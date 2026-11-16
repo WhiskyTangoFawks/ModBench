@@ -664,6 +664,12 @@ internal sealed class Store : IDisposable
 
     internal void NameRows(PluginAddress key, IEnumerable<string> formKeys) => NameRows(key, formKeys, OpenProjection);
 
+    internal void NameExistence(IEnumerable<string> formKeys)
+    {
+        var scope = OpenProjection;
+        lock (_projectionLock) scope.Existence.UnionWith(formKeys);
+    }
+
     private void NameRows(PluginAddress key, IEnumerable<string> formKeys, ProjectionScope scope)
     {
         lock (_projectionLock)
@@ -716,6 +722,7 @@ internal sealed class Store : IDisposable
                 foreach (var (key, named) in scope.NamedRows) NameRows(key, named, parent);
                 parent.ReadWhole.UnionWith(scope.ReadWhole);
                 parent.Told.UnionWith(scope.Told);
+                parent.Existence.UnionWith(scope.Existence);
                 return;
             }
 
@@ -732,13 +739,14 @@ internal sealed class Store : IDisposable
             scope.NamedRows.Clear();
             scope.ReadWhole.Clear();
             scope.Told.Clear();
+            scope.Existence.Clear();
         }
     }
 
-    // A record that moved moves the problems of every record of a compiled plugin that refers to it, whichever plugin holds it.
+    // A record gained or lost moves the problems of every record of a compiled plugin that refers to it, whichever plugin holds it.
     private void NameReferrers(ProjectionScope scope)
     {
-        var targets = scope.NamedRows.Values.SelectMany(keys => keys).Distinct().ToList();
+        var targets = scope.Existence.ToList();
         if (targets.Count == 0) return;
         var sources = DuckDbSql.Rows(
             Connection, $"SELECT DISTINCT plugin FROM {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} WHERE derived_from = '{DerivedFrom.SourceTree}'",
@@ -775,6 +783,7 @@ internal sealed class Store : IDisposable
         internal Dictionary<PluginAddress, HashSet<string>> NamedRows { get; } = new(PluginAddress.Comparer);
         internal HashSet<PluginAddress> ReadWhole { get; } = new(PluginAddress.Comparer);
         internal HashSet<PluginAddress> Told { get; } = new(PluginAddress.Comparer);
+        internal HashSet<string> Existence { get; } = new(StringComparer.Ordinal);
         private Action<ProjectionScope>? _endProjection = endProjection;
 
         // Idempotent: a second Dispose would otherwise re-announce and pop a scope it does not own.
@@ -932,6 +941,9 @@ internal sealed class Store : IDisposable
         /// <summary>Names rows changed in a plugin; a commit announces each plugin once, whoever named it.</summary>
         public void NameRows(PluginAddress key, IEnumerable<string> formKeys) => store.NameRows(key, formKeys);
 
+        /// <summary>Records gained or lost: the records that refer to them moved too.</summary>
+        public void NameExistence(IEnumerable<string> formKeys) => store.NameExistence(formKeys);
+
         /// <summary>A plugin's own facts changed, which names the plugin beside any rows named.</summary>
         public void PluginChanged(PluginAddress key) => store.NamePluginFacts(key);
 
@@ -939,7 +951,9 @@ internal sealed class Store : IDisposable
         /// FormKeys whose rows moved can move a winner.</summary>
         public void PluginReread(PluginAddress key, IReadOnlyDictionary<string, string> before)
         {
-            OweWinnerSweep(Projector.KeysDiffering(before, store.EffectiveContentHashes(key)));
+            var after = store.EffectiveContentHashes(key);
+            OweWinnerSweep(Projector.KeysDiffering(before, after));
+            NameExistence(before.Keys.Except(after.Keys).Concat(after.Keys.Except(before.Keys)));
             store.NameWholePlugin(key);
         }
     }
@@ -1016,6 +1030,7 @@ internal sealed class Store : IDisposable
         var held = EffectiveContentHashes(key).Keys;
         DeleteEveryTraceOf(key.Name, key.Origin);
         projection.OweWinnerSweep(held);
+        projection.NameExistence(held);
         projection.PluginChanged(key);
     });
 
@@ -1200,11 +1215,12 @@ internal sealed class Store : IDisposable
         if (written.Count + gone.Count == 0) return [];
 
         using var tx = BeginTransaction();
-        var movedKeys = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, written, gone));
+        var (movedKeys, existence) = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, written, gone));
         BumpSequence();
         OweCheckpoint();
         tx.Commit();
         OweWinnerSweep(movedKeys);
+        NameExistence(existence);
         return movedKeys;
     }
 
