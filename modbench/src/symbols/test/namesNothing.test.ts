@@ -180,7 +180,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
   });
 
   describe('when a change leaves what is judged as it was', () => {
-    const judgedAfter = async (change: (instance: { value: object }, files: string[]) => string[] | void) => {
+    const judgedAfter = async (change: (instance: { value: object }, files: string[]) => string[] | undefined) => {
       world.documents = [];
       const files = [CLOSED];
       let answer = files;
@@ -198,7 +198,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     });
 
     it('judges again when the instance holds another value', async () => {
-      expect(await judgedAfter((instance) => { instance.value = {}; })).toBe(2);
+      expect(await judgedAfter((instance) => { instance.value = {}; return undefined; })).toBe(2);
     });
 
     it('judges again when a kind answers its files as another list', async () => {
