@@ -36,7 +36,7 @@ const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
-import { dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
+import { basename, dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { FIRST_LEVEL, PROFILE_WATCH_PATTERN } from '../layout';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
@@ -3735,13 +3735,29 @@ describe('the MO2 Instance adapter', () => {
   });
 
   describe('the masterlist', () => {
-    const git = (...args: string[]) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' });
+    const trashing = (trashed: string[]): MoveToTrash => (path) => {
+      trashed.push(basename(path));
+      return rm(path);
+    };
+
+    it('sends each file it replaces to the trash before the write, and leaves an absent or unchanged file alone', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'my edit');
+      await writeFile(join(root, 'prelude.yaml'), 'common: []\n');
+      const trashed: string[] = [];
+
+      await adapter.changeMasterlist({ masterlist: 'plugins: []\n', prelude: 'common: []\n' }, trashing(trashed));
+      await rm(join(root, 'masterlist.yaml'));
+      await adapter.changeMasterlist({ masterlist: 'plugins: []\n', prelude: 'common: [x]\n' }, trashing(trashed));
+
+      expect(trashed).toEqual(['masterlist.yaml', 'prelude.yaml']);
+      expect(await readFile(join(root, 'masterlist.yaml'), 'utf8')).toBe('plugins: []\n');
+    });
 
     it('is written whole with the prelude at the instance root, and a second identical write changes nothing', async () => {
       const files = { masterlist: 'plugins: []\n', prelude: 'common: []\n' };
 
-      expect(await adapter.changeMasterlist(files)).toEqual({ written: ['masterlist.yaml', 'prelude.yaml'] });
-      expect(await adapter.changeMasterlist(files)).toEqual({ written: [] });
+      expect(await adapter.changeMasterlist(files, trashing([]))).toEqual({ written: ['masterlist.yaml', 'prelude.yaml'] });
+      expect(await adapter.changeMasterlist(files, trashing([]))).toEqual({ written: [] });
 
       expect([await readFile(join(root, 'masterlist.yaml'), 'utf8'), await readFile(join(root, 'prelude.yaml'), 'utf8')]).toEqual(['plugins: []\n', 'common: []\n']);
     });
@@ -3750,46 +3766,32 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'masterlist.yaml'), 'pinned masterlist');
       await mkdir(join(root, 'prelude.yaml'));
 
-      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' })).rejects.toThrow(/EISDIR/);
+      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' }, trashing([]))).rejects.toThrow(/EISDIR/);
 
       expect(await readFile(join(root, 'masterlist.yaml'), 'utf8')).toBe('pinned masterlist');
+    });
+
+    it('puts both files back as they were when the trash takes the prelude and then fails', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'pinned masterlist');
+      await writeFile(join(root, 'prelude.yaml'), 'pinned prelude');
+      const trashed: string[] = [];
+      const failing: MoveToTrash = async (path) => {
+        await trashing(trashed)(path);
+        if (basename(path) === 'prelude.yaml') throw new Error('the trash failed');
+      };
+
+      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' }, failing)).rejects.toThrow('the trash failed');
+
+      expect(trashed).toEqual(['masterlist.yaml', 'prelude.yaml']);
+      expect([await readFile(join(root, 'masterlist.yaml'), 'utf8'), await readFile(join(root, 'prelude.yaml'), 'utf8')]).toEqual(['pinned masterlist', 'pinned prelude']);
     });
 
     it('takes the masterlist away again when it was absent and the prelude cannot be written', async () => {
       await mkdir(join(root, 'prelude.yaml'));
 
-      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' })).rejects.toThrow(/EISDIR/);
+      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' }, trashing([]))).rejects.toThrow(/EISDIR/);
 
       await expect(readFile(join(root, 'masterlist.yaml'), 'utf8')).rejects.toThrow(/ENOENT/);
-    });
-
-    it('names both files of a staged rename between them', async () => {
-      await writeFile(join(root, 'masterlist.yaml'), 'the same content, long enough for git to see a rename\n');
-      git('init', '-q');
-      git('add', 'masterlist.yaml');
-      git('commit', '-q', '-m', 'pin');
-      git('mv', 'masterlist.yaml', 'prelude.yaml');
-
-      expect([...await adapter.uncommittedMasterlist()].sort()).toEqual(['masterlist.yaml', 'prelude.yaml']);
-    });
-
-    it('has no uncommitted change in an instance that is not a repository', async () => {
-      await writeFile(join(root, 'masterlist.yaml'), 'a');
-
-      expect(await adapter.uncommittedMasterlist()).toEqual([]);
-    });
-
-    it('names the metadata files git holds changes of, those edited and those never committed', async () => {
-      await writeFile(join(root, 'masterlist.yaml'), 'a');
-      git('init', '-q');
-      git('add', 'masterlist.yaml');
-      git('commit', '-q', '-m', 'pin');
-      expect(await adapter.uncommittedMasterlist()).toEqual([]);
-
-      await writeFile(join(root, 'masterlist.yaml'), 'edited');
-      await writeFile(join(root, 'prelude.yaml'), 'new');
-
-      expect(await adapter.uncommittedMasterlist()).toEqual(['masterlist.yaml', 'prelude.yaml']);
     });
   });
 

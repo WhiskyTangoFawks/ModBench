@@ -283,7 +283,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   ownAll(own, registerNexusCommands({ commands: nexusLogin(deps.nexus), nexus: deps.nexus, reporterFor }));
   own(registerMasterlistCommand({
-    commands: masterlistCommands({ adapter, lootMetadata: deps.lootMetadata }), instance, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say, ask, reporter: reporterFor('updateMasterlist'),
+    commands: masterlistCommands({ adapter, lootMetadata: deps.lootMetadata, trash }), instance, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say, reporter: reporterFor('updateMasterlist'),
   }));
   own(publishRepository(instance, instanceRoot));
   ownAll(own, registerModlistCommands({ commands: instanceRepository, instance, reporterFor }));

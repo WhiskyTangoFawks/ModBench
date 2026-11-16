@@ -1,59 +1,37 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { MasterlistCommands } from '../instanceCommands/masterlist';
-import { answeredToAgent, isAgentCall, registerWritingCommand, type AgentCall, type NoItemsResult } from '../drivingLib/agentGesture';
-import type { Progress } from '../drivingLib/pausableProgress';
+import { answeredToAgent, isAgentCall, registerWritingCommand, type NoItemsResult } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { AskQuestion } from '../ports/dialog';
 import type { Reporter } from '../ports/reporter';
 
 const UPDATE_MASTERLIST = 'modbench.instance.updateMasterlist';
-const CONFIRM = 'Update masterlist';
 
 interface MasterlistGestureDeps {
-  commands: Pick<MasterlistCommands, 'update' | 'uncommitted'>;
+  commands: Pick<MasterlistCommands, 'update'>;
   instance: Pick<Instance, 'refresh'>;
   /** The view whose progress shows the update runs. */
   pluginsView: string;
   /** The Plugins view's message line. */
   say: (message: string | undefined) => void;
-  ask: AskQuestion;
   reporter: Reporter;
 }
 
 const wroteOrCurrent = (written: readonly string[]): string =>
   written.length === 0 ? 'The masterlist was already current.' : `Wrote ${written.join(' and ')}.`;
 
-const forces = (call: AgentCall): boolean => 'force' in call.options && call.options.force === true;
-
-/** `modbench.instance.updateMasterlist` (commands.md): asks first, or refuses an agent without force, only over uncommitted changes. */
-export function registerMasterlistCommand({ commands, instance, pluginsView, say, ask, reporter }: MasterlistGestureDeps): vscode.Disposable {
-  const run = async (called: unknown, progress: Progress): Promise<NoItemsResult | undefined> => {
-    const agentCall = isAgentCall(called) ? called : undefined;
-    const finish = (result: { applied: true; written?: readonly string[] } | { applied: false; refusal: string }) => {
-      if (agentCall) return answeredToAgent(result, [], result.applied && result.written ? wroteOrCurrent(result.written) : undefined);
-      if (!result.applied) reporter.report('error', 'Could not update the masterlist.', result.refusal);
-      return undefined;
-    };
-    const held = await commands.uncommitted();
-    if (!held.applied) return finish(held);
-    if (held.files.length > 0 && !(agentCall && forces(agentCall))) {
-      const files = held.files.join(', ');
-      if (agentCall) {
-        return { applied: false, refusal: `The masterlist has uncommitted changes to ${files}, which updating would replace. Request it again with force to update it.` };
-      }
-      progress.waiting();
-      const answer = await ask(`Update the masterlist? It replaces uncommitted changes to ${files}.`, { modal: true }, CONFIRM);
-      progress.working();
-      if (answer !== CONFIRM) return undefined;
-    }
+export function registerMasterlistCommand({ commands, instance, pluginsView, say, reporter }: MasterlistGestureDeps): vscode.Disposable {
+  const run = async (called: unknown): Promise<NoItemsResult | undefined> => {
     say('Updating the masterlist…');
     try {
-      return finish(await commands.update());
+      const result = await commands.update();
+      if (isAgentCall(called)) return answeredToAgent(result, [], result.applied ? wroteOrCurrent(result.written) : undefined);
+      if (!result.applied) reporter.report('error', 'Could not update the masterlist.', result.refusal);
+      return undefined;
     } finally {
       say(undefined);
     }
   };
   return registerWritingCommand(UPDATE_MASTERLIST, (called?: unknown) =>
-    runWritingGesture(UPDATE_MASTERLIST, pluginsView, instance, (progress) => run(called, progress)));
+    runWritingGesture(UPDATE_MASTERLIST, pluginsView, instance, () => run(called)));
 }

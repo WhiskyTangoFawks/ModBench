@@ -5,7 +5,7 @@ import type { LootMetadata } from '../../lootMetadata/lootMetadata';
 
 function over(lootMetadata: LootMetadata['fetch'], answers: Parameters<typeof fakeInstanceAdapter>[1] = {}) {
   const fake = fakeInstanceAdapter(readingFixture({ gameRelease: 'Fallout4' }), answers);
-  return { fake, commands: masterlistCommands({ adapter: fake.adapter, lootMetadata: { fetch: lootMetadata } }) };
+  return { fake, commands: masterlistCommands({ adapter: fake.adapter, lootMetadata: { fetch: lootMetadata }, trash: () => Promise.resolve() }) };
 }
 
 const serving = (masterlist: string, prelude: string): LootMetadata['fetch'] => () =>
@@ -35,15 +35,5 @@ describe('update', () => {
     const { commands } = over(serving('a', 'b'), { refusals: refusing('changeMasterlist', 'EACCES') });
 
     expect(await commands.update()).toEqual({ applied: false, refusal: 'EACCES' });
-  });
-});
-
-describe('uncommitted', () => {
-  it('refuses, not throws, when the adapter cannot tell what git holds', async () => {
-    const fake = fakeInstanceAdapter(readingFixture());
-    const adapter = { ...fake.adapter, uncommittedMasterlist: () => Promise.reject(new Error('git: not found')) };
-    const commands = masterlistCommands({ adapter, lootMetadata: { fetch: serving('a', 'b') } });
-
-    expect(await commands.uncommitted()).toEqual({ applied: false, refusal: 'git: not found' });
   });
 });

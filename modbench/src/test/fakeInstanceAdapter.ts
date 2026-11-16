@@ -189,8 +189,6 @@ export interface InstanceAnswers {
   uncloned?: Awaited<ReturnType<InstanceAdapter['unclonedSubmodules']>>;
   /** The reason a trashed downloaded file's metadata is left behind. */
   metadataLeftBehind?: string;
-  /** The masterlist and prelude files git holds uncommitted changes of. */
-  uncommittedMasterlist?: readonly string[];
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
   /** The reason reading a file of an origin fails, or `undefined` when it reads. */
@@ -544,7 +542,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         };
         return { written };
       }),
-    uncommittedMasterlist: () => Promise.resolve(answers.uncommittedMasterlist ?? []),
     selectProfile: (profile) =>
       write({ verb: 'selectProfile', profile }, () => {
         const wrote = profile !== current.profile;
