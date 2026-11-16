@@ -1501,14 +1501,48 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(await call(client, 'read_record', { name: 'A.esp' })).toEqual({ isError: true, text: '"A.esp" is not a record.' });
   });
 
-  it('refuses a record no active plugin holds', async () => {
-    const mEdit = new InMemoryMEditClient();
-    mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getPlugins', PLUGINS);
-    mEdit.setQueryAnswer('getComparison', null);
-    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+  describe('a record no active plugin holds', () => {
+    const inactive = async (owners: Awaited<ReturnType<InMemoryMEditClient['getRecordOwners']>>) => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', NPC);
+      mEdit.setQueryAnswer('getPlugins', PLUGINS);
+      mEdit.setQueryAnswer('getComparison', null);
+      mEdit.setQueryAnswer('getRecordOwners', owners);
+      mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+      return (await clientOf(new FakeInstance(ENABLED), mEdit)).client;
+    };
 
-    expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
+    it('answers the one inactive compiled plugin\'s copy, not active and not winning', async () => {
+      const client = await inactive([{ name: 'A.esp', origin: 'Big Rocks' }]);
+
+      expect(await read(client, 'read_record', { name: 'SharedNpc' })).toMatchObject([
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, status: { label: '(not active)' }, kind: 'OwnFile' },
+      ]);
+    });
+
+    it('answers every inactive holder\'s copy, each keyed by origin and filename', async () => {
+      const client = await inactive([{ name: 'A.esp', origin: 'Big Rocks' }, { name: 'A.esp', origin: 'Other' }]);
+
+      expect(await read(client, 'read_record', { name: 'SharedNpc' })).toMatchObject([
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, status: { label: '(not active)' } },
+        { plugin: { name: 'A.esp', origin: 'Other' }, isWinner: false, status: { label: '(not active)' } },
+      ]);
+    });
+
+    it('refuses when no plugin holds it', async () => {
+      const client = await inactive([]);
+
+      expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No plugin holds 000800:A.esp.' });
+    });
+
+    it('refuses with mEdit\'s reason when the record index cannot answer', async () => {
+      const client = await inactive({ failed: 'refused', refusal: 'backend down' });
+
+      const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
+
+      expect(isError).toBe(true);
+      expect(text).toContain('backend down');
+    });
   });
 
   it('lists the places the symbol index gives for the record named, resolved to its FormKey, and what went unread', async () => {
