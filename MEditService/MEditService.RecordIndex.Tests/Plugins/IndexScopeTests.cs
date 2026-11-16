@@ -118,11 +118,15 @@ public class IndexScopeTests(TestPluginFixture fixture)
                 index.ListedIn(new PluginAddress("Plugin.esp", PluginOrigin.DataDirectory)),
                 row => row.EditorId == "NotANumber");
             Assert.Null(index.Queries.GetFilter().Value());
-            var cleared = Assert.Single(notifications.Notifications.OfType<RecordFilterClearedNotification>());
+            Assert.NotEmpty(notifications.Notifications.OfType<RecordIndexChangedNotification>());
+            var cleared = Assert.IsType<FilterCleared>(index.Queries.GetFilterCleared());
             Assert.Equal("filter.sql", cleared.Source);
             Assert.Contains("NotANumber", cleared.Reason, StringComparison.Ordinal);
             var listing = NpcsListed(index);
             Assert.Equal(2, listing.Total);
+
+            index.SetFilter("SELECT form_key FROM npc_", "another.sql");
+            Assert.Null(index.Queries.GetFilterCleared());
         }
     }
 

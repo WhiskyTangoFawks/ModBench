@@ -80,6 +80,8 @@ public interface IQueries
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
     Answer<RecordFilter?, IndexRefused> GetFilter();
+    // Why the filter was cleared, until another is set or cleared on purpose; null when it was not.
+    FilterCleared? GetFilterCleared();
     // Why the SQL cannot be a filter, or no load order to hold it; null once it is in force.
     IndexRefused? SetFilter(string sql, string source);
     void ClearFilter();

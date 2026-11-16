@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LoadOrderProgress } from '../../client';
+import type { RecordIndexStanding } from '../../client';
 import { createReconcileNarrator } from '../reconcileNarrator';
 
-const tick = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress => ({
+const tick = (over: Partial<RecordIndexStanding> = {}): RecordIndexStanding => ({
   totalPlugins: 2, activePlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, validating: false, ...over,
 });
 const dropped = (version = 3) => tick({ holdsNone: true, totalPlugins: 0, version });
 const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }], version });
 
-function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => Promise.resolve()) {
+function narrated(settle: (status: RecordIndexStanding) => Promise<void> = () => Promise.resolve()) {
   const progress: { closed: boolean }[] = [];
   const spans: Promise<void>[] = [];
   const deps = {

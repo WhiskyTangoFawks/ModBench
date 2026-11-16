@@ -10,19 +10,19 @@ const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
 
 describe('the client\'s load-order status', () => {
   it('is undefined before the first tick', () => {
-    expect(new InMemoryMEditClient().loadOrderStatus).toBeUndefined();
+    expect(new InMemoryMEditClient().recordIndexStanding).toBeUndefined();
   });
 
   it('reads the latest tick', () => {
     const client = new InMemoryMEditClient();
 
     client.emit(tick(true, [bad]));
-    expect(client.loadOrderStatus?.conflictsComputed).toBe(true);
-    expect(client.loadOrderStatus?.failures).toEqual([bad]);
+    expect(client.recordIndexStanding?.conflictsComputed).toBe(true);
+    expect(client.recordIndexStanding?.failures).toEqual([bad]);
 
     client.emit(tick(false));
-    expect(client.loadOrderStatus?.conflictsComputed).toBe(false);
-    expect(client.loadOrderStatus?.failures).toEqual([]);
+    expect(client.recordIndexStanding?.conflictsComputed).toBe(false);
+    expect(client.recordIndexStanding?.failures).toEqual([]);
   });
 
   it('resets when the backend leaves running, so a restarted process\'s reconcile starts unsettled', () => {
@@ -31,7 +31,7 @@ describe('the client\'s load-order status', () => {
 
     client.setStatus('disconnected');
 
-    expect(client.loadOrderStatus).toBeUndefined();
+    expect(client.recordIndexStanding).toBeUndefined();
   });
 
   it('resets when the stream reopens, since it may have reattached to another process', () => {
@@ -40,21 +40,7 @@ describe('the client\'s load-order status', () => {
 
     client.reconnected();
 
-    expect(client.loadOrderStatus).toBeUndefined();
-  });
-
-  it('tells the status listener every tick, and a reset with undefined, held or not', () => {
-    const client = new InMemoryMEditClient();
-    const seen: (boolean | undefined)[] = [];
-    client.onLoadOrderStatus((status) => seen.push(status?.conflictsComputed));
-
-    client.setStatus('disconnected');
-    client.emit(tick(false));
-    client.emit(tick(false));
-    client.emit(tick(true));
-    client.reconnected();
-
-    expect(seen).toEqual([undefined, false, false, true, undefined]);
+    expect(client.recordIndexStanding).toBeUndefined();
   });
 
   describe('the change event, on a status heard', () => {
@@ -109,7 +95,7 @@ describe('the client\'s load-order status', () => {
     it('is told, with the new failures already readable, when the failures differ, and not when they repeat', () => {
       const client = new InMemoryMEditClient();
       const seen: unknown[] = [];
-      client.onDidChange(() => seen.push(client.loadOrderStatus?.failures.length));
+      client.onDidChange(() => seen.push(client.recordIndexStanding?.failures.length));
 
       client.emit(tick(false, [bad]));
       client.emit(tick(false, [{ ...bad }]));

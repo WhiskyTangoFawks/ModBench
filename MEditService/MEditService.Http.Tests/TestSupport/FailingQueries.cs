@@ -72,6 +72,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout) => throw Failed();
 
     public Answer<RecordFilter?, IndexRefused> GetFilter() => throw Failed();
+    public FilterCleared? GetFilterCleared() => throw Failed();
 
     public IndexRefused? SetFilter(string sql, string source) => throw Failed();
 

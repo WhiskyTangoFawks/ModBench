@@ -101,6 +101,21 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.ListedIn(Key));
     }
 
+    [Fact]
+    public void ARebuild_NeverSaysTheLoadOrderIsHeldNoMore_SinceTheIndexClosedIsStillTheOneThatHoldsIt()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, _opens, notifications: notifications);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        var before = notifications.Notifications.Count;
+
+        Rebuilt(index, _fixture.InstanceRoot);
+
+        var told = notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>().Select(n => n.Status.State);
+        Assert.DoesNotContain(LoadOrderState.None, told);
+    }
+
     private static void Rebuilt(OpenedIndex index, string instanceRoot)
     {
         Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, instanceRoot));
@@ -321,7 +336,7 @@ public sealed class StoreRebuildTests : IDisposable
         bool? readWhileClosed = null;
         notifications.OnPublish = n =>
         {
-            if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.None }) return;
+            if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
             holder.Apply(holder.Current);
             parked = gate.WaitUntilParkedAsync();
             readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));

@@ -1,5 +1,5 @@
 import {
-  isSettled, type LoadOrderProgress, type LoadOrderRefusal, type PluginAddress,
+  isSettled, type RecordIndexStanding, type LoadOrderRefusal, type PluginAddress,
   type PluginLoadFailure,
 } from '../client';
 import { errorMessage } from '../ports/errorMessage';
@@ -12,7 +12,7 @@ export interface ReconcileNarratorDeps {
   /** plugins.md, States 4 and 6: the load order's own refusal. */
   applyRefused: (refusal: LoadOrderRefusal) => void;
   /** A reconcile reached Ready: its whole hand-off to the views. */
-  settle: (status: LoadOrderProgress) => Promise<void>;
+  settle: (status: RecordIndexStanding) => Promise<void>;
   log: (msg: string) => void;
 }
 
@@ -22,7 +22,7 @@ interface RefillWait {
 }
 
 export interface ReconcileNarrator {
-  hear(status: LoadOrderProgress): void;
+  hear(status: RecordIndexStanding): void;
   /** Resolves once a reconcile answering at least `version` has been handed to the views. */
   settled(version: number): Promise<void>;
   /** Armed before a rebuild is asked for: resolves once the refill that follows ends, and at once
@@ -35,13 +35,13 @@ export interface ReconcileNarrator {
 
 interface Span {
   close: () => void;
-  tick: (status: LoadOrderProgress) => void;
+  tick: (status: RecordIndexStanding) => void;
 }
 
 // plugins.md, States 2: the record index status says what the Plugins view shows, whoever started the
 // reconcile — a put, a rebuild's refill or the watcher.
 export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileNarrator {
-  let last: LoadOrderProgress | undefined;
+  let last: RecordIndexStanding | undefined;
   let span: Span | undefined;
   let settledVersion = -1;
   // The highest version whose hand-off is queued, so a Ready heard again meanwhile queues none.
@@ -64,7 +64,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
     settleWaits.release(settledVersion);
   };
 
-  const settle = (status: LoadOrderProgress, reconcileSeen: boolean): void => {
+  const settle = (status: RecordIndexStanding, reconcileSeen: boolean): void => {
     if (status.refusal !== undefined) {
       if (status.refusal.kind === 'failed' && status.version > settledVersion) {
         deps.log(`Indexing failed: ${status.refusal.message}`);

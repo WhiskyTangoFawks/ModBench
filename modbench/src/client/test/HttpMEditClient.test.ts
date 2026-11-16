@@ -85,20 +85,17 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
-describe('HttpMEditClient — the load-order status', () => {
+describe('HttpMEditClient — the record index standing', () => {
   it('is the latest tick the stream carried, and is gone once mEdit is stopped', async () => {
     const { response, push } = pushableStreamResponse();
     const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
-    const changes: (boolean | undefined)[] = [];
-    client.onLoadOrderStatus((status) => changes.push(status?.conflictsComputed));
     await client.start();
 
     push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+    await vi.waitFor(() => expect(client.recordIndexStanding?.conflictsComputed).toBe(true));
     await client.stop();
 
-    expect(client.loadOrderStatus).toBeUndefined();
-    expect(changes).toEqual([true, undefined]);
+    expect(client.recordIndexStanding).toBeUndefined();
   });
 
   it('is gone once the stream reopens, as it may have reattached to another process', async () => {
@@ -107,11 +104,11 @@ describe('HttpMEditClient — the load-order status', () => {
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
     streams[0]?.push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+    await vi.waitFor(() => expect(client.recordIndexStanding?.conflictsComputed).toBe(true));
 
     streams[0]?.end();
 
-    await vi.waitFor(() => expect(client.loadOrderStatus).toBeUndefined());
+    await vi.waitFor(() => expect(client.recordIndexStanding).toBeUndefined());
     expect(streams).toHaveLength(2);
   });
 });
@@ -881,7 +878,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
-    await vi.waitFor(() => expect(client.loadOrderStatus?.version).toBe(0));
+    await vi.waitFor(() => expect(client.recordIndexStanding?.version).toBe(0));
     answerPut(jsonResponse(200, appliedBody));
 
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
@@ -1082,8 +1079,8 @@ describe('HttpMEditClient — the change event', () => {
   });
 });
 
-describe('HttpMEditClient — onNotification', () => {
-  it('hands a typed listener the payload of a frame the stream carries', async () => {
+describe('HttpMEditClient — what a frame names', () => {
+  it('names the plugin a frame the stream carries on the change event', async () => {
     const frame = { kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 };
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -1094,11 +1091,11 @@ describe('HttpMEditClient — onNotification', () => {
       ['/notifications/stream', () => Promise.resolve(new Response(body, { status: 200 }))], ['/unsaved-documents', noContent],
     ]));
     const heard: unknown[] = [];
-    client.onNotification('plugin-changed', (p) => heard.push(p));
+    client.onDidChange((change) => heard.push(change));
 
     await client.start();
 
-    await vi.waitFor(() => expect(heard).toEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
+    await vi.waitFor(() => expect(heard).toContainEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
     await client.stop();
   });
 });
@@ -1546,7 +1543,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       await client.start();
       if (holdingALoadOrder) push(readyTickThatSettlesPutLoadOrder());
       await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
-      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.loadOrderStatus?.holdsNone).toBe(false); });
+      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.recordIndexStanding?.holdsNone).toBe(false); });
       return { client, push };
     }
 

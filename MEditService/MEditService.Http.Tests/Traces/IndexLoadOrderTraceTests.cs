@@ -76,7 +76,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task ARecordFilterThatCannotApplyAgainAfterASnapshot_IsPushedClearedWithItsSourceAndReason()
+    public async Task ARecordFilterThatCannotApplyAgainAfterASnapshot_IsToldAsEverythingChanged_AndReadClearedWithItsSourceAndReason()
     {
         using var fx = new PluginFixtureBuilder("trace-filter-cleared")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("7"), origin: Origin)
@@ -91,7 +91,8 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         OtherTool.WritesThePlugin(fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew("NotANumber"));
         await Client.NextCheck(fx);
 
-        var cleared = (await stream.EventsUntil("record-filter-cleared"))[^1].GetProperty("recordFilterCleared");
+        await stream.EventsUntil("record-index-changed");
+        var cleared = await Client.GetFromJsonAsync<JsonElement>("/load-order/filter/cleared");
         Assert.Equal("sevens.sql", cleared.GetProperty("source").GetString());
         Assert.Contains("NotANumber", cleared.GetProperty("reason").GetString(), StringComparison.Ordinal);
     }

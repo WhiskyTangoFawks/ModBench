@@ -9,13 +9,14 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// the plugins whose binary is not the one Modbench last wrote.</summary>
 internal static class ExternalChanges
 {
-    internal static IReadOnlyList<ChangedPlugin> NamedBy(LoadOrderSnapshot loadOrder)
+    internal static IReadOnlyList<PluginAddress> NamedBy(LoadOrderSnapshot loadOrder)
     {
         var notifications = new InMemoryNotificationPublisher();
         var service = TestEditService.Over(new LoadOrderHolder(), notifications: notifications);
         Put(loadOrder, service.GetRequiredService<PutLoadOrderHandler>());
         service.GetRequiredService<SignalChangeHandler>().Signal([]);
-        return notifications.Notifications.OfType<ExternalChangeNotification>().SelectMany(notice => notice.Plugins).ToList();
+        var changed = service.GetRequiredService<ChangedOutside>();
+        return [.. loadOrder.Plugins.Select(plugin => plugin.Key).Where(changed.Holds)];
     }
 
     internal static void Put(LoadOrderSnapshot loadOrder, PutLoadOrderHandler handler) =>

@@ -20,7 +20,7 @@ const GO_TO_SYMBOL = 'Go to Symbol in Workspace';
 
 const plugin = (address: typeof modA, over: Partial<PluginMetadata> = {}): PluginMetadata => ({
   ...address, path: `/mods/${address.origin}/${address.name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [],
-  isImmutable: false, inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null, ...over,
+  isImmutable: false, changedOutside: false, inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null, ...over,
 });
 
 const summary = (formKey: string, address: typeof modA, editorId?: string): RecordSummary => ({

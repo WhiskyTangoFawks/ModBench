@@ -79,7 +79,7 @@ async function holdPluginsTxt(text: string): Promise<void> {
 type MockPlugin = PluginMetadata;
 function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'inLoadOrder'>): MockPlugin {
   return {
-    isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false,
+    isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false, changedOutside: false,
     hasMatchingRecords: true,
     isCompiledPlugin: false,
     hasParseFailure: false,
@@ -279,7 +279,7 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(loadOrderStatus));
       return;
     }
-    if (url === '/load-order/filter') {
+    if (url === '/load-order/filter' || url === '/load-order/filter/cleared') {
       res.writeHead(204);
       res.end();
       return;

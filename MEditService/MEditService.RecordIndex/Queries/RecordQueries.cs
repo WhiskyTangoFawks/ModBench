@@ -20,6 +20,7 @@ internal sealed class RecordQueries(
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ISourceAdapter source,
+    ChangedOutside changedOutside,
     ILogger<RecordQueries> logger) : IQueries, IDisposable
 {
     private readonly ILogger _logger = logger;
@@ -57,7 +58,8 @@ internal sealed class RecordQueries(
                 HasParseFailure: parseFailures.Contains(plugin.Key),
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList(),
-                content.Description);
+                content.Description,
+                changedOutside.Holds(plugin.Key));
         }
 
         if (filter.Current is null)
@@ -566,6 +568,8 @@ internal sealed class RecordQueries(
         RequireReads();
         return filter.Current;
     });
+
+    public FilterCleared? GetFilterCleared() => filter.Cleared;
 
     public IndexRefused? SetFilter(string sql, string source) => _answer.Refusing(() =>
         filter.Set(_index, sql, source) is { } rejection ? new IndexRefused(IndexRefusal.FilterRejected, rejection) : null);

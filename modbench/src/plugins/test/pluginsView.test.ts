@@ -97,7 +97,7 @@ import { pluginArgumentOf } from '../../drivingLib/argument';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { soleGroup } from './browserRows';
-import type { LoadOrderProgress, LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
+import type { RecordIndexStanding, LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
 import { loadOrderStatusEventFixture, notificationEventFixture, pluginMetadataFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -153,7 +153,14 @@ function clientHoldingNothing(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getPlugins', []);
   client.setQueryAnswer('getDiagnoses', []);
+  client.setQueryAnswer('getFilterCleared', null);
   return client;
+}
+
+let clearedAt = 0;
+function clears(client: InMemoryMEditClient, source: string): void {
+  client.setQueryAnswer('getFilterCleared', { source, reason: 'Conversion Error', sequence: ++clearedAt });
+  client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
 }
 
 function pluginsView(
@@ -325,7 +332,7 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
   });
 });
 
-const APPLIED_STATUS: LoadOrderProgress = {
+const APPLIED_STATUS: RecordIndexStanding = {
   totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 
@@ -456,17 +463,21 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
 });
 
 describe('the Plugins view\'s Problems', () => {
-  it('puts a plugin changed outside Modbench on its row\'s own file, at the name it has on disk', () => {
+  it('puts a plugin changed outside Modbench on its row\'s own file, at the name it has on disk', async () => {
     const onDisk = '/instance/mods/ModA/test.ESP';
     const { client } = pluginsView(instanceValueFixture({
       plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
     }));
 
-    client.emit({ ...rowsChanged, kind: 'external-change', changedPlugins: [{ name: 'Test.esp', bytesSha256: 'ab12' }] });
+    client.emit(loadOrderStatusEventFixture());
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Test.esp', origin: 'ModA', changedOutside: true })]);
+    client.emit({ ...rowsChanged, kind: 'plugin-changed', plugin: 'Test.esp', origin: 'ModA' });
 
-    const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
-    expect([...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.severity)]))
-      .toEqual([[onDisk, [DiagnosticSeverity.Warning]]]);
+    await vi.waitFor(() => {
+      const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
+      expect([...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.severity)]))
+        .toEqual([[onDisk, [DiagnosticSeverity.Warning]]]);
+    });
   });
 
   it('puts the diagnosis of a failed read on its row\'s own file as an error, and a malformed plugin\'s as a warning', async () => {
@@ -709,9 +720,6 @@ describe('the record filter, from the commands that set and clear it', () => {
   });
 
   describe('a record filter the record index could not apply again', () => {
-    const cleared = (source: string) => notificationEventFixture({
-      kind: 'record-filter-cleared', recordFilterCleared: { source, reason: 'Conversion Error' },
-    });
     const warned = [{ severity: 'warning', message: 'The record filter a was cleared', detail: 'Conversion Error' }];
 
     async function showingA() {
@@ -727,7 +735,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       const view = await showingA();
       view.client.setQueryAnswer('getActiveFilter', null);
 
-      view.client.emit(cleared('a'));
+      clears(view.client, 'a');
 
       await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
       expect(view.description()).toBeUndefined();
@@ -740,7 +748,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       const view = await showingA();
       view.client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source: 'a' });
 
-      view.client.emit(cleared('older.sql'));
+      clears(view.client, 'older.sql');
 
       await vi.waitFor(() => {
         expect(view.reporter.shownFailures).toEqual([
@@ -755,7 +763,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       const view = await showingA();
       view.client.setQueryAnswer('getActiveFilter', null);
 
-      view.client.emit(cleared('older.sql'));
+      clears(view.client, 'older.sql');
 
       await vi.waitFor(() => {
         expect(view.reporter.reports).toEqual([
@@ -774,7 +782,7 @@ describe('the record filter, from the commands that set and clear it', () => {
 
       const applying = view.filter({ scheme: 'untitled', path: 'a' });
       await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(1); });
-      view.client.emit(cleared('a'));
+      clears(view.client, 'a');
       await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
       replied(null);
       await applying;
@@ -785,7 +793,7 @@ describe('the record filter, from the commands that set and clear it', () => {
   });
 
   describe('a change of everything', () => {
-    it('shows what mEdit holds, and says nothing, since the reason a filter was cleared comes with the notification', async () => {
+    it('shows what mEdit holds, and says nothing, since the reason a filter was cleared is read apart from it', async () => {
       h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
       const view = filtering();
       view.holds('a');
@@ -858,8 +866,8 @@ describe('the record filter, from the commands that set and clear it', () => {
       const reapplying = view.filter({ scheme: 'untitled', path: 'a' });
       await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(2); });
 
-      view.client.emit(notificationEventFixture({ kind: 'record-filter-cleared', recordFilterCleared: { source: 'a', reason: 'Conversion Error' } }));
-      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(3); });
+      clears(view.client, 'a');
+      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(2); });
       replied(null);
       await reapplying;
 

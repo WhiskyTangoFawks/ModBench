@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { isMEditGone, type LoadOrderProgress, type MEditClient, type PluginLoadFailure } from '../client';
+import { isMEditGone, type RecordIndexStanding, type MEditClient, type PluginLoadFailure } from '../client';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
@@ -19,7 +19,7 @@ interface ReconciledDeps {
 
 // Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
 // so conflicts are computed.
-async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
+async function settleReconciled(status: RecordIndexStanding, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
   deps.statusBar.ready(status.activePlugins);
   deps.registerRepositories();
@@ -33,7 +33,7 @@ const UNREACHABLE_REASON = {
 };
 
 interface IndexStatusDeps {
-  client: Pick<MEditClient, 'loadOrderStatus' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged'>;
+  client: Pick<MEditClient, 'recordIndexStanding' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged'>;
   facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
   progress: PluginsViewProgress;
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
@@ -65,9 +65,9 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),
   });
-  let lastHeardStatus: LoadOrderProgress | undefined;
+  let lastHeardStatus: RecordIndexStanding | undefined;
   const hearCurrent = (): void => {
-    const status = client.loadOrderStatus;
+    const status = client.recordIndexStanding;
     if (status === lastHeardStatus) return;
     lastHeardStatus = status;
     if (status) narrator.hear(status); else narrator.detached();

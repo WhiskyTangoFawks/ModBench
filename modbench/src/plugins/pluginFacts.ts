@@ -1,4 +1,4 @@
-import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
+import type { LoadOrderRefusal, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
 import { offeredMoves, type OfferedMove } from '../pluginCommands/pluginOrder';
 import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
@@ -136,8 +136,8 @@ export class PluginFacts {
   private matches?: ByPluginAddress<boolean>;
   private diagnosisTexts = new ByPluginAddress<string[]>();
   private diagnosisReports: PluginDiagnosisReport[] = [];
-  private readonly changedByMod = new Map<string, readonly PluginAddress[]>();
   private changed = new ByPluginAddress<true>();
+  private changedOutsideProblems: PluginProblem[] = [];
   private notRestoredFrom = new ByPluginAddress<string>();
   // Row status only, no blink: merges across a reload's ticks and persists until `reconciled`
   // lands the new answer.
@@ -264,6 +264,10 @@ export class PluginFacts {
       decompileRepairs: p.pluginSourceUnreadable.decompileRepairs,
     }]);
     this.matches = matches;
+    this.changed = new ByPluginAddress<true>();
+    for (const p of plugins) if (p.changedOutside) this.changed.set(p, true);
+    this.changedOutsideProblems = plugins.filter((p) => p.changedOutside)
+      .map((p) => ({ plugin: p.name, origin: p.origin, text: CHANGED_OUTSIDE_TEXT }));
     this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
       pluginAddressKey(p),
       `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
@@ -381,20 +385,6 @@ export class PluginFacts {
   /** The malformed-plugin scan could not be read; the last answer stays. */
   scanFailed(reason: string): void {
     this.scanRead.failure = reason;
-  }
-
-  /** Each settle of a source mod names every plugin of it that changed outside Modbench, so it
-   *  replaces what the mod's last settle named. The plugins whose standing changed come back. */
-  externalChange(event: NotificationPayloads['external-change']): PluginAddress[] {
-    const before = this.changedByMod.get(event.origin) ?? [];
-    const after = event.changedPlugins.map(({ name }) => ({ name, origin: event.origin }));
-    this.changedByMod.set(event.origin, after);
-    this.changed = new ByPluginAddress<true>();
-    for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
-    const standing = (plugins: readonly PluginAddress[]) => new Map(plugins.map((plugin) => [exactPluginAddressKey(plugin), plugin]));
-    const was = standing(before);
-    const is = standing(after);
-    return [...was, ...is].filter(([key]) => was.has(key) !== is.has(key)).map(([, plugin]) => plugin);
   }
 
   /** Each plugin a mod's manifest names that is not restored, with that mod, replacing the last. */
@@ -542,8 +532,7 @@ export class PluginFacts {
       sortingInfo: this.sortingProblems('info'),
       failedToRead: this.loadFailures.values().flatMap(({ name, origin, diagnosis }) =>
         diagnosis == null ? [] : [{ plugin: name, origin, text: diagnosis }]),
-      changedOutside: [...this.changedByMod.values()].flat()
-        .map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })),
+      changedOutside: this.changedOutsideProblems,
     };
   }
 }

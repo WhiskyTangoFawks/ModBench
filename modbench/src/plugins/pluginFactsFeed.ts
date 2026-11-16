@@ -12,7 +12,7 @@ import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
  *  changed outside Modbench. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onNotification' | 'loadOrderStatus'>;
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'recordIndexStanding'>;
 
 export interface PluginFactsFeedDeps {
   client: PluginFactsClient;
@@ -54,7 +54,6 @@ export type PluginRowFacts = Pick<PluginFacts,
 export class PluginFactsFeed implements vscode.Disposable {
   private readonly facts = new PluginFacts();
   private readonly changed = new vscode.EventEmitter<NamedPlugins>();
-  private readonly unsubscribe: () => void;
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
@@ -66,16 +65,9 @@ export class PluginFactsFeed implements vscode.Disposable {
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
 
-  constructor(private readonly deps: PluginFactsFeedDeps) {
-    this.unsubscribe = deps.client.onNotification('external-change', (event) => {
-      const named = this.facts.externalChange(event);
-      deps.publishChangedOutside(this.facts.problems().changedOutside);
-      this.changed.fire(named);
-    });
-  }
+  constructor(private readonly deps: PluginFactsFeedDeps) {}
 
   dispose(): void {
-    this.unsubscribe();
     this.changed.dispose();
   }
 
@@ -121,6 +113,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
+    this.deps.publishChangedOutside(this.facts.problems().changedOutside);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
     this.changed.fire(undefined);
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
@@ -174,7 +167,7 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {
     // mEdit answers no plugin's facts while it holds no load order: before the first put, and from a restart to the next.
-    const status = this.deps.client.loadOrderStatus;
+    const status = this.deps.client.recordIndexStanding;
     if (requested?.length === 0 || status === undefined || status.holdsNone) return;
     const named = this.facts.factsReadFailed() ? undefined : requested;
     const plugins = await this.readPlugins(named);
@@ -182,6 +175,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const sortingChanged = this.facts.refreshed(plugins, named);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
+    this.deps.publishChangedOutside(this.facts.problems().changedOutside);
     if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudgeAnnouncing(named);
     else this.changed.fire(named);
   }

@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type ViewOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'onDidChange' | 'loadOrderStatus' | 'latestLoadOrder' | 'signalChange'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'onDidChange' | 'recordIndexStanding' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
   /** The Plugins view's order of the active plugins; `onChange` is the moment it may have changed, as Editing read the plugins. */
   viewOrder: { of: ViewOrder; onChange(listener: () => void): { dispose(): void } };
@@ -95,7 +95,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
 
   // mEdit holds no load order, as after a restart: it is handed the one it should hold, as any put is.
   const holdsNone = client.onDidChange(() => {
-    const status = client.loadOrderStatus;
+    const status = client.recordIndexStanding;
     if (last === undefined || putsUnanswered > 0 || (status !== undefined && !status.holdsNone)) return;
     handed = undefined;
     put(last.source, last.stringsLanguage);

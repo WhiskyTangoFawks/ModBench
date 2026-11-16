@@ -73,6 +73,8 @@ internal sealed class Indexer : IDisposable
     private bool _validating;
     private int _plannedCount;
     private int _activeCount;
+    // What the load order held while a rebuild has the index closed, which still holds it.
+    private (int Planned, int Active)? _closedForRebuild;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
     private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? ReReadFailure)
     {
@@ -270,7 +272,9 @@ internal sealed class Indexer : IDisposable
                 LoadOrderStatus held;
                 if (_scope is null)
                 {
-                    held = LoadOrderStatus.None with { Version = _standing.Version };
+                    held = _closedForRebuild is { } rebuilding
+                        ? new LoadOrderStatus(LoadOrderState.Reconciling, rebuilding.Planned, rebuilding.Active, [], false, [], Version: _standing.Version)
+                        : LoadOrderStatus.None with { Version = _standing.Version };
                 }
                 else
                 {
@@ -862,6 +866,7 @@ internal sealed class Indexer : IDisposable
                 _plannedCount = 0;
                 _activeCount = 0;
                 _collisionFailures = [];
+                _closedForRebuild = null;
                 _scope = scope;
                 _openedUnchecked = true;
             }
@@ -1556,8 +1561,10 @@ internal sealed class Indexer : IDisposable
         try
         {
             var handedOut = Sequence;
+            lock (_lock) _closedForRebuild = _scope is null ? null : (_plannedCount, _activeCount);
             if (!Close())
             {
+                lock (_lock) _closedForRebuild = null;
                 AskReconcile();
                 return false;
             }
@@ -1566,6 +1573,7 @@ internal sealed class Indexer : IDisposable
             var refusal = heldElsewhere;
             var failed = failure;
             Swap(standing => standing with { HeldElsewhere = refusal, Failure = failed });
+            if (refusal is not null || failed is not null) lock (_lock) _closedForRebuild = null;
         }
         finally { ExitExclusive(); }
         if (heldElsewhere is null && failure is null) AskReconcile();

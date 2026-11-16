@@ -17,7 +17,7 @@ const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-c
 const PLUGIN_CHANGED = notificationEventFixture({ kind: 'plugin-changed', plugin: 'Mod.esp', origin: 'ModA', sequence: 2 });
 
 const settles = (client: InMemoryMEditClient) => {
-  client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.loadOrderStatus?.version ?? 0) + 1 }));
+  client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.recordIndexStanding?.version ?? 0) + 1 }));
 };
 
 
@@ -291,10 +291,10 @@ describe('a record tab going with the record to its new FormKey and reading it t
   });
 
   describe('a change that says everything changed', () => {
-    it('reads the record again when the record filter is cleared', () => {
+    it('reads the record again when mEdit says the record index changed, as it does when it clears the record filter', () => {
       const { client, panel } = openOn('000800:Mod.esp');
 
-      client.emit(notificationEventFixture({ kind: 'record-filter-cleared', recordFilterCleared: { source: 'a', reason: 'Conversion Error' } }));
+      client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
     });

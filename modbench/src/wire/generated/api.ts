@@ -86,6 +86,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/load-order/filter/cleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFilterCleared"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/load-order/sequence": {
         parameters: {
             query?: never;
@@ -1318,10 +1334,6 @@ export interface components {
             parseDiagnosis?: string | null;
             hasChildren: boolean;
         };
-        ChangedPlugin: {
-            name: string;
-            bytesSha256?: string | null;
-        };
         ChildRecordSummary: {
             formKey: string;
             editorId?: string | null;
@@ -1630,6 +1642,12 @@ export interface components {
             value?: unknown;
             checkError?: string | null;
         };
+        FilterCleared: {
+            source: string;
+            reason: string;
+            /** Format: int64 */
+            sequence: number;
+        };
         FlaggedPluginFile: {
             path: string;
             flags: {
@@ -1784,8 +1802,6 @@ export interface components {
             /** Format: int64 */
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
-            changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
-            recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             versionInGitPhase?: components["schemas"]["VersionInGitPhase"] | null;
         };
@@ -1906,6 +1922,7 @@ export interface components {
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
             description?: string | null;
+            changedOutside: boolean;
         };
         PluginSourceNamesRequest: {
             text: string;
@@ -2000,10 +2017,6 @@ export interface components {
         RecordFilter: {
             sql: string;
             source: string;
-        };
-        RecordFilterClearedNotification: {
-            source: string;
-            reason: string;
         };
         RecordResult: {
             formKey: string;
@@ -2474,6 +2487,33 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    GetFilterCleared: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterCleared"];
+                };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

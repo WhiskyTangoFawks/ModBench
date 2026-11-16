@@ -1,7 +1,6 @@
 import type { Message } from '../ports/phrase';
 import type { components } from '../wire/generated/api';
 import {
-  type ChangedPlugin,
   type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
@@ -65,21 +64,18 @@ export function isRefused<Words extends Message = string>(result: unknown): resu
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'version-in-git-progress', 'external-change',
-  'record-filter-cleared', 'record-index-changed',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'version-in-git-progress', 'record-index-changed',
 ] as const;
 
-/** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed `onNotification` call
+/** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed subscription
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 
-/** Each kind's payload as `onNotification` hands it over: a transform of the flat wire
+/** Each kind's payload as a subscriber is handed it: a transform of the flat wire
  *  `NotificationEvent`, carrying only the fields its kind uses. */
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'version-in-git-progress': VersionInGitProgress;
-  'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
-  'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
   'record-index-changed': Record<string, never>;
@@ -91,9 +87,8 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
   return (NOTIFICATION_KINDS as readonly string[]).includes(kind);
 }
 
-/** Re-exported under its own name because it is a callback contract, not merely a query return
- *  type the caller happens to see. */
-export type LoadOrderProgress = LoadOrderStatus;
+/** What the record index stands at for the load order it holds: how far it has indexed it, what failed, and why it refuses. */
+export type RecordIndexStanding = LoadOrderStatus;
 
 /** ADR-0013's snapshot, with the PUT's keys. */
 export type LoadOrderSnapshot = components['schemas']['LoadOrderRequest'];
@@ -102,7 +97,7 @@ export type LoadOrderSnapshot = components['schemas']['LoadOrderRequest'];
  *  mid-flight. `backendFailed`: mEdit did not come up to take it. `applied` carries the terminal
  *  status the Index reached, never read off the PUT alone. */
 export type LoadOrderOutcome =
-  | { outcome: 'applied'; status: LoadOrderProgress }
+  | { outcome: 'applied'; status: RecordIndexStanding }
   | { outcome: 'failed'; message: string }
   | { outcome: 'abandoned' }
   | { outcome: 'backendFailed' };
@@ -113,6 +108,9 @@ export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { 
 
 /** An archive's files, by their paths in it, or none and why it cannot be read. */
 export type ArchiveContents = components['schemas']['ArchiveContents'];
+
+/** mEdit cleared the filter from `source` for `reason`, as the record index stood at `sequence`. */
+export type FilterCleared = components['schemas']['FilterCleared'];
 
 /** A document with changes VS Code holds unsaved, by absolute path. */
 export interface UnsavedDocument { path: string; text: string }
@@ -402,10 +400,8 @@ export interface MEditClient {
   /** Null when mEdit dropped the filter, or the reason it did not. */
   clearFilter(): Promise<string | null>;
   getActiveFilter(token?: ReadCancellation): Promise<RecordFilter | null | ReadFailed>;
-
-  /** A listener handed its kind's payload. A frame missing its kind's payload
-   *  reaches no listener. */
-  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
+  /** Why mEdit cleared the filter, until another is set or cleared on purpose; null when it did not. */
+  getFilterCleared(token?: ReadCancellation): Promise<FilterCleared | null | ReadFailed>;
 
   /** The one change event, shaped as VS Code's `Event`: what changed in the record index, as names or as everything. */
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable;
@@ -425,11 +421,9 @@ export interface MEditClient {
   /** Told the new value wherever `recordIndexProgress` changes. */
   onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable;
 
-  /** The latest load-order status; undefined before the first, and again when a held status
-   *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */
-  readonly loadOrderStatus: LoadOrderStatus | undefined;
-  /** Each status as it arrives, and undefined when a held status resets. */
-  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void;
+  /** What the record index stands at; undefined before the first status, and again when it resets: mEdit has gone, or
+   *  the stream has reopened onto a process that may be another. Moves with `onDidChange` and `onDidChangeRecordIndexProgress`. */
+  readonly recordIndexStanding: RecordIndexStanding | undefined;
 
   /** One snapshot is put at a time, and the newest lands. Answers `backendFailed` once mEdit is gone. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;

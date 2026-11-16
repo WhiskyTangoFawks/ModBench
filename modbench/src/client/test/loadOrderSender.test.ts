@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
-import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../MEditClient';
+import type { LaunchOutcome, LoadOrderOutcome, RecordIndexStanding, LoadOrderSnapshot } from '../MEditClient';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
-const READY_STATUS: LoadOrderProgress = {
+const READY_STATUS: RecordIndexStanding = {
   totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };

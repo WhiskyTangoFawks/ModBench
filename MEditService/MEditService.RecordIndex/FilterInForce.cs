@@ -11,6 +11,13 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 {
     private readonly Lock _lock = new();
     private (string Sql, string Source, IndexScope Scope)? _current;
+    private FilterCleared? _cleared;
+
+    /// <summary>Why the filter was cleared, until another is set or cleared on purpose.</summary>
+    public FilterCleared? Cleared
+    {
+        get { lock (_lock) return _cleared; }
+    }
 
     public RecordFilter? Current
     {
@@ -25,7 +32,7 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
     /// <summary>A filter that is reported must clear, store or no store.</summary>
     public void Clear(Indexer index) => index.InForce(store => Materialize(store, null), () =>
     {
-        lock (_lock) _current = null;
+        lock (_lock) { _current = null; _cleared = null; }
         return null;
     });
 
@@ -34,6 +41,7 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
         lock (_lock)
         {
             if (store.SetFilter(filter?.Sql) is { } rejection) return rejection;
+            _cleared = null;
             _current = filter is { } set ? (set.Sql, set.Source, store.Scope) : null;
             return null;
         }
@@ -51,25 +59,26 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
     /// clears it. One that cannot apply again is cleared and published.</summary>
     public void Reapply(Store.Store store, bool sequenceAdvances)
     {
-        if (ReapplyOrClear(store, sequenceAdvances) is { } cleared) notifications?.Publish(cleared);
+        if (ReapplyOrClear(store, sequenceAdvances)) notifications?.Publish(new RecordIndexChangedNotification(store.Sequence));
     }
 
-    private RecordFilterClearedNotification? ReapplyOrClear(Store.Store store, bool sequenceAdvances)
+    private bool ReapplyOrClear(Store.Store store, bool sequenceAdvances)
     {
         lock (_lock)
         {
             if (_current is not { } filter)
             {
                 store.Filter.Set(null);
-                return null;
+                return false;
             }
-            if (!sequenceAdvances && store.Filter.Active) return null;
-            if (store.Filter.Set(filter.Sql) is not { } rejection) return null;
+            if (!sequenceAdvances && store.Filter.Active) return false;
+            if (store.Filter.Set(filter.Sql) is not { } rejection) return false;
             logger.LogWarning(
                 "Could not re-materialize the active filter ({Error}); the filter is cleared", rejection);
             store.Filter.Set(null);
             _current = null;
-            return new RecordFilterClearedNotification(filter.Source, rejection);
+            _cleared = new FilterCleared(filter.Source, rejection, store.Sequence);
+            return true;
         }
     }
 }

@@ -28,7 +28,7 @@ public sealed class LandingFaultTests : IDisposable
     public void APluginWhoseReadThrows_IsReportedWithItsOwnFault_ThoughTheFilterReapplyLandingItThrowsToo()
     {
         var holder = new LoadOrderHolder();
-        var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is RecordFilterClearedNotification };
+        var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is RecordIndexChangedNotification };
         using var index = Indexes.Open(holder, new FaultingTheFilterThenThrowing(_fixture.InstanceRoot), notifications: notifications);
         index.Reconcile(holder, _fixture.DataFolder, [.. _fixture.Plugins.Where(p => p.Name == Kept)], GameRelease.Fallout4, _fixture.InstanceRoot);
         index.SetFilter("SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7", "filter.sql");

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../../client';
+import type { LaunchOutcome, LoadOrderOutcome, RecordIndexStanding, LoadOrderSnapshot } from '../../client';
+import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
 
-const STATUS: LoadOrderProgress = {
+const STATUS: RecordIndexStanding = {
   totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
@@ -178,6 +179,20 @@ describe('a reconnect, which leaves mEdit holding no load order', () => {
 
     expect(told[1]).toMatchObject({ sent: true, outcome: { outcome: 'failed', message: 'the data folder is not found' } });
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'A.esp']);
+  });
+});
+
+describe('a rebuild of the record index, which still holds the load order', () => {
+  it('hands mEdit no load order again, as the status it publishes holds one', async () => {
+    const { client, toldCount, land, putPluginNames } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false }));
+    client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+    await client.latestLoadOrder();
+
+    expect(putPluginNames()).toEqual(['A.esp']);
   });
 });
 

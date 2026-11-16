@@ -1,5 +1,6 @@
 import type { LoadOrderStatus } from './apiClient';
 import { isSettled } from './apiClient';
+import type { NotificationSource } from './notificationStream';
 import { isMEditGone, type MEditClient, type RecordIndexProgress } from './MEditClient';
 
 export interface LoadOrderStatusKeeper {
@@ -11,7 +12,7 @@ export interface LoadOrderStatusKeeper {
 }
 
 export function keepLoadOrderStatus(
-  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
+  client: NotificationSource & Pick<MEditClient, 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
 ): LoadOrderStatusKeeper {
   let latest: LoadOrderStatus | undefined;
   let settledVersion = -1;

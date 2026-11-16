@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { loadOrderComing } from '../loadOrderComing';
-import type { LoadOrderStatus } from '../../client/apiClient';
+import type { RecordIndexStanding } from '../../client';
 
-const status = (overrides: Partial<LoadOrderStatus>): LoadOrderStatus => ({
+const status = (overrides: Partial<RecordIndexStanding>): RecordIndexStanding => ({
   totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, holdsNone: false, validating: false, ...overrides,
 });
 
-const comingFor = (modbenchHasOne: boolean, loadOrderStatus?: LoadOrderStatus) =>
-  loadOrderComing({ hasLoadOrderToHand: modbenchHasOne, subscribe: () => ({ dispose: () => undefined }) }, { loadOrderStatus }).now();
+const comingFor = (modbenchHasOne: boolean, loadOrderStatus?: RecordIndexStanding) =>
+  loadOrderComing({ hasLoadOrderToHand: modbenchHasOne, subscribe: () => ({ dispose: () => undefined }) }, { recordIndexStanding: loadOrderStatus }).now();
 
 describe('whether a load order is on its way to mEdit', () => {
   it.each([

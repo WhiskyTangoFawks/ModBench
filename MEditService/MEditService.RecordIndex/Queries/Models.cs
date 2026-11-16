@@ -40,7 +40,9 @@ public sealed record PluginResponse(
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
     IReadOnlyList<SourceProblem>? LaterReadFailure,
     // The description in the plugin's header, which LOOT's version() reads. Null for a header with none.
-    string? Description = null);
+    string? Description = null,
+    // ADR-0003: the plugin file's bytes are not the ones Modbench last wrote, as its mod's last check of the disk found.
+    bool ChangedOutside = false);
 
 public record RecordDetail(
     string FormKey,

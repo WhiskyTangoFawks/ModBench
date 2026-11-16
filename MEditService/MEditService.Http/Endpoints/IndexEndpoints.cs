@@ -39,6 +39,12 @@ internal static class IndexEndpoints
             .Produces(204)
             .ProducesProblem(503);
 
+        app.MapGet("/load-order/filter/cleared", GetFilterCleared)
+            .WithName("GetFilterCleared")
+            .WithTags(LoadOrderTag)
+            .Produces<FilterCleared>()
+            .Produces(204);
+
         // The read side's sequence. 0 with no index held, the same "absence is a state" answer
         // GetLoadOrderStatus gives.
         app.MapGet("/load-order/sequence", GetSequence)
@@ -115,6 +121,9 @@ internal static class IndexEndpoints
         logger.LogInformation("Received GetFilter");
         return EndpointMapping.Answered(svc.GetFilter(), filter => filter is null ? Results.NoContent() : Results.Ok(filter));
     }
+
+    private static IResult GetFilterCleared(IQueries svc) =>
+        svc.GetFilterCleared() is { } cleared ? Results.Ok(cleared) : Results.NoContent();
 
     private static IResult PostRebuildIndex(RebuildIndexRequest req, IQueries svc, ILoggerFactory loggerFactory)
     {

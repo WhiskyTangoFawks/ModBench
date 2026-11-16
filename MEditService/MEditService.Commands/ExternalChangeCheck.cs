@@ -6,7 +6,8 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands;
 
 /// <summary>Each compiled plugin changed outside Modbench (ADR-0003).</summary>
-internal sealed class ExternalChangeCheck(INotificationPublisher notifications, IPluginAdapter adapter, ISourceAdapter source)
+internal sealed class ExternalChangeCheck(
+    INotificationPublisher notifications, ChangedOutside changedOutside, IPluginAdapter adapter, ISourceAdapter source)
 {
     private readonly Lock _checking = new();
     // A mod whose repository went since is told it names no changed plugin.
@@ -31,19 +32,26 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
                 }
                 else if (_compiledPluginAtLastCheck.Remove(mod.Key.Folder))
                 {
-                    notifications.Publish(new ExternalChangeNotification(mod.Key.Name, []));
+                    Tell(mod.Key.Name, []);
                 }
             }
         }
     }
 
+    private void Tell(string origin, IReadOnlyList<string> changed)
+    {
+        // No projection moved, so no sequence for a subscriber to catch up to: the state is held before it is told.
+        foreach (var plugin in changedOutside.Replace(origin, changed))
+            notifications.Publish(new PluginChangedNotification(plugin, Sequence: 0));
+    }
+
     private void Tell(string origin, ISourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        notifications.Publish(new ExternalChangeNotification(origin, [.. plugins
+        Tell(origin, [.. plugins
             .Where(plugin => source.SourceReads(plugin))
             .Select(plugin => (plugin.Key, Observed: adapter.HashOf(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))
-            .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
+            .Select(plugin => plugin.Key.Name)]);
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).

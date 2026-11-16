@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
-import type { PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
+import type { PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { rulesReader } from '../../sortingRules/lootMetadata';
 import { PluginFacts, placeOf, type LootInput, type PluginPlace } from '../pluginFacts';
@@ -12,9 +12,10 @@ const failure = (reason: string, address = A): PluginLoadFailure => ({ ...addres
 const diagnosis = (text: string, address = A): PluginDiagnosisReport => (
   { plugin: address.name, origin: address.origin, text }
 );
-const changedOutside = (facts: PluginFacts, origin: string, ...names: string[]): void => {
-  facts.externalChange({ origin, changedPlugins: names.map((name) => ({ name, bytesSha256: 'ab12' })) });
+const answeredChangedOutside = (facts: PluginFacts, changed: boolean, ...plugins: PluginAddress[]): void => {
+  facts.refreshed(plugins.map((plugin) => held({ ...plugin, changedOutside: changed })), plugins);
 };
+const changedOutside = (facts: PluginFacts, ...plugins: PluginAddress[]): void => { answeredChangedOutside(facts, true, ...plugins); };
 
 const CHANGED_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -38,7 +39,7 @@ const loadsBeforeB: Scene = (facts) =>
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], [], [], []);
 const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], [], [], []);
 const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], [], [], []);
-const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
+const changed: Scene = (facts) => changedOutside(facts, A);
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
 
@@ -97,10 +98,10 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     ['failed to read, then sorting errors', scenes(failed, lackingMasters('Ghost.esm')), 'error'],
     ['sorting errors, then unreadable records', scenes(lackingMasters('Ghost.esm'), unreadable), 'error'],
     ['unreadable records over plugin source unreadable', scenes(sourceUnreadable, unreadable), 'error'],
-    ['plugin source unreadable over changed outside', scenes(changed, sourceUnreadable), 'warning'],
-    ['unreadable records, then changed outside', scenes(unreadable, changed), 'error'],
+    ['plugin source unreadable over changed outside', reconciledWith({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true }, changedOutside: true }), 'warning'],
+    ['unreadable records, then changed outside', reconciledWith({ hasParseFailure: true, changedOutside: true }), 'error'],
     ['changed outside, then malformed', scenes(changed, malformed), 'warning'],
-    ['sorting errors over changed outside', scenes(lackingMasters('Ghost.esm'), changed), 'error'],
+    ['sorting errors over changed outside', ((facts: PluginFacts) => facts.reconciled([held({ masters: ['Ghost.esm'], changedOutside: true })], [], [A], [A])) satisfies Scene, 'error'],
     ['unreadable records over malformed', scenes(unreadable, malformed), 'error'],
     ['failed to read over malformed', scenes(malformed, failed), 'error'],
     ['malformed alone', malformed, 'warning'],
@@ -115,9 +116,9 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
 
   it('lists every status in the spec order whatever the order they landed in', () => {
     const facts = new PluginFacts();
-    scenes(malformed, changed)(facts);
+    malformed(facts);
     facts.reconciled([
-      held({ isMaster: true, masters: ['Ghost.esm'], hasParseFailure: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
+      held({ isMaster: true, masters: ['Ghost.esm'], hasParseFailure: true, changedOutside: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
       held({ name: 'B.esp' }),
     ], [failure('Malformed record')], [B, A], [B, A], masterlistOf("plugins:\n  - name: 'A.esp'\n    after: ['B.esp']\n"));
 
@@ -271,12 +272,11 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
     expect(facts.description(A)).toBeUndefined();
   });
 
-  it('replaces what a mod\'s last settle named with its next, and leaves other mods\' alone', () => {
+  it('replaces what a plugin\'s last read said with its next, and leaves other plugins\' alone', () => {
     const facts = new PluginFacts();
     const C = { name: 'C.esp', origin: 'OtherMod' };
-    changedOutside(facts, 'SomeMod', 'A.esp');
-    changedOutside(facts, 'OtherMod', 'C.esp');
-    changedOutside(facts, 'SomeMod');
+    changedOutside(facts, A, C);
+    answeredChangedOutside(facts, false, A);
 
     expect(facts.description(A)).toBeUndefined();
     expect(facts.description(C)).toBe('changed outside Modbench');
@@ -292,16 +292,15 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     expect(facts.problems().malformed).toEqual([diagnosis('first'), diagnosis('second', B)]);
   });
 
-  it('lists a warning for every plugin changed outside, each mod\'s settle replacing its own', () => {
+  it('lists a warning for every plugin changed outside, each plugin\'s read replacing its own', () => {
     const facts = new PluginFacts();
-    changedOutside(facts, 'SomeMod', 'A.esp');
-    changedOutside(facts, 'OtherMod', 'C.esp');
+    changedOutside(facts, A, { name: 'C.esp', origin: 'OtherMod' });
     expect(facts.problems().changedOutside).toEqual([
       { plugin: 'A.esp', origin: 'SomeMod', text: CHANGED_TEXT },
       { plugin: 'C.esp', origin: 'OtherMod', text: CHANGED_TEXT },
     ]);
 
-    changedOutside(facts, 'SomeMod');
+    answeredChangedOutside(facts, false, A);
     expect(facts.problems().changedOutside).toEqual([{ plugin: 'C.esp', origin: 'OtherMod', text: CHANGED_TEXT }]);
   });
 
@@ -487,7 +486,7 @@ describe('PluginFacts — a name under two origins reads its own plugin', () => 
     ['no matching records', bothHeld({ hasMatchingRecords: false }), {}],
     ['a diagnosis', scenes(bothHeld({}), (facts) => facts.diagnosed([diagnosis('ModB is malformed', MOD_B)])), {}],
     ['a failure to read', (facts) => facts.reconciled([sharedAt('ModA')], [failure('Malformed record', MOD_B)], [], []), {}],
-    ['a change outside Modbench', scenes(bothHeld({}), (facts) => changedOutside(facts, 'ModB', 'Shared.esp')), {}],
+    ['a change outside Modbench', scenes(bothHeld({}), (facts) => changedOutside(facts, { name: 'Shared.esp', origin: 'ModB' })), {}],
     ['its own failure to read, the other plugin loaded', (facts) => facts.reconciled([sharedAt('ModB')], [failure('Malformed record', MOD_A)], [], []),
       { description: 'failed to read', icon: 'error', tooltipLines: ['Shared.esp', 'ModA', 'Failed to read: Malformed record'], editable: false, expansion: errorOf('Malformed record') }],
     ['only the other plugin held', (facts) => facts.reconciled([sharedAt('ModB')], [], [], []), { editable: false, expansion: INDEXING }],
@@ -644,8 +643,7 @@ describe('PluginFacts — a plugin\'s masters (plugins.md, The highlight, story 
 describe('PluginFacts — what a row shows of its plugin, as data for the agent (agent.md, Any agent, story 8)', () => {
   it('is each status\'s words and tooltip line, whether it is read-only, whether it is a compiled plugin, and its masters', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'] })], [failure('Malformed record')], [A], [A]);
-    changed(facts);
+    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'], changedOutside: true })], [failure('Malformed record')], [A], [A]);
 
     expect(facts.shown(A)).toEqual({
       statuses: [

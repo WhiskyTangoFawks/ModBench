@@ -8,6 +8,7 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using IQueries = MEditService.RecordIndex.Queries.IQueries;
 
@@ -201,12 +202,14 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>()));
 
+        services.TryAddSingleton<ChangedOutside>();
         services.AddSingleton(sp => new SignalChangeHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IPluginAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
+                sp.GetRequiredService<ChangedOutside>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>())));
 

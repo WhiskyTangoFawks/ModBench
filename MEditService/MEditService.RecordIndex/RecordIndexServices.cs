@@ -5,6 +5,7 @@ using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -19,6 +20,7 @@ public static class RecordIndexServices
 
     public static IServiceCollection AddRecordIndex(this IServiceCollection services, long? memoryLimit = null)
     {
+        services.TryAddSingleton<ChangedOutside>();
         services.AddSingleton<IQueries>(sp =>
         {
             var filter = new FilterInForce(sp.GetRequiredService<ILogger<FilterInForce>>(), sp.GetService<INotificationPublisher>());
@@ -36,7 +38,7 @@ public static class RecordIndexServices
             index.Subscribe();
             return new RecordQueries(
                 index, filter, sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<SchemaReflector>(),
-                sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<ILogger<RecordQueries>>());
+                sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<ChangedOutside>(), sp.GetRequiredService<ILogger<RecordQueries>>());
         });
         services.AddHostedService<IndexAtStartup>();
         return services;

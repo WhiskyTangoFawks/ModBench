@@ -693,42 +693,24 @@ describe('PluginFactsFeed', () => {
     expect(sourceUnreadable.items.map((entries) => entries.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
   });
 
-  it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {
-    const { client, changedOutside, changes } = feedOver();
+  it.each([
+    ['a facts re-read', (feed: PluginFactsFeed) => feed.refresh()],
+    ['a reconcile', (feed: PluginFactsFeed) => feed.reconciled([])],
+  ])('publishes the plugin mEdit says changed outside, to the Problems panel on %s', async (_what, read) => {
+    const { feed, client, changedOutside } = feedOver();
+    client.setQueryAnswer('getPlugins', [held({ changedOutside: true })]);
 
-    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
+    await read(feed);
 
-    expect(changedOutside.items.map((warnings) => warnings.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
-    expect(changes.mock.calls).toEqual([[[A]]]);
+    expect(changedOutside.items.at(-1)?.map(({ plugin, origin }) => ({ plugin, origin }))).toEqual([{ plugin: 'A.esp', origin: 'SomeMod' }]);
   });
 
-  it('names the plugin a later settle of the mod drops from its changed ones, so its row is redrawn', () => {
-    const { client, changes } = feedOver();
-    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
-    changes.mockClear();
-
-    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 1, changedPlugins: [] });
-
-    expect(changes.mock.calls).toEqual([[[A]]]);
-  });
-
-  it('names only the plugins whose changed standing a settle altered', () => {
-    const { client, changes } = feedOver();
-    const settle = (sequence: number, ...names: string[]) => client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence, changedPlugins: names.map((name) => ({ name, bytesSha256: 'ab12' })) });
-    settle(0, 'A.esp', 'B.esp');
-    changes.mockClear();
-
-    settle(1, 'B.esp', 'C.esp');
-
-    expect(changes.mock.calls).toEqual([[[A, { name: 'C.esp', origin: 'SomeMod' }]]]);
-  });
-
-  it('stops listening for the notification once disposed', () => {
+  it('names the plugin the facts re-read found changed outside, so its row is redrawn', async () => {
     const { feed, client, changes } = feedOver();
-    feed.dispose();
+    client.setQueryAnswer('getPlugins', [held({ changedOutside: true })]);
 
-    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [] });
+    await feed.refresh([A]);
 
-    expect(changes).not.toHaveBeenCalled();
+    expect(changes.mock.calls).toEqual([[[A]]]);
   });
 });

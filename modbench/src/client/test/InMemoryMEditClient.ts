@@ -2,9 +2,9 @@ import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { IGNORED_THROWS } from './fixtures';
 import type { Disposable } from '../eventEmitter';
 import type {
-  MEditClient, RecordIndexChange, RecordIndexProgress, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
+  MEditClient, RecordIndexChange, RecordIndexProgress, RecordIndexStanding, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
-import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
+import type { NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
@@ -19,7 +19,7 @@ type QueryMethod =
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
-  | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
+  | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'getFilterCleared';
 
 type CommandMethod =
   | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'rebuildIndex' | 'versionInGit' | 'build' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getCreateChanges' | 'getDeleteChanges'
@@ -257,10 +257,7 @@ export class InMemoryMEditClient implements MEditClient {
   onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
-  get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
-  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
-    return this.loadOrderStatusKept.onStatus(listener);
-  }
+  get recordIndexStanding(): RecordIndexStanding | undefined { return this.loadOrderStatusKept.current(); }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
@@ -278,11 +275,6 @@ export class InMemoryMEditClient implements MEditClient {
   /** A put of the unsaved documents answers: undefined when mEdit took them, else why not. */
   settleHandOver(failure: ReadFailed | undefined): void {
     for (const listener of this.handOverListeners) listener(failure);
-  }
-
-  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
-    this.record('onNotification', [kind]);
-    return this.notifications.onNotification(kind, listener);
   }
 
   emit(event: NotificationEvent): void {
@@ -507,4 +499,5 @@ export class InMemoryMEditClient implements MEditClient {
   }
   clearFilter(): ReturnType<MEditClient['clearFilter']> { return this.query('clearFilter', []); }
   getActiveFilter(): ReturnType<MEditClient['getActiveFilter']> { return this.query('getActiveFilter', []); }
+  getFilterCleared(): ReturnType<MEditClient['getFilterCleared']> { return this.query('getFilterCleared', []); }
 }

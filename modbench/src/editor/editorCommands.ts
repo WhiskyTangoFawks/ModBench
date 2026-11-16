@@ -41,7 +41,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'loadOrderStatus' | 'getRecordOwners'
+    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'recordIndexStanding' | 'getRecordOwners'
     | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -67,7 +67,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
     recordIndexMayBeLate: () => meditClient.recordIndexMayBeLate,
     loadOrderComing: () => deps.loadOrderComing.now(),
-    loadFailures: () => meditClient.loadOrderStatus?.failures ?? [],
+    loadFailures: () => meditClient.recordIndexStanding?.failures ?? [],
     modFacts: deps.modFacts,
   };
   const recordEditorProvider = new RecordEditorProvider({ context, tabs, routerDeps, client: meditClient, channel: outputChannel });

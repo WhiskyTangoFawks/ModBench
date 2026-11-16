@@ -206,7 +206,7 @@ public sealed class SwaggerSchemaTests
         {
             "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "isImmutable",
             "origin", "inLoadOrder",
-            "hasMatchingRecords", "isCompiledPlugin", "hasParseFailure",
+            "hasMatchingRecords", "isCompiledPlugin", "hasParseFailure", "changedOutside",
         })]
     [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure", "hasChildren", "workingTreeState" })]
     public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot_BecauseSwashbuckleIgnoresNullableReferenceTypeAnnotations(
@@ -240,7 +240,6 @@ public sealed class SwaggerSchemaTests
     [Theory]
     [InlineData("CellSummary", "editorId")]
     [InlineData("RecordSummary", "editorId")]
-    [InlineData("ChangedPlugin", "bytesSha256")]
     [InlineData("PluginResponse", "laterReadFailure")]
     public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
     {

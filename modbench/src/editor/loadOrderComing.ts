@@ -10,12 +10,12 @@ export interface LoadOrderComing {
 
 /** On its way while mEdit reports one that no refusal has ended, or, before it reports any, while the instance has one to hand (ADR-0013). */
 export function loadOrderComing(
-  instance: Pick<Instance, 'hasLoadOrderToHand' | 'subscribe'> | undefined, client: Pick<MEditClient, 'loadOrderStatus'>,
+  instance: Pick<Instance, 'hasLoadOrderToHand' | 'subscribe'> | undefined, client: Pick<MEditClient, 'recordIndexStanding'>,
 ): LoadOrderComing {
   return {
     now: () => {
-      const { loadOrderStatus } = client;
-      return loadOrderStatus ? loadOrderStatus.refusal === undefined : instance?.hasLoadOrderToHand ?? false;
+      const { recordIndexStanding } = client;
+      return recordIndexStanding ? recordIndexStanding.refusal === undefined : instance?.hasLoadOrderToHand ?? false;
     },
     onChanged: (listener) => instance?.subscribe(() => { listener(); }, { loadOrderSnapshot: true }) ?? { dispose: () => undefined },
   };

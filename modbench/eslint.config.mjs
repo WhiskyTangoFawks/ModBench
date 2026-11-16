@@ -150,6 +150,8 @@ const SYNTAX = {
     message: MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
     watcher: ['CallExpression[callee.name=/^create\\w*Watcher$/]', 'CallExpression[callee.property.name=/^create\\w*Watcher$/]']
         .map((selector) => ({ selector, message: 'Every watcher on the instance is created inside the Instance adapter\'s watch.' })),
+    clientStatus: ['MemberExpression[property.name=/^(onNotification|onLoadOrderStatus|loadOrderStatus)$/]']
+        .map((selector) => ({ selector, message: 'The notification kinds and the load order status stay inside the mEdit client: a view reads, the change event, and whether the record index may be late.' })),
     dynamicImport: [{ selector: 'ImportExpression', message: 'A dynamic import() evades no-restricted-imports; import at the top of the file.' }],
     typeImport: [{ selector: 'TSImportType', message: 'A type is imported by an import declaration, which no-restricted-imports checks; `import(\'x\')` in a type position evades it.' }],
     hostFs: ['MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', 'MemberExpression[object.name=\'workspace\'][property.name=\'fs\']']
@@ -161,7 +163,7 @@ const SYNTAX = {
     activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
 };
 /** @type {(keyof typeof SYNTAX)[]} */
-const EVERYWHERE_IN_SRC = ['message', 'watcher', 'typeImport', 'dynamicImport'];
+const EVERYWHERE_IN_SRC = ['message', 'watcher', 'typeImport', 'dynamicImport', 'clientStatus'];
 /** @param {(keyof typeof SYNTAX)[]} concerns */
 const restrictedSyntax = (concerns) => ['error', ...concerns.flatMap((concern) => SYNTAX[concern])];
 /** @param {(keyof typeof SYNTAX)[]} exempt */
@@ -367,8 +369,23 @@ export default defineConfig(
     },
     {
         files: ['src/*/test/**/*.ts'],
+        ignores: ['**/*.test.ts', 'src/client/test/**'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(['message', 'clientStatus']) },
+    },
+    {
+        files: ['src/client/test/**/*.ts'],
         ignores: ['**/*.test.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
+    },
+    {
+        files: ['src/**/*.test.ts'],
+        ignores: ['src/client/**'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(['clientStatus']) },
+    },
+    {
+        files: ['src/client/**/*.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('clientStatus')) },
     },
     {
         files: ['src/instanceAdapter/watchFiles.ts'],

@@ -280,15 +280,12 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     conflictsComputed: true, failures: [], version: 4, validating: false,
   };
   const modlistProgress: NotificationEvent['modlistProgress'] = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
-  const changedPlugins = [{ name: 'A.esp', bytesSha256: 'abc' }];
 
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), {
       totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false, validating: false,
     }],
     ['version-in-git-progress', rowsChanged([], { kind: 'version-in-git-progress', modlistProgress, versionInGitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
-    ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
-    ['record-filter-cleared', rowsChanged([], { kind: 'record-filter-cleared', recordFilterCleared: { source: 'a.sql', reason: 'boom' } }), { source: 'a.sql', reason: 'boom' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
   ];
@@ -298,8 +295,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     const hear = (kind: NotificationKind) => (payload: unknown) => { heard.push([kind, payload]); };
     subscriber.onNotification('load-order-status', hear('load-order-status'));
     subscriber.onNotification('version-in-git-progress', hear('version-in-git-progress'));
-    subscriber.onNotification('external-change', hear('external-change'));
-    subscriber.onNotification('record-filter-cleared', hear('record-filter-cleared'));
     subscriber.onNotification('rows-changed', hear('rows-changed'));
     subscriber.onNotification('plugin-changed', hear('plugin-changed'));
     return heard;
@@ -312,16 +307,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     subscriber.dispatch(event);
 
     expect(heard).toEqual([[kind, payload]]);
-  });
-
-  it('gives an external-change frame without changedPlugins an empty list', () => {
-    const subscriber = unopened();
-    const heard: unknown[] = [];
-    subscriber.onNotification('external-change', (p) => heard.push(p));
-
-    subscriber.dispatch(rowsChanged([], { kind: 'external-change' }));
-
-    expect(heard).toEqual([{ origin: 'ModA', changedPlugins: [] }]);
   });
 
   it.each(['load-order-status', 'version-in-git-progress'] as const)('skips a %s frame missing its payload', (kind) => {

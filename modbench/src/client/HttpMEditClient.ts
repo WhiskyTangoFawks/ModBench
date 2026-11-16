@@ -25,7 +25,7 @@ import {
   type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
-  type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type ReadCancellation, type RecordIndexChange, type RecordIndexProgress, type NotificationKind, type NotificationPayloads,
+  type LoadOrderSnapshot, type RecordIndexStanding, type MEditClient, type ReadCancellation, type RecordIndexChange, type RecordIndexProgress, type FilterCleared,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
@@ -237,10 +237,7 @@ class HttpMEditClient implements MEditClient {
   get recordIndexProgress(): RecordIndexProgress | undefined { return this.loadOrderStatusKept.progress(); }
   onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
 
-  get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
-  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
-    return this.loadOrderStatusKept.onStatus(listener);
-  }
+  get recordIndexStanding(): RecordIndexStanding | undefined { return this.loadOrderStatusKept.current(); }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
@@ -256,10 +253,6 @@ class HttpMEditClient implements MEditClient {
   }
 
   // ── notifications ────────────────────────────────────────────────────────
-
-  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
-    return this.notifications.onNotification(kind, listener);
-  }
 
   // ── writes ───────────────────────────────────────────────────────────────
 
@@ -368,7 +361,7 @@ class HttpMEditClient implements MEditClient {
   /** Discards the record index and refills it against the load order mEdit holds (commands.md, Instance). A 423 is
    *  `heldElsewhere` (ADR-0010), never a rejection. The refill is a sweep, late until it settles. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
-    const refills = this.loadOrderStatus?.holdsNone === false;
+    const refills = this.recordIndexStanding?.holdsNone === false;
     try {
       const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
       if (!response.ok) {
@@ -403,8 +396,8 @@ class HttpMEditClient implements MEditClient {
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
 
-    let resolveTerminal!: (status: LoadOrderProgress) => void;
-    const terminal = new Promise<LoadOrderProgress>((resolve) => { resolveTerminal = resolve; });
+    let resolveTerminal!: (status: RecordIndexStanding) => void;
+    const terminal = new Promise<RecordIndexStanding>((resolve) => { resolveTerminal = resolve; });
     // A box, not a `let`: the subscriber below closes over it before this call's own PUT answers
     // with the version it holds.
     const applying: { version?: number; latest?: LoadOrderStatus } = {};
@@ -453,8 +446,8 @@ class HttpMEditClient implements MEditClient {
   // A fast reconcile's tick can land before the PUT's answer, and an identical snapshot's no-op
   // publishes none: the latest tick the call heard, else the process's own current status.
   private async terminalAlready(
-    latest: LoadOrderProgress | undefined, version: number,
-  ): Promise<LoadOrderProgress | undefined> {
+    latest: RecordIndexStanding | undefined, version: number,
+  ): Promise<RecordIndexStanding | undefined> {
     if (latest && isTerminalLoadOrderStatusFor(latest, version)) return latest;
     const current = await this.currentLoadOrderStatus();
     return current && isTerminalLoadOrderStatusFor(current, version) ? current : undefined;
@@ -462,7 +455,7 @@ class HttpMEditClient implements MEditClient {
 
   // A reopened stream carries none of the ticks published while it was down, so the process's
   // own status is read again when it opens.
-  private rereadOnReopen(version: number, settle: (status: LoadOrderProgress) => void): () => void {
+  private rereadOnReopen(version: number, settle: (status: RecordIndexStanding) => void): () => void {
     return this.notifications.onReconnected(() => {
       void this.currentLoadOrderStatus().then((current) => {
         if (current && isTerminalLoadOrderStatusFor(current, version)) settle(current);
@@ -515,11 +508,11 @@ class HttpMEditClient implements MEditClient {
   // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving
   // 'running' abandons it too — once the stream is gone, nothing is left to hear its tick.
   private awaitTerminalOrAbort(
-    terminal: Promise<LoadOrderProgress>, signal: AbortSignal,
-  ): Promise<LoadOrderProgress | undefined> {
+    terminal: Promise<RecordIndexStanding>, signal: AbortSignal,
+  ): Promise<RecordIndexStanding | undefined> {
     return new Promise((resolve) => {
       let settled = false;
-      const settle = (status: LoadOrderProgress | undefined): void => {
+      const settle = (status: RecordIndexStanding | undefined): void => {
         if (settled) return;
         settled = true;
         signal.removeEventListener('abort', onAbort);
@@ -1011,6 +1004,11 @@ class HttpMEditClient implements MEditClient {
 
   getActiveFilter(token?: ReadCancellation): Promise<RecordFilter | null | ReadFailed> {
     return this.read('getActiveFilter', (api, signal) => api.GET('/load-order/filter', { signal }), noBodyFails,
+      { token, absent: { status: 204, answers: null } });
+  }
+
+  getFilterCleared(token?: ReadCancellation): Promise<FilterCleared | null | ReadFailed> {
+    return this.read('getFilterCleared', (api, signal) => api.GET('/load-order/filter/cleared', { signal }), noBodyFails,
       { token, absent: { status: 204, answers: null } });
   }
 
