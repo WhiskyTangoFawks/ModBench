@@ -18,6 +18,7 @@ public sealed class DecompileAndRepairPluginHandler
     private readonly LoadOrderHolder _loadOrder;
     private readonly IPluginAdapter _adapter;
     private readonly ISourceAdapter _source;
+    private readonly HeldWrites _held;
     private readonly ILogger _logger;
     private readonly PluginRepairer _repairer;
     private readonly ModInit _init;
@@ -25,10 +26,10 @@ public sealed class DecompileAndRepairPluginHandler
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal DecompileAndRepairPluginHandler(
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
-        SchemaReflector schemaReflector, ILogger<DecompileAndRepairPluginHandler> logger)
+        SchemaReflector schemaReflector, HeldWrites held, ILogger<DecompileAndRepairPluginHandler> logger)
     {
         var decompiler = new PluginDecompiler(logger, adapter, source, schemaReflector);
-        (_loadOrder, _adapter, _source, _logger) = (loadOrder, adapter, source, logger);
+        (_loadOrder, _adapter, _source, _held, _logger) = (loadOrder, adapter, source, held, logger);
         _repairer = new PluginRepairer(adapter, decompiler);
         _init = new ModInit(logger, source, modFolders, decompiler);
     }
@@ -50,10 +51,8 @@ public sealed class DecompileAndRepairPluginHandler
         var leftOutOfANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
         var heldByANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
         var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
-        {
-            cancel.ThrowIfCancellationRequested();
-            return RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force, cancel);
-        });
+            RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force));
+        await _held.ReadBackSource([.. repaired.Landed.Select(landed => landed.Item.Plugin), .. heldByANewSourceFolder], cancel);
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
             refused => Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder),
@@ -81,7 +80,7 @@ public sealed class DecompileAndRepairPluginHandler
 
     private async Task<ItemAnswer<DecompileAndRepairRefusal, NoOutcome>> RepairOneAsync(
         LoadOrderSnapshot loadOrder, PluginToRepair item, RepairTarget target, IReadOnlySet<PluginAddress> repairedHere,
-        (HashSet<PluginAddress> LeftOut, HashSet<PluginAddress> Held) newSourceFolder, bool force, CancellationToken cancel)
+        (HashSet<PluginAddress> LeftOut, HashSet<PluginAddress> Held) newSourceFolder, bool force)
     {
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
         var (plugin, mod) = (RepairTarget.Diagnosed)target;
@@ -96,7 +95,7 @@ public sealed class DecompileAndRepairPluginHandler
                 workingTree.Message + " Nothing was written.");
         }
 
-        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, cancel)).Holds(out var repairedSource, out var failure))
+        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, CancellationToken.None)).Holds(out var repairedSource, out var failure))
             return RefusedAs(plugin, failure);
         var (decompiled, repair) = (repairedSource.Decompiled, repairedSource.Written);
         if (decompiled.Source is not { } repaired)
@@ -116,18 +115,18 @@ public sealed class DecompileAndRepairPluginHandler
             var leftOut = repairedHere.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
                 loadOrder, new ModToVersionInGit(mod.Name, mod.Folder, made, Commit: true),
-                leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
+                leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, CancellationToken.None);
             if (init is ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} is not a source mod, and making a source folder for {plugin.Name} was refused: {initMessage}");
             newSourceFolder.LeftOut.UnionWith(leftOut);
             newSourceFolder.Held.UnionWith(((ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Wrote)init).Outcome);
-            return Written([plugin.Key, .. ((ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Wrote)init).Outcome]);
+            return Landed;
         }
 
         switch (repository.CommitRepair(plugin.Key, new TreeCommit(baseline, BaselineMessage(plugin, repair)), repairedCommit, repair.OriginalSha256))
         {
             case null:
-                return Written([plugin.Key]);
+                return Landed;
             case SourceFailure.GitUnavailable gitMissing:
                 return Refused(DecompileAndRepairRefusal.GitUnavailable, gitMissing.Reason);
             case SourceFailure.TwinFolders twins:
@@ -146,11 +145,7 @@ public sealed class DecompileAndRepairPluginHandler
         _ => Refused(DecompileAndRepairRefusal.RepairFailed, $"{plugin.Name}'s repair could not be made: {failure.Reason}."),
     };
 
-    private ItemAnswer<DecompileAndRepairRefusal, NoOutcome> Written(IEnumerable<PluginAddress> plugins)
-    {
-        _loadOrder.SourceWritten([.. plugins.Distinct(PluginAddress.Comparer).Select(plugin => new PluginChange(plugin, null))]);
-        return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
-    }
+    private static readonly ItemAnswer<DecompileAndRepairRefusal, NoOutcome> Landed = ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
 
     private static DecompileAndRepairRefusal RefusalOfInit(VersionInGitRefusal refusal) => refusal switch
     {

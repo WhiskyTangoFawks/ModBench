@@ -42,8 +42,28 @@ internal sealed class SourceModBuild
             _ => throw new ArgumentOutOfRangeException(nameof(mod), mod.Step, "A build file names no other built-in step."),
         };
         return ran is ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote { Outcome: var outcome }
-            ? ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(outcome with { Uncommitted = source.Uncommitted, Unpushed = source.Unpushed })
+            ? ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(outcome with
+            {
+                Uncommitted = source.Uncommitted,
+                Unpushed = source.Unpushed,
+                MadeFilesOf = PluginsOf(loadOrder, outcome.Made.Select(made => _modFolders.FullPathOf(mod.Folder, made.Path))),
+            })
             : ran;
+    }
+
+    // A copy can place a plugin, and an unpack or a pack its strings.
+    private List<PluginAddress>? PluginsOf(LoadOrderSnapshot loadOrder, IEnumerable<string> paths)
+    {
+        List<PluginAddress> plugins = [];
+        foreach (var path in paths)
+        {
+            switch (_plugins.Touching(loadOrder, path))
+            {
+                case PathAnswer.Unnamed: return null;
+                case PathAnswer.Touches touches: plugins.AddRange(touches.Plugins.Select(plugin => plugin.Key)); break;
+            }
+        }
+        return plugins;
     }
 
     private static IReadOnlyList<string> PathsRead(BuildStep step) => step switch
@@ -192,16 +212,18 @@ internal sealed class SourceModBuild
 
         var repository = _source.OverFolder(provider, loadOrder.GameRelease);
         SortedSet<ReplacedTree> replaced = new(Comparer<ReplacedTree>.Create((a, b) => string.CompareOrdinal(a.Aside, b.Aside)));
+        List<PluginAddress> written = [];
         foreach (var (plugin, source) in decompiled)
         {
             if (!repository.ReplaceSourceMovingAside(plugin.Key, source.Files, source.BinarySha256).Holds(out var aside, out var failure))
             {
                 var why = $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}";
-                return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(why) with { Replaced = [.. replaced] });
+                return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(why) with { Replaced = [.. replaced], Decompiled = written });
             }
             replaced.UnionWith(aside.Select(tree => new ReplacedTree(tree.Aside, tree.Path)));
+            written.Add(plugin.Key);
         }
-        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null) { Replaced = [.. replaced] });
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null) { Replaced = [.. replaced], Decompiled = written });
     }
 
     private static IReadOnlyList<MadeFile> MadeOf(IEnumerable<(string Path, bool Vouched)> files)

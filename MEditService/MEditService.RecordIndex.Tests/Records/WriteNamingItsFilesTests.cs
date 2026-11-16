@@ -30,7 +30,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     private readonly CountingTreeSource _source = new(TestAdapters.Source());
     private readonly LoadOrderHolder _holder = new();
     private readonly OpenedIndex _index;
-    private Action _onWritten = () => { };
 
     public WriteNamingItsFilesTests()
     {
@@ -45,7 +44,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             .BuildScattered()
             .CompiledPlugin();
         (_keys, _npc) = (keys, npc);
-        _holder.Written += (_, _) => _onWritten();
         _index = Indexes.Open(_holder, source: _source);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, Instance("written"));
     }
@@ -117,10 +115,14 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     private void Written((LoadOrderEntry Entry, SourceChanges Made) saved)
     {
-        var own = _holder.BeginOwnWrites();
-        _holder.SourceWritten([Named(saved)]);
-        _index.AwaitWrites(own);
+        Assert.Null(Hold(Handed(saved)).GetAwaiter().GetResult());
         _index.Settled();
+    }
+
+    private void Watched((LoadOrderEntry Entry, SourceChanges Made) saved)
+    {
+        _index.SignalChange([Named(saved)]);
+        Waits.Reached(() => !_index.Status.Validating, "the watch's read");
     }
 
     private static string RowsIn(string instance) =>
@@ -155,7 +157,21 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             test.Overriding.Key, test.Copied(test._keys.Cell, test._keys.Cell.ToString()))),
     };
 
-    public static TheoryData<string> WriteKinds() => [.. Writes.Keys];
+    private static readonly Dictionary<string, Action<WriteNamingItsFilesTests, (LoadOrderEntry, SourceChanges)>> Roads = new()
+    {
+        ["handed by its writer"] = (test, saved) => test.Written(saved),
+        ["named by the watch"] = (test, saved) => test.Watched(saved),
+    };
+
+    public static TheoryData<string, string> WriteKindsByRoad()
+    {
+        TheoryData<string, string> table = [];
+        foreach (var write in Writes.Keys)
+        {
+            foreach (var road in Roads.Keys) table.Add(write, road);
+        }
+        return table;
+    }
 
     private static readonly string[] MakingACellsBlock = ["an interior cell created", "an exterior cell created", "a record copied as an override"];
 
@@ -164,19 +180,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     public static TheoryData<string> WritesMakingACellsBlock() => [.. MakingACellsBlock];
 
     [Theory]
-    [MemberData(nameof(WriteKinds))]
-    public void AWriteNamingItsFiles_LeavesTheRowsAFreshReadOfTheTreeHolds(string write)
+    [MemberData(nameof(WriteKindsByRoad))]
+    public void AWrite_LeavesTheRowsAFreshReadOfTheTreeHolds(string write, string road)
     {
-        Written(Writes[write](this));
-
-        AssertTheRowsAFreshReadHolds();
-    }
-
-    [Theory]
-    [MemberData(nameof(WriteKinds))]
-    public async Task AHandedWrite_LeavesTheRowsAReadOfTheSameBytesHolds(string write)
-    {
-        Assert.Null(await Hold(Handed(Writes[write](this))));
+        Roads[road](this, Writes[write](this));
 
         AssertTheRowsAFreshReadHolds();
     }
@@ -390,69 +397,36 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     }
 
     [Fact]
-    public void AWriteNamingTheHeader_ReadsThePluginWhole()
+    public async Task AWriteNamingTheHeader_ReadsThePluginWhole()
     {
         var header = Directory.GetFiles(Path.Combine(Container.ModFolderOf(), PluginSourceRoot.For(ContainerMod.PluginName)), "*.json", SearchOption.TopDirectoryOnly).Single();
         var wholeReads = _source.WholeTreeReads;
 
-        var own = _holder.BeginOwnWrites();
-        _holder.SourceWritten([new PluginChange(Container.Key, [header])]);
-        _index.AwaitWrites(own);
+        Assert.Null(await Hold(new HandedPlugin(Container.Key, [header], [])));
 
         Assert.True(_source.WholeTreeReads > wholeReads);
     }
 
     [Fact]
-    public async Task AWriteCountedWhileATurnReadsAnotherWritesFiles_IsReadBeforeTheWriterIsAnswered()
+    public async Task AHandTakenWhileATurnReadsAnotherWritesFiles_IsAnsweredOnlyOnceItsOwnFilesAreRead()
     {
-        var renamedNpc = Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc")));
-        var renamedCell = Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_keys.Cell, "RenamedCell")));
-        using var paused = new FirstRaisePaused();
-        _onWritten = paused.Raised;
-        var own = _holder.BeginOwnWrites();
-        var first = Task.Run(() => _holder.SourceWritten([Named(renamedNpc)]));
-        paused.Counted.Wait();
-        var second = Task.Run(() => _holder.SourceWritten([Named(renamedCell)]));
-
-        paused.Released.Set();
-        await Task.WhenAll(first, second);
-        _index.AwaitWrites(own);
-
-        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
-        Assert.Equal("RenamedCell", Record(_keys.Cell).EditorId);
-    }
-
-    [Fact]
-    public async Task AWriteCountedAsATurnBegins_IsNotVouchedForByThatTurnsNamedRead()
-    {
-        var deleteOverride = RepositoryOf(Overriding).ChangesToRemove(Overriding.Key, Identity(_npc, Overriding));
-        var createNpc = RepositoryOf(Container).ChangesToPut(Container.Key, Copied(_npc, NewFormKey, "CreatedNpc"));
-        var renameNpc = RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"));
-        using var held = new FirstAndThirdNamedReadsHeld();
+        var deleteOverride = Saved(Overriding, RepositoryOf(Overriding).ChangesToRemove(Overriding.Key, Identity(_npc, Overriding)));
+        var renamedNpc = NpcRenamed();
+        using var held = new FirstTwoNamedReadsHeld();
         _source.BeforeEachNamedRead = held.Before;
-        var own = _holder.BeginOwnWrites();
-        _holder.SourceWritten([Named(Saved(Overriding, deleteOverride))]);
+        _index.SignalChange([Named(deleteOverride)]);
         held.FirstReached.Wait();
-        _holder.SourceWritten([Named(Saved(Container, createNpc))]);
-        var renamedNpc = Saved(Container, renameNpc);
-        using var paused = new FirstRaisePaused();
-        _onWritten = paused.Raised;
-        var npcWritten = Task.Run(() => _holder.SourceWritten([Named(renamedNpc)]));
-        paused.Counted.Wait();
+        var hand = Hold(Handed(renamedNpc));
         held.First.Set();
-        Waits.Reached(() => _source.NamedReads == 2 && !_index.Status.Validating, "the turn reading the created record");
-        paused.Released.Set();
-        await npcWritten;
+        held.SecondReached.Wait();
 
-        var awaited = _index.Queries.AwaitSourceWrites(own, CancellationToken.None);
-
-        Assert.False(awaited.IsCompleted);
-        held.Third.Set();
-        Assert.Null(await awaited);
+        Assert.False(hand.IsCompleted);
+        held.Second.Set();
+        Assert.Null(await hand);
         Assert.Equal("RenamedNpc", Record(_npc).EditorId);
     }
 
-    private sealed class FirstAndThirdNamedReadsHeld : IDisposable
+    private sealed class FirstTwoNamedReadsHeld : IDisposable
     {
         private readonly CancellationTokenSource _abandoned = new();
         private int _reads = -1;
@@ -461,7 +435,9 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
         public ManualResetEventSlim First { get; } = new();
 
-        public ManualResetEventSlim Third { get; } = new();
+        public ManualResetEventSlim SecondReached { get; } = new();
+
+        public ManualResetEventSlim Second { get; } = new();
 
         public void Before()
         {
@@ -471,7 +447,11 @@ public sealed class WriteNamingItsFilesTests : IDisposable
                 FirstReached.Set();
                 First.Wait(_abandoned.Token);
             }
-            if (read == 2) Third.Wait(_abandoned.Token);
+            if (read == 1)
+            {
+                SecondReached.Set();
+                Second.Wait(_abandoned.Token);
+            }
         }
 
         public void Dispose()
@@ -480,32 +460,8 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             _abandoned.Dispose();
             FirstReached.Dispose();
             First.Dispose();
-            Third.Dispose();
-        }
-    }
-
-    private sealed class FirstRaisePaused : IDisposable
-    {
-        private readonly CancellationTokenSource _abandoned = new();
-        private int _raised;
-
-        public ManualResetEventSlim Counted { get; } = new();
-
-        public ManualResetEventSlim Released { get; } = new();
-
-        public void Raised()
-        {
-            if (Interlocked.Exchange(ref _raised, 1) == 1) return;
-            Counted.Set();
-            Released.Wait(_abandoned.Token);
-        }
-
-        public void Dispose()
-        {
-            _abandoned.Cancel();
-            _abandoned.Dispose();
-            Counted.Dispose();
-            Released.Dispose();
+            SecondReached.Dispose();
+            Second.Dispose();
         }
     }
 

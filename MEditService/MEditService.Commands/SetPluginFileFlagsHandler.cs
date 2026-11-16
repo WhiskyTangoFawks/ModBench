@@ -42,11 +42,14 @@ public sealed class SetPluginFileFlagsHandler
 {
     private readonly IPluginAdapter _plugins;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly HeldWrites _held;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder) => (_plugins, _loadOrder) = (plugins, loadOrder);
+    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder, HeldWrites held) =>
+        (_plugins, _loadOrder, _held) = (plugins, loadOrder, held);
 
-    public SetPluginFileFlagsResult Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease)
+    /// <summary>Answers once the record index has read back each plugin the load order holds that was written.</summary>
+    public async Task<SetPluginFileFlagsResult> Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease, CancellationToken cancel = default)
     {
         var known = GameCodecs.For(gameRelease).LoadFlags;
         List<PluginFileFlagsSet> applied = [];
@@ -60,18 +63,18 @@ public sealed class SetPluginFileFlagsHandler
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
-        if (PluginsWritten(applied.Select(set => set.Path)) is { Count: > 0 } written) _loadOrder.SourceWritten(written);
+        await _held.ReadBack(PluginsWritten(applied.Select(set => set.Path)), cancel);
         return new SetPluginFileFlagsResult(applied, refused);
     }
 
     // The record index holds nothing of a file no plugin of the load order is, so a write to one has nothing to be read.
-    private List<PluginChange> PluginsWritten(IEnumerable<string> paths)
+    private List<PluginAddress> PluginsWritten(IEnumerable<string> paths)
     {
         var held = _loadOrder.Current.Plugins;
         return [.. paths
             .Select(path => held.FirstOrDefault(plugin => string.Equals(plugin.Path, path, StringComparison.OrdinalIgnoreCase)))
             .OfType<RegisteredPlugin>()
-            .Select(plugin => new PluginChange(plugin.Key, null))];
+            .Select(plugin => plugin.Key)];
     }
 
     private static PluginFileFlagRefusal RefusalOf(PluginFailure failure) =>

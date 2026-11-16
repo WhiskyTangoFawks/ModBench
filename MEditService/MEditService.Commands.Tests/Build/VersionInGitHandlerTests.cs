@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -55,6 +56,29 @@ public sealed class VersionInGitHandlerTests : IDisposable
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
+    }
+
+    [Fact]
+    public async Task Init_HandsTheRecordIndexEachPluginItsSourceFolderHolds_ToReadBack()
+    {
+        _holder.Apply(Snapshot);
+        var index = HandedWrites.Create();
+
+        await TestEditService.VersionInGitHandler(_holder, index: index.Queries).VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin));
+
+        Assert.Equal([HandedPlugin.ReadBackSource(new PluginAddress(PluginName, Origin))], Assert.Single(index.Hands).Require());
+    }
+
+    [Fact]
+    public async Task Init_WhoseRequestIsCancelled_StillPutsEveryPluginsSourceInItsSourceFolder()
+    {
+        _holder.Apply(Snapshot);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await TestEditService.VersionInGitHandler(_holder).VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin), cancelled.Token);
+
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
     }
 
     [Fact]

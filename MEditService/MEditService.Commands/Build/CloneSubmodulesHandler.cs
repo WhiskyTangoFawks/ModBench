@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
@@ -34,11 +36,34 @@ public enum CloneRefusal
 public sealed class CloneSubmodulesHandler
 {
     private readonly ISourceAdapter _source;
+    private readonly LoadOrderHolder _loadOrder;
+    private readonly HeldWrites _held;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CloneSubmodulesHandler(ISourceAdapter source) => _source = source;
+    internal CloneSubmodulesHandler(ISourceAdapter source, LoadOrderHolder loadOrder, HeldWrites held) =>
+        (_source, _loadOrder, _held) = (source, loadOrder, held);
 
-    public CloneSubmodulesResult Clone(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
+    /// <summary>Answers once the record index has read back each plugin whose source folder, as the held load order names it,
+    /// a clone made.</summary>
+    public async Task<CloneSubmodulesResult> Clone(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
+    {
+        var cloned = CloneEach(submodules, cancel);
+        var sourcing = cloned.Applied.ToDictionary(submodule => submodule.Folder, submodule => SourcedFrom(submodule.Folder));
+        foreach (var folder in sourcing.Where(sourced => sourced.Value.Count == 0).Select(sourced => sourced.Key))
+            _held.Unread($"the load order names no plugin source in {folder}, so its plugins' rows are read from their binaries.");
+        await _held.ReadBackSource(sourcing.Values.SelectMany(plugins => plugins), cancel);
+        return cloned;
+    }
+
+    private List<PluginAddress> SourcedFrom(string folder) =>
+        [.. _loadOrder.Current.Plugins
+            .Where(plugin => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder }
+                && string.Equals(Unslashed(folder), Unslashed(sourceFolder), FilePaths.Comparison))
+            .Select(plugin => plugin.Key)];
+
+    private static string Unslashed(string folder) => folder.TrimEnd('/', '\\');
+
+    private CloneSubmodulesResult CloneEach(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
     {
         List<SubmoduleCloned> cloned = [];
         List<SubmoduleNotCloned> refused = [];

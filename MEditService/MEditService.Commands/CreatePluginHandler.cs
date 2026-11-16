@@ -17,12 +17,14 @@ public sealed class CreatePluginHandler
     private readonly IPluginAdapter _adapter;
     private readonly LoadOrderHolder _holder;
     private readonly ISourceAdapter _source;
+    private readonly HeldWrites _held;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal CreatePluginHandler(
-        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
+        ILogger<CreatePluginHandler> logger) =>
+        (_adapter, _holder, _source, _held, _decompiler) = (adapter, holder, source, held, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
@@ -46,10 +48,10 @@ public sealed class CreatePluginHandler
     }
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> WrittenOnceItsSourceLands(
-        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
+        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)
     {
         var landed = await LandSourceIfCompiledPlugin(loadOrder, address, folder, sourceFolder, written);
-        if (landed.Holds(out _, out _)) _holder.SourceWritten([new PluginChange(address, null)]);
+        if (landed.Holds(out _, out _)) await _held.ReadBack([address], cancel);
         return landed;
     }
 
@@ -93,7 +95,7 @@ public sealed class CreatePluginHandler
     /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is the
     /// mod's, null for Overwrite. <paramref name="flags"/> may be left out where one combination is offered.</summary>
     public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(
-        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null)
+        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -117,7 +119,7 @@ public sealed class CreatePluginHandler
 
         return created.Outcome switch
         {
-            EmptyPluginWrite.Written => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written),
+            EmptyPluginWrite.Written => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written, cancel),
             EmptyPluginWrite.FolderGone => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateRefused(PluginCreateRefusal.FileExists,

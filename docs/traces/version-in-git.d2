@@ -26,6 +26,8 @@ sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.s
 sourceadapter.label: Source adapter
 source: @../../spec/architecture/target-architecture.medit_data.source
 source.label: Mod source
+indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
+indexer.label: Indexer
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
@@ -53,6 +55,8 @@ modfolder -> modfolderadapter: "the assets" {class: track}
 modfolderadapter -> engine: "the assets" {class: track}
 engine -> sourceadapter: "the mod source, in a new repository or the instance repository, and its first commit when asked: plugin source, assets, the manifest" {class: track}
 sourceadapter -> source: "the mod source" {class: track}
+engine -> indexer: "read back each plugin the mod source holds" {class: track}
+indexer -> engine: "why not: the load order names no plugin source of it yet" {class: track}
 engine -> http: "the outcome" {class: track}
 http -> client: "the outcome" {class: track}
 client -> sourcecommands: the outcome {class: track}

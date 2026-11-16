@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -19,6 +20,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     private readonly string _sourceMod;
     private readonly string _nonSourceMod;
     private readonly LoadOrderHolder _holder = new();
+    private readonly HandedWrites _index = HandedWrites.Create();
 
     public DecompilePluginHandlerTests()
     {
@@ -64,6 +66,26 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Equal(headBefore, Head());
+    }
+
+    [Fact]
+    public async Task ADecompileWhoseRequestIsCancelled_StillWritesEveryPlugin()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await TestEditService.DecompileHandler(_holder, index: _index.Queries)
+            .DecompileAsync([CompiledPlugin("First.esp"), CompiledPlugin("Second.esp")], force: true, cancelled.Token);
+
+        Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Decompile_HandsTheRecordIndexEachPluginItWroteToReadBack_AndNoneItRefused()
+    {
+        await Decompile(CompiledPlugin("Second.esp"), CompiledPlugin("Absent.esp"));
+
+        Assert.Equal([HandedPlugin.ReadBackSource(CompiledPlugin("Second.esp"))], Assert.Single(_index.Hands).Require());
     }
 
     [Fact]
@@ -247,7 +269,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Decompile(force: false, plugins);
 
     private async Task<DecompileResult> Decompile(bool force, params PluginAddress[] plugins) =>
-        (await TestEditService.DecompileHandler(_holder).DecompileAsync(plugins, force)).Value();
+        (await TestEditService.DecompileHandler(_holder, index: _index.Queries).DecompileAsync(plugins, force)).Value();
 
     private async Task<DecompileResult> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
         (await TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins, force: false)).Value();

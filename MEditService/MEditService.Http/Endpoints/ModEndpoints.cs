@@ -13,7 +13,6 @@ internal static class ModEndpoints
         // A missing load order or git refuses the whole selection once; every other refusal is an item of
         // the answer.
         app.MapPost("/build", Build)
-            .AwaitingItsSourceWrite()
             .WithName("BuildMod")
             .WithTags("Mods")
             .WithDescription(
@@ -80,7 +79,8 @@ internal static class ModEndpoints
     }
 
     // version-in-git: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> VersionInGit(VersionInGitRequest req, VersionInGitHandler versionInGitHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> VersionInGit(
+        VersionInGitRequest req, VersionInGitHandler versionInGitHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -98,11 +98,11 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest(SourceFolderRequest.ManifestFileIsAPath);
         List<ModToVersionInGit> toVersion = [.. mods.Select(mod => new ModToVersionInGit(mod.Name, mod.ModFolder, mod.SourceFolder.ToSourceFolderContents(), mod.Commit == true))];
 
-        return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion), EndpointMapping.Refusal);
+        return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion, cancel), EndpointMapping.Refusal);
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
-    internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildModHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildModHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -126,7 +126,7 @@ internal static class ModEndpoints
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 
         return await EndpointMapping.Answered(
-            "Build", logger, buildModHandler.BuildAsync(toBuild, new InstanceToBuild(req.ExclusionMark, variants)), EndpointMapping.Refusal);
+            "Build", logger, buildModHandler.BuildAsync(toBuild, new InstanceToBuild(req.ExclusionMark, variants), cancel), EndpointMapping.Refusal);
     }
 }
 
