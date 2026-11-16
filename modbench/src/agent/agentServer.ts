@@ -43,7 +43,7 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'hasHeardEveryChange' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
   symbols: SymbolIndex;
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
@@ -155,6 +155,7 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, te
   };
   const maybeLate = () => (mEdit.recordIndexMayBeLate ? ['The record index may be late: this answer may predate a write.'] : []);
   register(server, log, () => [...reading('instance', 'sortingRules', 'sourceLanguage')(), ...maybeLate()], PROBLEMS, async (args, cancelled) => {
+    await mEdit.hasHeardEveryChange();
     await untilCaughtUp(problemsCaughtUp, cancelled);
     return PROBLEMS.of(args, problemFolders);
   });
