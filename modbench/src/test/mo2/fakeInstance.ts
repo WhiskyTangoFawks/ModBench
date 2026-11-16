@@ -1,5 +1,4 @@
 import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
-import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 
 /** The double every provider's row contract needs: `.value` plus `.subscribe`, structurally
@@ -22,6 +21,9 @@ export class FakeInstance {
     this.subscribers.push(subscriber);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
   }
+  subscribeWriter(subscriber: InstanceSubscriber) {
+    return this.subscribe(subscriber);
+  }
   // Simulates a landed recompute: publishes to every live subscriber, the way Instance's own
   // watcher-driven recompute does.
   publish(value: InstanceValue, reread = CHECK_THE_DISK): void {
@@ -34,8 +36,8 @@ export class FakeInstance {
     this.publish(this.value, wrote === undefined ? CHECK_THE_DISK : { named: wrote, disk: false });
     return Promise.resolve();
   }
-  quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
-    return work(new WrittenFiles());
+  writing<T>(work: () => Promise<T>): Promise<T> {
+    return work();
   }
   onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);

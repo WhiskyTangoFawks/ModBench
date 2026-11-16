@@ -20,7 +20,7 @@ export interface EntryRenameDeps {
   readonly commands: Pick<ModCommands, 'renameModNameRefusal' | 'separatorNameRefusal'>;
   readonly renames: EntryRenameCommands;
   readonly source: SourceEditing;
-  readonly instance: Pick<Instance, 'value' | 'refresh' | 'quiet'>;
+  readonly instance: Pick<Instance, 'value' | 'refresh' | 'writing'>;
   readonly reporter: Reporter;
 }
 
@@ -58,7 +58,7 @@ function renameGesture(
       if (only === undefined || more.length > 0) throw new Refusal(`An agent call to rename a ${kind} carries one ${kind}.`);
       return { oldName: kind === 'mod' ? modNameOf(only) : separatorNameOf(only), newName: name };
     },
-    run: async (asked) => (asked.oldName === asked.newName ? { applied: true, outcome: { landed: [], refused: [] } } : runModsWriting(kind === 'mod' ? 'modbench.mod.rename' : 'modbench.separator.rename', instance, () => instance.quiet(() => source.oneAtATime(async () => {
+    run: async (asked) => (asked.oldName === asked.newName ? { applied: true, outcome: { landed: [], refused: [] } } : runModsWriting(kind === 'mod' ? 'modbench.mod.rename' : 'modbench.separator.rename', instance, () => instance.writing(() => source.oneAtATime(async () => {
       const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, []);
       return resultOf(asked, await rename({ held: heldTexts(unsavedTexts()), apply }, asked.oldName, asked.newName));
     })))),

@@ -28,7 +28,8 @@ export interface PluginsDeps {
   sourceEditing: PluginsViewDeps['sourceEditing'];
 }
 
-type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'modStatuses' | 'fileReads'> & {
+type PluginsInstanceDeps = Pick<PluginsViewDeps, 'commands' | 'modStatuses' | 'fileReads'> & {
+  instance: PluginsViewDeps['instance'] & Pick<Instance, 'subscribeWriter'>;
   syncPlugins: PluginSyncRun;
 };
 

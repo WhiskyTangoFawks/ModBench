@@ -1,4 +1,3 @@
-import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { handlers, registerCommand, showInputBox } = vi.hoisted(() => {
@@ -60,9 +59,9 @@ function setup(selection: readonly PluginsTreeNode[] = []) {
   }), instanceAnswers);
   const instance = {
     value: instanceValueFixture(),
-    quiet: async <T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> => {
+    writing: async <T>(work: () => Promise<T>): Promise<T> => {
       try {
-        return await work(new WrittenFiles());
+        return await work();
       } finally {
         progressSteps.push('Instance loader: read every file again');
       }
