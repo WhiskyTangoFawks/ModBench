@@ -240,7 +240,6 @@ public sealed class SwaggerSchemaTests
     [Theory]
     [InlineData("CellSummary", "editorId")]
     [InlineData("RecordSummary", "editorId")]
-    [InlineData("ChangedPlugin", "bytesSha256")]
     [InlineData("PluginResponse", "laterReadFailure")]
     public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
     {

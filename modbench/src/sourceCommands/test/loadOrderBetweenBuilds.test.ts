@@ -10,7 +10,7 @@ import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, rep
 import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client/MEditClient';
-import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
+import { holdsLoadOrder } from '../../client/test/says';
 
 let root: string;
 let SOURCES: Record<string, string>;
@@ -49,8 +49,8 @@ describe('sourceCommands build, between mods', () => {
   });
 
   it.each([
-    ['a settled load order', () => loadOrderStatusEventFixture()],
-    ['a change it names in the record index', () => notificationEventFixture({ kind: 'plugin-changed', plugin: 'B.esp', origin: 'ModB' })],
+    ['a settled load order', (client: InMemoryMEditClient) => { holdsLoadOrder(client); }],
+    ['a change it names in the record index', (client: InMemoryMEditClient) => { client.change([{ plugin: { name: 'B.esp', origin: 'ModB' } }]); }],
   ])('builds the next mod, with no recheck waited out, once mEdit tells %s and holds the plugins as they are on disk', async (_event, event) => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
     client.setQueryAnswer('getPluginIndexing', NOT_YET);
@@ -58,7 +58,7 @@ describe('sourceCommands build, between mods', () => {
     const outcome = built();
     await vi.waitFor(() => { expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' }); });
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(event());
+    event(client);
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });
@@ -96,7 +96,7 @@ describe('sourceCommands build, between mods', () => {
     }
     expect(builtMods(client)).toEqual(['ModB']);
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(loadOrderStatusEventFixture());
+    holdsLoadOrder(client);
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });
@@ -116,7 +116,7 @@ describe('sourceCommands build, between mods', () => {
     }
     expect(builtMods(client)).toEqual(['ModB']);
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(loadOrderStatusEventFixture());
+    holdsLoadOrder(client);
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });

@@ -46,7 +46,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it. A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, published as external-change; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
+        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it. A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, which GET /plugins and GET /plugins/indexing then say of each plugin; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
         post: operations["SignalChange"];
         delete?: never;
         options?: never;
@@ -81,6 +81,22 @@ export interface paths {
         put?: never;
         post: operations["SetFilter"];
         delete: operations["ClearFilter"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/load-order/filter/cleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFilterCleared"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -367,6 +383,23 @@ export interface paths {
         put?: never;
         /** @description GET /plugins for only the plugins named, each by name and origin: the same facts, a cost that follows the plugins named. */
         post: operations["GetPluginFacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/indexing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it with the reason: GET /plugins lists only the plugins opened. */
+        get: operations["GetPluginsIndexing"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1318,10 +1351,6 @@ export interface components {
             parseDiagnosis?: string | null;
             hasChildren: boolean;
         };
-        ChangedPlugin: {
-            name: string;
-            bytesSha256?: string | null;
-        };
         ChildRecordSummary: {
             formKey: string;
             editorId?: string | null;
@@ -1630,6 +1659,12 @@ export interface components {
             value?: unknown;
             checkError?: string | null;
         };
+        FilterCleared: {
+            source: string;
+            reason: string;
+            /** Format: int64 */
+            sequence: number;
+        };
         FlaggedPluginFile: {
             path: string;
             flags: {
@@ -1658,6 +1693,16 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
+        IndexOfPlugin: {
+            name: string;
+            origin: string;
+            state: components["schemas"]["IndexOfPluginState"];
+            reason?: string | null;
+            diagnosis?: string | null;
+            changedOutside: boolean;
+        };
+        /** @enum {string} */
+        IndexOfPluginState: "Pending" | "Indexed" | "Failed";
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -1784,8 +1829,6 @@ export interface components {
             /** Format: int64 */
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
-            changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
-            recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             versionInGitPhase?: components["schemas"]["VersionInGitPhase"] | null;
         };
@@ -2000,10 +2043,6 @@ export interface components {
         RecordFilter: {
             sql: string;
             source: string;
-        };
-        RecordFilterClearedNotification: {
-            source: string;
-            reason: string;
         };
         RecordResult: {
             formKey: string;
@@ -2474,6 +2513,33 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    GetFilterCleared: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterCleared"];
+                };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3134,6 +3200,35 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginsIndexing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexOfPlugin"][];
                 };
             };
             /** @description Service Unavailable */

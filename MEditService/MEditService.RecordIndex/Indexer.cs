@@ -73,6 +73,13 @@ internal sealed class Indexer : IDisposable
     private bool _validating;
     private int _plannedCount;
     private int _activeCount;
+    private (int Planned, int Active)? _closedForRebuild;
+
+    /// <summary>A rebuild has the index closed, and the load order is still the one it holds: no plugin is opened.</summary>
+    public bool Rebuilding
+    {
+        get { lock (_lock) return _closedForRebuild is not null; }
+    }
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
     private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? ReReadFailure)
     {
@@ -225,6 +232,24 @@ internal sealed class Indexer : IDisposable
         return new(asOnDisk ? PluginIndexing.AsOnDisk : PluginIndexing.NotYet);
     }
 
+    /// <summary>Each plugin of the load order held, by what the reconcile has done with it.</summary>
+    public IReadOnlyList<IndexOfPlugin> IndexOfPlugins()
+    {
+        var plugins = _holder.Held?.Snapshot.Plugins ?? throw new NoLoadOrderException();
+        lock (_lock)
+        {
+            if (_scope is not { } scope) return [.. plugins.Select(plugin => new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Pending))];
+            var failures = new List<PluginLoadFailure>([.. scope.Held.Failures, .. _collisionFailures]);
+            return [.. plugins.Select(plugin =>
+            {
+                var failure = failures.Find(f => f.Name == plugin.Name && f.Origin == plugin.Origin);
+                if (failure is not null) return new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Failed, failure.Reason, failure.Diagnosis);
+                var indexed = _indexed.Exists(held => PluginAddress.Comparer.Equals(held, plugin.Key));
+                return new IndexOfPlugin(plugin.Name, plugin.Origin, indexed ? IndexOfPluginState.Indexed : IndexOfPluginState.Pending);
+            })];
+        }
+    }
+
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
     {
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }
@@ -270,7 +295,9 @@ internal sealed class Indexer : IDisposable
                 LoadOrderStatus held;
                 if (_scope is null)
                 {
-                    held = LoadOrderStatus.None with { Version = _standing.Version };
+                    held = _closedForRebuild is { } rebuilding
+                        ? new LoadOrderStatus(LoadOrderState.Reconciling, rebuilding.Planned, rebuilding.Active, [], false, [], Version: _standing.Version)
+                        : LoadOrderStatus.None with { Version = _standing.Version };
                 }
                 else
                 {
@@ -862,6 +889,7 @@ internal sealed class Indexer : IDisposable
                 _plannedCount = 0;
                 _activeCount = 0;
                 _collisionFailures = [];
+                _closedForRebuild = null;
                 _scope = scope;
                 _openedUnchecked = true;
             }
@@ -1556,8 +1584,10 @@ internal sealed class Indexer : IDisposable
         try
         {
             var handedOut = Sequence;
+            lock (_lock) _closedForRebuild = _scope is null ? null : (_plannedCount, _activeCount);
             if (!Close())
             {
+                lock (_lock) _closedForRebuild = null;
                 AskReconcile();
                 return false;
             }
@@ -1566,6 +1596,7 @@ internal sealed class Indexer : IDisposable
             var refusal = heldElsewhere;
             var failed = failure;
             Swap(standing => standing with { HeldElsewhere = refusal, Failure = failed });
+            if (refusal is not null || failed is not null) lock (_lock) _closedForRebuild = null;
         }
         finally { ExitExclusive(); }
         if (heldElsewhere is null && failure is null) AskReconcile();

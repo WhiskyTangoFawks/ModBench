@@ -30,6 +30,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         IReadOnlyList<string> formKeys, PluginAddress? plugin) => throw Failed();
 
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) => throw Failed();
+    public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing() => throw Failed();
     public Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(
         PluginAddress plugin) => throw Failed();
 
@@ -72,6 +73,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout) => throw Failed();
 
     public Answer<RecordFilter?, IndexRefused> GetFilter() => throw Failed();
+    public FilterCleared? GetFilterCleared() => throw Failed();
+    public IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins) => throw Failed();
 
     public IndexRefused? SetFilter(string sql, string source) => throw Failed();
 

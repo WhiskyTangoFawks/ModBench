@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type ViewOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'onDidChange' | 'loadOrderStatus' | 'latestLoadOrder' | 'signalChange'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'onDidChange' | 'recordIndexProgress' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
   /** The Plugins view's order of the active plugins; `onChange` is the moment it may have changed, as Editing read the plugins. */
   viewOrder: { of: ViewOrder; onChange(listener: () => void): { dispose(): void } };
@@ -94,15 +94,14 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
   };
 
   // mEdit holds no load order, as after a restart: it is handed the one it should hold, as any put is.
-  const holdsNone = client.onDidChange(() => {
-    const status = client.loadOrderStatus;
-    if (last === undefined || putsUnanswered > 0 || (status !== undefined && !status.holdsNone)) return;
+  const holdsNothing = client.onDidChange(() => {
+    if (last === undefined || putsUnanswered > 0 || client.recordIndexProgress !== undefined) return;
     handed = undefined;
     put(last.source, last.stringsLanguage);
   });
   const unsubscribes = [
     () => { changeOfOrder.dispose(); },
-    () => { holdsNone.dispose(); },
+    () => { holdsNothing.dispose(); },
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);

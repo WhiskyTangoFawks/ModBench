@@ -207,6 +207,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
+                sp.GetRequiredService<IQueries>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>())));
 

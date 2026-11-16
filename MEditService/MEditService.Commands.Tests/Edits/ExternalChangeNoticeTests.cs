@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,11 +28,20 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     private void Put(LoadOrderSnapshot snapshot, IServiceProvider? service = null) =>
         ExternalChanges.Put(snapshot, (service ?? _service.Value).GetRequiredService<PutLoadOrderHandler>());
 
+    private IServiceProvider? _signalled;
+
     private void PutThenSignal(LoadOrderSnapshot snapshot, IServiceProvider? service = null)
     {
         Put(snapshot, service);
-        (service ?? _service.Value).GetRequiredService<SignalChangeHandler>().Signal([]);
+        _signalled = service ?? _service.Value;
+        _signalled.GetRequiredService<SignalChangeHandler>().Signal([]);
     }
+
+    private IReadOnlyList<string> TheChanged(string origin = Origin) =>
+        (_signalled ?? _service.Value).GetRequiredService<IQueries>().Handed().ChangedOutside(origin);
+
+    private IEnumerable<string> TheTold() =>
+        _notifications.Notifications.OfType<PluginChangedNotification>().Select(told => told.Plugin.Name);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
@@ -54,9 +64,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
             (IReadOnlyList<TreeFile>)[new TreeFile(TreeTampering.HeaderDocumentOf(p.Plugin), "{}"u8.ToArray())],
             new DecompiledPlugin(new PluginAddress(p.Plugin, Origin), TrailerHash(p.Bytes))))]);
 
-    private ExternalChangeNotification TheExternalChange() =>
-        Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());
-
     [Fact]
     public async Task AChangeSignal_NamesNoPlugin_ForTheBinaryARealCompileJustWrote()
     {
@@ -66,13 +73,12 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(mod.LoadOrder);
 
-        var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
-        Assert.Equal(SourceEditFixture.ModFolderOrigin, notice.Origin);
-        Assert.Empty(notice.Plugins);
+        Assert.Empty(_notifications.Notifications);
+        Assert.Empty(TheChanged(SourceEditFixture.ModFolderOrigin));
     }
 
     [Fact]
-    public void AChangeSignal_NamesACompiledPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
+    public void AChangeSignal_NamesACompiledPlugin_WhenItsBytesDifferFromWhatModbenchLastWrote()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, compiledPlugin));
@@ -80,9 +86,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder, TestEditService.Over(new LoadOrderHolder(), adapter: new HashingAs("changed"), notifications: _notifications));
 
-        var notice = TheExternalChange();
-        Assert.Equal(Origin, notice.Origin);
-        Assert.Equal([new ChangedPlugin(PluginName, "changed")], notice.Plugins);
+        Assert.Equal([PluginName], TheChanged());
+        Assert.Equal([PluginName], TheTold());
     }
 
     [Fact]
@@ -110,7 +115,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void AChangeSignal_NamesACompiledPluginThatCannotBeRead_WithNoState()
+    public void AChangeSignal_NamesACompiledPluginThatCannotBeRead()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, compiledPlugin));
@@ -119,7 +124,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Equal([new ChangedPlugin(PluginName, null)], TheExternalChange().Plugins);
+        Assert.Equal([PluginName], TheChanged());
     }
 
     [Fact]
@@ -132,7 +137,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Equal([new ChangedPlugin(PluginName, Sha256(compiledPlugin))], TheExternalChange().Plugins);
+        Assert.Equal([PluginName], TheChanged());
     }
 
     [Fact]
@@ -144,7 +149,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Empty(TheExternalChange().Plugins);
+        Assert.Empty(TheChanged());
     }
 
     [Fact]
@@ -160,7 +165,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Equal([], TheExternalChange().Plugins);
+        Assert.Equal([], TheChanged());
     }
 
     [Fact]
@@ -181,15 +186,13 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         Init((PluginName, compiledPlugin));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
         PutThenSignal(loadOrder);
-        Assert.Single(TheExternalChange().Plugins);
+        Assert.Single(TheChanged());
 
         AnotherTool.Delete(Path.Combine(ModFolder, ".git"));
         PutThenSignal(loadOrder);
 
-        var notices = _notifications.Notifications.OfType<ExternalChangeNotification>().ToList();
-        Assert.Equal(2, notices.Count);
-        Assert.Equal(Origin, notices[1].Origin);
-        Assert.Empty(notices[1].Plugins);
+        Assert.Empty(TheChanged());
+        Assert.Equal([PluginName, PluginName], TheTold());
     }
 
     [Fact]
@@ -219,9 +222,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        var notice = TheExternalChange();
-        Assert.Equal(Origin, notice.Origin);
-        Assert.Equal([PluginName], notice.Plugins.Select(p => p.Name));
+        Assert.Equal([PluginName], TheChanged());
     }
 
     [Fact]
@@ -249,12 +250,12 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Single(TheExternalChange().Plugins);
+        Assert.Single(TheChanged());
         Assert.Equal(before, FilesUnder(ModFolder));
     }
 
     [Fact]
-    public void ASecondChangeSignal_OverTheSameBytes_TellsTheSame()
+    public void ASecondChangeSignal_OverTheSameBytes_TellsNothingMore()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
         WithPlugins((PluginName, compiledPlugin));
@@ -264,10 +265,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         PutThenSignal(loadOrder);
         PutThenSignal(loadOrder);
 
-        var notices = _notifications.Notifications.OfType<ExternalChangeNotification>().ToList();
-        Assert.Equal(2, notices.Count);
-        Assert.Equal(notices[0].Origin, notices[1].Origin);
-        Assert.Equal(notices[0].Plugins, notices[1].Plugins);
+        Assert.Equal([PluginName], TheTold());
     }
 
     [Fact]
@@ -280,7 +278,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Empty(TheExternalChange().Plugins);
+        Assert.Empty(TheChanged());
     }
 
     [Fact]
@@ -294,7 +292,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Empty(TheExternalChange().Plugins);
+        Assert.Empty(TheChanged());
     }
 
     [Fact]
@@ -309,7 +307,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(loadOrder);
 
-        Assert.Empty(TheExternalChange().Plugins);
+        Assert.Empty(TheChanged());
     }
 
     [Fact]
@@ -324,8 +322,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(mod.LoadOrder);
 
-        var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
-        Assert.Equal([new ChangedPlugin(mod.Plugin.Name, Sha256(before))], notice.Plugins);
+        Assert.Equal([mod.Plugin.Name], TheChanged(SourceEditFixture.ModFolderOrigin));
     }
 
     private static Dictionary<string, string> FilesUnder(string folder) =>

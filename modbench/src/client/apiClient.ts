@@ -23,8 +23,6 @@ export type CompareRecordsAnswer = Schemas['CompareRecordsAnswer'];
 
 export type CopyText = Schemas['CopyText'];
 
-export type ChangedPlugin = Schemas['ChangedPlugin'];
-
 /** ADR-0012. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 

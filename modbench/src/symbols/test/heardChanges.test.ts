@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { heardChanges } from '../heardChanges';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { PluginAddress } from '../../client';
+import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
 const A: PluginAddress = { name: 'A.esp', origin: 'ModA' };
 
@@ -19,8 +19,8 @@ function world() {
   return {
     asker, heard, stop, asked,
     instanceChanges: () => { for (const listener of instance) listener(); },
-    pluginChanges: () => { client.emit({ kind: 'plugin-changed', plugin: A.name, origin: A.origin, keys: [], sequence: 1 }); },
-    settles: () => { client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 1 })); },
+    pluginChanges: () => { changeNamesPlugin(client, { name: A.name, origin: A.origin }); },
+    settles: () => { holdsLoadOrder(client, { version: 1 }); },
   };
 }
 

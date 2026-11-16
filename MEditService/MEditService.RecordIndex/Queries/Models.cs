@@ -422,5 +422,18 @@ public enum PluginIndexing { AsOnDisk, NotYet, ReadFailed }
 /// <summary><paramref name="Reason"/> is mEdit's, and set only when the read failed (ADR-0019).</summary>
 public sealed record PluginIndexedState(PluginIndexing State, string? Reason = null);
 
+/// <summary>Whether the record index holds a plugin's rows yet, or failed to read it (ADR-0019).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum IndexOfPluginState { Pending, Indexed, Failed }
+
+/// <summary>A plugin of the load order and how far the record index has come with it. Reason and Diagnosis are set only when
+/// it failed. ChangedOutside says its bytes are not the ones Modbench last wrote (ADR-0003).</summary>
+public sealed record IndexOfPlugin(
+    string Name, string Origin, IndexOfPluginState State, string? Reason = null, string? Diagnosis = null, bool ChangedOutside = false);
+
+/// <summary>Why the filter was cleared, until another is set or cleared on purpose: it could not apply again. Reason is the
+/// database's; Sequence is the Index's projection sequence right after.</summary>
+public sealed record FilterCleared(string Source, string Reason, long Sequence);
+
 /// <summary>The record filter in force: the SQL that narrows the listings, and the file or document it was written in.</summary>
 public sealed record RecordFilter(string Sql, string Source);

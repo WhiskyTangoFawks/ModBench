@@ -4,6 +4,11 @@ import { isNotificationKind, type NotificationKind, type NotificationPayloads } 
 import { isString, isStringArray } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 
+/** What the keepers of what the stream says subscribe through. */
+export interface NotificationSource {
+  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
+}
+
 /** Where a listener's throw goes: it left whatever the listener feeds out of date. `recovered`
  *  follows a call that succeeded after one that threw. */
 export interface ListenerThrows {
@@ -19,9 +24,8 @@ class NotificationListenerRegistry {
   constructor(protected readonly log: Log, private readonly throws: ListenerThrows) {}
 
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
-    'load-order-status': new Set(), 'version-in-git-progress': new Set(), 'external-change': new Set(),
-    'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
-    'record-index-changed': new Set(),
+    'load-order-status': new Set(), 'version-in-git-progress': new Set(), 'rows-changed': new Set(),
+    'plugin-changed': new Set(), 'record-index-changed': new Set(),
   };
 
   private heard = 0;
@@ -60,12 +64,6 @@ class NotificationListenerRegistry {
         break;
       case 'version-in-git-progress':
         if (event.modlistProgress) this.deliver(kind, { ...event.modlistProgress, phase: event.versionInGitPhase });
-        break;
-      case 'external-change':
-        this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
-        break;
-      case 'record-filter-cleared':
-        if (event.recordFilterCleared) this.deliver('record-filter-cleared', event.recordFilterCleared);
         break;
       case 'rows-changed':
         this.deliver('rows-changed', { plugin: { name: plugin, origin }, keys });
@@ -141,8 +139,6 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     modlistProgress?: NotificationEvent['modlistProgress'];
     versionInGitPhase?: NotificationEvent['versionInGitPhase'];
-    changedPlugins?: NotificationEvent['changedPlugins'];
-    recordFilterCleared?: NotificationEvent['recordFilterCleared'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
   if (!isString(w.plugin)) throw new Error('Expected a notification event to carry a string plugin.');
@@ -151,8 +147,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   if (typeof w.sequence !== 'number') throw new Error('Expected a notification event to carry a numeric sequence.');
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
-    loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, versionInGitPhase: w.versionInGitPhase, changedPlugins: w.changedPlugins,
-    recordFilterCleared: w.recordFilterCleared,
+    loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, versionInGitPhase: w.versionInGitPhase,
   };
 }
 

@@ -16,16 +16,18 @@ vi.mock('vscode', () => ({
 import { followIndexStatus } from '../indexStatus';
 import { createStatusBar } from '../statusBar';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { holdsLoadOrder, holdsNoLoadOrder, type Holds } from '../../client/test/says';
 
 const statusBarText = (): string => present(h.items.at(-1), 'the status bar item').text;
 
 beforeEach(() => { h.items.length = 0; });
 
-const statusEvent = (over: Parameters<typeof loadOrderStatusEventFixture>[0] = {}) =>
-  loadOrderStatusEventFixture({ totalPlugins: 2, activePlugins: 2, ...over });
+const tell = async (client: InMemoryMEditClient, holds: Holds | undefined): Promise<void> => {
+  if (holds) holdsLoadOrder(client, holds); else holdsNoLoadOrder(client);
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+};
 
 function followed() {
   const client = new InMemoryMEditClient();
@@ -34,7 +36,7 @@ function followed() {
     client,
     facts: {
       indexed: vi.fn(), refused: vi.fn(), unreachable: vi.fn(),
-      reconciled: vi.fn().mockResolvedValue(0), refresh: vi.fn().mockResolvedValue(undefined),
+      reconciled: vi.fn().mockResolvedValue({ held: 0, active: 0 }), refresh: vi.fn().mockResolvedValue(undefined),
     },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
     statusBar: createStatusBar(client, () => recordingReporter()),
@@ -49,8 +51,9 @@ function followed() {
 describe('the Plugins view following the record index status and mEdit\'s own', () => {
   it('says Ready on the status bar counting the active plugins, not every plugin indexed, once the stream\'s Ready is handed to the tree', async () => {
     const { client, deps, handedOver } = followed();
+    deps.facts.reconciled.mockResolvedValue({ held: 5, active: 2 });
 
-    client.emit(statusEvent({ totalPlugins: 5, activePlugins: 2 }));
+    await tell(client, { total: 5 });
     await handedOver();
 
     expect(deps.facts.reconciled).toHaveBeenCalledOnce();
@@ -61,7 +64,7 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
     const { client, deps, handedOver } = followed();
     deps.facts.reconciled.mockResolvedValue(undefined);
 
-    client.emit(statusEvent());
+    await tell(client, { total: 2 });
     await handedOver();
 
     expect(deps.log).not.toHaveBeenCalledWith('error', expect.anything());
@@ -69,27 +72,40 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
   });
 
   it.each([
-    ['a later reconcile starts', { state: 'Reconciling', conflictsComputed: false, version: 2 }],
-    ['the record index is dropped', { state: 'None', conflictsComputed: false, totalPlugins: 0, version: 2 }],
-  ] as const)('gives Ready back to mEdit\'s own state when %s', async (_when, over) => {
+    ['a later reconcile starts', { settled: false, total: 2, version: 2 }],
+    ['the record index is dropped', undefined],
+  ] as const)('gives Ready back to mEdit\'s own state when %s', async (_when, holds) => {
     const { client, handedOver } = followed();
-    client.emit(statusEvent());
+    await tell(client, { total: 2 });
     await handedOver();
 
-    client.emit(statusEvent(over));
+    await tell(client, holds);
 
     expect(statusBarText()).toBe('$(plug) mEdit: Running');
   });
 
   it('hands a refusal to the tree, and gives the status bar back to mEdit\'s own state', async () => {
     const { client, deps, handedOver } = followed();
-    client.emit(statusEvent());
+    await tell(client, { total: 2 });
     await handedOver();
 
-    client.emit(statusEvent({ state: 'HeldElsewhere', conflictsComputed: false, message: 'This instance\'s index is open in another Modbench window.', version: 2 }));
+    await tell(client, { settled: false, total: 2, refusal: { kind: 'heldElsewhere', message: 'This instance\'s index is open in another Modbench window.' }, version: 2 });
 
     expect(deps.facts.refused).toHaveBeenCalledWith({ kind: 'heldElsewhere', message: 'This instance\'s index is open in another Modbench window.' });
     expect(statusBarText()).toBe('$(plug) mEdit: Running');
+  });
+
+  it.each([
+    ['answers every plugin pending', (client: InMemoryMEditClient) => { client.setQueryAnswer('getPluginsIndexing', [{ name: 'A.esp', origin: 'SomeMod', state: 'Pending', changedOutside: false }]); }],
+    ['cannot be reached', (client: InMemoryMEditClient) => { client.setQueryFailure('getPluginsIndexing', { failed: 'unreachable' }); }],
+  ])('hands a refusal to the tree, and ends the wait on its version, whichever way the read of the index state goes: it %s', async (_how, script) => {
+    const { client, deps, followed: following } = followed();
+    script(client);
+
+    await tell(client, { settled: false, version: 4, total: 2, refusal: { kind: 'heldElsewhere', message: 'Another window holds it.' } });
+
+    expect(deps.facts.refused).toHaveBeenCalledWith({ kind: 'heldElsewhere', message: 'Another window holds it.' });
+    await expect(following.narrator.settled(4)).resolves.toBeUndefined();
   });
 
   it('runs the view\'s progress while the record index fills, and closes it on Ready', async () => {
@@ -97,11 +113,11 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
     let closed = false;
     deps.progress.while.mockImplementation((work: () => Promise<void>) => work().then(() => { closed = true; }));
 
-    client.emit(statusEvent({ state: 'Reconciling', conflictsComputed: false }));
+    await tell(client, { settled: false, total: 2 });
     expect(deps.progress.while).toHaveBeenCalledOnce();
     expect(closed).toBe(false);
 
-    client.emit(statusEvent());
+    await tell(client, { total: 2 });
     await handedOver();
     expect(closed).toBe(true);
   });
@@ -127,11 +143,11 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
     expect(deps.facts.refresh).not.toHaveBeenCalled();
   });
 
-  it('hears nothing once disposed', () => {
+  it('hears nothing once disposed', async () => {
     const { client, deps, followed: following } = followed();
 
     following.dispose();
-    client.emit(statusEvent({ state: 'Reconciling', conflictsComputed: false }));
+    await tell(client, { settled: false, total: 2 });
     client.setStatus('disconnected');
 
     expect(deps.progress.while).not.toHaveBeenCalled();
@@ -145,7 +161,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
   it('registers the source mods\' repositories', async () => {
     const { client, deps, handedOver } = followed();
 
-    client.emit(statusEvent());
+    await tell(client, { total: 2 });
     await handedOver();
 
     expect(deps.registerRepositories).toHaveBeenCalledOnce();
@@ -154,7 +170,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
   it('warns and logs a skipped plugin by name', async () => {
     const { client, deps, handedOver } = followed();
 
-    client.emit(statusEvent({ failures: [badFailure] }));
+    await tell(client, { total: 2, failures: [badFailure] });
     await handedOver();
 
     expect(deps.reporter.reports.map((report) => report.severity)).toEqual(['warning']);
@@ -162,10 +178,10 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('Bad.esp'));
   });
 
-  it('hands the tree the status\'s own failures and counts the snapshot\'s total in the log', async () => {
+  it('hands the tree the record index\'s own failures and counts the snapshot\'s total in the log', async () => {
     const { client, deps, handedOver } = followed();
 
-    client.emit(statusEvent({ totalPlugins: 42, failures: [badFailure] }));
+    await tell(client, { total: 42, failures: [badFailure] });
     await handedOver();
 
     expect(deps.facts.reconciled).toHaveBeenCalledWith([badFailure]);

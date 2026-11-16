@@ -73,6 +73,33 @@ public sealed class IndexedAsOnDiskTests
     }
 
     [Fact]
+    public void EveryPluginsIndexState_NamesAPluginMEditFailedToRead_WithItsReason()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("index-of-plugins-failed").WithPlugin("Patch.esp").Build();
+        using var index = Indexes.Open(holder, new FailsToRead());
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        var plugin = Assert.Single(index.Queries.GetPluginsIndexing().Value());
+
+        Assert.Equal(("Patch.esp", IndexOfPluginState.Failed, index.Status.Failures.Single().Reason), (plugin.Name, plugin.State, plugin.Reason));
+    }
+
+    [Fact]
+    public void EveryPluginsIndexState_SaysAPluginMEditNeverOpenedWasChangedOutside()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("index-of-plugins-changed-outside").WithPlugin("Patch.esp").Build();
+        using var index = Indexes.Open(holder, new FailsToRead());
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        index.Queries.SetChangedOutside(Patch.Origin, [Patch.Name]);
+
+        var plugin = Assert.Single(index.Queries.GetPluginsIndexing().Value());
+
+        Assert.Equal((IndexOfPluginState.Failed, true), (plugin.State, plugin.ChangedOutside));
+    }
+
+    [Fact]
     public void APluginRewrittenSinceMEditFailedToReadIt_IsNotYet_NotReadFailed()
     {
         var holder = new LoadOrderHolder();

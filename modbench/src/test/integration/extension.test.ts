@@ -279,7 +279,12 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(loadOrderStatus));
       return;
     }
-    if (url === '/load-order/filter') {
+    if (url === '/plugins/indexing') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('[]');
+      return;
+    }
+    if (url === '/load-order/filter' || url === '/load-order/filter/cleared') {
       res.writeHead(204);
       res.end();
       return;

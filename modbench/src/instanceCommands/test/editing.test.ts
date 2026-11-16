@@ -1,14 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../../client';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
+import { holdsLoadOrder } from '../../client/test/says';
 
-const STATUS: LoadOrderProgress = {
-  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
-};
-const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
+const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 
 const NO_SNAPSHOT: LoadOrderSource = undefined;
 const REFUSED: LoadOrderSource = { refusal: 'a.esp has no mod folder' };
@@ -163,14 +161,14 @@ describe('the load order is put at a recompute that changed it', () => {
   });
 });
 
-describe('a reconnect, which leaves mEdit holding no load order', () => {
-  it('hands the load order again after a reconnect, tells a put mEdit refused, and hands it again at the next gesture', async () => {
+describe('a change that says everything while mEdit holds no load order', () => {
+  it('hands the load order again, tells a put mEdit refused, and hands it again at the next gesture', async () => {
     const { client, told, toldCount, land, putPluginNames } = wired();
     land(valueWith('A.esp'));
     await toldCount(1);
     client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'the data folder is not found' }));
 
-    client.reconnected();
+    client.change(undefined);
     await toldCount(2);
     client.answerPuts(() => Promise.resolve(APPLIED));
     land(valueWith('A.esp'));
@@ -178,6 +176,20 @@ describe('a reconnect, which leaves mEdit holding no load order', () => {
 
     expect(told[1]).toMatchObject({ sent: true, outcome: { outcome: 'failed', message: 'the data folder is not found' } });
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'A.esp']);
+  });
+});
+
+describe('a rebuild of the record index, which still holds the load order', () => {
+  it('hands mEdit no load order again, as the status it publishes holds one', async () => {
+    const { client, toldCount, land, putPluginNames } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    holdsLoadOrder(client, { settled: false });
+    client.change(undefined);
+    await client.latestLoadOrder();
+
+    expect(putPluginNames()).toEqual(['A.esp']);
   });
 });
 

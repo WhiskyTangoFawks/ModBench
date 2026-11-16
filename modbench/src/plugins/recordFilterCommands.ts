@@ -6,7 +6,7 @@ import type { RecordBrowser } from './RecordBrowser';
 import { answerOf } from '../wire/readFailed';
 
 export interface FilterCommandDeps {
-  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'onDidChange' | 'onNotification'>;
+  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'getFilterCleared' | 'onDidChange'>;
   treeProvider: Pick<RecordBrowser, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
@@ -74,7 +74,23 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     await showHeld();
   };
 
-  // mEdit says why it cleared a filter only here; the change event says that everything changed, which asks the filter again.
+  let reported = '';
+  // The change event says that everything changed, which asks the filter again; mEdit says why it cleared one in that read.
+  const onChange = async (): Promise<void> => {
+    try {
+      const cleared = answerOf(await client.getFilterCleared());
+      const told = JSON.stringify(cleared && { source: cleared.source, reason: cleared.reason });
+      if (cleared === null || told === reported) {
+        reported = cleared === null ? '' : reported;
+        return await showHeld();
+      }
+      reported = told;
+      await onCleared(cleared);
+    } catch (e) {
+      reporter.report('error', 'Could not read the record filter', errorMessage(e));
+    }
+  };
+
   const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
     const shownBefore = showRecordFilter.shownSource();
     await showHeld();
@@ -108,8 +124,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   };
 
   return [
-    client.onDidChange((change) => { if (change === undefined) void showHeld(); }),
-    { dispose: client.onNotification('record-filter-cleared', (cleared) => { void onCleared(cleared); }) },
+    client.onDidChange((change) => { if (change === undefined) void onChange(); }),
     vscode.commands.registerCommand('modbench.record.filter', (source?: vscode.Uri) =>
       source === undefined ? fromPick() : fromDocument(source)),
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {

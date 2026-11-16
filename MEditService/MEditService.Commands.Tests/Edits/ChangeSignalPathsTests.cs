@@ -57,7 +57,7 @@ public sealed class ChangeSignalPathsTests : IDisposable
         _service.GetRequiredService<SignalChangeHandler>().Signal([.. kinds.Select(PathNamed)]);
 
     private string[] ToldExternalChangeOf() =>
-        [.. _notifications.Notifications.OfType<ExternalChangeNotification>().Select(notice => notice.Origin).Order(StringComparer.Ordinal)];
+        [.. _notifications.Notifications.OfType<PluginChangedNotification>().Select(told => told.Plugin.Origin).Order(StringComparer.Ordinal)];
 
     private void Signal(string kinds) => Signal(kinds.Split(',', StringSplitOptions.RemoveEmptyEntries));
 

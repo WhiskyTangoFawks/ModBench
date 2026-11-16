@@ -85,20 +85,32 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
-describe('HttpMEditClient — the load-order status', () => {
+describe('HttpMEditClient — the record index standing', () => {
   it('is the latest tick the stream carried, and is gone once mEdit is stopped', async () => {
     const { response, push } = pushableStreamResponse();
     const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
-    const changes: (boolean | undefined)[] = [];
-    client.onLoadOrderStatus((status) => changes.push(status?.conflictsComputed));
     await client.start();
 
     push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+    await vi.waitFor(() => expect(client.recordIndexProgress?.settled).toBe(true));
     await client.stop();
 
-    expect(client.loadOrderStatus).toBeUndefined();
-    expect(changes).toEqual([true, undefined]);
+    expect(client.recordIndexProgress).toBeUndefined();
+  });
+
+  it('is late while the record index is not settled, or refuses the load order, and carries the reason', async () => {
+    const { response, push } = pushableStreamResponse();
+    const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
+    await client.start();
+
+    push(loadOrderStatusTick({ conflictsComputed: false, version: 1 }));
+    await vi.waitFor(() => expect(client.recordIndexMayBeLate).toBe(true));
+    push(loadOrderStatusTick({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false, version: 1 }));
+    await vi.waitFor(() => expect(client.recordIndexProgress?.refusal).toEqual({ kind: 'heldElsewhere', message: 'another window holds the record index' }));
+    expect(client.recordIndexMayBeLate).toBe(true);
+    push(loadOrderStatusTick({ conflictsComputed: true, version: 2 }));
+
+    await vi.waitFor(() => expect(client.recordIndexMayBeLate).toBe(false));
   });
 
   it('is gone once the stream reopens, as it may have reattached to another process', async () => {
@@ -107,11 +119,11 @@ describe('HttpMEditClient — the load-order status', () => {
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
     streams[0]?.push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+    await vi.waitFor(() => expect(client.recordIndexProgress?.settled).toBe(true));
 
     streams[0]?.end();
 
-    await vi.waitFor(() => expect(client.loadOrderStatus).toBeUndefined());
+    await vi.waitFor(() => expect(client.recordIndexProgress).toBeUndefined());
     expect(streams).toHaveLength(2);
   });
 });
@@ -841,7 +853,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await client.start();
 
     await expect(client.sendLoadOrder(snapshot))
-      .resolves.toMatchObject({ outcome: 'applied', status: { version: 1, conflictsComputed: true } });
+      .resolves.toMatchObject({ outcome: 'applied', version: 1 });
   });
 
   it('settles a PUT whose terminal tick was lost to a stream reopening, from the status read then, a reopened stream carrying none of the ticks published while it was down', async () => {
@@ -862,7 +874,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
     streams[0]?.end();
 
-    await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
+    await expect(load).resolves.toMatchObject({ outcome: 'applied', version: 1 });
   });
 
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
@@ -881,10 +893,10 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
-    await vi.waitFor(() => expect(client.loadOrderStatus?.version).toBe(0));
+    await vi.waitFor(() => expect(client.recordIndexProgress?.version).toBe(0));
     answerPut(jsonResponse(200, appliedBody));
 
-    await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
+    await expect(load).resolves.toMatchObject({ outcome: 'applied', version: 1 });
   });
 
   it('stays stopped after a crash, telling its exit once: a snapshot answers backendFailed', async () => {
@@ -1082,8 +1094,8 @@ describe('HttpMEditClient — the change event', () => {
   });
 });
 
-describe('HttpMEditClient — onNotification', () => {
-  it('hands a typed listener the payload of a frame the stream carries', async () => {
+describe('HttpMEditClient — what a frame names', () => {
+  it('names the plugin a frame the stream carries on the change event', async () => {
     const frame = { kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 };
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -1094,11 +1106,11 @@ describe('HttpMEditClient — onNotification', () => {
       ['/notifications/stream', () => Promise.resolve(new Response(body, { status: 200 }))], ['/unsaved-documents', noContent],
     ]));
     const heard: unknown[] = [];
-    client.onNotification('plugin-changed', (p) => heard.push(p));
+    client.onDidChange((change) => heard.push(change));
 
     await client.start();
 
-    await vi.waitFor(() => expect(heard).toEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
+    await vi.waitFor(() => expect(heard).toContainEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
     await client.stop();
   });
 });
@@ -1546,7 +1558,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       await client.start();
       if (holdingALoadOrder) push(readyTickThatSettlesPutLoadOrder());
       await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
-      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.loadOrderStatus?.holdsNone).toBe(false); });
+      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.recordIndexProgress).toBeDefined(); });
       return { client, push };
     }
 

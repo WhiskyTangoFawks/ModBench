@@ -112,7 +112,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'latestLoadOrder' | 'loadOrderApplied' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'recordIndexProgress' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -300,7 +300,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloads.nameFilter],
     ]),
   ));
-  own(registerRefreshCommand({ instance, loadOrderStatus: () => client.loadOrderStatus, mEditStatus: () => client.status, reporterFor, instanceRoot }));
+  own(registerRefreshCommand({ instance, recordIndexProgress: () => client.recordIndexProgress, mEditStatus: () => client.status, reporterFor, instanceRoot }));
   own(registerRebuildRecordIndexCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporterFor, instanceRoot,
   }));

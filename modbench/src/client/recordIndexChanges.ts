@@ -1,4 +1,5 @@
 import type { MEditClient, RecordIndexChange } from './MEditClient';
+import type { NotificationSource } from './notificationStream';
 import { EventEmitter, type Disposable } from './eventEmitter';
 import type { LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 
@@ -7,7 +8,7 @@ export interface RecordIndexChanges {
 }
 
 export function keepRecordIndexChanges(
-  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
+  client: NotificationSource & Pick<MEditClient, 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
   loadOrder: Pick<LoadOrderStatusKeeper, 'onChanged'>,
 ): RecordIndexChanges {
   const changes = new EventEmitter<RecordIndexChange>();
@@ -16,7 +17,6 @@ export function keepRecordIndexChanges(
   client.onNotification('rows-changed', ({ plugin, keys }) => { tell([{ plugin, keys }]); });
   client.onNotification('plugin-changed', ({ plugin }) => { tell([{ plugin }]); });
   client.onNotification('record-index-changed', () => { tell(undefined); });
-  client.onNotification('record-filter-cleared', () => { tell(undefined); });
   loadOrder.onChanged(() => { tell(undefined); });
   client.onReconnected(() => { tell(undefined); });
   client.onStatusChanged((status) => { if (status === 'running') tell(undefined); });

@@ -18,4 +18,7 @@ function trackValue<T>(read: () => T, initial: T, same: (a: T, b: T) => boolean 
 export const trackLateness = (isLate: () => boolean) => trackValue(isLate, false);
 
 export const trackProgress = (read: () => RecordIndexProgress | undefined) =>
-  trackValue(read, undefined, (a, b) => a?.done === b?.done && a?.total === b?.total);
+  trackValue(read, undefined, (a, b) => JSON.stringify(a) === JSON.stringify(b));
+
+export const indexingMakesLate = (progress: RecordIndexProgress | undefined): boolean =>
+  progress !== undefined && (!progress.settled || progress.refusal !== undefined);

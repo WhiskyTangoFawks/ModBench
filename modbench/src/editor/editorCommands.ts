@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import { loadFailuresOf, type MEditClient } from '../client';
+import { isReadFailed } from '../wire/readFailed';
 import { argumentOfKind, registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import type { KindedRow } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
@@ -41,7 +42,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'loadOrderStatus' | 'getRecordOwners'
+    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'getPluginsIndexing' | 'getRecordOwners'
     | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -67,7 +68,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
     recordIndexMayBeLate: () => meditClient.recordIndexMayBeLate,
     loadOrderComing: () => deps.loadOrderComing.now(),
-    loadFailures: () => meditClient.loadOrderStatus?.failures ?? [],
+    loadFailures: async () => {
+      const indexing = await meditClient.getPluginsIndexing();
+      return isReadFailed(indexing) ? [] : loadFailuresOf(indexing);
+    },
     modFacts: deps.modFacts,
   };
   const recordEditorProvider = new RecordEditorProvider({ context, tabs, routerDeps, client: meditClient, channel: outputChannel });

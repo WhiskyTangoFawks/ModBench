@@ -44,11 +44,12 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { parseRowResourceUri } from '../recordResourceUri';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { listsForThePluginAsked, loadOrderStatusEventFixture, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
+import { listsForThePluginAsked, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
 import { browserClient } from './browserRows';
 import { ABSENT_SORTING_RULE_FILES } from '../../instanceAdapter/instanceAdapter';
 import { READ_SORTING_RULE_FILES } from '../../test/readSortingRuleFiles';
 import type { PluginProblem } from '../pluginFacts';
+import { holdsLoadOrder } from '../../client/test/says';
 
 type ModStatus = NonNullable<ReturnType<LastModStatuses['of']>>;
 
@@ -128,7 +129,7 @@ function makeTree(
 async function reconcile(
   h: Harness, plugins: PluginMetadata[], failures: PluginLoadFailure[] = [],
 ): Promise<void> {
-  h.client.emit(loadOrderStatusEventFixture());
+  holdsLoadOrder(h.client);
   h.client.setQueryAnswer('getPlugins', plugins);
   await h.tree.facts.reconciled(failures);
 }
@@ -1715,7 +1716,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
 describe('PluginsTreeProvider fact refresh', () => {
   it('re-renders without rebuilding the rows', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.emit(loadOrderStatusEventFixture());
+    holdsLoadOrder(h.client);
     const before = await h.tree.getChildren();
     const heard: unknown[] = [];
     h.tree.onDidChangeTreeData(() => heard.push(true));

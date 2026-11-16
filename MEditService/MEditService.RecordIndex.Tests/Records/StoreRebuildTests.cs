@@ -72,6 +72,16 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
+    public void AnIndexThatFailedToOpen_StillAnswersEveryPluginOfTheLoadOrderItHolds_AsPending()
+    {
+        Reconcile(Path.Combine(_fixture.InstanceRoot, "no-such-instance"));
+
+        var indexing = _index.Queries.GetPluginsIndexing().Value();
+
+        Assert.Equal([("UFO4P.esp", IndexOfPluginState.Pending)], indexing.Select(plugin => (plugin.Name, plugin.State)));
+    }
+
+    [Fact]
     public void ARebuildOfAnInstanceRootThatIsNotThere_FailsNamingIt_CreatesNothing_AndReopensOnceItReturns()
     {
         Reconcile(_fixture.InstanceRoot);
@@ -99,6 +109,28 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(2, _opens.OpenedTotal);
         Assert.Equal(held, _index.Status.Version);
         Assert.NotEmpty(_index.ListedIn(Key));
+    }
+
+    [Fact]
+    public void ARebuild_AnswersEveryPluginPendingAndOpensNone_NeverNoLoadOrder_WhileTheIndexIsClosed()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, _opens, notifications: notifications);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        IReadOnlyList<PluginResponse>? plugins = null;
+        IReadOnlyList<IndexOfPlugin>? indexing = null;
+        notifications.OnPublish = n =>
+        {
+            if (plugins is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
+            plugins = index.Queries.GetPlugins().Value();
+            indexing = index.Queries.GetPluginsIndexing().Value();
+        };
+
+        Rebuilt(index, _fixture.InstanceRoot);
+
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PluginResponse>>(plugins));
+        Assert.Equal([("UFO4P.esp", IndexOfPluginState.Pending)], Assert.IsAssignableFrom<IReadOnlyList<IndexOfPlugin>>(indexing).Select(plugin => (plugin.Name, plugin.State)));
     }
 
     private static void Rebuilt(OpenedIndex index, string instanceRoot)
@@ -321,7 +353,7 @@ public sealed class StoreRebuildTests : IDisposable
         bool? readWhileClosed = null;
         notifications.OnPublish = n =>
         {
-            if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.None }) return;
+            if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
             holder.Apply(holder.Current);
             parked = gate.WaitUntilParkedAsync();
             readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));

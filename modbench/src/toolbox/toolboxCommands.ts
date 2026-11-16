@@ -55,7 +55,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
 interface RefreshGestureDeps {
   instance: Pick<Instance, 'refresh'>;
   /** The record index's status as mEdit last published it. */
-  loadOrderStatus: () => { readonly refusal?: { readonly kind: 'heldElsewhere' | 'failed' } } | undefined;
+  recordIndexProgress: () => { readonly refusal?: { readonly kind: 'heldElsewhere' | 'failed' } } | undefined;
   reporterFor: (tag: string) => Reporter;
   instanceRoot: string;
   /** Whether mEdit is up to take the check. */
@@ -79,7 +79,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
       reporter.report('error', unchecked);
       return undefined;
     }
-    if (deps.loadOrderStatus()?.refusal?.kind === 'heldElsewhere') {
+    if (deps.recordIndexProgress()?.refusal?.kind === 'heldElsewhere') {
       if (fromAgent) return { applied: false, refusal: message, detail: deps.instanceRoot };
       reporter.report('error', message, deps.instanceRoot);
       return undefined;

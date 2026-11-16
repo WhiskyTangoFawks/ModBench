@@ -27,7 +27,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task APluginAnotherToolRewrote_IsNamedOnTheStream_WithItsMod_WhenTheChangeNamesItsFile()
+    public async Task APluginAnotherToolRewrote_IsNamedOnTheStream_AndReadAsChangedOutside_WhenTheChangeNamesItsFile()
     {
         var fx = await CompiledPlugin();
         using var stream = await Client.NotificationStream();
@@ -36,24 +36,24 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         OtherTool.WritesThePlugin(path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
         await Client.SignalChange(path);
 
-        var change = (await stream.EventsUntil("external-change", NamesThePlugin))[^1];
-        Assert.Equal(Origin, change.GetProperty("origin").GetString());
+        await stream.EventsUntil("plugin-changed", NamesThePlugin);
+        await Wire.Eventually(async () => await Client.ChangedOutside(Plugin), "the plugin read as changed outside");
     }
 
     [Fact]
-    public async Task AChangeNamingOnlyAnAsset_PublishesNothing_WhereTheNextChangeNamingNoPathPublishes()
+    public async Task AChangeNamingOnlyAnAsset_ChangesNothing_WhereTheNextChangeNamingNoPathDoes()
     {
         var fx = await CompiledPlugin();
-        using var stream = await Client.NotificationStream();
         var path = fx.Plugins.Single(p => p.Origin == Origin).Path;
 
         await Client.SignalChange(Path.Combine(Path.GetDirectoryName(path).Require(), "textures", "watched.dds"));
+        Assert.False(await Client.ChangedOutside(Plugin));
         OtherTool.WritesThePlugin(path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
         await Client.SignalChange();
 
-        Assert.True(NamesThePlugin(Assert.Single(await stream.EventsUntil("external-change", NamesThePlugin))));
+        await Wire.Eventually(async () => await Client.ChangedOutside(Plugin), "the plugin read as changed outside");
     }
 
     private static bool NamesThePlugin(JsonElement change) =>
-        change.GetProperty("changedPlugins").EnumerateArray().Any(p => p.GetProperty("name").GetString() == Plugin);
+        change.GetProperty("plugin").GetString() == Plugin && change.GetProperty("origin").GetString() == Origin;
 }

@@ -116,7 +116,7 @@ public sealed class IndexAnnouncementTests : IDisposable
     }
 
     [Fact]
-    public void ARebuild_AnnouncesTheStatusItLeft()
+    public void ARebuild_AnnouncesTheLoadOrderStillHeld()
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
@@ -124,7 +124,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         _index.Queries.RebuildStore(GameRelease.Fallout4, _instanceRoot);
 
         var status = Assert.Single(SinceReconcile.OfType<LoadOrderStatusNotification>());
-        Assert.Equal(LoadOrderState.None, status.Status.State);
+        Assert.Equal(LoadOrderState.Reconciling, status.Status.State);
         Assert.Empty(SinceReconcile.OfType<PluginChangedNotification>());
     }
 }

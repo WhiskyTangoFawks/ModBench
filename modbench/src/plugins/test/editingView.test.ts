@@ -8,9 +8,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 type Sent = Extract<PutLoadOrderResult, { sent: true }>;
 type Outcome = Sent['outcome'];
 
-const STATUS = {
-  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
-};
+const HEARD = { progress: { done: 1, total: 1, version: 7, settled: true }, indexed: [], failures: [] };
 const SNAPSHOT: Sent['snapshot'] = {
   plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [],
   dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
@@ -26,10 +24,11 @@ function wired() {
   const putReports: string[] = [];
   const logged: string[] = [];
   const revealed = { count: 0 };
-  const narrator = createReconcileNarrator({
+  const reconciling = createReconcileNarrator({
     showProgress: () => undefined, applyIndexed: () => undefined, applyRefused: () => undefined,
-    settle: (status) => new Promise((resolve) => { setTimeout(() => { handed.push(status); resolve(); }, 0); }), log: () => undefined,
+    settle: (heard) => new Promise((resolve) => { setTimeout(() => { handed.push(heard); resolve(); }, 0); }), log: () => undefined,
   });
+  const narrator = { ...reconciling, hearNow: () => { reconciling.hear(HEARD); return Promise.resolve(); } };
   const progress = { while: (work: () => Promise<void>) => work(), say: (message: string) => { said.push(message); } };
   const log = { info: (message: string) => { logged.push(message); } };
   const lines: string[] = [];
@@ -105,9 +104,9 @@ describe("a put's own outcome shown", () => {
   it("hands an applied send's status to the views and is done once they hold it", async () => {
     const { view, putReports, handed } = wired();
 
-    await view.onPut(sent({ outcome: 'applied', status: STATUS }));
+    await view.onPut(sent({ outcome: 'applied', version: 7 }));
 
-    expect(handed).toEqual([STATUS]);
+    expect(handed).toEqual([HEARD]);
     expect(putReports).toEqual([]);
   });
 

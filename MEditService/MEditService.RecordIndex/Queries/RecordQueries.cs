@@ -24,6 +24,7 @@ internal sealed class RecordQueries(
 {
     private readonly ILogger _logger = logger;
     private readonly Indexer _index = index;
+    private readonly ChangedOutside _changedOutside = new();
     private readonly IndexAnswer _answer = new(index.RecoverFromInvalidation);
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
@@ -36,6 +37,7 @@ internal sealed class RecordQueries(
 
     private IReadOnlyList<PluginResponse> PluginResponses(IReadOnlyCollection<PluginAddress>? named)
     {
+        if (_index.Rebuilding) return [];
         using var reads = RequireReads().InOneSnapshot();
         var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
@@ -530,6 +532,9 @@ internal sealed class RecordQueries(
             return Dependants.Of(plugin, _loadOrder.Require(), opened);
         });
 
+    public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing() =>
+        _answer.Of(() => (IReadOnlyList<IndexOfPlugin>)[.. _index.IndexOfPlugins().Select(plugin => plugin with { ChangedOutside = _changedOutside.Holds(new PluginAddress(plugin.Name, plugin.Origin)) })]);
+
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
         _answer.Of(() => _index.IndexedState(plugin));
 
@@ -566,6 +571,10 @@ internal sealed class RecordQueries(
         RequireReads();
         return filter.Current;
     });
+
+    public IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins) => _changedOutside.Replace(origin, plugins);
+
+    public FilterCleared? GetFilterCleared() => filter.Cleared;
 
     public IndexRefused? SetFilter(string sql, string source) => _answer.Refusing(() =>
         filter.Set(_index, sql, source) is { } rejection ? new IndexRefused(IndexRefusal.FilterRejected, rejection) : null);

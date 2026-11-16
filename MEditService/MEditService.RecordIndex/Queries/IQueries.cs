@@ -67,6 +67,7 @@ public interface IQueries
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
     Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
+    Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing();
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin, RecordsAsked? asked = null);
     Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked = null);
 
@@ -80,6 +81,10 @@ public interface IQueries
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
     Answer<RecordFilter?, IndexRefused> GetFilter();
+    // Replaces which compiled plugins of a mod changed outside Modbench (ADR-0003), and answers the plugins whose standing flipped.
+    IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins);
+    // Null when the filter was not cleared.
+    FilterCleared? GetFilterCleared();
     // Why the SQL cannot be a filter, or no load order to hold it; null once it is in force.
     IndexRefused? SetFilter(string sql, string source);
     void ClearFilter();

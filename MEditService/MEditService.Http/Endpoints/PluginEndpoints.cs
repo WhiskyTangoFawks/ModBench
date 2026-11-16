@@ -31,6 +31,14 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/indexing", (IQueries svc) =>
+            EndpointMapping.Ok(svc.GetPluginsIndexing()))
+            .WithName("GetPluginsIndexing")
+            .WithTags(Tag)
+            .WithDescription("Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it with the reason: GET /plugins lists only the plugins opened.")
+            .Produces<IReadOnlyList<IndexOfPlugin>>()
+            .ProducesProblem(503);
+
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
         // session-load complement of init's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.

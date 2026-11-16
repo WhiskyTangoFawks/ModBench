@@ -1,6 +1,6 @@
 export type {
-  MEditClient, RecordIndexChange, LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
-  NotificationPayloads, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
+  MEditClient, RecordIndexChange, LaunchOutcome, LoadOrderOutcome, RecordIndexProgress, FilterCleared, IndexOfPlugin, LoadOrderSnapshot,
+  RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, PluginProblems, PluginFilePaths, PluginAddress, RecordAt,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   PluginToRepair, ModToVersionInGit, VersionInGitOutcome, DecompileOutcome, DecompileAndRepairOutcome, SourceFolderRequest, SourceModIn, BuildFacts, BuildMod, BuildOutcome, VersionInGitProgress, PluginMetadata, PluginDiagnosisReport, RecordSummary,
@@ -9,8 +9,7 @@ export type {
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsAnswer, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,
 } from './MEditClient';
 export type { RecordEditChangesOutcome, RecordEditEnvelope, SourceChanges, WriteRefused } from './MEditClient';
-export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
-export { isSettled } from './apiClient';
+export { isMEditGone, isRefused, loadFailuresOf, UNLIMITED_RECORDS } from './MEditClient';
 export { attachPortOf } from './attachPort';
 export { createMEditClient, stopMEditClient } from './HttpMEditClient';
 export { recordIndexReferences } from './recordIndexReferences';

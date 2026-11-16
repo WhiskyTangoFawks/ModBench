@@ -1,14 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LoadOrderProgress } from '../../client';
-import { createReconcileNarrator } from '../reconcileNarrator';
+import type { LoadOrderRefusal, PluginAddress, PluginLoadFailure } from '../../client';
+import { createReconcileNarrator, type Heard } from '../reconcileNarrator';
 
-const tick = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress => ({
-  totalPlugins: 2, activePlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, validating: false, ...over,
-});
-const dropped = (version = 3) => tick({ holdsNone: true, totalPlugins: 0, version });
-const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }], version });
+const A = { name: 'A.esp', origin: 'SomeMod' };
+const B = { name: 'B.esp', origin: 'SomeMod' };
 
-function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => Promise.resolve()) {
+const tick = (over: { version?: number; indexed?: PluginAddress[]; failures?: PluginLoadFailure[]; refusal?: LoadOrderRefusal } = {}): Heard => {
+  const { version = 3, indexed = [], failures = [], refusal } = over;
+  return { progress: { done: indexed.length + failures.length, total: 2, version, settled: false, ...(refusal && { refusal }) }, indexed, failures };
+};
+const ready = (version = 3): Heard => ({ progress: { done: 2, total: 2, version, settled: true }, indexed: [A, B], failures: [] });
+const validating = (version = 3): Heard => ({ ...ready(version), progress: { ...ready(version).progress, settled: false } });
+
+function narrated(settle: (heard: Heard) => Promise<void> = () => Promise.resolve()) {
   const progress: { closed: boolean }[] = [];
   const spans: Promise<void>[] = [];
   const deps = {
@@ -34,10 +38,9 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     await narrator.settled(3);
     deps.settle.mockClear();
 
-    narrator.hear(dropped(4));
-    expect(deps.applyIndexed).toHaveBeenLastCalledWith([], []);
     narrator.hear(tick({ version: 4 }));
-    narrator.hear(tick({ version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
+    expect(deps.applyIndexed).toHaveBeenLastCalledWith([], []);
+    narrator.hear(tick({ version: 4, indexed: [A] }));
     expect(progress).toEqual([{ closed: false }]);
     expect(deps.applyIndexed).toHaveBeenLastCalledWith([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
@@ -53,9 +56,9 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     narrator.hear(ready(3));
     await narrator.settled(3);
 
-    narrator.hear({ ...ready(3), validating: true });
+    narrator.hear(validating(3));
     expect(progress).toEqual([{ closed: false }]);
-    narrator.hear({ ...ready(3), validating: true });
+    narrator.hear(validating(3));
     expect(progress).toHaveLength(1);
 
     narrator.hear(ready(3));
@@ -67,8 +70,8 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     const { progress, narrator } = narrated();
 
     narrator.hear(tick());
-    narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
-    narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }] }));
+    narrator.hear(tick({ indexed: [A] }));
+    narrator.hear(tick({ indexed: [A, B] }));
 
     expect(progress).toHaveLength(1);
   });
@@ -175,7 +178,6 @@ describe('the reconcile narrator: the refill a rebuild starts, which the rebuild
     const ended = narrator.nextRefill().ended.then(() => { refilled = true; });
 
     narrator.hear(ready());
-    narrator.hear(dropped());
     narrator.hear(tick());
     await aWindow();
     expect(refilled).toBe(false);
@@ -187,7 +189,6 @@ describe('the reconcile narrator: the refill a rebuild starts, which the rebuild
 
   it('ends the wait at once when the record index held nothing to refill', async () => {
     const { narrator } = narrated();
-    narrator.hear(dropped());
 
     await expect(narrator.nextRefill().ended).resolves.toBeUndefined();
   });
@@ -197,7 +198,7 @@ describe('the reconcile narrator: the refill a rebuild starts, which the rebuild
     narrator.hear(ready());
     const refilled = narrator.nextRefill().ended;
 
-    narrator.hear(dropped());
+    narrator.hear(tick());
     narrator.hear(tick({ refusal: { kind: 'heldElsewhere', message: 'another window' } }));
 
     await expect(refilled).resolves.toBeUndefined();

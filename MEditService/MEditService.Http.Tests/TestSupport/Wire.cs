@@ -312,6 +312,10 @@ internal static class Wire
         await client.AwaitTerminalLoadOrderStatus(status.GetProperty("version").GetInt64());
     }
 
+    internal static async Task<bool> ChangedOutside(this HttpClient client, string name) =>
+        (await client.GetFromJsonAsync<JsonElement>("/plugins/indexing")).EnumerateArray()
+            .Any(plugin => plugin.GetProperty("name").GetString() == name && plugin.GetProperty("changedOutside").GetBoolean());
+
     internal static Task<long> Sequence(this HttpClient client) =>
         client.GetFromJsonAsync<long>("/load-order/sequence");
 

@@ -63,8 +63,6 @@ internal sealed class SseNotificationPublisher : INotificationPublisher
 internal sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
-    IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
-    RecordFilterClearedNotification? RecordFilterCleared = null,
     ModlistProgress? ModlistProgress = null,
     VersionInGitPhase? VersionInGitPhase = null)
 {
@@ -76,8 +74,6 @@ internal sealed record NotificationEvent(
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
         VersionInGitProgressNotification n => new("version-in-git-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, VersionInGitPhase: n.Phase),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
-        ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
-        RecordFilterClearedNotification n => new("record-filter-cleared", "", "", [], 0, RecordFilterCleared: n),
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
     };
 }

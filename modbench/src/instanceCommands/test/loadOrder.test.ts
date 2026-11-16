@@ -1,12 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
+import type { LoadOrderOutcome } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { putLoadOrder, type ViewOrder, type LoadOrderSource } from '../loadOrder';
 
-const READY_STATUS: LoadOrderProgress = {
-  totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
-};
-const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
+const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 
 const PLUGIN = { name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod', provider: { kind: 'Mod' as const, mod: 'TestMod', folder: '/instance/mods/TestMod' }, line: 0, lineNamesIt: true, archives: [], stringsFiles: [] };
 const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };

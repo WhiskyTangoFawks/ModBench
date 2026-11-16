@@ -21,7 +21,6 @@ vi.mock('vscode', () => ({
 
 import { RenderedDocuments } from '../renderedDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { notificationEventFixture } from '../../client/test/fixtures';
 
 interface ContentProvider {
   provideTextDocumentContent(uri: unknown): Promise<string>;
@@ -71,8 +70,7 @@ describe('a rendered document\'s text', () => {
 });
 
 describe('an open rendered document, when mEdit reports a change', () => {
-  const rowsChanged = (plugin: { name: string; origin: string }, keys: string[]) =>
-    notificationEventFixture({ kind: 'rows-changed', plugin: plugin.name, origin: plugin.origin, keys });
+  const rowsChanged = (plugin: { name: string; origin: string }, keys: string[]) => [{ plugin: { name: plugin.name, origin: plugin.origin }, keys }];
 
   it('changes when its plugin\'s rows that changed hold its record', () => {
     const client = new InMemoryMEditClient();
@@ -80,7 +78,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const uri = GUN_URI;
     h.textDocuments.push({ uri }, { uri: renderedUri('/ModA/A.esp/Other.json', 'formKey=000802%3AA.esp&name=A.esp&origin=ModA') });
 
-    client.emit(rowsChanged(modA, [GUN]));
+    client.change(rowsChanged(modA, [GUN]));
 
     expect(changed).toEqual([uri]);
   });
@@ -90,7 +88,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const { changed } = rendered(client);
     h.textDocuments.push({ uri: GUN_URI });
 
-    client.emit(rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
+    client.change(rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
 
     expect(changed).toEqual([]);
   });
@@ -101,7 +99,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const uri = GUN_URI;
     h.textDocuments.push({ uri }, { uri: { scheme: 'file', path: uri.path, query: uri.query } });
 
-    client.emit(notificationEventFixture({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA' }));
+    client.change([{ plugin: { name: 'A.esp', origin: 'ModA' } }]);
 
     expect(changed).toEqual([uri]);
   });

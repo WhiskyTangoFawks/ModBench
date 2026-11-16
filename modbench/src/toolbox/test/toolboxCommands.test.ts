@@ -179,9 +179,9 @@ describe('Switch profile, called by an agent', () => {
 });
 
 describe('Refresh', () => {
-  const registerRefresh = (statusWhenChecked?: ReturnType<RefreshDeps['loadOrderStatus']>, mEditStatus: ReturnType<RefreshDeps['mEditStatus']> = 'running') => {
+  const registerRefresh = (statusWhenChecked?: ReturnType<RefreshDeps['recordIndexProgress']>, mEditStatus: ReturnType<RefreshDeps['mEditStatus']> = 'running') => {
     const checks: unknown[] = [];
-    let status: ReturnType<RefreshDeps['loadOrderStatus']>;
+    let status: ReturnType<RefreshDeps['recordIndexProgress']>;
     const { reporter, reporterFor } = tagRecordingReporterFor();
     registerRefreshCommand({
       instance: {
@@ -192,7 +192,7 @@ describe('Refresh', () => {
           return Promise.resolve(undefined);
         },
       },
-      loadOrderStatus: () => status,
+      recordIndexProgress: () => status,
       mEditStatus: () => mEditStatus,
       reporterFor,
       instanceRoot: '/instance/FO4',
