@@ -426,7 +426,7 @@ export const removeUntold = (path: string): Promise<void> => rm(path, { recursiv
 /** As `ensureDir`, for a folder the loader does not read. */
 export const ensureDirUntold = (path: string): Promise<void> => mkdir(path, { recursive: true }).then(() => undefined);
 
-/** As `append`, for a file the loader does not read. */
+/** Appends `text` to a file the loader does not read. */
 export const appendUntold = (path: string, text: string): Promise<void> => appendFile(path, text);
 
 export type Undo = () => Promise<void>;

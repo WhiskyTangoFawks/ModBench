@@ -27,9 +27,13 @@ describe('a write through the adapter', () => {
 
   const inProfile = (file: string): string => join(root, 'profiles', PROFILE, file);
 
-  const writes: [string, (adapter: InstanceAdapter) => Promise<unknown>, (root: string) => string[]][] = [
+  type Write = [string, (adapter: InstanceAdapter) => Promise<unknown>, (root: string) => string[]];
+  const writesUnderALock: Write[] = [
     ['a change to the mod order', (a) => a.changeModOrder(PROFILE, () => [{ kind: 'enable', mod: 'Beta', enabled: true }]), () => [inProfile('modlist.txt')]],
     ['a change to the plugin order', (a) => a.changePluginOrder(PROFILE, () => [{ kind: 'enable', plugin: 'B.esp', enabled: true }]), () => [inProfile('loadorder.txt'), inProfile('plugins.txt')]],
+  ];
+  const writes: Write[] = [
+    ...writesUnderALock,
     ['a new mod folder', (a) => a.createModFolder('Fresh'), (r) => [join(r, 'mods', 'Fresh')]],
     ['a change that changes nothing', (a) => a.changeModOrder(PROFILE, () => []), () => []],
   ];
@@ -41,9 +45,14 @@ describe('a write through the adapter', () => {
     expect([...told.values()].every(Boolean)).toBe(true);
   });
 
-  it.each(writes)('tells the loader once it holds no lock, so the loader may wait on a write that takes one, for %s', async (_, write) => {
-    writesToldTo({ told: async (paths) => { await Promise.all(paths.map((path) => withLock(path, () => Promise.resolve()))); } });
+  it.each(writesUnderALock)('tells the loader once it holds no lock, so the loader may take the lock of each file it is told of, for %s', async (_, write, files) => {
+    const lockedByLoader: string[] = [];
+    writesToldTo({ told: async (paths) => {
+      await Promise.all(paths.map((path) => withLock(path, () => { lockedByLoader.push(path); return Promise.resolve(); })));
+    } });
 
     await write(adapter);
+
+    expect(lockedByLoader.sort()).toEqual(files(root).sort());
   });
 });

@@ -12,7 +12,7 @@ import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
  *  changed outside Modbench. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onNotification'>;
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onNotification' | 'loadOrderStatus'>;
 
 export interface PluginFactsFeedDeps {
   client: PluginFactsClient;
@@ -62,8 +62,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private refreshing: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
-  // mEdit answers no fact before it holds a load order, which the first hand-off follows.
-  private handedOff = false;
 
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
@@ -112,7 +110,6 @@ export class PluginFactsFeed implements vscode.Disposable {
    *  every fact it answers about each plugin. Returns how many plugins it holds; `undefined` when
    *  the read failed or a newer step superseded it. */
   async reconciled(failures: readonly PluginLoadFailure[]): Promise<number | undefined> {
-    this.handedOff = true;
     const generation = ++this.generation;
     const plugins = await this.readPlugins(undefined);
     if (generation !== this.generation) return undefined;
@@ -176,7 +173,9 @@ export class PluginFactsFeed implements vscode.Disposable {
   }
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {
-    if (requested?.length === 0 || !this.handedOff) return;
+    // mEdit answers no plugin's facts while it holds no load order: before the first put, and from a restart to the next.
+    const status = this.deps.client.loadOrderStatus;
+    if (requested?.length === 0 || status === undefined || status.holdsNone) return;
     const named = this.facts.factsReadFailed() ? undefined : requested;
     const plugins = await this.readPlugins(named);
     if (generation !== this.generation) return;

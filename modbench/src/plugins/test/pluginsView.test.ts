@@ -126,7 +126,6 @@ const tick = (over: Parameters<typeof loadOrderStatusEventFixture>[0] = {}) => l
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
-// mEdit answers no plugin's facts before it holds a load order, which a settled tick hands the view.
 async function handedOff(client: InMemoryMEditClient): Promise<void> {
   const before = pluginReads(client);
   client.emit(tick({ state: 'Ready', conflictsComputed: true }));
@@ -371,7 +370,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const redrawn: unknown[] = [];
     provider().onDidChangeTreeData?.((element) => redrawn.push(element));
 
-    client.reconnected();
+    client.setStatus('running');
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     expect(refresh.mock.calls).toEqual([[undefined]]);
@@ -860,6 +859,8 @@ describe('the record filter, from the commands that set and clear it', () => {
       h.document = { uri: source, fileName: 'a', getText: () => ARMOR_SQL };
       const view = filtering();
       view.holds('a');
+      await handedOff(view.client);
+      h.contexts.length = 0;
       await view.filter(source);
       view.recordBrowserRefreshes.length = 0;
       return view;
@@ -879,11 +880,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     });
 
     it('re-reads the matching plugins, as a set does', async () => {
-      h.document = { uri: source, fileName: 'a', getText: () => ARMOR_SQL };
-      const view = filtering();
-      view.holds('a');
-      await handedOff(view.client);
-      await view.filter(source);
+      const view = await applied();
       await view.pluginReadsAre(1);
 
       await view.clearFilter();

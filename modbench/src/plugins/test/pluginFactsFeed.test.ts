@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PluginAddress, PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import type { ReadFailed } from '../../wire/readFailed';
 import { EventEmitter } from '../../test/vscodeMock';
 
@@ -56,10 +56,14 @@ interface FeedOptions {
   readonly present?: readonly string[];
   readonly asked?: (reads: unknown) => void;
   readonly gates?: readonly Promise<undefined>[];
+  readonly holdsLoadOrder?: boolean;
 }
 
-function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [] }: FeedOptions = {}) {
+function feedOver({
+  shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [], holdsLoadOrder = true,
+}: FeedOptions = {}) {
   const client = clientFindingNoDefects();
+  if (holdsLoadOrder) client.emit(loadOrderStatusEventFixture());
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
@@ -395,8 +399,9 @@ describe('PluginFactsFeed', () => {
       expect(client.calls).toEqual([]);
     });
 
-    it('asks nothing before the first hand-off, as mEdit holds no load order to answer of', async () => {
-      const { feed, client } = feedOver();
+    it('asks nothing while mEdit says it holds no load order', async () => {
+      const { feed, client } = feedOver({ holdsLoadOrder: false });
+      client.emit(loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }));
       client.calls.length = 0;
 
       await feed.refresh();
@@ -404,13 +409,26 @@ describe('PluginFactsFeed', () => {
       expect(client.calls).toEqual([]);
     });
 
-    it('reads the next re-read after one that threw', async () => {
-      let broken = false;
-      const { feed, client } = feedOver({ shownPlugins: () => { if (broken) throw new Error('the tree broke'); return [A]; } });
+    it('asks nothing once mEdit has gone, until the restarted mEdit holds a load order', async () => {
+      const { feed, client } = feedOver();
       client.setQueryAnswer('getPlugins', [held()]);
       await feed.reconciled([]);
+      client.setStatus('stopped');
+      client.setStatus('running');
+      client.calls.length = 0;
+
+      await feed.refresh();
+      const whileNoneHeld = [...client.calls];
+      client.emit(loadOrderStatusEventFixture());
+      await feed.refresh();
+
+      expect({ whileNoneHeld, after: client.calls.map(({ method }) => method) }).toEqual({ whileNoneHeld: [], after: ['getPlugins'] });
+    });
+
+    it('reads the next re-read after one that threw', async () => {
+      let broken = true;
+      const { feed, client } = feedOver({ shownPlugins: () => { if (broken) throw new Error('the tree broke'); return [A]; } });
       client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true })]);
-      broken = true;
       await expect(feed.refresh([A])).rejects.toThrow('the tree broke');
       broken = false;
 
@@ -663,22 +681,16 @@ describe('PluginFactsFeed', () => {
     });
   });
 
-  const unreadable = held({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } });
   it.each([
     ['a reconcile', (feed: PluginFactsFeed) => feed.reconciled([])],
-    ['a facts re-read', async (feed: PluginFactsFeed, client: InMemoryMEditClient) => {
-      client.setQueryAnswer('getPlugins', [held()]);
-      await feed.reconciled([]);
-      client.setQueryAnswer('getPlugins', [unreadable]);
-      await feed.refresh();
-    }],
+    ['a facts re-read', (feed: PluginFactsFeed) => feed.refresh()],
   ])('publishes a plugin whose plugin source is unreadable to the Problems panel on %s', async (_what, read) => {
     const { feed, client, sourceUnreadable } = feedOver();
-    client.setQueryAnswer('getPlugins', [unreadable]);
+    client.setQueryAnswer('getPlugins', [held({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })]);
 
-    await read(feed, client);
+    await read(feed);
 
-    expect(sourceUnreadable.items.at(-1)?.map(({ plugin, origin }) => ({ plugin, origin }))).toEqual([{ plugin: 'A.esp', origin: 'SomeMod' }]);
+    expect(sourceUnreadable.items.map((entries) => entries.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
   });
 
   it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {

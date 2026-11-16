@@ -742,6 +742,22 @@ describe('Instance — a write that changes several files', () => {
     expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
   });
 
+  it('returns, while another overlaps it, once the read after both holds what its work wrote', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    let finishOther!: () => void;
+    let returned = false;
+
+    const other = instance.quiet(() => new Promise<void>((resolve) => { finishOther = resolve; }));
+    const own = instance.quiet(() => instance.told(['/instance/profiles/Default/modlist.txt'])).then(() => { returned = true; });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(returned).toBe(false);
+    finishOther();
+    await Promise.all([other, own]);
+
+    expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
+  });
+
   it('reads again no file after work that names none, and checks the disk after work that left its files unnamed', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
@@ -807,10 +823,10 @@ describe('Instance — a write that changes several files', () => {
     const heard = vi.fn();
     instance.onReadFailure(heard);
 
-    await instance.quiet(async () => {
+    await expect(instance.quiet(async () => {
       fake.failReading('ModOrganizer.ini is empty');
       await instance.refresh();
-    });
+    })).rejects.toThrow('ModOrganizer.ini is empty');
 
     expect(heard).toHaveBeenCalledTimes(1);
     expect(errorLines).toHaveLength(1);

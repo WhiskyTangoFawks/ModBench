@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { toldAfter, toldOnceSettled, writesToldTo } from '../writesTold';
 
 const told: (readonly string[])[] = [];
@@ -34,6 +34,35 @@ describe('a write the loader is told of', () => {
     loaderTold(() => Promise.reject(new Error('read failed')));
 
     await expect(toldAfter(['/a'], () => Promise.resolve())).rejects.toThrow('read failed');
+  });
+
+  it('tells the files written inside locked work once, after the work has settled, and answers once the loader holds them', async () => {
+    let answerTold!: () => void;
+    loaderTold(() => new Promise((resolve) => { answerTold = resolve; }));
+    const steps: string[] = [];
+
+    const settled = toldOnceSettled(async () => {
+      await toldAfter(['/a'], () => Promise.resolve());
+      await toldOnceSettled(() => toldAfter(['/b'], () => Promise.resolve()));
+      steps.push(`work done, told ${told.length}`);
+    }).then(() => steps.push('answered'));
+    await vi.waitFor(() => { expect(told).toEqual([['/a', '/b']]); });
+    steps.push('loader answers');
+    answerTold();
+    await settled;
+
+    expect(steps).toEqual(['work done, told 0', 'loader answers', 'answered']);
+  });
+
+  it('tells the files written inside locked work that fails, and fails with the work\'s own failure', async () => {
+    loaderTold(() => Promise.reject(new Error('read failed')));
+
+    await expect(toldOnceSettled(async () => {
+      await toldAfter(['/a'], () => Promise.resolve());
+      throw new Error('disk full');
+    })).rejects.toThrow('disk full');
+
+    expect(told).toEqual([['/a']]);
   });
 
   it('tells at once a write that starts after the locked work it was armed in has settled', async () => {
