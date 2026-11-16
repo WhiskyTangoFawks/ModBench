@@ -195,12 +195,13 @@ internal sealed class Indexer : IDisposable
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
-    public RelationReads RequireReads() => RequireScope().Store.Reads;
+    public RelationReads RequireReads(CancellationToken cancel, bool inOneSnapshot = false) =>
+        RequireScope().Store.Reads.ForCaller(cancel, inOneSnapshot);
 
-    public RelationReads RequireWholeSetReads()
+    public RelationReads RequireWholeSetReads(CancellationToken cancel, bool inOneSnapshot = false)
     {
         var status = Status;
-        if (status.State == LoadOrderState.Ready) return RequireReads();
+        if (status.State == LoadOrderState.Ready) return RequireReads(cancel, inOneSnapshot);
         if (_holder.Held is null) throw new NoLoadOrderException();
         throw new IndexNotReadyException(
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");

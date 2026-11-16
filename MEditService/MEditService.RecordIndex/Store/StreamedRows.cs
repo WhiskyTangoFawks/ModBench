@@ -18,8 +18,8 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
     /// <summary>The next row's JSON object, or null after the last row.</summary>
     public string? Next()
     {
-        var reader = _reader ??= StoreFaults.Translating(command.ExecuteReader);
-        if (!StoreFaults.Translating(() => Read(reader))) return null;
+        var reader = _reader ??= read.Observed(() => StoreFaults.Translating(command.ExecuteReader));
+        if (!read.Observed(() => StoreFaults.Translating(() => Read(reader)))) return null;
         var row = new StringBuilder("{");
         for (var i = 0; i < columns.Count; i++)
         {

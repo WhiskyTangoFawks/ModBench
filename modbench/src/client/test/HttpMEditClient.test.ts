@@ -1042,6 +1042,13 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     expect(sawSignal?.aborted).toBe(true);
   });
 
+  it('limits the names a document holds, a read that once had no limit', async () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const client = makeClient(fetch, { timeoutMs: 20 });
+
+    await expect(client.getPluginSourceNames('{}', 'a.json')).resolves.toEqual({ failed: 'timed-out' });
+  });
+
   it('does not time out a read that answers before the deadline', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, [])));
     const client = makeClient(fetch, { timeoutMs: 20 });

@@ -22,10 +22,10 @@ public sealed class SelectedRows : IDisposable
 
     /// <summary>The rows, once the first is read: a SELECT refused, or out of memory, before its first row is refused
     /// whole.</summary>
-    internal static Answer<SelectedRows, IndexRefused> Selected(Indexer index, string sql, IndexAnswer answer) =>
+    internal static Answer<SelectedRows, IndexRefused> Selected(Indexer index, string sql, IndexAnswer answer, CancellationToken cancel) =>
         Hinted(answer.Flat(() => RefusingTheSql<SelectedRows>(() =>
         {
-            if (!SqlDoor.Select(index, sql).Holds(out var rows, out var rejection)) return new IndexRefused(IndexRefusal.SelectRejected, rejection);
+            if (!SqlDoor.Select(index, sql, cancel).Holds(out var rows, out var rejection)) return new IndexRefused(IndexRefusal.SelectRejected, rejection);
             var selected = new SelectedRows(rows, answer);
             try
             {
