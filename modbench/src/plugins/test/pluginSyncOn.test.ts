@@ -11,7 +11,7 @@ const channel = { error: () => undefined, info: () => undefined };
 function instanceHeard() {
   let subscriber!: () => Promise<void>;
   const refresh = vi.fn((wrote?: readonly string[]) => { void wrote; return Promise.resolve(); });
-  const instance = { refresh, subscribe: (s: () => Promise<void>) => { subscriber = s; return { dispose: () => undefined }; } };
+  const instance = { refresh, subscribeWriter: (s: () => Promise<void>) => { subscriber = s; return { dispose: () => undefined }; } };
   const hears = () => subscriber();
   return { instance, refresh, hears };
 }

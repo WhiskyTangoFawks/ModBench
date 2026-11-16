@@ -50,7 +50,7 @@ import type { FileReads } from '../sortingRules/lootConditions';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
-  instance: PluginsInstance & Pick<Instance, 'quiet'>;
+  instance: PluginsInstance & Pick<Instance, 'writing'>;
   commands: PluginCommands;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;

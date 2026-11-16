@@ -37,7 +37,7 @@ interface FollowRenameDeps {
   readonly profiles: Pick<InstanceCommands, 'renameProfile'>;
   readonly scripts: Pick<ScriptRenameCommands, 'renameScript'>;
   readonly source: SourceEditing;
-  readonly instance: Pick<Instance, 'quiet'>;
+  readonly instance: Pick<Instance, 'writing'>;
   readonly reporter: Reporter;
 }
 
@@ -100,9 +100,9 @@ export function followRenames(deps: FollowRenameDeps) {
       const symbols = (await Promise.all(renames.map(({ from, to }) => deps.adapter.renamedSymbol(from, to)))).filter((symbol) => symbol !== undefined);
       let unplanned = symbols.length;
       if (unplanned === 0) return;
-      await deps.instance.quiet(() => deps.source.oneAtATime(async () => {
+      const reports = await deps.instance.writing(() => deps.source.oneAtATime(async () => {
         const held = heldTexts(unsavedTexts());
-        await Promise.all(symbols.map(async (symbol) => {
+        return Promise.all(symbols.map(async (symbol): Promise<() => void> => {
           let isPlanned = false;
           const hasPlanned = () => {
             if (isPlanned) return;
@@ -123,10 +123,11 @@ export function followRenames(deps: FollowRenameDeps) {
           } finally {
             hasPlanned();
           }
-          if (await landed) outcome.report();
-          else deps.reporter.report('warning', `VS Code did not report renaming ${outcome.named}, so no reference to it followed.`);
+          if (await landed) return outcome.report;
+          return () => { deps.reporter.report('warning', `VS Code did not report renaming ${outcome.named}, so no reference to it followed.`); };
         }));
       }));
+      for (const report of reports) report();
     })().catch((error: unknown) => { deps.reporter.report('error', 'Could not carry the references to what VS Code renamed.', errorMessage(error)); });
     return { planned: Promise.race([planned, done]), done };
   };

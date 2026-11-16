@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Log } from '../ports/log';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type GameFolderArchived, type FileWinners, type StackedCopies } from './fileConflictIndex';
 import {
@@ -42,10 +41,8 @@ interface Run {
   tellsUnheard: boolean;
   fromEvents: boolean;
   readonly settled: Promise<void>;
-  /** Settles when the read has landed, before its subscribers have settled; rejects with the failure of a read that failed. A run dropped
-   *  for a write in flight settles with the run that reads what it was to read. */
+  /** Settles when the read has landed, before its subscribers have settled; rejects with the failure of a read that failed. */
   readonly valueLanded: Promise<void>;
-  readonly inherited: Run[];
   /** The named paths the read found as the value held them. */
   unchanged: ReadonlySet<string>;
   landValue(failure?: Error): void;
@@ -59,12 +56,7 @@ function nextRun(): Run {
   const valueLanded = new Promise<void>((resolve, reject) => { settleValueLanded = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
   // A refresh asks for `settled` alone, so a failure nobody asked `valueLanded` for is not an unhandled one.
   valueLanded.catch(() => undefined);
-  const inherited: Run[] = [];
-  const landValue = (failure?: Error): void => {
-    settleValueLanded(failure);
-    for (const run of inherited) run.landValue(failure);
-  };
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, inherited, unchanged: new Set(), landValue, land };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, unchanged: new Set(), landValue: settleValueLanded, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -190,6 +182,7 @@ export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
 interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
+  readonly writes: boolean;
 }
 
 const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
@@ -339,13 +332,10 @@ export class Instance implements Subscription {
   private reading = false;
 
   private next: Run | undefined;
-  private dropped: Run | undefined;
 
-  private quiets = 0;
+  private writesRunning = 0;
 
-  private quietEpoch = 0;
-
-  private readonly quietWork = new AsyncLocalStorage<WrittenFiles>();
+  private readonly heldBack = new Map<Subscribed, { readonly named: Set<string>; disk: boolean }>();
 
   private readonly changes: Subscription;
 
@@ -404,11 +394,24 @@ export class Instance implements Subscription {
   subscribe<K extends keyof InstanceValue>(
     subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
   ): Subscription {
-    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)) };
+    return this.subscribed(subscriber, concerns, false);
+  }
+
+  /** As `subscribe`, for a subscriber that writes files the value reads: a value that lands while a `writing` runs reaches it
+   *  once the last one ends. */
+  subscribeWriter<K extends keyof InstanceValue>(
+    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
+  ): Subscription {
+    return this.subscribed(subscriber, concerns, true);
+  }
+
+  private subscribed<K extends keyof InstanceValue>(subscriber: InstanceSubscriber<K>, concerns: Concerns<K> | undefined, writes: boolean): Subscription {
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), writes };
     this.subscribers.push(subscribed);
     return {
       dispose: () => {
         this.subscribers = this.subscribers.filter((s) => s !== subscribed);
+        this.heldBack.delete(subscribed);
       },
     };
   }
@@ -457,8 +460,7 @@ export class Instance implements Subscription {
     };
   }
 
-  /** A read of the files `wrote` names, or a check of the disk when none is named. Settles when its read has run; a read
-   *  that overlapped `quiet` is dropped, not landed. */
+  /** A read of the files `wrote` names, or a check of the disk when none is named. Settles when its read has run. */
   refresh(wrote?: readonly string[]): Promise<void> {
     return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false }).settled;
   }
@@ -466,38 +468,33 @@ export class Instance implements Subscription {
   /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
    *  the writer's own caller, holding a lock the write took. */
   told(wrote: readonly string[]): Promise<void> {
-    const work = this.quietWork.getStore();
-    if (work !== undefined) {
-      work.name(wrote);
-      return Promise.resolve();
-    }
     return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }).valueLanded;
   }
 
-  /** Runs `work`, a write to several files the value reads, and answers once the value holds the files it names. A read
-   *  that overlapped it never lands: it may hold some files from before the write and some after. */
-  async quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
+  /** Runs `work`, a write to several files the value reads, then reads again what no write told. Values land while it
+   *  runs. */
+  async writing<T>(work: () => Promise<T>): Promise<T> {
     const written = new WrittenFiles();
-    this.quietEpoch++;
-    this.quiets++;
-    let answer: T;
+    this.writesRunning++;
     try {
-      answer = await this.quietWork.run(written, () => collectingWrites(written, () => work(written)));
-    } catch (err) {
-      await this.closeQuiet(written).catch(() => undefined);
-      throw err;
+      return await collectingWrites(written, work);
+    } finally {
+      try {
+        if (written.named?.length !== 0) await this.refresh(written.named);
+      } finally {
+        this.writesRunning--;
+        if (this.writesRunning === 0) await this.releaseHeldBack();
+      }
     }
-    await this.closeQuiet(written);
-    return answer;
   }
 
-  // A read another open `quiet` drops settles at once; its value lands with the read after the last one closes.
-  private async closeQuiet(written: WrittenFiles): Promise<void> {
-    this.quiets--;
-    this.quietEpoch++;
-    const run = this.enqueue({ named: written.named, disk: written.named === undefined, tellsUnheard: false });
-    await run.valueLanded;
-    await run.settled;
+  private async releaseHeldBack(): Promise<void> {
+    const heldBack = [...this.heldBack];
+    this.heldBack.clear();
+    const value = this.current;
+    const sequence = this.seq;
+    await Promise.all(heldBack.map(([{ subscriber }, { named, disk }]) =>
+      this.notify([subscriber], 'value', () => subscriber(value, sequence, { named: [...named], disk }))));
   }
 
   /** The value once the first read has landed: reads when none has, and holds the read it has. */
@@ -582,14 +579,6 @@ export class Instance implements Subscription {
   }): Run {
     const next = this.next ?? nextRun();
     this.next = next;
-    if (this.dropped !== undefined) {
-      for (const path of this.dropped.named) next.named.add(path);
-      next.disk ||= this.dropped.disk;
-      next.tellsUnheard ||= this.dropped.tellsUnheard;
-      next.fromEvents ||= this.dropped.fromEvents;
-      next.inherited.push(...this.dropped.inherited);
-      this.dropped = undefined;
-    }
     for (const path of named) next.named.add(path);
     next.fromEvents ||= fromEvents || (disk && (this.heard.size > 0 || this.heardNoPath));
     if (disk) {
@@ -610,8 +599,8 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
-      const { settled, failed, dropped } = await this.recompute(run);
-      if (!dropped) run.landValue(failed);
+      const { settled, failed } = await this.recompute(run);
+      run.landValue(failed);
       run.land(settled);
     }
     this.reading = false;
@@ -619,20 +608,17 @@ export class Instance implements Subscription {
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(run: Run): Promise<{ settled: Promise<void>; failed?: Error; dropped?: true }> {
+  private async recompute(run: Run): Promise<{ settled: Promise<void>; failed?: Error }> {
     let next: InstanceValue;
-    const epoch = this.quietEpoch;
     try {
       next = await this.read(run);
     } catch (err) {
-      if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
       this.setLate(this.heardSinceRun());
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
       return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()), failed: new Error(failure) };
     }
-    if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
     const before = this.current;
     const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
     this.current = next;
@@ -642,20 +628,17 @@ export class Instance implements Subscription {
     const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
-    return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
+    const held = this.writesRunning > 0 ? told.filter(({ writes }) => writes) : [];
+    for (const subscribed of held) this.holdBack(subscribed, reread);
+    const now = told.filter((subscribed) => !held.includes(subscribed)).map(({ subscriber }) => subscriber);
+    return { settled: this.notify(now, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
-  // What a dropped run was to read is read by the next run, so a change the watch heard while a write ran is never lost.
-  private dropRun(run: Run): { settled: Promise<void>; dropped: true } {
-    const dropped = this.dropped ?? nextRun();
-    this.dropped = dropped;
-    for (const path of run.named) dropped.named.add(path);
-    dropped.disk ||= run.disk;
-    dropped.tellsUnheard ||= run.tellsUnheard;
-    dropped.fromEvents ||= run.fromEvents;
-    dropped.inherited.push(run);
-    if (this.quiets === 0) void this.enqueue({ disk: false, tellsUnheard: false });
-    return { settled: Promise.resolve(), dropped: true };
+  private holdBack(subscribed: Subscribed, { named, disk }: Reread): void {
+    const heldBack = this.heldBack.get(subscribed) ?? { named: new Set<string>(), disk: false };
+    for (const path of named) heldBack.named.add(path);
+    heldBack.disk ||= disk;
+    this.heldBack.set(subscribed, heldBack);
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
