@@ -663,6 +663,17 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) _checkpointOwed = true;
     }
 
+    internal void NameRows(PluginAddress key, IEnumerable<string> formKeys) => NameRows(key, formKeys, OpenProjection);
+
+    private void NameRows(PluginAddress key, IEnumerable<string> formKeys, ProjectionScope scope)
+    {
+        lock (_projectionLock)
+        {
+            if (!scope.NamedRows.TryGetValue(key, out var named)) scope.NamedRows[key] = named = new HashSet<string>(StringComparer.Ordinal);
+            named.UnionWith(formKeys);
+        }
+    }
+
     /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
     /// subscriber is never told about rows at a sequence the store has not reached.</summary>
     internal void Announce(Action publish)
@@ -670,6 +681,8 @@ internal sealed class Store : IDisposable
         var scope = OpenProjection;
         lock (_projectionLock) scope.Announcements.Add(publish);
     }
+
+    private void AnnounceEverything() => _notifications?.Publish(new RecordIndexChangedNotification(Sequence));
 
     private void Advance() =>
         DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
@@ -694,6 +707,8 @@ internal sealed class Store : IDisposable
                 parent.BumpOwed |= scope.BumpOwed;
                 parent.Announcements.AddRange(scope.Announcements);
                 scope.Announcements.Clear();
+                foreach (var (key, named) in scope.NamedRows) NameRows(key, named, parent);
+                parent.ReadWhole.UnionWith(scope.ReadWhole);
                 return;
             }
 
@@ -701,10 +716,15 @@ internal sealed class Store : IDisposable
             {
                 Advance();
                 scope.BumpOwed = false;
+                if (scope.Announcements.Count == 0 && scope.NamedRows.Count == 0) scope.Announcements.Add(AnnounceEverything);
             }
             var announcements = scope.Announcements.ToArray();
             scope.Announcements.Clear();
             foreach (var publish in announcements) publish();
+            foreach (var (key, named) in scope.NamedRows.Where(row => !scope.ReadWhole.Contains(row.Key)))
+                _notifications?.Publish(new RowsChangedNotification(key, [.. named], Sequence));
+            scope.NamedRows.Clear();
+            scope.ReadWhole.Clear();
         }
     }
 
@@ -715,6 +735,8 @@ internal sealed class Store : IDisposable
         internal ProjectionScope? Parent { get; } = parent;
         internal bool BumpOwed { get; set; }
         internal List<Action> Announcements { get; } = [];
+        internal Dictionary<PluginAddress, HashSet<string>> NamedRows { get; } = new(PluginAddress.Comparer);
+        internal HashSet<PluginAddress> ReadWhole { get; } = new(PluginAddress.Comparer);
         private Action<ProjectionScope>? _endProjection = endProjection;
 
         // Idempotent: a second Dispose would otherwise re-announce and pop a scope it does not own.
@@ -871,6 +893,9 @@ internal sealed class Store : IDisposable
 
         public void OweWinnerSweep(IEnumerable<string> formKeys) => store.OweWinnerSweep(formKeys);
 
+        /// <summary>Names rows changed in a plugin; a commit announces each plugin once, whoever named it.</summary>
+        public void NameRows(PluginAddress key, IEnumerable<string> formKeys) => store.NameRows(key, formKeys);
+
         public void Announce(Func<long, INotification> announcement) =>
             store.Announce(() => store._notifications?.Publish(announcement(store.Sequence)));
 
@@ -879,6 +904,22 @@ internal sealed class Store : IDisposable
         public void PluginChanged(PluginAddress key)
         {
             OweWinnerSweep();
+            store.OpenProjection.ReadWhole.Add(key);
+            Announce(sequence => new PluginChangedNotification(key, sequence));
+        }
+
+        /// <summary>A whole plugin read again, <paramref name="before"/> being the content its rows held: only the
+        /// FormKeys whose rows moved can move a winner, and a plugin that held none moved them all.</summary>
+        public void PluginReread(PluginAddress key, IReadOnlyDictionary<string, string> before)
+        {
+            if (before.Count == 0) OweWinnerSweep();
+            else
+            {
+                var after = store.EffectiveContentHashes(key);
+                OweWinnerSweep(before.Keys.Union(after.Keys, StringComparer.Ordinal)
+                    .Where(formKey => before.GetValueOrDefault(formKey) != after.GetValueOrDefault(formKey)));
+            }
+            store.OpenProjection.ReadWhole.Add(key);
             Announce(sequence => new PluginChangedNotification(key, sequence));
         }
 
@@ -1082,8 +1123,26 @@ internal sealed class Store : IDisposable
             lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
             throw;
         }
+        AnnounceSwept(owed);
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("Swept winners in {ElapsedMs} ms", timer.ElapsedMilliseconds);
+    }
+
+    // A swept FormKey is shown in every plugin that holds it, with the winner it now has.
+    private void AnnounceSwept(OwedSweep owed)
+    {
+        if (owed.FormKeys is null)
+        {
+            Announce(AnnounceEverything);
+            return;
+        }
+        var held = DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, form_key FROM {EffectiveRows} WHERE form_key IN (SELECT unnest($1::VARCHAR[]))",
+            reader => (Plugin: reader.GetPluginAddress(), FormKey: reader.GetString(2)), owed.FormKeys.ToList());
+        foreach (var holder in held.GroupBy(row => row.Plugin))
+        {
+            NameRows(holder.Key, holder.Select(row => row.FormKey));
+        }
     }
 
     // Replaced whole, never diffed (ADR-0013).

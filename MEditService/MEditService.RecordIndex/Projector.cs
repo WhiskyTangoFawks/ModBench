@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
@@ -218,18 +217,18 @@ internal sealed class Projector(
         var statesBefore = index.HeldWorkingTreeStates(key);
         if (Ingest(plugin) is { } stopped) return stopped;
         var after = index.EffectiveContentHashes(key);
-        projection.OweWinnerSweep(before.Keys.Union(after.Keys));
         var statesAfter = index.HeldWorkingTreeStates(key);
 
         // The keys asked about, and every row the tree read again moved, gone
         // or gained.
         var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
+        projection.OweWinnerSweep(KeysDiffering(before, after));
         AnnounceRows(projection, key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
         return null;
     }
 
     private static void AnnounceRows(Store.Store.Projection projection, PluginAddress key, IReadOnlyList<string> formKeys) =>
-        projection.Announce(sequence => new RowsChangedNotification(key, formKeys, sequence));
+        projection.NameRows(key, formKeys);
 
     /// <summary>Compares <paramref name="plugin"/>'s rows against the system of record they
     /// came from, the tree <paramref name="state"/> stamps or else the binary, and refreshes what

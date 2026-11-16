@@ -703,6 +703,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => streamPromise],
       ['/load-order/status', () => Promise.reject(new Error('no status read in this test'))],
+      ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
       ['/load-order', putFetch],
     ]);
     const client = makeClient(fetch);
@@ -1190,6 +1191,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', noContent],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
+      ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
       ['/plugins', (req) => new Promise<Response>((_resolve, reject) => {
         sent = true;
         req.signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); });
@@ -1230,6 +1232,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', noContent],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
+      ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
       ['/records/select', (req) => {
         const body = new ReadableStream<Uint8Array>({
           start: (controller) => {
@@ -1325,6 +1328,38 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
       await signalled;
       expect(settled).toBe(true);
+    });
+  });
+
+  describe('whether the client has heard every change mEdit has made', () => {
+    const rowsTick = (sequence: number) => new TextEncoder().encode(`data: ${JSON.stringify({
+      kind: 'rows-changed', plugin: 'A.esp', origin: 'Mod', keys: ['0001:A.esp'], sequence,
+    })}\n\n`);
+
+    async function hearing(mEditSequence: () => number) {
+      const { response, push } = pushableStreamResponse();
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, mEditSequence()))],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      return { client, push };
+    }
+
+    it('is not while mEdit has advanced past the last sequence a notification carried', async () => {
+      let sequence = 3;
+      const { client, push } = await hearing(() => sequence);
+      await vi.waitFor(async () => { expect(await client.hasHeardEveryChange()).toBe(true); });
+
+      sequence = 5;
+      push(rowsTick(4));
+      await vi.waitFor(async () => { expect(await client.hasHeardEveryChange()).toBe(false); });
+      expect(client.recordIndexMayBeLate).toBe(true);
+      push(rowsTick(5));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      expect(await client.hasHeardEveryChange()).toBe(true);
     });
   });
 

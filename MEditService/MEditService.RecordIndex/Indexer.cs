@@ -1449,8 +1449,9 @@ internal sealed class Indexer : IDisposable
 
     private ReadOutcome ReadWhole(OpenScope scope, PluginMetadata plugin, ReadState state) => scope.Store.Commit(projection =>
     {
+        var before = scope.Store.EffectiveContentHashes(plugin.Key);
         var read = IndexOnePlugin(scope, plugin, state, CancellationToken.None);
-        if (read.Failure is null) projection.PluginChanged(plugin.Key);
+        if (read.Failure is null) projection.PluginReread(plugin.Key, before);
         return read;
     });
 

@@ -127,6 +127,7 @@ class HttpMEditClient implements MEditClient {
   private readonly changes: RecordIndexChanges;
   private readonly leaveWritesUnnamed: () => void;
   private sweepsAwaited = 0;
+  private mEditSequence = 0;
   private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
 
   constructor(deps: HttpMEditClientDeps) {
@@ -146,7 +147,12 @@ class HttpMEditClient implements MEditClient {
     this.lifecycle.onStatusChanged((status) => {
       if (status === 'running') this.notifications.start();
       else this.notifications.stop();
+      if (status === 'running') void this.hearFromHere();
     });
+    this.notifications.onReconnected(() => { void this.hearFromHere(); });
+    for (const kind of ['rows-changed', 'plugin-changed', 'record-index-changed'] as const) {
+      this.notifications.onNotification(kind, () => { this.lateness.note(); });
+    }
     this.loadOrderStatusKept = keepLoadOrderStatus({
       onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
@@ -206,7 +212,18 @@ class HttpMEditClient implements MEditClient {
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
-  get recordIndexMayBeLate(): boolean { return this.loadOrder.pending() || this.handOver.pending() || this.sweepsAwaited > 0; }
+  async hasHeardEveryChange(): Promise<boolean> {
+    const current = await this.currentSequence();
+    if (current !== undefined) this.mEditSequence = Math.max(this.mEditSequence, current);
+    this.lateness.note();
+    return !this.behindMEdit;
+  }
+
+  private get behindMEdit(): boolean { return this.notifications.heardSequence < this.mEditSequence; }
+
+  get recordIndexMayBeLate(): boolean {
+    return this.loadOrder.pending() || this.handOver.pending() || this.sweepsAwaited > 0 || this.behindMEdit;
+  }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
@@ -463,6 +480,24 @@ class HttpMEditClient implements MEditClient {
     let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || over(status)) end(); });
     void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && over(current)) end(); });
     return ended;
+  }
+
+  // A process opened onto is heard from where it stands: everything before is said by the change that follows its opening.
+  private async hearFromHere(): Promise<void> {
+    this.notifications.forgetHeard();
+    this.mEditSequence = 0;
+    const current = await this.currentSequence();
+    if (current !== undefined) this.notifications.hearUpTo(current);
+  }
+
+  private async currentSequence(): Promise<number | undefined> {
+    try {
+      const { data } = await this.apiClient.GET('/load-order/sequence', {});
+      return data;
+    } catch (e) {
+      this.log.error(`[HttpMEditClient] reading the record index sequence threw: ${errorMessage(e)}`);
+      return undefined;
+    }
   }
 
   // Undefined when the read fails: the caller then waits on the stream's own ticks.
