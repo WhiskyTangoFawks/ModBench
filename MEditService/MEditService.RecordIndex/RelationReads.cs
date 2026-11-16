@@ -220,7 +220,6 @@ internal sealed class RelationReads(
             r.full_name AS full_name
             """;
 
-        var total = context.Scalar<long>($"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams]);
 
         // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
         // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
@@ -232,7 +231,11 @@ internal sealed class RelationReads(
             LIMIT {query.Limit} OFFSET {query.Offset}
             """, ReadSummary, [.. dataParams]);
 
-        return new PagedResult<RecordSummary>(items, (int)total);
+        // A read of named records is the whole listing, which needs no count of the rest.
+        var total = query.FormKeys is null
+            ? (int)context.Scalar<long>($"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams])
+            : items.Count;
+        return new PagedResult<RecordSummary>(items, total);
     }
 
     // A listing of one plugin walks that plugin's holdings alone, bound after the listing's own
@@ -885,7 +888,7 @@ internal sealed class RelationReads(
         return context.Rows($"""
             SELECT cc.child, cc.slot, cc.slot_index
             FROM holdings cc
-            LEFT JOIN records r ON r.form_key = cc.child AND r.plugin = cc.plugin AND r.origin = cc.origin
+            LEFT JOIN {TableDdlBuilder.MirrorSchema}.records r ON r.form_key = cc.child AND r.plugin = $2 AND r.origin = $3
             WHERE cc.parent = $1 AND cc.plugin = $2 AND cc.origin = $3{inFilter}
             ORDER BY {order}
             """, reader => new HoldingRow(parentFormKey, reader.GetString(0), reader.GetString(1), reader.GetInt32(2)),

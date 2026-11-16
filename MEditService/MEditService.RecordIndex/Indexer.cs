@@ -1307,9 +1307,15 @@ internal sealed class Indexer : IDisposable
 
     private static ModPath ModPathOf(string path) => new(ModKey.FromFileName(Path.GetFileName(path)), path);
 
-    // A binary's rows hold its texts as its strings gave them. A tree's hold their own, and a plugin not localized has none.
+    // A binary's rows hold its texts as its strings gave them, and a plugin not localized has none. A tree's hold their own in every
+    // language, and the strings language picks the name each shows.
     private bool StringsStillRead(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, DerivedFrom? derivedFrom, string? read) =>
-        derivedFrom is null or DerivedFrom.SourceTree || read is null || read == StringsReadBy(loadOrder, plugin);
+        derivedFrom switch
+        {
+            null => true,
+            DerivedFrom.SourceTree => read is null || read == loadOrder.StringsLanguage.ToString(),
+            _ => read is null || read == StringsReadBy(loadOrder, plugin),
+        };
 
     // The language a read shows its texts in, and each place it takes its strings from, by the stamp Mod Management
     // handed with it, or why a place could not be read (ADR-0003).

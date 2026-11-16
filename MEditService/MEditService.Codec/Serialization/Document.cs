@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
+using Mutagen.Bethesda.Strings;
 using ChildDocument = MEditService.Codec.Serialization.ContainerDocuments.ChildDocument;
 
 namespace MEditService.Codec.Serialization;
@@ -59,6 +60,22 @@ public sealed class Document
     /// document omits it or holds no string there.</summary>
     public string? StringAt(params ReadOnlySpan<string> path) =>
         At(path) is { ValueKind: JsonValueKind.String } value ? DocumentNodes.StringValueOf(value) : null;
+
+    /// <summary>The text of the translated string at <paramref name="path"/> that <paramref name="language"/> shows: its one
+    /// value, else its entry for the language; null where there is none.</summary>
+    public string? TranslatedTextAt(Language language, params ReadOnlySpan<string> path)
+    {
+        if (At(path) is not { ValueKind: JsonValueKind.Object } translated) return null;
+        if (translated.TryGetProperty("Value", out var one) && one.ValueKind == JsonValueKind.String) return DocumentNodes.StringValueOf(one);
+        if (!translated.TryGetProperty("Values", out var values) || values.ValueKind != JsonValueKind.Array) return null;
+        foreach (var entry in values.EnumerateArray())
+        {
+            if (entry.TryGetProperty("Language", out var held) && held.GetString() == language.ToString()
+                && entry.TryGetProperty("String", out var text) && text.ValueKind == JsonValueKind.String)
+                return DocumentNodes.StringValueOf(text);
+        }
+        return null;
+    }
 
     /// <summary>The integer at <paramref name="path"/>; null where the document omits it or holds no
     /// integer there.</summary>

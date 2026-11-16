@@ -283,7 +283,7 @@ internal sealed class PluginIngest
             document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
             _contentStamp(document.Text), refs,
             RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis,
-            refused ? default : DerivedColumns.Of(document.Text, _stringsLanguage()));
+            refused ? default : DerivedColumns.Of(root, _stringsLanguage()));
     }
 
     private static void AppendPrepared(

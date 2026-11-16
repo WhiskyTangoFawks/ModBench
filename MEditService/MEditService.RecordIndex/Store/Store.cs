@@ -495,7 +495,6 @@ internal sealed class Store : IDisposable
     {
         if (DuckDbSql.Execute(Connection, $"UPDATE {TableDdlBuilder.StringsLanguageRelation} SET language = $1 WHERE language <> $1", language.ToString()) == 0) return;
         _stringsLanguage = language;
-        DerivedColumns.OfSourceTrees(Connection);
         BumpSequence();
     }
 
@@ -966,7 +965,7 @@ internal sealed class Store : IDisposable
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
     public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath, CancellationToken token) =>
-        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, recordsHeld: null, token);
+        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: _stringsLanguage.ToString(), recordsHeld: null, token);
 
     /// <summary>A binary whose documents miss one of the <paramref name="recordsHeld"/> records it holds, or that holds one
     /// FormKey in two groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
