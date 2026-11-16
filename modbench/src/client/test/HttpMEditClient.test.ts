@@ -1374,7 +1374,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       await client.refreshRecordIndexLateness();
 
       sequence = 7;
-      streams[0].end();
+      streams[0]?.end();
       await vi.waitFor(() => { expect(streams).toHaveLength(2); });
 
       await vi.waitFor(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(false); });
