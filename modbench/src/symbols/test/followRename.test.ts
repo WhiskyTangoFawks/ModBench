@@ -78,7 +78,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     instance: {
       writing: async (work) => {
         writing += 1;
-        try { return await work(); } finally { writing -= 1; }
+        try { return await work(); } finally { writing -= 1; events.push(`writing ends, ${String(reporter.reports.length)} reported`); }
       },
     },
     reporter,
@@ -99,7 +99,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
 
     landing.resolve(true);
     await following.done;
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1, writing', 'commit Renamed.esp, writing']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1, writing', 'commit Renamed.esp, writing', 'writing ends, 0 reported']);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -129,7 +129,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
 
     landing.resolve(true);
     await following.done;
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'writing ends, 0 reported']);
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: '"Patch.esp" (Patch Mod) was renamed to "Renamed.esp", and no reference to it followed: Not a valid plugin file name: "Renamed.esp"', detail: undefined,
     }]);
@@ -158,12 +158,21 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     }]);
   });
 
+  it('says what it carried once its write of several files, and each sync it held back, has ended', async () => {
+    const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]), { 'Patch.esp': { cannotFollow: ['LOOT\'s masterlist names Patch.esp'] } });
+
+    await follow([RENAME], Promise.resolve(true)).done;
+
+    expect(events.at(-1)).toBe('writing ends, 0 reported');
+    expect(reporter.reports).toHaveLength(1);
+  });
+
   it('applies and commits nothing when VS Code never says the rename landed, and says so', async () => {
     const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
 
     await follow([RENAME], Promise.resolve(false)).done;
 
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'writing ends, 0 reported']);
     expect(reporter.reports.map(({ severity, message }) => ({ severity, message }))).toEqual([
       { severity: 'warning', message: 'VS Code did not report renaming "Patch.esp" (Patch Mod), so no reference to it followed.' },
     ]);

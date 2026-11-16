@@ -19,9 +19,9 @@ interface ModSyncDeps {
 export function modSyncOn({ instance, syncMods, channel }: ModSyncDeps): ModSyncOn {
   const modSync = createModSync(syncMods, channel, instance.value.managerNames.modOrderFile);
   const subscriptions = [
-    instance.subscribeWriter(() => { void modSync.run(); }, { mods: true, modFolders: true }),
+    instance.subscribeWriter(async () => { await modSync.run(); }, { mods: true, modFolders: true }),
     // Recovery is not gated (ADR-0003): a sync whose failure stands is tried again at each value, as the first one was.
-    instance.subscribeWriter(() => { if (modSync.message() !== undefined) void modSync.run(); }),
+    instance.subscribeWriter(async () => { if (modSync.message() !== undefined) await modSync.run(); }),
   ];
   return { modSync, dispose: () => { for (const subscription of subscriptions) subscription.dispose(); } };
 }
