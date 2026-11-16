@@ -4,11 +4,7 @@ import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 type KnownResult = components['schemas']['KnownResult'];
 type RecordResult = components['schemas']['RecordResult'];
 
-export interface HeldAnswer {
-  plugin: PluginAddress;
-  failure?: string | null;
-  records?: RecordResult[] | null;
-}
+export type HeldAnswer = Pick<components['schemas']['PluginProblems'], 'plugin' | 'failure' | 'records'>;
 
 /** How an answer divides into its records' parts and the plugin's own level, as pull diagnostics divide a workspace's. */
 export interface Division<A extends HeldAnswer, Part> {

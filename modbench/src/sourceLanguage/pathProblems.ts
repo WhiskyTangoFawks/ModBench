@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { addNamed, type Named } from '../drivingLib/namedPlugins';
+import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, lastRead, positionAt, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
@@ -122,7 +122,7 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
       showStatus();
     }
   };
-  const asking = new Map<string, Named>();
+  const asking = new Map<string, PluginRecords>();
   let wholeWanted = true;
   let atSubscribe = true;
   const askWanted = asks.asking(async () => {
@@ -132,10 +132,10 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     wholeWanted = false;
     atSubscribe = false;
     asking.clear();
-    await Promise.all(whole ? [ask(undefined, first)] : named.map(({ plugin, keys }) => ask(plugin, false, keys && [...keys])));
+    await Promise.all(whole ? [ask(undefined, first)] : named.map(({ plugin, keys }) => ask(plugin, false, keys)));
   });
-  const askPlugin = (plugin: PluginAddress, keys?: readonly string[]) => {
-    addNamed(asking, plugin, keys);
+  const askPlugin = (named: PluginRecords) => {
+    addNamed(asking, named);
     askWanted();
   };
   const whenNotLate = askingWhenNotLate(client, askPlugin);

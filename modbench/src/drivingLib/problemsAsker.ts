@@ -1,3 +1,4 @@
+import type { PluginChanged, PluginRecords } from './namedPlugins';
 import { bounded, REQUESTS_AT_ONCE, type InTurn } from '../ports/bounded';
 import { askedAgain, keyOf, WHOLE_SET, type Read } from './askedAgain';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -11,10 +12,8 @@ interface Reads<Paths extends Answered, Problems> {
   onDidChange(listener: (change: readonly { readonly plugin: PluginAddress; readonly keys?: readonly string[] }[] | undefined) => void): { dispose(): void };
 }
 
-export interface PluginChanged { plugin?: PluginAddress; keys?: readonly string[] }
-
 /** A plugin-changed listener that asks of the one plugin named, with the records the change names, or of the whole set when none is. */
-export function askingOnChange(whole: () => void, plugin: (changed: { plugin: PluginAddress; keys?: readonly string[] }) => void): (event: PluginChanged) => void {
+export function askingOnChange(whole: () => void, plugin: (changed: PluginRecords) => void): (event: PluginChanged) => void {
   return (event) => { if (event.plugin === undefined) whole(); else plugin({ plugin: event.plugin, keys: event.keys }); };
 }
 

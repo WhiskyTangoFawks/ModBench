@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { addNamed, type Named } from '../drivingLib/namedPlugins';
+import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
@@ -62,7 +62,6 @@ interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Un
 const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
 const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
-// An answer mEdit gave again as it was, the same object, places as it did.
 const placedBefore = new WeakMap<PluginProblems, readonly [string, Contribution | undefined, Unplaced?]>();
 
 function placedPlugin(answer: PluginProblems, { sourceFiles }: SourceProblemsDeps): readonly [string, Contribution | undefined, Unplaced?] {
@@ -169,16 +168,16 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   };
   let wholeWanted = true;
   let atSubscribe = true;
-  const asking = new Map<string, Named>();
+  const asking = new Map<string, PluginRecords>();
   const asks = settling();
   const askWanted = asks.asking(async () => {
     const [whole, first, named] = [wholeWanted, atSubscribe, [...asking.values()]];
     [wholeWanted, atSubscribe] = [false, false];
     asking.clear();
-    await Promise.all(whole ? [ask(undefined, first)] : named.map(({ plugin, keys }) => ask(plugin, false, keys && [...keys])));
+    await Promise.all(whole ? [ask(undefined, first)] : named.map(({ plugin, keys }) => ask(plugin, false, keys)));
   });
-  const askPlugin = (plugin: PluginAddress, keys?: readonly string[]) => {
-    addNamed(asking, plugin, keys);
+  const askPlugin = (named: PluginRecords) => {
+    addNamed(asking, named);
     askWanted();
   };
   const whenNotLate = askingWhenNotLate(client, askPlugin);

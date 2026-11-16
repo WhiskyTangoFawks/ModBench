@@ -121,7 +121,7 @@ describe('asking when the record index is not late', () => {
 
     askingWhenNotLate(client, (plugin) => asked.push(plugin)).plugin({ plugin: PLUGIN });
 
-    expect(asked).toEqual([PLUGIN]);
+    expect(asked).toEqual([{ plugin: PLUGIN }]);
   });
 
   it('holds each plugin changed while it may be late, and asks of exactly those plugins, once each, when it is not', async () => {
@@ -133,7 +133,19 @@ describe('asking when the record index is not late', () => {
 
     await end();
 
-    expect(asked).toEqual([PLUGIN, OTHER]);
+    expect(asked).toEqual([{ plugin: PLUGIN }, { plugin: OTHER }]);
+  });
+
+  it('holds the records changed while it may be late, and asks of those records of each plugin once it is not', async () => {
+    const { asking, asked, end } = whileLate();
+    asking.plugin({ plugin: PLUGIN, keys: ['1'] });
+    asking.plugin({ plugin: PLUGIN, keys: ['2'] });
+    asking.plugin({ plugin: OTHER, keys: ['3'] });
+    asking.plugin({ plugin: OTHER });
+
+    await end();
+
+    expect(asked).toEqual([{ plugin: PLUGIN, keys: ['1', '2'] }, { plugin: OTHER }]);
   });
 
   it('asks nothing when it stops being late with nothing held', async () => {

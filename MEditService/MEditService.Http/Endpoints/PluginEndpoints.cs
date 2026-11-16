@@ -43,8 +43,7 @@ internal static class PluginEndpoints
 
         app.MapPost("/plugins/problems", (string? plugin, string? origin, RecordsAsked asked, IQueries svc) =>
         {
-            if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            if (address is null && asked.Keys is not null) return EndpointMapping.BadRequest("Name the plugin the keys are of.");
+            if (!EndpointMapping.RecordsAskedOf(plugin, origin, asked, out var address, out var refused)) return refused;
             return EndpointMapping.Ok(svc.GetProblems(address, asked));
         })
             .WithName("GetPluginProblems")
@@ -59,8 +58,7 @@ internal static class PluginEndpoints
 
         app.MapPost("/plugins/file-paths", (string? plugin, string? origin, RecordsAsked asked, IQueries svc) =>
         {
-            if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            if (address is null && asked.Keys is not null) return EndpointMapping.BadRequest("Name the plugin the keys are of.");
+            if (!EndpointMapping.RecordsAskedOf(plugin, origin, asked, out var address, out var refused)) return refused;
             return EndpointMapping.Ok(svc.GetFilePaths(address, asked));
         })
             .WithName("GetPluginFilePaths")

@@ -56,6 +56,33 @@ public sealed class RowsChangedNotificationTests
     }
 
     [Fact]
+    public void ADeletedRecord_IsAnnouncedWithTheRecordsOfCompiledPluginsThatReferToIt()
+    {
+        FormKey target = default;
+        FormKey referrer = default;
+        using var fixture = new PluginFixtureBuilder("rows-changed-referrers")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                target = mod.Npcs.AddNew("Target").FormKey;
+                var referring = mod.Npcs.AddNew("Referrer");
+                referring.Race.SetTo(target);
+                referrer = referring.FormKey;
+                mod.Npcs.AddNew("Bystander");
+            }, origin: "FixtureMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var entry = fixture.Plugins.Single();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Reconciled(fixture, notifications: notifications);
+        File.Delete(entry.SourceFileOf(index.DocumentOf(target.ToString(), entry.Key)));
+
+        index.NextCheck();
+
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal(new[] { target.ToString(), referrer.ToString() }.Order(StringComparer.Ordinal), notification.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void ValidatingAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
     {
         var (fixture, entry, notifications, index, moved, still) = TwoNpcs("rows-changed-gained");

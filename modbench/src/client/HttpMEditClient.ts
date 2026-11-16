@@ -793,7 +793,6 @@ class HttpMEditClient implements MEditClient {
       api.POST('/plugins/file-paths', { params: { query: address === undefined ? {} : { plugin: address.name, origin: address.origin } }, body, signal }));
   }
 
-  // The records a change names are asked of alone, with the results held of them; what comes back folds into the held answer.
   private async askedByRecord<A extends HeldAnswer, Part>(
     what: string, held: HeldResults<A, Part>, plugin: PluginAddress | undefined, keys: readonly string[] | undefined, token: ReadCancellation | undefined,
     post: (api: ApiClient, signal: AbortSignal, address: PluginAddress | undefined, body: RecordsAsked) => Promise<{ data?: A[]; error?: unknown; response: Response }>,

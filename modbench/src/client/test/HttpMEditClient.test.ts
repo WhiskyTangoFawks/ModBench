@@ -6,7 +6,7 @@ import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { isReadFailed } from '../../wire/readFailed';
+import { answerOf as read, isReadFailed } from '../../wire/readFailed';
 import { answered } from './healthAnswer';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -410,10 +410,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       const second = await client.getPluginProblems(REFERS);
 
       expect(second).toEqual(first);
-      const [before] = isReadFailed(first) ? [] : first;
-      const [after] = isReadFailed(second) ? [] : second;
-      expect(before).toBeDefined();
-      expect(after).toBe(before);
+      expect(read(second)[0]).toBe(read(first)[0]);
+      expect(read(first)[0]?.problems.map(({ formKey }) => formKey)).toEqual(['A']);
     });
 
     it('asks only for the records named, and puts what it answers beside the records it holds', async () => {
@@ -426,7 +424,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       const merged = await client.getPluginProblems(REFERS, undefined, ['B']);
 
       expect((await bodies())[1]).toEqual({ keys: ['B'], known: [{ plugin: REFERS, formKey: 'A', resultId: '1' }, { plugin: REFERS, formKey: 'B', resultId: '2' }] });
-      expect(isReadFailed(merged) ? [] : merged[0]?.problems.map(({ formKey, message }) => [formKey, message])).toEqual([['A', 'names no record'], ['B', 'changed']]);
+      expect(read(merged)[0]?.problems.map(({ formKey, message }) => [formKey, message])).toEqual([['A', 'names no record'], ['B', 'changed']]);
     });
 
     it('drops a record whose answer comes back clean', async () => {
@@ -435,7 +433,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       await client.getPluginProblems(REFERS);
       const merged = await client.getPluginProblems(REFERS, undefined, ['B']);
 
-      expect(isReadFailed(merged) ? [] : merged[0]?.problems.map(({ formKey }) => formKey)).toEqual(['A']);
+      expect(read(merged)[0]?.problems.map(({ formKey }) => formKey)).toEqual(['A']);
     });
 
     it('asks the whole plugin again when the records it named come back failed', async () => {
@@ -470,7 +468,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       const merged = await client.getPluginProblems(REFERS);
 
       expect((await bodies())[2]).toEqual({ keys: null, known: [] });
-      expect(isReadFailed(merged) ? [] : merged[0]?.problems.map(({ formKey }) => formKey)).toEqual(['Z']);
+      expect(read(merged)[0]?.problems.map(({ formKey }) => formKey)).toEqual(['Z']);
     });
 
     it('puts the files an unread copy stops beside the lines of the records it holds', async () => {
@@ -489,8 +487,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       await client.getPluginFilePaths(REFERS);
       const merged = await client.getPluginFilePaths(REFERS, undefined, ['A']);
 
-      expect(isReadFailed(merged) ? [] : merged[0]?.unread).toEqual(['stray.json: stopped', 'B: refused']);
-      expect(isReadFailed(merged) ? [] : merged[0]?.paths.map(({ dataPath }) => dataPath)).toEqual(['a.dds']);
+      expect(read(merged)[0]?.unread).toEqual(['stray.json: stopped', 'B: refused']);
+      expect(read(merged)[0]?.paths.map(({ dataPath }) => dataPath)).toEqual(['a.dds']);
     });
   });
 

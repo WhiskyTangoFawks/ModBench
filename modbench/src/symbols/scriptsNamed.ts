@@ -1,5 +1,6 @@
 import type { MEditClient, PluginAddress } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import type { PluginRecords } from '../drivingLib/namedPlugins';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey, pluginRowName } from '../wire/pluginAddress';
 import { failureReason, isNotYetAnswerable, isReadFailed, ReadFailedError } from '../wire/readFailed';
@@ -13,15 +14,12 @@ interface ScriptsNamedDeps {
 }
 
 type NamedInFile = { file: string; name: string };
-/** A plugin to ask of, with the records a change names. */
-export type NamedPlugin = PluginAddress & { keys?: readonly string[] };
 type Answered = Extract<Awaited<ReturnType<MEditClient['getPluginFilePaths']>>, unknown[]>;
 
 /** Each script every compiled plugin's source names, with its file; `only` asks of those plugins, and none of `[]`.
  *  Undefined while the record index cannot answer yet. A plugin whose answer failed keeps what it last held. */
-export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps): (only?: readonly NamedPlugin[]) => Promise<NamedInFile[] | undefined> {
+export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps): (only?: readonly PluginRecords[]) => Promise<NamedInFile[] | undefined> {
   const held = new Map<string, NamedInFile[]>();
-  // An answer mEdit gave again as it was, the same object, names the same scripts.
   const namedBy = new WeakMap<object, NamedInFile[]>();
   let listed: NamedInFile[] | undefined;
   let told = '';
@@ -32,9 +30,9 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
     told = why;
   };
 
-  const take = (answers: Answered, only: readonly NamedPlugin[] | undefined) => {
+  const take = (answers: Answered, only: readonly PluginRecords[] | undefined) => {
     for (const key of [...held.keys()]) {
-      const asked = only === undefined || only.some((plugin) => pluginAddressKey(plugin) === key);
+      const asked = only === undefined || only.some(({ plugin }) => pluginAddressKey(plugin) === key);
       if (asked && !answers.some(({ plugin }) => pluginAddressKey(plugin) === key)) { held.delete(key); listed = undefined; }
     }
     for (const answer of answers) {
@@ -49,7 +47,7 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
   };
 
   return async (only) => {
-    const asked = await Promise.all(only === undefined ? [paths.getPluginFilePaths()] : only.map(({ keys, ...plugin }) => paths.getPluginFilePaths(plugin, keys)));
+    const asked = await Promise.all(only === undefined ? [paths.getPluginFilePaths()] : only.map(({ plugin, keys }) => paths.getPluginFilePaths(plugin, keys)));
     const failed = asked.find(isReadFailed);
     if (failed !== undefined) {
       if (isNotYetAnswerable(failed)) return undefined;

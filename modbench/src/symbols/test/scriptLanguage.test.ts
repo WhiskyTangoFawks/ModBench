@@ -105,7 +105,7 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     const asked = { scriptsIn: vi.fn(() => Promise.resolve([])), scriptsNamed: vi.fn(() => Promise.resolve([])) };
     const { language: unjudged, reporter } = language(NONE, SCRIPTS, standing, asked);
 
-    const answers = [await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing([{ name: 'Mod.esp', origin: 'Mod' }])];
+    const answers = [await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing([{ plugin: { name: 'Mod.esp', origin: 'Mod' } }])];
 
     expect(answers).toEqual(why === undefined ? [undefined, undefined] : [[], []]);
     expect([asked.scriptsIn.mock.calls, asked.scriptsNamed.mock.calls]).toEqual([[], []]);
@@ -137,7 +137,7 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     const { language: judging, instance } = language(NONE, SCRIPTS, {}, { scriptsNamed: asked });
 
     const first = await judging.filesNamingNothing();
-    const same = await judging.filesNamingNothing([{ name: 'Mod.esp', origin: 'Mod' }]);
+    const same = await judging.filesNamingNothing([{ plugin: { name: 'Mod.esp', origin: 'Mod' } }]);
     asked.mockResolvedValueOnce([...NAMED]);
     const another = await judging.filesNamingNothing();
     instance.value = { ...instance.value };
@@ -148,7 +148,7 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
 
   it('asks of the plugins it is given, and says nothing can be said where mEdit has not answered', async () => {
     const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(undefined));
-    const only = [{ name: 'Mod.esp', origin: 'Mod' }];
+    const only = [{ plugin: { name: 'Mod.esp', origin: 'Mod' } }];
 
     expect([await language(NONE, SCRIPTS, {}, { scriptsNamed: asked }).language.filesNamingNothing(only), asked.mock.calls]).toEqual([undefined, [[only]]]);
   });

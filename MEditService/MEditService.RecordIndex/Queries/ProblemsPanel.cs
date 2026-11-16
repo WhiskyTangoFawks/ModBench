@@ -13,9 +13,10 @@ internal static class ProblemsPanel
     public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null, RecordsAsked? asked = null)
     {
         var keys = RecordResults.KeysOf(asked);
+        keys?.Add("");
         bool Asked(string? formKey) => keys is null || keys.Contains(formKey ?? "");
         var derivations = reads.GetDerivations();
-        var stopped = index.SourceFileFailures.Where(failure => Asked(failure.FormKey)).ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
+        var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var found = index.FileProblems.Where(problem => Asked(problem.Problem.FormKey)).ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
         var unreadable = UnreadableActive(index, snapshot);
         var heldReasons = ReadFailures.HeldReasons(index);
@@ -43,7 +44,7 @@ internal static class ProblemsPanel
                     return Placed(plugin, source, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         derivations.ContainsKey(plugin.Key) ? heldReasons.GetValueOrDefault(plugin.Key) : null,
-                        [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
+                        [.. stopped[plugin.Key].Where(failure => Asked(failure.FormKey)).Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
                         [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
                 }),
         ];

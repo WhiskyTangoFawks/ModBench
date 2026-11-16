@@ -113,8 +113,8 @@ describe('every script the plugin source of the compiled plugins names', () => {
     const placed = vi.fn(FILE_OF);
     const placing = sourceNames({ names: { getPluginSourceNames: vi.fn() }, paths, sourceFiles: () => ({ file: placed }), reporter: recordingReporter() });
 
-    await placing.scriptsNamed([{ ...plugin, keys: ['000800:Mod.esp'] }]);
-    await placing.scriptsNamed([plugin]);
+    await placing.scriptsNamed([{ plugin, keys: ['000800:Mod.esp'] }]);
+    await placing.scriptsNamed([{ plugin }]);
 
     expect([paths.getPluginFilePaths.mock.calls, placed.mock.calls.length]).toEqual([[[plugin, ['000800:Mod.esp']], [plugin, undefined]], 1]);
     expect(await owner.scriptsNamed()).toHaveLength(1);
@@ -125,7 +125,7 @@ describe('every script the plugin source of the compiled plugins names', () => {
     const { owner } = owning(() => answer);
 
     const first = await owner.scriptsNamed();
-    const again = await owner.scriptsNamed([plugin]);
+    const again = await owner.scriptsNamed([{ plugin }]);
 
     expect(again).toBe(first);
   });
@@ -137,7 +137,7 @@ describe('every script the plugin source of the compiled plugins names', () => {
 
     answer = [holding(plugin, 'Gone')];
 
-    expect(await owner.scriptsNamed([plugin])).not.toBe(first);
+    expect(await owner.scriptsNamed([{ plugin }])).not.toBe(first);
   });
 
   it('says nothing is answered while the record index cannot answer yet', async () => {
@@ -150,8 +150,8 @@ describe('every script the plugin source of the compiled plugins names', () => {
 
   it('asks of the plugins named alone, answers every plugin\'s scripts, and asks of none for an empty list', async () => {
     const { owner, paths } = owning((asked) => [holding(asked ?? plugin, `Of${asked?.name ?? 'All'}`)]);
-    await owner.scriptsNamed([plugin]);
-    await owner.scriptsNamed([beside]);
+    await owner.scriptsNamed([{ plugin }]);
+    await owner.scriptsNamed([{ plugin: beside }]);
 
     expect(await owner.scriptsNamed([])).toEqual([
       { file: FILE_OF('Mod.esp/Npc.json'), name: 'OfMod.esp' }, { file: FILE_OF('Beside.esp/Npc.json'), name: 'OfBeside.esp' },

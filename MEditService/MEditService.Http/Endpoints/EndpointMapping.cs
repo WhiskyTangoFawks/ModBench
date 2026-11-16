@@ -40,6 +40,14 @@ internal static class EndpointMapping
         return refusal is null;
     }
 
+    /// <summary>A query of a plugin's records by key, which names the plugin the keys are of.</summary>
+    internal static bool RecordsAskedOf(string? plugin, string? origin, RecordsAsked asked, out PluginAddress? address, [NotNullWhen(false)] out IResult? refusal)
+    {
+        if (!OptionalPluginAt(plugin, origin, out address, out refusal)) return false;
+        if (address is null && asked.Keys is not null) refusal = BadRequest("Name the plugin the keys are of.");
+        return refusal is null;
+    }
+
     /// <summary>A request that is malformed in itself: the protocol's 400, before any handler is reached.</summary>
     internal static IResult BadRequest(string detail) => Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest);
 

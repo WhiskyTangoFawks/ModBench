@@ -20,6 +20,7 @@ vi.mock('vscode', () => ({
 import { registerNamesNothing } from '../namesNothing';
 import { bounded, REQUESTS_AT_ONCE } from '../../ports/bounded';
 import type { PluginAddress } from '../../client';
+import type { PluginRecords } from '../../drivingLib/namedPlugins';
 import type { ScriptSymbol } from '../../symbolNames/symbolNames';
 import { fakeKind, fakeKinds } from './fakeKinds';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -167,7 +168,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
 
   it('asks of the one plugin whose source changed, and of all once the instance changes', async () => {
     world.documents = [];
-    const asked = vi.fn((_only?: readonly PluginAddress[]) => Promise.resolve([] as string[]));
+    const asked = vi.fn((_only?: readonly PluginRecords[]) => Promise.resolve([] as string[]));
     const { changed } = start(script({ filesNamingNothing: asked }));
     await settle();
     changed(PLUGIN);
@@ -175,7 +176,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     changed();
     await settle();
 
-    expect(asked.mock.calls).toEqual([[undefined], [[PLUGIN]], [undefined]]);
+    expect(asked.mock.calls).toEqual([[undefined], [[{ plugin: PLUGIN }]], [undefined]]);
   });
 
   describe('when a change leaves what is judged as it was', () => {
@@ -269,8 +270,8 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     ['cannot answer yet', () => Promise.resolve(undefined)],
   ])('asks for every plugin again after a whole-set ask that %s, even when one plugin\'s files changed', async (_case, failing) => {
     world.documents = [];
-    let ask: (only?: readonly PluginAddress[]) => Promise<string[] | undefined> = failing;
-    const asked = vi.fn((only?: readonly PluginAddress[]) => ask(only));
+    let ask: (only?: readonly PluginRecords[]) => Promise<string[] | undefined> = failing;
+    const asked = vi.fn((only?: readonly PluginRecords[]) => ask(only));
     const { changed } = start(script({ filesNamingNothing: asked }));
     await settle();
     ask = () => Promise.resolve([]);
@@ -279,7 +280,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     changed(PLUGIN);
     await settle();
 
-    expect(asked.mock.calls).toEqual([[undefined], [undefined], [[PLUGIN]]]);
+    expect(asked.mock.calls).toEqual([[undefined], [undefined], [[{ plugin: PLUGIN }]]]);
   });
 
   it('judges an open document again as it changes, and drops a judgement that a later one overtook', async () => {

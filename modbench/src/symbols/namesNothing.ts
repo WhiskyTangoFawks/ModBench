@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
-import { addNamed, type Named } from '../drivingLib/namedPlugins';
+import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InTurn } from '../ports/bounded';
 import { coalesced } from '../ports/coalesced';
@@ -9,7 +9,6 @@ import type { Reporter } from '../ports/reporter';
 import { placeIn } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { inOrder, type NamesNothing, type SymbolKinds } from './symbolKind';
-import type { NamedPlugin } from './scriptsNamed';
 
 interface NamesNothingDeps {
   kinds: SymbolKinds;
@@ -84,7 +83,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, i
   };
 
   // Undefined where any kind cannot answer: what is shown then stays.
-  const filesHolding = async (only: readonly NamedPlugin[] | undefined): Promise<(readonly string[])[] | undefined> => {
+  const filesHolding = async (only: readonly PluginRecords[] | undefined): Promise<(readonly string[])[] | undefined> => {
     const lists = await Promise.all(inOrder(kinds).map(async (kind) => {
       try {
         return kind.filesNamingNothing === undefined ? NO_FILES : await kind.filesNamingNothing(only);
@@ -102,9 +101,9 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, i
   let wholeWanted = true;
   let mustJudge = true;
   let judgedOf: { lists: (readonly string[])[]; value: object | undefined } | undefined;
-  const asking = new Map<string, Named>();
+  const asking = new Map<string, PluginRecords>();
   const judgeAll = coalesced(async () => {
-    const only = wholeWanted ? undefined : [...asking.values()].map(({ plugin, keys }) => ({ ...plugin, keys: keys && [...keys] }));
+    const only = wholeWanted ? undefined : [...asking.values()];
     wholeWanted = false;
     asking.clear();
     const held = vscode.workspace.textDocuments.filter(isFile);
@@ -122,7 +121,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, i
     ]);
     if (files === undefined) {
       if (only === undefined) wholeWanted = true;
-      for (const { keys, ...plugin } of only ?? []) addNamed(asking, plugin, keys);
+      for (const named of only ?? []) addNamed(asking, named);
       shown = new Set([...shown, ...judging]);
       return;
     }
@@ -137,7 +136,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, i
   return vscode.Disposable.from(
     onChanged((plugin, keys) => {
       if (plugin === undefined) wholeWanted = true;
-      else addNamed(asking, plugin, keys);
+      else addNamed(asking, { plugin, keys });
       judgeAll();
     }),
     vscode.workspace.onDidOpenTextDocument(open.judge),

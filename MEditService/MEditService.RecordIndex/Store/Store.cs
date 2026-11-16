@@ -719,6 +719,8 @@ internal sealed class Store : IDisposable
                 return;
             }
 
+
+            NameReferrers(scope);
             var advanced = scope.BumpOwed;
             if (advanced)
             {
@@ -731,6 +733,22 @@ internal sealed class Store : IDisposable
             scope.ReadWhole.Clear();
             scope.Told.Clear();
         }
+    }
+
+    // A record that moved moves the problems of every record of a compiled plugin that refers to it, whichever plugin holds it.
+    private void NameReferrers(ProjectionScope scope)
+    {
+        var targets = scope.NamedRows.Values.SelectMany(keys => keys).Distinct().ToList();
+        if (targets.Count == 0) return;
+        var referrers = DuckDbSql.Rows(Connection, $"""
+            SELECT DISTINCT fr.source_plugin, fr.source_origin, fr.source_form_key
+            FROM {TableDdlBuilder.MirrorSchema}.form_references fr
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin AND d.derived_from = '{DerivedFrom.SourceTree}'
+            WHERE fr.target_form_key IN (SELECT unnest($1::VARCHAR[]))
+            """, reader => (Plugin: reader.GetPluginAddress(), FormKey: reader.GetString(2)), targets);
+        foreach (var plugin in referrers.GroupBy(referrer => referrer.Plugin, PluginAddress.Comparer))
+            NameRows(plugin.Key, plugin.Select(referrer => referrer.FormKey), scope);
     }
 
     // An advance no commit named says everything.

@@ -15,7 +15,7 @@ internal static class RecordResults
         var byRecord = answer.Problems
             .GroupBy(problem => problem.FormKey ?? "", StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
-        foreach (var key in asked?.Keys ?? []) byRecord.TryAdd(key, []);
+        foreach (var key in asked?.Keys is null ? [] : asked.Keys.Append("")) byRecord.TryAdd(key, []);
         var records = Results(answer.Plugin, answer.Failure is not null, byRecord.Select(record => (record.Key, (object)record.Value, (IReadOnlyList<string>)[])), asked);
         var left = Left(records);
         return answer with { Problems = [.. answer.Problems.Where(problem => !left.Contains(problem.FormKey ?? ""))], Records = records };
@@ -29,7 +29,7 @@ internal static class RecordResults
             .Distinct(StringComparer.OrdinalIgnoreCase);
         var records = Results(
             answer.Plugin, answer.Failure is not null,
-            keys.Select(key => (key, (object)(paths[key].ToList(), scripts[key].ToList(), unreadOf.GetValueOrDefault(key) ?? []), (IReadOnlyList<string>)(unreadOf.GetValueOrDefault(key) ?? []))), asked);
+            keys.Select(key => (key, (object)new RecordPaths(paths[key].ToList(), scripts[key].ToList(), unreadOf.GetValueOrDefault(key) ?? []), (IReadOnlyList<string>)(unreadOf.GetValueOrDefault(key) ?? []))), asked);
         var left = Left(records);
         var leftUnread = records.Where(record => record.Unchanged).SelectMany(record => unreadOf.GetValueOrDefault(record.FormKey) ?? []).ToHashSet();
         return answer with
@@ -40,6 +40,8 @@ internal static class RecordResults
             Records = [.. records.Select(record => record.Unchanged ? record with { Unread = [] } : record)],
         };
     }
+
+    private sealed record RecordPaths(List<NamedFilePath> Paths, List<NamedScript> Scripts, List<string> Unread);
 
     private static HashSet<string> Left(List<RecordResult> records) =>
         records.Where(record => record.Unchanged).Select(record => record.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
