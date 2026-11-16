@@ -40,7 +40,7 @@ public sealed class EveryChangeIsNamedTests
     }
 
     [Fact]
-    public void ActivatingAndDeactivatingAPlugin_AnnounceTheRecordsInOtherPluginsThatReferToItsRecords()
+    public void ActivatingAndDeactivatingAPlugin_NamesTheRecordsThatReferToItsRecords_OrSaysEverything()
     {
         FormKey target = default, referrer = default;
         using var fixture = new PluginFixtureBuilder("activation-names-referrers")
@@ -67,13 +67,9 @@ public sealed class EveryChangeIsNamedTests
         index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         var activated = notifications.Since(before).ToList();
 
-        Assert.True(AnnouncesTheReferrer(deactivated, refersEntry.Key, referrer.ToString()), "deactivated");
-        Assert.True(AnnouncesTheReferrer(activated, refersEntry.Key, referrer.ToString()), "activated");
+        Assert.True(NamesTheReferrerOrSaysEverything(deactivated, refersEntry.Key, referrer.ToString()), "deactivated");
+        Assert.True(NamesTheReferrerOrSaysEverything(activated, refersEntry.Key, referrer.ToString()), "activated");
     }
-
-    private static bool AnnouncesTheReferrer(IEnumerable<INotification> announced, PluginAddress plugin, string formKey) =>
-        announced.Any(n => n is RecordIndexChangedNotification
-            || n is RowsChangedNotification rows && rows.Plugin.Equals(plugin) && rows.Keys.Contains(formKey));
 
     [Fact]
     public void ANewLoadOrder_SaysEverythingChanged_AtTheSequenceItLandedOn()
@@ -208,4 +204,8 @@ public sealed class EveryChangeIsNamedTests
         RecordIndexChangedNotification n => n.Sequence,
         _ => 0,
     };
+
+    private static bool NamesTheReferrerOrSaysEverything(IEnumerable<INotification> announced, PluginAddress plugin, string formKey) =>
+        announced.Any(n => n is RecordIndexChangedNotification
+            || n is RowsChangedNotification rows && rows.Plugin.Equals(plugin) && rows.Keys.Contains(formKey));
 }
