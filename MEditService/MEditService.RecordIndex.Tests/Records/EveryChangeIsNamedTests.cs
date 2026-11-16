@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -36,6 +37,38 @@ public sealed class EveryChangeIsNamedTests
         Assert.Contains(named, n => n.Plugin.Equals(baseEntry.Key) && n.Keys.Contains(formKey));
         Assert.Contains(named, n => n.Plugin.Equals(overEntry.Key) && n.Keys.Contains(formKey));
         Assert.DoesNotContain(notifications.Since(before), n => n is RecordIndexChangedNotification);
+    }
+
+    [Fact]
+    public void ActivatingAndDeactivatingAPlugin_NamesTheRecordsThatReferToItsRecords_OrSaysEverything()
+    {
+        FormKey target = default, referrer = default;
+        using var fixture = new PluginFixtureBuilder("activation-names-referrers")
+            .WithPlugin("Base.esp", mod => target = mod.Npcs.AddNew("Target").FormKey, origin: "BaseMod")
+            .WithPlugin("Refers.esp", mod =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esp") });
+                var referring = mod.Npcs.AddNew("Referrer");
+                referring.Race.SetTo(target.ToLinkGetter<IRaceGetter>());
+                referrer = referring.FormKey;
+            }, origin: "RefersMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var (baseEntry, refersEntry) = (fixture.Plugins[0], fixture.Plugins[1]);
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: notifications);
+        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+
+        var before = notifications.Notifications.Count;
+        index.Reconcile(holder, fixture.DataFolder, [baseEntry with { Enabled = false }, refersEntry], GameRelease.Fallout4);
+        var deactivated = notifications.Since(before).ToList();
+        before = notifications.Notifications.Count;
+        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        var activated = notifications.Since(before).ToList();
+
+        Assert.True(NamesTheReferrerOrSaysEverything(deactivated, refersEntry.Key, referrer.ToString()), "deactivated");
+        Assert.True(NamesTheReferrerOrSaysEverything(activated, refersEntry.Key, referrer.ToString()), "activated");
     }
 
     [Fact]
@@ -171,4 +204,8 @@ public sealed class EveryChangeIsNamedTests
         RecordIndexChangedNotification n => n.Sequence,
         _ => 0,
     };
+
+    private static bool NamesTheReferrerOrSaysEverything(IEnumerable<INotification> announced, PluginAddress plugin, string formKey) =>
+        announced.Any(n => n is RecordIndexChangedNotification
+            || n is RowsChangedNotification rows && rows.Plugin.Equals(plugin) && rows.Keys.Contains(formKey));
 }

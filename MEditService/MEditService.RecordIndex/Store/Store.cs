@@ -726,7 +726,6 @@ internal sealed class Store : IDisposable
                 return;
             }
 
-
             NameReferrers(scope);
             var advanced = scope.BumpOwed;
             if (advanced)
