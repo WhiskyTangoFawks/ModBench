@@ -20,7 +20,7 @@ export const selectedProfileAt = (text: string) => iniNameAt(text, GENERAL_SECTI
 
 export const readGameName = (text: string): string => readRequired(text, 'gameName');
 
-export const GAME_PATH_KEY = 'gamePath';
+const GAME_PATH_KEY = 'gamePath';
 
 export const readGamePath = (text: string): string => readRequired(text, GAME_PATH_KEY);
 

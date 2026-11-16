@@ -1,5 +1,5 @@
 import type {
-  CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, InteriorCellBlock, MEditClient, PluginAddress,
+  CellSummary, ChildRecordSummary, InteriorCellBlock, MEditClient, PluginAddress,
   PluginDiagnosisReport, PluginMetadata, PluginRecordTypeCount, RecordPage, RecordSummary, WorldspaceSummary,
 } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
@@ -8,6 +8,10 @@ import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
 import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
+
+type Answered<T> = Exclude<Awaited<T>, ReadFailed>;
+type CellChildRecords = Answered<ReturnType<MEditClient['getCellChildRecords']>>;
+export type ContainerChildSummary = Answered<ReturnType<MEditClient['getContainerChildren']>>[number];
 
 export const NOT_EDITABLE: PluginConditions = { editable: false };
 
