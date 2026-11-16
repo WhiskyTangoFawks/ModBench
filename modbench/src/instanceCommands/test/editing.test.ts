@@ -164,23 +164,11 @@ describe('the load order is put at a recompute that changed it', () => {
 });
 
 describe('a put the client makes again on its own', () => {
-  it('is told as the snapshot it put', async () => {
-    const { client, told, toldCount, land } = wired();
+  it('is told to no one, since the record index status says how it fared', async () => {
+    const { client, told, toldCount, land, putPluginNames } = wired();
     land(valueWith('A.esp'));
     await toldCount(1);
 
-    client.reconnected();
-    await toldCount(2);
-
-    expect(told[1]).toMatchObject({ sent: true, snapshot: { dataFolder: '/game/Data' }, outcome: APPLIED });
-  });
-
-  it('is told no more once the flow is disposed', async () => {
-    const { client, flow, told, toldCount, land, putPluginNames } = wired();
-    land(valueWith('A.esp'));
-    await toldCount(1);
-
-    flow.dispose();
     client.reconnected();
     await client.latestLoadOrder();
 

@@ -1,13 +1,13 @@
 // Put load order (ADR-0013) when the snapshot changed, and signal change. The client owns the process both go
 // to; what came of each put comes back through `onPut`.
 
-import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
+import type { LaunchOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { exactPluginAddressKey } from '../wire/pluginAddress';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type ViewOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder' | 'signalChange'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
   /** The Plugins view's order of the active plugins; `onChange` is the moment it may have changed, as Editing read the plugins. */
   viewOrder: { of: ViewOrder; onChange(listener: () => void): { dispose(): void } };
@@ -91,9 +91,6 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
 
   const unsubscribes = [
     () => { changeOfOrder.dispose(); },
-    client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
-      tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
-    }),
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);

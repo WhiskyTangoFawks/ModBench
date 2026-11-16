@@ -865,25 +865,22 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('announces every plugin it put again as changed once a reopened stream\'s process has applied it, since views read it again on a change and never on a reconnect', async () => {
+  it('says everything changed once the stream reopens, since views read again on a change and never on a reconnect', async () => {
     const { streams, open } = reopeningStreams();
     const fetch = routedFetch([
       ['/notifications/stream', open],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
         state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
       }))],
-      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
     ]);
     const client = makeClient(fetch, { reconnectDelayMs: 0 });
     await client.start();
     const heard: unknown[] = [];
-    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin));
-    await client.sendLoadOrder(snapshot);
-    expect(heard).toEqual([]);
+    client.onDidChange((change) => heard.push(change));
 
     streams[0]?.end();
 
-    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }]));
+    await vi.waitFor(() => expect(heard).toEqual([undefined]));
   });
 
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {

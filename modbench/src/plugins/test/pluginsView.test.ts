@@ -391,7 +391,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     expect(redrawn).toContain(undefined);
   });
 
-  it('re-reads every plugin, then each plugin of the snapshot it holds again, after a dropped connection', async () => {
+  it('re-reads every plugin after a dropped connection', async () => {
     const { client, recordBrowser } = pluginsView();
     client.answerPuts(() => Promise.resolve({ outcome: 'applied', status: APPLIED_STATUS }));
     client.setStatus('running');
@@ -401,7 +401,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     client.reconnected();
     await client.latestLoadOrder();
 
-    await vi.waitFor(() => { expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined, 1, 1, 1]); });
+    await vi.waitFor(() => { expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined]); });
   });
 
   it('hears no push once disposed', () => {

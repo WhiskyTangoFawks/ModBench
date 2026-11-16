@@ -41,7 +41,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getRecordOwners'
+    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'loadOrderStatus' | 'getRecordOwners'
     | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -98,7 +98,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     childRecordDocuments,
     holdOneTextPerFile(outputChannel),
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
-    { dispose: meditClient.onLoadOrderStatus((status) => { if (status?.refusal !== undefined) recordEditorProvider.readAgain(); }) },
     deps.loadOrderComing.onChanged(() => { recordEditorProvider.readAgain(); }),
     followCopiesIntoDocuments(meditClient, childRecordDocuments, recordEditorProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same

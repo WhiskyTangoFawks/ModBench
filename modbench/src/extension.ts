@@ -111,7 +111,7 @@ import type { MoveToTrash } from './ports/trash';
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'loadOrderApplied' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
+  'sendLoadOrder' | 'latestLoadOrder' | 'loadOrderApplied' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
   | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
 
 interface ViewsDeps {

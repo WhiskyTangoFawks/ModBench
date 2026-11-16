@@ -57,11 +57,11 @@ describe('the client\'s load-order status', () => {
     expect(seen).toEqual([undefined, false, false, true, undefined]);
   });
 
-  describe('a reconcile settled', () => {
+  describe('the change event, on a reconcile settled', () => {
     it('is told for each ready status newer than the last settled one, even when its picture is the last\'s', () => {
       const client = new InMemoryMEditClient();
       const settled = vi.fn();
-      client.onLoadOrderSettled(settled);
+      client.onDidChange(settled);
 
       client.emit(tick(true, [], 1));
       client.emit(tick(true, [], 1));
@@ -74,7 +74,7 @@ describe('the client\'s load-order status', () => {
       const client = new InMemoryMEditClient();
       client.emit(tick(true, [], 1));
       const settled = vi.fn();
-      client.onLoadOrderSettled(settled);
+      client.onDidChange(settled);
 
       client.emit(tick(false, [], 1));
       client.emit(tick(true, [], 1));
@@ -86,7 +86,7 @@ describe('the client\'s load-order status', () => {
       const client = new InMemoryMEditClient();
       client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
       const settled = vi.fn();
-      client.onLoadOrderSettled(settled);
+      client.onDidChange(settled);
 
       client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: true, version: 1 }));
       client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
@@ -98,7 +98,7 @@ describe('the client\'s load-order status', () => {
       const client = new InMemoryMEditClient();
       client.emit(tick(true, [], 1));
       const settled = vi.fn();
-      client.onLoadOrderSettled(settled);
+      client.onDidChange(settled);
 
       client.emit(tick(false, [], 2));
       client.emit(tick(false, [], 2));
@@ -109,7 +109,7 @@ describe('the client\'s load-order status', () => {
     it('is told, with the new failures already readable, when the failures differ, and not when they repeat', () => {
       const client = new InMemoryMEditClient();
       const seen: unknown[] = [];
-      client.onLoadOrderSettled(() => seen.push(client.loadOrderStatus?.failures.length));
+      client.onDidChange(() => seen.push(client.loadOrderStatus?.failures.length));
 
       client.emit(tick(false, [bad]));
       client.emit(tick(false, [{ ...bad }]));
@@ -122,7 +122,7 @@ describe('the client\'s load-order status', () => {
       const client = new InMemoryMEditClient();
       client.emit(tick(true, [], 5));
       const settled = vi.fn();
-      client.onLoadOrderSettled(settled);
+      client.onDidChange(settled);
 
       client.setStatus('disconnected');
       expect(settled).not.toHaveBeenCalled();
@@ -131,14 +131,63 @@ describe('the client\'s load-order status', () => {
       expect(settled).toHaveBeenCalledOnce();
     });
 
+    it('is told when a refusal arrives, and when it lifts, though no reconcile settled', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(tick(false, [], 1));
+      const changed = vi.fn();
+      client.onDidChange(changed);
+
+      client.emit(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', version: 1 }));
+      client.emit(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', version: 1 }));
+      expect(changed).toHaveBeenCalledOnce();
+
+      client.emit(tick(false, [], 1));
+      expect(changed).toHaveBeenCalledTimes(2);
+    });
+
     it('stops telling a listener once it unsubscribes', () => {
       const client = new InMemoryMEditClient();
       const settled = vi.fn();
-      client.onLoadOrderSettled(settled)();
+      client.onDidChange(settled).dispose();
 
       client.emit(tick(true));
 
       expect(settled).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the record index\'s progress', () => {
+    it('is the plugins indexed or failed out of the load order, while it indexes, and the record index is late', () => {
+      const client = new InMemoryMEditClient();
+      const seen: unknown[] = [];
+      client.onDidChangeRecordIndexProgress((progress) => seen.push(progress));
+
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: false, totalPlugins: 3, indexedPlugins: [{ name: 'A.esp', origin: 'Mod' }], failures: [bad] }));
+
+      expect([client.recordIndexProgress, seen, client.recordIndexMayBeLate]).toEqual([{ done: 2, total: 3 }, [{ done: 2, total: 3 }], true]);
+    });
+
+    it('is none once the reconcile settles, or the process is gone', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(tick(false));
+
+      client.emit(tick(true));
+      expect(client.recordIndexProgress).toBeUndefined();
+
+      client.emit(tick(false));
+      client.setStatus('disconnected');
+      expect(client.recordIndexProgress).toBeUndefined();
+    });
+
+    it('is told only when it changes', () => {
+      const client = new InMemoryMEditClient();
+      const told = vi.fn();
+      client.onDidChangeRecordIndexProgress(told);
+
+      client.emit(tick(false));
+      client.emit(tick(false));
+
+      expect(told).toHaveBeenCalledOnce();
     });
   });
 });

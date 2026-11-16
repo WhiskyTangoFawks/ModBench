@@ -54,14 +54,6 @@ function putHeldUntilAborted(client: InMemoryMEditClient): { inFlight: Promise<v
   return { inFlight: started.promise, aborted: () => signal?.aborted === true };
 }
 
-const resentOf = (client: InMemoryMEditClient) => {
-  const resent: { name: string; outcome: LoadOrderOutcome }[] = [];
-  client.onLoadOrderResent((sent, outcome) => {
-    resent.push({ name: sent.plugins.map((p) => p.name).join(), outcome });
-  });
-  return resent;
-};
-
 describe('a snapshot while mEdit is not running', () => {
   it.each(['stopped', 'disconnected'] as const)('answers backendFailed when %s, launching nothing', async (status) => {
     const client = new InMemoryMEditClient();
@@ -201,18 +193,16 @@ describe('a send during a disconnect', () => {
 describe('a reconnect', () => {
   it('puts the newest snapshot again, since the process behind the stream may hold nothing', async () => {
     const client = running();
-    const resent = resentOf(client);
     await client.sendLoadOrder(snapshot('A.esp'));
 
     client.reconnected();
 
-    await vi.waitFor(() => { expect(resent).toEqual([{ name: 'A.esp', outcome: APPLIED }]); });
+    await vi.waitFor(() => { expect(sentNames(client)).toEqual(['A.esp', 'A.esp']); });
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
   });
 
   it('puts the snapshot in flight again after it, since it may have landed on the process before', async () => {
     const client = running();
-    const resent = resentOf(client);
     const released = pending<LoadOrderOutcome>();
     client.answerPuts(() => released.promise);
     const sent = client.sendLoadOrder(snapshot('A.esp'));
@@ -221,30 +211,13 @@ describe('a reconnect', () => {
     client.answerPuts(() => Promise.resolve(APPLIED));
     released.resolve(APPLIED);
 
-    await vi.waitFor(() => { expect(resent).toEqual([{ name: 'A.esp', outcome: APPLIED }]); });
+    await vi.waitFor(() => { expect(sentNames(client)).toEqual(['A.esp', 'A.esp']); });
     expect(await sent).toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
   });
 
-  it('owes every view the announce until a snapshot applies, a resend that failed announcing nothing', async () => {
-    const client = running();
-    const resent = resentOf(client);
-    const heard: string[] = [];
-    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin.name));
-    await client.sendLoadOrder(snapshot('A.esp'));
-    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
-
-    client.reconnected();
-    await vi.waitFor(() => { expect(resent).toEqual([{ name: 'A.esp', outcome: { outcome: 'failed', message: 'no' } }]); });
-    client.answerPuts(() => Promise.resolve(APPLIED));
-    await client.sendLoadOrder(snapshot('B.esp'));
-
-    await vi.waitFor(() => { expect(heard).toEqual(['B.esp']); });
-  });
-
   it('tells a snapshot that was waiting at the reopen to its sender alone, never as a resend', async () => {
     const client = running();
-    const resent = resentOf(client);
     const released = pending<LoadOrderOutcome>();
     const failed: LoadOrderOutcome = { outcome: 'failed', message: 'no' };
     client.answerPuts((sent) => (sent.plugins[0]?.name === 'A.esp' ? released.promise : Promise.resolve(failed)));
@@ -257,37 +230,16 @@ describe('a reconnect', () => {
 
     await expect(older).resolves.toEqual(APPLIED);
     await expect(newer).resolves.toEqual(failed);
-    expect(resent).toEqual([]);
-  });
-
-  it('announces the newer snapshot once it applies, and not the older one in flight at the reopen, since a reopen finding one waiting resends nothing', async () => {
-    const client = running();
-    const released = pending<LoadOrderOutcome>();
-    client.answerPuts((sent) => (sent.plugins[0]?.name === 'A.esp' ? released.promise : Promise.resolve(APPLIED)));
-    const heard: string[] = [];
-    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin.name));
-    const older = client.sendLoadOrder(snapshot('A.esp'));
-    await vi.waitFor(() => { expect(sentNames(client)).toHaveLength(1); });
-    const newer = client.sendLoadOrder(snapshot('B.esp'));
-
-    client.reconnected();
-    released.resolve(APPLIED);
-    await older;
-    await newer;
-
     expect(sentNames(client)).toEqual(['A.esp', 'B.esp']);
-    expect(heard).toEqual(['B.esp']);
   });
 
   it('puts nothing before any snapshot was handed', async () => {
     const client = running();
-    const resent = resentOf(client);
 
     client.reconnected();
     await client.sendLoadOrder(snapshot('A.esp'));
 
     expect(sentNames(client)).toEqual(['A.esp']);
-    expect(resent).toEqual([]);
   });
 });
 

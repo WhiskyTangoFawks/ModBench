@@ -33,7 +33,7 @@ const UNREACHABLE_REASON = {
 };
 
 interface IndexStatusDeps {
-  client: Pick<MEditClient, 'onLoadOrderStatus' | 'onStatusChanged'>;
+  client: Pick<MEditClient, 'loadOrderStatus' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged'>;
   facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
   progress: PluginsViewProgress;
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
@@ -65,9 +65,19 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),
   });
+  let heard: LoadOrderProgress | undefined;
+  const hearCurrent = (): void => {
+    const status = client.loadOrderStatus;
+    if (status === heard) return;
+    heard = status;
+    if (status) narrator.hear(status); else narrator.detached();
+  };
+  const progressSubscription = client.onDidChangeRecordIndexProgress(hearCurrent);
+  const changeSubscription = client.onDidChange(hearCurrent);
   const unsubscribes = [
-    client.onLoadOrderStatus((status) => { if (status) narrator.hear(status); else narrator.detached(); }),
+    () => { progressSubscription.dispose(); changeSubscription.dispose(); },
     client.onStatusChanged((status) => {
+      hearCurrent();
       if (!isMEditGone(status)) return;
       // ADR-0002: the rows stay, and expand into the error row.
       void facts.refresh();

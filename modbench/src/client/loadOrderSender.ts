@@ -33,8 +33,6 @@ export interface LoadOrderSender {
   pending(): boolean;
   /** Told wherever `pending` may have changed. */
   onPendingChanged(listener: () => void): () => void;
-  onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
-  onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
   onExit(listener: () => void): () => void;
   launch(): Promise<LaunchOutcome>;
@@ -193,23 +191,11 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   };
 }
 
-interface ChangeAnnouncer {
-  announceChanged(snapshot: LoadOrderSnapshot): void;
-}
-
-/** A restarted mEdit holds only what was resent, so every view hears the first snapshot applied after a reopen as the change it is. */
-export function announceAfterReopen(sender: Pick<LoadOrderSender, 'onAppliedAfterReopen'>, notifications: ChangeAnnouncer): void {
-  sender.onAppliedAfterReopen((snapshot) => { notifications.announceChanged(snapshot); });
-}
-
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const pendingChanges = new EventEmitter();
   const slot = createSendSlot(wire, () => { pendingChanges.fire(); });
   let newestHanded: LoadOrderSnapshot | undefined;
   let handedCount = 0;
-  let reopenUnannounced = false;
-  const resent = new EventEmitter<{ snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome }>();
-  const appliedAfterReopen = new EventEmitter<LoadOrderSnapshot>();
   const launches = new EventEmitter<Promise<LaunchOutcome>>();
   const exits = new EventEmitter();
   const launcher = createLauncher(wire, (launched) => { launches.fire(launched); });
@@ -229,20 +215,13 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (isMEditGone(wire.status()) && !launcher.launching()) return Promise.resolve(BACKEND_FAILED);
     newestHanded = snapshot;
     handedCount++;
-    const sent = slot.hold(snapshot);
-    void sent.then((outcome) => {
-      if (!reopenUnannounced || outcome.outcome !== 'applied' || snapshot !== newestHanded) return;
-      reopenUnannounced = false;
-      appliedAfterReopen.fire(snapshot);
-    });
-    return sent;
+    return slot.hold(snapshot);
   };
 
   const resend = (): void => {
     const snapshot = newestHanded;
     if (!snapshot) return;
-    reopenUnannounced = true;
-    if (!slot.holdsOne()) void hand(snapshot).then((outcome) => { resent.fire({ snapshot, outcome }); });
+    if (!slot.holdsOne()) void hand(snapshot);
     void slot.oweSignal([]);
   };
 
@@ -272,15 +251,12 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     handed: () => handedCount,
     pending: () => slot.pending(),
     onPendingChanged: subscribeTo(pendingChanges),
-    onResent: (listener) => subscribeTo(resent)(({ snapshot, outcome }) => { listener(snapshot, outcome); }),
-    onAppliedAfterReopen: subscribeTo(appliedAfterReopen),
     onLaunch: subscribeTo(launches),
     onExit: subscribeTo(exits),
     launch,
     async stop() {
       launcher.stop();
       newestHanded = undefined;
-      reopenUnannounced = false;
       slot.abortInFlight();
       slot.drop(ABANDONED);
       slot.releaseSignalWaiters();

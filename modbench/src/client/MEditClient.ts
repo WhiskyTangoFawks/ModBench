@@ -36,6 +36,9 @@ interface RecordsChanged { readonly plugin: PluginAddress; readonly keys?: reado
 /** What changed in the record index: the names, or undefined for everything. */
 export type RecordIndexChange = readonly RecordsChanged[] | undefined;
 
+/** Work done out of total, as a long operation reports it. */
+export interface RecordIndexProgress { readonly done: number; readonly total: number }
+
 /** The backend process as the extension reports it: starting while it comes up, running while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
 export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
@@ -416,16 +419,17 @@ export interface MEditClient {
   refreshRecordIndexLateness(token?: ReadCancellation): Promise<void>;
   /** Told the new value wherever `recordIndexMayBeLate` changes, which no change of the record index tells. */
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable;
+  /** The plugins the record index has finished or failed, out of all the load order holds, while it indexes one; undefined
+   *  when it indexes none. A record index indexing is late. */
+  readonly recordIndexProgress: RecordIndexProgress | undefined;
+  /** Told the new value wherever `recordIndexProgress` changes. */
+  onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable;
 
   /** The latest load-order status; undefined before the first, and again when a held status
    *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */
   readonly loadOrderStatus: LoadOrderStatus | undefined;
   /** Each status as it arrives, and undefined when a held status resets. */
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void;
-  /** A reconcile settled: a ready status newer than the last settled one, even when its picture
-   *  repeats the last, and a status whose failures differ from those held. A reset starts the
-   *  versions over and tells nothing. */
-  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void;
 
   /** One snapshot is put at a time, and the newest lands. Answers `backendFailed` once mEdit is gone. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
@@ -438,9 +442,6 @@ export interface MEditClient {
   /** Tells mEdit the files at `paths` changed, or, with none, to check the disk, once every snapshot handed
    *  before has answered. Settles once the sweep it starts is over, at once while mEdit is not running. */
   signalChange(paths: readonly string[]): Promise<void>;
-  /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
-   *  behind the stream may hold nothing sent before. */
-  onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
 
   /** Every plugin-source document VS Code holds unsaved, which mEdit reads in place of its file.
    *  Put at once and in order while mEdit runs, and the newest again whenever the process may hold none. */
