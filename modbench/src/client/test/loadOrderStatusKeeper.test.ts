@@ -82,6 +82,18 @@ describe('the client\'s load-order status', () => {
       expect(settled).toHaveBeenCalledOnce();
     });
 
+    it('is not told when a sweep over a named change stops validating, as that change was named', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled);
+
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: true, version: 1 }));
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
+
+      expect(settled).not.toHaveBeenCalled();
+    });
+
     it('is not told when a reconcile starts, or while it runs', () => {
       const client = new InMemoryMEditClient();
       client.emit(tick(true, [], 1));

@@ -8,6 +8,7 @@ import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
+import { trackLateness } from '../lateness';
 import { keepRecordIndexChanges } from '../recordIndexChanges';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
@@ -107,12 +108,15 @@ export class InMemoryMEditClient implements MEditClient {
     },
     signalChange: (paths) => {
       this.record('signalChange', [paths]);
-      return this.signalAnswer();
+      return this.signalAnswer().then(() => ({ ended: Promise.resolve() }));
     },
   });
 
+  private readonly lateness = trackLateness(() => this.sender.pending());
+
   constructor() {
     announceAfterReopen(this.sender, this.notifications);
+    this.sender.onPendingChanged(this.lateness.note);
   }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
@@ -238,6 +242,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
   get recordIndexMayBeLate(): boolean { return this.sender.pending(); }
+  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
@@ -250,7 +255,7 @@ export class InMemoryMEditClient implements MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
   loadOrdersHanded(): number { return this.sender.handed(); }
-  signalChange(paths: readonly string[]): void { this.sender.signalChange(paths); }
+  signalChange(paths: readonly string[]): Promise<void> { return this.sender.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.sender.onResent(listener);
   }

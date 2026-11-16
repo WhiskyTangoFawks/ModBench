@@ -12,7 +12,7 @@ import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
  *  changed outside Modbench. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onNotification'>;
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onNotification' | 'loadOrderStatus'>;
 
 export interface PluginFactsFeedDeps {
   client: PluginFactsClient;
@@ -173,7 +173,9 @@ export class PluginFactsFeed implements vscode.Disposable {
   }
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {
-    if (requested?.length === 0) return;
+    // mEdit answers no plugin's facts while it holds no load order: before the first put, and from a restart to the next.
+    const status = this.deps.client.loadOrderStatus;
+    if (requested?.length === 0 || status === undefined || status.holdsNone) return;
     const named = this.facts.factsReadFailed() ? undefined : requested;
     const plugins = await this.readPlugins(named);
     if (generation !== this.generation) return;
