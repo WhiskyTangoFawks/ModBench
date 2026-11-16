@@ -11,7 +11,9 @@ export interface SeparatorLeaf {
 
 export interface SeparatorGroup {
   readonly kind: 'group';
-  readonly id: string;
+  /** The prefix path, and which run of that path this is, counting in mod order. */
+  readonly path: string;
+  readonly run: number;
   readonly label: string;
   readonly parent: SeparatorGroup | undefined;
   readonly children: SeparatorEntry[];
@@ -32,11 +34,6 @@ function prefixOf(name: string): string | undefined {
 /** Separators in mod order, folded under a group wherever two or more consecutive ones share a prefix, at every level. */
 export function groupSeparators(groups: readonly ModGroup[]): SeparatorEntry[] {
   const runsSeen = new Map<string, number>();
-  const idOf = (path: string): string => {
-    const run = (runsSeen.get(path) ?? 0) + 1;
-    runsSeen.set(path, run);
-    return run === 1 ? `separatorGroup:${path}` : `separatorGroup:${path}#${run}`;
-  };
 
   const build = (items: readonly Remaining[], parent: SeparatorGroup | undefined, parentPath: string | undefined): SeparatorEntry[] => {
     const entries: SeparatorEntry[] = [];
@@ -47,7 +44,9 @@ export function groupSeparators(groups: readonly ModGroup[]): SeparatorEntry[] {
       const end = prefix === undefined ? at + 1 : at + 1 + (sharing === -1 ? items.length - at - 1 : sharing);
       if (prefix !== undefined && end - at >= 2) {
         const path = parentPath === undefined ? prefix : `${parentPath}${DIVIDER}${prefix}`;
-        const group: SeparatorGroup = { kind: 'group', id: idOf(path), label: prefix, parent, children: [] };
+        const run = (runsSeen.get(path) ?? 0) + 1;
+        runsSeen.set(path, run);
+        const group: SeparatorGroup = { kind: 'group', path, run, label: prefix, parent, children: [] };
         const inside = items.slice(at, end).map(({ held, rest }) => ({ held, rest: rest.slice(prefix.length + DIVIDER.length) }));
         group.children.push(...build(inside, group, path));
         entries.push(group);

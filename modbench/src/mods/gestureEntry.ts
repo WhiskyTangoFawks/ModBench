@@ -58,9 +58,9 @@ interface ModsKeyContext {
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
   const mods = selection.filter(isRowOf(['mod']));
   const files = selection.filter(isRowOf(['file']));
-  // No API names the focused row, and a file or folder in the selection may be it: the keys do
+  // No API names the focused row, and a file, a folder or a separator group in the selection may be it: the keys do
   // nothing on one (common.md, A view, story 5).
-  const keyed = selection.some(isRowOf(['folder', 'file'])) ? [] : selection;
+  const keyed = selection.some(isRowOf(['folder', 'file', 'separatorGroup'])) ? [] : selection;
   const [firstMod] = keyed.filter(isRowOf(['mod']));
   const kinds = new Set(keyed.filter(isRowOf(['mod', 'separator'])).map((row) => row.kind));
   const [onlyKind] = kinds;

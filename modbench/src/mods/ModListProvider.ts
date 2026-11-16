@@ -56,7 +56,7 @@ interface ModListProviderOptions {
 
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
 // share a name.
-function rowIdentity(kind: 'mod' | 'separator', name: string): string {
+function rowIdentity(kind: 'mod' | 'separator' | 'separatorGroup', name: string): string {
   return `${kind}:${name}`;
 }
 
@@ -89,9 +89,9 @@ export class SeparatorNode extends vscode.TreeItem {
     public readonly separator: Separator,
     public readonly mods: Mod[],
     public readonly shown: ChildrenShown = 'all',
-    label: string = separator.name,
+    public readonly text: string = separator.name,
   ) {
-    super(label, expanderOver(mods, shown));
+    super(text, expanderOver(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
     this.resourceUri = separatorRowUri(separator.name);
     this.iconPath = blankIcon();
@@ -104,7 +104,7 @@ export class SeparatorGroupNode extends vscode.TreeItem {
   readonly kind = 'separatorGroup' as const;
   constructor(public readonly group: SeparatorGroup, public readonly rows: readonly (SeparatorNode | SeparatorGroupNode)[], public readonly shown: ChildrenShown = 'all') {
     super(group.label, expanderOver(rows, shown));
-    this.id = group.id;
+    this.id = rowIdentity(this.kind, JSON.stringify([group.path, group.run]));
     this.contextValue = this.kind;
     this.iconPath = blankIcon();
   }
@@ -350,7 +350,7 @@ export class ModListProvider
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
     if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) {
-      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? this.leafNamed(element.separator.name)?.label ?? element.separator.name : OVERWRITE_LABEL;
+      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.text : OVERWRITE_LABEL;
       element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
     }
     return element;
@@ -376,11 +376,6 @@ export class ModListProvider
       : id.startsWith('mod:') ? this.rowFor(modOrigin(id.slice('mod:'.length)))
         : this.separatorRowNamed(id.slice('separator:'.length));
     if (row) this._onDidChangeTreeData.fire(row);
-  }
-
-  private separatorRowNamed(name: string): SeparatorNode | undefined {
-    const group = this.loadedModGroups().groups.find((g) => g.separator.name === name);
-    return group && this.groupRow(group);
   }
 
   private marked(): ReadonlySet<string> {
@@ -451,8 +446,8 @@ export class ModListProvider
     return shown === 'all' || rows.length > 0 ? new SeparatorGroupNode(entry, rows, shown) : undefined;
   }
 
-  private groupRow(group: ModGroup): SeparatorNode | undefined {
-    const leaf = this.leafNamed(group.separator.name);
+  private separatorRowNamed(name: string): SeparatorNode | undefined {
+    const leaf = this.leafNamed(name);
     return leaf && this.leafRow(leaf, this.filterText ? 'matching' : 'all');
   }
 
@@ -520,7 +515,7 @@ export class ModListProvider
       return this.flat() ? undefined : parent && this.rowOf(parent);
     }
     const group = element instanceof ModNode ? this.groupHolding(element.mod.name) : undefined;
-    return group && this.groupRow(group);
+    return group && this.separatorRowNamed(group.separator.name);
   }
 
   private flat(): boolean {
@@ -567,7 +562,7 @@ export class ModListProvider
   private showsMod(mod: Mod): boolean {
     if (!this.filterText) return true;
     const group = this.groupHolding(mod.name);
-    return group ? this.groupRow(group)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
+    return group ? this.separatorRowNamed(group.separator.name)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
   }
 
   // Mod order is winning-first. View order only.
