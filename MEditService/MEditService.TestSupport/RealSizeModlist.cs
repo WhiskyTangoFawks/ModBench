@@ -39,7 +39,6 @@ public sealed class RealSizeModlist : IDisposable
     private readonly RunFolder _folder;
     private readonly List<(FormKey Key, string EditorId)> _baseStatics = [];
     private readonly List<string> _manyDocuments = [];
-    private string _recordManyPluginsOverride = "";
     private LoadOrderEntry? _uncommitted;
 
     public string InstanceRoot => _folder.Path;
@@ -50,6 +49,9 @@ public sealed class RealSizeModlist : IDisposable
 
     /// <summary>The largest plugin, the master every other plugin names.</summary>
     public LoadOrderEntry Master => LoadOrder[0];
+
+    /// <summary>The record the deepest stack of plugins overrides.</summary>
+    public string OverriddenRecord { get; private set; } = "";
 
     public string MastersBigCell { get; private set; } = "";
 
@@ -185,7 +187,7 @@ public sealed class RealSizeModlist : IDisposable
         var made = 0;
         if (rank <= PluginsOverridingOneRecord)
         {
-            mod.Npcs.Add(new Npc(FormKey.Factory(_recordManyPluginsOverride), Fallout4Release.Fallout4) { EditorID = "Overridden", ShortName = $"Mod{rank:D3}" });
+            mod.Npcs.Add(new Npc(FormKey.Factory(OverriddenRecord), Fallout4Release.Fallout4) { EditorID = "Overridden", ShortName = $"Mod{rank:D3}" });
             made++;
         }
         for (; made < overrides; made++)
@@ -278,7 +280,7 @@ public sealed class RealSizeModlist : IDisposable
         {
             var npc = new Npc(mod) { EditorID = $"Npc{rank:D3}x{n}", ShortName = $"Npc {n}", Keywords = [new FormLink<IKeywordGetter>(layer.FormKey)] };
             mod.Npcs.Add(npc);
-            if (rank == 0 && n == 0) _recordManyPluginsOverride = npc.FormKey.ToString();
+            if (rank == 0 && n == 0) OverriddenRecord = npc.FormKey.ToString();
             added++;
         }
         for (var q = 0; q < Math.Max(1, cells / CellsPerQuest); q++) added += AddQuest(mod, rank, q);

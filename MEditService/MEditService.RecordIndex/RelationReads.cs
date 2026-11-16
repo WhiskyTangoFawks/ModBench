@@ -38,14 +38,6 @@ internal sealed class RelationReads(
     /// </summary>
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
-    /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
-    /// that plugin never indexed this FormKey.</summary>
-    public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
-    {
-        using var context = OpenRead();
-        return OneDocument(context, Located(context, "records", "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin));
-    }
-
     public IReadOnlyList<PluginAddress> GetOwners(string formKey)
     {
         using var context = OpenRead();
@@ -58,11 +50,6 @@ internal sealed class RelationReads(
             ORDER BY plugin, origin
             """, reader => reader.GetPluginAddress(), formKey);
     }
-
-    private RecordDocument? OneDocument(ReadContext context, List<CopySize> located) =>
-        located is [var copy]
-            ? ReadDocumentFromBody(context, Stored(context, [located]).Single().Single(), LinkResolution.ForLinksOf(context, [copy.FormKey]))
-            : null;
 
     // Each caller names a record or a few copies, so the length taken above the view's joins carries few documents.
     private static List<CopySize> Located(ReadContext context, string view, string where, params object?[] values) =>
@@ -78,15 +65,18 @@ internal sealed class RelationReads(
     /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
     /// active or not. Null if no plugin indexes the FormKey. Text that is no record document gives
     /// a copy with a <c>ParseDiagnosis</c>.</summary>
-    public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+    public RecordDocument? DocumentFromText(
+        string formKey, PluginAddress plugin, int loadOrderIndex, string text, LinkResolver resolver)
     {
         using var context = OpenRead();
         var tableName = FindRecordTypeInAnyPlugin(context, formKey);
         if (tableName == null) return null;
         var (body, editorId, parseDiagnosis) = CallerText.Read(text);
+        var schema = store.Schemas[tableName];
+        resolver.Learn(context, LinksOf(body, schema));
         return DocumentFromBody(
             context, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
-            store.Schemas[tableName], LinkResolution.ForLinksOf(context, [formKey]), parseDiagnosis);
+            schema, resolver.Resolve, parseDiagnosis);
     }
 
     /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
@@ -102,19 +92,19 @@ internal sealed class RelationReads(
 
     /// <summary>Each of <paramref name="copies"/>' documents, null where that copy's plugin holds no indexed
     /// copy, and the resolver for the links of their records.</summary>
-    public (List<RecordDocument?> Documents, Func<string, RecordLookupEntry?> Resolve) GetDocuments(IReadOnlyList<RecordCopy> copies)
+    public (List<RecordDocument?> Documents, LinkResolver Resolver) GetDocuments(IReadOnlyList<RecordCopy> copies)
     {
-        var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
         var named = copies.Select((_, i) => $"(form_key = ${3 * i + 1} AND plugin = ${3 * i + 2} AND origin = ${3 * i + 3})");
         using var context = OpenRead();
-        var resolve = LinkResolution.ForLinksOf(context, formKeys, Resolve);
         var located = Located(context, "records", string.Join(" OR ", named),
             [.. copies.SelectMany(copy => new[] { copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin })]);
-        var held = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
-            .SelectMany(record => record)
-            .Select(copy => ReadDocumentFromBody(context, copy, resolve))
+        var stored = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
+            .SelectMany(record => record).ToList();
+        var resolver = NewLinkResolver();
+        LearnLinks(resolver, context, stored);
+        var held = stored.Select(copy => ReadDocumentFromBody(context, copy, resolver.Resolve))
             .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
-        return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
+        return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolver);
     }
 
     /// <summary>Each record's active copies in load order; given <paramref name="within"/>, that plugin and its masters alone
@@ -186,23 +176,26 @@ internal sealed class RelationReads(
             name, formKey);
     }
 
-    /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
-    /// FormKey isn't indexed anywhere.</summary>
-    public OverrideStack? GetOverrideStack(string formKey)
+    /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order, of the record type the first holds.
+    /// Null if the FormKey isn't indexed anywhere.</summary>
+    public OverrideStack? GetOverrideStack(string formKey, LinkResolver resolver)
     {
         using var context = OpenRead();
-        var located = Located(context, "records",
-            "form_key = $1 AND record_type = (SELECT record_type FROM records WHERE form_key = $1 LIMIT 1)", formKey);
+        var located = context.Rows(
+            "SELECT form_key, plugin, origin, strlen(body), record_type FROM records WHERE form_key = $1 ORDER BY load_order_idx",
+            reader => (Size: CopySizeOf(reader), RecordType: reader.GetString(4)), formKey);
         if (located.Count == 0) return null;
-        var resolve = LinkResolution.ForLinksOf(context, [formKey]);
-        var copies = Stored(context, [located]).Single();
+        var recordType = located[0].RecordType;
+        List<CopySize> ofThatType = [.. located.Where(copy => copy.RecordType == recordType).Select(copy => copy.Size)];
+        var copies = Stored(context, [ofThatType]).Single();
+        LearnLinks(resolver, context, copies);
         var entries = copies.ConvertAll(copy =>
         {
-            var doc = ReadDocumentFromBody(context, copy, resolve);
+            var doc = ReadDocumentFromBody(context, copy, resolver.Resolve);
             var isDirty = WorkingTreeStates.FromStored(copy.WorkingTreeState) != WorkingTreeState.None;
             return new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty);
         });
-        return new OverrideStack(formKey, copies[0].RecordType, entries);
+        return new OverrideStack(formKey, recordType, entries);
     }
 
     public PagedResult<RecordSummary> Search(RecordQuery query)
@@ -372,14 +365,13 @@ internal sealed class RelationReads(
         return LinkResolution.Resolve(context, formKey);
     }
 
-    /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
-    /// about <paramref name="formKeys"/>, each distinct FormKey asked once. The store resolves the
-    /// links its copies carry in one query up front.</summary>
-    public Func<string, RecordLookupEntry?> LinkResolver(List<string> formKeys)
-    {
-        using var context = OpenRead();
-        return LinkResolution.ForLinksOf(context, formKeys, Resolve);
-    }
+    public LinkResolver NewLinkResolver() => new(Resolve);
+
+    private void LearnLinks(LinkResolver resolver, ReadContext context, IEnumerable<StoredCopy> copies) =>
+        resolver.Learn(context, copies.SelectMany(copy => LinksOf(copy.Body, store.Schemas[copy.RecordType])));
+
+    private static IEnumerable<string> LinksOf(string body, RecordTableSchema schema) =>
+        FormReferences.Collect(body, schema.RecordColumns).Select(reference => reference.TargetFormKey);
 
     // A join of winners would hold the whole index in memory.
     public IReadOnlyDictionary<string, string> RecordTypesOf(List<string> formKeys)
