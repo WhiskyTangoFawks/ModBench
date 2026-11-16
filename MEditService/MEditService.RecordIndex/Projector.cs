@@ -223,6 +223,7 @@ internal sealed class Projector(
         // or gained.
         var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
         projection.OweWinnerSweep(KeysDiffering(before, after));
+        projection.NameExistence(before.Keys.Except(after.Keys).Concat(after.Keys.Except(before.Keys)));
         projection.NameRows(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
         return null;
     }

@@ -129,6 +129,66 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
+    public void ARecordWhoseResultTheCallerHolds_AnswersUnchanged_AndLeavesItsProblemsOut()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+        var first = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key).Value());
+        var referrer = Assert.Single(first.Records ?? [], record => record.FormKey == first.Problems[0].FormKey);
+
+        var again = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked(null, [new KnownResult(Entry(plugin).Key, referrer.FormKey, referrer.ResultId)])).Value());
+
+        Assert.Equal((false, true), (referrer.Unchanged, Assert.Single(again.Records ?? [], record => record.FormKey == referrer.FormKey).Unchanged));
+        Assert.Empty(again.Problems);
+    }
+
+    [Fact]
+    public void AskedForARecord_AnswersTheSameAsTheWholeAnswerDoesOfThatRecord()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+        var whole = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key).Value());
+        var referrer = whole.Problems[0].FormKey ?? "";
+
+        var keyed = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked([referrer], [])).Value());
+
+        Assert.Equal(whole.Problems.Where(problem => problem.FormKey == referrer), keyed.Problems);
+        Assert.Equal(
+            (whole.Records ?? []).Where(record => record.FormKey == referrer).Select(record => (record.FormKey, record.ResultId)),
+            (keyed.Records ?? []).Where(record => record.FormKey == referrer).Select(record => (record.FormKey, record.ResultId)));
+    }
+
+    [Fact]
+    public void AskedForARecord_AnswersTheFilesTheReadStoppedAtAsTheWholeAnswerDoes()
+    {
+        var plugin = new Plugin("Strayed.esp", RefersTo: null);
+        Build(plugin);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(SourceFileHolding(plugin, "Other")) ?? "", "Stray.json"), "{}");
+        using var index = Indexes.Reconciled(Fixture);
+        var whole = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key).Value());
+
+        var keyed = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked(["000FFF:Strayed.esp"], [])).Value());
+
+        Assert.Equal(whole.Problems, keyed.Problems);
+        Assert.Equal((whole.Records ?? []).Select(record => (record.FormKey, record.ResultId)), (keyed.Records ?? []).Where(record => record.FormKey == "").Select(record => (record.FormKey, record.ResultId)));
+    }
+
+    [Fact]
+    public void AskedForRecords_AnswersTheProblemsOfOnlyThose()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+        var named = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key).Value()).Problems[0].FormKey ?? "";
+        var other = "000FFF:Refers.esp";
+
+        var asked = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked([other], [])).Value());
+
+        Assert.Empty(asked.Problems);
+        Assert.Equal([other, ""], (asked.Records ?? []).Select(record => record.FormKey));
+        Assert.NotEmpty(Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked([named], [])).Value()).Problems);
+    }
+
+    [Fact]
     public void GivenAPlugin_OnlyThatPluginIsAnswered()
     {
         var other = new Plugin("Other.esp");

@@ -41,30 +41,32 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/problems", (string? plugin, string? origin, IQueries svc) =>
+        app.MapPost("/plugins/problems", (string? plugin, string? origin, RecordsAsked asked, IQueries svc) =>
         {
-            if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetProblems(address));
+            if (!EndpointMapping.RecordsAskedOf(plugin, origin, asked, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetProblems(address, asked));
         })
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
                 "What is wrong in each compiled plugin's source, on the file that holds the " +
-                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's.")
+                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's, and given keys, only those records'. " +
+                "Each record answers its result id, and answers unchanged, leaving its rows out, when the known result id of it is the same.")
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/file-paths", (string? plugin, string? origin, IQueries svc) =>
+        app.MapPost("/plugins/file-paths", (string? plugin, string? origin, RecordsAsked asked, IQueries svc) =>
         {
-            if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetFilePaths(address));
+            if (!EndpointMapping.RecordsAskedOf(plugin, origin, asked, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetFilePaths(address, asked));
         })
             .WithName("GetPluginFilePaths")
             .WithTags(Tag)
             .WithDescription(
                 "The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin " +
-                "source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready.")
+                "source that holds each naming record. Given plugin and origin, only that plugin's, and given keys, only those records'. " +
+                "Each record answers its result id, and answers unchanged, leaving its rows out, when the known result id of it is the same. Answers only once the record index is ready.")
             .Produces<IReadOnlyList<PluginFilePaths>>()
             .ProducesProblem(400)
             .ProducesProblem(503);

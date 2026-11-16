@@ -2,7 +2,7 @@ import type { MEditClient, PluginAddress, PluginFilePaths, PluginProblems } from
 import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import { coalesced } from '../ports/coalesced';
 import type { Reporter } from '../ports/reporter';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 
 export type Asked = ProblemsAsker<PluginFilePaths, PluginProblems>;
@@ -34,17 +34,17 @@ export function tellingOnSurface(reporter: Pick<Reporter, 'shownOnSurface'>): (s
 
 type Lateness = Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate'>;
 
-/** Asks of each plugin changed, and while the record index may be late holds the plugins named, to ask of exactly those when it is not. */
-export function askingWhenNotLate(client: Lateness, ask: (plugin: PluginAddress) => void): { plugin: (event: { plugin: PluginAddress }) => void; stop: () => void } {
-  const held = new Map<string, PluginAddress>();
+/** Asks of each plugin changed, and while the record index may be late holds the plugins and records named, to ask of exactly those when it is not. */
+export function askingWhenNotLate(client: Lateness, ask: (named: PluginRecords) => void): { plugin: (event: PluginRecords) => void; stop: () => void } {
+  const held = new Map<string, PluginRecords>();
   const subscription = client.onDidChangeRecordIndexMayBeLate((late) => {
     if (late) return;
     const named = [...held.values()];
     held.clear();
-    for (const plugin of named) ask(plugin);
+    for (const each of named) ask(each);
   });
   return {
-    plugin: ({ plugin }) => { if (client.recordIndexMayBeLate) held.set(pluginAddressKey(plugin), plugin); else ask(plugin); },
+    plugin: (named) => { if (client.recordIndexMayBeLate) addNamed(held, named); else ask(named); },
     stop: () => { subscription.dispose(); },
   };
 }

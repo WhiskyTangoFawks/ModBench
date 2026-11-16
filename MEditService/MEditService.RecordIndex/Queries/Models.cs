@@ -384,7 +384,18 @@ public enum ProblemsFailureKind
 /// <summary><paramref name="Failure"/> and its <paramref name="FailureKind"/> are set when the plugin's
 /// <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(
-    PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null);
+    PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null,
+    IReadOnlyList<RecordResult>? Records = null);
+
+/// <summary>The result of a record's answer that the caller holds, by its <paramref name="ResultId"/>.</summary>
+public sealed record KnownResult(PluginAddress Plugin, string FormKey, string ResultId);
+
+/// <summary>The records asked, or the whole plugin when <paramref name="Keys"/> is null, with the results the caller holds.</summary>
+public sealed record RecordsAsked(IReadOnlyList<string>? Keys, IReadOnlyList<KnownResult> Known);
+
+/// <summary>A record's answer, named by <paramref name="ResultId"/>; <paramref name="Unchanged"/> leaves its rows out.
+/// <paramref name="Unread"/>: the copies mEdit could not read.</summary>
+public sealed record RecordResult(string FormKey, string ResultId, bool Unchanged, IReadOnlyList<string> Unread);
 
 /// <summary>A file path a record of a compiled plugin's source names at <paramref name="FieldPath"/>, in the file
 /// <paramref name="SourceRelativePath"/> that holds the record, and where it lies in the Data folder.</summary>
@@ -397,7 +408,8 @@ public sealed record NamedScript(string FormKey, string FieldPath, string Source
 /// <summary>The paths and scripts a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped
 /// at and the copies mEdit could not read. <paramref name="Failure"/>: not the whole answer (ADR-0019).</summary>
 public sealed record PluginFilePaths(
-    PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<NamedScript> Scripts, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
+    PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<NamedScript> Scripts, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null,
+    IReadOnlyList<RecordResult>? Records = null);
 
 /// <summary>The plugins whose masters list a plugin's file name, and those whose masters mEdit could not
 /// read and so may.</summary>

@@ -67,8 +67,8 @@ public interface IQueries
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
     Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
-    Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin);
-    Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin);
+    Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin, RecordsAsked? asked = null);
+    Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked = null);
 
     /// <summary>Null once the record index holds each plugin <paramref name="written"/> names, or once a check of the disk has
     /// read it when null; otherwise why not (ADR-0029).</summary>

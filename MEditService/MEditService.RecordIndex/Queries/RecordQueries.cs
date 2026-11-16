@@ -536,18 +536,18 @@ internal sealed class RecordQueries(
 
     // A plugin the record index has not reached holds no record yet, so every link into it would read as a
     // missing record.
-    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin) =>
+    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin, RecordsAsked? asked = null) =>
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
-            return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source, plugin);
+            return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source, plugin, asked);
         });
 
-    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin) =>
+    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked = null) =>
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
-            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas(), WhyUnreadable, plugin);
+            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas(), WhyUnreadable, plugin, asked);
         });
 
     public LoadOrderStatus GetStatus() => _index.Status;

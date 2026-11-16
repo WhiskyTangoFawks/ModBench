@@ -15,6 +15,10 @@ import { SseNotificationSubscriber, type ListenerThrows } from './notificationSt
 import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender, type SweepEnd } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
+import { heldResults, STALE, type HeldAnswer, type HeldResults } from './heldResults';
+
+
+import { problemsDivision, filePathsDivision } from './recordDivisions';
 import { keepRecordIndexChanges, type RecordIndexChanges } from './recordIndexChanges';
 import type { Disposable } from './eventEmitter';
 import {
@@ -107,6 +111,8 @@ function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   };
 }
 
+type RecordsAsked = components['schemas']['RecordsAsked'];
+
 interface ReadOptions<A> {
   timed?: boolean;
   absent?: { status: number; answers: A };
@@ -118,6 +124,8 @@ class HttpMEditClient implements MEditClient {
   private api?: { port: number; client: ApiClient };
   private readonly fetchImpl: (input: Request) => Promise<Response>;
   private readonly log: Log;
+  private readonly problemsHeld = heldResults(problemsDivision);
+  private readonly filePathsHeld = heldResults(filePathsDivision);
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
@@ -775,16 +783,35 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails, { token });
   }
 
-  getPluginProblems(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginProblems[] | ReadFailed> {
-    return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', {
-      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, signal,
-    }), noBodyFails, { token, timed: true });
+  getPluginProblems(plugin?: PluginAddress, token?: ReadCancellation, keys?: readonly string[]): Promise<PluginProblems[] | ReadFailed> {
+    return this.askedByRecord('getPluginProblems', this.problemsHeld, plugin, keys, token, (api, signal, address, body) =>
+      api.POST('/plugins/problems', { params: { query: address === undefined ? {} : { plugin: address.name, origin: address.origin } }, body, signal }));
   }
 
-  getPluginFilePaths(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginFilePaths[] | ReadFailed> {
-    return this.read('getPluginFilePaths', (api, signal) => api.GET('/plugins/file-paths', {
-      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, signal,
-    }), noBodyFails, { token, timed: true });
+  getPluginFilePaths(plugin?: PluginAddress, token?: ReadCancellation, keys?: readonly string[]): Promise<PluginFilePaths[] | ReadFailed> {
+    return this.askedByRecord('getPluginFilePaths', this.filePathsHeld, plugin, keys, token, (api, signal, address, body) =>
+      api.POST('/plugins/file-paths', { params: { query: address === undefined ? {} : { plugin: address.name, origin: address.origin } }, body, signal }));
+  }
+
+  private async askedByRecord<A extends HeldAnswer, Part>(
+    what: string, held: HeldResults<A, Part>, plugin: PluginAddress | undefined, keys: readonly string[] | undefined, token: ReadCancellation | undefined,
+    post: (api: ApiClient, signal: AbortSignal, address: PluginAddress | undefined, body: RecordsAsked) => Promise<{ data?: A[]; error?: unknown; response: Response }>,
+  ): Promise<A[] | ReadFailed> {
+    const ask = async (named: readonly string[] | undefined, withKnown: boolean) => {
+      const known = withKnown ? held.known(plugin) : [];
+      const answer = await this.read(what, (api, signal) => post(api, signal, plugin, { keys: named ? [...named] : null, known }),
+        noBodyFails, { token, timed: true });
+      return { answer, known, keyed: named !== undefined };
+    };
+    let asked = await ask(plugin && keys && held.holds(plugin) ? keys : undefined, true);
+    if (!isReadFailed(asked.answer) && asked.keyed && asked.answer.some(({ failure }) => failure != null)) asked = await ask(undefined, true);
+    if (isReadFailed(asked.answer)) return asked.answer;
+    const first = held.merge(asked.answer, asked.known, plugin, asked.keyed);
+    if (first !== STALE) return first;
+    const whole = await ask(undefined, false);
+    if (isReadFailed(whole.answer)) return whole.answer;
+    const merged = held.merge(whole.answer, [], plugin, false);
+    return merged === STALE ? whole.answer : merged;
   }
 
   getRecordTypes({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<PluginRecordTypeCount[] | ReadFailed> {

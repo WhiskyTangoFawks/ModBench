@@ -1,8 +1,8 @@
 import type * as vscode from 'vscode';
-import type { PluginAddress } from '../client';
 import type { Reveal } from '../drivingLib/symbolRows';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { EntrySymbol, PluginName, ScriptSymbol, TextSpan } from '../symbolNames/symbolNames';
+import type { PluginRecords } from '../drivingLib/namedPlugins';
 import type { AskedIn } from './symbolPlaces';
 
 export type PluginNamed = { readonly kind: 'plugin' } & PluginName;
@@ -80,7 +80,7 @@ export interface SymbolKind<Symbol> {
   namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[] | undefined>;
   /** Each file, open or not, that holds a name that names nothing, from one ask of its owner; `only` asks of those
    *  plugins' files. None where judging has stopped; undefined where nothing can be said yet. */
-  filesNamingNothing?(only?: readonly PluginAddress[]): Promise<readonly string[] | undefined>;
+  filesNamingNothing?(only?: readonly PluginRecords[]): Promise<readonly string[] | undefined>;
   /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty, asking nothing further once the
    *  search is cancelled. */
   symbolsFor(query: string, search: SymbolSearch): Promise<readonly Listed[]>;

@@ -5,6 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
+import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, lastRead, positionAt, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
@@ -96,17 +97,23 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
   });
   const take = (answers: readonly PluginFilePaths[], target: string) => {
     const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
-    for (const key of held.keys()) if ((target === WHOLE_SET || key === target) && !answered.has(key)) held.delete(key);
-    for (const answer of answers) held.set(pluginAddressKey(answer.plugin), { answer, texts: new Map() });
+    let changed = answers.length !== answered.size;
+    for (const key of held.keys()) if ((target === WHOLE_SET || key === target) && !answered.has(key)) { held.delete(key); changed = true; }
+    for (const answer of answers) {
+      const key = pluginAddressKey(answer.plugin);
+      if (held.get(key)?.answer === answer) continue;
+      held.set(key, { answer, texts: new Map() });
+      changed = true;
+    }
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
     tellStanding();
     showStatus();
-    void judge();
+    if (changed) void judge();
   };
-  const ask = async (plugin?: PluginAddress, atSubscribe = false) => {
+  const ask = async (plugin?: PluginAddress, atSubscribe = false, keys?: readonly string[]) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
-      const answer = answerOf(await deps.ask.getPluginFilePaths(plugin));
+      const answer = answerOf(await deps.ask.getPluginFilePaths(plugin, keys));
       take(answer, target);
     } catch (error) {
       if (atSubscribe) return;
@@ -115,7 +122,7 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
       showStatus();
     }
   };
-  const asking = new Map<string, PluginAddress>();
+  const asking = new Map<string, PluginRecords>();
   let wholeWanted = true;
   let atSubscribe = true;
   const askWanted = asks.asking(async () => {
@@ -125,10 +132,10 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     wholeWanted = false;
     atSubscribe = false;
     asking.clear();
-    await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
+    await Promise.all(whole ? [ask(undefined, first)] : named.map(({ plugin, keys }) => ask(plugin, false, keys)));
   });
-  const askPlugin = (plugin: PluginAddress) => {
-    asking.set(pluginAddressKey(plugin), plugin);
+  const askPlugin = (named: PluginRecords) => {
+    addNamed(asking, named);
     askWanted();
   };
   const whenNotLate = askingWhenNotLate(client, askPlugin);

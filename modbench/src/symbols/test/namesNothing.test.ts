@@ -20,6 +20,7 @@ vi.mock('vscode', () => ({
 import { registerNamesNothing } from '../namesNothing';
 import { bounded, REQUESTS_AT_ONCE } from '../../ports/bounded';
 import type { PluginAddress } from '../../client';
+import type { PluginRecords } from '../../drivingLib/namedPlugins';
 import type { ScriptSymbol } from '../../symbolNames/symbolNames';
 import { fakeKind, fakeKinds } from './fakeKinds';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -35,14 +36,14 @@ const script = (over: Parameters<typeof fakeKind<ScriptSymbol>>[0]) => fakeKinds
 const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
 const messagesOn = (collection: FakeDiagnosticCollection, file: string) => collection.get(Uri.file(file))?.map(({ message }) => message);
 
-function start(kinds: ReturnType<typeof fakeKinds>, saved: Record<string, string> = {}) {
+function start(kinds: ReturnType<typeof fakeKinds>, saved: Record<string, string> = {}, instance?: { value: object }) {
   const collection = new FakeDiagnosticCollection();
   const reporter = recordingReporter();
   const savedText = vi.fn((path: string) => Promise.resolve(saved[path]));
   let changed: (plugin?: PluginAddress) => void = () => undefined;
   const forgotten: (PluginAddress | undefined)[] = [];
   registerNamesNothing({
-    kinds, reporter, savedText, collection,
+    kinds, reporter, savedText, collection, instance,
     asker: { inTurn: bounded(REQUESTS_AT_ONCE), forget: (plugin) => { forgotten.push(plugin); } },
     onChanged: (listener) => { changed = listener; return { dispose: () => undefined }; },
   });
@@ -167,7 +168,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
 
   it('asks of the one plugin whose source changed, and of all once the instance changes', async () => {
     world.documents = [];
-    const asked = vi.fn((_only?: readonly PluginAddress[]) => Promise.resolve([] as string[]));
+    const asked = vi.fn((_only?: readonly PluginRecords[]) => Promise.resolve([] as string[]));
     const { changed } = start(script({ filesNamingNothing: asked }));
     await settle();
     changed(PLUGIN);
@@ -175,7 +176,46 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     changed();
     await settle();
 
-    expect(asked.mock.calls).toEqual([[undefined], [[PLUGIN]], [undefined]]);
+    expect(asked.mock.calls).toEqual([[undefined], [[{ plugin: PLUGIN }]], [undefined]]);
+  });
+
+  describe('when a change leaves what is judged as it was', () => {
+    const judgedAfter = async (change: (instance: { value: object }, files: string[]) => string[] | undefined) => {
+      world.documents = [];
+      const files = [CLOSED];
+      let answer = files;
+      const instance = { value: {} };
+      const { changed, savedText } = start(script({ filesNamingNothing: () => Promise.resolve(answer), namesNothingIn: () => Promise.resolve([nothing(0, 'Gone')]) }), { [CLOSED]: '' }, instance);
+      await settle();
+      answer = change(instance, files) ?? files;
+      changed(PLUGIN);
+      await settle();
+      return savedText.mock.calls.length;
+    };
+
+    it('judges nothing again when every kind answers the files it answered and the instance value is the same', async () => {
+      expect(await judgedAfter(() => undefined)).toBe(1);
+    });
+
+    it('judges again when the instance holds another value', async () => {
+      expect(await judgedAfter((instance) => { instance.value = {}; return undefined; })).toBe(2);
+    });
+
+    it('judges again when a kind answers its files as another list', async () => {
+      expect(await judgedAfter((_instance, files) => [...files])).toBe(2);
+    });
+
+    it('judges again when a document closes, though nothing else changed', async () => {
+      world.documents = [];
+      const files = [CLOSED];
+      const { savedText } = start(script({ filesNamingNothing: () => Promise.resolve(files), namesNothingIn: () => Promise.resolve([]) }), { [CLOSED]: '' }, { value: {} });
+      await settle();
+
+      world.handlers.get('close')?.(document('', CLOSED));
+      await settle();
+
+      expect(savedText).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('clears a file no kind says holds one any more', async () => {
@@ -230,8 +270,8 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     ['cannot answer yet', () => Promise.resolve(undefined)],
   ])('asks for every plugin again after a whole-set ask that %s, even when one plugin\'s files changed', async (_case, failing) => {
     world.documents = [];
-    let ask: (only?: readonly PluginAddress[]) => Promise<string[] | undefined> = failing;
-    const asked = vi.fn((only?: readonly PluginAddress[]) => ask(only));
+    let ask: (only?: readonly PluginRecords[]) => Promise<string[] | undefined> = failing;
+    const asked = vi.fn((only?: readonly PluginRecords[]) => ask(only));
     const { changed } = start(script({ filesNamingNothing: asked }));
     await settle();
     ask = () => Promise.resolve([]);
@@ -240,7 +280,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     changed(PLUGIN);
     await settle();
 
-    expect(asked.mock.calls).toEqual([[undefined], [undefined], [[PLUGIN]]]);
+    expect(asked.mock.calls).toEqual([[undefined], [undefined], [[{ plugin: PLUGIN }]]]);
   });
 
   it('judges an open document again as it changes, and drops a judgement that a later one overtook', async () => {

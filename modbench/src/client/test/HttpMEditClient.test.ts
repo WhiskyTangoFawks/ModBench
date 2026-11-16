@@ -6,7 +6,7 @@ import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { isReadFailed } from '../../wire/readFailed';
+import { answerOf as read, isReadFailed } from '../../wire/readFailed';
 import { answered } from './healthAnswer';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -212,10 +212,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const sharedFile = { kind: 'OwnFile', location: '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
   const fileRecord = { formKey: sharedKey, plugin: 'Shared.esp', origin: 'ModA' };
   const sourcePath = '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
-  const problems = [{
-    plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
-    problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
-  }];
   const same = <T>(answer: T) => ({ answer, reads: answer });
   const createdRecord = { formKey: '000900:MyPatch.esp', ...changes };
   const formKeyEdit: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' };
@@ -366,8 +362,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/plugins/creatable-extensions', query: {} },
     { name: 'getPluginIndexing', verb: (c) => c.getPluginIndexing({ name: 'Patch.esp', origin: 'PatchMod' }), answer: { state: 'ReadFailed', reason: 'Patch.esp could not be parsed.' },
       path: '/plugins/Patch.esp/indexed-as-on-disk', query: { origin: 'PatchMod' } },
-    { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
-      path: '/plugins/problems', query: {} },
     { name: 'getActiveFilter', verb: (c) => c.getActiveFilter(), answer: { sql: 'SELECT 1', source: 'armor.sql' },
       path: '/load-order/filter', query: {} },
   ];
@@ -380,6 +374,122 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(request.method).toBe('GET');
     expect(url.pathname).toBe(path);
     expect(Object.fromEntries(url.searchParams)).toEqual(query);
+  });
+
+  describe('the problems and file paths of a plugin, asked by record', () => {
+    const REFERS = { name: 'Refers.esp', origin: 'ReferringMod' };
+    const problemOf = (formKey: string, message = 'names no record') => ({ formKey, sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message });
+    const answerOf = (rows: { formKey: string; id: string; unchanged?: boolean; message?: string }[], over: object = {}) => ({
+      plugin: REFERS,
+      problems: rows.filter(({ unchanged }) => !unchanged).map(({ formKey, message }) => problemOf(formKey, message)),
+      records: rows.map(({ formKey, id, unchanged }) => ({ formKey, resultId: id, unchanged: unchanged ?? false, unread: [] })),
+      ...over,
+    });
+    const asking = (...replies: unknown[]) => {
+      const queue = [...replies];
+      const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, queue.shift())));
+      const bodies = () => Promise.all(fetch.mock.calls.map(async ([req]) => { const body: unknown = JSON.parse(await req.clone().text()); return body; }));
+      return { client: makeClient(fetch), fetch, bodies };
+    };
+
+    it('posts what it asks of the whole plugin, and names the results it holds the next time', async () => {
+      const { client, fetch, bodies } = asking([answerOf([{ formKey: 'A', id: '1' }])], [answerOf([{ formKey: 'A', id: '1', unchanged: true }])]);
+
+      await client.getPluginProblems(REFERS);
+      await client.getPluginProblems(REFERS);
+
+      expect(fetch.mock.calls.map(([req]) => `${req.method} ${new URL(req.url).pathname}${new URL(req.url).search}`)).toEqual(
+        Array(2).fill('POST /plugins/problems?plugin=Refers.esp&origin=ReferringMod'));
+      expect(await bodies()).toEqual([{ keys: null, known: [] }, { keys: null, known: [{ plugin: REFERS, formKey: 'A', resultId: '1' }] }]);
+    });
+
+    it('answers the held answer itself when every record is unchanged', async () => {
+      const { client } = asking([answerOf([{ formKey: 'A', id: '1' }])], [answerOf([{ formKey: 'A', id: '1', unchanged: true }])]);
+
+      const first = await client.getPluginProblems(REFERS);
+      const second = await client.getPluginProblems(REFERS);
+
+      expect(second).toEqual(first);
+      expect(read(second)[0]).toBe(read(first)[0]);
+      expect(read(first)[0]?.problems.map(({ formKey }) => formKey)).toEqual(['A']);
+    });
+
+    it('asks only for the records named, and puts what it answers beside the records it holds', async () => {
+      const { client, bodies } = asking(
+        [answerOf([{ formKey: 'A', id: '1' }, { formKey: 'B', id: '2' }])],
+        [answerOf([{ formKey: 'B', id: '3', message: 'changed' }])],
+      );
+
+      await client.getPluginProblems(REFERS);
+      const merged = await client.getPluginProblems(REFERS, undefined, ['B']);
+
+      expect((await bodies())[1]).toEqual({ keys: ['B'], known: [{ plugin: REFERS, formKey: 'A', resultId: '1' }, { plugin: REFERS, formKey: 'B', resultId: '2' }] });
+      expect(read(merged)[0]?.problems.map(({ formKey, message }) => [formKey, message])).toEqual([['A', 'names no record'], ['B', 'changed']]);
+    });
+
+    it('drops a record whose answer comes back clean', async () => {
+      const { client } = asking([answerOf([{ formKey: 'A', id: '1' }, { formKey: 'B', id: '2' }])], [answerOf([{ formKey: 'B', id: '3', unchanged: false }], { problems: [] })]);
+
+      await client.getPluginProblems(REFERS);
+      const merged = await client.getPluginProblems(REFERS, undefined, ['B']);
+
+      expect(read(merged)[0]?.problems.map(({ formKey }) => formKey)).toEqual(['A']);
+    });
+
+    it('asks the whole plugin again when the records it named come back failed', async () => {
+      const { client, bodies } = asking(
+        [answerOf([{ formKey: 'A', id: '1' }])],
+        [answerOf([], { failure: 'unreadable', failureKind: 'Placement' })],
+        [answerOf([{ formKey: 'A', id: '1', unchanged: true }])],
+      );
+
+      await client.getPluginProblems(REFERS);
+      await client.getPluginProblems(REFERS, undefined, ['A']);
+
+      expect(await bodies()).toEqual([expect.objectContaining({ keys: null }), expect.objectContaining({ keys: ['A'] }), expect.objectContaining({ keys: null })]);
+    });
+
+    it('asks the whole plugin when it holds none of it', async () => {
+      const { client, bodies } = asking([answerOf([{ formKey: 'A', id: '1' }])]);
+
+      await client.getPluginProblems(REFERS, undefined, ['A']);
+
+      expect(await bodies()).toEqual([{ keys: null, known: [] }]);
+    });
+
+    it('asks again without the results it holds when an answer is unchanged for a record it holds no result of', async () => {
+      const { client, bodies } = asking(
+        [answerOf([{ formKey: 'A', id: '1' }])],
+        [answerOf([{ formKey: 'Z', id: '9', unchanged: true }])],
+        [answerOf([{ formKey: 'Z', id: '9' }])],
+      );
+
+      await client.getPluginProblems(REFERS);
+      const merged = await client.getPluginProblems(REFERS);
+
+      expect((await bodies())[2]).toEqual({ keys: null, known: [] });
+      expect(read(merged)[0]?.problems.map(({ formKey }) => formKey)).toEqual(['Z']);
+    });
+
+    it('puts the files an unread copy stops beside the lines of the records it holds', async () => {
+      const paths = (rows: { formKey: string; id: string; unchanged?: boolean; unread?: string[]; path?: string }[], stopped: string[]) => [{
+        plugin: REFERS,
+        paths: rows.filter(({ unchanged, path }) => !unchanged && path).map(({ formKey, path }) => ({ formKey, fieldPath: 'F', sourceRelativePath: 'x.json', dataPath: path })),
+        scripts: [],
+        unread: [...stopped, ...rows.filter(({ unchanged }) => !unchanged).flatMap(({ unread }) => unread ?? [])],
+        records: rows.map(({ formKey, id, unchanged, unread }) => ({ formKey, resultId: id, unchanged: unchanged ?? false, unread: unchanged ? [] : unread ?? [] })),
+      }];
+      const { client } = asking(
+        paths([{ formKey: 'A', id: '1', path: 'a.dds' }, { formKey: 'B', id: '2', unread: ['B: refused'] }], ['stray.json: stopped']),
+        paths([{ formKey: 'A', id: '1', unchanged: true }], ['stray.json: stopped']),
+      );
+
+      await client.getPluginFilePaths(REFERS);
+      const merged = await client.getPluginFilePaths(REFERS, undefined, ['A']);
+
+      expect(read(merged)[0]?.unread).toEqual(['stray.json: stopped', 'B: refused']);
+      expect(read(merged)[0]?.paths.map(({ dataPath }) => dataPath)).toEqual(['a.dds']);
+    });
   });
 
   it('getRecordsComparison returns the copies no plugin gave, each with its reason, and no comparison', async () => {

@@ -56,6 +56,81 @@ public sealed class RowsChangedNotificationTests
     }
 
     [Fact]
+    public void ADeletedRecord_IsAnnouncedWithTheRecordsOfCompiledPluginsThatReferToIt()
+    {
+        FormKey target = default;
+        FormKey referrer = default;
+        using var fixture = new PluginFixtureBuilder("rows-changed-referrers")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                target = mod.Npcs.AddNew("Target").FormKey;
+                var referring = mod.Npcs.AddNew("Referrer");
+                referring.Race.SetTo(target);
+                referrer = referring.FormKey;
+                mod.Npcs.AddNew("Bystander");
+            }, origin: "FixtureMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var entry = fixture.Plugins.Single();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Reconciled(fixture, notifications: notifications);
+        File.Delete(entry.SourceFileOf(index.DocumentOf(target.ToString(), entry.Key)));
+
+        index.NextCheck();
+
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal(new[] { target.ToString(), referrer.ToString() }.Order(StringComparer.Ordinal), notification.Keys.Order(StringComparer.Ordinal));
+    }
+
+    private static (ScatteredFixtureData Fixture, LoadOrderEntry Entry, InMemoryNotificationPublisher Notifications, OpenedIndex Index, FormKey Target, FormKey Referrer) ReferrerOfATarget(string name, string? refersTo = null)
+    {
+        FormKey target = default, referrer = default;
+        var fixture = new PluginFixtureBuilder(name)
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                target = mod.Npcs.AddNew("Target").FormKey;
+                var referring = mod.Npcs.AddNew("Referrer");
+                referring.Race.SetTo(refersTo is null ? target : FormKey.Factory(refersTo));
+                referrer = referring.FormKey;
+            }, origin: "FixtureMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var notifications = new InMemoryNotificationPublisher();
+        var index = Indexes.Reconciled(fixture, notifications: notifications);
+        return (fixture, fixture.Plugins.Single(), notifications, index, target, referrer);
+    }
+
+    [Fact]
+    public void AContentEditOfARecord_NamesNoRecordThatReferToIt()
+    {
+        var (fixture, entry, notifications, index, target, referrer) = ReferrerOfATarget("rows-changed-edit-referrers");
+        using var _ = fixture;
+        using var __ = index;
+        entry.HandEdit(index.DocumentOf(target.ToString(), entry.Key), "\"Target\"", "\"Edited\"");
+
+        index.NextCheck();
+
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal([target.ToString()], notification.Keys);
+        Assert.DoesNotContain(referrer.ToString(), notification.Keys);
+    }
+
+    [Fact]
+    public void ARecordAdded_IsAnnouncedWithTheRecordsThatReferToItBeforeItExisted()
+    {
+        const string Added = "000F00:Fixture.esp";
+        var (fixture, entry, notifications, index, target, referrer) = ReferrerOfATarget("rows-changed-add-referrers", Added);
+        using var _ = fixture;
+        using var __ = index;
+        GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, target.ToString());
+
+        index.NextCheck();
+
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal(new[] { Added, referrer.ToString() }.Order(StringComparer.Ordinal), notification.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void ValidatingAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
     {
         var (fixture, entry, notifications, index, moved, still) = TwoNpcs("rows-changed-gained");

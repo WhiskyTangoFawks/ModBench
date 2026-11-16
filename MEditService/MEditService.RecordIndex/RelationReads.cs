@@ -394,10 +394,22 @@ internal sealed class RelationReads(
             .ToDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
-    private List<MissingReference> GetReferencesToMissingRecords()
+    private List<MissingReference> GetReferencesToMissingRecords(PluginAddress? only, IReadOnlySet<string>? forms)
     {
         using var context = OpenRead();
         var release = store.Release;
+        var narrowed = new List<object>();
+        var narrowing = "";
+        if (only is { } plugin)
+        {
+            narrowed.AddRange([plugin.Name, plugin.Origin]);
+            narrowing += $" AND fr.source_plugin = ${narrowed.Count - 1} AND fr.source_origin = ${narrowed.Count}";
+        }
+        if (forms is not null)
+        {
+            narrowed.Add(forms.ToList());
+            narrowing += $" AND fr.source_form_key IN (SELECT unnest(${narrowed.Count}::VARCHAR[]))";
+        }
         return context.Rows($"""
             SELECT fr.source_plugin, fr.source_origin, fr.source_form_key, fr.record_type, fr.editor_id,
                    fr.target_form_key, fr.field_path
@@ -410,10 +422,11 @@ internal sealed class RelationReads(
                   SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.records own
                   WHERE own.form_key = fr.target_form_key
                     AND own.plugin = fr.source_plugin AND own.origin = fr.source_origin)
+              {narrowing}
             ORDER BY fr.source_plugin, fr.source_origin, fr.source_form_key, fr.field_path
             """, reader => new MissingReference(
                 reader.GetPluginAddress(), reader.GetString(2), reader.GetString(3),
-                reader.GetStringOrNull(4), reader.GetString(5), reader.GetString(6)))
+                reader.GetStringOrNull(4), reader.GetString(5), reader.GetString(6)), [.. narrowed])
             .Where(reference => FormKeyResolution.From(reference.TargetFormKey, null, [], release).State == FormKeyResolutionState.Unresolved)
             .ToList();
     }
@@ -421,12 +434,12 @@ internal sealed class RelationReads(
     /// <summary>Each link from a plugin read from its source tree to a FormKey no active plugin holds
     /// and the engine does not define, on its file in <paramref name="sourceOf"/>.</summary>
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
-        Func<PluginAddress, ISourceRepositoryReads?> sourceOf)
+        PluginAddress? only, IReadOnlySet<string>? forms, Func<PluginAddress, ISourceRepositoryReads?> sourceOf)
     {
         var repositories = new Dictionary<PluginAddress, ISourceRepositoryReads?>(PluginAddress.Comparer);
         return
         [
-            .. GetReferencesToMissingRecords().Select(reference =>
+            .. GetReferencesToMissingRecords(only, forms).Select(reference =>
             {
                 if (!repositories.TryGetValue(reference.Plugin, out var repository))
                 {

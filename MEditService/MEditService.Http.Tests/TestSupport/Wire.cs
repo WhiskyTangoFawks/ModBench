@@ -11,6 +11,17 @@ internal static class Wire
     // How long a client waits for anything the service does on a thread of its own.
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
+    /// <summary>The records of a plugin's problems or file paths, as Modbench asks them: the keys asked, and the results it holds.</summary>
+    internal static Task<HttpResponseMessage> PostAsked(this HttpClient client, string url, string[]? keys = null, object[]? known = null) =>
+        client.PostAsJsonAsync(url, new { keys, known = known ?? [] });
+
+    internal static async Task<JsonElement> Asked(this HttpClient client, string url, string[]? keys = null, object[]? known = null)
+    {
+        var response = await client.PostAsked(url, keys, known);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
     internal static Task<HttpResponseMessage> PutLoadOrder(
         this HttpClient client, ScatteredFixtureData fx, params string[] origins) =>
         client.PutLoadOrder(fx, Listed(fx, origins));

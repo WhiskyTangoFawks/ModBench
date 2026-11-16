@@ -10,17 +10,20 @@ namespace MEditService.RecordIndex.Queries;
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 internal static class ProblemsPanel
 {
-    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null)
+    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null, RecordsAsked? asked = null)
     {
+        var keys = RecordResults.KeysOf(asked);
+        keys?.Add("");
+        bool Asked(string? formKey) => keys is null || keys.Contains(formKey ?? "");
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
-        var found = index.FileProblems.ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
+        var found = index.FileProblems.Where(problem => Asked(problem.Problem.FormKey)).ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
         var unreadable = UnreadableActive(index, snapshot);
         var heldReasons = ReadFailures.HeldReasons(index);
         var linkedPlugins = reads.GetPluginsLinkedBySourcePlugins();
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
-            .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin) is { } registered
+            .GetReferencesToMissingRecordsOnFiles(only, keys, plugin => held.GetValueOrDefault(plugin) is { } registered
                 ? source.Over(registered, snapshot.GameRelease)
                 : null)
             .ToLookup(row => row.Reference.Plugin, PluginAddress.Comparer);
@@ -35,17 +38,17 @@ internal static class ProblemsPanel
                         .Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
                             && linkedPlugins[plugin.Key].Contains(file.Key, StringComparer.OrdinalIgnoreCase))
                         .ToList();
-                    var headerProblems = linkedUnreadable.Count == 0
+                    var headerProblems = linkedUnreadable.Count == 0 || !Asked(PluginHeader.IdentityOf(plugin.Name).FormKey.ToString())
                         ? new HeaderProblems([], null)
                         : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
                     return Placed(plugin, source, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         derivations.ContainsKey(plugin.Key) ? heldReasons.GetValueOrDefault(plugin.Key) : null,
-                        [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
+                        [.. stopped[plugin.Key].Where(failure => Asked(failure.FormKey)).Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
                         [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
                 }),
         ];
-        return placed;
+        return [.. placed.Select(answer => RecordResults.Of(answer, asked))];
     }
 
     // A file that cannot be read to place its problems is a failure of the plugin; its problems sit on the first line.

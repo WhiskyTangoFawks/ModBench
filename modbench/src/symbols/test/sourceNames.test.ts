@@ -1,3 +1,4 @@
+import type { FilePathsAsked } from '../scriptsNamed';
 import { describe, expect, it, vi } from 'vitest';
 import { sourceNames } from '../sourceNames';
 import type { DocumentName, MEditClient } from '../../client';
@@ -94,7 +95,7 @@ describe('every script the plugin source of the compiled plugins names', () => {
     ({ plugin: who, paths: [], scripts: [attached(name, `${who.name}/Npc.json`)], unread: [], ...over });
   const owning = (answer: (asked?: Parameters<MEditClient['getPluginFilePaths']>[0]) => Answer) => {
     const files = (origin: string) => (origin === ORIGIN ? { file: FILE_OF } : undefined);
-    const paths = { getPluginFilePaths: vi.fn<MEditClient['getPluginFilePaths']>((asked) => Promise.resolve(answer(asked))) };
+    const paths = { getPluginFilePaths: vi.fn<FilePathsAsked['getPluginFilePaths']>((asked) => Promise.resolve(answer(asked))) };
     const reporter = recordingReporter();
     return { owner: sourceNames({ names: { getPluginSourceNames: vi.fn() }, paths, sourceFiles: files, reporter }), paths, reporter };
   };
@@ -104,6 +105,39 @@ describe('every script the plugin source of the compiled plugins names', () => {
 
     expect(await owner.scriptsNamed()).toEqual([{ file: FILE_OF('Mod.esp/Npc.json'), name: 'Gone' }]);
     expect(paths.getPluginFilePaths.mock.calls).toEqual([[]]);
+  });
+
+  it('asks of the records a change names, and places an answer given again as it was only once', async () => {
+    const answer = [holding(plugin, 'Gone')];
+    const { owner, paths } = owning(() => answer);
+    const placed = vi.fn(FILE_OF);
+    const placing = sourceNames({ names: { getPluginSourceNames: vi.fn() }, paths, sourceFiles: () => ({ file: placed }), reporter: recordingReporter() });
+
+    await placing.scriptsNamed([{ plugin, keys: ['000800:Mod.esp'] }]);
+    await placing.scriptsNamed([{ plugin }]);
+
+    expect([paths.getPluginFilePaths.mock.calls, placed.mock.calls.length]).toEqual([[[plugin, ['000800:Mod.esp']], [plugin, undefined]], 1]);
+    expect(await owner.scriptsNamed()).toHaveLength(1);
+  });
+
+  it('answers the same list while every answer is the one it had', async () => {
+    const answer = [holding(plugin, 'Gone')];
+    const { owner } = owning(() => answer);
+
+    const first = await owner.scriptsNamed();
+    const again = await owner.scriptsNamed([{ plugin }]);
+
+    expect(again).toBe(first);
+  });
+
+  it('answers another list when an answer is another', async () => {
+    let answer = [holding(plugin, 'Gone')];
+    const { owner } = owning(() => answer);
+    const first = await owner.scriptsNamed();
+
+    answer = [holding(plugin, 'Gone')];
+
+    expect(await owner.scriptsNamed([{ plugin }])).not.toBe(first);
   });
 
   it('says nothing is answered while the record index cannot answer yet', async () => {
@@ -116,13 +150,13 @@ describe('every script the plugin source of the compiled plugins names', () => {
 
   it('asks of the plugins named alone, answers every plugin\'s scripts, and asks of none for an empty list', async () => {
     const { owner, paths } = owning((asked) => [holding(asked ?? plugin, `Of${asked?.name ?? 'All'}`)]);
-    await owner.scriptsNamed([plugin]);
-    await owner.scriptsNamed([beside]);
+    await owner.scriptsNamed([{ plugin }]);
+    await owner.scriptsNamed([{ plugin: beside }]);
 
     expect(await owner.scriptsNamed([])).toEqual([
       { file: FILE_OF('Mod.esp/Npc.json'), name: 'OfMod.esp' }, { file: FILE_OF('Beside.esp/Npc.json'), name: 'OfBeside.esp' },
     ]);
-    expect(paths.getPluginFilePaths.mock.calls).toEqual([[plugin], [beside]]);
+    expect(paths.getPluginFilePaths.mock.calls).toEqual([[plugin, undefined], [beside, undefined]]);
   });
 
   it('drops a plugin that left the load order, and keeps what a plugin whose answer failed last held, saying why once', async () => {

@@ -70,6 +70,80 @@ public sealed class PluginFilePathsTests : IDisposable
     }
 
     [Fact]
+    public void ARecordWhoseResultTheCallerHolds_AnswersUnchanged_AndLeavesItsRowsOut()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var first = Assert.Single(index.Queries.GetFilePaths(Compiled).Value());
+        var holder = Assert.Single(first.Records ?? [], record => record.FormKey == _holder.ToString());
+        var held = new RecordsAsked(null, [new KnownResult(Compiled, holder.FormKey, holder.ResultId)]);
+
+        var again = Assert.Single(index.Queries.GetFilePaths(Compiled, held).Value());
+
+        Assert.Equal((false, true), (holder.Unchanged, Assert.Single(again.Records ?? [], record => record.FormKey == holder.FormKey).Unchanged));
+        Assert.Empty(again.Paths);
+    }
+
+    [Fact]
+    public void RecordsThatNameDifferentPaths_AnswerDifferentResultIds()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var other = FormKey.Factory("000FFF:Holding.esp").ToString();
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(Compiled, new RecordsAsked([_holder.ToString(), other], [])).Value());
+
+        Assert.Equal(2, (answered.Records ?? []).Select(record => record.ResultId).Distinct().Count());
+    }
+
+    [Fact]
+    public void AskedForRecords_AnswersTheSameAsTheWholeAnswerDoesOfThoseRecords()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var whole = Assert.Single(index.Queries.GetFilePaths(Compiled).Value());
+
+        var keyed = Assert.Single(index.Queries.GetFilePaths(Compiled, new RecordsAsked([_holder.ToString()], [])).Value());
+
+        Assert.Equal((whole.Paths, whole.Scripts, whole.Unread, whole.Records), (keyed.Paths, keyed.Scripts, keyed.Unread, keyed.Records), new SameLists());
+    }
+
+    private sealed class SameLists : IEqualityComparer<(IReadOnlyList<NamedFilePath>, IReadOnlyList<NamedScript>, IReadOnlyList<string>, IReadOnlyList<RecordResult>?)>
+    {
+        public bool Equals((IReadOnlyList<NamedFilePath>, IReadOnlyList<NamedScript>, IReadOnlyList<string>, IReadOnlyList<RecordResult>?) x, (IReadOnlyList<NamedFilePath>, IReadOnlyList<NamedScript>, IReadOnlyList<string>, IReadOnlyList<RecordResult>?) y) =>
+            x.Item1.SequenceEqual(y.Item1) && x.Item2.SequenceEqual(y.Item2) && x.Item3.SequenceEqual(y.Item3)
+            && (x.Item4 ?? []).Select(record => (record.FormKey, record.ResultId)).SequenceEqual((y.Item4 ?? []).Select(record => (record.FormKey, record.ResultId)));
+
+        public int GetHashCode((IReadOnlyList<NamedFilePath>, IReadOnlyList<NamedScript>, IReadOnlyList<string>, IReadOnlyList<RecordResult>?) obj) => 0;
+    }
+
+    [Fact]
+    public void ARecordWhoseResultTheCallerHoldsAnotherOf_AnswersFull()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var held = new RecordsAsked(null, [new KnownResult(Compiled, _holder.ToString(), "stale")]);
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(Compiled, held).Value());
+
+        Assert.False(Assert.Single(answered.Records ?? [], record => record.FormKey == _holder.ToString()).Unchanged);
+        Assert.Single(answered.Paths);
+    }
+
+    [Fact]
+    public void AskedForRecords_AnswersOnlyThose_AndAnEmptyResultForOneThatNamesNothing()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var other = FormKey.Factory("000FFF:Holding.esp").ToString();
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(Compiled, new RecordsAsked([other], [])).Value());
+
+        Assert.Empty(answered.Paths);
+        Assert.Equal([other], (answered.Records ?? []).Select(record => record.FormKey));
+    }
+
+    [Fact]
     public void ACompiledPlugin_AnswersEachScriptItsSourceAttaches_OnTheFileThatHoldsTheRecord()
     {
         FormKey attaching = default;
