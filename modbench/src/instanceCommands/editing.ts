@@ -1,13 +1,13 @@
 // Put load order (ADR-0013) when the snapshot changed, and signal change. The client owns the process both go
-// to; what came of each put comes back through `onPut`.
+// to; what came of each put it was asked for comes back through `onPut`.
 
-import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
+import type { LaunchOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { exactPluginAddressKey } from '../wire/pluginAddress';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type ViewOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder' | 'signalChange'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'onDidChange' | 'loadOrderStatus' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
   /** The Plugins view's order of the active plugins; `onChange` is the moment it may have changed, as Editing read the plugins. */
   viewOrder: { of: ViewOrder; onChange(listener: () => void): { dispose(): void } };
@@ -61,8 +61,12 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     return true;
   };
 
+  let putsUnanswered = 0;
   // A put the backend failed is not told: the status bar reports the stop.
   const tellPut = (put: Promise<PutLoadOrderResult>): void => {
+    putsUnanswered++;
+    const answered = (): void => { putsUnanswered--; };
+    void put.then(answered, answered);
     void tells.track(put.then((result) => {
       if (result.sent && result.outcome.outcome !== 'applied' && handed?.snapshot === result.snapshot) handed = undefined;
       if (result.sent && result.outcome.outcome === 'backendFailed') return;
@@ -89,11 +93,16 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     await tells.settled();
   };
 
+  // mEdit holds no load order, as after a restart: it is handed the one it should hold, as any put is.
+  const holdsNone = client.onDidChange(() => {
+    const status = client.loadOrderStatus;
+    if (last === undefined || putsUnanswered > 0 || (status !== undefined && !status.holdsNone)) return;
+    handed = undefined;
+    put(last.source, last.stringsLanguage);
+  });
   const unsubscribes = [
     () => { changeOfOrder.dispose(); },
-    client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
-      tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
-    }),
+    () => { holdsNone.dispose(); },
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);

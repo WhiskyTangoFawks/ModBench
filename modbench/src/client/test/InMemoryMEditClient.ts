@@ -2,13 +2,13 @@ import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { IGNORED_THROWS } from './fixtures';
 import type { Disposable } from '../eventEmitter';
 import type {
-  MEditClient, RecordIndexChange, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
+  MEditClient, RecordIndexChange, RecordIndexProgress, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
-import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
+import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
-import { trackLateness } from '../lateness';
+import { trackLateness, trackProgress } from '../lateness';
 import { keepRecordIndexChanges } from '../recordIndexChanges';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
@@ -112,11 +112,12 @@ export class InMemoryMEditClient implements MEditClient {
     },
   });
 
-  private readonly lateness = trackLateness(() => this.sender.pending());
+  private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
+  private readonly progress = trackProgress(() => this.recordIndexProgress);
 
   constructor() {
-    announceAfterReopen(this.sender, this.notifications);
     this.sender.onPendingChanged(this.lateness.note);
+    this.loadOrderStatusKept.onStatus(() => { this.lateness.note(); this.progress.note(); });
   }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
@@ -249,15 +250,16 @@ export class InMemoryMEditClient implements MEditClient {
     this.lateness.note();
     return Promise.resolve();
   }
-  get recordIndexMayBeLate(): boolean { return this.sender.pending() || this.notifications.heardSequence < this.readSequence; }
+  get recordIndexMayBeLate(): boolean {
+    return this.sender.pending() || this.notifications.heardSequence < this.readSequence || this.recordIndexProgress !== undefined;
+  }
+  get recordIndexProgress(): RecordIndexProgress | undefined { return this.loadOrderStatusKept.progress(); }
+  onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
     return this.loadOrderStatusKept.onStatus(listener);
-  }
-  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void {
-    return this.loadOrderStatusKept.onSettled(listener);
   }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
@@ -265,9 +267,6 @@ export class InMemoryMEditClient implements MEditClient {
   loadOrderApplied(): Promise<boolean> { return this.sender.applied(); }
   loadOrdersHanded(): number { return this.sender.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.sender.signalChange(paths); }
-  onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
-    return this.sender.onResent(listener);
-  }
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
 

@@ -5,11 +5,10 @@ type Ask = Pick<MEditClient, 'getPluginSourceNames'>;
 
 /** The record index's names for plugin source, asked only of a file `isPluginSource` says is plugin source, and once
  *  for a place every kind asks of in turn, until the record index changes. */
-export function pluginSourceNames(client: Ask & Pick<MEditClient, 'onNotification'>, isPluginSource: (path: string) => boolean): Ask {
+export function pluginSourceNames(client: Ask & Pick<MEditClient, 'onDidChange'>, isPluginSource: (path: string) => boolean): Ask {
   let last: { text: string; path?: string; at?: number; names: Promise<DocumentName[] | ReadFailed> } | undefined;
   const forget = () => { last = undefined; };
-  client.onNotification('rows-changed', forget);
-  client.onNotification('plugin-changed', forget);
+  client.onDidChange(forget);
   return {
     getPluginSourceNames(text, path, at) {
       if (path !== undefined && !isPluginSource(path)) return Promise.resolve([]);

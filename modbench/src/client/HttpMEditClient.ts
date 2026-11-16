@@ -1,4 +1,4 @@
-import { trackLateness } from './lateness';
+import { trackLateness, trackProgress } from './lateness';
 import type { components } from '../wire/generated/api';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
@@ -12,7 +12,7 @@ import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber, type ListenerThrows } from './notificationStream';
-import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender, type SweepEnd } from './loadOrderSender';
+import { createLoadOrderSender, type LoadOrderSender, type SweepEnd } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import { heldResults, STALE, type HeldAnswer, type HeldResults } from './heldResults';
@@ -25,7 +25,7 @@ import {
   type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
-  type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type ReadCancellation, type RecordIndexChange, type NotificationKind, type NotificationPayloads,
+  type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type ReadCancellation, type RecordIndexChange, type RecordIndexProgress, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
@@ -137,6 +137,7 @@ class HttpMEditClient implements MEditClient {
   private sweepsAwaited = 0;
   private mEditSequence = 0;
   private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
+  private readonly progress = trackProgress(() => this.recordIndexProgress);
 
   constructor(deps: HttpMEditClientDeps) {
     this.leaveWritesUnnamed = deps.leaveWritesUnnamed;
@@ -167,6 +168,7 @@ class HttpMEditClient implements MEditClient {
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
       onReconnected: (listener) => this.notifications.onReconnected(listener),
     });
+    this.loadOrderStatusKept.onStatus(() => { this.lateness.note(); this.progress.note(); });
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
@@ -176,7 +178,6 @@ class HttpMEditClient implements MEditClient {
       put: (snapshot, signal, answered) => this.putLoadOrder(snapshot, signal, answered),
       signalChange: (paths) => this.postSignalChange(paths),
     });
-    announceAfterReopen(this.loadOrder, this.notifications);
     this.changes = keepRecordIndexChanges({
       onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
@@ -230,15 +231,15 @@ class HttpMEditClient implements MEditClient {
   private get behindMEdit(): boolean { return this.notifications.heardSequence < this.mEditSequence; }
 
   get recordIndexMayBeLate(): boolean {
-    return this.loadOrder.pending() || this.handOver.pending() || this.sweepsAwaited > 0 || this.behindMEdit;
+    return this.loadOrder.pending() || this.handOver.pending() || this.sweepsAwaited > 0 || this.behindMEdit || this.recordIndexProgress !== undefined;
   }
+
+  get recordIndexProgress(): RecordIndexProgress | undefined { return this.loadOrderStatusKept.progress(); }
+  onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
     return this.loadOrderStatusKept.onStatus(listener);
-  }
-  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void {
-    return this.loadOrderStatusKept.onSettled(listener);
   }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
@@ -246,9 +247,6 @@ class HttpMEditClient implements MEditClient {
   loadOrderApplied(): Promise<boolean> { return this.loadOrder.applied(); }
   loadOrdersHanded(): number { return this.loadOrder.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.loadOrder.signalChange(paths); }
-  onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
-    return this.loadOrder.onResent(listener);
-  }
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver.hand(documents); }
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }

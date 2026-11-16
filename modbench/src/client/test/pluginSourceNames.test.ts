@@ -38,6 +38,7 @@ describe('asking the record index what plugin source names (target-architecture.
   it.each([
     ['rows-changed'],
     ['plugin-changed'],
+    ['record-index-changed'],
   ])('asks again once the record index tells of %s', async (kind) => {
     const { names, client, asked } = asking();
 

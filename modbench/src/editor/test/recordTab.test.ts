@@ -99,6 +99,14 @@ describe('a record tab going with the record to its new FormKey and reading it t
     expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
   });
 
+  it('reads a tab again when mEdit refuses the load order, which the change event says as everything', () => {
+    const { client, panel } = openOn('000800:Mod.esp');
+
+    client.emit(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false }));
+
+    expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
+  });
+
   it('holds and follows every tab showing the record, for an edit fired with no tab, with one write', async () => {
     const tabs = heard(new InMemoryMEditClient());
     const opened = [showing(tabs, '000800:Mod.esp'), showing(tabs, '000800:Mod.esp'), showing(tabs, '000801:Mod.esp')];

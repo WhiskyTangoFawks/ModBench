@@ -8,7 +8,7 @@ export interface RecordIndexChanges {
 
 export function keepRecordIndexChanges(
   client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
-  loadOrder: Pick<LoadOrderStatusKeeper, 'onSettled'>,
+  loadOrder: Pick<LoadOrderStatusKeeper, 'onChanged'>,
 ): RecordIndexChanges {
   const changes = new EventEmitter<RecordIndexChange>();
   const tell = (change: RecordIndexChange) => { changes.fire(change); };
@@ -17,7 +17,7 @@ export function keepRecordIndexChanges(
   client.onNotification('plugin-changed', ({ plugin }) => { tell([{ plugin }]); });
   client.onNotification('record-index-changed', () => { tell(undefined); });
   client.onNotification('record-filter-cleared', () => { tell(undefined); });
-  loadOrder.onSettled(() => { tell(undefined); });
+  loadOrder.onChanged(() => { tell(undefined); });
   client.onReconnected(() => { tell(undefined); });
   client.onStatusChanged((status) => { if (status === 'running') tell(undefined); });
 
