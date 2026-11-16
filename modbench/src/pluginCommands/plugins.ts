@@ -106,10 +106,10 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginFactsOf> {
 }
 
 /** `client` that answers as an mEdit that cannot until a load order has been put, so it is not asked before. */
-export function askedOnceLoadOrderPut(client: Pick<MEditClient, 'getPlugins' | 'latestLoadOrder'>): PluginMasters {
+export function askedOnceLoadOrderPut(client: Pick<MEditClient, 'getPlugins' | 'loadOrderApplied'>): PluginMasters {
   return {
     getPlugins: async () => {
-      if (await client.latestLoadOrder() === undefined) throw new Error('no load order has been put to mEdit');
+      if (!await client.loadOrderApplied()) throw new Error('no load order has been put to mEdit');
       return client.getPlugins();
     },
   };

@@ -1112,6 +1112,24 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
+  it('says a load order is applied once mEdit has answered the newest sent, not once its sweep has finished', async () => {
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await expect(client.loadOrderApplied()).resolves.toBe(false);
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+
+    const applied = client.loadOrderApplied();
+    answerPut();
+
+    await expect(applied).resolves.toBe(true);
+  });
+
   it.each(readsOverUnsaved)('reads %s once mEdit has answered the load order sent before it, not once its sweep has finished', async (_name, reading, route) => {
     let answerPut!: () => void;
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });

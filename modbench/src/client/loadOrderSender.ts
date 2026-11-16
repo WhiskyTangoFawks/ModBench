@@ -25,8 +25,9 @@ export interface LoadOrderSender {
   /** Settles once the sweep the signal starts is over, at once when mEdit is gone: the signal is then owed. */
   signalChange(paths: readonly string[]): Promise<void>;
   latest(): Promise<LoadOrderOutcome | undefined>;
-  /** Resolves once the newest snapshot handed has been answered, or dropped, ahead of the sweep that follows it. */
-  applied(): Promise<void>;
+  /** Resolves once the newest snapshot handed has been answered, or dropped, ahead of the sweep that follows it. False when
+   *  none was handed. */
+  applied(): Promise<boolean>;
   handed(): number;
   /** Whether a snapshot or a change signal is waiting, in flight or owed. */
   pending(): boolean;
@@ -187,7 +188,7 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
     drop,
     pump,
     abortInFlight: () => { inFlight?.abort(); },
-    applied: async (): Promise<void> => { await ofNewest((handed) => handed.applied); },
+    applied: async (): Promise<boolean> => (await ofNewest(async (handed) => { await handed.applied; return true; })) ?? false,
     latest: (): Promise<LoadOrderOutcome | undefined> => ofNewest((handed) => handed.sent),
   };
 }

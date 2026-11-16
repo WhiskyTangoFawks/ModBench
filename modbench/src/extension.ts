@@ -111,7 +111,7 @@ import type { MoveToTrash } from './ports/trash';
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
+  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'loadOrderApplied' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
   | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
 
 interface ViewsDeps {
@@ -412,7 +412,7 @@ function start(context: vscode.ExtensionContext): void {
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
-  context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), latest: () => meditClient.latestLoadOrder() }));
+  context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), taken: () => meditClient.loadOrderApplied() }));
   context.subscriptions.push(surfaceManagerRunning({ reporter: reporterFor('write'), ...opened.managerRunning }));
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,

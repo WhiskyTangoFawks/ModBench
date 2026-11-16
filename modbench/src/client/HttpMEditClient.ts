@@ -235,6 +235,7 @@ class HttpMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
+  loadOrderApplied(): Promise<boolean> { return this.loadOrder.applied(); }
   loadOrdersHanded(): number { return this.loadOrder.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.loadOrder.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
