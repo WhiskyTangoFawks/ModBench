@@ -1501,14 +1501,46 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(await call(client, 'read_record', { name: 'A.esp' })).toEqual({ isError: true, text: '"A.esp" is not a record.' });
   });
 
-  it('refuses a record no active plugin holds', async () => {
-    const mEdit = new InMemoryMEditClient();
-    mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getPlugins', PLUGINS);
-    mEdit.setQueryAnswer('getComparison', null);
-    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+  describe('a record no active plugin holds', () => {
+    const BIG_ROCKS = { name: 'A.esp', origin: 'Big Rocks' };
+    const OTHER = { name: 'A.esp', origin: 'Other' };
+    const OVERRIDDEN_A = { name: 'A.esp', path: '/m/A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: false };
+    const OTHER_A = { name: 'A.esp', path: '/m2/A.esp', origin: 'Other', line: 1, enabled: true, winning: true };
+    const OTHER_ENABLED = { ...ENABLED, mods: [...ENABLED.mods, { kind: 'mod' as const, name: 'Other', enabled: true }], plugins: [OVERRIDDEN_A, OTHER_A] };
 
-    expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
+    const asked = async (instance: typeof VALUE, owners: Awaited<ReturnType<InMemoryMEditClient['getRecordOwners']>>, document: Awaited<ReturnType<InMemoryMEditClient['getCopyDocument']>> = { kind: 'OwnFile', location: '/s/x.json' }) => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', NPC);
+      mEdit.setQueryAnswer('getPlugins', [{ ...pluginListed('A.esp'), inLoadOrder: false }]);
+      mEdit.setQueryAnswer('getComparison', null);
+      mEdit.setQueryAnswer('getRecordOwners', owners);
+      mEdit.setQueryAnswer('getCopyDocument', document);
+      const { client } = await clientOf(new FakeInstance(instance), mEdit);
+      return call(client, 'read_record', { name: 'SharedNpc' });
+    };
+
+    it.each([
+      ['a disabled holder reads (not active)', VALUE, [BIG_ROCKS], [{ label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' }]],
+      [
+        'each holder reads the status the instance gives it, (overridden) before (not active)', OTHER_ENABLED, [BIG_ROCKS, OTHER],
+        [{ label: '(overridden)', reason: 'The game loads Other’s file instead.' }, undefined],
+      ],
+    ])('lists every holder\'s copy, none winning, keyed by origin and filename: %s', async (_name, instance, owners, statuses) => {
+      const { text } = await asked(instance, owners);
+
+      const copies = z.array(z.object({ plugin: z.object({ name: z.string(), origin: z.string() }), isWinner: z.boolean(), kind: z.string(), status: z.unknown().optional() })).parse(JSON.parse(text));
+      expect(copies.map(({ plugin, isWinner, kind, status }) => ({ plugin, isWinner, kind, status }))).toEqual(
+        owners.map((plugin, n) => ({ plugin, isWinner: false, kind: 'OwnFile', status: statuses[n] })),
+      );
+    });
+
+    it.each([
+      ['no plugin holds it', [], undefined, 'No plugin holds 000800:A.esp.'],
+      ['the record index cannot answer', { failed: 'refused', refusal: 'backend down' } as const, undefined, 'backend down'],
+      ['a holder\'s copy cannot be read', [BIG_ROCKS], null, JSON.stringify([{ plugin: BIG_ROCKS, isWinner: false, reason: 'A.esp (Big Rocks) holds no 000800:A.esp.' }])],
+    ])('refuses when %s', async (_name, owners, document, reason) => {
+      expect(await asked(VALUE, owners, document)).toEqual({ isError: true, text: reason });
+    });
   });
 
   it('lists the places the symbol index gives for the record named, resolved to its FormKey, and what went unread', async () => {

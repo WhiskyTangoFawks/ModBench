@@ -43,7 +43,7 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordOwners' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
   symbols: SymbolIndex;
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
