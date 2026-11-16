@@ -43,8 +43,8 @@ internal sealed class WorkingTreeOverlay
         Written Document, string StoredBody, string Stamp, bool HasSchema, PluginIngest.PreparedRecord? Prepared,
         List<ContainerDocuments.ChildDocument> Embedded);
 
-    /// <summary>Folds re-derived documents into the read model, a byte-equal one converging, and takes out the records of
-    /// <paramref name="gone"/>. A held record keeps its type and its place. Returns every key whose rows moved, and those gained or lost.</summary>
+    /// <summary>Folds re-derived documents into the read model, and takes out the records of
+    /// <paramref name="gone"/>. A held record keeps its type and its place. Returns the keys that moved, and those gained or lost.</summary>
     public (List<string> Moved, List<string> Existence) ProjectDocuments(PluginAddress key, IReadOnlyList<PluginDocument> written, IReadOnlyList<string> gone)
     {
         // The documents' own keys are named whether or not their bytes moved: the caller asked about
