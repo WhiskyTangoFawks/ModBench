@@ -168,7 +168,7 @@ describe('a file rewritten only where it changes', () => {
 
   it('edits again the text another program wrote while an awaiting edit ran, so that write is not lost', async () => {
     await writeFile(path, 'one\n');
-    const edit = vi.fn(async (text: string) => text.toUpperCase());
+    const edit = vi.fn((text: string) => Promise.resolve(text.toUpperCase()));
     edit.mockImplementationOnce(async (text: string) => {
       await writeFile(path, `${text}outside\n`);
       return text.toUpperCase();
