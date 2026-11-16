@@ -6,21 +6,23 @@ import { isReadFailed, type ReadFailed } from '../wire/readFailed';
 interface Answered { plugin: PluginAddress; failure?: string | null; unread: string[] }
 
 interface Reads<Paths extends Answered, Problems> {
-  getPluginFilePaths(plugin?: PluginAddress): Promise<Paths[] | ReadFailed>;
-  getPluginProblems(plugin?: PluginAddress): Promise<Problems[] | ReadFailed>;
-  onDidChange(listener: (change: readonly { readonly plugin: PluginAddress }[] | undefined) => void): { dispose(): void };
+  getPluginFilePaths(plugin?: PluginAddress, token?: undefined, keys?: readonly string[]): Promise<Paths[] | ReadFailed>;
+  getPluginProblems(plugin?: PluginAddress, token?: undefined, keys?: readonly string[]): Promise<Problems[] | ReadFailed>;
+  onDidChange(listener: (change: readonly { readonly plugin: PluginAddress; readonly keys?: readonly string[] }[] | undefined) => void): { dispose(): void };
 }
 
-/** A plugin-changed listener that asks of the one plugin named, or of the whole set when none is. */
-export function askingOnChange(whole: () => void, plugin: (changed: { plugin: PluginAddress }) => void): (event: { plugin?: PluginAddress }) => void {
-  return (event) => { if (event.plugin === undefined) whole(); else plugin({ plugin: event.plugin }); };
+export interface PluginChanged { plugin?: PluginAddress; keys?: readonly string[] }
+
+/** A plugin-changed listener that asks of the one plugin named, with the records the change names, or of the whole set when none is. */
+export function askingOnChange(whole: () => void, plugin: (changed: { plugin: PluginAddress; keys?: readonly string[] }) => void): (event: PluginChanged) => void {
+  return (event) => { if (event.plugin === undefined) whole(); else plugin({ plugin: event.plugin, keys: event.keys }); };
 }
 
 export interface ProblemsAsker<Paths extends Answered, Problems> {
-  getPluginFilePaths: Reads<Paths, Problems>['getPluginFilePaths'];
-  getPluginProblems: Reads<Paths, Problems>['getPluginProblems'];
-  /** Told after the asker dropped what it held of the plugin, or of every plugin when no plugin is named. */
-  onPluginChanged(listener: (event: { plugin?: PluginAddress }) => void): () => void;
+  getPluginFilePaths(plugin?: PluginAddress, keys?: readonly string[]): Promise<Paths[] | ReadFailed>;
+  getPluginProblems(plugin?: PluginAddress, keys?: readonly string[]): Promise<Problems[] | ReadFailed>;
+  /** Told after the asker dropped what it held of the plugin, or of every plugin when no plugin is named; `keys` are the records a change names. */
+  onPluginChanged(listener: (event: PluginChanged) => void): () => void;
   /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
   onAskedAgain(read: Read, listener: (plugin?: PluginAddress) => void): () => void;
   forget(plugin?: PluginAddress): void;
@@ -41,13 +43,13 @@ export function problemsAsker<Paths extends Answered, Problems>(client: Reads<Pa
     held.delete(keyOf(plugin));
   };
 
-  const filePathsOf = (plugin?: PluginAddress): Promise<Paths[] | ReadFailed> => {
+  const filePathsOf = (plugin?: PluginAddress, keys?: readonly string[]): Promise<Paths[] | ReadFailed> => {
     const key = keyOf(plugin);
     const answered = held.get(key);
     if (answered) return answered;
     const whole = held.get(WHOLE_SET);
     if (plugin !== undefined && whole) return whole.then((answer) => (isReadFailed(answer) ? answer : answer.filter((each) => keyOf(each.plugin) === key)));
-    const asked = inTurn(() => client.getPluginFilePaths(plugin));
+    const asked = inTurn(() => client.getPluginFilePaths(plugin, undefined, keys));
     held.set(key, asked);
     retries.watch('getPluginFilePaths', plugin, asked);
     const keepIfComplete = (answer?: Paths[] | ReadFailed) => {
@@ -60,8 +62,8 @@ export function problemsAsker<Paths extends Answered, Problems>(client: Reads<Pa
 
   return {
     getPluginFilePaths: filePathsOf,
-    getPluginProblems: (plugin) => {
-      const asked = inTurn(() => client.getPluginProblems(plugin));
+    getPluginProblems: (plugin, keys) => {
+      const asked = inTurn(() => client.getPluginProblems(plugin, undefined, keys));
       retries.watch('getPluginProblems', plugin, asked);
       return asked;
     },
@@ -70,7 +72,7 @@ export function problemsAsker<Paths extends Answered, Problems>(client: Reads<Pa
     onPluginChanged: (listener) => {
       const subscription = client.onDidChange((change) => {
         if (change === undefined) { forget(); listener({}); return; }
-        for (const { plugin } of change) { forget(plugin); listener({ plugin }); }
+        for (const { plugin, keys } of change) { forget(plugin); listener({ plugin, keys }); }
       });
       return () => { subscription.dispose(); };
     },

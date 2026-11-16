@@ -129,6 +129,35 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
+    public void ARecordWhoseResultTheCallerHolds_AnswersUnchanged_AndLeavesItsProblemsOut()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+        var first = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key).Value());
+        var referrer = Assert.Single(first.Records ?? [], record => record.FormKey == first.Problems[0].FormKey);
+
+        var again = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked(null, [new KnownResult(Entry(plugin).Key, referrer.FormKey, referrer.ResultId)])).Value());
+
+        Assert.Equal((false, true), (referrer.Unchanged, Assert.Single(again.Records ?? [], record => record.FormKey == referrer.FormKey).Unchanged));
+        Assert.Empty(again.Problems);
+    }
+
+    [Fact]
+    public void AskedForRecords_AnswersTheProblemsOfOnlyThose()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+        var named = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key).Value()).Problems[0].FormKey ?? "";
+        var other = "000FFF:Refers.esp";
+
+        var asked = Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked([other], [])).Value());
+
+        Assert.Empty(asked.Problems);
+        Assert.Equal([other], (asked.Records ?? []).Select(record => record.FormKey));
+        Assert.NotEmpty(Assert.Single(index.Queries.GetProblems(Entry(plugin).Key, new RecordsAsked([named], [])).Value()).Problems);
+    }
+
+    [Fact]
     public void GivenAPlugin_OnlyThatPluginIsAnswered()
     {
         var other = new Plugin("Other.esp");

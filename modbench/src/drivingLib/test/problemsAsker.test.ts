@@ -18,12 +18,12 @@ const TIMED_OUT: ReadFailed = { failed: 'timed-out' };
 const turn = () => new Promise<void>((resolve) => { setTimeout(resolve, 0); });
 
 function fakeClient() {
-  const calls: { method: Method; plugin?: PluginAddress }[] = [];
+  const calls: { method: Method; plugin?: PluginAddress; keys?: readonly string[] }[] = [];
   const queued: Record<Method, (() => Promise<Answer>)[]> = { getPluginFilePaths: [], getPluginProblems: [] };
   const standing: Record<Method, Answer> = { getPluginFilePaths: [answerFor(A), answerFor(B)], getPluginProblems: [] };
-  const changed = new Set<(change: readonly { plugin: PluginAddress }[] | undefined) => void>();
-  const read = (method: Method) => (plugin?: PluginAddress): Promise<Answer> => {
-    calls.push({ method, plugin });
+  const changed = new Set<(change: readonly { plugin: PluginAddress; keys?: readonly string[] }[] | undefined) => void>();
+  const read = (method: Method) => (plugin?: PluginAddress, _token?: undefined, keys?: readonly string[]): Promise<Answer> => {
+    calls.push({ method, plugin, keys });
     return queued[method].shift()?.() ?? Promise.resolve(standing[method]);
   };
   const subscribe = <T>(listeners: Set<T>, listener: T) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
@@ -31,7 +31,7 @@ function fakeClient() {
     calls,
     getPluginFilePaths: read('getPluginFilePaths'),
     getPluginProblems: read('getPluginProblems'),
-    onDidChange: (listener: (change: readonly { plugin: PluginAddress }[] | undefined) => void) => ({ dispose: subscribe(changed, listener) }),
+    onDidChange: (listener: (change: readonly { plugin: PluginAddress; keys?: readonly string[] }[] | undefined) => void) => ({ dispose: subscribe(changed, listener) }),
     answerNext: (method: Method, answer: () => Promise<Answer>) => { queued[method].push(answer); },
     answerAlways: (method: Method, answer: Answer) => { standing[method] = answer; },
     gate: (method: Method, count: number, answer: Answer = []) => {
@@ -39,7 +39,8 @@ function fakeClient() {
       release.forEach((each) => queued[method].push(() => new Promise<Answer>((resolve) => { each.now = () => { resolve(answer); }; })));
       return release;
     },
-    pluginChanged: (plugin: PluginAddress) => { for (const listener of changed) listener([{ plugin }]); },
+    pluginChanged: (plugin: PluginAddress, keys?: readonly string[]) => { for (const listener of changed) listener([{ plugin, keys }]); },
+    keysAsked: () => calls.map(({ keys }) => keys),
     everythingChanged: () => { for (const listener of changed) listener(undefined); },
     asked: (method: Method = 'getPluginFilePaths') => calls.filter((call) => call.method === method).map(({ plugin }) => plugin),
   };
@@ -60,6 +61,17 @@ describe('problemsAsker', () => {
     const later = await asker.getPluginFilePaths();
 
     expect([client.asked(), [...answers, later]]).toEqual([[undefined], Array(3).fill([answerFor(A), answerFor(B)])]);
+  });
+
+  it('tells its listener the records a change names, and asks the client of those records alone', async () => {
+    const { client, asker } = started();
+    const heard: (readonly string[] | undefined)[] = [];
+    asker.onPluginChanged(({ plugin, keys }) => { heard.push(keys); void asker.getPluginFilePaths(plugin, keys); });
+
+    client.pluginChanged(A, ['000800:A.esp']);
+    await turn();
+
+    expect([heard, client.keysAsked()]).toEqual([[['000800:A.esp']], [['000800:A.esp']]]);
   });
 
   it('answers a plugin from the whole set it holds', async () => {

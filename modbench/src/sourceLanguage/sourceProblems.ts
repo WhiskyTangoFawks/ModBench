@@ -6,6 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
+import { addNamed, type Named } from '../drivingLib/namedPlugins';
 import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
@@ -61,27 +62,36 @@ interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Un
 const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
 const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
-function placed(answer: PluginProblems[], { sourceFiles }: SourceProblemsDeps): Placed {
-  const unplaced: Unplaced[] = [];
-  const ofPlugin = new Map(answer.map(({ plugin, problems, failure, failureKind }) => {
-    const files = sourceFiles(plugin.origin);
-    const key = pluginAddressKey(plugin);
-    const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
-    if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined || failureKind !== 'LaterRead' });
-    if (files === undefined) return [key, undefined] as const;
-    const contribution: Contribution = { links: new Map(), stops: new Map() };
-    const byPath = new Map<string, SourceProblem[]>();
-    for (const problem of problems) {
-      const path = files.file(problem.sourceRelativePath);
-      byPath.set(path, [...(byPath.get(path) ?? []), problem]);
-    }
-    for (const [path, onPath] of byPath) {
-      contribution.links.set(path, onPath.filter(isLink).map((problem) => onFile(plugin, problem)));
-      contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onFile(plugin, problem)));
-    }
-    return [key, contribution] as const;
-  }));
-  return { ofPlugin, unplaced };
+// An answer mEdit gave again as it was, the same object, places as it did.
+const placedBefore = new WeakMap<PluginProblems, readonly [string, Contribution | undefined, Unplaced?]>();
+
+function placedPlugin(answer: PluginProblems, { sourceFiles }: SourceProblemsDeps): readonly [string, Contribution | undefined, Unplaced?] {
+  const before = placedBefore.get(answer);
+  if (before) return before;
+  const { plugin, problems, failure, failureKind } = answer;
+  const files = sourceFiles(plugin.origin);
+  const key = pluginAddressKey(plugin);
+  const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
+  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined || failureKind !== 'LaterRead' };
+  if (files === undefined) return [key, undefined, unplaced];
+  const contribution: Contribution = { links: new Map(), stops: new Map() };
+  const byPath = new Map<string, SourceProblem[]>();
+  for (const problem of problems) {
+    const path = files.file(problem.sourceRelativePath);
+    byPath.set(path, [...(byPath.get(path) ?? []), problem]);
+  }
+  for (const [path, onPath] of byPath) {
+    contribution.links.set(path, onPath.filter(isLink).map((problem) => onFile(plugin, problem)));
+    contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onFile(plugin, problem)));
+  }
+  const placed = [key, contribution, unplaced] as const;
+  placedBefore.set(answer, placed);
+  return placed;
+}
+
+function placed(answer: PluginProblems[], deps: SourceProblemsDeps): Placed {
+  const each = answer.map((one) => placedPlugin(one, deps));
+  return { ofPlugin: new Map(each.map(([key, contribution]) => [key, contribution])), unplaced: each.flatMap(([, , unplaced]) => unplaced ?? []) };
 }
 
 function onEveryFile(contributions: Contribution[]): ProblemsByFile {
@@ -112,6 +122,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   const tellUnplaced = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
   let unplacedHeld = new Map<string, Unplaced>();
+  let published = false;
   const failures = new Map<string, string>();
   let handOverFailed: string | undefined;
   const showStatus = () => {
@@ -134,9 +145,10 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     : undefined;
   const settle = (target: string, { ofPlugin, unplaced }: Placed) => {
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
+    const before = held;
     held = new Map([...outsideTarget(held, target), ...nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)))]);
     unplacedHeld = new Map([...outsideTarget(unplacedHeld, target), ...unplaced.map((one) => [one.key, one] as const)]);
-    publish(onEveryFile([...held.values()]));
+    if (!published || held.size !== before.size || [...held].some(([key, contribution]) => before.get(key) !== contribution)) { published = true; publish(onEveryFile([...held.values()])); }
     showStatus();
     tellUnplaced([...unplacedHeld.values()].filter(({ told }) => told));
   };
@@ -146,10 +158,10 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     failures.set(target, why);
     showStatus();
   };
-  const ask = async (plugin?: PluginAddress, first = false) => {
+  const ask = async (plugin?: PluginAddress, first = false, keys?: readonly string[]) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
-      const answer = placed(answerOf(await deps.ask.getPluginProblems(plugin)), deps);
+      const answer = placed(answerOf(await deps.ask.getPluginProblems(plugin, keys)), deps);
       settle(target, answer);
     } catch (error) {
       if (!first) keepLastAnswer(target, error);
@@ -157,16 +169,16 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   };
   let wholeWanted = true;
   let atSubscribe = true;
-  const asking = new Map<string, PluginAddress>();
+  const asking = new Map<string, Named>();
   const asks = settling();
   const askWanted = asks.asking(async () => {
     const [whole, first, named] = [wholeWanted, atSubscribe, [...asking.values()]];
     [wholeWanted, atSubscribe] = [false, false];
     asking.clear();
-    await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
+    await Promise.all(whole ? [ask(undefined, first)] : named.map(({ plugin, keys }) => ask(plugin, false, keys && [...keys])));
   });
-  const askPlugin = (plugin: PluginAddress) => {
-    asking.set(pluginAddressKey(plugin), plugin);
+  const askPlugin = (plugin: PluginAddress, keys?: readonly string[]) => {
+    addNamed(asking, plugin, keys);
     askWanted();
   };
   const whenNotLate = askingWhenNotLate(client, askPlugin);

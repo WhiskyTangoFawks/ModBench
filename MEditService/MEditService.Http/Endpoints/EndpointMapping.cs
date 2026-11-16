@@ -1,7 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography;
-using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
@@ -9,9 +7,6 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
-using Microsoft.AspNetCore.Http.Json;
-using Microsoft.Extensions.Options;
-using Microsoft.Net.Http.Headers;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
@@ -188,28 +183,6 @@ internal static class EndpointMapping
     }
 
     internal static IResult Ok<T>(Answer<T, IndexRefused> answer) => Answered(answer, Results.Ok);
-
-    /// <summary>Ok, tagged by its content: asked again with the tag of the answer the caller holds, it answers 304 with no body.</summary>
-    internal static IResult OkUnlessHeld<T>(Answer<T, IndexRefused> answer) => Answered(answer, value => new Tagged<T>(value));
-
-    private sealed class Tagged<T>(T value) : IResult
-    {
-        public Task ExecuteAsync(HttpContext httpContext)
-        {
-            var options = httpContext.RequestServices.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
-            var body = JsonSerializer.SerializeToUtf8Bytes(value, options);
-            var tag = new EntityTagHeaderValue($"\"{Convert.ToHexString(SHA256.HashData(body))}\"");
-            var response = httpContext.Response;
-            response.Headers.ETag = tag.ToString();
-            if (httpContext.Request.GetTypedHeaders().IfNoneMatch.Any(held => held.Compare(tag, useStrongComparison: true)))
-            {
-                response.StatusCode = StatusCodes.Status304NotModified;
-                return Task.CompletedTask;
-            }
-            response.ContentType = "application/json; charset=utf-8";
-            return response.Body.WriteAsync(body).AsTask();
-        }
-    }
 
     internal static IResult Answered<T>(Answer<T, IndexRefused> answer, Func<T, IResult> onAnswered) =>
         answer.Holds(out var value, out var refused) ? onAnswered(value) : Refusal(refused);

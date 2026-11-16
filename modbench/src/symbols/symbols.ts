@@ -95,7 +95,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     script: scriptLanguage({ instance, names, client, reporter }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
-  const changed = (listener: (plugin?: PluginAddress) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
+  const changed = (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
   const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
     plugin, entry, names, client, plugins: () => instance?.value.plugins ?? [],

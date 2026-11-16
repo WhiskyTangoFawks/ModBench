@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -23,7 +21,7 @@ public sealed class PluginFilePathsApiTests : HostedTests
         await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
 
-        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugins/file-paths?plugin={Plugin}&origin={Origin}");
+        var answer = await Client.Asked($"/plugins/file-paths?plugin={Plugin}&origin={Origin}");
 
         var plugin = Assert.Single(answer.EnumerateArray());
         Assert.Equal((Plugin, Origin), (plugin.GetProperty("plugin").GetProperty("name").GetString(), plugin.GetProperty("plugin").GetProperty("origin").GetString()));
@@ -34,9 +32,17 @@ public sealed class PluginFilePathsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetPluginFilePaths_AskedWithTheTagOfItsLastAnswer_AnswersNotModified_UntilTheAnswerChanges()
+    public async Task GetPluginFilePaths_AskedWithKeysAndNoPlugin_ReturnsBadRequest()
     {
-        var fx = Owned(new PluginFixtureBuilder("api-plugin-file-paths-tag")
+        var response = await Client.PostAsked("/plugins/file-paths", keys: ["000800:Names.esp"]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetPluginFilePaths_AskedWithTheResultIdsItHolds_AnswersEachRecordUnchanged()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-plugin-file-paths-known")
             .WithPlugin(Plugin, mod => mod.TextureSets.AddNew("Holder").Diffuse = @"Decals\Stain_d.dds", origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -44,20 +50,19 @@ public sealed class PluginFilePathsApiTests : HostedTests
         await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var url = $"/plugins/file-paths?plugin={Plugin}&origin={Origin}";
-        var tag = (await Client.GetAsync(url)).Headers.ETag.Require();
+        var record = Assert.Single((await Client.Asked(url))[0].GetProperty("records").EnumerateArray());
+        var known = new object[] { new { plugin = new { name = Plugin, origin = Origin }, formKey = record.GetProperty("formKey").GetString(), resultId = record.GetProperty("resultId").GetString() } };
 
-        var again = await Client.GetHolding(url, tag);
-        var other = await Client.GetHolding(url, new System.Net.Http.Headers.EntityTagHeaderValue("\"stale\""));
+        var again = (await Client.Asked(url, known: known))[0];
 
-        Assert.Equal(HttpStatusCode.NotModified, again.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
-        Assert.Equal(tag, other.Headers.ETag);
+        Assert.True(Assert.Single(again.GetProperty("records").EnumerateArray()).GetProperty("unchanged").GetBoolean());
+        Assert.Empty(again.GetProperty("paths").EnumerateArray());
     }
 
     [Fact]
     public async Task GetPluginFilePaths_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
     {
-        var response = await Client.GetAsync($"/plugins/file-paths?plugin={Plugin}");
+        var response = await Client.PostAsked($"/plugins/file-paths?plugin={Plugin}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

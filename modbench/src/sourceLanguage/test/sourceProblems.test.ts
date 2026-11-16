@@ -52,10 +52,9 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
     unsavedStatus: (text) => unsaved.push(text),
   });
   const answered = async (answer: PluginProblems[], event?: NotificationEvent): Promise<ProblemsByFile> => {
-    const before = published.length;
-    client.setQueryAnswer('getPluginProblems', answer);
+    client.setQueryAnswer('getPluginProblems', answer.map((each) => ({ ...each })));
     if (event) client.emit(event); else reconciledAgain(client);
-    await vi.waitFor(() => { expect(published.length).toBeGreaterThan(before); });
+    await settled();
     return published[published.length - 1] ?? new Map();
   };
   return { client, reporter, published, status, unsaved, answered, settled };
@@ -153,6 +152,29 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1, 0]); });
   });
 
+  it('asks only for the records a notification names', async () => {
+    const { client, published, settled } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [] }]);
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+
+    client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+    await settled();
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args[2])).toEqual([undefined, [REFERRER]]);
+  });
+
+  it('publishes nothing again when mEdit answers a plugin as it was', async () => {
+    const same = [{ plugin: PLUGIN, problems: [problem()] }];
+    const { client, published, settled } = feed(sourceFolders, same);
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+
+    client.setQueryAnswer('getPluginProblems', same);
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await settled();
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
+    expect(published).toHaveLength(1);
+  });
+
   it('says nothing when mEdit cannot answer at subscribe, and asks nothing on a save until the record index is ready', async () => {
     const refused = Promise.reject(new Error('mEdit is down.'));
     const { client, reporter, answered } = feed(sourceFolders, refused);
@@ -185,7 +207,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
     const shown = await answered([{ plugin: PLUGIN, problems: [] }], { kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
-    expect([[...shown.keys()], client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args).at(-1)])
+    expect([[...shown.keys()], client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args.slice(0, 1)).at(-1)])
       .toEqual([['/source/OtherMod/Other.esp/Npc.json'], [PLUGIN]]);
   });
 
@@ -202,7 +224,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     const { client, answered } = feed();
     await answered([]);
 
-    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args).at(-1)).toEqual([undefined]);
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args.slice(0, 1)).at(-1)).toEqual([undefined]);
   });
 
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {

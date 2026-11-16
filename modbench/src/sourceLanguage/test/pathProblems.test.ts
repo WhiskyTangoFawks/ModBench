@@ -45,7 +45,7 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
   return { client, reporter, published, status, latest, settled, instanceChanged: () => { for (const listener of listeners) listener(); } };
 }
 
-const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args);
+const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args.slice(0, 1));
 
 afterEach(() => { vi.useRealTimers(); });
 
@@ -246,6 +246,18 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
 
     expect(reads).toEqual([FILE]);
+  });
+
+  it('asks only for the records a notification names, and for the whole plugin when it names none', async () => {
+    const { settled, client } = feed([answerFor()]);
+    await settled(1);
+
+    client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [HOLDER], sequence: 1 });
+    await vi.waitFor(() => { expect(client.calls.filter((call) => call.method === 'getPluginFilePaths')).toHaveLength(2); });
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+    await vi.waitFor(() => { expect(client.calls.filter((call) => call.method === 'getPluginFilePaths')).toHaveLength(3); });
+
+    expect(client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args[2])).toEqual([undefined, [HOLDER], undefined]);
   });
 
   it('reads no file and publishes nothing again when mEdit answers a plugin as it was', async () => {

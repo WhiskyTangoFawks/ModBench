@@ -70,6 +70,47 @@ public sealed class PluginFilePathsTests : IDisposable
     }
 
     [Fact]
+    public void ARecordWhoseResultTheCallerHolds_AnswersUnchanged_AndLeavesItsRowsOut()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var first = Assert.Single(index.Queries.GetFilePaths(Compiled).Value());
+        var holder = Assert.Single(first.Records ?? [], record => record.FormKey == _holder.ToString());
+        var held = new RecordsAsked(null, [new KnownResult(Compiled, holder.FormKey, holder.ResultId)]);
+
+        var again = Assert.Single(index.Queries.GetFilePaths(Compiled, held).Value());
+
+        Assert.Equal((false, true), (holder.Unchanged, Assert.Single(again.Records ?? [], record => record.FormKey == holder.FormKey).Unchanged));
+        Assert.Empty(again.Paths);
+    }
+
+    [Fact]
+    public void ARecordWhoseResultTheCallerHoldsAnotherOf_AnswersFull()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var held = new RecordsAsked(null, [new KnownResult(Compiled, _holder.ToString(), "stale")]);
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(Compiled, held).Value());
+
+        Assert.False(Assert.Single(answered.Records ?? [], record => record.FormKey == _holder.ToString()).Unchanged);
+        Assert.Single(answered.Paths);
+    }
+
+    [Fact]
+    public void AskedForRecords_AnswersOnlyThose_AndAnEmptyResultForOneThatNamesNothing()
+    {
+        Build(compiled: true, Compiled);
+        using var index = Indexes.Reconciled(Fixture);
+        var other = FormKey.Factory("000FFF:Holding.esp").ToString();
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(Compiled, new RecordsAsked([other], [])).Value());
+
+        Assert.Empty(answered.Paths);
+        Assert.Equal([other], (answered.Records ?? []).Select(record => record.FormKey));
+    }
+
+    [Fact]
     public void ACompiledPlugin_AnswersEachScriptItsSourceAttaches_OnTheFileThatHoldsTheRecord()
     {
         FormKey attaching = default;

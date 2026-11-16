@@ -321,9 +321,10 @@ export interface MEditClient {
   getDiagnoses(token?: ReadCancellation): Promise<PluginDiagnosisReport[] | ReadFailed>;
   getPluginIndexing(plugin: PluginAddress, token?: ReadCancellation): Promise<PluginIndexedState | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
-  getPluginProblems(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginProblems[] | ReadFailed>;
+  // Named `keys`, only those records are asked of; an answer that changes nothing is the answer last given, the same object.
+  getPluginProblems(plugin?: PluginAddress, token?: ReadCancellation, keys?: readonly string[]): Promise<PluginProblems[] | ReadFailed>;
   /** The file paths each compiled plugin's source names, or only `plugin`'s. */
-  getPluginFilePaths(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginFilePaths[] | ReadFailed>;
+  getPluginFilePaths(plugin?: PluginAddress, token?: ReadCancellation, keys?: readonly string[]): Promise<PluginFilePaths[] | ReadFailed>;
   getRecordTypes(plugin: PluginAddress, token?: ReadCancellation): Promise<PluginRecordTypeCount[] | ReadFailed>;
   getWorkingTreeStatesBeneath(plugin: PluginAddress, token?: ReadCancellation): Promise<WorkingTreeStatesBeneath | ReadFailed>;
   // The game's, not a plugin's: every plugin of the load order shares it.

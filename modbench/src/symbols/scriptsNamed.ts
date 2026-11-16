@@ -4,19 +4,25 @@ import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey, pluginRowName } from '../wire/pluginAddress';
 import { failureReason, isNotYetAnswerable, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
+export interface FilePathsAsked { getPluginFilePaths(plugin?: PluginAddress, keys?: readonly string[]): ReturnType<MEditClient['getPluginFilePaths']> }
+
 interface ScriptsNamedDeps {
-  paths: Pick<MEditClient, 'getPluginFilePaths'>;
+  paths: FilePathsAsked;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
 type NamedInFile = { file: string; name: string };
+/** A plugin to ask of, with the records a change names. */
+export type NamedPlugin = PluginAddress & { keys?: readonly string[] };
 type Answered = Extract<Awaited<ReturnType<MEditClient['getPluginFilePaths']>>, unknown[]>;
 
 /** Each script every compiled plugin's source names, with its file; `only` asks of those plugins, and none of `[]`.
  *  Undefined while the record index cannot answer yet. A plugin whose answer failed keeps what it last held. */
-export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps): (only?: readonly PluginAddress[]) => Promise<NamedInFile[] | undefined> {
+export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps): (only?: readonly NamedPlugin[]) => Promise<NamedInFile[] | undefined> {
   const held = new Map<string, NamedInFile[]>();
+  // An answer mEdit gave again as it was, the same object, names the same scripts.
+  const namedBy = new WeakMap<object, NamedInFile[]>();
   let told = '';
 
   const tellUnread = (answers: Answered) => {
@@ -25,19 +31,23 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
     told = why;
   };
 
-  const take = (answers: Answered, only: readonly PluginAddress[] | undefined) => {
+  const take = (answers: Answered, only: readonly NamedPlugin[] | undefined) => {
     for (const key of [...held.keys()]) {
       const asked = only === undefined || only.some((plugin) => pluginAddressKey(plugin) === key);
       if (asked && !answers.some(({ plugin }) => pluginAddressKey(plugin) === key)) held.delete(key);
     }
-    for (const { plugin, scripts, failure } of answers) {
+    for (const answer of answers) {
+      const { plugin, scripts, failure } = answer;
       const files = sourceFiles(plugin.origin);
-      if (failure == null) held.set(pluginAddressKey(plugin), files === undefined ? [] : scripts.map(({ name, sourceRelativePath }) => ({ file: files.file(sourceRelativePath), name })));
+      if (failure != null) continue;
+      const named = namedBy.get(answer) ?? (files === undefined ? [] : scripts.map(({ name, sourceRelativePath }) => ({ file: files.file(sourceRelativePath), name })));
+      if (files !== undefined) namedBy.set(answer, named);
+      held.set(pluginAddressKey(plugin), named);
     }
   };
 
   return async (only) => {
-    const asked = await Promise.all(only === undefined ? [paths.getPluginFilePaths()] : only.map((plugin) => paths.getPluginFilePaths(plugin)));
+    const asked = await Promise.all(only === undefined ? [paths.getPluginFilePaths()] : only.map(({ keys, ...plugin }) => paths.getPluginFilePaths(plugin, keys)));
     const failed = asked.find(isReadFailed);
     if (failed !== undefined) {
       if (isNotYetAnswerable(failed)) return undefined;

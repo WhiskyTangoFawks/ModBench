@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -30,15 +29,11 @@ public sealed class PluginProblemsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetProblems_AskedWithTheTagOfItsLastAnswer_AnswersNotModified()
+    public async Task GetProblems_AskedWithKeysAndNoPlugin_ReturnsBadRequest()
     {
-        await CompiledPluginLoad();
-        var url = $"/plugins/problems?plugin={Plugin}&origin={Origin}";
-        var tag = (await Client.GetAsync(url)).Headers.ETag.Require();
+        var response = await Client.PostAsked("/plugins/problems", keys: ["000800:Refers.esp"]);
 
-        var again = await Client.GetHolding(url, tag);
-
-        Assert.Equal(HttpStatusCode.NotModified, again.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -47,7 +42,7 @@ public sealed class PluginProblemsApiTests : HostedTests
         var fx = await CompiledPluginLoad();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Name == Plugin).Path).Require();
 
-        var answer = await Client.GetFromJsonAsync<JsonElement>("/plugins/problems");
+        var answer = await Client.Asked("/plugins/problems");
 
         var plugin = Assert.Single(answer.EnumerateArray());
         Assert.Equal((Plugin, Origin), (plugin.GetProperty("plugin").GetProperty("name").GetString(), plugin.GetProperty("plugin").GetProperty("origin").GetString()));
@@ -65,7 +60,7 @@ public sealed class PluginProblemsApiTests : HostedTests
     {
         await CompiledPluginLoad();
 
-        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugins/problems?plugin={Plugin}&origin=AnotherMod");
+        var answer = await Client.Asked($"/plugins/problems?plugin={Plugin}&origin=AnotherMod");
 
         Assert.Empty(answer.EnumerateArray());
     }
@@ -73,7 +68,7 @@ public sealed class PluginProblemsApiTests : HostedTests
     [Fact]
     public async Task GetProblems_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
     {
-        var response = await Client.GetAsync($"/plugins/problems?plugin={Plugin}");
+        var response = await Client.PostAsked($"/plugins/problems?plugin={Plugin}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

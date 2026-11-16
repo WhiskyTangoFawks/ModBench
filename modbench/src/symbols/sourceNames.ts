@@ -4,13 +4,13 @@ import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Reporter } from '../ports/reporter';
 import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
 import { answerOf, failureReason, isReadFailed } from '../wire/readFailed';
-import { scriptsNamed } from './scriptsNamed';
+import { scriptsNamed, type FilePathsAsked } from './scriptsNamed';
 
 interface SourceNamesDeps {
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   /** What mEdit's record index names across every compiled plugin's source. */
-  paths: Pick<MEditClient, 'getPluginFilePaths'>;
+  paths: FilePathsAsked;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }

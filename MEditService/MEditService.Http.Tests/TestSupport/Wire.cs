@@ -11,11 +11,15 @@ internal static class Wire
     // How long a client waits for anything the service does on a thread of its own.
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
-    /// <summary>A GET that says it holds the answer tagged <paramref name="tag"/> (If-None-Match).</summary>
-    internal static async Task<HttpResponseMessage> GetHolding(this HttpClient client, string url, System.Net.Http.Headers.EntityTagHeaderValue tag)
+    /// <summary>The records of a plugin's problems or file paths, as Modbench asks them: the keys asked, and the results it holds.</summary>
+    internal static Task<HttpResponseMessage> PostAsked(this HttpClient client, string url, string[]? keys = null, object[]? known = null) =>
+        client.PostAsJsonAsync(url, new { keys, known = known ?? [] });
+
+    internal static async Task<JsonElement> Asked(this HttpClient client, string url, string[]? keys = null, object[]? known = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url) { Headers = { IfNoneMatch = { tag } } };
-        return await client.SendAsync(request);
+        var response = await client.PostAsked(url, keys, known);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     internal static Task<HttpResponseMessage> PutLoadOrder(

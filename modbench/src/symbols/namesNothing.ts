@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
+import { addNamed, type Named } from '../drivingLib/namedPlugins';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InTurn } from '../ports/bounded';
 import { coalesced } from '../ports/coalesced';
@@ -9,6 +10,7 @@ import { placeIn } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { inOrder, type NamesNothing, type SymbolKinds } from './symbolKind';
+import type { NamedPlugin } from './scriptsNamed';
 
 interface NamesNothingDeps {
   kinds: SymbolKinds;
@@ -17,7 +19,7 @@ interface NamesNothingDeps {
   /** The text of a file on disk, which no document opens; undefined where it is gone. */
   savedText: (path: string) => Promise<string | undefined>;
   /** Told whenever what a name resolves to, or what a file names, may have changed: of one plugin's files, or of all. */
-  onChanged: (listener: (plugin?: PluginAddress) => void) => { dispose: () => unknown };
+  onChanged: (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => { dispose: () => unknown };
   /** The one bound on requests, and what it holds of mEdit's answers, dropped whenever a file may have changed. */
   asker: { inTurn: InTurn; forget: (plugin?: PluginAddress) => void };
 }
@@ -79,7 +81,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
   };
 
   // Undefined where any kind cannot answer: what is shown then stays.
-  const filesHolding = async (only: readonly PluginAddress[] | undefined): Promise<string[] | undefined> => {
+  const filesHolding = async (only: readonly NamedPlugin[] | undefined): Promise<string[] | undefined> => {
     const lists = await Promise.all(inOrder(kinds).map(async (kind) => {
       try {
         return kind.filesNamingNothing === undefined ? [] : await kind.filesNamingNothing(only);
@@ -95,9 +97,9 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
   };
 
   let wholeWanted = true;
-  const asking = new Map<string, PluginAddress>();
+  const asking = new Map<string, Named>();
   const judgeAll = coalesced(async () => {
-    const only = wholeWanted ? undefined : [...asking.values()];
+    const only = wholeWanted ? undefined : [...asking.values()].map(({ plugin, keys }) => ({ ...plugin, keys: keys && [...keys] }));
     wholeWanted = false;
     asking.clear();
     const held = vscode.workspace.textDocuments.filter(isFile);
@@ -110,7 +112,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     ]);
     if (files === undefined) {
       if (only === undefined) wholeWanted = true;
-      for (const plugin of only ?? []) asking.set(pluginAddressKey(plugin), plugin);
+      for (const { keys, ...plugin } of only ?? []) addNamed(asking, plugin, keys);
       shown = new Set([...shown, ...judging]);
       return;
     }
@@ -122,9 +124,9 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
 
   judgeAll();
   return vscode.Disposable.from(
-    onChanged((plugin) => {
+    onChanged((plugin, keys) => {
       if (plugin === undefined) wholeWanted = true;
-      else asking.set(pluginAddressKey(plugin), plugin);
+      else addNamed(asking, plugin, keys);
       judgeAll();
     }),
     vscode.workspace.onDidOpenTextDocument(open.judge),

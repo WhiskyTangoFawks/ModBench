@@ -396,10 +396,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's. Tagged: asked with If-None-Match holding the tag of the answer the caller holds, an unchanged answer is 304. */
-        get: operations["GetPluginProblems"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's, and given keys, only those records'. Each record answers its result id, and answers unchanged, leaving its rows out, when the known result id of it is the same. */
+        post: operations["GetPluginProblems"];
         delete?: never;
         options?: never;
         head?: never;
@@ -413,10 +413,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready. Tagged: asked with If-None-Match holding the tag of the answer the caller holds, an unchanged answer is 304. */
-        get: operations["GetPluginFilePaths"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Given plugin and origin, only that plugin's, and given keys, only those records'. Each record answers its result id, and answers unchanged, leaving its rows out, when the known result id of it is the same. Answers only once the record index is ready. */
+        post: operations["GetPluginFilePaths"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1670,6 +1670,11 @@ export interface components {
             cells: components["schemas"]["CellSummary"][];
             hasParseFailure: boolean;
         };
+        KnownResult: {
+            plugin: components["schemas"]["PluginAddress"];
+            formKey: string;
+            resultId: string;
+        };
         LoadOrderPlugin: {
             name: string;
             path: string;
@@ -1840,6 +1845,7 @@ export interface components {
             unread: string[];
             failure?: string | null;
             failureKind?: components["schemas"]["ProblemsFailureKind"] | null;
+            records?: components["schemas"]["RecordResult"][] | null;
         };
         PluginIndexedState: {
             state: components["schemas"]["PluginIndexing"];
@@ -1863,6 +1869,7 @@ export interface components {
             problems: components["schemas"]["SourceProblem"][];
             failure?: string | null;
             failureKind?: components["schemas"]["ProblemsFailureKind"] | null;
+            records?: components["schemas"]["RecordResult"][] | null;
         };
         /** @enum {string} */
         PluginProviderKind: "Mod" | "Game" | "None";
@@ -1998,6 +2005,12 @@ export interface components {
             source: string;
             reason: string;
         };
+        RecordResult: {
+            formKey: string;
+            resultId: string;
+            unchanged: boolean;
+            unread: string[];
+        };
         RecordSummary: {
             formKey: string;
             plugin: string;
@@ -2023,6 +2036,10 @@ export interface components {
         };
         RecordWritten: {
             formKey: string;
+        };
+        RecordsAsked: {
+            keys?: string[] | null;
+            known: components["schemas"]["KnownResult"][];
         };
         ReferenceResult: {
             formKey: string;
@@ -3169,7 +3186,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordsAsked"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3179,13 +3200,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PluginProblems"][];
                 };
-            };
-            /** @description Not Modified */
-            304: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Bad Request */
             400: {
@@ -3217,7 +3231,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordsAsked"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3227,13 +3245,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PluginFilePaths"][];
                 };
-            };
-            /** @description Not Modified */
-            304: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Bad Request */
             400: {
