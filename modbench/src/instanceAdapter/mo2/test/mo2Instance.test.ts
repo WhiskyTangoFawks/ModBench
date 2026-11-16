@@ -8,7 +8,7 @@ import { ignoreLink } from '../../gameFolder/ownEntries';
 import {
   access, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
-import type { PathLike } from 'node:fs';
+import { appendFileSync, type PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { eventually, writtenAndHeard } from '../../../test/eventually';
@@ -60,7 +60,7 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 import { runningProgram } from '../../../test/runningProgram';
 import { hostWithoutGit } from '../../../test/hostGitDouble';
 import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
-import { adapterOver, contextOver, managerOver, sourceOver } from '../../../test/mo2/adapterOver';
+import { adapterOver, contextOver, managerOver, sourceOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
@@ -1131,8 +1131,8 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('where the user excludes folders from VS Code\'s watch (files.watcherExclude)', () => {
-      const excludingOver = (exclude: WatcherExclude): ReturnType<typeof watchedOver> => {
-        const context = contextOver(root);
+      const excludingOver = (exclude: WatcherExclude, answers: AdapterAnswers = {}): ReturnType<typeof watchedOver> => {
+        const context = contextOver(root, answers);
         return watchedOver({ ...context, watch: mo2Watch(root, () => ({ dispose: () => {} }), context.repository.changed, exclude) });
       };
       const wholeBelow = (): string[] => live().filter((w) => recursive(w.pattern)).map((w) => relativeFrom(root, w.base).split(sep).join('/')).sort();
@@ -1172,6 +1172,21 @@ describe('the MO2 Instance adapter', () => {
         expect(named(watched).sort((a, b) => a.folder.localeCompare(b.folder))).toEqual([
           { folder: 'mods/Harder VATS', reason: EXCLUDED }, { folder: 'overwrite', reason: EXCLUDED },
         ]);
+      });
+
+      it('names the game folder\'s Data folder where it is excluded, and watches its first level', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-data-'));
+        try {
+          await mkdir(join(game, 'Data'));
+          const watched = excludingOver(watcherExcluding({ '**/Data/**': true }), { gameFolderSettingValue: game });
+          watched.subscribe(() => undefined);
+          await (await watched.settings()).gameFolder();
+
+          expect(watched.unwatchedFolders()).toEqual([{ folder: join(game, 'Data'), reason: EXCLUDED }]);
+          expect(live().filter((w) => w.base === join(game, 'Data')).map((w) => w.pattern)).toEqual([FIRST_LEVEL]);
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
       });
 
       it('names the folder holding files the user excluded, with the pattern, once for each pattern however many mods hold them', async () => {
@@ -3060,6 +3075,21 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
+    it('lands its change on the order an outside write left, not over it', async () => {
+      const file = join(root, DEFAULT_MODLIST);
+      const decide = vi.fn(() => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }] satisfies ModOrderChange[]);
+      decide.mockImplementationOnce(() => {
+        appendFileSync(file, '-Outside Mod\n');
+        return [{ kind: 'enable', mod: 'Harder VATS', enabled: true }];
+      });
+      const before = modNames(await source.modOrder('Default'));
+
+      await adapter.changeModOrder('Default', decide);
+
+      expect(modNames(await source.modOrder('Default'))).toEqual([...before.map((name) => (name === 'mod:Harder VATS:false' ? 'mod:Harder VATS:true' : name)), 'mod:Outside Mod:false']);
+      expect(decide).toHaveBeenCalledTimes(2);
+    });
+
     it('adds a separator with its folder', async () => {
       await change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
@@ -3361,6 +3391,19 @@ describe('the MO2 Instance adapter', () => {
     it('writes no loadorder.txt when plugin order is unchanged', async () => {
       await change([{ kind: 'enable', plugin: 'Patch Mod.esp', enabled: true }]);
 
+      await expect(text(root, DEFAULT_LOAD_ORDER)).rejects.toThrow(/ENOENT/);
+    });
+
+    it('writes no loadorder.txt from a first pass that an outside write to plugins.txt made unneeded', async () => {
+      const decide = vi.fn(() => [{ kind: 'add', plugin: 'New.esp' }] satisfies PluginOrderChange[]);
+      decide.mockImplementationOnce(() => {
+        appendFileSync(join(root, DEFAULT_PLUGINS), '*New.esp\r\n');
+        return [{ kind: 'add', plugin: 'New.esp' }];
+      });
+
+      await expect(adapter.changePluginOrder('Default', decide)).resolves.toEqual({ wrote: false });
+
+      expect(decide).toHaveBeenCalledTimes(2);
       await expect(text(root, DEFAULT_LOAD_ORDER)).rejects.toThrow(/ENOENT/);
     });
 

@@ -337,7 +337,7 @@ export interface ModFolders {
 }
 
 /** Decides the changes to mod order from the order, and the mod folders, as they stand when the
- *  changes land; `folders` is undefined when there is no folder for mods at all. */
+ *  changes land; `folders` is undefined when there is no folder for mods at all. May run again. */
 export type DecideModOrder = (order: readonly ModlistEntry[], folders: ModFolders | undefined) => readonly ModOrderChange[];
 
 /** Decides the changes to plugin order from the order as it stands when the changes land. */

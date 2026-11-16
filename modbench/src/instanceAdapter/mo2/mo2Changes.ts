@@ -131,11 +131,15 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
   // changed plugins.txt brings loadorder.txt with it.
   function putPluginOrder(profile: string, edit: (before: string) => string | Promise<string>): Promise<{ wrote: boolean }> {
     const [loadOrder, plugins] = pluginOrderFiles(instanceRoot, profile);
-    return withLock(loadOrder, () => putIfChanged(plugins, async (before) => {
-      const after = await edit(before);
-      if (after !== before) await write(loadOrder, loadOrderTextOf(after));
-      return after;
-    }));
+    return withLock(loadOrder, async () => {
+      let after = '';
+      const put = await putIfChanged(plugins, async (before) => {
+        after = await edit(before);
+        return after;
+      });
+      if (put.wrote) await write(loadOrder, loadOrderTextOf(after));
+      return put;
+    });
   }
 
   return {
