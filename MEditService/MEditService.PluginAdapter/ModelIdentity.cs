@@ -191,9 +191,8 @@ internal static class ModelIdentity
         }
     }
 
-    // A plugin name is the same name in any case: the game and Mutagen's ModKey match it so. Only a string
-    // already spelled as Mutagen writes a FormKey is one: the parser also trims, reads "None" in any case,
-    // takes "_" for ":" and any case of hex, and none of those is a case of a plugin name.
+    // ADR-0006: only a plugin name's case is tolerated. FormKey.TryFactory also trims and accepts "_",
+    // any-case "None" and lowercase hex, so only text already written as Mutagen writes it counts.
     private static bool SameFormKey(string left, string right) =>
         AsWritten(left) is { } leftKey && AsWritten(right) is { } rightKey && leftKey == rightKey;
 

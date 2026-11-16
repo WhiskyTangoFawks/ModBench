@@ -275,9 +275,8 @@ public sealed class CompiledTree
             drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))];
     }
 
-    // Mutagen writes a master under the first spelling of its name that a record carries, and the game
-    // matches names without case. So each name in a record's own FormKey and in its links is respelled as
-    // masterOrder spells it, and the header names the master as the load order does.
+    // Mutagen writes a master under the first spelling a record carries, so own keys and links are
+    // respelled as masterOrder spells them.
     private void SpellPluginsAsTheLoadOrderDoes(IReadOnlyList<string> masterOrder)
     {
         var spellings = new Dictionary<ModKey, ModKey>();
