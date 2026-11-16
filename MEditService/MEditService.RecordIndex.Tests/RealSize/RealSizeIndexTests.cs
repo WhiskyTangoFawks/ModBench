@@ -19,6 +19,8 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
     private static readonly TimeSpan OneFactsRead = TimeSpan.FromSeconds(0.01);
     private static readonly TimeSpan OneFilesRead = TimeSpan.FromSeconds(0.1);
+    private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
+    private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
     private const int Runs = 5;
     private const int Launches = 3;
 
@@ -306,5 +308,26 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneGesture, () => listed = queries.GetCellChildRecords(modlist.Master.Key, modlist.MastersBigCell).Value(), "Expanding the master's big cell", Runs);
         Assert.Equal(RealSizeModlist.ReferencesInTheBigCell, listed?.Temporary.Count);
+    }
+
+    [RealSizeFact]
+    public void OneRecordsRead_TakesAQuarterOfAGesture()
+    {
+        var (queries, modlist) = (Index.Queries, Modlist);
+        var copy = new RecordCopy(modlist.OverriddenRecord, modlist.LoadOrder[1].Key);
+        CompareRecordsAnswer? read = null;
+
+        Budgets.Ran(OneRecordsRead, () => read = queries.GetCompareRecords([copy]).Value(), "Reading one record", Runs);
+        Assert.Single(read?.Compare?.Overrides ?? []);
+    }
+
+    [RealSizeFact]
+    public void ARecordsComparisonAcrossItsDeepestStack_TakesHalfAGesture()
+    {
+        var (queries, modlist) = (Index.Queries, Modlist);
+        CompareResult? compared = null;
+
+        Budgets.Ran(OneRecordsComparison, () => compared = queries.GetCompare(modlist.OverriddenRecord, null).Value(), "Comparing a record across its stack", Runs);
+        Assert.Equal(modlist.LoadOrder.Take(RealSizeModlist.PluginsOverridingOneRecord + 1).Count(plugin => plugin.Enabled), compared?.Overrides.Count);
     }
 }

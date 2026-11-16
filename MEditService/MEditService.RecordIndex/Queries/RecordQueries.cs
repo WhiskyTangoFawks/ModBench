@@ -117,7 +117,8 @@ internal sealed class RecordQueries(
     {
         using var reads = RequireReads().InOneSnapshot();
         var recordText = text is null ? (RecordText?)null : TextOfRecord(formKey, text.Plugin, text.DocumentText);
-        var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey);
+        var resolver = reads.NewLinkResolver();
+        var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey, resolver);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
 
@@ -127,20 +128,17 @@ internal sealed class RecordQueries(
         {
             var at = active.FindIndex(c => PluginAddress.Comparer.Equals(c.Plugin, text.Plugin));
             var loadOrderIndex = at >= 0 ? active[at].LoadOrderIndex : snapshot.LoadOrderIndex(text.Plugin) ?? NotInLoadOrder;
-            var fromText = CopyFromText(reads, formKey, text.Plugin, loadOrderIndex, read);
+            var fromText = CopyFromText(reads, formKey, text.Plugin, loadOrderIndex, read, resolver);
             if (fromText is null) return null;
             if (at >= 0) active[at] = fromText with { IsWinner = active[at].IsWinner };
             else outside.Add(fromText);
         }
         var recordType = (active.Count > 0 ? active[0] : outside[0]).RecordType;
 
-        // One memoizing cache per response (ADR-0005): a FormKey repeated across sibling
-        // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
-        var resolveFormKey = reads.LinkResolver([formKey]);
         var formIds = LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins);
         var overrides = active.ConvertAll(ToRecordDetail);
         var outsideTheComparison = outside.ConvertAll(ToRecordDetail);
-        var (classification, conflictAll) = ClassifyStack(overrides, resolveFormKey, formIds, outsideTheComparison);
+        var (classification, conflictAll) = ClassifyStack(overrides, resolver.Resolve, formIds, outsideTheComparison);
         // PluginStates is keyed by ColumnKey.Of (ADR-0012), so a bare-plugin lookup
         // would miss for any non-Data-origin column and silently drop its ConflictThis.
         var annotated = overrides.Concat(outsideTheComparison)
@@ -186,14 +184,14 @@ internal sealed class RecordQueries(
         var snapshot = _loadOrder.Require();
         List<RecordText?> texts = [.. copies.Select(copy => copy.DocumentText is { } text ? TextOfRecord(copy.FormKey, copy.Plugin, text) : (RecordText?)null)];
 
-        var (fromIndex, resolveFormKey) = reads.GetDocuments(copies);
+        var (fromIndex, resolver) = reads.GetDocuments(copies);
         var documents = new List<RecordDocument>(copies.Count);
         var missing = new List<RecordCopy>();
         for (var i = 0; i < copies.Count; i++)
         {
             var copy = copies[i];
             var document = texts[i] is { } text
-                ? CopyFromText(reads, copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
+                ? CopyFromText(reads, copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text, resolver)
                 : fromIndex[i];
             if (document == null) missing.Add(copy);
             else documents.Add(document);
@@ -205,7 +203,7 @@ internal sealed class RecordQueries(
         // Two copies may come from one plugin, so a column is named by its place as well.
         var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
         var diffs = _conflictClassifier.Align(
-            records, columns, snapshot.GameRelease, snapshot.StringsLanguage, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
+            records, columns, snapshot.GameRelease, snapshot.StringsLanguage, resolver.Resolve, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
             indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
@@ -254,9 +252,10 @@ internal sealed class RecordQueries(
     }
 
     private static RecordDocument? CopyFromText(
-        RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, RecordText text)
+        RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, RecordText text,
+        LinkResolver resolver)
     {
-        var document = reads.DocumentFromText(formKey, plugin, loadOrderIndex, text.Text);
+        var document = reads.DocumentFromText(formKey, plugin, loadOrderIndex, text.Text, resolver);
         return text.WhyUnread is { } why && document is not null ? document with { ParseDiagnosis = why } : document;
     }
 
@@ -334,11 +333,11 @@ internal sealed class RecordQueries(
     private List<RecordTypeChoice>? ChildRecordTypesOf(PluginAddress plugin, string formKey)
     {
         using var reads = RequireReads().InOneSnapshot();
-        if (reads.GetDocument(formKey, plugin) is not { Body: { } body } container) return null;
+        if (reads.GetCopyText(formKey, plugin) is not var (identity, body)) return null;
         var schemas = RequireSchemas();
         var place = reads.GetCellLocation(plugin, formKey)?.Place;
         var held = reads.GetEveryHolding(plugin, formKey).Select(holding => (holding.Slot, holding.Child));
-        return Choices(ChildRecordTypes.Of(container.RecordType, body, held, place, _loadOrder.Require().GameRelease), schemas);
+        return Choices(ChildRecordTypes.Of(identity.RecordType, body, held, place, _loadOrder.Require().GameRelease), schemas);
     }
 
     // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.

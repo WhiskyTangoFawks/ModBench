@@ -11,48 +11,12 @@ internal static class LinkResolution
     // long one slower than the whole join runs.
     private const int ConstantListLimit = 200;
 
-    // form_references lists an inline child's links under the child's own FormKey. A worldspace's top
-    // cell is its one holding with no block directory. No read walks a placed reference.
-    private static readonly string SourceIsTheRecordOrAnInlineChild = $"""
-        source_form_key IN (
-            WITH RECURSIVE carried(form_key) AS (
-                SELECT unnest($1::VARCHAR[])
-                UNION
-                SELECT inline.child FROM {TableDdlBuilder.MirrorSchema}.holdings inline
-                JOIN carried ON inline.parent = carried.form_key
-                WHERE inline.slot NOT IN ({HoldingSlots.Placed}, {HoldingSlots.Exterior}))
-            SELECT form_key FROM carried)
-        """;
-
-    /// <summary>Resolves every link form_references lists for <paramref name="formKeys"/> and the
-    /// records their documents carry inline, in any plugin, up front; a FormKey it did not list still
-    /// resolves alone.</summary>
-    internal static Func<string, RecordLookupEntry?> ForLinksOf(ReadContext context, List<string> formKeys) =>
-        ForLinksOf(context, formKeys, alone => Resolve(context, alone));
-
-    /// <summary>The same, resolving an unlisted FormKey through <paramref name="resolveAlone"/>, for
-    /// a resolver that outlives <paramref name="context"/>.</summary>
-    internal static Func<string, RecordLookupEntry?> ForLinksOf(
-        ReadContext context, List<string> formKeys, Func<string, RecordLookupEntry?> resolveAlone) =>
-        Prefetched(context, resolveAlone, SourceIsTheRecordOrAnInlineChild, formKeys);
-
     internal static RecordLookupEntry? Resolve(ReadContext context, string formKey) =>
         context.Rows("SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1",
             reader => Entry(reader), formKey) is [var entry] ? entry : null;
 
-    private static Func<string, RecordLookupEntry?> Prefetched(
-        ReadContext context, Func<string, RecordLookupEntry?> resolveAlone, string sourceFilter, List<string> formKeys)
-    {
-        var linked = Resolve(context, LinkTargets(context, sourceFilter, formKeys));
-        return FormKeyResolutionCache.Memoize(formKey => linked.TryGetValue(formKey, out var entry) ? entry : resolveAlone(formKey));
-    }
-
-    private static List<string> LinkTargets(ReadContext context, string sourceFilter, List<string> formKeys) =>
-        context.Rows($"SELECT DISTINCT target_form_key FROM {TableDdlBuilder.MirrorSchema}.form_references WHERE {sourceFilter}",
-            reader => reader.GetString(0), formKeys);
-
     // Keyed by the FormKey as asked, not as the lookup row spells it: the join ignores filename case.
-    private static Dictionary<string, RecordLookupEntry?> Resolve(ReadContext context, List<string> formKeys)
+    internal static Dictionary<string, RecordLookupEntry?> Resolve(ReadContext context, List<string> formKeys)
     {
         var resolved = new Dictionary<string, RecordLookupEntry?>(StringComparer.Ordinal);
         if (formKeys.Count == 0) return resolved;
@@ -79,4 +43,23 @@ internal static class LinkResolution
 
     private static RecordLookupEntry Entry(DbDataReader reader, int first = 0) =>
         new(reader.GetString(first), reader.GetStringOrNull(first + 1));
+}
+
+/// <summary>One response's FormKey to (record type, EditorID) lookup against the winning copy. The FormKeys it is handed to
+/// learn resolve in one pass over the winners; any other resolves alone.</summary>
+internal sealed class LinkResolver(Func<string, RecordLookupEntry?> resolveAlone)
+{
+    private readonly Dictionary<string, RecordLookupEntry?> _resolved = new(StringComparer.Ordinal);
+
+    internal void Learn(ReadContext context, IEnumerable<string> formKeys)
+    {
+        List<string> unknown = [.. formKeys.Where(formKey => !_resolved.ContainsKey(formKey)).Distinct(StringComparer.Ordinal)];
+        foreach (var (formKey, entry) in LinkResolution.Resolve(context, unknown)) _resolved[formKey] = entry;
+    }
+
+    internal RecordLookupEntry? Resolve(string formKey)
+    {
+        if (!_resolved.TryGetValue(formKey, out var entry)) _resolved[formKey] = entry = resolveAlone(formKey);
+        return entry;
+    }
 }
