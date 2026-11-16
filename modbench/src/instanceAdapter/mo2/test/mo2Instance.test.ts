@@ -55,7 +55,6 @@ import type {
   EntryRef, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
-import { GAME_PATH_KEY } from '../codecs/modOrganizerIni';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
@@ -431,7 +430,7 @@ describe('the MO2 Instance adapter', () => {
         const unrelated = { named: [join(root, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false };
         const first = await askedBy(CHECK_THE_DISK);
         const settings = join(root, 'ModOrganizer.ini');
-        await writeFile(settings, setIniValue(await readFile(settings, 'utf8'), 'General', GAME_PATH_KEY, join(root, 'elsewhere')));
+        await writeFile(settings, (await readFile(settings, 'utf8')).replace(/^gamePath=.*$/m, `gamePath=@ByteArray(${join(root, 'elsewhere')})`));
 
         expect([first, await askedBy(unrelated), await askedBy({ named: [join(game, 'Data')], disk: false })]).toEqual([['game', 'running'], ['game'], ['game']]);
       });
