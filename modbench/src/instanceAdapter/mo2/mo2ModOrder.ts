@@ -20,8 +20,6 @@ import {
 
 type Mo2ModOrder = Pick<InstanceAdapter, 'changeModOrder'>;
 
-const WRITTEN_MEANWHILE = new Error('Mod order written by another program meanwhile');
-
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
   const listed = listedAs(order, entry);
   if (listed === undefined) throw new Error(entryNotFound(entry));
@@ -179,6 +177,7 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
             resolved.push(landing);
             after = spliceModOrderChange(after, landing);
           }
+          if (!sameStamp(await stampOf(file), stamp)) continue;
           const undos: Undo[] = [];
           try {
             for (const change of resolved) await refuseFolderInTheWay(change);
@@ -186,14 +185,11 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
               const undo = await moveFolders(change);
               if (undo) undos.unshift(undo);
             }
-            if (!sameStamp(await stampOf(file), stamp)) throw WRITTEN_MEANWHILE;
             if (after === before) return { wrote: false, landed: resolved };
             await write(file, after);
             return { wrote: true, landed: resolved };
           } catch (err) {
-            const failure = await undoAll(undos, err);
-            if (failure === WRITTEN_MEANWHILE) continue;
-            throw failure;
+            throw await undoAll(undos, err);
           }
         }
       });

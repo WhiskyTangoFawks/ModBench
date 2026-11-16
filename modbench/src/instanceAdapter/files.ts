@@ -394,9 +394,8 @@ export function remove(path: string): Promise<void> {
   return toldAfter([path], () => rm(path, { recursive: true, force: true }));
 }
 
-/** Hands `edit` the text of `path`, serialized per path, and skips the write when `edit` changed
- *  nothing, so an unwritten file never fires its watcher. An awaiting `edit` holds the lock. A file another
- *  program wrote meanwhile is edited again, so `edit` may run more than once. */
+/** Hands `edit` the text of `path`, serialized per path, and skips the write when `edit` changed nothing.
+ *  `edit` runs again over a file another program wrote meanwhile. */
 export function putIfChanged(
   path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {
