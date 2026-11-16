@@ -1502,46 +1502,44 @@ describe('the agent server, reading a record through mEdit', () => {
   });
 
   describe('a record no active plugin holds', () => {
-    const inactive = async (owners: Awaited<ReturnType<InMemoryMEditClient['getRecordOwners']>>) => {
+    const BIG_ROCKS = { name: 'A.esp', origin: 'Big Rocks' };
+    const OTHER = { name: 'A.esp', origin: 'Other' };
+    const OVERRIDDEN_A = { name: 'A.esp', path: '/m/A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: false };
+    const OTHER_A = { name: 'A.esp', path: '/m2/A.esp', origin: 'Other', line: 1, enabled: true, winning: true };
+    const OTHER_ENABLED = { ...ENABLED, mods: [...ENABLED.mods, { kind: 'mod' as const, name: 'Other', enabled: true }], plugins: [OVERRIDDEN_A, OTHER_A] };
+
+    const asked = async (instance: typeof VALUE, owners: Awaited<ReturnType<InMemoryMEditClient['getRecordOwners']>>, document: unknown = { kind: 'OwnFile', location: '/s/x.json' }) => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setQueryAnswer('resolveNames', NPC);
-      mEdit.setQueryAnswer('getPlugins', PLUGINS);
+      mEdit.setQueryAnswer('getPlugins', [{ ...pluginListed('A.esp'), inLoadOrder: false }]);
       mEdit.setQueryAnswer('getComparison', null);
       mEdit.setQueryAnswer('getRecordOwners', owners);
-      mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
-      return (await clientOf(new FakeInstance(ENABLED), mEdit)).client;
+      mEdit.setQueryAnswer('getCopyDocument', document as never);
+      const { client } = await clientOf(new FakeInstance(instance), mEdit);
+      return call(client, 'read_record', { name: 'SharedNpc' });
     };
 
-    it('answers the one inactive compiled plugin\'s copy, not active and not winning', async () => {
-      const client = await inactive([{ name: 'A.esp', origin: 'Big Rocks' }]);
+    it.each([
+      ['a disabled holder reads (not active)', VALUE, [BIG_ROCKS], [{ label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' }]],
+      [
+        'each holder reads the status the instance gives it, (overridden) before (not active)', OTHER_ENABLED, [BIG_ROCKS, OTHER],
+        [{ label: '(overridden)', reason: 'The game loads Other’s file instead.' }, undefined],
+      ],
+    ])('lists every holder\'s copy, none winning, keyed by origin and filename: %s', async (_name, instance, owners, statuses) => {
+      const { text } = await asked(instance, owners);
 
-      expect(await read(client, 'read_record', { name: 'SharedNpc' })).toMatchObject([
-        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, status: { label: '(not active)' }, kind: 'OwnFile' },
-      ]);
+      const copies = z.array(z.object({ plugin: z.object({ name: z.string(), origin: z.string() }), isWinner: z.boolean(), kind: z.string(), status: z.unknown().optional() })).parse(JSON.parse(text));
+      expect(copies.map(({ plugin, isWinner, kind, status }) => ({ plugin, isWinner, kind, status }))).toEqual(
+        owners.map((plugin, n) => ({ plugin, isWinner: false, kind: 'OwnFile', status: statuses[n] })),
+      );
     });
 
-    it('answers every inactive holder\'s copy, each keyed by origin and filename', async () => {
-      const client = await inactive([{ name: 'A.esp', origin: 'Big Rocks' }, { name: 'A.esp', origin: 'Other' }]);
-
-      expect(await read(client, 'read_record', { name: 'SharedNpc' })).toMatchObject([
-        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, status: { label: '(not active)' } },
-        { plugin: { name: 'A.esp', origin: 'Other' }, isWinner: false, status: { label: '(not active)' } },
-      ]);
-    });
-
-    it('refuses when no plugin holds it', async () => {
-      const client = await inactive([]);
-
-      expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No plugin holds 000800:A.esp.' });
-    });
-
-    it('refuses with mEdit\'s reason when the record index cannot answer', async () => {
-      const client = await inactive({ failed: 'refused', refusal: 'backend down' });
-
-      const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
-
-      expect(isError).toBe(true);
-      expect(text).toContain('backend down');
+    it.each([
+      ['no plugin holds it', [], undefined, 'No plugin holds 000800:A.esp.'],
+      ['the record index cannot answer', { failed: 'refused', refusal: 'backend down' } as const, undefined, 'backend down'],
+      ['a holder\'s copy cannot be read', [BIG_ROCKS], null, JSON.stringify([{ plugin: BIG_ROCKS, isWinner: false, reason: 'A.esp (Big Rocks) holds no 000800:A.esp.' }])],
+    ])('refuses when %s', async (_name, owners, document, reason) => {
+      expect(await asked(VALUE, owners, document)).toEqual({ isError: true, text: reason });
     });
   });
 

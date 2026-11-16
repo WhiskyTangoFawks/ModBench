@@ -94,28 +94,25 @@ const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: str
   return status === null ? {} : { status };
 };
 
-const NOT_ACTIVE: Standing = { overriddenBy: null, notActive: true };
+const entryOf = async (mEdit: RecordReads, copy: RecordCopy, isWinner: boolean, standing: object) => {
+  const document = await copyOf(mEdit, copy);
+  return 'refused' in document
+    ? { plugin: copy.plugin, isWinner, reason: document.refused }
+    : { plugin: copy.plugin, isWinner, ...standing, ...document };
+};
 
-const inactiveEntries = async (mEdit: RecordReads, formKey: string) => {
+const inactiveEntries = async (mEdit: RecordReads, value: InstanceValue, formKey: string) => {
   const owners = await mEdit.getRecordOwners(formKey);
   if (isReadFailed(owners)) throw new Refusal(failureReason(owners));
   if (owners.length === 0) throw new Refusal(`No plugin holds ${formKey}.`);
-  return Promise.all(owners.map(async (plugin) => {
-    const copy = await copyOf(mEdit, { formKey, plugin });
-    if ('refused' in copy) return { plugin, isWinner: false, reason: copy.refused };
-    const status = statusForAgent({ plugin: plugin.name, origin: plugin.origin, isPartialForm: false, isInOverwrite: false }, undefined, NOT_ACTIVE);
-    return { plugin, isWinner: false, ...(status !== null && { status }), ...copy };
-  }));
+  return Promise.all(owners.map(async (plugin) => entryOf(mEdit, { formKey, plugin }, false, await standingIn(mEdit, value, formKey, plugin))));
 };
 
 const activeEntries = async (mEdit: RecordReads, formKey: string, comparison: CompareResult) => {
   const plugins = await pluginsRead(mEdit);
-  return Promise.all(comparison.overrides.map(async (copied) => {
-    const { isWinner } = copied;
-    const copyAddress = pluginAddressOf(copied);
-    const copy = await copyOf(mEdit, { formKey, plugin: copyAddress });
-    return 'refused' in copy ? { plugin: copyAddress, isWinner, reason: copy.refused } : { plugin: copyAddress, isWinner, ...standingOf(plugins, comparison, copied, NO_STANDING), ...copy };
-  }));
+  return Promise.all(comparison.overrides.map((copied) => entryOf(
+    mEdit, { formKey, plugin: pluginAddressOf(copied) }, copied.isWinner, standingOf(plugins, comparison, copied, NO_STANDING),
+  )));
 };
 
 const sqlText = (text: string): string => `'${text.replaceAll("'", "''")}'`;
@@ -140,7 +137,7 @@ export const READ_RECORD = {
     }
     const compared = await mEdit.getComparison(formKey);
     if (isReadFailed(compared)) throw new Refusal(failureReason(compared));
-    const entries = compared === null ? await inactiveEntries(mEdit, formKey) : await activeEntries(mEdit, formKey, withMasterCellStates(compared));
+    const entries = compared === null ? await inactiveEntries(mEdit, value, formKey) : await activeEntries(mEdit, formKey, withMasterCellStates(compared));
     const fitted = fitting(entries, (copies) => ({
       copies: copies.map((entry) => ({ plugin: entry.plugin, isWinner: entry.isWinner, chars: JSON.stringify(entry).length })),
       narrow: 'plugin narrows the read to one copy.',
