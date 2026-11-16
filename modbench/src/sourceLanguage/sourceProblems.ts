@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { askedAgain, lastRead, askingWhenNotLate, indexIsCurrent, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -165,16 +165,16 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     asking.clear();
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
   });
-  const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
-    if (!indexIsCurrent(client)) return;
+  const askPlugin = (plugin: PluginAddress) => {
     asking.set(pluginAddressKey(plugin), plugin);
     askWanted();
   };
+  const whenNotLate = askingWhenNotLate(client, askPlugin);
   const unsubscribe = [
-    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
-    deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
+    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
+    deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
     client.onUnsavedHandOver(handedOver),
-    askingWhenNotLate(client, () => { wholeWanted = true; askWanted(); }),
+    whenNotLate.stop,
   ];
   askWanted();
   return { stop: () => { for (const off of unsubscribe) off(); }, settled: asks.settled };

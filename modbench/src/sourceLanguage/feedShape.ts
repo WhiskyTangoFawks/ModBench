@@ -2,6 +2,7 @@ import type { MEditClient, PluginAddress, PluginFilePaths, PluginProblems } from
 import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import { coalesced } from '../ports/coalesced';
 import type { Reporter } from '../ports/reporter';
+import { pluginAddressKey } from '../wire/pluginAddress';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 
 export type Asked = ProblemsAsker<PluginFilePaths, PluginProblems>;
@@ -33,13 +34,20 @@ export function tellingOnSurface(reporter: Pick<Reporter, 'shownOnSurface'>): (s
 
 type Lateness = Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate'>;
 
-export const indexIsCurrent = (client: Lateness): boolean => !client.recordIndexMayBeLate;
-
-/** Asks for the whole set when the record index stops being late, since the changes told meanwhile were not asked of. */
-export const askingWhenNotLate = (client: Lateness, askWhole: () => void): (() => void) => {
-  const subscription = client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) askWhole(); });
-  return () => { subscription.dispose(); };
-};
+/** Asks of each plugin changed, and while the record index may be late holds the plugins named, to ask of exactly those when it is not. */
+export function askingWhenNotLate(client: Lateness, ask: (plugin: PluginAddress) => void): { plugin: (event: { plugin: PluginAddress }) => void; stop: () => void } {
+  const held = new Map<string, PluginAddress>();
+  const subscription = client.onDidChangeRecordIndexMayBeLate((late) => {
+    if (late) return;
+    const named = [...held.values()];
+    held.clear();
+    for (const plugin of named) ask(plugin);
+  });
+  return {
+    plugin: ({ plugin }) => { if (client.recordIndexMayBeLate) held.set(pluginAddressKey(plugin), plugin); else ask(plugin); },
+    stop: () => { subscription.dispose(); },
+  };
+}
 
 /** A publisher for each feed named, each replacing only its own problems; `publishFile` gets every feed's problems on a
  *  file together, and only for a file whose problems changed. A file whose problems went is published with none. */

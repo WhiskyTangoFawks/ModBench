@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { askedAgain, lastRead, positionAt, askingWhenNotLate, indexIsCurrent, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
+import { askedAgain, lastRead, positionAt, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
@@ -127,15 +127,15 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     asking.clear();
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
   });
-  const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
-    if (!indexIsCurrent(client)) return;
+  const askPlugin = (plugin: PluginAddress) => {
     asking.set(pluginAddressKey(plugin), plugin);
     askWanted();
   };
+  const whenNotLate = askingWhenNotLate(client, askPlugin);
   const unsubscribe = [
-    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
-    deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
-    askingWhenNotLate(client, () => { wholeWanted = true; askWanted(); }),
+    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
+    deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
+    whenNotLate.stop,
   ];
   const judging = paths.subscribe(() => { void judge(); });
   askWanted();

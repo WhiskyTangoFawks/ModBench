@@ -143,21 +143,38 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect([...published[before] ?? []]).toEqual([]);
   });
 
-  it('asks nothing of a plugin changed while the record index may be late, and the whole set when it is not', async () => {
-    const { client, answered } = feed();
-    await answered([]);
-    const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;
-    const endLateness = late(client);
-    await new Promise((resolve) => { setTimeout(resolve, 20); });
-    const before = asked();
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-    await new Promise((resolve) => { setTimeout(resolve, 20); });
-    expect(asked()).toBe(before);
+  describe('while the record index may be late', () => {
+    const asks = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getPluginProblems');
+    const settledLate = async () => {
+      const { client, answered } = feed();
+      await answered([]);
+      const endLateness = late(client);
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+      return { client, endLateness, before: asks(client).length };
+    };
 
-    endLateness();
+    it('holds the plugin changed, and asks of exactly that plugin when it is not late', async () => {
+      const { client, endLateness, before } = await settledLate();
+      client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+      expect(asks(client)).toHaveLength(before);
 
-    await vi.waitFor(() => { expect(asked()).toBeGreaterThan(before); });
-    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').at(-1)?.args).toEqual([undefined]);
+      endLateness();
+
+      await vi.waitFor(() => { expect(asks(client)).toHaveLength(before + 1); });
+      expect(asks(client).at(-1)?.args).toEqual([PLUGIN]);
+    });
+
+    it('asks nothing when it ends with no change held', async () => {
+      const { client, endLateness, before } = await settledLate();
+      const ended = new Promise<void>((resolve) => { client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) resolve(); }); });
+
+      endLateness();
+      await ended;
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+
+      expect(asks(client)).toHaveLength(before);
+    });
   });
 
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
@@ -189,17 +206,6 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     answer([]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
-
-    await answered([]);
-
-    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
-  });
-
-  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index may be late', async (kind) => {
-    const { client, answered } = feed();
-    await answered([]);
-    late(client);
-    client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
     await answered([]);
 

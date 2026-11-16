@@ -246,23 +246,40 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect(reads).toEqual([FILE]);
   });
 
-  it('asks nothing of a plugin changed while the record index may be late, and the whole set when it is not', async () => {
-    const { client, settled } = feed([answerFor()]);
-    await settled(1);
-    client.setStatus('running');
-    let end!: () => void;
-    client.answerPuts(() => new Promise((resolve) => { end = () => { resolve({ outcome: 'abandoned' }); }; }));
-    void client.sendLoadOrder(EMPTY_SNAPSHOT);
-    await new Promise((resolve) => { setTimeout(resolve, 20); });
-    const before = asked(client).length;
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-    await new Promise((resolve) => { setTimeout(resolve, 20); });
-    expect(asked(client)).toHaveLength(before);
+  describe('while the record index may be late', () => {
+    const settledLate = async () => {
+      const { client, settled } = feed([answerFor()]);
+      await settled(1);
+      client.setStatus('running');
+      let end!: () => void;
+      client.answerPuts(() => new Promise((resolve) => { end = () => { resolve({ outcome: 'abandoned' }); }; }));
+      void client.sendLoadOrder(EMPTY_SNAPSHOT);
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+      return { client, endLateness: () => { end(); }, before: asked(client).length };
+    };
 
-    end();
+    it('holds the plugin changed, and asks of exactly that plugin when it is not late', async () => {
+      const { client, endLateness, before } = await settledLate();
+      client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+      expect(asked(client)).toHaveLength(before);
 
-    await vi.waitFor(() => { expect(asked(client).length).toBeGreaterThan(before); });
-    expect(asked(client).at(-1)).toEqual([undefined]);
+      endLateness();
+
+      await vi.waitFor(() => { expect(asked(client)).toHaveLength(before + 1); });
+      expect(asked(client).at(-1)).toEqual([PLUGIN]);
+    });
+
+    it('asks nothing when it ends with no change held', async () => {
+      const { client, endLateness, before } = await settledLate();
+      const ended = new Promise<void>((resolve) => { client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) resolve(); }); });
+
+      endLateness();
+      await ended;
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+
+      expect(asked(client)).toHaveLength(before);
+    });
   });
 
   describe.each([
