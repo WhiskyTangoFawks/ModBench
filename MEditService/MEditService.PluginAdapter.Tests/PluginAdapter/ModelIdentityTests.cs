@@ -447,6 +447,48 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
+    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>, bool> FormKeySpellings => new()
+    {
+        { "a plugin name in another case", () => (HeadPart("Upper.esp", 0x817), HeadPart("UPPER.ESP", 0x817)), false },
+        { "an id", () => (HeadPart("Upper.esp", 0x817), HeadPart("Upper.esp", 0x818)), true },
+        { "a plugin beyond case", () => (HeadPart("Upper.esp", 0x817), HeadPart("Other.esp", 0x817)), true },
+        { "None in another case", () => (ScriptString("None"), ScriptString("none")), true },
+        { "leading whitespace", () => (ScriptString("000817:Upper.esp"), ScriptString(" 000817:Upper.esp")), true },
+        { "an underscore for the colon", () => (ScriptString("000817:Upper.esp"), ScriptString("000817_Upper.esp")), true },
+        { "an id in another hex case", () => (ScriptString("00081D:Upper.esp"), ScriptString("00081d:Upper.esp")), true },
+    };
+
+    [Theory]
+    [MemberData(nameof(FormKeySpellings))]
+    public async Task DivergenceFrom_WhenAFormKeyDiffers_OnlyInThePluginNamesCaseIsTheSameValue(
+        string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, bool diverges)
+    {
+        var (original, recompiled) = mods();
+
+        Assert.Equal(diverges, await DivergenceAsync(original, recompiled) is not null);
+    }
+
+    private static Fallout4Mod HeadPart(string plugin, uint id) =>
+        NpcWith(npc => npc.HeadParts.Add(new FormLink<IHeadPartGetter>(new FormKey(ModKey.FromFileName(plugin), id))));
+
+    private static Fallout4Mod ScriptString(string text) => NpcWith(npc => npc.VirtualMachineAdapter = new VirtualMachineAdapter
+    {
+        Scripts = [new ScriptEntry
+        {
+            Name = "Script",
+            Properties = [new ScriptStringProperty { Name = "Text", Data = text }],
+        }],
+    });
+
+    private static Fallout4Mod NpcWith(Action<Npc> set)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var npc = new Npc(new FormKey(mod.ModKey, 0x800), Fallout4Release.Fallout4) { EditorID = "Npc" };
+        set(npc);
+        mod.Npcs.Add(npc);
+        return mod;
+    }
+
     private static async Task<string?> DivergenceAsync(Fallout4Mod original, Fallout4Mod recompiled)
     {
         using var scratch = new ScratchDirectory("medit-modelidentity-");

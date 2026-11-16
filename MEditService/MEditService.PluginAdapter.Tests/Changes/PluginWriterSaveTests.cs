@@ -123,6 +123,38 @@ public sealed class PluginWriterSaveTests
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 
+    public static TheoryData<string, Action<Fallout4Mod, ModKey>> TreesNamingAPluginInAnotherCase => new()
+    {
+        { "a reference", (mod, spelled) => mod.Npcs.AddNew("Npc").Race.SetTo(new FormKey(spelled, 0x800)) },
+        { "an override", (mod, spelled) => mod.Npcs.Add(new Npc(new FormKey(spelled, 0x800), Fallout4Release.Fallout4) { EditorID = "Npc" }) },
+    };
+
+    [Theory]
+    [MemberData(nameof(TreesNamingAPluginInAnotherCase))]
+    public async Task Save_OfATreeNamingAPluginInAnotherCaseThanTheMasterOrder_WritesTheMasterUnderTheMasterOrdersSpelling(
+        string _, Action<Fallout4Mod, ModKey> name)
+    {
+        using var folder = new ScratchDirectory("pw-save-master-case");
+        var pluginPath = Path.Combine(folder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        name(mod, ModKey.FromFileName("UPPER.ESP"));
+        mod.WriteToBinary(pluginPath);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(
+            new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, new PluginProvider.FromMod("FixtureMod", folder, folder), Line: null, HandedStrings.Of(pluginPath)),
+            EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
+
+        (await tree.SaveAsync(pluginPath, ["Upper.esp", "UPPER.ESP", "Fixture.esp"], ["UPPER.ESP"], save =>
+        {
+            save.Commit(_ => false);
+            return true;
+        })).Answered();
+
+        using var written = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(mod.ModKey, pluginPath), Fallout4Release.Fallout4);
+        Assert.Equal(["Upper.esp"], written.ModHeader.MasterReferences.Select(master => master.Master.FileName.String));
+    }
+
     [Fact]
     public async Task Save_OfAStarfieldOverrideOfALightMastersRecord_WritesItUnderThatMastersFormKey_AndDropsNothing()
     {

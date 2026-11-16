@@ -275,6 +275,31 @@ public sealed class CompiledTree
             drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))];
     }
 
+    // Mutagen writes a master under the first spelling a record carries, so own keys and links are
+    // respelled as masterOrder spells them.
+    private void SpellPluginsAsTheLoadOrderDoes(IReadOnlyList<string> masterOrder)
+    {
+        var spellings = new Dictionary<ModKey, ModKey>();
+        foreach (var key in masterOrder.Select(name => ModKey.FromFileName(name))) spellings.TryAdd(key, key);
+
+        FormKey Respelled(FormKey key) =>
+            !key.IsNull && spellings.TryGetValue(key.ModKey, out var spelled)
+            && !string.Equals(spelled.FileName.String, key.ModKey.FileName.String, StringComparison.Ordinal)
+                ? new FormKey(spelled, key.ID)
+                : key;
+
+        static bool Differs(FormKey key, FormKey other) =>
+            !string.Equals(key.ModKey.FileName.String, other.ModKey.FileName.String, StringComparison.Ordinal);
+
+        var respelledLinks = new Dictionary<FormKey, FormKey>();
+        foreach (var key in _mod.EnumerateFormLinks().Select(link => link.FormKey).Where(key => Differs(key, Respelled(key))))
+            respelledLinks.TryAdd(key, Respelled(key));
+        if (respelledLinks.Count > 0) _mod.RemapLinks(respelledLinks);
+
+        foreach (var record in _mod.EnumerateMajorRecords().OfType<IMajorRecordInternal>().Where(record => Differs(record.FormKey, Respelled(record.FormKey))))
+            record.FormKey = Respelled(record.FormKey);
+    }
+
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> for
     /// <paramref name="land"/> to Commit into place, and discarded once it returns. Only the styles
     /// of <paramref name="masters"/>, the plugins the tree references, are read.</summary>
@@ -282,6 +307,7 @@ public sealed class CompiledTree
         string pluginPath, IReadOnlyList<string> masterOrder, IEnumerable<string> masters, Func<PreparedPluginSave, T> land)
     {
         if (!MasterStyles.Of(masters.Select(name => ModKey.FromFileName(name)), _loadOrder).Holds(out var styles, out var unread)) return unread;
+        SpellPluginsAsTheLoadOrderDoes(masterOrder);
         var landing = false;
         try
         {
