@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Store;
 
@@ -24,12 +25,12 @@ internal sealed class WorkingTreeOverlay
 
     public WorkingTreeOverlay(
         DuckDBConnection connection, ILogger logger, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release,
-        Func<string, string> contentStamp)
+        Func<string, string> contentStamp, Func<Language> stringsLanguage)
     {
         _contentStamp = contentStamp;
         _connection = connection;
         _containers = new ContainerDocuments(release);
-        _ingest = new PluginIngest(connection, logger, release, contentStamp);
+        _ingest = new PluginIngest(connection, logger, release, contentStamp, stringsLanguage);
         _types = RecordTypes.For(release);
         _release = release;
         _schemas = schemas;
@@ -140,12 +141,14 @@ internal sealed class WorkingTreeOverlay
             DuckDbSql.Execute(_connection, """
                 UPDATE mirror.records r
                 SET body = m.body, content_hash = m.content_hash, editor_id = json_extract_string(m.body, '$.EditorID'),
-                    masters = coalesce(m.masters, r.masters)
+                    masters = coalesce(m.masters, r.masters), full_name = m.full_name, base = m.base
                 FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS body,
-                             unnest($5::VARCHAR[]) AS content_hash, unnest($6::VARCHAR[][]) AS masters) m
+                             unnest($5::VARCHAR[]) AS content_hash, unnest($6::VARCHAR[][]) AS masters,
+                             unnest($7::VARCHAR[]) AS full_name, unnest($8::VARCHAR[]) AS base) m
                 WHERE r.form_key = m.form_key AND r.plugin = $1 AND r.origin = $2
                 """, key.Name, key.Origin, Column(held, d => d.Document.FormKey), Column(held, d => d.StoredBody),
-                Column(held, d => d.Stamp), Column(held, d => d.Prepared?.Masters));
+                Column(held, d => d.Stamp), Column(held, d => d.Prepared?.Masters),
+                Column(held, d => d.Prepared?.Derived.FullName), Column(held, d => d.Prepared?.Derived.Base));
         }
 
         var materialized = derived.Where(d => !d.Document.Held).ToList();
@@ -156,13 +159,15 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
         DuckDbSql.Execute(_connection, """
-            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, masters, form_key_plugin)
-            SELECT form_key, $1, $2, record_type, json_extract_string(body, '$.EditorID'), body, content_hash, coalesce(masters, []), form_key_plugin
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, masters, form_key_plugin, full_name, base)
+            SELECT form_key, $1, $2, record_type, json_extract_string(body, '$.EditorID'), body, content_hash, coalesce(masters, []), form_key_plugin, full_name, base
             FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS record_type, unnest($5::VARCHAR[]) AS body,
-                         unnest($6::VARCHAR[]) AS content_hash, unnest($7::VARCHAR[][]) AS masters, unnest($8::VARCHAR[]) AS form_key_plugin)
+                         unnest($6::VARCHAR[]) AS content_hash, unnest($7::VARCHAR[][]) AS masters, unnest($8::VARCHAR[]) AS form_key_plugin,
+                         unnest($9::VARCHAR[]) AS full_name, unnest($10::VARCHAR[]) AS base)
             """, key.Name, key.Origin, Column(materialized, d => d.Document.FormKey), Column(materialized, d => d.Document.RecordType),
             Column(materialized, d => d.StoredBody), Column(materialized, d => d.Stamp), Column(materialized, d => d.Prepared?.Masters),
-            Column(materialized, d => RecordMasters.PluginNamedBy(d.Document.FormKey)));
+            Column(materialized, d => RecordMasters.PluginNamedBy(d.Document.FormKey)),
+            Column(materialized, d => d.Prepared?.Derived.FullName), Column(materialized, d => d.Prepared?.Derived.Base));
     }
 
     private static List<T> Column<T>(List<Derived> rows, Func<Derived, T> value) => [.. rows.Select(value)];

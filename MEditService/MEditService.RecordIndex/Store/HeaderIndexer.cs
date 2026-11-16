@@ -25,6 +25,8 @@ internal static class HeaderIndexer
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed
         row.AppendValue(new List<string>());
         row.AppendValue(RecordMasters.PluginNamedBy(header.FormKey));
+        row.AppendNullValue();
+        row.AppendNullValue();
         row.EndRow();
     }
 }

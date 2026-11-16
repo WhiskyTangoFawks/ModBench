@@ -15,6 +15,7 @@ namespace MEditService.RecordIndex.Tests.RealSize;
 public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan OneKeystroke = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan LitRsLaunch = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
     private static readonly TimeSpan OneFactsRead = TimeSpan.FromSeconds(0.01);
@@ -308,6 +309,46 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneGesture, () => listed = queries.GetCellChildRecords(modlist.Master.Key, modlist.MastersBigCell).Value(), "Expanding the master's big cell", Runs);
         Assert.Equal(RealSizeModlist.ReferencesInTheBigCell, listed?.Temporary.Count);
+    }
+
+    [RealSizeFact]
+    public void ASearchAsTheUserTypes_AnswersWithinAQuarterOfAGesture()
+    {
+        PagedResult<RecordSummary>? found = null;
+
+        Budgets.Ran(OneKeystroke, () => found = Index.Queries.GetRecords(types: null, plugin: null, search: "Quest", limit: 20, offset: 0).Value(), "Searching every plugin's records for \"Quest\"", Runs);
+        Assert.Equal(20, found?.Items.Count);
+    }
+
+    [RealSizeFact]
+    public void TheMastersWorldspaceBlocks_ListWithinOneSecond()
+    {
+        var master = Modlist.Master.Key;
+        var world = Index.Queries.GetWorldspaces(master).Value().First(w => w.HasChildren);
+        WorldspaceBlocks? listed = null;
+
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetWorldspaceBlocks(master, world.FormKey).Value(), "Expanding the master's worldspace", Runs);
+        Assert.NotEmpty(listed?.Blocks ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheMastersInteriorCells_ListWithinOneSecond()
+    {
+        IReadOnlyList<InteriorCellBlock>? listed = null;
+
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetInteriorCells(Modlist.Master.Key).Value(), "Expanding the master's interior cells", Runs);
+        Assert.NotEmpty(listed ?? []);
+    }
+
+    [RealSizeFact]
+    public void AQuestsTopics_ListWithinAQuarterOfAGesture()
+    {
+        var master = Modlist.Master.Key;
+        var quest = Index.Queries.GetRecords(["qust"], master, search: null, limit: 1, offset: 0).Value().Items.Single();
+        IReadOnlyList<ContainerChildSummary>? listed = null;
+
+        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetContainerChildren(master, quest.FormKey).Value(), "Expanding a quest's topics", Runs);
+        Assert.NotEmpty(listed ?? []);
     }
 
     [RealSizeFact]

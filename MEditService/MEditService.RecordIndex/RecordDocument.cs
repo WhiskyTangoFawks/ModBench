@@ -33,7 +33,7 @@ internal sealed record OverrideStack(string FormKey, string RecordType, IReadOnl
 
 /// <summary><c>GroupOnly</c> lists a group in FormID order, otherwise by EditorID.
 /// <c>SearchFormKey</c> is a FormID search's FormKey, matched beside the EditorID text.
-/// <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012).</summary>
+/// <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012). <c>FormKeys</c> lists only those records.</summary>
 internal sealed record RecordQuery(
     RecordQueryScope Scope,
     IReadOnlyList<string>? RecordTypes = null,
@@ -43,7 +43,8 @@ internal sealed record RecordQuery(
     string? SearchFormKey = null,
     int Limit = 50,
     int Offset = 0,
-    bool GroupOnly = false);
+    bool GroupOnly = false,
+    IReadOnlyList<string>? FormKeys = null);
 
 /// <summary>The record filter narrows the navigator and never a search: plugins.md says of it, "It never
 /// narrows the Editor or Referenced By".</summary>
