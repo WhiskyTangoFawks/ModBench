@@ -131,8 +131,8 @@ internal static class ModelIdentity
         var recompiledText = RecordTextCodec.SerializeToText(recompiled, release);
         if (string.Equals(originalText, recompiledText, StringComparison.Ordinal)) return null;
 
-        // Not text-identical: decide structurally, honouring only the two model-equal respellings a rewrite
-        // is entitled to — negative zero and a dictionary field's enumeration order.
+        // Not text-identical: decide structurally, honouring only the model-equal respellings a rewrite
+        // is entitled to — negative zero, a dictionary field's enumeration order and a FormKey's plugin name in another case.
         using var originalDoc = System.Text.Json.JsonDocument.Parse(originalText);
         using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledText);
         return FirstModelDifference(originalDoc.RootElement, recompiledDoc.RootElement, path: "", propertyName: null,
@@ -176,7 +176,7 @@ internal static class ModelIdentity
                     .FirstOrDefault(difference => difference != null);
             case System.Text.Json.JsonValueKind.String:
                 return a.GetString() is { } left && b.GetString() is { } right
-                    && NormalizeNegativeZeros(left) == NormalizeNegativeZeros(right)
+                    && (NormalizeNegativeZeros(left) == NormalizeNegativeZeros(right) || SameFormKey(left, right))
                     ? null
                     : path;
             case System.Text.Json.JsonValueKind.Number:
@@ -190,6 +190,14 @@ internal static class ModelIdentity
                 return null; // kinds already matched: true/false/null carry no further content
         }
     }
+
+    // ADR-0006: only a plugin name's case is tolerated. FormKey.TryFactory also trims and accepts "_",
+    // any-case "None" and lowercase hex, so only text already written as Mutagen writes it counts.
+    private static bool SameFormKey(string left, string right) =>
+        AsWritten(left) is { } leftKey && AsWritten(right) is { } rightKey && leftKey == rightKey;
+
+    private static FormKey? AsWritten(string text) =>
+        FormKey.TryFactory(text, out var key) && text == key.ToString() ? key : null;
 
     private static bool IsZeroSpelling(string rawNumber) => rawNumber is "0" or "-0" or "0.0" or "-0.0";
 
