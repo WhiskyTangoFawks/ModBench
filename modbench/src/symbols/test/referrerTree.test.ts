@@ -56,7 +56,7 @@ describe('the Referenced By list — states', () => {
     client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', []);
     client.setStatus('running');
     client.answerSignals(() => new Promise<undefined>(() => undefined));
-    client.signalChange(['/m/A.esp']);
+    void client.signalChange(['/m/A.esp']);
     expect((await listOf(client)).message).toBe('No references found. mEdit is still indexing plugins: this list may not be complete.');
     client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', [reference({ formKey: '000002:Fallout4.esm' })]);
     expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
@@ -66,7 +66,7 @@ describe('the Referenced By list — states', () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
     client.setStatus('running');
     client.answerSignals(() => new Promise<undefined>(() => undefined));
-    client.signalChange(['/m/A.esp']);
+    void client.signalChange(['/m/A.esp']);
     expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
   });
 
