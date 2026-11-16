@@ -178,7 +178,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       let shows!: () => void;
       const surface = surfaceReadModel({
         handed: () => handed,
-        latest: () => new Promise<void>((resolve) => { shows = resolve; }),
+        taken: () => new Promise<void>((resolve) => { shows = resolve; }),
       });
       onTestFinished(() => { surface.dispose(); });
       return { hand: () => { handed++; }, shows: () => { shows(); } };

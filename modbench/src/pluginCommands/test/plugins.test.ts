@@ -9,7 +9,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { askedOnceLoadOrderPut, pluginSyncOver, type PluginsDrop } from '../plugins';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
-import type { LoadOrderOutcome, PluginMetadata } from '../../client';
+import type { PluginMetadata } from '../../client';
 import { manifestedIn } from '../../test/modStatusFixture';
 import { renamedPlugin } from '../../test/renamedPlugin';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
@@ -491,19 +491,19 @@ describe('loadAfter', () => {
 });
 
 describe('askedOnceLoadOrderPut keeps mEdit from being asked for plugins before a load order is put', () => {
-  const asking = (put: LoadOrderOutcome | undefined) => {
+  const asking = (put: boolean) => {
     const getPlugins = vi.fn(() => Promise.resolve([]));
-    return { getPlugins, client: askedOnceLoadOrderPut({ getPlugins, latestLoadOrder: () => Promise.resolve(put) }) };
+    return { getPlugins, client: askedOnceLoadOrderPut({ getPlugins, loadOrderApplied: () => Promise.resolve(put) }) };
   };
 
   it('answers as an mEdit that cannot, asking nothing, while no load order has been put', async () => {
-    const { getPlugins, client } = asking(undefined);
+    const { getPlugins, client } = asking(false);
     await expect(client.getPlugins()).rejects.toThrow();
     expect(getPlugins).not.toHaveBeenCalled();
   });
 
   it('asks mEdit once a put has been answered', async () => {
-    const { getPlugins, client } = asking({ outcome: 'failed', message: 'refused' });
+    const { getPlugins, client } = asking(true);
     await client.getPlugins();
     expect(getPlugins).toHaveBeenCalledOnce();
   });

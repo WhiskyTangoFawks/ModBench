@@ -235,6 +235,7 @@ class HttpMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
+  loadOrderApplied(): Promise<boolean> { return this.loadOrder.applied(); }
   loadOrdersHanded(): number { return this.loadOrder.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.loadOrder.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
@@ -262,7 +263,7 @@ class HttpMEditClient implements MEditClient {
     if (spec.answersChanges !== true) this.leaveWritesUnnamed();
     try {
       await this.handOver.sent();
-      await this.loadOrder.latest();
+      await this.loadOrder.applied();
     } catch (e) {
       return this.refusedUnreachable(spec, e);
     }
@@ -660,7 +661,7 @@ class HttpMEditClient implements MEditClient {
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
     await this.handOver.sent();
-    await this.loadOrder.latest();
+    await this.loadOrder.applied();
     let result;
     try {
       result = await this.apiClient.POST('/records/{formKey}/edit-changes', {

@@ -430,6 +430,8 @@ export interface MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined>;
+  /** Settles once mEdit has answered the newest snapshot, ahead of the sweep that follows it. False when none was sent. */
+  loadOrderApplied(): Promise<boolean>;
   /** How many snapshots have been handed to be sent: a caller that sees it grow knows a send followed its work. */
   loadOrdersHanded(): number;
   /** Tells mEdit the files at `paths` changed, or, with none, to check the disk, once every snapshot handed

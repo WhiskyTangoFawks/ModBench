@@ -22,7 +22,7 @@ export async function runUnderProgress<T>(
     progress.working();
     try {
       await refreshWritten(instance, written);
-      if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.latest();
+      if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.taken();
     } finally {
       await progress.done();
     }
@@ -88,8 +88,8 @@ let inFlight: string | undefined;
 interface ReadModel {
   /** How many sends the other read model was handed. */
   readonly handed: () => number;
-  /** Settles when the newest send has shown. */
-  readonly latest: () => Promise<unknown>;
+  /** Settles once the other read model has taken the newest send. */
+  readonly taken: () => Promise<unknown>;
 }
 
 let readModel: ReadModel | undefined;

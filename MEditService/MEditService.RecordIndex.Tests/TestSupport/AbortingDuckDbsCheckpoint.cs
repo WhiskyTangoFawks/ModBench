@@ -8,9 +8,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Reads <paramref name="plugin"/> as the real adapter does, and on its <paramref name="nthRead"/>
-/// leaves DuckDB to abort its next checkpoint.</summary>
-internal sealed class AbortingDuckDbsCheckpoint(string instanceRoot, string plugin, int nthRead) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+/// <summary>Reads <paramref name="plugin"/> as <paramref name="inner"/> does, the real adapter by default, and on its
+/// <paramref name="nthRead"/> leaves DuckDB to abort its next checkpoint.</summary>
+internal sealed class AbortingDuckDbsCheckpoint(string instanceRoot, string plugin, int nthRead, IPluginAdapter? inner = null)
+    : DelegatingPluginAdapter(inner ?? TestAdapters.Mutagen())
 {
     private int _reads;
 

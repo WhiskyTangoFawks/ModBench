@@ -262,6 +262,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
+  loadOrderApplied(): Promise<boolean> { return this.sender.applied(); }
   loadOrdersHanded(): number { return this.sender.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.sender.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
