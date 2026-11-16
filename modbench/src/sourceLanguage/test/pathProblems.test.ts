@@ -175,6 +175,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     });
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
     text = `  ${TEXT}`;
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
 
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
@@ -194,6 +195,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
     await settled();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
 
     let ended = false;
@@ -244,6 +246,26 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
 
     expect(reads).toEqual([FILE]);
+  });
+
+  it('reads no file and publishes nothing again when mEdit answers a plugin as it was', async () => {
+    const reads: string[] = [];
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+    const published: ProblemsByFile[] = [];
+    feedPathProblems({
+      client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),
+      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      publish: (problems) => published.push(problems), languageStatus: () => undefined,
+    });
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(reads).toEqual([FILE]);
+    expect(published).toHaveLength(1);
   });
 
   describe.each([

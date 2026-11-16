@@ -44,28 +44,30 @@ internal static class PluginEndpoints
         app.MapGet("/plugins/problems", (string? plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetProblems(address));
+            return EndpointMapping.OkUnlessHeld(svc.GetProblems(address));
         })
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
                 "What is wrong in each compiled plugin's source, on the file that holds the " +
-                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's.")
+                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's. Tagged: asked with If-None-Match holding the tag of the answer the caller holds, an unchanged answer is 304.")
             .Produces<IReadOnlyList<PluginProblems>>()
+            .Produces(304)
             .ProducesProblem(400)
             .ProducesProblem(503);
 
         app.MapGet("/plugins/file-paths", (string? plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetFilePaths(address));
+            return EndpointMapping.OkUnlessHeld(svc.GetFilePaths(address));
         })
             .WithName("GetPluginFilePaths")
             .WithTags(Tag)
             .WithDescription(
                 "The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin " +
-                "source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready.")
+                "source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready. Tagged: asked with If-None-Match holding the tag of the answer the caller holds, an unchanged answer is 304.")
             .Produces<IReadOnlyList<PluginFilePaths>>()
+            .Produces(304)
             .ProducesProblem(400)
             .ProducesProblem(503);
 

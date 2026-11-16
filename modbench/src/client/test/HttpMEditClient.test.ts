@@ -382,6 +382,40 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(Object.fromEntries(url.searchParams)).toEqual(query);
   });
 
+  describe.each([
+    { name: 'getPluginProblems', verb: (c: MEditClient) => c.getPluginProblems(shared), answer: problems },
+    { name: 'getPluginFilePaths', verb: (c: MEditClient) => c.getPluginFilePaths(shared), answer: [{ plugin: shared, paths: [], scripts: [], unread: [] }] },
+  ])('$name asked again of a plugin', ({ verb, answer }) => {
+    const tagged = (tag: string) => () => Promise.resolve(new Response(JSON.stringify(answer), { status: 200, headers: { 'content-type': 'application/json', etag: tag } }));
+    const notModified = () => Promise.resolve(new Response(null, { status: 304 }));
+
+    it('sends the tag of the answer it holds, and answers that answer again when mEdit says it is unchanged', async () => {
+      const replies = [tagged('"one"'), notModified];
+      const fetch = vi.fn((_req: Request) => replies.shift()?.() ?? Promise.reject(new Error('unrouted')));
+      const client = makeClient(fetch);
+
+      const first = await verb(client);
+      const second = await verb(client);
+
+      expect(fetch.mock.calls[0]?.[0].headers.get('if-none-match')).toBeNull();
+      expect(fetch.mock.calls[1]?.[0].headers.get('if-none-match')).toBe('"one"');
+      expect(second).toBe(first);
+    });
+
+    it('takes the new answer, and its tag, when mEdit answers one', async () => {
+      const replies = [tagged('"one"'), tagged('"two"'), notModified];
+      const fetch = vi.fn((_req: Request) => replies.shift()?.() ?? Promise.reject(new Error('unrouted')));
+      const client = makeClient(fetch);
+
+      await verb(client);
+      const second = await verb(client);
+      const third = await verb(client);
+
+      expect(fetch.mock.calls[2]?.[0].headers.get('if-none-match')).toBe('"two"');
+      expect(third).toBe(second);
+    });
+  });
+
   it('getRecordsComparison returns the copies no plugin gave, each with its reason, and no comparison', async () => {
     const missing = {
       compare: null,

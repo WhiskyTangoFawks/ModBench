@@ -396,7 +396,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's. */
+        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's. Tagged: asked with If-None-Match holding the tag of the answer the caller holds, an unchanged answer is 304. */
         get: operations["GetPluginProblems"];
         put?: never;
         post?: never;
@@ -413,7 +413,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready. */
+        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready. Tagged: asked with If-None-Match holding the tag of the answer the caller holds, an unchanged answer is 304. */
         get: operations["GetPluginFilePaths"];
         put?: never;
         post?: never;
@@ -3180,6 +3180,13 @@ export interface operations {
                     "application/json": components["schemas"]["PluginProblems"][];
                 };
             };
+            /** @description Not Modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -3220,6 +3227,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PluginFilePaths"][];
                 };
+            };
+            /** @description Not Modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

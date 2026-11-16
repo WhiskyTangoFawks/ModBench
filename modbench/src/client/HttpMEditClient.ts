@@ -1,4 +1,5 @@
 import { trackLateness } from './lateness';
+import { pluginAddressKey } from '../wire/pluginAddress';
 import type { components } from '../wire/generated/api';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
@@ -107,6 +108,8 @@ function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   };
 }
 
+interface Tagged<D> { tag: string; data: D }
+
 interface ReadOptions<A> {
   timed?: boolean;
   absent?: { status: number; answers: A };
@@ -118,6 +121,8 @@ class HttpMEditClient implements MEditClient {
   private api?: { port: number; client: ApiClient };
   private readonly fetchImpl: (input: Request) => Promise<Response>;
   private readonly log: Log;
+  private readonly problemsHeld = new Map<string, Tagged<PluginProblems[]>>();
+  private readonly filePathsHeld = new Map<string, Tagged<PluginFilePaths[]>>();
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
@@ -776,15 +781,32 @@ class HttpMEditClient implements MEditClient {
   }
 
   getPluginProblems(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginProblems[] | ReadFailed> {
-    return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', {
-      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, signal,
-    }), noBodyFails, { token, timed: true });
+    return this.read('getPluginProblems', this.revalidated(this.problemsHeld, plugin, (api, signal, headers) => api.GET('/plugins/problems', {
+      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, headers, signal,
+    })), noBodyFails, { token, timed: true });
   }
 
   getPluginFilePaths(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginFilePaths[] | ReadFailed> {
-    return this.read('getPluginFilePaths', (api, signal) => api.GET('/plugins/file-paths', {
-      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, signal,
-    }), noBodyFails, { token, timed: true });
+    return this.read('getPluginFilePaths', this.revalidated(this.filePathsHeld, plugin, (api, signal, headers) => api.GET('/plugins/file-paths', {
+      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, headers, signal,
+    })), noBodyFails, { token, timed: true });
+  }
+
+  /** Sends the tag of the answer held for this read, and answers the held answer when mEdit says it is unchanged. */
+  private revalidated<D>(
+    answersHeld: Map<string, Tagged<D>>, plugin: PluginAddress | undefined,
+    call: (api: ApiClient, signal: AbortSignal, headers: Record<string, string>) => Promise<{ data?: D; error?: unknown; response: Response }>,
+  ): (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }> {
+    const key = plugin === undefined ? '' : pluginAddressKey(plugin);
+    return async (api, signal) => {
+      const held = answersHeld.get(key);
+      const result = await call(api, signal, held ? { 'If-None-Match': held.tag } : {});
+      const { response, data } = result;
+      if (response.status === 304 && held) return { data: held.data, response: new Response(null, { status: 200 }) };
+      const tag = response.headers.get('etag');
+      if (response.ok && tag && data !== undefined) answersHeld.set(key, { tag, data });
+      return result;
+    };
   }
 
   getRecordTypes({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<PluginRecordTypeCount[] | ReadFailed> {

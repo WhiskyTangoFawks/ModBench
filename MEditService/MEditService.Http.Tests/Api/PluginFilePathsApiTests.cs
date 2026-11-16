@@ -34,6 +34,27 @@ public sealed class PluginFilePathsApiTests : HostedTests
     }
 
     [Fact]
+    public async Task GetPluginFilePaths_AskedWithTheTagOfItsLastAnswer_AnswersNotModified_UntilTheAnswerChanges()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-plugin-file-paths-tag")
+            .WithPlugin(Plugin, mod => mod.TextureSets.AddNew("Holder").Diffuse = @"Decals\Stain_d.dds", origin: Origin)
+            .BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
+        await Client.NextCheck(fx);
+        await Client.PluginReportsCompiledPlugin(Plugin);
+        var url = $"/plugins/file-paths?plugin={Plugin}&origin={Origin}";
+        var tag = (await Client.GetAsync(url)).Headers.ETag.Require();
+
+        var again = await Client.GetHolding(url, tag);
+        var other = await Client.GetHolding(url, new System.Net.Http.Headers.EntityTagHeaderValue("\"stale\""));
+
+        Assert.Equal(HttpStatusCode.NotModified, again.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        Assert.Equal(tag, other.Headers.ETag);
+    }
+
+    [Fact]
     public async Task GetPluginFilePaths_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
     {
         var response = await Client.GetAsync($"/plugins/file-paths?plugin={Plugin}");

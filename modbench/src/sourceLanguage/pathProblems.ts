@@ -96,12 +96,18 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
   });
   const take = (answers: readonly PluginFilePaths[], target: string) => {
     const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
-    for (const key of held.keys()) if ((target === WHOLE_SET || key === target) && !answered.has(key)) held.delete(key);
-    for (const answer of answers) held.set(pluginAddressKey(answer.plugin), { answer, texts: new Map() });
+    let changed = answers.length !== answered.size;
+    for (const key of held.keys()) if ((target === WHOLE_SET || key === target) && !answered.has(key)) { held.delete(key); changed = true; }
+    for (const answer of answers) {
+      const key = pluginAddressKey(answer.plugin);
+      if (held.get(key)?.answer === answer) continue;
+      held.set(key, { answer, texts: new Map() });
+      changed = true;
+    }
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
     tellStanding();
     showStatus();
-    void judge();
+    if (changed) void judge();
   };
   const ask = async (plugin?: PluginAddress, atSubscribe = false) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);

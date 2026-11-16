@@ -11,6 +11,13 @@ internal static class Wire
     // How long a client waits for anything the service does on a thread of its own.
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
+    /// <summary>A GET that says it holds the answer tagged <paramref name="tag"/> (If-None-Match).</summary>
+    internal static async Task<HttpResponseMessage> GetHolding(this HttpClient client, string url, System.Net.Http.Headers.EntityTagHeaderValue tag)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url) { Headers = { IfNoneMatch = { tag } } };
+        return await client.SendAsync(request);
+    }
+
     internal static Task<HttpResponseMessage> PutLoadOrder(
         this HttpClient client, ScatteredFixtureData fx, params string[] origins) =>
         client.PutLoadOrder(fx, Listed(fx, origins));

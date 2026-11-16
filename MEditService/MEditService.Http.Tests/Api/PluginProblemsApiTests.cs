@@ -30,6 +30,18 @@ public sealed class PluginProblemsApiTests : HostedTests
     }
 
     [Fact]
+    public async Task GetProblems_AskedWithTheTagOfItsLastAnswer_AnswersNotModified()
+    {
+        await CompiledPluginLoad();
+        var url = $"/plugins/problems?plugin={Plugin}&origin={Origin}";
+        var tag = (await Client.GetAsync(url)).Headers.ETag.Require();
+
+        var again = await Client.GetHolding(url, tag);
+
+        Assert.Equal(HttpStatusCode.NotModified, again.StatusCode);
+    }
+
+    [Fact]
     public async Task GetProblems_ACompiledPluginReferringToAMissingRecord_NamesTheReferrersFileInTheModFolder_WhichSpellsTheTargetAsAnswered()
     {
         var fx = await CompiledPluginLoad();
