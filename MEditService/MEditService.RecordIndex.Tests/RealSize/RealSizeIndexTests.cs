@@ -227,8 +227,10 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         var check = Index.Queries.Hold(null, CancellationToken.None);
         plugin.HandEdit(record, $"\"{record.EditorId}\"", "\"Edited\"");
 
-        Budgets.Ran(OneGesture, () => Held(new PluginChange(plugin.Key, [path])), $"An edit made during a check that reads {rewritten.Count} plugins");
+        var took = Budgets.Fastest(() => Held(new PluginChange(plugin.Key, [path])));
 
+        Console.WriteLine($"BUDGET An edit made during a check that reads {rewritten.Count} plugins: {took.TotalSeconds:F2} s");
+        Assert.True(took <= OneGesture, $"The edit took {took.TotalSeconds:F2} s, past its budget of {OneGesture.TotalSeconds:F1} s.");
         Assert.False(check.IsCompleted, "The check ended before the edit returned.");
         Assert.Equal("Edited", Index.RowOf(formKey, plugin.Key)?.EditorId);
         Assert.Null(check.GetAwaiter().GetResult());

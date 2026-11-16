@@ -42,7 +42,7 @@ export interface EditorCommandDeps {
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'recordIndexMayBeLate' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getRecordOwners'
-    | 'latestLoadOrder' | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
+    | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // The rows selected in the view `view` names, which a key bound in that view acts on.

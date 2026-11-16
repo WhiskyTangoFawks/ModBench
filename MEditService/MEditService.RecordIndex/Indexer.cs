@@ -511,6 +511,11 @@ internal sealed class Indexer : IDisposable
         return () => ValidateAndPublish(paths, named, files, hands);
     }
 
+    private bool NamedWaits()
+    {
+        lock (_turns) return _named.Count > 0 || _namedFiles.Count > 0 || _namedHands.Count > 0;
+    }
+
     // ADR-0029: long work lands what was named meanwhile between its steps, except a plugin still to land, and nothing while
     // a newer load order waits. A landing that reopened the store stops the work with its failure.
     private bool LandNamedBetween(OpenScope scope, Func<PluginAddress, bool> stillToLand)
@@ -1285,8 +1290,8 @@ internal sealed class Indexer : IDisposable
             ? string.Join('\n', places.Select(place => $"{Store.Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
 
-    // ADR-0029: the plugins validated within a landing's time land together, and what was named meanwhile lands between,
-    // moving the stamps. A plugin not held failed to open, and the reconcile opens it again once its bytes change.
+    // ADR-0029: the plugins validated within a landing's time land together until something is named, which then lands
+    // between, moving the stamps. A plugin not held failed to open, and the reconcile opens it again once its bytes change.
     private void ValidateIndex(CancellationToken token)
     {
         var scope = RequireScope();
@@ -1302,7 +1307,7 @@ internal sealed class Indexer : IDisposable
                 scope.Store.Commit(_ =>
                 {
                     indexed ??= scope.Store.IndexedStamps(plugins.Skip(at).Select(held => held.Key).Where(key => !scope.Projector.Matched(key)));
-                    for (var first = true; at < plugins.Count && (first || _timeProvider.GetUtcNow() < until); first = false)
+                    for (var first = true; at < plugins.Count && (first || (_timeProvider.GetUtcNow() < until && !NamedWaits())); first = false)
                     {
                         token.ThrowIfCancellationRequested();
                         if (scope.Held.Find(plugins[at++].Key) is { } plugin && ValidateOne(scope, plugin, indexed, token)) landed.Add(plugin);
