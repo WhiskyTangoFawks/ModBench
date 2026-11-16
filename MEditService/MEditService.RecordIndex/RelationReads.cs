@@ -72,11 +72,10 @@ internal sealed class RelationReads(
         var tableName = FindRecordTypeInAnyPlugin(context, formKey);
         if (tableName == null) return null;
         var (body, editorId, parseDiagnosis) = CallerText.Read(text);
-        var schema = store.Schemas[tableName];
-        resolver.Learn(context, LinksOf(body, schema));
+        LearnLinks(resolver, context, [(body, tableName)]);
         return DocumentFromBody(
             context, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
-            schema, resolver.Resolve, parseDiagnosis);
+            store.Schemas[tableName], resolver.Resolve, parseDiagnosis);
     }
 
     /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
@@ -101,7 +100,7 @@ internal sealed class RelationReads(
         var stored = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
             .SelectMany(record => record).ToList();
         var resolver = NewLinkResolver();
-        LearnLinks(resolver, context, stored);
+        LearnLinks(resolver, context, stored.Select(copy => (copy.Body, copy.RecordType)));
         var held = stored.Select(copy => ReadDocumentFromBody(context, copy, resolver.Resolve))
             .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
         return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolver);
@@ -181,14 +180,12 @@ internal sealed class RelationReads(
     public OverrideStack? GetOverrideStack(string formKey, LinkResolver resolver)
     {
         using var context = OpenRead();
-        var located = context.Rows(
-            "SELECT form_key, plugin, origin, strlen(body), record_type FROM records WHERE form_key = $1 ORDER BY load_order_idx",
-            reader => (Size: CopySizeOf(reader), RecordType: reader.GetString(4)), formKey);
+        var located = Located(context, "records", "form_key = $1", formKey);
         if (located.Count == 0) return null;
-        var recordType = located[0].RecordType;
-        List<CopySize> ofThatType = [.. located.Where(copy => copy.RecordType == recordType).Select(copy => copy.Size)];
-        var copies = Stored(context, [ofThatType]).Single();
-        LearnLinks(resolver, context, copies);
+        var stored = Stored(context, [located]).Single();
+        var recordType = stored[0].RecordType;
+        var copies = stored.FindAll(copy => copy.RecordType == recordType);
+        LearnLinks(resolver, context, copies.Select(copy => (copy.Body, copy.RecordType)));
         var entries = copies.ConvertAll(copy =>
         {
             var doc = ReadDocumentFromBody(context, copy, resolver.Resolve);
@@ -367,11 +364,9 @@ internal sealed class RelationReads(
 
     public LinkResolver NewLinkResolver() => new(Resolve);
 
-    private void LearnLinks(LinkResolver resolver, ReadContext context, IEnumerable<StoredCopy> copies) =>
-        resolver.Learn(context, copies.SelectMany(copy => LinksOf(copy.Body, store.Schemas[copy.RecordType])));
-
-    private static IEnumerable<string> LinksOf(string body, RecordTableSchema schema) =>
-        FormReferences.Collect(body, schema.RecordColumns).Select(reference => reference.TargetFormKey);
+    private void LearnLinks(LinkResolver resolver, ReadContext context, IEnumerable<(string Body, string RecordType)> documents) =>
+        resolver.Learn(context, documents.SelectMany(document =>
+            FormReferences.Collect(document.Body, store.Schemas[document.RecordType].RecordColumns).Select(reference => reference.TargetFormKey)));
 
     // A join of winners would hold the whole index in memory.
     public IReadOnlyDictionary<string, string> RecordTypesOf(List<string> formKeys)

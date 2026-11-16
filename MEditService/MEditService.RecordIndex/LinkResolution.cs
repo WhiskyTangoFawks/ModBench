@@ -45,8 +45,8 @@ internal static class LinkResolution
         new(reader.GetString(first), reader.GetStringOrNull(first + 1));
 }
 
-/// <summary>One response's FormKey to (record type, EditorID) lookup against the winning copy. It learns the links of the
-/// documents it reads in one pass over the winners; a FormKey it was not told resolves alone.</summary>
+/// <summary>One response's FormKey to (record type, EditorID) lookup against the winning copy. The FormKeys it is handed to
+/// learn resolve in one pass over the winners; any other resolves alone.</summary>
 internal sealed class LinkResolver(Func<string, RecordLookupEntry?> resolveAlone)
 {
     private readonly Dictionary<string, RecordLookupEntry?> _resolved = new(StringComparer.Ordinal);

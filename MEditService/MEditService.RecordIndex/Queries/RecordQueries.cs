@@ -117,8 +117,6 @@ internal sealed class RecordQueries(
     {
         using var reads = RequireReads().InOneSnapshot();
         var recordText = text is null ? (RecordText?)null : TextOfRecord(formKey, text.Plugin, text.DocumentText);
-        // One memoizing cache per response (ADR-0005): a FormKey repeated across sibling
-        // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
         var resolver = reads.NewLinkResolver();
         var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey, resolver);
         if (stack == null && text == null) return null;

@@ -34,7 +34,7 @@ public sealed class RealSizeModlist : IDisposable
     private const int BigSourceRank = 7;
 
     // LitR's deepest conflict stack.
-    private const int PluginsOverridingOneRecord = 230;
+    public const int PluginsOverridingOneRecord = 230;
 
     private readonly RunFolder _folder;
     private readonly List<(FormKey Key, string EditorId)> _baseStatics = [];

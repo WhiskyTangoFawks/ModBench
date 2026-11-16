@@ -328,6 +328,6 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         CompareResult? compared = null;
 
         Budgets.Ran(OneRecordsComparison, () => compared = queries.GetCompare(modlist.OverriddenRecord, null).Value(), "Comparing a record across its stack", Runs);
-        Assert.True(compared?.Overrides.Count > 100);
+        Assert.Equal(modlist.LoadOrder.Take(RealSizeModlist.PluginsOverridingOneRecord + 1).Count(plugin => plugin.Enabled), compared?.Overrides.Count);
     }
 }
