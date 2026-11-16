@@ -1,11 +1,11 @@
-// The switch profile gesture, refresh and the rename of a profile, bound to one instance.
+// The switch profile gesture, the rebuild of the record index and the rename of a profile, bound to one instance.
 
 import type { MEditClient } from '../client';
 import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { TailOf } from '../coreLib/boundCommand';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import type { RefreshResult } from './loadOrder';
+import type { RebuildResult } from './loadOrder';
 import { change, committedBy, type RenameEditing } from '../coreLib/change';
 import type { ChangeResult } from '../ports/changeResult';
 
@@ -31,9 +31,9 @@ function renameProfile(adapter: InstanceAdapter, { held, apply }: RenameEditing,
   return change(owners, (owner) => owner.plan({ kind: 'profile', name: from }, to, held), apply);
 }
 
-async function refresh(
+async function rebuildRecordIndex(
   adapter: InstanceAdapter, client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string,
-): Promise<RefreshResult> {
+): Promise<RebuildResult> {
   try {
     const outcome = await client.rebuildIndex(instanceRoot, await adapter.gameRelease());
     if (outcome.rebuilt) return { applied: true };
@@ -51,7 +51,7 @@ export function instanceCommands(
 ) {
   return {
     switchProfile: (...args: TailOf<typeof switchProfile>) => switchProfile(adapter, ...args),
-    refresh: () => refresh(adapter, client, instanceRoot),
+    rebuildRecordIndex: () => rebuildRecordIndex(adapter, client, instanceRoot),
     renameProfile: (...args: TailOf<typeof renameProfile>) => renameProfile(adapter, ...args),
   };
 }

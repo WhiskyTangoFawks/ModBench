@@ -409,6 +409,8 @@ export interface MEditClient {
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
    *  unsaved documents is unanswered, or the sweep one started has not settled. */
   readonly recordIndexMayBeLate: boolean;
+  /** Told the new value wherever `recordIndexMayBeLate` changes, which no change of the record index tells. */
+  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable;
 
   /** The latest load-order status; undefined before the first, and again when a held status
    *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */
@@ -427,8 +429,8 @@ export interface MEditClient {
   /** How many snapshots have been handed to be sent: a caller that sees it grow knows a send followed its work. */
   loadOrdersHanded(): number;
   /** Tells mEdit the files at `paths` changed, or, with none, to check the disk, once every snapshot handed
-   *  before has answered. Signals handed while one is in flight fold into one more. */
-  signalChange(paths: readonly string[]): void;
+   *  before has answered. Settles once the sweep it starts is over, at once while mEdit is not running. */
+  signalChange(paths: readonly string[]): Promise<void>;
   /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
    *  behind the stream may hold nothing sent before. */
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;

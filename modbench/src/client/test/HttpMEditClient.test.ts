@@ -1298,6 +1298,96 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 
+  describe('the promise a change signal returns', () => {
+    async function signalling() {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = {};
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/signal-change', () => { status = { validating: true }; return noContent(); }],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus))],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      return { client, push };
+    }
+
+    it('settles when the sweep the check started has settled, not when the signal is answered', async () => {
+      const { client, push } = await signalling();
+      let settled = false;
+
+      const signalled = client.signalChange([]).then(() => { settled = true; });
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(true); });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(settled).toBe(false);
+
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await signalled;
+      expect(settled).toBe(true);
+    });
+  });
+
+  describe('the event of the lateness changing', () => {
+    it('tells true when a signal starts a sweep and false when the sweep settles, once each', async () => {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = {};
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/signal-change', () => { status = { validating: true }; return noContent(); }],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus))],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      const told: boolean[] = [];
+      client.onDidChangeRecordIndexMayBeLate((late) => { told.push(late); });
+
+      const signalled = client.signalChange(['/m/Foo.esp']);
+      await vi.waitFor(() => { expect(told).toEqual([true]); });
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await signalled;
+
+      expect(told).toEqual([true, false]);
+    });
+  });
+
+  describe('a rebuild of the record index', () => {
+    async function rebuilding(holdingALoadOrder: boolean) {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = { state: 'None', conflictsComputed: false };
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/index/rebuild', () => { status = { state: 'None', conflictsComputed: false }; return noContent(); }],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus))],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      if (holdingALoadOrder) push(readyTickThatSettlesPutLoadOrder());
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.loadOrderStatus?.holdsNone).toBe(false); });
+      return { client, push };
+    }
+
+    it('is late until the refill it starts settles', async () => {
+      const { client, push } = await rebuilding(true);
+
+      await expect(client.rebuildIndex('/instance', 'Fallout4')).resolves.toEqual({ rebuilt: true });
+      expect(client.recordIndexMayBeLate).toBe(true);
+
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false, version: 1 }));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
+
+    it('is not late when mEdit holds no load order to refill', async () => {
+      const { client } = await rebuilding(false);
+
+      await client.rebuildIndex('/instance', 'Fallout4');
+
+      expect(client.recordIndexMayBeLate).toBe(false);
+    });
+  });
+
   it('is true from unsaved documents handed until their PUT is answered and the status shows nothing validating', async () => {
     let puts = 0;
     let answerPut!: () => void;
@@ -1319,7 +1409,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
   });
 
   describe.each<[string, (client: MEditClient) => void]>([
-    ['a change signal', (client) => { client.signalChange(['/m/Foo.esp']); }],
+    ['a change signal', (client) => { void client.signalChange(['/m/Foo.esp']); }],
     ['unsaved documents', (client) => { client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]); }],
   ])('after %s are answered', (_what, hand) => {
     async function started() {

@@ -44,6 +44,7 @@ function deferred<T>() {
 
 function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: Readonly<Record<string, Answer>> = {}) {
   const events: string[] = [];
+  const locksTaken: string[] = [];
   let quiet = 0;
   const reporter = recordingReporter();
   const rename = async ({ apply }: RenameEditing, from: string, to: string): Promise<ChangeResult> => {
@@ -73,7 +74,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     scripts: { renameScript: (editing, { name, to }) => renameScript(editing, name, to.name ?? '') },
     source: {
       applyWorkspaceChanges: (items) => { events.push(`apply ${String(items.length)}${quiet > 0 ? ', quiet' : ''}`); return Promise.resolve(); },
-      oneAtATime: (job) => job(),
+      oneAtATime: (job) => { locksTaken.push(quiet > 0 ? 'quiet' : 'not quiet'); return job(); },
       refreshSourceControlFor: () => undefined,
     },
     instance: {
@@ -84,7 +85,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     },
     reporter,
   });
-  return { follow, events, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
+  return { follow, events, locksTaken, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
 }
 
 const renaming = (rename: FileRename, symbol: RenamedSymbol): [string, RenamedSymbol] => [`${rename.from} > ${rename.to}`, symbol];
@@ -102,6 +103,14 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     await following.done;
     expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1, quiet', 'commit Renamed.esp, quiet']);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('takes the source lock once the instance is quiet, the order the rename gestures take them in, so neither waits on the other', async () => {
+    const { follow, locksTaken } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
+
+    await follow([RENAME], Promise.resolve(true)).done;
+
+    expect(locksTaken).toEqual(['quiet']);
   });
 
   it.each([

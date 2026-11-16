@@ -19,6 +19,7 @@ vi.mock('vscode', () => ({
 import { registerPutLoadOrder } from '../putLoadOrderCommand';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import type { InstanceSubscriber } from '../../instanceLoader/instance';
 
 const wired = () => {
   const puts: (string | undefined)[] = [];
@@ -26,7 +27,7 @@ const wired = () => {
   const instance = new FakeInstance(instanceValueFixture());
   registerPutLoadOrder({
     onRecompute: (_source, stringsLanguage) => { puts.push(stringsLanguage); sent.push('put'); },
-    signalChange: (paths) => { sent.push(`signal ${paths.join()}`); },
+    signalChange: (paths) => { sent.push(`signal ${paths.join()}`); return Promise.resolve(); },
   }, instance);
   return { puts, sent, instance };
 };
@@ -63,6 +64,27 @@ describe('signal change', () => {
     commands.get('modbench.instance.signalChange')?.(undefined);
 
     expect(sent).toEqual(['signal ']);
+  });
+});
+
+describe('the instance read that signalled', () => {
+  it('settles once the sweep the signal started has settled', async () => {
+    let sweepEnds!: () => void;
+    const sweep = new Promise<void>((resolve) => { sweepEnds = resolve; });
+    const subscribers: InstanceSubscriber[] = [];
+    registerPutLoadOrder(
+      { onRecompute: () => undefined, signalChange: () => sweep },
+      { value: instanceValueFixture(), subscribe: (subscriber) => { subscribers.push(subscriber); return { dispose: () => undefined }; } },
+    );
+    const signalling = subscribers.at(-1);
+    let settled = false;
+
+    void Promise.resolve(signalling?.(instanceValueFixture(), 1, { named: [], disk: true })).then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    sweepEnds();
+    await vi.waitFor(() => { expect(settled).toBe(true); });
   });
 });
 
