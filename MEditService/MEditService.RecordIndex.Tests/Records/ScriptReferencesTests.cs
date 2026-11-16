@@ -60,4 +60,19 @@ public sealed class ScriptReferencesTests
         Assert.Equal(["VirtualMachineAdapter.Scripts[0].Name"], Assert.Single(attached).FieldPaths);
         Assert.Empty(fixture.Index.Queries.GetScriptReferences("Ns:Edited").Value().Copies);
     }
+
+    [Fact]
+    public void ARecordTheWorkingTreeLoses_IsNoLongerAReferenceToTheScriptItAttached()
+    {
+        using var fixture = new IndexedContainerMod();
+        var npc = fixture.Index.DocumentOf(fixture.Npc, fixture.Plugin);
+        var body = JsonNode.Parse(fixture.Index.BodyOf(fixture.Npc, fixture.Plugin)).Require().AsObject();
+        body["VirtualMachineAdapter"] = new JsonObject { ["Scripts"] = new JsonArray(new JsonObject { ["Name"] = "Ns:Lost" }) };
+        fixture.Index.Edit(fixture.Entry, npc, body.ToJsonString());
+        Assert.Single(fixture.Index.Queries.GetScriptReferences("Ns:Lost").Value().Copies);
+
+        fixture.Index.Delete(fixture.Entry, npc);
+
+        Assert.Empty(fixture.Index.Queries.GetScriptReferences("Ns:Lost").Value().Copies);
+    }
 }
