@@ -36,7 +36,16 @@ interface RecordsChanged { readonly plugin: PluginAddress; readonly keys?: reado
 export type RecordIndexChange = readonly RecordsChanged[] | undefined;
 
 /** Work done out of total, as a long operation reports it. */
-export interface RecordIndexProgress { readonly done: number; readonly total: number }
+export interface RecordIndexProgress {
+  readonly done: number;
+  readonly total: number;
+  /** The Apply the progress answers for: a put waits for the version it was given. */
+  readonly version: number;
+  /** Every plugin indexed and the winners computed: what a comparison may be asked of. */
+  readonly settled: boolean;
+  /** Why mEdit refuses the load order, as a work-done report ends with its message. */
+  readonly refusal?: LoadOrderRefusal;
+}
 
 /** The backend process as the extension reports it: starting while it comes up, running while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
@@ -87,8 +96,6 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
   return (NOTIFICATION_KINDS as readonly string[]).includes(kind);
 }
 
-/** What the record index stands at for the load order it holds: how far it has indexed it, what failed, and why it refuses. */
-export type RecordIndexStanding = LoadOrderStatus;
 
 /** ADR-0013's snapshot, with the PUT's keys. */
 export type LoadOrderSnapshot = components['schemas']['LoadOrderRequest'];
@@ -97,7 +104,7 @@ export type LoadOrderSnapshot = components['schemas']['LoadOrderRequest'];
  *  mid-flight. `backendFailed`: mEdit did not come up to take it. `applied` carries the terminal
  *  status the Index reached, never read off the PUT alone. */
 export type LoadOrderOutcome =
-  | { outcome: 'applied'; status: RecordIndexStanding }
+  | { outcome: 'applied'; version: number }
   | { outcome: 'failed'; message: string }
   | { outcome: 'abandoned' }
   | { outcome: 'backendFailed' };
@@ -109,7 +116,16 @@ export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { 
 /** An archive's files, by their paths in it, or none and why it cannot be read. */
 export type ArchiveContents = components['schemas']['ArchiveContents'];
 
-/** mEdit cleared the filter from `source` for `reason`, as the record index stood at `sequence`. */
+/** A plugin of the load order and how far the record index has come with it. */
+export type IndexOfPlugin = components['schemas']['IndexOfPlugin'];
+
+/** The plugins the record index failed to read, with why. */
+export function loadFailuresOf(indexing: readonly IndexOfPlugin[]): PluginLoadFailure[] {
+  return indexing.flatMap(({ name, origin, state, reason, diagnosis }) =>
+    state === 'Failed' ? [{ name, origin, reason: reason ?? '', ...(diagnosis == null ? {} : { diagnosis }) }] : []);
+}
+
+/** Why mEdit cleared the filter from `source`, until another is set or cleared on purpose. */
 export type FilterCleared = components['schemas']['FilterCleared'];
 
 /** A document with changes VS Code holds unsaved, by absolute path. */
@@ -400,7 +416,9 @@ export interface MEditClient {
   /** Null when mEdit dropped the filter, or the reason it did not. */
   clearFilter(): Promise<string | null>;
   getActiveFilter(token?: ReadCancellation): Promise<RecordFilter | null | ReadFailed>;
-  /** Why mEdit cleared the filter, until another is set or cleared on purpose; null when it did not. */
+  /** Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it. */
+  getPluginsIndexing(token?: ReadCancellation): Promise<IndexOfPlugin[] | ReadFailed>;
+  /** Null when mEdit did not clear the filter. */
   getFilterCleared(token?: ReadCancellation): Promise<FilterCleared | null | ReadFailed>;
 
   /** The one change event, shaped as VS Code's `Event`: what changed in the record index, as names or as everything. */
@@ -415,15 +433,12 @@ export interface MEditClient {
   refreshRecordIndexLateness(token?: ReadCancellation): Promise<void>;
   /** Told the new value wherever `recordIndexMayBeLate` changes, which no change of the record index tells. */
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable;
-  /** The plugins the record index has finished or failed, out of all the load order holds, while it indexes one; undefined
-   *  when it indexes none. A record index indexing is late. */
+  /** How far the record index has come with the load order it holds, or why it refuses it; undefined while it holds none.
+   *  A record index not settled, or refusing, is late. */
   readonly recordIndexProgress: RecordIndexProgress | undefined;
   /** Told the new value wherever `recordIndexProgress` changes. */
   onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable;
 
-  /** What the record index stands at; undefined before the first status, and again when it resets: mEdit has gone, or
-   *  the stream has reopened onto a process that may be another. Moves with `onDidChange` and `onDidChangeRecordIndexProgress`. */
-  readonly recordIndexStanding: RecordIndexStanding | undefined;
 
   /** One snapshot is put at a time, and the newest lands. Answers `backendFailed` once mEdit is gone. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;

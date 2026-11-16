@@ -38,10 +38,9 @@ import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { makeShowRecordFilter, registerFilterCommands } from './recordFilterCommands';
 import { survivingSelection } from './survivingSelection';
-import { followIndexStatus } from './indexStatus';
+import { followIndexStatus, type FollowedNarrator } from './indexStatus';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { RecordCreateDeps } from './createRecordCommand';
-import type { ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 import { mastersOfPlugins } from './mastersOfPlugins';
 import { modsOfPlugins } from './modsOfPlugins';
@@ -57,7 +56,7 @@ export interface PluginsViewDeps {
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
-    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged' | 'getFilterCleared' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags'>;
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged' | 'getFilterCleared' | 'getPluginsIndexing' | 'recordIndexProgress' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags'>;
   statusBar: StatusBar;
   /** Registers the source mods' repositories: a reconcile reached Ready. */
   registerRepositories: () => Promise<void>;
@@ -86,7 +85,7 @@ export interface PluginsView extends vscode.Disposable {
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
   symbolRows: PluginRows;
-  narrator: ReconcileNarrator;
+  narrator: FollowedNarrator;
   /** The lines that bear on a read of the plugins, for the agent. */
   standingLines: () => string[];
   sortingRuleLines: () => string[];

@@ -59,6 +59,9 @@ interface FeedOptions {
   readonly holdsLoadOrder?: boolean;
 }
 
+/** The plugins each read of their facts named, which the read of their index state is not. */
+const factsAsked = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getPlugins').map(({ args }) => args);
+
 function feedOver({
   shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [], holdsLoadOrder = true,
 }: FeedOptions = {}) {
@@ -265,6 +268,20 @@ describe('PluginFactsFeed', () => {
     expect(changes.mock.calls).toEqual([[[A]]]);
   });
 
+  describe('a change while mEdit rebuilds the record index, when it opens no plugin', () => {
+    it('leaves a row it does not hold still indexing, never an error', async () => {
+      const { feed, client } = feedOver();
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+      feed.indexed([], []);
+      client.setQueryAnswer('getPlugins', []);
+
+      await feed.refresh();
+
+      expect(feed.rows.expansion(A)).toEqual({ kind: 'indexing' });
+    });
+  });
+
   describe('judging again as the facts are re-read', () => {
     const B = { name: 'B.esp', origin: 'SomeMod' };
     const raised = (errors: readonly (readonly unknown[])[]) => errors.map((published) => published.length > 0);
@@ -307,7 +324,7 @@ describe('PluginFactsFeed', () => {
 
       await feed.refresh([A]);
 
-      expect([client.calls.map(({ args }) => args), feed.rows.contextFlags(A).includes('compiledPlugin'), feed.rows.contextFlags(B).includes('compiledPlugin')])
+      expect([factsAsked(client), feed.rows.contextFlags(A).includes('compiledPlugin'), feed.rows.contextFlags(B).includes('compiledPlugin')])
         .toEqual([[[[A]]], false, true]);
     });
 
@@ -319,7 +336,7 @@ describe('PluginFactsFeed', () => {
 
       await feed.refresh();
 
-      expect(client.calls.map(({ args }) => args)).toEqual([[]]);
+      expect(factsAsked(client)).toEqual([[]]);
     });
 
     it('forgets a named plugin the answer does not hold', async () => {
@@ -372,7 +389,7 @@ describe('PluginFactsFeed', () => {
 
       await feed.refresh([B]);
 
-      expect([client.calls.map(({ args }) => args), compiledPluginFlag(feed)]).toEqual([[[]], true]);
+      expect([factsAsked(client), compiledPluginFlag(feed)]).toEqual([[[]], true]);
     });
 
     it('keeps apart two plugins whose names differ only in case', async () => {
@@ -422,7 +439,7 @@ describe('PluginFactsFeed', () => {
       client.emit(loadOrderStatusEventFixture());
       await feed.refresh();
 
-      expect({ whileNoneHeld, after: client.calls.map(({ method }) => method) }).toEqual({ whileNoneHeld: [], after: ['getPlugins'] });
+      expect({ whileNoneHeld, after: client.calls.map(({ method }) => method).filter((method) => method !== 'getPluginsIndexing') }).toEqual({ whileNoneHeld: [], after: ['getPlugins'] });
     });
 
     it('reads the next re-read after one that threw', async () => {
@@ -693,6 +710,16 @@ describe('PluginFactsFeed', () => {
     expect(sourceUnreadable.items.map((entries) => entries.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
   });
 
+  it('publishes a plugin mEdit never opened and says changed outside, which no read of its facts names', async () => {
+    const { feed, client, changedOutside } = feedOver();
+    client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswer('getPluginsIndexing', [{ name: 'Never.esp', origin: 'SomeMod', state: 'Failed', reason: 'truncated', changedOutside: true }]);
+
+    await feed.refresh();
+
+    expect(changedOutside.items.at(-1)?.map(({ plugin, origin }) => ({ plugin, origin }))).toEqual([{ plugin: 'Never.esp', origin: 'SomeMod' }]);
+  });
+
   it.each([
     ['a facts re-read', (feed: PluginFactsFeed) => feed.refresh()],
     ['a reconcile', (feed: PluginFactsFeed) => feed.reconciled([])],
@@ -703,14 +730,5 @@ describe('PluginFactsFeed', () => {
     await read(feed);
 
     expect(changedOutside.items.at(-1)?.map(({ plugin, origin }) => ({ plugin, origin }))).toEqual([{ plugin: 'A.esp', origin: 'SomeMod' }]);
-  });
-
-  it('names the plugin the facts re-read found changed outside, so its row is redrawn', async () => {
-    const { feed, client, changes } = feedOver();
-    client.setQueryAnswer('getPlugins', [held({ changedOutside: true })]);
-
-    await feed.refresh([A]);
-
-    expect(changes.mock.calls).toEqual([[[A]]]);
   });
 });

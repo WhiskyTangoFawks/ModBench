@@ -2,13 +2,13 @@ import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { IGNORED_THROWS } from './fixtures';
 import type { Disposable } from '../eventEmitter';
 import type {
-  MEditClient, RecordIndexChange, RecordIndexProgress, RecordIndexStanding, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
+  MEditClient, RecordIndexChange, RecordIndexProgress, IndexOfPlugin, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
-import { trackLateness, trackProgress } from '../lateness';
+import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 import { keepRecordIndexChanges } from '../recordIndexChanges';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
@@ -19,7 +19,7 @@ type QueryMethod =
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
-  | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'getFilterCleared';
+  | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'getFilterCleared' | 'getPluginsIndexing';
 
 type CommandMethod =
   | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'rebuildIndex' | 'versionInGit' | 'build' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getCreateChanges' | 'getDeleteChanges'
@@ -251,13 +251,12 @@ export class InMemoryMEditClient implements MEditClient {
     return Promise.resolve();
   }
   get recordIndexMayBeLate(): boolean {
-    return this.sender.pending() || this.notifications.heardSequence < this.readSequence || this.recordIndexProgress !== undefined;
+    return this.sender.pending() || this.notifications.heardSequence < this.readSequence || indexingMakesLate(this.recordIndexProgress);
   }
   get recordIndexProgress(): RecordIndexProgress | undefined { return this.loadOrderStatusKept.progress(); }
   onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
-  get recordIndexStanding(): RecordIndexStanding | undefined { return this.loadOrderStatusKept.current(); }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
@@ -500,4 +499,13 @@ export class InMemoryMEditClient implements MEditClient {
   clearFilter(): ReturnType<MEditClient['clearFilter']> { return this.query('clearFilter', []); }
   getActiveFilter(): ReturnType<MEditClient['getActiveFilter']> { return this.query('getActiveFilter', []); }
   getFilterCleared(): ReturnType<MEditClient['getFilterCleared']> { return this.query('getFilterCleared', []); }
+  getPluginsIndexing(): ReturnType<MEditClient['getPluginsIndexing']> {
+    if (this.queryAnswers.getPluginsIndexing?.length || this.queryQueues.getPluginsIndexing?.length || this.queryFailures.has('getPluginsIndexing')) return this.query('getPluginsIndexing', []);
+    this.record('getPluginsIndexing', []);
+    const status = this.loadOrderStatusKept.current();
+    return Promise.resolve([
+      ...(status?.indexedPlugins ?? []).map(({ name, origin }): IndexOfPlugin => ({ name, origin, state: 'Indexed', changedOutside: false })),
+      ...(status?.failures ?? []).map(({ name, origin, reason, diagnosis }): IndexOfPlugin => ({ name, origin, state: 'Failed', reason, diagnosis, changedOutside: false })),
+    ]);
+  }
 }

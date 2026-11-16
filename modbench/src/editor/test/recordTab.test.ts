@@ -17,7 +17,7 @@ const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-c
 const PLUGIN_CHANGED = notificationEventFixture({ kind: 'plugin-changed', plugin: 'Mod.esp', origin: 'ModA', sequence: 2 });
 
 const settles = (client: InMemoryMEditClient) => {
-  client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.recordIndexStanding?.version ?? 0) + 1 }));
+  client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.recordIndexProgress?.version ?? 0) + 1 }));
 };
 
 

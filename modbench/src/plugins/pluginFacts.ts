@@ -138,6 +138,8 @@ export class PluginFacts {
   private diagnosisReports: PluginDiagnosisReport[] = [];
   private changed = new ByPluginAddress<true>();
   private changedOutsideProblems: PluginProblem[] = [];
+  private changedRows: readonly PluginAddress[] = [];
+  private changedWithoutRow: readonly PluginAddress[] = [];
   private notRestoredFrom = new ByPluginAddress<string>();
   // Row status only, no blink: merges across a reload's ticks and persists until `reconciled`
   // lands the new answer.
@@ -264,10 +266,8 @@ export class PluginFacts {
       decompileRepairs: p.pluginSourceUnreadable.decompileRepairs,
     }]);
     this.matches = matches;
-    this.changed = new ByPluginAddress<true>();
-    for (const p of plugins) if (p.changedOutside) this.changed.set(p, true);
-    this.changedOutsideProblems = plugins.filter((p) => p.changedOutside)
-      .map((p) => ({ plugin: p.name, origin: p.origin, text: CHANGED_OUTSIDE_TEXT }));
+    this.changedRows = plugins.filter((p) => p.changedOutside);
+    this.deriveChanged();
     this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
       pluginAddressKey(p),
       `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
@@ -277,6 +277,19 @@ export class PluginFacts {
     const sortingChanged = judged !== this.judgedFacts;
     this.judgedFacts = judged;
     return sortingChanged;
+  }
+
+  /** The plugins mEdit says changed outside Modbench that it never opened, so no read of its facts names them. */
+  changedWithoutARow(plugins: readonly PluginAddress[]): void {
+    this.changedWithoutRow = plugins;
+    this.deriveChanged();
+  }
+
+  private deriveChanged(): void {
+    const everyone = [...this.changedRows, ...this.changedWithoutRow.filter((address) => !this.answers.has(exactPluginAddressKey(address)))];
+    this.changed = new ByPluginAddress<true>();
+    for (const address of everyone) this.changed.set(address, true);
+    this.changedOutsideProblems = everyone.map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT }));
   }
 
   private factsOver(order: readonly PluginAddress[]): PluginFactsOf {

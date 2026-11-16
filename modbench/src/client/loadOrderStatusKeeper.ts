@@ -5,7 +5,6 @@ import { isMEditGone, type MEditClient, type RecordIndexProgress } from './MEdit
 
 export interface LoadOrderStatusKeeper {
   current(): LoadOrderStatus | undefined;
-  /** The plugins done out of the load order's, while the record index indexes it. */
   progress(): RecordIndexProgress | undefined;
   onStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void;
   onChanged(listener: (status: LoadOrderStatus) => void): () => void;
@@ -42,8 +41,11 @@ export function keepLoadOrderStatus(
   return {
     current: () => latest,
     progress: () => {
-      if (latest === undefined || latest.holdsNone || isSettled(latest)) return undefined;
-      return { done: latest.indexedPlugins.length + latest.failures.length, total: latest.totalPlugins };
+      if (latest === undefined || (latest.holdsNone && latest.refusal === undefined)) return undefined;
+      return {
+        done: latest.indexedPlugins.length + latest.failures.length, total: latest.totalPlugins, version: latest.version,
+        settled: isSettled(latest) && latest.refusal === undefined, ...(latest.refusal && { refusal: latest.refusal }),
+      };
     },
     onStatus: (listener) => { statusListeners.add(listener); return () => { statusListeners.delete(listener); }; },
     onChanged: (listener) => { changedListeners.add(listener); return () => { changedListeners.delete(listener); }; },

@@ -2,11 +2,9 @@ import type { Reporter } from '../ports/reporter';
 import type { SyncFailureReport } from '../drivingLib/syncFailureReport';
 import type { PutLoadOrderResult } from '../instanceCommands/loadOrder';
 
-type AppliedStatus = Extract<Extract<PutLoadOrderResult, { sent: true }>['outcome'], { outcome: 'applied' }>['status'];
-
 export interface EditingViewDeps {
   narrator: {
-    hear(status: AppliedStatus): void;
+    hearNow(): Promise<void>;
     settled(version: number): Promise<void>;
   };
   progress: {
@@ -46,8 +44,8 @@ export function editingView(deps: EditingViewDeps) {
     if (outcome.outcome === 'failed') reportPut(outcome.message);
     if (outcome.outcome !== 'applied') return;
     // The status the put waited for, heard here too: its ticks can be lost to a stream reopening.
-    narrator.hear(outcome.status);
-    await narrator.settled(outcome.status.version);
+    await narrator.hearNow();
+    await narrator.settled(outcome.version);
   };
 
   return { around, onPut };

@@ -52,7 +52,7 @@ export interface RouteRecordPanelMessageDeps {
   keepViewState: (state: ViewState) => void;
   // Whether the record index may not yet hold what Modbench handed it.
   recordIndexMayBeLate: () => boolean;
-  loadFailures: () => readonly PluginLoadFailure[];
+  loadFailures: () => Promise<readonly PluginLoadFailure[]>;
   modFacts: ModFacts;
   // The origins the panel's last read showed, which it is told the state of when the instance changes.
   originsShown: (origins: readonly string[]) => void;
@@ -191,7 +191,7 @@ async function answerRecordLoad(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
-  const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
+  const [plugins, failures] = await Promise.allSettled([deps.meditClient.getPlugins(), deps.loadFailures()]);
   const listed = plugins.status === 'fulfilled' && !isReadFailed(plugins.value) ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
   const [settled] = await Promise.allSettled([readRecord(deps, m, pluginActive)]);
@@ -202,7 +202,7 @@ async function answerRecordLoad(
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;
   }
-  tellAnswered(deps, m, read, listed, pluginActive);
+  tellAnswered(deps, m, read, listed, pluginActive, failures.status === 'fulfilled' ? failures.value : []);
 }
 
 function tellAnswered(
@@ -211,6 +211,7 @@ function tellAnswered(
   answered: RecordRead & { fileCopyAlone: boolean },
   listed: PluginMetadata[] | null,
   pluginActive: boolean,
+  loadFailures: readonly PluginLoadFailure[],
 ): void {
   if (answered.compare === null) deps.channel.warn([`Held by no plugin: ${answered.gone.join(', ')}.`, ...answered.copiesLacking].join(' '));
   const overrides = answered.compare?.overrides;
@@ -228,7 +229,7 @@ function tellAnswered(
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, ...(answered.compare && { compare: withMasterCellStates(answered.compare) }), plugins: listed, columnStatuses: statuses,
-    comparisonComplete, loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
+    comparisonComplete, loadFailures: [...loadFailures], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });
 }

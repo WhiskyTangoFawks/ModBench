@@ -1,18 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { loadOrderComing } from '../loadOrderComing';
-import type { RecordIndexStanding } from '../../client';
+import type { RecordIndexProgress } from '../../client';
 
-const status = (overrides: Partial<RecordIndexStanding>): RecordIndexStanding => ({
-  totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, holdsNone: false, validating: false, ...overrides,
-});
+const status = (overrides: Partial<RecordIndexProgress>): RecordIndexProgress => ({ done: 0, total: 0, version: 1, settled: false, ...overrides });
 
-const comingFor = (modbenchHasOne: boolean, loadOrderStatus?: RecordIndexStanding) =>
-  loadOrderComing({ hasLoadOrderToHand: modbenchHasOne, subscribe: () => ({ dispose: () => undefined }) }, { recordIndexStanding: loadOrderStatus }).now();
+const comingFor = (modbenchHasOne: boolean, progress?: RecordIndexProgress) =>
+  loadOrderComing({ hasLoadOrderToHand: modbenchHasOne, subscribe: () => ({ dispose: () => undefined }) }, { recordIndexProgress: progress }).now();
 
 describe('whether a load order is on its way to mEdit', () => {
   it.each([
     ['reconciling one', status({})],
-    ['rebuilding the index a good read filled', status({ holdsNone: true })],
+    ['rebuilding the index a good read filled', status({ done: 0, total: 3 })],
   ])('is yes while mEdit is %s, whatever Modbench holds', (_name, reported) => {
     expect(comingFor(false, reported)).toBe(true);
   });

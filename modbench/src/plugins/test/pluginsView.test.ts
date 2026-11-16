@@ -97,7 +97,7 @@ import { pluginArgumentOf } from '../../drivingLib/argument';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { soleGroup } from './browserRows';
-import type { RecordIndexStanding, LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
+import type { LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
 import { loadOrderStatusEventFixture, notificationEventFixture, pluginMetadataFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -332,9 +332,6 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
   });
 });
 
-const APPLIED_STATUS: RecordIndexStanding = {
-  totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
-};
 
 function snapshotOf(...names: string[]): LoadOrderSnapshot {
   return {
@@ -380,7 +377,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
-    expect(client.calls.map(({ method, args }) => [method, args])).toEqual([['getPlugins', [[TEST]]]]);
+    expect(client.calls.filter(({ method }) => method !== 'getPluginsIndexing').map(({ method, args }) => [method, args])).toEqual([['getPlugins', [[TEST]]]]);
   });
 
   it('redraws every row, and re-reads every plugin\'s records, when the change names none', async () => {
@@ -400,7 +397,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
 
   it('re-reads every plugin after a dropped connection', async () => {
     const { client, recordBrowser } = pluginsView();
-    client.answerPuts(() => Promise.resolve({ outcome: 'applied', status: APPLIED_STATUS }));
+    client.answerPuts(() => Promise.resolve({ outcome: 'applied', version: 1 }));
     client.setStatus('running');
     await client.sendLoadOrder(snapshotOf('A.esp', 'B.esp', 'C.esp'));
     const refresh = vi.spyOn(recordBrowser, 'refresh');
@@ -433,32 +430,34 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
     return { client, rerenders };
   }
 
-  it('re-renders for a tick that landed a new plugin', () => {
+  it('re-renders for a tick that landed a new plugin', async () => {
     const { client, rerenders } = reconciling();
 
     client.emit(tick({ indexedPlugins: [A] }));
+
+    await vi.waitFor(() => { expect(rerenders).toHaveLength(1); });
+  });
+
+  it('does not re-render for a tick that landed nothing new', async () => {
+    const { client, rerenders } = reconciling();
+
+    client.emit(tick({ indexedPlugins: [A] }));
+    client.emit(tick({ indexedPlugins: [A] }));
+    client.emit(tick({ indexedPlugins: [A] }));
+    await settle();
 
     expect(rerenders).toHaveLength(1);
   });
 
-  it('does not re-render for a tick that landed nothing new', () => {
+  it('re-renders for a tick that landed a failure though no plugin was indexed, since a failed plugin never joins the indexed set', async () => {
     const { client, rerenders } = reconciling();
 
     client.emit(tick({ indexedPlugins: [A] }));
-    client.emit(tick({ indexedPlugins: [A] }));
-    client.emit(tick({ indexedPlugins: [A] }));
-
-    expect(rerenders).toHaveLength(1);
-  });
-
-  it('re-renders for a tick that landed a failure though no plugin was indexed, since a failed plugin never joins the indexed set', () => {
-    const { client, rerenders } = reconciling();
-
-    client.emit(tick({ indexedPlugins: [A] }));
+    await settle();
     const afterTheFirst = rerenders.length;
     client.emit(tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
-    expect(rerenders.slice(afterTheFirst)).toContain(undefined);
+    await vi.waitFor(() => { expect(rerenders.slice(afterTheFirst)).toContain(undefined); });
   });
 });
 
@@ -771,6 +770,19 @@ describe('the record filter, from the commands that set and clear it', () => {
         ]);
       });
       expect(view.description()).toBeUndefined();
+    });
+
+    it('reports a clearing again whose sequence is lower than the last, as after the record index file was deleted', async () => {
+      const view = await showingA();
+      view.client.setQueryAnswer('getActiveFilter', null);
+      view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 9 });
+      view.client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+      await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
+
+      view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 1 });
+      view.client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+
+      await vi.waitFor(() => { expect(view.reporter.reports).toEqual([...warned, ...warned]); });
     });
 
     it('shows no filter when the clearing outruns the reply to the set it clears', async () => {

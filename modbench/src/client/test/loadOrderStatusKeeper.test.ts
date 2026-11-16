@@ -8,21 +8,19 @@ const tick = (conflictsComputed: boolean, failures: PluginLoadFailure[] = [], ve
 
 const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
 
-describe('the client\'s load-order status', () => {
+describe('the client\'s record index progress', () => {
   it('is undefined before the first tick', () => {
-    expect(new InMemoryMEditClient().recordIndexStanding).toBeUndefined();
+    expect(new InMemoryMEditClient().recordIndexProgress).toBeUndefined();
   });
 
   it('reads the latest tick', () => {
     const client = new InMemoryMEditClient();
 
     client.emit(tick(true, [bad]));
-    expect(client.recordIndexStanding?.conflictsComputed).toBe(true);
-    expect(client.recordIndexStanding?.failures).toEqual([bad]);
+    expect(client.recordIndexProgress).toMatchObject({ settled: true, done: 1, version: 1 });
 
     client.emit(tick(false));
-    expect(client.recordIndexStanding?.conflictsComputed).toBe(false);
-    expect(client.recordIndexStanding?.failures).toEqual([]);
+    expect(client.recordIndexProgress).toMatchObject({ settled: false, done: 0 });
   });
 
   it('resets when the backend leaves running, so a restarted process\'s reconcile starts unsettled', () => {
@@ -31,7 +29,7 @@ describe('the client\'s load-order status', () => {
 
     client.setStatus('disconnected');
 
-    expect(client.recordIndexStanding).toBeUndefined();
+    expect(client.recordIndexProgress).toBeUndefined();
   });
 
   it('resets when the stream reopens, since it may have reattached to another process', () => {
@@ -40,7 +38,7 @@ describe('the client\'s load-order status', () => {
 
     client.reconnected();
 
-    expect(client.recordIndexStanding).toBeUndefined();
+    expect(client.recordIndexProgress).toBeUndefined();
   });
 
   describe('the change event, on a status heard', () => {
@@ -95,7 +93,7 @@ describe('the client\'s load-order status', () => {
     it('is told, with the new failures already readable, when the failures differ, and not when they repeat', () => {
       const client = new InMemoryMEditClient();
       const seen: unknown[] = [];
-      client.onDidChange(() => seen.push(client.recordIndexStanding?.failures.length));
+      client.onDidChange(() => seen.push(client.recordIndexProgress?.done));
 
       client.emit(tick(false, [bad]));
       client.emit(tick(false, [{ ...bad }]));
@@ -163,11 +161,27 @@ describe('the client\'s load-order status', () => {
 
       client.emit(loadOrderStatusEventFixture({ conflictsComputed: false, totalPlugins: 3, indexedPlugins: [{ name: 'A.esp', origin: 'Mod' }], failures: [bad] }));
 
-      expect([client.recordIndexProgress, seen, client.recordIndexMayBeLate]).toEqual([{ done: 2, total: 3 }, [{ done: 2, total: 3 }], true]);
+      expect([client.recordIndexProgress, seen, client.recordIndexMayBeLate]).toEqual([{ done: 2, total: 3, version: 1, settled: false }, [{ done: 2, total: 3, version: 1, settled: false }], true]);
+    });
+
+    it('is settled, and no longer late, once the reconcile settles', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(tick(false));
+
+      client.emit(tick(true));
+
+      expect([client.recordIndexProgress?.settled, client.recordIndexMayBeLate]).toEqual([true, false]);
+    });
+
+    it('carries the reason mEdit refuses the load order, which keeps the record index late', () => {
+      const client = new InMemoryMEditClient();
+
+      client.emit(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false }));
+
+      expect([client.recordIndexProgress?.refusal, client.recordIndexMayBeLate]).toEqual([{ kind: 'heldElsewhere', message: 'another window holds the record index' }, true]);
     });
 
     it.each([
-      ['the reconcile settles', (client: InMemoryMEditClient) => { client.emit(tick(true)); }],
       ['the load order is dropped', (client: InMemoryMEditClient) => { client.emit(loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false })); }],
       ['the process is gone', (client: InMemoryMEditClient) => { client.setStatus('disconnected'); }],
     ])('is none once %s', (_case, end) => {

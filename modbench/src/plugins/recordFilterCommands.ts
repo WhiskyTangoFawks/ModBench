@@ -74,13 +74,17 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     await showHeld();
   };
 
-  let reportedAt = 0;
+  let reported = '';
   // The change event says that everything changed, which asks the filter again; mEdit says why it cleared one in that read.
   const onChange = async (): Promise<void> => {
     try {
       const cleared = answerOf(await client.getFilterCleared());
-      if (cleared === null || cleared.sequence <= reportedAt) return await showHeld();
-      reportedAt = cleared.sequence;
+      const told = JSON.stringify(cleared);
+      if (cleared === null || told === reported) {
+        reported = cleared === null ? '' : reported;
+        return await showHeld();
+      }
+      reported = told;
       await onCleared(cleared);
     } catch (e) {
       reporter.report('error', 'Could not read the record filter', errorMessage(e));

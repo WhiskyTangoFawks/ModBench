@@ -1,15 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LaunchOutcome, LoadOrderOutcome, RecordIndexStanding, LoadOrderSnapshot } from '../../client';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot } from '../../client';
 import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
 
-const STATUS: RecordIndexStanding = {
-  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
-};
-const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
+const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 
 const NO_SNAPSHOT: LoadOrderSource = undefined;
 const REFUSED: LoadOrderSource = { refusal: 'a.esp has no mod folder' };

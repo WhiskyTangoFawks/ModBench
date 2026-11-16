@@ -1,12 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
-import type { LaunchOutcome, LoadOrderOutcome, RecordIndexStanding, LoadOrderSnapshot } from '../MEditClient';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot } from '../MEditClient';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
-const READY_STATUS: RecordIndexStanding = {
-  totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
-};
-const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
+const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 const SIGNAL_WAIT_CAP_MS = 10_000;

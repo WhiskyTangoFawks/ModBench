@@ -1,18 +1,22 @@
-import {
-  isSettled, type RecordIndexStanding, type LoadOrderRefusal, type PluginAddress,
-  type PluginLoadFailure,
-} from '../client';
+import type { LoadOrderRefusal, PluginAddress, PluginLoadFailure, RecordIndexProgress } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { makeReconcileProgressHandler } from './loadOrderProgress';
+
+/** What the record index has done with the load order: how far, and which plugins it holds and which it failed. */
+export interface Heard {
+  readonly progress: RecordIndexProgress;
+  readonly indexed: readonly PluginAddress[];
+  readonly failures: readonly PluginLoadFailure[];
+}
 
 export interface ReconcileNarratorDeps {
   /** Opens the Plugins view's progress, closed when `until` settles. */
   showProgress: (until: Promise<void>) => void;
-  applyIndexed: (indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]) => void;
+  applyIndexed: (indexedPlugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]) => void;
   /** plugins.md, States 4 and 6: the load order's own refusal. */
   applyRefused: (refusal: LoadOrderRefusal) => void;
   /** A reconcile reached Ready: its whole hand-off to the views. */
-  settle: (status: RecordIndexStanding) => Promise<void>;
+  settle: (heard: Heard) => Promise<void>;
   log: (msg: string) => void;
 }
 
@@ -22,7 +26,7 @@ interface RefillWait {
 }
 
 export interface ReconcileNarrator {
-  hear(status: RecordIndexStanding): void;
+  hear(heard: Heard): void;
   /** Resolves once a reconcile answering at least `version` has been handed to the views. */
   settled(version: number): Promise<void>;
   /** Armed before a rebuild is asked for: resolves once the refill that follows ends, and at once
@@ -35,13 +39,13 @@ export interface ReconcileNarrator {
 
 interface Span {
   close: () => void;
-  tick: (status: RecordIndexStanding) => void;
+  tick: (heard: Heard) => void;
 }
 
 // plugins.md, States 2: the record index status says what the Plugins view shows, whoever started the
 // reconcile — a put, a rebuild's refill or the watcher.
 export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileNarrator {
-  let last: RecordIndexStanding | undefined;
+  let last: Heard | undefined;
   let span: Span | undefined;
   let settledVersion = -1;
   // The highest version whose hand-off is queued, so a Ready heard again meanwhile queues none.
@@ -64,44 +68,40 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
     settleWaits.release(settledVersion);
   };
 
-  const settle = (status: RecordIndexStanding, reconcileSeen: boolean): void => {
-    if (status.refusal !== undefined) {
-      if (status.refusal.kind === 'failed' && status.version > settledVersion) {
-        deps.log(`Indexing failed: ${status.refusal.message}`);
+  const settle = (heard: Heard, reconcileSeen: boolean): void => {
+    const { refusal, version } = heard.progress;
+    if (refusal !== undefined) {
+      if (refusal.kind === 'failed' && version > settledVersion) {
+        deps.log(`Indexing failed: ${refusal.message}`);
       }
-      deps.applyRefused(status.refusal);
-      markSettled(status.version);
+      deps.applyRefused(refusal);
+      markSettled(version);
       return;
     }
-    if (!reconcileSeen && status.version <= Math.max(settledVersion, queuedVersion)) return;
-    queuedVersion = Math.max(queuedVersion, status.version);
+    if (!reconcileSeen && version <= Math.max(settledVersion, queuedVersion)) return;
+    queuedVersion = Math.max(queuedVersion, version);
     const handedBy = generation;
     handingOver = handingOver
-      .then(() => deps.settle(status))
+      .then(() => deps.settle(heard))
       .catch((e: unknown) => deps.log(`handing the reconciled load order to the views threw: ${errorMessage(e)}`))
-      .then(() => { if (handedBy === generation) markSettled(status.version); });
+      .then(() => { if (handedBy === generation) markSettled(version); });
   };
 
   return {
-    hear(status) {
-      last = status;
-      if (isSettled(status)) {
+    hear(heard) {
+      last = heard;
+      if (heard.progress.settled || heard.progress.refusal !== undefined) {
         const reconcileSeen = closeSpan();
         refillWaits.end(false);
-        settle(status, reconcileSeen);
+        settle(heard, reconcileSeen);
         return;
       }
       refillWaits.started();
-      if (status.holdsNone) {
-        closeSpan();
-        deps.applyIndexed([], []);
-        return;
-      }
       span ??= openSpan(deps);
-      span.tick(status);
+      span.tick(heard);
     },
     settled: (version) => (version <= settledVersion ? Promise.resolve() : settleWaits.arm(version)),
-    nextRefill: () => (!last || last.holdsNone ? { ended: Promise.resolve(), release: () => {} } : refillWaits.arm()),
+    nextRefill: () => (!last ? { ended: Promise.resolve(), release: () => {} } : refillWaits.arm()),
     detached() {
       generation++;
       closeSpan();
