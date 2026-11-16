@@ -428,8 +428,13 @@ public sealed record PluginIndexedState(PluginIndexing State, string? Reason = n
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum IndexOfPluginState { Pending, Indexed, Failed }
 
-/// <summary>A plugin of the load order and how far the record index has come with it. Reason and Diagnosis are set only when it failed.</summary>
-public sealed record IndexOfPlugin(string Name, string Origin, IndexOfPluginState State, string? Reason = null, string? Diagnosis = null);
+/// <summary>A plugin of the load order and how far the record index has come with it. Reason and Diagnosis are set only when it failed. ChangedOutside is the plugin file's bytes not being the ones Modbench last wrote (ADR-0003), which a plugin never opened has no row to say.</summary>
+public sealed record IndexOfPlugin(
+    string Name, string Origin, IndexOfPluginState State, string? Reason = null, string? Diagnosis = null, bool ChangedOutside = false);
+
+/// <summary>Why the filter was cleared, until another is set or cleared on purpose: it could not apply again. Reason is the
+/// database's; Sequence is the Index's projection sequence right after.</summary>
+public sealed record FilterCleared(string Source, string Reason, long Sequence);
 
 /// <summary>The record filter in force: the SQL that narrows the listings, and the file or document it was written in.</summary>
 public sealed record RecordFilter(string Sql, string Source);

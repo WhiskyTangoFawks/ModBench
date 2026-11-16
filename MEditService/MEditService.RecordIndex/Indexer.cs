@@ -73,8 +73,13 @@ internal sealed class Indexer : IDisposable
     private bool _validating;
     private int _plannedCount;
     private int _activeCount;
-    // What the load order held while a rebuild has the index closed, which still holds it.
     private (int Planned, int Active)? _closedForRebuild;
+
+    /// <summary>A rebuild has the index closed, and the load order is still the one it holds: no plugin is opened.</summary>
+    public bool Rebuilding
+    {
+        get { lock (_lock) return _closedForRebuild is not null; }
+    }
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
     private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? ReReadFailure)
     {
@@ -230,8 +235,9 @@ internal sealed class Indexer : IDisposable
     /// <summary>Each plugin of the load order held, by what the reconcile has done with it.</summary>
     public IReadOnlyList<IndexOfPlugin> IndexOfPlugins()
     {
-        var scope = RequireScope();
         var plugins = _holder.Held?.Snapshot.Plugins ?? throw new NoLoadOrderException();
+        if (Rebuilding) return [.. plugins.Select(plugin => new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Pending))];
+        var scope = RequireScope();
         lock (_lock)
         {
             var failures = new List<PluginLoadFailure>([.. scope.Held.Failures, .. _collisionFailures]);

@@ -13,7 +13,7 @@ internal static class ChangeSignalEndpoints
                 "Says that the disk changed at the paths named, or, naming none, that mEdit is to check it. A path that " +
                 "the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads " +
                 "nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are " +
-                "checked for a change made outside Modbench, published as external-change; the record index validates the plugins " +
+                "checked for a change made outside Modbench, which GET /plugins and GET /plugins/indexing then say of each plugin; the record index validates the plugins " +
                 "touched, or every plugin, after, and announces what it re-read.")
             .Produces(204);
 

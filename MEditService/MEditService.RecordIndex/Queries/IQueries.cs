@@ -82,7 +82,11 @@ public interface IQueries
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
     Answer<RecordFilter?, IndexRefused> GetFilter();
-    // Why the filter was cleared, until another is set or cleared on purpose; null when it was not.
+    // Each compiled plugin of a mod changed outside Modbench (ADR-0003), as the mod's last check of the disk found: a mod's whole answer.
+    IReadOnlyList<string> GetChangedOutside(string origin);
+    // Replaces what the mod last named, and answers the plugins whose standing flipped.
+    IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins);
+    // Null when the filter was not cleared.
     FilterCleared? GetFilterCleared();
     // Why the SQL cannot be a filter, or no load order to hold it; null once it is in force.
     IndexRefused? SetFilter(string sql, string source);

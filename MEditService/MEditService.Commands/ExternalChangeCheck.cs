@@ -1,13 +1,14 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
 /// <summary>Each compiled plugin changed outside Modbench (ADR-0003).</summary>
 internal sealed class ExternalChangeCheck(
-    INotificationPublisher notifications, ChangedOutside changedOutside, IPluginAdapter adapter, ISourceAdapter source)
+    INotificationPublisher notifications, IQueries index, IPluginAdapter adapter, ISourceAdapter source)
 {
     private readonly Lock _checking = new();
     // A mod whose repository went since is told it names no changed plugin.
@@ -40,8 +41,9 @@ internal sealed class ExternalChangeCheck(
 
     private void Tell(string origin, IReadOnlyList<string> changed)
     {
+        if (changed.SequenceEqual(index.GetChangedOutside(origin))) return;
         // No projection moved, so no sequence for a subscriber to catch up to: the state is held before it is told.
-        foreach (var plugin in changedOutside.Replace(origin, changed))
+        foreach (var plugin in index.SetChangedOutside(origin, changed))
             notifications.Publish(new PluginChangedNotification(plugin, Sequence: 0));
     }
 

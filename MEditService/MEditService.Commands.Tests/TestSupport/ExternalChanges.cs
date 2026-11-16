@@ -1,22 +1,20 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
-using MEditService.TestSupport;
+using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>What a client is told when it puts a load order over trees Modbench has been writing, then signals a change:
+/// <summary>What mEdit holds when a client puts a load order over trees Modbench has been writing, then signals a change:
 /// the plugins whose binary is not the one Modbench last wrote.</summary>
 internal static class ExternalChanges
 {
     internal static IReadOnlyList<PluginAddress> NamedBy(LoadOrderSnapshot loadOrder)
     {
-        var notifications = new InMemoryNotificationPublisher();
-        var service = TestEditService.Over(new LoadOrderHolder(), notifications: notifications);
+        var service = TestEditService.Over(new LoadOrderHolder());
         Put(loadOrder, service.GetRequiredService<PutLoadOrderHandler>());
         service.GetRequiredService<SignalChangeHandler>().Signal([]);
-        var changed = service.GetRequiredService<ChangedOutside>();
-        return [.. loadOrder.Plugins.Select(plugin => plugin.Key).Where(changed.Holds)];
+        var changed = service.GetRequiredService<IQueries>();
+        return [.. loadOrder.Plugins.Select(plugin => plugin.Origin).Distinct().SelectMany(origin => changed.GetChangedOutside(origin).Select(name => new PluginAddress(name, origin)))];
     }
 
     internal static void Put(LoadOrderSnapshot loadOrder, PutLoadOrderHandler handler) =>

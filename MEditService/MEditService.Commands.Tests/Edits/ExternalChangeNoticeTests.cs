@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,9 +37,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         _signalled.GetRequiredService<SignalChangeHandler>().Signal([]);
     }
 
-    private IReadOnlyList<string> TheChanged(string origin = Origin, params string[] among) =>
-        [.. (among.Length == 0 ? [PluginName, "SourceUnreadable.esp"] : among)
-            .Where(name => (_signalled ?? _service.Value).GetRequiredService<ChangedOutside>().Holds(new PluginAddress(name, origin)))];
+    private IReadOnlyList<string> TheChanged(string origin = Origin) =>
+        (_signalled ?? _service.Value).GetRequiredService<IQueries>().GetChangedOutside(origin);
 
     private IEnumerable<string> TheTold() =>
         _notifications.Notifications.OfType<PluginChangedNotification>().Select(told => told.Plugin.Name);
@@ -74,11 +74,11 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         PutThenSignal(mod.LoadOrder);
 
         Assert.Empty(_notifications.Notifications);
-        Assert.Empty(TheChanged(SourceEditFixture.ModFolderOrigin, mod.Plugin.Name));
+        Assert.Empty(TheChanged(SourceEditFixture.ModFolderOrigin));
     }
 
     [Fact]
-    public void AChangeSignal_NamesACompiledPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
+    public void AChangeSignal_NamesACompiledPlugin_WhenItsBytesDifferFromWhatModbenchLastWrote()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, compiledPlugin));
@@ -115,7 +115,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void AChangeSignal_NamesACompiledPluginThatCannotBeRead_WithNoState()
+    public void AChangeSignal_NamesACompiledPluginThatCannotBeRead()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, compiledPlugin));
@@ -322,7 +322,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         PutThenSignal(mod.LoadOrder);
 
-        Assert.Equal([mod.Plugin.Name], TheChanged(SourceEditFixture.ModFolderOrigin, mod.Plugin.Name));
+        Assert.Equal([mod.Plugin.Name], TheChanged(SourceEditFixture.ModFolderOrigin));
     }
 
     private static Dictionary<string, string> FilesUnder(string folder) =>

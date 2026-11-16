@@ -74,6 +74,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
 
     public Answer<RecordFilter?, IndexRefused> GetFilter() => throw Failed();
     public FilterCleared? GetFilterCleared() => throw Failed();
+    public IReadOnlyList<string> GetChangedOutside(string origin) => throw Failed();
+    public IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins) => throw Failed();
 
     public IndexRefused? SetFilter(string sql, string source) => throw Failed();
 

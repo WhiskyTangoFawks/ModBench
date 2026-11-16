@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 
@@ -21,8 +22,19 @@ public class HandedWrites : DispatchProxy
 
     public static HandedWrites Create() => (HandedWrites)(object)Create<IQueries, HandedWrites>();
 
+    private readonly Dictionary<string, IReadOnlyList<string>> _changedOutside = [];
+
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
+        if (targetMethod?.Name == nameof(IQueries.GetChangedOutside))
+            return _changedOutside.TryGetValue((string)args.Require()[0].Require(), out var held) ? held : [];
+        if (targetMethod?.Name == nameof(IQueries.SetChangedOutside))
+        {
+            var (origin, plugins) = ((string)args.Require()[0].Require(), (IReadOnlyList<string>)args.Require()[1].Require());
+            var before = _changedOutside.TryGetValue(origin, out var was) ? was : [];
+            _changedOutside[origin] = plugins;
+            return (IReadOnlyList<PluginAddress>)[.. before.Except(plugins).Concat(plugins.Except(before)).Select(name => new PluginAddress(name, origin))];
+        }
         if (targetMethod?.Name != nameof(IQueries.Hold)) throw new NotSupportedException($"The record index here serves no {targetMethod?.Name}.");
         var (written, cancel) = ((IReadOnlyList<HandedPlugin>?)args.Require()[0], (CancellationToken)args.Require()[1].Require());
         lock (_hands) _hands.Add(written);

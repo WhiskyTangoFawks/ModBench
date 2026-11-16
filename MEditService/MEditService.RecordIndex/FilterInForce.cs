@@ -13,7 +13,6 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
     private (string Sql, string Source, IndexScope Scope)? _current;
     private FilterCleared? _cleared;
 
-    /// <summary>Why the filter was cleared, until another is set or cleared on purpose.</summary>
     public FilterCleared? Cleared
     {
         get { lock (_lock) return _cleared; }

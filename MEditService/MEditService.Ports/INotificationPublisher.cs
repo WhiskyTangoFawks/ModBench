@@ -18,7 +18,8 @@ public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList
     : INotification;
 
 /// <summary>A validation changed a plugin as a whole (ADR-0003): re-derived or removed it, or its read
-/// failed or recovered while its rows stood. It names the plugin, not rows.</summary>
+/// failed or recovered while its rows stood, or it came to be changed outside Modbench or no longer. It names
+/// the plugin, not rows.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : INotification;
 
@@ -32,7 +33,3 @@ public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INoti
 
 /// <summary>Why a compiled plugin's source does not read, and whether decompile gets past it.</summary>
 public sealed record UnreadableSource(string Reason, bool DecompileRepairs);
-
-/// <summary>Why the record filter was cleared, kept until the next one is set or cleared: it could not apply
-/// again. Reason is the database's; Sequence is the Index's projection sequence right after.</summary>
-public sealed record FilterCleared(string Source, string Reason, long Sequence);

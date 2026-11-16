@@ -102,18 +102,25 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void ARebuild_NeverSaysTheLoadOrderIsHeldNoMore_SinceTheIndexClosedIsStillTheOneThatHoldsIt()
+    public void ARebuild_AnswersEveryPluginPendingAndOpensNone_NeverNoLoadOrder_WhileTheIndexIsClosed()
     {
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, _opens, notifications: notifications);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var before = notifications.Notifications.Count;
+        IReadOnlyList<PluginResponse>? plugins = null;
+        IReadOnlyList<IndexOfPlugin>? indexing = null;
+        notifications.OnPublish = n =>
+        {
+            if (plugins is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
+            plugins = index.Queries.GetPlugins().Value();
+            indexing = index.Queries.GetPluginsIndexing().Value();
+        };
 
         Rebuilt(index, _fixture.InstanceRoot);
 
-        var told = notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>().Select(n => n.Status.State);
-        Assert.DoesNotContain(LoadOrderState.None, told);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PluginResponse>>(plugins));
+        Assert.Equal([("UFO4P.esp", IndexOfPluginState.Pending)], Assert.IsAssignableFrom<IReadOnlyList<IndexOfPlugin>>(indexing).Select(plugin => (plugin.Name, plugin.State)));
     }
 
     private static void Rebuilt(OpenedIndex index, string instanceRoot)

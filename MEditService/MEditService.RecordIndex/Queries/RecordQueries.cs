@@ -20,11 +20,11 @@ internal sealed class RecordQueries(
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ISourceAdapter source,
-    ChangedOutside changedOutside,
     ILogger<RecordQueries> logger) : IQueries, IDisposable
 {
     private readonly ILogger _logger = logger;
     private readonly Indexer _index = index;
+    private readonly ChangedOutside changedOutside = new();
     private readonly IndexAnswer _answer = new(index.RecoverFromInvalidation);
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
@@ -37,6 +37,7 @@ internal sealed class RecordQueries(
 
     private IReadOnlyList<PluginResponse> PluginResponses(IReadOnlyCollection<PluginAddress>? named)
     {
+        if (_index.Rebuilding) return [];
         using var reads = RequireReads().InOneSnapshot();
         var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
@@ -533,7 +534,7 @@ internal sealed class RecordQueries(
         });
 
     public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing() =>
-        _answer.Of(() => _index.IndexOfPlugins());
+        _answer.Of(() => (IReadOnlyList<IndexOfPlugin>)[.. _index.IndexOfPlugins().Select(plugin => plugin with { ChangedOutside = changedOutside.Holds(new PluginAddress(plugin.Name, plugin.Origin)) })]);
 
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
         _answer.Of(() => _index.IndexedState(plugin));
@@ -571,6 +572,10 @@ internal sealed class RecordQueries(
         RequireReads();
         return filter.Current;
     });
+
+    public IReadOnlyList<string> GetChangedOutside(string origin) => changedOutside.Of(origin);
+
+    public IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins) => changedOutside.Replace(origin, plugins);
 
     public FilterCleared? GetFilterCleared() => filter.Cleared;
 
