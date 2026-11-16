@@ -48,18 +48,18 @@ public sealed class CloneSubmodulesHandler
     public async Task<CloneSubmodulesResult> Clone(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
     {
         var cloned = CloneEach(submodules, cancel);
-        await _held.ReadBackSource(SourcedFrom(cloned.Applied.Select(submodule => submodule.Folder)), cancel);
+        var sourcing = cloned.Applied.ToDictionary(submodule => submodule.Folder, submodule => SourcedFrom(submodule.Folder));
+        foreach (var folder in sourcing.Where(sourced => sourced.Value.Count == 0).Select(sourced => sourced.Key))
+            _held.Unread($"the load order names no plugin source in {folder}, so its plugins' rows are read from their binaries.");
+        await _held.ReadBackSource(sourcing.Values.SelectMany(plugins => plugins), cancel);
         return cloned;
     }
 
-    private IEnumerable<PluginAddress> SourcedFrom(IEnumerable<string> folders)
-    {
-        var cloned = folders.Select(Unslashed).ToList();
-        return _loadOrder.Current.Plugins
+    private List<PluginAddress> SourcedFrom(string folder) =>
+        [.. _loadOrder.Current.Plugins
             .Where(plugin => plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder }
-                && cloned.Exists(folder => string.Equals(folder, Unslashed(sourceFolder), FilePaths.Comparison)))
-            .Select(plugin => plugin.Key);
-    }
+                && string.Equals(Unslashed(folder), Unslashed(sourceFolder), FilePaths.Comparison))
+            .Select(plugin => plugin.Key)];
 
     private static string Unslashed(string folder) => folder.TrimEnd('/', '\\');
 

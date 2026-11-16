@@ -4,6 +4,8 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Build;
@@ -52,6 +54,20 @@ public sealed class CloneSubmodulesHandlerTests : IDisposable
         await TestEditService.CloneSubmodulesHandler(holder, index.Queries).Clone([new Submodule(_submodule.Folder, pin, null)], CancellationToken.None);
 
         Assert.Equal([HandedPlugin.ReadBackSource(new PluginAddress("Cloned.esp", "Cloned"))], Assert.Single(index.Hands).Require());
+    }
+
+    [Fact]
+    public async Task ACloneOfAFolderTheLoadOrderNamesAsNoPluginsSource_LogsWhyTheRecordIndexHasNotReadIt()
+    {
+        var pin = _submodule.Commit(("build.json", "{\"files\": []}"));
+        _submodule.Pin(pin);
+        List<LogEntry> logged = [];
+
+        await TestEditService.Over(new LoadOrderHolder(), logging: logging => logging.AddProvider(new CollectingLoggerProvider(logged)))
+            .GetRequiredService<CloneSubmodulesHandler>().Clone([new Submodule(_submodule.Folder, pin, null)], CancellationToken.None);
+
+        Assert.Contains(logged, entry => entry.Level == LogLevel.Warning
+            && entry.Message.Contains($"the load order names no plugin source in {_submodule.Folder}", StringComparison.Ordinal));
     }
 
     [Fact]

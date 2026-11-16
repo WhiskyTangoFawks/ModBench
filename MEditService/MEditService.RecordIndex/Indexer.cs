@@ -529,12 +529,16 @@ internal sealed class Indexer : IDisposable
         return unheld.Count == 0 ? null : NotReadYet + string.Join(" ", unheld);
     }
 
-    private static string? WhyNotHeld(OpenScope scope, HandedPlugin handed, HashSet<PluginAddress> read)
+    private string? WhyNotHeld(OpenScope scope, HandedPlugin handed, HashSet<PluginAddress> read)
     {
         var plugin = handed.Plugin;
         if (scope.LoadOrder.Plugin(plugin) is not { } registered) return $"the load order does not hold {plugin.Name} ({plugin.Origin}).";
         if (handed.OfSource && scope.Projector.TruthOf(registered) != DerivedFrom.SourceTree)
-            return $"the load order names no plugin source of {plugin.Name} ({plugin.Origin}), so its rows are read from its binary.";
+        {
+            return _source.WhySourceDoesNotRead(registered) is { } unreadable
+                ? $"{plugin.Name} ({plugin.Origin}): {unreadable.Reason}"
+                : $"the load order names no plugin source of {plugin.Name} ({plugin.Origin}), so its rows are read from its binary.";
+        }
         if (scope.Held.FailureOf(plugin) is { } failed) return $"{plugin.Name} ({plugin.Origin}): {failed.Reason}";
         if (scope.Failed.WhyTreeStopped(plugin) is { } stopped) return $"{plugin.Name} ({plugin.Origin}): {stopped.Reason}";
         return read.Contains(plugin) ? null : $"{plugin.Name} ({plugin.Origin}) was not read.";
