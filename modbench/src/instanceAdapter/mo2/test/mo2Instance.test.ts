@@ -1174,6 +1174,30 @@ describe('the MO2 Instance adapter', () => {
         ]);
       });
 
+      it('names the source folders where they are excluded, and watches their first level', () => {
+        const watched = excludingOver(watcherExcluding({ '**/source/**': true }));
+        watched.subscribe(() => undefined);
+
+        expect(wholeBelow()).toEqual(['mods', 'overwrite']);
+        expect([named(watched), firstLevelOf('source')]).toEqual([[{ folder: 'source', reason: EXCLUDED }], 1]);
+      });
+
+      it('names the game folder\'s Data folder where it is excluded, and watches its first level', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-data-'));
+        try {
+          await mkdir(join(game, 'Data'));
+          const context = contextOver(root, { gameFolderSettingValue: game });
+          const watched = watchedOver({ ...context, watch: mo2Watch(root, () => ({ dispose: () => {} }), context.repository.changed, watcherExcluding({ '**/Data/**': true })) });
+          watched.subscribe(() => undefined);
+          await (await watched.settings()).gameFolder();
+
+          expect(watched.unwatchedFolders()).toEqual([{ folder: join(game, 'Data'), reason: EXCLUDED }]);
+          expect(live().filter((w) => w.base === join(game, 'Data')).map((w) => w.pattern)).toEqual([FIRST_LEVEL]);
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
       it('names the folder holding files the user excluded, with the pattern, once for each pattern however many mods hold them', async () => {
         const watched = await listedWith({ '**/*.dds': true });
         await writeFile(join(root, 'mods', 'Patch Mod', 'b.dds'), '');
