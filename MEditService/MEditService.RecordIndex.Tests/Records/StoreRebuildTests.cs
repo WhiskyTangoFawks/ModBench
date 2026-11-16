@@ -72,6 +72,16 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
+    public void AnIndexThatFailedToOpen_StillAnswersEveryPluginOfTheLoadOrderItHolds_AsPending()
+    {
+        Reconcile(Path.Combine(_fixture.InstanceRoot, "no-such-instance"));
+
+        var indexing = _index.Queries.GetPluginsIndexing().Value();
+
+        Assert.Equal([("UFO4P.esp", IndexOfPluginState.Pending)], indexing.Select(plugin => (plugin.Name, plugin.State)));
+    }
+
+    [Fact]
     public void ARebuildOfAnInstanceRootThatIsNotThere_FailsNamingIt_CreatesNothing_AndReopensOnceItReturns()
     {
         Reconcile(_fixture.InstanceRoot);

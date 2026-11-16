@@ -1949,7 +1949,6 @@ export interface components {
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
             description?: string | null;
-            changedOutside: boolean;
         };
         PluginSourceNamesRequest: {
             text: string;

@@ -236,10 +236,9 @@ internal sealed class Indexer : IDisposable
     public IReadOnlyList<IndexOfPlugin> IndexOfPlugins()
     {
         var plugins = _holder.Held?.Snapshot.Plugins ?? throw new NoLoadOrderException();
-        if (Rebuilding) return [.. plugins.Select(plugin => new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Pending))];
-        var scope = RequireScope();
         lock (_lock)
         {
+            if (_scope is not { } scope) return [.. plugins.Select(plugin => new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Pending))];
             var failures = new List<PluginLoadFailure>([.. scope.Held.Failures, .. _collisionFailures]);
             return [.. plugins.Select(plugin =>
             {

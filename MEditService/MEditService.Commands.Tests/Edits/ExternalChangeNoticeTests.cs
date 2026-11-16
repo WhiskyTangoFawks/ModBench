@@ -38,7 +38,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     private IReadOnlyList<string> TheChanged(string origin = Origin) =>
-        (_signalled ?? _service.Value).GetRequiredService<IQueries>().GetChangedOutside(origin);
+        (_signalled ?? _service.Value).GetRequiredService<IQueries>().Handed().ChangedOutside(origin);
 
     private IEnumerable<string> TheTold() =>
         _notifications.Notifications.OfType<PluginChangedNotification>().Select(told => told.Plugin.Name);

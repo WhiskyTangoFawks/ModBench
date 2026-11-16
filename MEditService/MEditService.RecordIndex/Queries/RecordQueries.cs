@@ -24,7 +24,7 @@ internal sealed class RecordQueries(
 {
     private readonly ILogger _logger = logger;
     private readonly Indexer _index = index;
-    private readonly ChangedOutside changedOutside = new();
+    private readonly ChangedOutside _changedOutside = new();
     private readonly IndexAnswer _answer = new(index.RecoverFromInvalidation);
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
@@ -59,8 +59,7 @@ internal sealed class RecordQueries(
                 HasParseFailure: parseFailures.Contains(plugin.Key),
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList(),
-                content.Description,
-                changedOutside.Holds(plugin.Key));
+                content.Description);
         }
 
         if (filter.Current is null)
@@ -534,7 +533,7 @@ internal sealed class RecordQueries(
         });
 
     public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing() =>
-        _answer.Of(() => (IReadOnlyList<IndexOfPlugin>)[.. _index.IndexOfPlugins().Select(plugin => plugin with { ChangedOutside = changedOutside.Holds(new PluginAddress(plugin.Name, plugin.Origin)) })]);
+        _answer.Of(() => (IReadOnlyList<IndexOfPlugin>)[.. _index.IndexOfPlugins().Select(plugin => plugin with { ChangedOutside = _changedOutside.Holds(new PluginAddress(plugin.Name, plugin.Origin)) })]);
 
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
         _answer.Of(() => _index.IndexedState(plugin));
@@ -573,9 +572,7 @@ internal sealed class RecordQueries(
         return filter.Current;
     });
 
-    public IReadOnlyList<string> GetChangedOutside(string origin) => changedOutside.Of(origin);
-
-    public IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins) => changedOutside.Replace(origin, plugins);
+    public IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins) => _changedOutside.Replace(origin, plugins);
 
     public FilterCleared? GetFilterCleared() => filter.Cleared;
 

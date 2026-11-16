@@ -24,10 +24,11 @@ public class HandedWrites : DispatchProxy
 
     private readonly Dictionary<string, IReadOnlyList<string>> _changedOutside = [];
 
+    /// <summary>What the writer last told of each plugin of a mod changed outside Modbench.</summary>
+    public IReadOnlyList<string> ChangedOutside(string origin) => _changedOutside.TryGetValue(origin, out var held) ? held : [];
+
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
-        if (targetMethod?.Name == nameof(IQueries.GetChangedOutside))
-            return _changedOutside.TryGetValue((string)args.Require()[0].Require(), out var held) ? held : [];
         if (targetMethod?.Name == nameof(IQueries.SetChangedOutside))
         {
             var (origin, plugins) = ((string)args.Require()[0].Require(), (IReadOnlyList<string>)args.Require()[1].Require());
@@ -40,4 +41,9 @@ public class HandedWrites : DispatchProxy
         lock (_hands) _hands.Add(written);
         return Answer().WaitAsync(cancel);
     }
+}
+
+internal static class HandedWritesOf
+{
+    internal static HandedWrites Handed(this IQueries queries) => (HandedWrites)queries;
 }

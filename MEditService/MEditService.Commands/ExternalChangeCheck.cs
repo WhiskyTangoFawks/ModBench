@@ -41,7 +41,6 @@ internal sealed class ExternalChangeCheck(
 
     private void Tell(string origin, IReadOnlyList<string> changed)
     {
-        if (changed.SequenceEqual(index.GetChangedOutside(origin))) return;
         // No projection moved, so no sequence for a subscriber to catch up to: the state is held before it is told.
         foreach (var plugin in index.SetChangedOutside(origin, changed))
             notifications.Publish(new PluginChangedNotification(plugin, Sequence: 0));

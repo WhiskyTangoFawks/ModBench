@@ -67,7 +67,6 @@ public interface IQueries
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
     Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
-    // Every plugin of the load order, pending, indexed or failed, which GetPlugins leaves out until it is opened.
     Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing();
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin, RecordsAsked? asked = null);
     Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked = null);
@@ -82,9 +81,7 @@ public interface IQueries
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
     Answer<RecordFilter?, IndexRefused> GetFilter();
-    // Each compiled plugin of a mod changed outside Modbench (ADR-0003), as the mod's last check of the disk found: a mod's whole answer.
-    IReadOnlyList<string> GetChangedOutside(string origin);
-    // Replaces what the mod last named, and answers the plugins whose standing flipped.
+    // Replaces which compiled plugins of a mod changed outside Modbench (ADR-0003), and answers the plugins whose standing flipped.
     IReadOnlyList<PluginAddress> SetChangedOutside(string origin, IReadOnlyList<string> plugins);
     // Null when the filter was not cleared.
     FilterCleared? GetFilterCleared();

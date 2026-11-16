@@ -13,8 +13,8 @@ internal static class ExternalChanges
         var service = TestEditService.Over(new LoadOrderHolder());
         Put(loadOrder, service.GetRequiredService<PutLoadOrderHandler>());
         service.GetRequiredService<SignalChangeHandler>().Signal([]);
-        var changed = service.GetRequiredService<IQueries>();
-        return [.. loadOrder.Plugins.Select(plugin => plugin.Origin).Distinct().SelectMany(origin => changed.GetChangedOutside(origin).Select(name => new PluginAddress(name, origin)))];
+        var changed = service.GetRequiredService<IQueries>().Handed();
+        return [.. loadOrder.Plugins.Select(plugin => plugin.Origin).Distinct().SelectMany(origin => changed.ChangedOutside(origin).Select(name => new PluginAddress(name, origin)))];
     }
 
     internal static void Put(LoadOrderSnapshot loadOrder, PutLoadOrderHandler handler) =>

@@ -73,4 +73,4 @@ indexer -> port: "plugin changed: the plugin, sequence" {class: push}
 indexer -> port: "record index changed: the sequence, when a filter is cleared" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: "record index status · rows changed · plugin changed · record index changed" {class: push}
+client -> views: "how far the record index has come · rows changed · plugin changed · record index changed" {class: push}

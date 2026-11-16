@@ -40,9 +40,7 @@ public sealed record PluginResponse(
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
     IReadOnlyList<SourceProblem>? LaterReadFailure,
     // The description in the plugin's header, which LOOT's version() reads. Null for a header with none.
-    string? Description = null,
-    // ADR-0003: the plugin file's bytes are not the ones Modbench last wrote, as its mod's last check of the disk found.
-    bool ChangedOutside = false);
+    string? Description = null);
 
 public record RecordDetail(
     string FormKey,
@@ -429,7 +427,7 @@ public sealed record PluginIndexedState(PluginIndexing State, string? Reason = n
 public enum IndexOfPluginState { Pending, Indexed, Failed }
 
 /// <summary>A plugin of the load order and how far the record index has come with it. Reason and Diagnosis are set only when
-/// it failed. ChangedOutside is ADR-0003's, said here for a plugin never opened.</summary>
+/// it failed. ChangedOutside says its bytes are not the ones Modbench last wrote (ADR-0003).</summary>
 public sealed record IndexOfPlugin(
     string Name, string Origin, IndexOfPluginState State, string? Reason = null, string? Diagnosis = null, bool ChangedOutside = false);
 
