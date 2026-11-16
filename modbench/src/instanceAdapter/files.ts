@@ -421,7 +421,11 @@ export function putIfChangedUntold(
   });
 }
 
-const stampIfThere = (path: string): Promise<FileStamp | undefined> => stampOf(path).catch(() => undefined);
+const stampIfThere = (path: string): Promise<FileStamp | undefined> =>
+  stampOf(path).catch((err: unknown) => {
+    if (errnoCode(err) === 'ENOENT') return undefined;
+    throw err;
+  });
 
 const sameStampOrAbsent = (a: FileStamp | undefined, b: FileStamp | undefined): boolean =>
   a === undefined || b === undefined ? a === b : sameStamp(a, b);

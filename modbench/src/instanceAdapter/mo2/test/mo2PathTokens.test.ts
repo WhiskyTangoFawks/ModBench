@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
@@ -12,11 +13,23 @@ import { managerOver } from '../../../test/mo2/adapterOver';
 import { fileProblemsFake } from '../../../test/fileProblemsFake';
 
 vi.mock('vscode', () => fakeVscodeModule());
+const smudge = vi.hoisted(() => ({ onRun: undefined as (() => void) | undefined }));
+vi.mock('../../git', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../git')>();
+  return {
+    ...actual,
+    gitWritingInto: (objects: string) => {
+      const scratch = actual.gitWritingInto(objects);
+      return { ...scratch, git: (folder: string, ...args: string[]) => { if (args.includes('--filters')) smudge.onRun?.(); return scratch.git(folder, ...args); } };
+    },
+  };
+});
 
 
 const made: string[] = [];
 
 afterEach(async () => {
+  smudge.onRun = undefined;
   await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
 });
 
@@ -568,6 +581,17 @@ describe('the MO2 adapter\'s path tokens', () => {
       await adapter.writePathTokens();
 
       expect(await readFile(join(clone, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([`gamePath=@ByteArray(${onWineDrive(steam, '\\\\')})`]));
+    });
+
+    it('names a file once as still holding a path token, though an outside write made it edit the file again', async () => {
+      const { clone, adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`]);
+      const ini = join(clone, 'ModOrganizer.ini');
+      let runs = 0;
+      smudge.onRun = () => { if (++runs === 2) appendFileSync(ini, 'outside=1\r\n'); };
+
+      const answer = await adapter.writePathTokens();
+
+      expect([runs, answer]).toEqual([3, expect.stringMatching(/^ModOrganizer\.ini still holds a path token/)]);
     });
 
     it('answers the files that still hold a path token while the game folder is not found', async () => {

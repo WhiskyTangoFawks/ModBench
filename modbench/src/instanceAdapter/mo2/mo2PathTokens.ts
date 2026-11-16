@@ -156,11 +156,12 @@ async function checkedOut(scratch: ScratchGit, instanceRoot: string, file: strin
 async function smudged(scratch: ScratchGit, instanceRoot: string, files: readonly string[]): Promise<string[]> {
   const holding: string[] = [];
   for (const file of files) {
+    let after = '';
     await putIfChangedUntold(join(instanceRoot, file), async (text) => {
-      const after = holdsToken(text) ? await checkedOut(scratch, instanceRoot, file, text) : text;
-      if (holdsPathToken(after)) holding.push(file);
+      after = holdsToken(text) ? await checkedOut(scratch, instanceRoot, file, text) : text;
       return after;
     }).catch(absentAs(undefined));
+    if (holdsPathToken(after)) holding.push(file);
   }
   return holding;
 }

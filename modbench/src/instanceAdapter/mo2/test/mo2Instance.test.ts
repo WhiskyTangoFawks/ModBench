@@ -3394,6 +3394,19 @@ describe('the MO2 Instance adapter', () => {
       await expect(text(root, DEFAULT_LOAD_ORDER)).rejects.toThrow(/ENOENT/);
     });
 
+    it('writes no loadorder.txt from a first pass that an outside write to plugins.txt made unneeded', async () => {
+      const decide = vi.fn(() => [{ kind: 'add', plugin: 'New.esp' }] satisfies PluginOrderChange[]);
+      decide.mockImplementationOnce(() => {
+        appendFileSync(join(root, DEFAULT_PLUGINS), '*New.esp\r\n');
+        return [{ kind: 'add', plugin: 'New.esp' }];
+      });
+
+      await expect(adapter.changePluginOrder('Default', decide)).resolves.toEqual({ wrote: false });
+
+      expect(decide).toHaveBeenCalledTimes(2);
+      await expect(text(root, DEFAULT_LOAD_ORDER)).rejects.toThrow(/ENOENT/);
+    });
+
     it('hands the decision the order as it stands', async () => {
       const seen: string[][] = [];
 
