@@ -63,7 +63,7 @@ export function isRefused<Words extends Message = string>(result: unknown): resu
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'version-in-git-progress', 'external-change',
-  'record-filter-cleared',
+  'record-filter-cleared', 'record-index-changed',
 ] as const;
 
 /** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed `onNotification` call
@@ -79,6 +79,7 @@ export interface NotificationPayloads {
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
+  'record-index-changed': Record<string, never>;
 }
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
@@ -408,6 +409,10 @@ export interface MEditClient {
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
    *  unsaved documents is unanswered, or the sweep one started has not settled. */
   readonly recordIndexMayBeLate: boolean;
+  /** Reads mEdit's current sequence, so `recordIndexMayBeLate` holds while mEdit is further on than the last
+   *  sequence a notification carried, until the notification arrives. A write made past Modbench, such as a
+   *  script's, is known only by this read. */
+  refreshRecordIndexLateness(token?: ReadCancellation): Promise<void>;
   /** Told the new value wherever `recordIndexMayBeLate` changes, which no change of the record index tells. */
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable;
 

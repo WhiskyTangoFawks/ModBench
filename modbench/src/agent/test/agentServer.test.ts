@@ -630,6 +630,15 @@ describe('the agent server, given an instance value', () => {
     const blocksOf = async (client: Client) => CallToolResultSchema.parse(await client.callTool({ name: 'list_problems', arguments: {} })).content
       .map((block) => (block.type === 'text' ? block.text : ''));
 
+    it('says its answer may predate a write mEdit has made and the client has not heard', async () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setStatus('running');
+      mEdit.sequenceMEditStandsAt = 5;
+      const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+
+      expect(await blocksOf(client)).toContain(LATE_LINE);
+    });
+
     it('says its answer may predate a write', async () => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setStatus('running');

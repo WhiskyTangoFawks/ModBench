@@ -21,7 +21,18 @@ class NotificationListenerRegistry {
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'version-in-git-progress': new Set(), 'external-change': new Set(),
     'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
+    'record-index-changed': new Set(),
   };
+
+  private heard = 0;
+
+  /** The highest sequence of the record index a notification has carried, or been told to start from. */
+  get heardSequence(): number { return this.heard; }
+
+  /** A stream that opens onto a process of unknown sequence: nothing is heard until `hearUpTo` says where it stands. */
+  forgetHeard(): void { this.heard = 0; }
+
+  hearUpTo(sequence: number): void { this.heard = Math.max(this.heard, sequence); }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
     const set: Set<(payload: NotificationPayloads[K]) => void> = this.typedListeners[kind];
@@ -42,6 +53,7 @@ class NotificationListenerRegistry {
     // `event.kind` is `string` on the wire type; an event this build doesn't route stays
     // undelivered.
     if (!isNotificationKind(event.kind)) return;
+    this.hearUpTo(event.sequence);
     this.dispatchTyped(event.kind, event);
   }
 
@@ -65,6 +77,9 @@ class NotificationListenerRegistry {
         break;
       case 'plugin-changed':
         this.deliver('plugin-changed', { plugin: { name: plugin, origin } });
+        break;
+      case 'record-index-changed':
+        this.deliver('record-index-changed', {});
         break;
     }
   }
