@@ -5,7 +5,7 @@ import type { ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginFilePaths } from '../../client';
-import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -244,42 +244,6 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
 
     expect(reads).toEqual([FILE]);
-  });
-
-  describe('while the record index may be late', () => {
-    const settledLate = async () => {
-      const { client, settled } = feed([answerFor()]);
-      await settled(1);
-      client.setStatus('running');
-      let end!: () => void;
-      client.answerPuts(() => new Promise((resolve) => { end = () => { resolve({ outcome: 'abandoned' }); }; }));
-      void client.sendLoadOrder(EMPTY_SNAPSHOT);
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      return { client, endLateness: () => { end(); }, before: asked(client).length };
-    };
-
-    it('holds the plugin changed, and asks of exactly that plugin when it is not late', async () => {
-      const { client, endLateness, before } = await settledLate();
-      client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      expect(asked(client)).toHaveLength(before);
-
-      endLateness();
-
-      await vi.waitFor(() => { expect(asked(client)).toHaveLength(before + 1); });
-      expect(asked(client).at(-1)).toEqual([PLUGIN]);
-    });
-
-    it('asks nothing when it ends with no change held', async () => {
-      const { client, endLateness, before } = await settledLate();
-      const ended = new Promise<void>((resolve) => { client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) resolve(); }); });
-
-      endLateness();
-      await ended;
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-
-      expect(asked(client)).toHaveLength(before);
-    });
   });
 
   describe.each([

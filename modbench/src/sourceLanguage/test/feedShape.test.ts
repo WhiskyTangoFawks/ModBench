@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mergedFeeds, settling } from '../feedShape';
+import { askingWhenNotLate, mergedFeeds, settling } from '../feedShape';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import type { ProblemOnFile } from '../sourceProblems';
 
 const at = { line: 0, character: 0 };
@@ -94,5 +96,51 @@ describe('a feed\'s settling', () => {
     await working;
 
     expect(await idle(feed.settled())).toBe(true);
+  });
+});
+
+describe('asking when the record index is not late', () => {
+  const PLUGIN = { name: 'A.esp', origin: 'ModA' };
+  const OTHER = { name: 'B.esp', origin: 'ModB' };
+
+  function whileLate() {
+    const client = new InMemoryMEditClient();
+    client.setStatus('running');
+    let answer!: () => void;
+    client.answerPuts(() => new Promise((resolve) => { answer = () => { resolve({ outcome: 'abandoned' }); }; }));
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    const asked: unknown[] = [];
+    const asking = askingWhenNotLate(client, (plugin) => asked.push(plugin));
+    const ended = new Promise<void>((resolve) => { client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) resolve(); }); });
+    return { asking, asked, end: async () => { answer(); await ended; } };
+  }
+
+  it('asks at once of a plugin changed when the record index is not late', () => {
+    const client = new InMemoryMEditClient();
+    const asked: unknown[] = [];
+
+    askingWhenNotLate(client, (plugin) => asked.push(plugin)).plugin({ plugin: PLUGIN });
+
+    expect(asked).toEqual([PLUGIN]);
+  });
+
+  it('holds each plugin changed while it may be late, and asks of exactly those plugins, once each, when it is not', async () => {
+    const { asking, asked, end } = whileLate();
+    asking.plugin({ plugin: PLUGIN });
+    asking.plugin({ plugin: OTHER });
+    asking.plugin({ plugin: PLUGIN });
+    expect(asked).toEqual([]);
+
+    await end();
+
+    expect(asked).toEqual([PLUGIN, OTHER]);
+  });
+
+  it('asks nothing when it stops being late with nothing held', async () => {
+    const { asked, end } = whileLate();
+
+    await end();
+
+    expect(asked).toEqual([]);
   });
 });

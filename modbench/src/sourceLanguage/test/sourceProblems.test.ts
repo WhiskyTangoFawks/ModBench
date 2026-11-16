@@ -143,40 +143,6 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect([...published[before] ?? []]).toEqual([]);
   });
 
-  describe('while the record index may be late', () => {
-    const asks = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getPluginProblems');
-    const settledLate = async () => {
-      const { client, answered } = feed();
-      await answered([]);
-      const endLateness = late(client);
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      return { client, endLateness, before: asks(client).length };
-    };
-
-    it('holds the plugin changed, and asks of exactly that plugin when it is not late', async () => {
-      const { client, endLateness, before } = await settledLate();
-      client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      expect(asks(client)).toHaveLength(before);
-
-      endLateness();
-
-      await vi.waitFor(() => { expect(asks(client)).toHaveLength(before + 1); });
-      expect(asks(client).at(-1)?.args).toEqual([PLUGIN]);
-    });
-
-    it('asks nothing when it ends with no change held', async () => {
-      const { client, endLateness, before } = await settledLate();
-      const ended = new Promise<void>((resolve) => { client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) resolve(); }); });
-
-      endLateness();
-      await ended;
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-
-      expect(asks(client)).toHaveLength(before);
-    });
-  });
-
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
     const { client, published } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
