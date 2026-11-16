@@ -31,7 +31,6 @@ export interface ReadCancellation {
   onCancellationRequested(listener: () => unknown): Disposable;
 }
 
-/** A plugin whose records changed, with the record keys where mEdit gave them. */
 interface RecordsChanged { readonly plugin: PluginAddress; readonly keys?: readonly string[] }
 
 /** What changed in the record index: the names, or undefined for everything. */

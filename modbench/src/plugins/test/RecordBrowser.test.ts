@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  type RecordSummary, type ContainerChildSummary, type CellSummary, type InteriorCellBlock,
+  type RecordSummary, type CellSummary, type InteriorCellBlock,
   type ChildRecordSummary, type WorldspaceSummary,
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { NOT_EDITABLE, browserClient, type BrowserAnswers, cellRow, childrenOf, placedRow, recordRow, soleChild, soleGroup, worldspaceRow } from './browserRows';
+import { NOT_EDITABLE, browserClient, type BrowserAnswers, type ContainerChildSummary, cellRow, childrenOf, placedRow, recordRow, soleChild, soleGroup, worldspaceRow } from './browserRows';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { recordResourceUri } from '../recordResourceUri';
