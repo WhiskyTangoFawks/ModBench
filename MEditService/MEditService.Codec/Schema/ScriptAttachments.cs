@@ -6,12 +6,10 @@ namespace MEditService.Codec.Schema;
 public readonly record struct ScriptAttachment(string Name, string FieldPath);
 
 /// <summary>Which Papyrus scripts a document attaches, answered by the schema for its record type.</summary>
-public static class ScriptAttachments
+internal static class ScriptAttachments
 {
-    public static List<ScriptAttachment> Collect(string text, IReadOnlyList<ColumnSpec> columns)
+    internal static List<ScriptAttachment> Collect(JsonElement root, IReadOnlyList<ColumnSpec> columns)
     {
-        using var document = JsonDocument.Parse(text);
-        var root = document.RootElement;
         var attached = new List<ScriptAttachment>();
         foreach (var col in columns)
         {
@@ -20,5 +18,15 @@ public static class ScriptAttachments
                 (_, path, value) => { if (FormReferences.ExtractString(value) is { Length: > 0 } name) attached.Add(new(name, path)); });
         }
         return attached;
+    }
+}
+
+/// <summary>The files and the scripts a document names, read from one parse of it.</summary>
+public sealed record NamedInDocument(NamedFiles Files, IReadOnlyList<ScriptAttachment> Scripts)
+{
+    public static NamedInDocument Of(string text, IReadOnlyList<ColumnSpec> columns)
+    {
+        using var document = JsonDocument.Parse(text);
+        return new(AssetPaths.Collect(document.RootElement, columns), ScriptAttachments.Collect(document.RootElement, columns));
     }
 }

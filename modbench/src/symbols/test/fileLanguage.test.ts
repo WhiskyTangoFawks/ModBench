@@ -104,7 +104,7 @@ describe('where a file is defined, and the records that name it (symbols.md, The
 
   it('lists each record that names it at its member, and each copy it could not read', async () => {
     const kind = language({
-      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [UNREAD],
+      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'], recordType: 'TXST' }], unread: [UNREAD],
     });
 
     expect(await kind.referencesTo({ kind: 'file', path: FILE })).toEqual({
@@ -217,7 +217,7 @@ describe('referenced by on a file (commands.md, `referenced by` under Symbol)', 
 
   it('lists the records that name its path in the Data folder, titled with the path', async () => {
     const files = language({
-      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [],
+      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'], recordType: 'TXST' }], unread: [],
     });
 
     await files.referencedBy({ kind: 'file', path: FILE });

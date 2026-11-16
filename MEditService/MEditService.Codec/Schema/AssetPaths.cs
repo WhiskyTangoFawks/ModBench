@@ -18,12 +18,10 @@ public sealed record NamedFiles(IReadOnlyList<AssetPath> Files, IReadOnlyList<As
 
 /// <summary>Which files in the Data folder a document names: the schema for its record type says which member holds a
 /// path, and Mutagen's asset type says where in the Data folder it lies.</summary>
-public static class AssetPaths
+internal static class AssetPaths
 {
-    public static NamedFiles Collect(string text, IReadOnlyList<ColumnSpec> columns)
+    internal static NamedFiles Collect(JsonElement root, IReadOnlyList<ColumnSpec> columns)
     {
-        using var document = JsonDocument.Parse(text);
-        var root = document.RootElement;
         var files = new List<AssetPath>();
         var refusals = new List<AssetRefusal>();
         foreach (var col in columns)

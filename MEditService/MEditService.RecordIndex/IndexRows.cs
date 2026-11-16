@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
@@ -10,12 +11,20 @@ internal sealed record ReferenceRow(string FormKey, string Plugin, string FieldP
 /// <summary>A copy's document as the record index stores it, and whether its plugin has plugin source.</summary>
 internal sealed record CopyHoldingText(string FormKey, PluginAddress Plugin, string RecordType, string? EditorId, string Body, bool InPluginSource);
 
+/// <summary>A name a copy's document holds, and whether its plugin has plugin source.</summary>
+internal sealed record NamedAt(PluginAddress Plugin, bool InPluginSource, DocumentNameRow Row);
+
 internal record struct FormReferenceRow(
     string SourceFormKey,
     string TargetFormKey,
     string FieldPath,
     string RecordType,
     string? EditorId);
+
+/// <summary>A script or a file a record's document names, at <paramref name="FieldPath"/>. A path no file can be named for
+/// has no <paramref name="Name"/>, and says why.</summary>
+internal sealed record DocumentNameRow(
+    string FormKey, string RecordType, string? EditorId, DocumentNameKind Kind, string FieldPath, string? Name, string? Refusal);
 
 /// <summary>A link in <paramref name="Plugin"/>'s record <paramref name="FormKey"/> (an inline child
 /// under its own) to <paramref name="TargetFormKey"/>, which no active plugin holds.</summary>

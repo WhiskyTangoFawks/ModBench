@@ -44,6 +44,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("holdings", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
+        new("document_names", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("record_type_failure", "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
         new(PluginDerivationTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
         new(PluginDiagnosisTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
@@ -101,6 +102,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreatePluginDiagnosisTable(connection);
         CreateFormReferencesTable(connection);
         CreateHoldingsTable(connection);
+        CreateDocumentNamesTable(connection);
         CreateCellLocationTable(connection);
         CreateRecordTypeFailureTable(connection);
         CreateSequenceTable(connection);
@@ -319,6 +321,23 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 field_path      VARCHAR NOT NULL,
                 record_type     VARCHAR NOT NULL,
                 editor_id       VARCHAR
+            )
+            """);
+
+    // The scripts and files a document names, one row each. A file's name is its path in the Data folder; a path its
+    // asset type cannot hold has no name, and says why.
+    internal static void CreateDocumentNamesTable(DuckDBConnection connection) =>
+        DuckDbSql.Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.document_names (
+                form_key    VARCHAR {FilenameIdentity} NOT NULL,
+                plugin      VARCHAR {FilenameIdentity} NOT NULL,
+                origin      VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type VARCHAR NOT NULL,
+                editor_id   VARCHAR,
+                kind        VARCHAR NOT NULL,
+                field_path  VARCHAR NOT NULL,
+                name        VARCHAR {FilenameIdentity},
+                refusal     VARCHAR
             )
             """);
 

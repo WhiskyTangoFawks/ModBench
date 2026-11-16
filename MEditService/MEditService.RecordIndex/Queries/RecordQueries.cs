@@ -372,9 +372,7 @@ internal sealed class RecordQueries(
     });
 
     public Answer<MemberReferences, IndexRefused> GetScriptReferences(string name) =>
-        _answer.Of(() =>
-            CopiesNamingAtMembers(name, (copy, columns) => ([.. ScriptAttachments.Collect(copy.Body, columns)
-                .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath)], null)));
+        _answer.Of(() => MemberReferencesOf(_index.RequireWholeSetReads().GetScriptAttachments(name)));
 
     private static readonly char[] PathSeparators = ['/', '\\'];
 
@@ -382,46 +380,18 @@ internal sealed class RecordQueries(
     public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath) =>
         _answer.Of(() =>
         {
-            var file = new DataRelativePath(dataPath);
+            var file = new DataRelativePath(dataPath).Path.Replace('\\', '/');
             var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
-            return CopiesNamingAtMembers(name, (copy, columns) =>
-            {
-                var named = AssetPaths.Collect(copy.Body, columns);
-                return ([.. named.Files.Where(path => new DataRelativePath(path.DataPath) == file).Select(path => path.FieldPath)],
-                    named.Refusals is [var refused, ..] ? $"{refused.FieldPath}: {refused.Reason}" : null);
-            });
+            return MemberReferencesOf(_index.RequireWholeSetReads().GetFileNamings(file, name));
         });
 
-    private MemberReferences CopiesNamingAtMembers(string text, Func<CopyHoldingText, IReadOnlyList<ColumnSpec>, (IReadOnlyList<string> Paths, string? Unread)> namingPaths)
-    {
-        var schemas = RequireSchemas();
-        var copies = new List<CopyNamingAtMembers>();
-        var unread = new List<string>();
-        foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(text))
-        {
-            var named = ReadFailures.Copy(copy.FormKey, copy.Plugin);
-            if (!schemas.TryGetValue(copy.RecordType, out var schema))
-            {
-                unread.Add($"{named}: mEdit has no schema for its record type {copy.RecordType}");
-                continue;
-            }
-            try
-            {
-                var (paths, unreadReason) = namingPaths(copy, schema.RecordColumns);
-                if (unreadReason is not null)
-                {
-                    unread.Add($"{named}: {unreadReason}");
-                    continue;
-                }
-                if (paths.Count > 0) copies.Add(new CopyNamingAtMembers(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
-            }
-            catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
-            {
-                unread.Add($"{named}: {ex.Message}");
-            }
-        }
-        return new MemberReferences(copies, unread);
-    }
+    private static MemberReferences MemberReferencesOf(IReadOnlyList<NamedAt> named) =>
+        new(
+            [.. named.Where(found => found.Row.Refusal is null)
+                .GroupBy(found => (found.Row.FormKey, found.Plugin))
+                .Select(copy => new CopyNamingAtMembers(copy.Key.FormKey, copy.Key.Plugin, copy.First().InPluginSource, [.. copy.Select(found => found.Row.FieldPath)], copy.First().Row.RecordType, copy.First().Row.EditorId))],
+            [.. named.Where(found => found.Row.Refusal is not null)
+                .Select(found => $"{ReadFailures.Copy(found.Row.FormKey, found.Plugin)}: {found.Row.FieldPath}: {found.Row.Refusal}")]);
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {
@@ -447,11 +417,16 @@ internal sealed class RecordQueries(
 
     // A compiled plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
     public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey) =>
-        _answer.Sourced(() => CopyDocumentOf(plugin, formKey));
+        _answer.Sourced(() => RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)
+            ? SourceAnswer.Of<CopyDocument?>(null)
+            : CopyDocumentOf(plugin, identity));
 
-    private Answer<CopyDocument?, SourceFailure> CopyDocumentOf(PluginAddress plugin, string formKey)
+    // A caller that already holds the identity costs the record index no read.
+    public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, RecordIdentity identity) =>
+        _answer.Sourced(() => CopyDocumentOf(plugin, identity));
+
+    private Answer<CopyDocument?, SourceFailure> CopyDocumentOf(PluginAddress plugin, RecordIdentity identity)
     {
-        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return SourceAnswer.Of<CopyDocument?>(null);
         if (TreeOf(plugin) is not { } tree)
         {
             return RenderedFileName(plugin, identity)
@@ -551,7 +526,7 @@ internal sealed class RecordQueries(
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
-            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas(), WhyUnreadable, plugin, asked);
+            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, WhyUnreadable, plugin, asked);
         });
 
     public LoadOrderStatus GetStatus() => _index.Status;

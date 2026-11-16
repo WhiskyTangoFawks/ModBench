@@ -14,6 +14,8 @@ public sealed class RealSizeModlist : IDisposable
     public const int SourceTreePlugins = 252;
     public const int ReferencesInTheBigCell = 4_000;
     public const int ManyDocuments = 1_000;
+    public const string AttachedScript = "Generated:Attached";
+    private const int NpcsPerAttachedScript = 20;
 
     // LitR's records per plugin, by rank from the largest.
     private static readonly (int Rank, int Records)[] Sizes =
@@ -279,6 +281,8 @@ public sealed class RealSizeModlist : IDisposable
         for (var n = 0; n < cells / CellsPerNpc; n++)
         {
             var npc = new Npc(mod) { EditorID = $"Npc{rank:D3}x{n}", ShortName = $"Npc {n}", Keywords = [new FormLink<IKeywordGetter>(layer.FormKey)] };
+            if (n % NpcsPerAttachedScript == 0)
+                npc.VirtualMachineAdapter = new VirtualMachineAdapter { Scripts = [new ScriptEntry { Name = AttachedScript }] };
             mod.Npcs.Add(npc);
             if (rank == 0 && n == 0) OverriddenRecord = npc.FormKey.ToString();
             added++;

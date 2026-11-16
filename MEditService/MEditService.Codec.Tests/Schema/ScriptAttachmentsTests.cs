@@ -49,7 +49,7 @@ public class ScriptAttachmentsTests
         var text = RecordTextCodec.SerializeToText(Records[record](NewMod()), GameRelease.Fallout4);
         var columns = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[recordType].RecordColumns;
 
-        var attached = ScriptAttachments.Collect(text, columns);
+        var attached = NamedInDocument.Of(text, columns).Scripts;
 
         Assert.Equal(expectedPaths.Order(StringComparer.Ordinal), attached.Select(a => a.FieldPath).Order(StringComparer.Ordinal));
         Assert.Equal(["First", "Ns:Second"], attached.Select(a => a.Name).Order(StringComparer.Ordinal));
@@ -64,7 +64,7 @@ public class ScriptAttachmentsTests
         npc.VirtualMachineAdapter.Scripts.Add(new Tes5.ScriptEntry { Name = "Attached" });
         var text = RecordTextCodec.SerializeToText(npc, GameRelease.SkyrimSE);
 
-        var attached = ScriptAttachments.Collect(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["npc_"].RecordColumns);
+        var attached = NamedInDocument.Of(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["npc_"].RecordColumns).Scripts;
 
         Assert.Equal([new ScriptAttachment("Attached", "VirtualMachineAdapter.Scripts[0].Name")], attached);
     }
@@ -77,7 +77,7 @@ public class ScriptAttachmentsTests
         quest.VirtualMachineAdapter.Fragments.Add(new Fo4.QuestScriptFragment { ScriptName = "Fragments:Quest", FragmentName = "Fragment_Stage_0010" });
         var text = RecordTextCodec.SerializeToText(quest, GameRelease.Fallout4);
 
-        var attached = ScriptAttachments.Collect(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["qust"].RecordColumns);
+        var attached = NamedInDocument.Of(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["qust"].RecordColumns).Scripts;
 
         Assert.Contains(new ScriptAttachment("Fragments:Quest", "VirtualMachineAdapter.Fragments[0].ScriptName"), attached);
     }
@@ -91,7 +91,7 @@ public class ScriptAttachmentsTests
         quest.VirtualMachineAdapter.Fragments.Add(new Tes5.QuestScriptFragment { ScriptName = "QF_Holder", FragmentName = "Fragment_0" });
         var text = RecordTextCodec.SerializeToText(quest, GameRelease.SkyrimSE);
 
-        var attached = ScriptAttachments.Collect(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"].RecordColumns);
+        var attached = NamedInDocument.Of(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"].RecordColumns).Scripts;
 
         Assert.Equal(
             [new ScriptAttachment("QF_Holder", "VirtualMachineAdapter.FileName"), new ScriptAttachment("QF_Holder", "VirtualMachineAdapter.Fragments[0].ScriptName")],

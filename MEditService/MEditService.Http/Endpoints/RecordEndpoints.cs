@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -401,7 +402,7 @@ internal static class RecordEndpoints
         var copies = new List<ScriptCopyFile>();
         foreach (var copy in references.Copies)
         {
-            var (place, at) = copy.InPluginSource ? PlaceOf(svc.GetCopyDocument(copy.Plugin, copy.FormKey)) : (ScriptCopyPlace.NoPluginSource, null);
+            var (place, at) = copy.InPluginSource ? PlaceOf(svc.GetCopyDocument(copy.Plugin, new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId))) : (ScriptCopyPlace.NoPluginSource, null);
             copies.Add(new(copy.FormKey, copy.Plugin, copy.FieldPaths, place, at));
         }
         return copies;

@@ -28,7 +28,7 @@ function renaming(held: Held) {
       }),
       originHoldsFile: (source, path) => Promise.resolve((held[keyOf(source)] ?? []).some((each) => each.toLowerCase() === path.toLowerCase())),
     },
-    client: { getScriptReferences: () => Promise.resolve({ copies: [{ formKey: '000801:Mod.esp', plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: [] }], unread: [] }) },
+    client: { getScriptReferences: () => Promise.resolve({ copies: [{ formKey: '000801:Mod.esp', plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: [], recordType: 'QUST' }], unread: [] }) },
     references: { plan },
   });
   const editing = { held: heldTexts([]), apply: (changes: readonly FileChanges[]) => { applied.push(changes); return Promise.resolve(undefined); } };

@@ -544,13 +544,53 @@ internal sealed class RelationReads(
             """, reader => new RecordAt(new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetString(0)), formKey)];
     }
 
-    /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>
-    public IEnumerable<CopyHoldingText> GetCopiesHoldingText(string text) =>
-        CopiesWhere("contains(lower(body), lower($1))", ActiveOrCompiled, text);
+    /// <summary>What the documents of <paramref name="plugin"/> (every registered plugin when null) name, in their records'
+    /// order, narrowed to <paramref name="formKeys"/> when given.</summary>
+    public IReadOnlyList<NamedAt> GetDocumentNames(PluginAddress? plugin, IReadOnlyCollection<string>? formKeys)
+    {
+        List<object> values = [];
+        var narrowing = "TRUE";
+        if (plugin is { } only)
+        {
+            values.AddRange([only.Name, only.Origin]);
+            narrowing += " AND n.plugin = $1 AND n.origin = $2";
+        }
+        if (formKeys is not null)
+        {
+            values.Add(formKeys.ToList());
+            narrowing += $" AND n.form_key IN (SELECT unnest(${values.Count}::VARCHAR[]))";
+        }
+        return DocumentNamesWhere(narrowing, [.. values]);
+    }
 
-    /// <summary>Each copy <paramref name="plugin"/> holds, read in batches of whole records as the caller takes them.</summary>
-    public IEnumerable<CopyHoldingText> GetCopiesOf(PluginAddress plugin) =>
-        CopiesWhere("plugin = $1 AND origin = $2", "TRUE", plugin.Name, plugin.Origin);
+    /// <summary>Each attachment of the script <paramref name="name"/> in an active plugin or a compiled one.</summary>
+    public IReadOnlyList<NamedAt> GetScriptAttachments(string name) =>
+        DocumentNamesWhere($"n.kind = '{DocumentNameKind.Script}' AND n.name = $1 AND {ActiveOrCompiled}", name);
+
+    /// <summary>Each member of an active or compiled plugin that names the file <paramref name="dataPath"/>, and each path
+    /// naming <paramref name="fileName"/> that no file can be named for.</summary>
+    public IReadOnlyList<NamedAt> GetFileNamings(string dataPath, string fileName) =>
+        DocumentNamesWhere(
+            $"n.kind = '{DocumentNameKind.File}' AND (n.name = $1 OR contains(lower(n.refusal), lower($2))) AND {ActiveOrCompiled}", dataPath, fileName);
+
+    private List<NamedAt> DocumentNamesWhere(string filter, params object[] values)
+    {
+        using var context = OpenRead();
+        return context.Rows($"""
+            SELECT n.plugin, n.origin, n.form_key, n.record_type, n.editor_id, n.kind, n.field_path, n.name, n.refusal, {InPluginSource}
+            FROM {TableDdlBuilder.MirrorSchema}.document_names n
+            {TableDdlBuilder.RegisteredJoin("n", "plugin", "origin")}
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = n.plugin AND d.origin = n.origin
+            WHERE {filter}
+            ORDER BY n.plugin, n.origin, n.form_key, n.rowid
+            """, reader => new NamedAt(
+                reader.GetPluginAddress(), reader.GetBoolean(9),
+                new DocumentNameRow(
+                    reader.GetString(2), reader.GetString(3), reader.GetStringOrNull(4), Enum.Parse<DocumentNameKind>(reader.GetString(5)),
+                    reader.GetString(6), reader.GetStringOrNull(7), reader.GetStringOrNull(8))),
+            values);
+    }
 
     /// <summary>Each of <paramref name="copies"/> a registered plugin holds, read in batches as the caller takes them.</summary>
     public IEnumerable<CopyHoldingText> GetCopies(IReadOnlyList<RecordAt> copies)

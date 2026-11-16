@@ -14,9 +14,9 @@ public class AssetPathsTests
     private static Tes5.SkyrimMod NewMod() => new(ModKey.FromFileName("Assets.esp"), Tes5.SkyrimRelease.SkyrimSE);
 
     private static IReadOnlyList<AssetPath> Collected(Tes5.Static record) =>
-        AssetPaths.Collect(
+        NamedInDocument.Of(
             RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files;
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files.Files;
 
     [Fact]
     public void APathARecordNames_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
@@ -34,9 +34,9 @@ public class AssetPathsTests
         record.Diffuse = @"Decals\Stain_d.dds";
         record.Material = @"Decals\Stain.bgsm";
 
-        var collected = AssetPaths.Collect(
+        var collected = NamedInDocument.Of(
             RecordTextCodec.SerializeToText(record, GameRelease.Fallout4),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns).Files;
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns).Files.Files;
 
         Assert.Equal(
             [
@@ -55,9 +55,9 @@ public class AssetPathsTests
     }
 
     private static NamedFiles CollectedFrom(string given) =>
-        AssetPaths.Collect(
+        NamedInDocument.Of(
             JsonSerializer.Serialize(new { Model = new { File = given } }),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns);
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files;
 
     [Fact]
     public void APathThatAlreadyNamesItsAssetTypesFolder_IsNotPrefixedTwice()

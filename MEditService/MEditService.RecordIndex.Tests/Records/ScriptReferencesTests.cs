@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -6,7 +7,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.RecordIndex.Tests.Records;
 
-public class ScriptReferencesTests
+public sealed class ScriptReferencesTests
 {
     private static readonly PluginAddress Holding = new("Holding.esp", "ModA");
 
@@ -41,5 +42,22 @@ public class ScriptReferencesTests
         var copy = Assert.Single(copies);
         Assert.Equal((attaching, Holding, false), (copy.FormKey, copy.Plugin, copy.InPluginSource));
         Assert.Equal(["VirtualMachineAdapter.Scripts[0].Name"], copy.FieldPaths);
+    }
+
+    [Fact]
+    public void AScriptAttachedByAnEdit_IsAReferenceAtOnce_AndNoneOnceTheEditTakesItOut()
+    {
+        using var fixture = new IndexedContainerMod();
+        var npc = fixture.Index.DocumentOf(fixture.Npc, fixture.Plugin);
+        var body = JsonNode.Parse(fixture.Index.BodyOf(fixture.Npc, fixture.Plugin)).Require().AsObject();
+        var plain = body.ToJsonString();
+        body["VirtualMachineAdapter"] = new JsonObject { ["Scripts"] = new JsonArray(new JsonObject { ["Name"] = "Ns:Edited" }) };
+
+        fixture.Index.Edit(fixture.Entry, npc, body.ToJsonString());
+        var attached = fixture.Index.Queries.GetScriptReferences("Ns:Edited").Value().Copies;
+        fixture.Index.Edit(fixture.Entry, npc, plain);
+
+        Assert.Equal(["VirtualMachineAdapter.Scripts[0].Name"], Assert.Single(attached).FieldPaths);
+        Assert.Empty(fixture.Index.Queries.GetScriptReferences("Ns:Edited").Value().Copies);
     }
 }

@@ -371,4 +371,55 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Budgets.Ran(OneRecordsComparison, () => compared = queries.GetCompare(modlist.OverriddenRecord, null).Value(), "Comparing a record across its stack", Runs);
         Assert.Equal(modlist.LoadOrder.Take(RealSizeModlist.PluginsOverridingOneRecord + 1).Count(plugin => plugin.Enabled), compared?.Overrides.Count);
     }
+
+    [RealSizeFact]
+    public void TheFilePathsOfEveryPlugin_ListWithinOneGesture()
+    {
+        IReadOnlyList<PluginFilePaths>? listed = null;
+
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetFilePaths(null).Value(), "Listing the file paths of every plugin", Runs);
+        Assert.Equal(RealSizeModlist.SourceTreePlugins, listed?.Count);
+        Assert.Contains(listed ?? [], plugin => plugin.Paths.Count > 0);
+    }
+
+    [RealSizeFact]
+    public void TheFilePathsOfOnePlugin_ListWithinAQuarterOfAGesture()
+    {
+        IReadOnlyList<PluginFilePaths>? listed = null;
+
+        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetFilePaths(Modlist.BigSourcePlugin.Key).Value(), "Listing the file paths of one plugin", Runs);
+        Assert.NotEmpty(Assert.Single(listed ?? []).Paths);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToAFilePath_ListWithinAQuarterOfAGesture()
+    {
+        MemberReferences? listed = null;
+
+        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetFileReferences("Meshes/Generated/Mod007/Static0.nif").Value(), "Listing the references to a file path", Runs);
+        Assert.NotEmpty(listed?.Copies ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToAScript_ListWithinAQuarterOfAGesture()
+    {
+        MemberReferences? listed = null;
+
+        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetScriptReferences(RealSizeModlist.AttachedScript).Value(), "Listing the references to a script", Runs);
+        Assert.NotEmpty(listed?.Copies ?? []);
+    }
+
+    [RealSizeFact]
+    public void ARenamedScriptsReferences_AreReadWithinOneGesture()
+    {
+        var queries = Index.Queries;
+        var placed = 0;
+
+        Budgets.Ran(OneGesture, () =>
+        {
+            var references = queries.GetScriptReferences(RealSizeModlist.AttachedScript).Value();
+            placed = references.Copies.Count(copy => queries.GetCopyDocument(copy.Plugin, new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId)).Value() is not null);
+        }, "Reading a script's references for its rename", Runs);
+        Assert.True(placed > 0);
+    }
 }
