@@ -389,6 +389,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/indexing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it with the reason: GET /plugins lists only the plugins opened. */
+        get: operations["GetPluginsIndexing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/diagnoses": {
         parameters: {
             query?: never;
@@ -1676,6 +1693,15 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
+        IndexOfPlugin: {
+            name: string;
+            origin: string;
+            state: components["schemas"]["IndexOfPluginState"];
+            reason?: string | null;
+            diagnosis?: string | null;
+        };
+        /** @enum {string} */
+        IndexOfPluginState: "Pending" | "Indexed" | "Failed";
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -3174,6 +3200,35 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginsIndexing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexOfPlugin"][];
                 };
             };
             /** @description Service Unavailable */

@@ -227,6 +227,24 @@ internal sealed class Indexer : IDisposable
         return new(asOnDisk ? PluginIndexing.AsOnDisk : PluginIndexing.NotYet);
     }
 
+    /// <summary>Each plugin of the load order held, by what the reconcile has done with it.</summary>
+    public IReadOnlyList<IndexOfPlugin> IndexOfPlugins()
+    {
+        var scope = RequireScope();
+        var plugins = _holder.Held?.Snapshot.Plugins ?? throw new NoLoadOrderException();
+        lock (_lock)
+        {
+            var failures = new List<PluginLoadFailure>([.. scope.Held.Failures, .. _collisionFailures]);
+            return [.. plugins.Select(plugin =>
+            {
+                var failure = failures.Find(f => f.Name == plugin.Name && f.Origin == plugin.Origin);
+                if (failure is not null) return new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Failed, failure.Reason, failure.Diagnosis);
+                var indexed = _indexed.Exists(held => PluginAddress.Comparer.Equals(held, plugin.Key));
+                return new IndexOfPlugin(plugin.Name, plugin.Origin, indexed ? IndexOfPluginState.Indexed : IndexOfPluginState.Pending);
+            })];
+        }
+    }
+
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
     {
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }

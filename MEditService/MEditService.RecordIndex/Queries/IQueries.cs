@@ -67,6 +67,8 @@ public interface IQueries
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
     Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
+    // Every plugin of the load order, pending, indexed or failed, which GetPlugins leaves out until it is opened.
+    Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing();
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin, RecordsAsked? asked = null);
     Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked = null);
 

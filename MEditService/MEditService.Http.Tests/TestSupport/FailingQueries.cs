@@ -30,6 +30,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         IReadOnlyList<string> formKeys, PluginAddress? plugin) => throw Failed();
 
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) => throw Failed();
+    public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing() => throw Failed();
     public Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(
         PluginAddress plugin) => throw Failed();
 

@@ -28,6 +28,7 @@ public sealed class WholeSetRefusalTests
     private static readonly Dictionary<string, Func<IQueries, IndexRefused>> BehindTheReadsGuard = new()
     {
         [nameof(IQueries.GetPlugins)] = q => q.GetPlugins().Refused(),
+        [nameof(IQueries.GetPluginsIndexing)] = q => q.GetPluginsIndexing().Refused(),
         [nameof(IQueries.GetFilter)] = q => q.GetFilter().Refused(),
         [nameof(IQueries.SetFilter)] = q => q.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql")
             ?? throw new InvalidOperationException("Expected the Index to refuse here."),

@@ -45,6 +45,28 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
+    public async Task EveryPluginsIndexState_ReadsPendingUntilItIsIndexed_AndNoPluginIsLeftOut()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = ThreePlugins("sm-progressive-index-of-plugins");
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
+        using var __ = gate;
+
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+        var midLoad = index.Queries.GetPluginsIndexing().Value();
+        gate.Release();
+        await load;
+        var settled = index.Queries.GetPluginsIndexing().Value();
+
+        Assert.Equal(
+            [("Master.esm", IndexOfPluginState.Indexed), ("A.esp", IndexOfPluginState.Indexed), ("B.esp", IndexOfPluginState.Pending)],
+            midLoad.Select(plugin => (plugin.Name, plugin.State)));
+        Assert.All(settled, plugin => Assert.Equal(IndexOfPluginState.Indexed, plugin.State));
+    }
+
+    [Fact]
     public async Task Status_ReportsTheLoadWhileItRuns_AndSettlesWhenTheSweepCompletes()
     {
         var holder = new LoadOrderHolder();
