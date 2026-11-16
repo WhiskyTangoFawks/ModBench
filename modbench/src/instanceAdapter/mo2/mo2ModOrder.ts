@@ -19,6 +19,8 @@ import {
 
 type Mo2ModOrder = Pick<InstanceAdapter, 'changeModOrder'>;
 
+const WRITTEN_MEANWHILE = new Error('Mod order written by another program meanwhile');
+
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
   const listed = listedAs(order, entry);
   if (listed === undefined) throw new Error(entryNotFound(entry));
@@ -158,34 +160,40 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
 
   return {
     // The folders move, the file is written and any move is put back, all under the file's one
-    // lock, so no change queued behind this one sees a folder this one moved and then undid.
+    // lock, so no change queued behind this one sees a folder this one moved and then undid. A
+    // file another program wrote meanwhile is read again and decided over (ADR-0003).
     changeModOrder(profile, decide) {
       const file = modlistFile(instanceRoot, profile);
       return withLock(file, async () => {
-        const before = await get(file);
-        const folders = await listModFolders(context, ignoreSkippedLink);
-        const changes = decide(firstLines(parseModlist(before), modLineKey).kept, folders && modFoldersOf(folders));
-        let after = before;
-        const resolved: ModOrderChange[] = [];
-        for (const change of changes) {
-          const order = parseModlist(after);
-          if (alreadyDone(order, change)) continue;
-          const landing = resolveModOrderChange(order, change);
-          resolved.push(landing);
-          after = spliceModOrderChange(after, landing);
-        }
-        const undos: Undo[] = [];
-        try {
-          for (const change of resolved) await refuseFolderInTheWay(change);
-          for (const change of resolved) {
-            const undo = await moveFolders(change);
-            if (undo) undos.unshift(undo);
+        for (;;) {
+          const before = await get(file);
+          const folders = await listModFolders(context, ignoreSkippedLink);
+          const changes = decide(firstLines(parseModlist(before), modLineKey).kept, folders && modFoldersOf(folders));
+          let after = before;
+          const resolved: ModOrderChange[] = [];
+          for (const change of changes) {
+            const order = parseModlist(after);
+            if (alreadyDone(order, change)) continue;
+            const landing = resolveModOrderChange(order, change);
+            resolved.push(landing);
+            after = spliceModOrderChange(after, landing);
           }
-          if (after === before) return { wrote: false, landed: resolved };
-          await write(file, after);
-          return { wrote: true, landed: resolved };
-        } catch (err) {
-          throw await undoAll(undos, err);
+          const undos: Undo[] = [];
+          try {
+            for (const change of resolved) await refuseFolderInTheWay(change);
+            for (const change of resolved) {
+              const undo = await moveFolders(change);
+              if (undo) undos.unshift(undo);
+            }
+            if (await get(file) !== before) throw WRITTEN_MEANWHILE;
+            if (after === before) return { wrote: false, landed: resolved };
+            await write(file, after);
+            return { wrote: true, landed: resolved };
+          } catch (err) {
+            const failure = await undoAll(undos, err);
+            if (failure === WRITTEN_MEANWHILE) continue;
+            throw failure;
+          }
         }
       });
     },

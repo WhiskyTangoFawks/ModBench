@@ -8,7 +8,7 @@ import { ignoreLink } from '../../gameFolder/ownEntries';
 import {
   access, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
-import type { PathLike } from 'node:fs';
+import { appendFileSync, type PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { eventually, writtenAndHeard } from '../../../test/eventually';
@@ -3058,6 +3058,24 @@ describe('the MO2 Instance adapter', () => {
         'mod:Harder VATS:true',
         'mod:Cracked and Smudged Pip-Boy Screen:true',
       ]);
+    });
+
+    it('lands its change on the order an outside write left, not over it', async () => {
+      const file = join(root, DEFAULT_MODLIST);
+      let wrote = false;
+      const decide = vi.fn(() => {
+        if (!wrote) {
+          wrote = true;
+          appendFileSync(file, '-Outside Mod\n');
+        }
+        return [{ kind: 'enable', mod: 'Harder VATS', enabled: true }] satisfies ModOrderChange[];
+      });
+
+      await adapter.changeModOrder('Default', decide);
+
+      const names = modNames(await source.modOrder('Default'));
+      expect(names).toContain('mod:Outside Mod:false');
+      expect(names).toContain('mod:Harder VATS:true');
     });
 
     it('adds a separator with its folder', async () => {
