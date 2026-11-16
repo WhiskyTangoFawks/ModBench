@@ -60,4 +60,29 @@ public class FileReferencesTests
         Assert.Equal([naming.ToString()], answer.Copies.Select(copy => copy.FormKey));
         Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(answer.Unread));
     }
+
+    [Fact]
+    public void ACopyWhoseRootedPathNamesNoDataFolder_IsNamedAsUnread_WhateverMessageMutagenGivesIt()
+    {
+        var rooted = OperatingSystem.IsWindows() ? "C:/Other/Stain_d.dds" : "/Other/Stain_d.dds";
+        FormKey unreadable = default;
+        using var fixture = new PluginFixtureBuilder("file-references-rooted")
+            .WithPlugin(Holding.Name, mod =>
+            {
+                var holder = mod.TextureSets.AddNew("Holder");
+                holder.Diffuse = @"Decals\Stain_d.dds";
+                unreadable = holder.FormKey;
+            }, origin: Holding.Origin)
+            .BuildScattered()
+            .CompiledPlugin();
+        var entry = fixture.Plugins.Single();
+        using (var live = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins))
+            entry.HandEdit(live.DocumentOf(unreadable.ToString(), entry.Key), @"Decals\\Stain_d.dds", rooted);
+        using var index = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
+
+        var answer = index.Queries.GetFileReferences("Textures/Decals/Stain_d.dds").Value();
+
+        Assert.Empty(answer.Copies);
+        Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(answer.Unread));
+    }
 }

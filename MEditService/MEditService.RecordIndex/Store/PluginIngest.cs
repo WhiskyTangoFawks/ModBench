@@ -42,7 +42,7 @@ internal sealed class PluginIngest
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     internal sealed record PreparedRecord(
         string RecordType, string FormKey, string Body, string ContentHash, List<FormReferenceRow> Refs,
-        List<string> Masters, List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
+        List<string> Masters, List<HoldingRow> Holdings, List<CellLocationRow> CellLocations, List<DocumentNameRow> Names,
         string? EditorId, string? ParseDiagnosis, DerivedColumns.Columns Derived);
 
     // ADR-0005, from the one stream that carries the documents. A DuckDB appender holds its rows
@@ -90,6 +90,7 @@ internal sealed class PluginIngest
         DeleteFormReferencesForPlugin(plugin, origin);
         DeleteExistingForOrigin("holdings", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
+        DeleteExistingForOrigin("document_names", plugin, origin);
         DeleteExistingForOrigin("record_type_failure", plugin, origin);
     }
 
@@ -203,6 +204,7 @@ internal sealed class PluginIngest
         using var formReferences = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
         using var holdings = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings");
         using var cellLocations = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "cell_location");
+        using var names = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "document_names");
         foreach (var p in prepared)
         {
             if (p.ParseDiagnosis is { } diagnosis && _logger.IsEnabled(LogLevel.Warning))
@@ -229,6 +231,8 @@ internal sealed class PluginIngest
                 AppendHoldingRow(holdings, row, plugin, origin);
             foreach (var row in p.CellLocations)
                 AppendCellLocationRow(cellLocations, row, plugin, origin);
+            foreach (var row in p.Names)
+                AppendDocumentName(names, row, plugin, origin);
             if (_logger.IsEnabled(LogLevel.Trace))
             {
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
@@ -279,10 +283,12 @@ internal sealed class PluginIngest
 
         // The stamp is the source document's, children and all: it is what validation compares a
         // tree's file against.
+        var body = ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release);
         return new PreparedRecord(
-            document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
+            document.RecordType, document.FormKey, body,
             _contentStamp(document.Text), refs,
-            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis,
+            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations,
+            refused ? [] : NamesIn(body, schema, document.FormKey, document.RecordType, editorId), editorId, document.ParseDiagnosis,
             refused ? default : DerivedColumns.Of(root, _stringsLanguage()));
     }
 
@@ -324,6 +330,35 @@ internal sealed class PluginIngest
             row.AppendValue(failure.Diagnosis);
             row.EndRow();
         }
+    }
+
+    // A container's children are rows of their own, so what a record names is read off its own body.
+    private static List<DocumentNameRow> NamesIn(string body, RecordTableSchema schema, string formKey, string recordType, string? editorId)
+    {
+        var named = NamedInDocument.Of(body, schema.RecordColumns);
+        var files = named.Assets;
+        return
+        [
+            .. files.Files.Select(file => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.File, file.FieldPath, file.DataPath, null)),
+            .. files.Refusals.Select(refused => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.File, refused.FieldPath, refused.Given, refused.Reason)),
+            .. named.Scripts
+                .Select(script => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.Script, script.FieldPath, script.Name, null)),
+        ];
+    }
+
+    internal static void AppendDocumentName(DuckDBAppender appender, DocumentNameRow r, string plugin, string origin)
+    {
+        var row = appender.CreateRow();
+        row.AppendValue(r.FormKey);
+        row.AppendValue(plugin);
+        row.AppendValue(origin);
+        row.AppendValue(r.RecordType);
+        row.AppendValue(r.EditorId);
+        row.AppendValue(r.Kind.ToString());
+        row.AppendValue(r.FieldPath);
+        row.AppendValue(r.Name);
+        row.AppendValue(r.Refusal);
+        row.EndRow();
     }
 
     // The rows a record's own links become: a child it carries inline holds its own. Shared by

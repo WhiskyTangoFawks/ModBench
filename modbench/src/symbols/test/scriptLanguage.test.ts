@@ -155,7 +155,7 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
 });
 
 describe('where a Papyrus script is defined, and the records that attach it', () => {
-  const copy = (origin: string) => ({ formKey: QUEST, plugin: { name: 'Mod.esp', origin }, inPluginSource: true, fieldPaths: [PATH] });
+  const copy = (origin: string) => ({ formKey: QUEST, plugin: { name: 'Mod.esp', origin }, inPluginSource: true, fieldPaths: [PATH], recordType: 'QUST' });
 
   it.each([
     ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],

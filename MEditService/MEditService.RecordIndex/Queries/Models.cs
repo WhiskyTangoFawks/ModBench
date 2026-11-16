@@ -147,7 +147,8 @@ public sealed record CopyNaming(string FormKey, PluginAddress Plugin, bool InPlu
 
 /// <summary>A copy that names a symbol, such as a Papyrus script or a file, the member paths that name it, and whether its
 /// plugin has plugin source, which a rename can change.</summary>
-public sealed record CopyNamingAtMembers(string FormKey, PluginAddress Plugin, bool InPluginSource, IReadOnlyList<string> FieldPaths);
+public sealed record CopyNamingAtMembers(
+    string FormKey, PluginAddress Plugin, bool InPluginSource, IReadOnlyList<string> FieldPaths, string RecordType, string? EditorId);
 
 /// <summary>The copies that name a symbol, and why each copy that may name it went unread.</summary>
 public sealed record MemberReferences(IReadOnlyList<CopyNamingAtMembers> Copies, IReadOnlyList<string> Unread);

@@ -1477,6 +1477,8 @@ export interface components {
             plugin: components["schemas"]["PluginAddress"];
             inPluginSource: boolean;
             fieldPaths: string[];
+            recordType: string;
+            editorId?: string | null;
         };
         CopyRecordRefused: {
             item: components["schemas"]["CopyItem"];

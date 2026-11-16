@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -58,6 +59,9 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         PluginAddress plugin, string formKey) => throw Failed();
 
     public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey) =>
+        throw Failed();
+
+    public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, RecordIdentity identity) =>
         throw Failed();
 
     public Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path) => throw Failed();

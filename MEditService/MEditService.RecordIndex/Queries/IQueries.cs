@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
@@ -51,6 +52,7 @@ public interface IQueries
     Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey);
+    Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, RecordIdentity identity);
     Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path);
     /// <summary>The names a document's text holds, and where each sits; with <paramref name="at"/>, those at that offset.
     /// Given the <paramref name="path"/> of a file no plugin's source holds, none.</summary>

@@ -178,10 +178,15 @@ internal sealed class WorkingTreeOverlay
 
     private void ReplaceReferences(PluginAddress key, List<Derived> derived)
     {
-        DeleteReferencesFrom(key, [.. derived.Select(d => d.Document.FormKey)]);
+        var formKeys = derived.Select(d => d.Document.FormKey).ToList();
+        DeleteReferencesFrom(key, formKeys);
+        DeleteNamesOf(key, formKeys);
         using var appender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
         foreach (var reference in derived.SelectMany(d => d.Prepared?.Refs ?? []))
             PluginIngest.AppendFormReference(appender, reference, key.Name, key.Origin);
+        using var names = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "document_names");
+        foreach (var name in derived.SelectMany(d => d.Prepared?.Names ?? []))
+            PluginIngest.AppendDocumentName(names, name, key.Name, key.Origin);
     }
 
     // A container's child set and slot order live in its document, so delete-then-insert per parent
@@ -243,6 +248,7 @@ internal sealed class WorkingTreeOverlay
             DuckDbSql.Execute(_connection, $"DELETE FROM mirror.records WHERE plugin = $1 AND origin = $2 AND form_key {AmongKeys}",
                 key.Name, key.Origin, level);
             DeleteReferencesFrom(key, level);
+            DeleteNamesOf(key, level);
             DuckDbSql.Execute(_connection,
                 $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND (child {AmongKeys} OR parent {AmongKeys})",
                 key.Name, key.Origin, level);
@@ -264,6 +270,11 @@ internal sealed class WorkingTreeOverlay
     private void DeleteReferencesFrom(PluginAddress key, List<string> formKeys) =>
         DuckDbSql.Execute(_connection,
             $"DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2 AND source_form_key {AmongKeys}",
+            key.Name, key.Origin, formKeys);
+
+    private void DeleteNamesOf(PluginAddress key, List<string> formKeys) =>
+        DuckDbSql.Execute(_connection,
+            $"DELETE FROM mirror.document_names WHERE plugin = $1 AND origin = $2 AND form_key {AmongKeys}",
             key.Name, key.Origin, formKeys);
 
     private void DeleteCellLocationsOf(PluginAddress key, List<string> formKeys) =>
