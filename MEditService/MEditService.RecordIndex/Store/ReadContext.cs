@@ -5,8 +5,7 @@ using DuckDB.NET.Native;
 namespace MEditService.RecordIndex.Store;
 
 /// <summary>One snapshot of the record index: every query a read asks sees one state, whatever a write commits
-/// meanwhile. A context from <see cref="Store.OpenRead"/> is the reader's to dispose. Once its cancellation is requested,
-/// DuckDB is interrupted and each query that follows throws <see cref="OperationCanceledException"/>.</summary>
+/// meanwhile. The reader disposes it. DuckDB's interrupt ends only the running query, so each later one checks the token.</summary>
 internal sealed class ReadContext : IDisposable
 {
     private readonly DuckDBConnection _connection;
