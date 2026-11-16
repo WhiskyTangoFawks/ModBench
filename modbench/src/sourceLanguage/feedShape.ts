@@ -1,5 +1,6 @@
 import type { MEditClient, PluginAddress, PluginFilePaths, PluginProblems } from '../client';
 import type { ProblemsAsker } from '../drivingLib/problemsAsker';
+import { coalesced } from '../ports/coalesced';
 import type { Reporter } from '../ports/reporter';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 
@@ -53,13 +54,14 @@ export function mergedFeeds(publishFile: (file: string, problems: readonly Probl
   };
 }
 
+/** `settled` resolves once every change heard has its answer published. */
+export interface Feed { stop: () => void; settled: () => Promise<void> }
+
 export interface Settling {
-  /** A change calls for an ask. */
-  requested: () => void;
-  /** Runs the ask that takes every request made before it began. */
-  answering: <T>(run: () => Promise<T>) => Promise<T>;
+  /** Makes the function a change calls: one `body` run follows the calls of a turn, and never two at once. */
+  asking: (body: () => Promise<void>) => () => void;
   working: <T>(run: () => Promise<T>) => Promise<T>;
-  /** Resolves once no request is unanswered and no work runs. */
+  /** Resolves once no call is unanswered and no work runs. */
   settled: () => Promise<void>;
 }
 
@@ -73,10 +75,12 @@ export function settling(): Settling {
     try { return await run(); } finally { running -= 1; release(); }
   };
   return {
-    requested: () => { requests += 1; },
-    answering: (run) => {
-      const taken = requests;
-      return working(async () => { try { return await run(); } finally { requests -= taken; } });
+    asking: (body) => {
+      const run = coalesced(() => {
+        const taken = requests;
+        return working(async () => { try { await body(); } finally { requests -= taken; } });
+      });
+      return () => { requests += 1; run(); };
     },
     working,
     settled: () => (requests === 0 && running === 0 ? Promise.resolve() : new Promise<void>((resume) => { waiting.push(resume); })),

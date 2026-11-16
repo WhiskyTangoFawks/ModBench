@@ -34,6 +34,7 @@ import type { MEditClient } from '../../client/MEditClient';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { status } from '../../test/modStatusFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { fakeInstanceAdapter, fileIn, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
@@ -622,6 +623,28 @@ describe('the agent server, given an instance value', () => {
     caughtUp();
 
     expect(await asked).toEqual([]);
+  });
+
+  describe('list_problems, when the record index may be late', () => {
+    const LATE_LINE = 'The record index may be late: this answer may predate a write.';
+    const blocksOf = async (client: Client) => CallToolResultSchema.parse(await client.callTool({ name: 'list_problems', arguments: {} })).content
+      .map((block) => (block.type === 'text' ? block.text : ''));
+
+    it('says its answer may predate a write', async () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setStatus('running');
+      mEdit.answerPuts(() => new Promise(() => undefined));
+      void mEdit.sendLoadOrder(EMPTY_SNAPSHOT);
+      const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+
+      expect(await blocksOf(client)).toContain(LATE_LINE);
+    });
+
+    it('says nothing of lateness when the record index is not late', async () => {
+      const { client } = await clientOf(new FakeInstance(VALUE));
+
+      expect(await blocksOf(client)).not.toContain(LATE_LINE);
+    });
   });
 
   describe('list_problems given paths', () => {

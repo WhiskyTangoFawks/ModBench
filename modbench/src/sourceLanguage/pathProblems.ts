@@ -1,13 +1,12 @@
 import type { MEditClient, PluginAddress, PluginFilePaths } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { askingOnChange } from '../drivingLib/problemsAsker';
-import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { askedAgain, lastRead, positionAt, readiness, settling, tellingOnSurface, type Asked, type Told } from './feedShape';
-import type { Feed, ProblemOnFile, ProblemsByFile } from './sourceProblems';
+import { askedAgain, lastRead, positionAt, readiness, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
+import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
 /** What the instance says of a file the plugin source names. */
@@ -121,7 +120,7 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
   const asking = new Map<string, PluginAddress>();
   let wholeWanted = true;
   let atSubscribe = true;
-  const run = coalesced(() => asks.answering(async () => {
+  const askWanted = asks.asking(async () => {
     const whole = wholeWanted;
     const first = atSubscribe;
     const named = [...asking.values()];
@@ -129,8 +128,7 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     atSubscribe = false;
     asking.clear();
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
-  }));
-  const askWanted = () => { asks.requested(); run(); };
+  });
   const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
     if (!ready()) return;
     asking.set(pluginAddressKey(plugin), plugin);

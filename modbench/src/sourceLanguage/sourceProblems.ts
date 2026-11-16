@@ -1,13 +1,12 @@
 import type { MEditClient, PluginAddress, PluginProblems } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { askingOnChange } from '../drivingLib/problemsAsker';
-import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { askedAgain, lastRead, readiness, settling, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, readiness, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -105,9 +104,6 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
   }));
 }
 
-/** `settled` resolves once every change heard has its answer published. */
-export interface Feed { stop: () => void; settled: () => Promise<void> }
-
 /** Publishes what mEdit answers is wrong in each compiled plugin's source. A plugin mEdit
  *  cannot answer for keeps the links it last had and takes the stops it now answers, and the
  *  language status says why. */
@@ -165,13 +161,12 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   let atSubscribe = true;
   const asking = new Map<string, PluginAddress>();
   const asks = settling();
-  const run = coalesced(() => asks.answering(async () => {
+  const askWanted = asks.asking(async () => {
     const [whole, first, named] = [wholeWanted, atSubscribe, [...asking.values()]];
     [wholeWanted, atSubscribe] = [false, false];
     asking.clear();
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
-  }));
-  const askWanted = () => { asks.requested(); run(); };
+  });
   const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
     if (!ready()) return;
     asking.set(pluginAddressKey(plugin), plugin);

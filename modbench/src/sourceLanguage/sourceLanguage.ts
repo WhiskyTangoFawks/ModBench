@@ -53,7 +53,6 @@ interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
   /** The line that says mEdit could not take the unsaved plugin source: the one line a read of a record is qualified by. */
   unsavedSourceMessages(): string[];
-  /** Resolves once every change mEdit named has its problems in the diagnostics. */
   problemsCaughtUp(): Promise<void>;
 }
 

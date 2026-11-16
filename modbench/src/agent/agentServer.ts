@@ -34,7 +34,7 @@ import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { PROBLEMS } from './problems';
-import { untilCaughtUp } from './untilCaughtUp';
+import { Cancelled, untilCaughtUp } from './untilCaughtUp';
 import { READ_GUIDE } from './readGuide';
 import { INSTRUCTIONS } from './instructions/instructions';
 import { TOOL_DESCRIPTIONS } from './instructions/tools';
@@ -43,9 +43,8 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChange' | 'onLoadOrderStatus' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
   symbols: SymbolIndex;
-  /** Resolves once every change mEdit named has its problems in the diagnostics. */
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
@@ -79,7 +78,7 @@ async function answer(log: Log, standing: () => string[], name: string, work: ()
   } catch (error) {
     const line = `[agent] ${name}: ${errorMessage(error)}`;
     if (error instanceof Refusal) log.warn(line);
-    else log.error(line);
+    else if (!(error instanceof Cancelled)) log.error(line);
     const text = error instanceof Refusal && error.answer !== undefined ? JSON.stringify(error.answer) : errorMessage(error);
     return { isError: true, content: [textBlock(text), ...standing().map(textBlock)] };
   }
@@ -154,8 +153,9 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, te
     const { modDirs, sourceDirs, overwriteDir } = currentValue(instance).paths;
     return [...modDirs.values(), ...sourceDirs.values(), overwriteDir, deployment.folder()].filter((folder) => folder !== undefined);
   };
-  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, async (args, cancelled) => {
-    await untilCaughtUp({ mEdit, problemsCaughtUp }, cancelled);
+  const maybeLate = () => (mEdit.recordIndexMayBeLate ? ['The record index may be late: this answer may predate a write.'] : []);
+  register(server, log, () => [...reading('instance', 'sortingRules', 'sourceLanguage')(), ...maybeLate()], PROBLEMS, async (args, cancelled) => {
+    await untilCaughtUp(problemsCaughtUp, cancelled);
     return PROBLEMS.of(args, problemFolders);
   });
   register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mergedFeeds, settling } from '../feedShape';
 import type { ProblemOnFile } from '../sourceProblems';
 
@@ -46,33 +46,42 @@ describe('the problems of several feeds, published together', () => {
 describe('a feed\'s settling', () => {
   const idle = async (settled: Promise<void>) => Promise.race([settled.then(() => true), Promise.resolve().then(() => false)]);
 
-  it('is settled when nothing was requested', async () => {
+  it('is settled when nothing was asked', async () => {
     expect(await idle(settling().settled())).toBe(true);
   });
 
-  it('is unsettled from a request until the answer that took it ends', async () => {
+  const gated = () => {
+    const ends: (() => void)[] = [];
+    const body = () => new Promise<void>((resolve) => { ends.push(resolve); });
+    return { body, ends };
+  };
+
+  it('is unsettled from a call until the run that takes it ends', async () => {
     const feed = settling();
-    feed.requested();
-    let end: () => void = () => undefined;
-    const answering = feed.answering(() => new Promise<void>((resolve) => { end = resolve; }));
+    const { body, ends } = gated();
+    feed.asking(body)();
 
     expect(await idle(feed.settled())).toBe(false);
-    end();
-    await answering;
+    await vi.waitFor(() => { expect(ends).toHaveLength(1); });
+    ends[0]?.();
 
-    expect(await idle(feed.settled())).toBe(true);
+    await feed.settled();
   });
 
-  it('stays unsettled for a request made while an answer runs', async () => {
+  it('stays unsettled for a call made while a run goes, until the run after it ends', async () => {
     const feed = settling();
-    feed.requested();
-    let end: () => void = () => undefined;
-    const answering = feed.answering(() => new Promise<void>((resolve) => { end = resolve; }));
-    feed.requested();
-    end();
-    await answering;
+    const { body, ends } = gated();
+    const ask = feed.asking(body);
+    ask();
+    await vi.waitFor(() => { expect(ends).toHaveLength(1); });
+    ask();
+    ends[0]?.();
 
+    await vi.waitFor(() => { expect(ends).toHaveLength(2); });
     expect(await idle(feed.settled())).toBe(false);
+    ends[1]?.();
+
+    await feed.settled();
   });
 
   it('is unsettled while other work runs', async () => {

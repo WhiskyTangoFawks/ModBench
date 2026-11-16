@@ -49,6 +49,8 @@ const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => cal
 
 afterEach(() => { vi.useRealTimers(); });
 
+let releaseSecond: (text: string) => void = () => undefined;
+
 describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
   it('puts a path that no file the game gets and no file its mod holds names on the path itself', async () => {
     const { settled } = feed([answerFor()]);
@@ -181,19 +183,17 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
   });
 
   it('is settled only once the judgement of a change is published', async () => {
-    let release: (text: string) => void = () => undefined;
-    let reading = false;
+    const texts = [Promise.resolve(TEXT), new Promise<string>((resolve) => { releaseSecond = resolve; })];
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
     const published: ProblemsByFile[] = [];
     const { settled } = feedPathProblems({
       client, ask: problemsAsker(client), sourceFiles: sourceFolders, reporter: recordingReporter(),
-      readText: () => { if (!reading) return Promise.resolve(TEXT); return new Promise<string>((resolve) => { release = resolve; }); },
+      readText: () => texts.shift() ?? Promise.resolve(TEXT),
       paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
     await settled();
-    reading = true;
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
 
     let ended = false;
@@ -201,7 +201,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
     await new Promise((resolve) => { setTimeout(resolve, 20); });
     expect(ended).toBe(false);
-    release(TEXT);
+    releaseSecond(TEXT);
     await waiting;
 
     expect(published).toHaveLength(2);

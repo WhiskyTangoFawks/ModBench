@@ -1,16 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { untilCaughtUp } from '../untilCaughtUp';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from '../../client/test/fixtures';
-
-function lateIndex() {
-  const mEdit = new InMemoryMEditClient();
-  mEdit.setStatus('running');
-  let answer!: () => void;
-  mEdit.answerPuts(() => new Promise((resolve) => { answer = () => { resolve({ outcome: 'abandoned' }); }; }));
-  void mEdit.sendLoadOrder(EMPTY_SNAPSHOT);
-  return { mEdit, answer: () => { answer(); } };
-}
+import { describe, expect, it } from 'vitest';
+import { Cancelled, untilCaughtUp } from '../untilCaughtUp';
 
 const answeredIn = async (promise: Promise<unknown>): Promise<boolean> => {
   let answered = false;
@@ -19,17 +8,10 @@ const answeredIn = async (promise: Promise<unknown>): Promise<boolean> => {
   return answered;
 };
 
-describe('waiting until the problems have caught up with what mEdit named', () => {
-  it('answers at once when the feeds are settled and the record index is not late', async () => {
-    const waited = untilCaughtUp({ mEdit: new InMemoryMEditClient(), problemsCaughtUp: () => Promise.resolve() }, new AbortController().signal);
-
-    expect(await answeredIn(waited)).toBe(true);
-  });
-
-  it('waits for the feeds to settle', async () => {
+describe('waiting until the problems have caught up', () => {
+  it('answers once the feeds have settled', async () => {
     let settle!: () => void;
-    const problemsCaughtUp = () => new Promise<void>((resolve) => { settle = resolve; });
-    const waited = untilCaughtUp({ mEdit: new InMemoryMEditClient(), problemsCaughtUp }, new AbortController().signal);
+    const waited = untilCaughtUp(() => new Promise<void>((resolve) => { settle = resolve; }), new AbortController().signal);
 
     expect(await answeredIn(waited)).toBe(false);
     settle();
@@ -37,39 +19,23 @@ describe('waiting until the problems have caught up with what mEdit named', () =
     await waited;
   });
 
-  it('waits while the record index may be late, then for the feeds again', async () => {
-    const { mEdit, answer } = lateIndex();
-    let asked = 0;
-    const waited = untilCaughtUp({ mEdit, problemsCaughtUp: () => { asked += 1; return Promise.resolve(); } }, new AbortController().signal);
-    expect(await answeredIn(waited)).toBe(false);
-
-    answer();
-    mEdit.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 1 }));
-
-    await waited;
-    await vi.waitFor(() => { expect(mEdit.recordIndexMayBeLate).toBe(false); });
-    expect(asked).toBeGreaterThan(1);
-  });
-
-  it('stops waiting on a late record index when the request is cancelled', async () => {
-    const { mEdit } = lateIndex();
-    const cancel = new AbortController();
-    const waited = untilCaughtUp({ mEdit, problemsCaughtUp: () => Promise.resolve() }, cancel.signal);
-    const rejection = expect(waited).rejects.toThrow('cancelled');
-    await answeredIn(waited);
-
-    cancel.abort();
-
-    await rejection;
-  });
-
   it('stops waiting on feeds that never settle when the request is cancelled', async () => {
     const cancel = new AbortController();
-    const waited = untilCaughtUp({ mEdit: new InMemoryMEditClient(), problemsCaughtUp: () => new Promise<void>(() => undefined) }, cancel.signal);
-    const rejection = expect(waited).rejects.toThrow('cancelled');
+    const waited = untilCaughtUp(() => new Promise<void>(() => undefined), cancel.signal);
+    const rejection = expect(waited).rejects.toBeInstanceOf(Cancelled);
 
     cancel.abort();
 
     await rejection;
+  });
+
+  it('asks nothing of the feeds for a request already cancelled', async () => {
+    const cancel = new AbortController();
+    cancel.abort();
+    let asked = false;
+
+    await expect(untilCaughtUp(() => { asked = true; return Promise.resolve(); }, cancel.signal)).rejects.toBeInstanceOf(Cancelled);
+
+    expect(asked).toBe(false);
   });
 });
