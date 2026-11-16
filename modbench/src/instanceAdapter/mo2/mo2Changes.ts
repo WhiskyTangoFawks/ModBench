@@ -224,9 +224,9 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
           for (const [path, text] of [[paths.masterlist, masterlist], [paths.prelude, prelude]] as const) {
             const before = (await exists(path)) ? await get(path) : undefined;
             if (before === text) continue;
+            undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
             if (before !== undefined) await trash(path);
             await write(path, text);
-            undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
             written.push(basename(path));
           }
         } catch (err) {

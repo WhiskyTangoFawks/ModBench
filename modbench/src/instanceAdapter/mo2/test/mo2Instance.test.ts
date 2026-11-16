@@ -3771,6 +3771,21 @@ describe('the MO2 Instance adapter', () => {
       expect(await readFile(join(root, 'masterlist.yaml'), 'utf8')).toBe('pinned masterlist');
     });
 
+    it('puts both files back as they were when the trash takes the prelude and then fails', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'pinned masterlist');
+      await writeFile(join(root, 'prelude.yaml'), 'pinned prelude');
+      const trashed: string[] = [];
+      const failing: MoveToTrash = async (path) => {
+        await trashing(trashed)(path);
+        if (basename(path) === 'prelude.yaml') throw new Error('the trash failed');
+      };
+
+      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' }, failing)).rejects.toThrow('the trash failed');
+
+      expect(trashed).toEqual(['masterlist.yaml', 'prelude.yaml']);
+      expect([await readFile(join(root, 'masterlist.yaml'), 'utf8'), await readFile(join(root, 'prelude.yaml'), 'utf8')]).toEqual(['pinned masterlist', 'pinned prelude']);
+    });
+
     it('takes the masterlist away again when it was absent and the prelude cannot be written', async () => {
       await mkdir(join(root, 'prelude.yaml'));
 

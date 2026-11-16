@@ -20,7 +20,6 @@ interface MasterlistGestureDeps {
 const wroteOrCurrent = (written: readonly string[]): string =>
   written.length === 0 ? 'The masterlist was already current.' : `Wrote ${written.join(' and ')}.`;
 
-/** `modbench.instance.updateMasterlist` (commands.md): asks nothing. */
 export function registerMasterlistCommand({ commands, instance, pluginsView, say, reporter }: MasterlistGestureDeps): vscode.Disposable {
   const run = async (called: unknown): Promise<NoItemsResult | undefined> => {
     say('Updating the masterlist…');
