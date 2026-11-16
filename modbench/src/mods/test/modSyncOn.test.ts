@@ -29,19 +29,29 @@ function instanceOver(): Instance {
 describe('mod sync on the instance', () => {
   it('holds the read that started it until it has written, as a gesture that writes ends once what it wrote stands', async () => {
     const instance = instanceOver();
-    let written = false;
+    const order: string[] = [];
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    let started!: () => void;
+    const syncStarted = new Promise<void>((resolve) => { started = resolve; });
     modSyncOn({
       instance, channel: { error: () => undefined, info: () => undefined },
       syncMods: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        written = true;
+        started();
+        await released;
+        order.push('written');
         return { applied: true, added: [], dropped: [] };
       },
     });
 
-    await instance.refresh();
+    const refreshed = instance.refresh().then(() => { order.push('read settled'); });
+    await syncStarted;
+    await instance.told([MODLIST]);
+    expect(order).toEqual([]);
+    release();
+    await refreshed;
 
-    expect(written).toBe(true);
+    expect(order[0]).toBe('written');
   });
 
   it('tries a sync that failed again at each value until one lands, though mod order and the mod folders are as they were', async () => {

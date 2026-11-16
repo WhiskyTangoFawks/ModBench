@@ -14,7 +14,6 @@ import {
 import type { FlaggedRead, SourceMods } from '../manifestAdapter/manifestAdapter';
 import { type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
-import { present } from '../ports/present';
 import type { MEditClient } from '../client/MEditClient';
 import type { Disposable } from '../client/eventEmitter';
 import { FlaggedHashesHeld } from './flaggedHashes';
@@ -336,8 +335,7 @@ export class Instance implements Subscription {
 
   private writesRunning = 0;
 
-  // What each subscriber that writes was held back from while a write ran: it is called once with the last value.
-  private readonly owed = new Map<Subscribed, { readonly named: Set<string>; disk: boolean }>();
+  private readonly heldBack = new Map<Subscribed, { readonly named: Set<string>; disk: boolean }>();
 
   private readonly changes: Subscription;
 
@@ -400,7 +398,7 @@ export class Instance implements Subscription {
   }
 
   /** As `subscribe`, for a subscriber that writes files the value reads: a value that lands while a `writing` runs reaches it
-   *  once the last one ends, so it never acts on a write half done. */
+   *  once the last one ends. */
   subscribeWriter<K extends keyof InstanceValue>(
     subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
   ): Subscription {
@@ -413,7 +411,7 @@ export class Instance implements Subscription {
     return {
       dispose: () => {
         this.subscribers = this.subscribers.filter((s) => s !== subscribed);
-        this.owed.delete(subscribed);
+        this.heldBack.delete(subscribed);
       },
     };
   }
@@ -474,7 +472,7 @@ export class Instance implements Subscription {
   }
 
   /** Runs `work`, a write to several files the value reads, then reads again what no write told. Values land while it
-   *  runs; a subscriber that writes hears the last once no `writing` runs. */
+   *  runs. */
   async writing<T>(work: () => Promise<T>): Promise<T> {
     const written = new WrittenFiles();
     this.writesRunning++;
@@ -485,17 +483,18 @@ export class Instance implements Subscription {
         if (written.named?.length !== 0) await this.refresh(written.named);
       } finally {
         this.writesRunning--;
-        if (this.writesRunning === 0) await this.payOwed();
+        if (this.writesRunning === 0) await this.releaseHeldBack();
       }
     }
   }
 
-  private async payOwed(): Promise<void> {
-    const owed = new Map([...this.owed].map(([{ subscriber }, { named, disk }]) => [subscriber, { named: [...named], disk }]));
-    this.owed.clear();
+  private async releaseHeldBack(): Promise<void> {
+    const heldBack = [...this.heldBack];
+    this.heldBack.clear();
     const value = this.current;
     const sequence = this.seq;
-    await this.notify([...owed.keys()], 'value', (subscriber) => subscriber(value, sequence, present(owed.get(subscriber), 'what the subscriber was held back from')));
+    await Promise.all(heldBack.map(([{ subscriber }, { named, disk }]) =>
+      this.notify([subscriber], 'value', () => subscriber(value, sequence, { named: [...named], disk }))));
   }
 
   /** The value once the first read has landed: reads when none has, and holds the read it has. */
@@ -630,16 +629,16 @@ export class Instance implements Subscription {
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
     const held = this.writesRunning > 0 ? told.filter(({ writes }) => writes) : [];
-    for (const subscribed of held) this.owe(subscribed, reread);
+    for (const subscribed of held) this.holdBack(subscribed, reread);
     const now = told.filter((subscribed) => !held.includes(subscribed)).map(({ subscriber }) => subscriber);
     return { settled: this.notify(now, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
-  private owe(subscribed: Subscribed, { named, disk }: Reread): void {
-    const owed = this.owed.get(subscribed) ?? { named: new Set<string>(), disk: false };
-    for (const path of named) owed.named.add(path);
-    owed.disk ||= disk;
-    this.owed.set(subscribed, owed);
+  private holdBack(subscribed: Subscribed, { named, disk }: Reread): void {
+    const heldBack = this.heldBack.get(subscribed) ?? { named: new Set<string>(), disk: false };
+    for (const path of named) heldBack.named.add(path);
+    heldBack.disk ||= disk;
+    this.heldBack.set(subscribed, heldBack);
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute

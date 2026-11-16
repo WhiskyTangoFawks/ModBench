@@ -793,6 +793,56 @@ describe('Instance — a write that changes several files', () => {
     expect(heard).not.toHaveBeenCalled();
   });
 
+  it('rejects with the failure of its work, and hands a subscriber that writes the last value all the same', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    const heard = vi.fn();
+    instance.subscribeWriter(heard);
+
+    await expect(instance.writing(async () => {
+      await instance.refresh(['/instance/mods/A/a.esp']);
+      throw new Error('the folder is in use');
+    })).rejects.toThrow('the folder is in use');
+
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns once a subscriber that writes, held back while it ran, has settled', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    const order: string[] = [];
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    let heard!: () => void;
+    const held = new Promise<void>((resolve) => { heard = resolve; });
+    instance.subscribeWriter(async () => {
+      heard();
+      await released;
+      order.push('subscriber settled');
+    });
+
+    const writing = instance.writing(() => instance.refresh(['/instance/mods/A/a.esp'])).then(() => { order.push('returned'); });
+    await held;
+    release();
+    await writing;
+
+    expect(order).toEqual(['subscriber settled', 'returned']);
+  });
+
+  it('hands nothing after it to a subscriber that writes and was disposed while it ran', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    const heard = vi.fn();
+    const subscription = instance.subscribeWriter(heard);
+
+    await instance.writing(async () => {
+      await instance.refresh(['/instance/mods/A/a.esp']);
+      subscription.dispose();
+    });
+
+    expect(heard).not.toHaveBeenCalled();
+  });
+
   it('returns from a write inside another once its own work ends, and hands a subscriber that writes the last value once the outer one ends', async () => {
     const { instance } = loader();
     await instance.refresh();
