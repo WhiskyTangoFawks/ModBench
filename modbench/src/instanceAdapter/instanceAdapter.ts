@@ -872,10 +872,9 @@ export interface InstanceAdapter extends DataFileReads {
   /** Adds to the userlist a rule for each plugin that it loads after each plugin given, every other byte staying.
    *  Made when absent; writes nothing for a held rule. Rejects, writing nothing, for a file it cannot read. */
   changeUserlist(additions: readonly LoadAfter[]): Promise<Written>;
-  /** Puts the masterlist and the prelude whole, each made when absent and left alone when it already holds the text. */
-  changeMasterlist(files: MetadataTexts): Promise<{ readonly written: readonly string[] }>;
-  /** The names of the masterlist and the prelude that git holds uncommitted changes of, a file never committed among them. None in an instance that is not a repository. */
-  uncommittedMasterlist(): Promise<readonly string[]>;
+  /** Puts the masterlist and the prelude whole, each made when absent and left alone when it already holds the text.
+   *  A file it replaces goes to `trash` first. */
+  changeMasterlist(files: MetadataTexts, trash: MoveToTrash): Promise<{ readonly written: readonly string[] }>;
 
   // Put and rename in mods/.
   /** Refuses a name that is not a bare name, and a folder already there, whatever it holds, matched as the manager matches names. */

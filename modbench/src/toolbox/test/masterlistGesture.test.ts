@@ -19,7 +19,7 @@ vi.mock('vscode', async () => {
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { progressSteps } from '../../test/recordedProgress';
 import { registerMasterlistCommand } from '../masterlistGesture';
-import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import type { MasterlistCommands } from '../../instanceCommands/masterlist';
 
@@ -27,20 +27,18 @@ const UPDATE = 'modbench.instance.updateMasterlist';
 const PLUGINS_VIEW = 'modbench.plugins';
 
 const update = vi.fn<MasterlistCommands['update']>();
-const uncommitted = vi.fn<MasterlistCommands['uncommitted']>();
 
-function register(ask: ScriptedDialog = scriptedDialog()) {
+function register() {
   const reporter = recordingReporter();
   const said: (string | undefined)[] = [];
   registerMasterlistCommand({
-    commands: { update, uncommitted },
+    commands: { update },
     instance: { refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     pluginsView: PLUGINS_VIEW,
     say: (message) => { said.push(message); },
-    ask,
     reporter,
   });
-  return { reporter, said, ask, run: (...args: unknown[]) => present(handlers.get(UPDATE), 'the registered handler')(...args) };
+  return { reporter, said, run: (...args: unknown[]) => present(handlers.get(UPDATE), 'the registered handler')(...args) };
 }
 
 beforeEach(() => {
@@ -48,66 +46,16 @@ beforeEach(() => {
   progressSteps.length = 0;
   vi.clearAllMocks();
   update.mockResolvedValue({ applied: true, written: ['masterlist.yaml', 'prelude.yaml'] });
-  uncommitted.mockResolvedValue({ applied: true, files: [] });
 });
 
 describe('from the palette', () => {
-  it("asks nothing, says so in the Plugins view's message line while it runs, and gives the line back", async () => {
-    const { run, said, ask } = register();
+  it("says so in the Plugins view's message line while it runs, and gives the line back", async () => {
+    const { run, said } = register();
 
     await run();
 
-    expect(ask.asked).toEqual([]);
     expect(said).toEqual(['Updating the masterlist…', undefined]);
     expect(progressSteps).toEqual([`progress opens on ${PLUGINS_VIEW}`, 'progress closes']);
-  });
-
-  it('asks once, naming the files, while git holds uncommitted changes of them, and updates on the confirming button', async () => {
-    uncommitted.mockResolvedValue({ applied: true, files: ['masterlist.yaml', 'prelude.yaml'] });
-    const { run, ask } = register(scriptedDialog('Update masterlist'));
-
-    await run();
-
-    expect(ask.asked).toEqual([{
-      message: 'Update the masterlist? It replaces uncommitted changes to masterlist.yaml, prelude.yaml.', detail: undefined, buttons: ['Update masterlist'],
-    }]);
-    expect(update).toHaveBeenCalledOnce();
-  });
-
-  it('updates nothing when the confirmation is cancelled, and says nothing in the message line', async () => {
-    uncommitted.mockResolvedValue({ applied: true, files: ['masterlist.yaml'] });
-    const { run, said } = register(scriptedDialog(undefined));
-
-    await run();
-
-    expect(update).not.toHaveBeenCalled();
-    expect(said).toEqual([]);
-  });
-
-  it('closes the view\'s progress while the confirmation waits for the person, and opens it again after', async () => {
-    uncommitted.mockResolvedValue({ applied: true, files: ['masterlist.yaml'] });
-    let whileAsking: string[] = [];
-    const ask: ScriptedDialog = Object.assign(async () => {
-      await new Promise((resolve) => { setTimeout(resolve, 0); });
-      whileAsking = [...progressSteps];
-      return 'Update masterlist';
-    }, { asked: [] });
-    const { run } = register(ask);
-
-    await run();
-
-    expect(whileAsking).toEqual([`progress opens on ${PLUGINS_VIEW}`, 'progress closes']);
-    expect(progressSteps.filter((step) => step.startsWith('progress opens'))).toHaveLength(2);
-  });
-
-  it('reports a git failure as an error, updating nothing', async () => {
-    uncommitted.mockResolvedValue({ applied: false, refusal: 'git: not found' });
-    const { run, reporter } = register();
-
-    await run();
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not update the masterlist.', detail: 'git: not found' }]);
-    expect(update).not.toHaveBeenCalled();
   });
 
   it('reports the refusal as an error', async () => {
@@ -132,35 +80,6 @@ describe('from an agent', () => {
     const { run } = register();
 
     expect(await run(new AgentCall([], {}))).toEqual({ applied: true, done: 'The masterlist was already current.' });
-  });
-
-  it('refuses over uncommitted changes, naming what it would lose and force, and updates nothing', async () => {
-    uncommitted.mockResolvedValue({ applied: true, files: ['masterlist.yaml'] });
-    const { run, ask } = register();
-
-    expect(await run(new AgentCall([], {}))).toEqual({
-      applied: false,
-      refusal: 'The masterlist has uncommitted changes to masterlist.yaml, which updating would replace. Request it again with force to update it.',
-    });
-    expect(update).not.toHaveBeenCalled();
-    expect(ask.asked).toEqual([]);
-  });
-
-  it('updates over uncommitted changes when forced, asking nothing', async () => {
-    uncommitted.mockResolvedValue({ applied: true, files: ['masterlist.yaml'] });
-    const { run, ask } = register();
-
-    expect(await run(new AgentCall([], { force: true }))).toMatchObject({ applied: true });
-    expect(update).toHaveBeenCalledOnce();
-    expect(ask.asked).toEqual([]);
-  });
-
-  it('answers a git failure as a refusal, updating nothing', async () => {
-    uncommitted.mockResolvedValue({ applied: false, refusal: 'git: not found' });
-    const { run } = register();
-
-    expect(await run(new AgentCall([], { force: true }))).toEqual({ applied: false, refusal: 'git: not found' });
-    expect(update).not.toHaveBeenCalled();
   });
 
   it('answers the refusal LOOT gave', async () => {

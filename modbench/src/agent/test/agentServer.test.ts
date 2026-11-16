@@ -1675,6 +1675,16 @@ describe('the agent server, running a gesture', () => {
     expect(answer).toEqual({ isError: false, text: JSON.stringify({ applied: true, done: 'Wrote masterlist.yaml and prelude.yaml.' }) });
   });
 
+  it('rejects an option of the masterlist update, which takes none, and fires nothing', async () => {
+    fired.outcome = { applied: true, done: 'Wrote masterlist.yaml.' };
+    const { client } = await served();
+
+    const answer = await call(client, 'instance_update_masterlist', { options: { force: true } });
+
+    expect(answer.isError).toBe(true);
+    expect(fired.calls).toEqual([]);
+  });
+
   it('answers a refused deploy with its refusal', async () => {
     fired.outcome = { applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' };
     const { client } = await served();

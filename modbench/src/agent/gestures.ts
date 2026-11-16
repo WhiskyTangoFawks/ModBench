@@ -158,11 +158,6 @@ const INSTALL = gestureInput(
 
 const NO_INPUT = gestureInput(z.strictObject({}), () => new AgentCall([], {}));
 
-const UPDATE_MASTERLIST = gestureInput(
-  z.strictObject({ options: z.strictObject({ force: z.boolean().optional() }).optional() }),
-  (_value, { options }) => new AgentCall([], { force: options?.force }),
-);
-
 const SWITCH_PROFILE = gestureInput(
   z.strictObject({ argument: z.array(z.strictObject({ name: z.string() })) }),
   (_value, { argument }) => new AgentCall(argument.map(({ name }) => ({ kind: 'profile', name })), {}),
@@ -315,7 +310,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, readonly [GestureInput, ReadToo
   ['modbench.instance.deploy', [NO_INPUT, 'list_problems']],
   ['modbench.instance.purge', [NO_INPUT, 'list_problems']],
   ['modbench.instance.moveToOverwrite', [MOVE_TO_OVERWRITE, 'list_file_conflicts']],
-  ['modbench.instance.updateMasterlist', [UPDATE_MASTERLIST, 'list_sorting_rules']],
+  ['modbench.instance.updateMasterlist', [NO_INPUT, 'list_sorting_rules']],
   ['modbench.instance.logOut', [NO_INPUT, null]],
   ['modbench.mod.updateManifest', [UPDATE_MANIFEST, 'list_mod_statuses']],
   ['modbench.mod.checkForUpdates', [MODS_OR_EVERY_MOD, 'list_mods']],
