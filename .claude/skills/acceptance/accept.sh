@@ -3,6 +3,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$here/../validate/slot.sh"
+runs_prefix="${SLOT_ACCEPT_PREFIX:-/tmp/modbench-accept.}"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 state="${MODBENCH_ACCEPT_HOME:-$HOME/.local/share/modbench-accept}"
 mkdir -p "$state"
@@ -17,8 +19,8 @@ usage() {
 }
 
 live_runs() {
-  for d in /tmp/modbench-accept.*; do
-    [ -f "$d/xvfb.pid" ] && kill -0 "$(cat "$d/xvfb.pid")" 2>/dev/null && echo "$d"
+  for d in "$runs_prefix"*; do
+    [ -n "$(run_pids "$d")" ] && echo "$d"
   done
   return 0
 }
@@ -56,7 +58,7 @@ print(json.dumps({"argument": [{"name": sys.argv[1]}], "options": {"where": "New
 }
 
 up() {
-  local target="${1:-}" dir port display instance game source="" game_folder="" facts=""
+  local args=("$@") target="${1:-}" dir port display instance game source="" game_folder="" facts=""
   [ -n "$target" ] || usage
   shift
   for option in "$@"; do
@@ -72,8 +74,9 @@ up() {
   [ -n "$others" ] && { echo "refused: a run is already up: $others" >&2; exit 1; }
   [ -f "$root/modbench/out/extension.js" ] && [ -x "$root/modbench/backend/MEditService.Http" ] || {
     echo "refused: build first, in modbench/ through slot-run: npm run build, npm run build:backend" >&2; exit 1; }
+  [ -n "${BUILD_SLOT_HELD:-}" ] || SLOT_KEEP_SCOPE=1 exec bash "$here/../validate/slot-run.sh" bash "$here/accept.sh" up "${args[@]}"
 
-  dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
+  dir="$(mktemp -d "${runs_prefix}XXXX")"
   instance="$dir/instance"
   if [ -n "$game" ]; then
     local fixture; fixture="DevList$(tr '[:lower:]' '[:upper:]' <<< "${game:0:1}")${game:1}"
@@ -105,13 +108,14 @@ print(json.dumps({"modbench.agent.port": int(sys.argv[1])}))' "$port" > "$instan
 
   display="$(free_display)"
   Xvfb ":$display" -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &
-  echo $! > "$dir/xvfb.pid"
+  stamp $! "$dir"
   # Electron leaves Xvfb for the desktop's compositor while a Wayland session is in its environment.
   # Git refuses a file:// submodule remote by default; a fixture's remote is a bare repository on disk.
   env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE DISPLAY=":$display" \
     GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always setsid code \
     --extensionDevelopmentPath="$root/modbench" --user-data-dir "$dir/user" --extensions-dir "$dir/ext" \
     --disable-workspace-trust "$instance" > "$dir/code.log" 2>&1 &
+  stamp $! "$dir"
 
   local waited=0
   until python3 -I "$here/mcp.py" "$port" tools >/dev/null 2>&1; do
@@ -122,8 +126,22 @@ print(json.dumps({"modbench.agent.port": int(sys.argv[1])}))' "$port" > "$instan
     sleep 5; waited=$((waited + 5))
     [ "$waited" -ge 900 ] && { echo "the index was not ready in 900s" >&2; down "$dir"; exit 1; }
   done
+  for p in $(open_pids "$dir"); do stamp "$p" "$dir"; done
   [ -z "$source" ] || shape_source "$dir" "$port" "$facts"
   echo "DIR=$dir PORT=$port ready after ${waited}s"
+}
+
+stamp() { echo "$1 $(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | awk '{ print $20 }')" >> "$2/pids"; }
+
+# The backend's command line does not name the folder; its open files do.
+open_pids() {
+  local p self=" $$ $PPID "
+  for p in $(ls /proc | grep -E '^[0-9]+$'); do
+    case "$self" in *" $p "*) continue;; esac
+    if tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -qF "$1/" || ls -l "/proc/$p/fd" 2>/dev/null | grep -qF "$1/"; then
+      tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -q "accept.sh" || echo "$p"
+    fi
+  done
 }
 
 wait_gone() {
@@ -139,19 +157,11 @@ wait_gone() {
 
 down() {
   local dir="$1" keep="${2:-}" seed="$state/seed/${3:-}"
-  case "$dir" in /tmp/modbench-accept.*) ;; *) echo "refused: not a run folder: $dir" >&2; exit 1;; esac
-  # The backend's command line does not name the folder; its open files do.
-  local pids="" self=" $$ $PPID "
-  for p in $(ls /proc | grep -E '^[0-9]+$'); do
-    case "$self" in *" $p "*) continue;; esac
-    if tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -qF "$dir/" || ls -l "/proc/$p/fd" 2>/dev/null | grep -qF "$dir/"; then
-      tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -q "accept.sh" || pids="$pids $p"
-    fi
-  done
-  [ -n "$pids" ] && kill $pids 2>/dev/null || true
+  case "$dir" in "$runs_prefix"*) ;; *) echo "refused: not a run folder: $dir" >&2; exit 1;; esac
+  local pids; pids="$(open_pids "$dir") $(run_pids "$dir")"
+  [ -n "${pids// /}" ] && kill $pids 2>/dev/null || true
   wait_gone 10 $pids || for p in $pids; do kill -9 "$p" 2>/dev/null || true; done
   wait_gone 10 $pids || { echo "still running after SIGKILL:$pids" >&2; exit 1; }
-  [ -f "$dir/xvfb.pid" ] && kill "$(cat "$dir/xvfb.pid")" 2>/dev/null || true
   local failed=0
   if [ "$keep" = "--keep-seed" ]; then
     mkdir -p "$seed" && rm -f "$seed"/index.duckdb* && cp "$dir"/instance/modbench/index.duckdb* "$seed/" || {

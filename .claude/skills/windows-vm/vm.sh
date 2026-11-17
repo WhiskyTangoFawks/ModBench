@@ -11,6 +11,8 @@ SSH_OPTS=(-i "$KEY" -o UserKnownHostsFile="$VM_HOME/known_hosts" -o StrictHostKe
 
 case "${1:-}" in
   up)
+    # A VM already up is someone's and does not hold the slot against its own start.
+    [[ -n ${BUILD_SLOT_HELD:-} ]] || SLOT_INSIDE=windows-vm exec bash "$HERE/../validate/slot-run.sh" bash "$HERE/vm.sh" up
     mkdir -p "$VM_HOME/disk" "$VM_HOME/oem"
     [[ -f $KEY ]] || ssh-keygen -q -t ed25519 -N '' -C modbench-windows -f "$KEY"
     cp "$HERE"/oem/* "$VM_HOME/oem/"

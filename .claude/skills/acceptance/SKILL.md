@@ -9,8 +9,8 @@ An acceptance run meets Modbench as the user's agent does: a real Extension Deve
 
 ## A run
 
-1. Build this worktree: in `modbench/`, through slot-run, `npm run build`, and `npm run build:backend` when `MEditService/` changed.
-2. `accept.sh up <game>` takes `fallout`, `skyrim` or `starfield`, whichever the case needs, or the path of an instance folder. It copies `DevList<Game>` into a new folder under `/tmp`, seeds its index, starts VS Code on it, and waits until the index is ready. It prints `DIR=<folder> PORT=<port>`. A folder you name gets no seed. A game takes two options, made as `up` brings the instance up:
+1. Build this worktree and start the run in one slot, so no other run takes the slot between them: `SLOT_KEEP_SCOPE=1 bash .claude/skills/validate/slot-run.sh bash -c 'cd modbench && npm run build && npm run build:backend && cd .. && .claude/skills/acceptance/accept.sh up <game>'`. Leave out `npm run build:backend` when `MEditService/` did not change.
+2. `accept.sh up <game>`, which step 1 runs, takes `fallout`, `skyrim` or `starfield`, whichever the case needs, or the path of an instance folder. It copies `DevList<Game>` into a new folder under `/tmp`, seeds its index, starts VS Code on it, and waits until the index is ready. It prints `DIR=<folder> PORT=<port>`. A folder you name gets no seed. A game takes two options, made as `up` brings the instance up:
    - `--game-folder` links the Steam install into the instance as `game/` and sets `gamePath` to it, so the game's archives and loose files take part. Without it the game folder is outside the instance.
    - `--source` makes `MB-DEV Conflict A` a source mod in a repository of its own, and commits records beside `MBDevItemA` that name a file the mod holds, a file `Conflict B` holds, and a file a vanilla archive holds. `MBDevItemA` names none.
 3. Shape the instance for the case. A change Modbench owns goes through its gestures: install, create empty mod, add separator, create plugin, build. A change it does not own is a plain file in the run's folder: a package in `downloads/`, a file in a mod folder, a profile's mod order. The report lists each shaping step, so another run can repeat the case. A shape that two cases need moves into that game's `DevList<Game>`.
@@ -19,7 +19,7 @@ An acceptance run meets Modbench as the user's agent does: a real Extension Deve
 
 **Criterion:** the report lists the shaping steps, each claim in it quotes a call's result or a file's content, and `accept.sh down` printed `down:`.
 
-One run is up at a time: a host and its index hold gigabytes of memory, and `up` refuses while another run is up. The Windows VM holds 6 GB too; start a run only while no gate run is using the VM.
+One run is up at a time: a host and its index hold gigabytes of memory, and `up` refuses while another run is up. `up` runs through `slot-run.sh`, so it waits for a gate run or the Windows VM, and while the run is up every other `slot-run.sh` waits and names it. The slot frees when every process `up` recorded in the run's `pids` file, Xvfb, VS Code and the backend, has exited, `accept.sh down` or not. Step 1's one `slot-run.sh` holds the slot from the build into the live run. `up` alone, after a separate build, leaves the slot free between them. A run of your own while it is up: `SLOT_INSIDE=acceptance bash .claude/skills/validate/slot-run.sh <command>`, or the same variable before `run-gates.sh`.
 
 ## The index seed
 

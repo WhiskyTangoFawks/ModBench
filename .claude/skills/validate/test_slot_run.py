@@ -66,6 +66,10 @@ class SlotRun(unittest.TestCase):
         unit = re.search(r"--unit=(\S+)", scoped[0])[1]
         self.assertEqual(self.log.read_text().splitlines()[-1], f"systemctl --user stop {unit}.scope")
 
+    def test_a_run_that_starts_what_outlives_it_keeps_its_scope(self):
+        self.slot_run("echo ran", SLOT_KEEP_SCOPE="1")
+        self.assertNotIn("systemctl", self.log.read_text())
+
     def test_a_scoped_run_compiles_on_a_compiler_server_of_its_own(self):
         run = self.slot_run('echo "server $SharedCompilationId"')
         unit = re.search(r"--unit=(\S+)", self.log.read_text())[1]

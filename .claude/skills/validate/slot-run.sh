@@ -5,6 +5,7 @@ DIR=${BASH_SOURCE[0]%/*}
 [[ -n ${BUILD_SLOT_HELD:-} ]] && exec "$@"
 
 export BUILD_SLOT_HELD=1
+export SLOT_YIELDS_TO_HEAVY=1
 # MSBuild's worker nodes otherwise idle on after the build, about 190 MB each, and serve the
 # builds of other worktrees.
 export MSBUILDDISABLENODEREUSE=1
@@ -22,7 +23,8 @@ if systemd-run --user --scope --quiet true 2>/dev/null; then
   # it would otherwise idle on holding a GB or more.
   export SharedCompilationId=$unit
 fi
-in_slot build 1 "${scope[@]}" "$@"
+in_slot "${MEDIT_SLOT_KIND:-build}" 1 "${scope[@]}" "$@"
 status=$?
-[[ ${#scope[@]} -gt 0 ]] && systemctl --user stop "$unit.scope" 2>/dev/null
+# A run that starts what outlives it, as an acceptance run does, keeps its scope.
+[[ ${#scope[@]} -gt 0 && -z ${SLOT_KEEP_SCOPE:-} ]] && systemctl --user stop "$unit.scope" 2>/dev/null
 exit "$status"
