@@ -49,15 +49,17 @@ public sealed class CommitLandingTests : IDisposable
         Waits.Reached(() => Logged(log, Checkpointed), "the first load's checkpoint");
         Waits.Reached(() => IsQuiet(log), "the first load's checkpoints");
         lock (log) log.Clear();
-        using var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value();
-        using var taken = rows.Rows().GetEnumerator();
-        Assert.True(taken.MoveNext());
+        IndexFiles.LogQueries(_fixture.InstanceRoot);
+        using var left = new CancellationTokenSource();
+        var slow = Task.Run(() => index.Queries.SelectRows(AbandonedReadTests.ForeverSelect, left.Token));
+        InFlight();
 
         await Task.Run(() => index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot))
             .WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.False(Logged(log, Checkpointed));
-        rows.Dispose();
+        await left.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => slow);
         Waits.Reached(() => Logged(log, Checkpointed), "the checkpoint after the read ended");
     }
 
@@ -81,22 +83,29 @@ public sealed class CommitLandingTests : IDisposable
     }
 
     [Fact]
-    public void AFatalCheckpoint_ReopensTheStore_WithNoReadToMeetIt()
+    public async Task AFatalCheckpoint_ReopensTheStore_WithNoReadToMeetIt()
     {
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master)), (Later, () => Items(Later))), notifications: notifications);
         index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
-        using var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value();
+        IndexFiles.LogQueries(_fixture.InstanceRoot);
+        using var left = new CancellationTokenSource();
+        var slow = Task.Run(() => index.Queries.SelectRows(AbandonedReadTests.ForeverSelect, left.Token));
+        InFlight();
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL debug_checkpoint_abort = 'before_header'");
         var before = notifications.Notifications.Count;
 
-        rows.Dispose();
+        await left.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => slow);
 
         Waits.Reached(
             () => notifications.Since(before).OfType<LoadOrderStatusNotification>().Any(n => n.Status.State == LoadOrderState.Reconciling),
             "the store reopening", TimeSpan.FromSeconds(30));
         Waits.Reached(() => index.Status.State == LoadOrderState.Ready && index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
     }
+
+    private void InFlight() =>
+        Waits.Reached(() => IndexFiles.Started(_fixture.InstanceRoot, "hash(a.range + b.range)"), "the slow read open");
 }

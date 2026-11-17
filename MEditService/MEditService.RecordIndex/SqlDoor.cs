@@ -15,7 +15,7 @@ internal static class SqlDoor
     private static readonly HashSet<string> RowSources = new(StringComparer.OrdinalIgnoreCase) { "unnest", "range", "generate_series" };
 
     /// <summary>The rows of one SELECT over the views of every plugin the record index holds, once the whole set is read.</summary>
-    internal static Answer<StreamedRows, string> Select(Indexer index, string sql, CancellationToken cancel)
+    internal static Answer<SpooledRows, string> Select(Indexer index, string sql, CancellationToken cancel)
     {
         using var reads = index.RequireWholeSetReads(cancel);
         index.InForce(store =>

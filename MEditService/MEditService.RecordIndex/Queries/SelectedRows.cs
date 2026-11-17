@@ -3,18 +3,18 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.RecordIndex.Queries;
 
-/// <summary>The rows of one SELECT, each the JSON text of an object of its columns, read from one snapshot as they are
-/// taken and never all held (ADR-0010). Its read stays open until it is disposed.</summary>
+/// <summary>The rows of one SELECT, each the JSON text of an object of its columns, from one snapshot. They are spooled
+/// to disk, never held in memory (ADR-0010), and the read ends with the query.</summary>
 public sealed class SelectedRows : IDisposable
 {
     private const string BodiesByKey =
         "A sort or a join that carries body holds all of it in memory: find the keys on narrow columns, then select body for those keys.";
 
-    private readonly StreamedRows _rows;
+    private readonly SpooledRows _rows;
     private readonly IndexAnswer _answer;
     private Answer<string?, IndexRefused>? _first;
 
-    private SelectedRows(StreamedRows rows, IndexAnswer answer)
+    private SelectedRows(SpooledRows rows, IndexAnswer answer)
     {
         _rows = rows;
         _answer = answer;

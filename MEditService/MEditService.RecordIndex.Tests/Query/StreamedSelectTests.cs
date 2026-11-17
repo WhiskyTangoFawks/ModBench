@@ -44,6 +44,61 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Equal(Records, read);
     }
 
+    [Fact]
+    public void ASelectPausedAfterItsFirstRow_HoldsNoSnapshotThatHoldsBackTheCheckpoint()
+    {
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))));
+        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
+        using var rows = index.Queries.SelectRows("SELECT form_key FROM records WHERE record_type = 'misc'").Value();
+        using var taken = rows.Rows().GetEnumerator();
+        Assert.True(taken.MoveNext());
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
+
+        Assert.True(taken.MoveNext());
+    }
+
+    [Fact]
+    public void AnIndexOpened_RemovesTheSpoolFilesAKilledProcessLeft()
+    {
+        Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records)))).Dispose();
+        var left = Path.Combine(Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require(), "killed.spool");
+        File.WriteAllText(left, "rows");
+
+        using var again = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
+
+        Assert.False(File.Exists(left));
+    }
+
+    [Fact]
+    public void ASpoolFileThatCannotBeRemoved_LeavesTheIndexOpenedAndIntact()
+    {
+        Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records)))).Dispose();
+        IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE kept_marker (x INTEGER)");
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
+        var folder = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require();
+        var stuck = Directory.CreateDirectory(Path.Combine(folder, "stuck.spool"));
+        File.WriteAllText(Path.Combine(stuck.FullName, "held"), "rows");
+
+        using var again = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
+
+        Assert.Equal("1", IndexFiles.Rows(_fixture.InstanceRoot, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'kept_marker'").Single().Single());
+    }
+
+    [Fact]
+    public void ASelectsRows_AreAllServed_AndNoSpoolFileOutlivesThem()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
+        var folder = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require();
+
+        using (var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value())
+            Assert.True(rows.Rows().Count() >= Records);
+
+        Assert.Empty(Directory.GetFiles(folder, "*.spool"));
+    }
+
     [Theory]
     [InlineData("SELECT body FROM records")]
     [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]

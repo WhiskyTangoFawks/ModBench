@@ -257,9 +257,9 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, read from one snapshot as
-    /// they are taken; or why the SQL cannot be one. The filter in force does not narrow it.</summary>
-    public Answer<StreamedRows, string> Select(string statement)
+    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, from one snapshot; or why
+    /// the SQL cannot be one. The filter in force does not narrow it.</summary>
+    public Answer<SpooledRows, string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
         ReadContext? context = store.OpenRead(cancel);

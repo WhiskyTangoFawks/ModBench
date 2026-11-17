@@ -111,26 +111,35 @@ internal sealed class Store : IDisposable
             throw new IndexFaultException($"Instance root not found: {_instanceRoot}") { Fault = IndexFault.Refused };
         Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)
             ?? throw new InvalidOperationException($"Expected '{_databasePath}' to name a file in a folder."));
+        var refusal = OpenFileStore(_databasePath);
+        if (refusal is null) SpoolFile.Sweep(SpoolDirectory);
+        return refusal;
+    }
+
+    private string? OpenFileStore(string databasePath)
+    {
         try
         {
-            _connection = OpenFile(_databasePath);
+            _connection = OpenFile(databasePath);
             return null;
         }
         catch (Exception ex) when (IsAnotherWriter(ex))
         {
-            _logger.LogWarning(ex, "The record index at {Path} is held by another window", _databasePath);
-            return $"This instance's record index is open in another Modbench window ({_databasePath}). Close that window, then refresh.";
+            _logger.LogWarning(ex, "The record index at {Path} is held by another window", databasePath);
+            return $"This instance's record index is open in another Modbench window ({databasePath}). Close that window, then refresh.";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Every other exception, not DuckDBException alone: what an unreadable file throws has
             // changed between DuckDB versions, and the answer is the same for all of them.
-            _logger.LogWarning(ex, "Could not open the record index at {Path}; rebuilding it from scratch", _databasePath);
-            File.Delete(_databasePath);
-            _connection = OpenFile(_databasePath);
+            _logger.LogWarning(ex, "Could not open the record index at {Path}; rebuilding it from scratch", databasePath);
+            File.Delete(databasePath);
+            _connection = OpenFile(databasePath);
             return null;
         }
     }
+
+    private string SpoolDirectory => _databasePath is null ? Path.GetTempPath() : Path.GetDirectoryName(_databasePath) ?? throw new InvalidOperationException($"Expected '{_databasePath}' to name a file in a folder.");
 
     /// <summary>Whether another process holds the file, never answered by rebuilding: deleting an open
     /// file can succeed and destroy a live index. Matched on DuckDB's message, all it offers, which
@@ -155,7 +164,7 @@ internal sealed class Store : IDisposable
                 lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); }
                 RequestCheckpoint();
             };
-            return new ReadContext(connection, cancel);
+            return new ReadContext(connection, () => SpoolFile.In(SpoolDirectory), cancel);
         }
     }
 
