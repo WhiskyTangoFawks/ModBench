@@ -1,5 +1,6 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
+import { basename } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
@@ -54,6 +55,8 @@ function judged(mod: ModAt, manifest: ManifestRead, values: Values, flagged: Sta
   return 'cannotTell' in hashes ? unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${hashes.cannotTell}`) : statusFrom(mod, manifest, values, hashes);
 }
 
+type Installed = Awaited<ReturnType<InstanceAdapter['installationFile']>>;
+
 const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>): string => JSON.stringify([...held].map(([mod, paths]) => [mod, [...paths].sort()]));
 
 const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening => {
@@ -97,8 +100,8 @@ export class ModStatuses {
     return this.derived;
   }
 
-  /** The files of the mod's folder that one of its packages holds, by bytes or by name, as the latest derivation read them:
-   *  those of its source folder's manifest for a source mod, else of its folder's. */
+  /** The files of the mod's folder that a package holds, by bytes or by name, as the latest derivation read: its source
+   *  folder's manifest's for a source mod, else its folder's, and its installation file's. */
   heldByPackage(mod: string): ReadonlySet<string> {
     return this.heldByPackages.get(mod) ?? new Set();
   }
@@ -181,23 +184,26 @@ export class ModStatuses {
     }
   }
 
-  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes']): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes'], installation: Promise<Installed>): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
     const manifest = await manifestAt(mod.folder);
     const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
     const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
     const status = judged(mod, manifest, values, flagged, mod.sourcePaths);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
+    const installed = await installation;
+    const installationFile = installed.kind === 'read' && installed.answer !== undefined ? { name: basename(installed.answer.path), entries: installed.answer.entries } : undefined;
     return {
       status: { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() },
-      packaged: named.read !== undefined && 'manifest' in named.read ? filesAPackageHolds(named.read.manifest, values) : new Set(),
+      packaged: named.read !== undefined && 'manifest' in named.read ? filesAPackageHolds(named.read.manifest, values, installationFile) : new Set(),
     };
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
   private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes']): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+    const installation = this.reads.installationFile(mod.name, mod.folder);
     const [{ status, packaged }, installed, buildFile] = await Promise.all([
-      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit, flagged), this.reads.installationFile(mod.name, mod.folder),
+      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit, flagged, installation), installation,
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
     return { status: { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } }, packaged };
