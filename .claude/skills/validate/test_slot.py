@@ -28,7 +28,7 @@ class InSlot(unittest.TestCase):
     def in_slot(self, slots, command, path=None):
         """The caller is a shell as a terminal starts it, with INT at its default even where the
         tests run as a detached job, which ignores INT."""
-        env = {**os.environ, "ROOT": str(self.root), **({"PATH": path} if path else {})}
+        env = {**os.environ, "ROOT": str(self.root), "SLOT_YIELDS_TO_HEAVY": "", **({"PATH": path} if path else {})}
         run = subprocess.Popen(["bash", "-c", f'source "$1"; in_slot {self.kind} {slots} bash -c "$2"', "_", SLOT, command],
                                env=env, start_new_session=True,
                                preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
