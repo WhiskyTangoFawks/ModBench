@@ -2,9 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
 
-import { executeCommand, registered, runRegisteredTask } from '../../test/taskDouble';
+import { callWithSignal, executeCommand, registered, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { AgentCall } from '../../drivingLib/agentGesture';
 import type { DeployResult } from '../../instanceCommands/deploy';
 import { registerDeployTask } from '../deployTask';
 
@@ -24,7 +23,7 @@ describe('the deploy task', () => {
     const { written, closedWith, reporter } = await deploy(landed());
 
     expect([registered.type, written, closedWith, reporter.shownFailures]).toEqual(['modbench.instance.deploy', 'Deployed the load order.\r\n', [0], []]);
-    expect(executeCommand).toHaveBeenCalledWith('modbench.instance.deploy', new AgentCall([], {}, expect.any(AbortSignal)));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.instance.deploy', callWithSignal([]));
   });
 
   it('passes, and says the deployment folder already held the load order, when deploy wrote nothing', async () => {

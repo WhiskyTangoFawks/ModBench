@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import { CancelledNotificationSchema, JSONRPCRequestSchema, type RequestId, type ServerNotification, type ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import { isInitializeRequest, type ServerNotification, type ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { CopyReads } from '../mods/sameCopies';
 import { ArchivedCopies } from '../mods/archivedCopies';
@@ -185,13 +186,16 @@ async function bodyOf(request: IncomingMessage): Promise<{ parsed: unknown } | u
   }
 }
 
-// Each call is a request of its own on a server of its own, so the client's `notifications/cancelled` reaches a server
-// that holds no such request: it closes the server of the call it names, which aborts that call's signal.
-type InFlight = Map<RequestId, () => void>;
+type Sessions = Map<string, StreamableHTTPServerTransport>;
 
-async function handle(options: OpenOptions, inFlight: InFlight, request: IncomingMessage, response: ServerResponse): Promise<void> {
+async function handle(options: OpenOptions, sessions: Sessions, request: IncomingMessage, response: ServerResponse): Promise<void> {
   if (!isOwnHost(request) || request.headers.origin !== undefined) {
     response.writeHead(403).end();
+    return;
+  }
+  const held = sessions.get(String(request.headers['mcp-session-id']));
+  if (request.method === 'DELETE' && held !== undefined) {
+    await held.handleRequest(request, response);
     return;
   }
   if (request.method !== 'POST') {
@@ -203,21 +207,19 @@ async function handle(options: OpenOptions, inFlight: InFlight, request: Incomin
     response.writeHead(400).end();
     return;
   }
-  const cancelled = CancelledNotificationSchema.safeParse(body.parsed);
-  if (cancelled.success) {
-    const { requestId } = cancelled.data.params;
-    if (requestId !== undefined) inFlight.get(requestId)?.();
-    response.writeHead(202).end();
+  if (held !== undefined) {
+    await held.handleRequest(request, response, body.parsed);
+    return;
+  }
+  if (!isInitializeRequest(body.parsed)) {
+    response.writeHead(404).end();
     return;
   }
   const mcp = mcpServerOf(options);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  const asked = JSONRPCRequestSchema.safeParse(body.parsed);
-  if (asked.success) inFlight.set(asked.data.id, () => { void mcp.close(); });
-  response.on('close', () => {
-    if (asked.success) inFlight.delete(asked.data.id);
-    void transport.close();
-    void mcp.close();
+  const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: randomUUID,
+    onsessioninitialized: (id) => { sessions.set(id, transport); },
+    onsessionclosed: (id) => { sessions.delete(id); },
   });
   await mcp.connect(transport);
   await transport.handleRequest(request, response, body.parsed);
@@ -229,9 +231,9 @@ export function serveAgent(options: AgentServerOptions): AgentServer {
   const { instance, copyReads, statuses, deployment, pluginsShown, port, reporter, log } = options;
   if (instance === undefined || copyReads === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
   const open = { ...options, instance, copyReads, statuses, deployment, pluginsShown };
-  const inFlight: InFlight = new Map();
+  const sessions: Sessions = new Map();
   const http = createServer((request, response) => {
-    handle(open, inFlight, request, response).catch((error: unknown) => {
+    handle(open, sessions, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);
       if (!response.headersSent) response.writeHead(500);
       response.end();
@@ -250,5 +252,5 @@ export function serveAgent(options: AgentServerOptions): AgentServer {
       done(typeof address === 'object' && address !== null ? address : undefined);
     });
   });
-  return { listening, dispose: () => { http.close(); http.closeAllConnections(); } };
+  return { listening, dispose: () => { sessions.forEach((transport) => { void transport.close(); }); http.close(); http.closeAllConnections(); } };
 }

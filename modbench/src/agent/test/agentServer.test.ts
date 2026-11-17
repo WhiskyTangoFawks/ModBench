@@ -26,6 +26,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { callWithSignal, signalOf } from '../../test/taskDouble';
 import { Refusal } from '../../drivingLib/refusal';
 import {
   buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackCopies, type ConflictEntry,
@@ -1813,12 +1814,33 @@ describe('the agent server, running a gesture', () => {
     const answered = client.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal });
     answered.catch(() => undefined);
     await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
-    const { signal } = (fired.calls[0]?.[1] as AgentCall);
+    const signal = signalOf(fired.calls[0]?.[1]);
     expect(signal?.aborted).toBe(false);
 
     cancelled.abort();
 
     await vi.waitFor(() => { expect(signal?.aborted).toBe(true); }, { timeout: 5000 });
+  });
+
+  it('cancels only the call of the client that cancels, though another client\'s call has the same request id', async () => {
+    fired.outcome = new Promise(() => undefined);
+    const { bound } = await serve(new FakeInstance(CONFLICTED));
+    const [first, second] = [new Client({ name: 'first', version: '0' }), new Client({ name: 'second', version: '0' })];
+    for (const client of [first, second]) {
+      await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+      clients.push(client);
+    }
+    const cancelled = new AbortController();
+    first.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal }).catch(() => undefined);
+    await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
+    second.callTool({ name: 'mod_build', arguments: { argument: [] } }).catch(() => undefined);
+    await vi.waitFor(() => { expect(fired.calls).toHaveLength(2); });
+    const [firstSignal, secondSignal] = fired.calls.map((fire) => signalOf(fire[1]));
+
+    cancelled.abort();
+
+    await vi.waitFor(() => { expect(firstSignal?.aborted).toBe(true); });
+    expect(secondSignal?.aborted).toBe(false);
   });
 
   it('refuses in whole, answering the command\'s refusal', async () => {
@@ -2296,7 +2318,7 @@ describe('the agent server, running a gesture', () => {
 
     await call(client, tool, args);
 
-    expect(fired.calls).toEqual([[command, new AgentCall(argument, options, command === 'modbench.mod.build' ? expect.any(AbortSignal) : undefined)]]);
+    expect(fired.calls).toEqual([[command, command === 'modbench.mod.build' ? callWithSignal(argument) : new AgentCall(argument, options)]]);
   });
 
   describe('a file the mod manager marks excluded', () => {

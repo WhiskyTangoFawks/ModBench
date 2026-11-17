@@ -2,10 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
 
-import { executeCommand, runRegisteredTask } from '../../test/taskDouble';
+import { callWithSignal, executeCommand, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { SourceBuildOutcome as BuildOutcome } from '../../sourceCommands/buildSourceMod';
-import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerBuildTask } from '../buildTask';
 
 type Landed = BuildOutcome['landed'][number];
@@ -26,14 +25,14 @@ describe('the build task', () => {
       { ...DEFINITION, mods: ['ModA', 'ModB'] }, applied({ landed: [landed(), landed({ mod: 'ModB' })], refused: [] }),
     );
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], {}, expect.any(AbortSignal)));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', callWithSignal([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }]));
     expect([written, closedWith, reporter.shownFailures]).toEqual(['Built "ModA".\r\nBuilt "ModB".\r\n', [0], []]);
   });
 
   it('names no mod when its definition names none', async () => {
     await build(DEFINITION, applied({ landed: [], refused: [] }));
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([], {}, expect.any(AbortSignal)));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', callWithSignal([]));
   });
 
   const WARNING = 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.';

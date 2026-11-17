@@ -1,6 +1,17 @@
 import { vi, expect } from 'vitest';
 import { EventEmitter } from './vscodeMock';
 import { present } from '../ports/present';
+import type { Argument } from '../wire/argument';
+
+/** The signal of the AgentCall a command was sent. Not an `instanceof`: this module loads inside the `vscode` mock, which AgentCall's module imports. */
+export const signalOf = (sent: unknown): AbortSignal | undefined =>
+  (typeof sent === 'object' && sent !== null && 'signal' in sent && sent.signal instanceof AbortSignal ? sent.signal : undefined);
+
+/** Matches the AgentCall of an entry point that hands its gesture a signal. */
+export function callWithSignal(argument: readonly Argument[]): unknown {
+  const signal: unknown = expect.any(AbortSignal);
+  return expect.objectContaining({ argument, options: {}, signal });
+}
 
 interface Terminal { onDidWrite: (listener: (text: string) => void) => void; onDidClose: (listener: (code: number) => void) => void; open: () => void; close: () => void }
 interface TaskStandIn { execution: { start: () => Promise<Terminal> } }
