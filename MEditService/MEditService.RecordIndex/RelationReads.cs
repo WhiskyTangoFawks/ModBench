@@ -259,7 +259,7 @@ internal sealed class RelationReads(
 
     /// <summary>The rows of one SELECT over the views of every plugin the record index holds, read from one snapshot as
     /// they are taken; or why the SQL cannot be one. The filter in force does not narrow it.</summary>
-    public Answer<StreamedRows, string> Select(string statement)
+    public Answer<SpooledRows, string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
         ReadContext? context = store.OpenRead(cancel);

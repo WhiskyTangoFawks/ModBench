@@ -14,6 +14,7 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
 {
     private readonly string[] _names = [.. columns.Select(column => Encoded(column.Name))];
     private DuckDBDataReader? _reader;
+    private int _disposed;
 
     /// <summary>The next row's JSON object, or null after the last row.</summary>
     public string? Next()
@@ -49,6 +50,7 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
         _reader?.Dispose();
         command.Dispose();
         read.Dispose();

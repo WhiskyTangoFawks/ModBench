@@ -10,11 +10,11 @@ public sealed class SelectedRows : IDisposable
     private const string BodiesByKey =
         "A sort or a join that carries body holds all of it in memory: find the keys on narrow columns, then select body for those keys.";
 
-    private readonly StreamedRows _rows;
+    private readonly SpooledRows _rows;
     private readonly IndexAnswer _answer;
     private Answer<string?, IndexRefused>? _first;
 
-    private SelectedRows(StreamedRows rows, IndexAnswer answer)
+    private SelectedRows(SpooledRows rows, IndexAnswer answer)
     {
         _rows = rows;
         _answer = answer;

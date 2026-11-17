@@ -51,8 +51,8 @@ internal sealed class ReadContext : IDisposable
     private const string TextType = "VARCHAR";
 
     /// <summary>Each row of <paramref name="sql"/> as the JSON text of an object of its columns, read as it is taken.
-    /// The rows take this context, which disposing them ends.</summary>
-    public StreamedRows Streamed(string sql)
+    /// The rows take this context, which the query's end releases.</summary>
+    public SpooledRows Streamed(string sql)
     {
         // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
         var columns = Rows($"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM ({sql}\n) __row)",
@@ -64,7 +64,7 @@ internal sealed class ReadContext : IDisposable
         var command = _connection.CreateCommand();
         command.CommandText = $"SELECT {values} FROM ({sql}\n) __row({aliases})";
         command.UseStreamingMode = true;
-        return new StreamedRows(this, command, columns);
+        return new SpooledRows(new StreamedRows(this, command, columns));
     }
 
     public int Execute(string sql, params object?[] args) => Observed(() => DuckDbSql.Execute(_connection, sql, args));

@@ -3,6 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -25,19 +26,33 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
     private RealSizeModlist Modlist => realSize.Modlist;
 
     [RealSizeFact]
-    public void ASessionOfEveryOperationKind_LeavesTheEnginesMemoryWhereItStarted_AndEveryReadAnswers() => Soak(readsInFlight: false);
+    public void ASessionOfEveryOperationKind_LeavesTheEnginesMemoryWhereItStarted_AndEveryReadAnswers() => Soak(reading: null);
 
     [RealSizeFact]
-    public void ASessionOfEveryOperationKindWithAReadAlwaysInFlight_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() => Soak(readsInFlight: true);
+    public void ASessionOfEveryOperationKindWithAReadAlwaysInFlight_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() => Soak(new ReadsInFlight(Index.Queries));
 
-    private void Soak(bool readsInFlight)
+    [RealSizeFact]
+    public void AScriptTakingASelectsRowsSlowlyWhileItWrites_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() =>
+        Soak(new SlowStream(Index.Queries));
+
+    [RealSizeFact]
+    public void ASelectOfEveryRecord_ReturnsItsFirstRowWithinOneGesture()
     {
-        _ = Index;
+        Budgets.Ran(TimeSpan.FromSeconds(1), () =>
+        {
+            using var rows = Index.Queries.SelectRows("SELECT form_key, editor_id FROM records", CancellationToken.None).Value();
+            Assert.NotNull(rows.Rows().First().Value());
+        }, "The first row of a select of every record", 5);
+    }
+
+    private void Soak(IDisposable? reading)
+    {
+        using var held = reading;
+        var readsInFlight = reading is not null;
         Selects();
         Settle(readsInFlight);
         var started = Sample();
         Report("start", started);
-        using var reading = readsInFlight ? new ReadsInFlight(Index.Queries) : null;
 
         var operations = new (string Name, Action Run)[]
         {
@@ -52,6 +67,7 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
             foreach (var (name, run) in operations)
             {
                 run();
+                (reading as SlowStream)?.TakeARow();
                 Settle(readsInFlight);
                 Report($"round {round + 1} after {name}", Sample());
             }
@@ -64,8 +80,8 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
         Report("end", ended);
         Assert.True(Index.Queries.GetStatus().State == LoadOrderState.Ready);
         Assert.True(WalBytes() <= SmallBound, $"The write-ahead log stands at {Mb(WalBytes())} MiB after {Rounds} rounds.");
-        var held = readsInFlight ? ended.Keys.Union(started.Keys).Except(EvictableMemory) : ended.Keys.Union(started.Keys);
-        foreach (var tag in held)
+        var tags = readsInFlight ? ended.Keys.Union(started.Keys).Except(EvictableMemory) : ended.Keys.Union(started.Keys);
+        foreach (var tag in tags)
         {
             var (before, after) = (started.GetValueOrDefault(tag), ended.GetValueOrDefault(tag));
             Assert.True(after - before <= (readsInFlight ? UnevictableBound : SmallBound), $"duckdb_memory() tag {tag} grew from {Mb(before)} to {Mb(after)} MiB over {Rounds} rounds.");
@@ -79,6 +95,26 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
     }
 
     private long WalBytes() => new FileInfo(IndexFiles.In(Modlist.InstanceRoot) + ".wal") is { Exists: true } wal ? wal.Length : 0;
+
+    private sealed class SlowStream : IDisposable
+    {
+        private readonly SelectedRows _rows;
+        private readonly IEnumerator<Answer<string, IndexRefused>> _taken;
+
+        internal SlowStream(IQueries queries)
+        {
+            _rows = queries.SelectRows("SELECT form_key FROM records LIMIT 1000000", CancellationToken.None).Value();
+            _taken = _rows.Rows().GetEnumerator();
+        }
+
+        internal void TakeARow() => Assert.True(_taken.MoveNext());
+
+        public void Dispose()
+        {
+            _taken.Dispose();
+            _rows.Dispose();
+        }
+    }
 
     private sealed class ReadsInFlight : IDisposable
     {

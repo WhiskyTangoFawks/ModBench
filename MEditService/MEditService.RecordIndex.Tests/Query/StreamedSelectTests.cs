@@ -44,6 +44,22 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Equal(Records, read);
     }
 
+    [Fact]
+    public void ASelectPausedAfterItsFirstRow_HoldsNoSnapshotThatHoldsBackTheCheckpoint()
+    {
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))));
+        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
+        using var rows = index.Queries.SelectRows("SELECT form_key FROM records WHERE record_type = 'misc'").Value();
+        using var taken = rows.Rows().GetEnumerator();
+        Assert.True(taken.MoveNext());
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
+
+        Assert.True(taken.MoveNext());
+    }
+
     [Theory]
     [InlineData("SELECT body FROM records")]
     [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
