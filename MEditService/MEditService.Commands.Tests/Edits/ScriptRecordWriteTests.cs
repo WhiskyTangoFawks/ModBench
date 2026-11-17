@@ -77,7 +77,7 @@ public sealed class ScriptRecordWriteTests
     {
         using var mod = CopyFixture.Create();
         var header = Path.Combine(mod.DestinationModFolder, SourceModTree.HeaderDocumentFile(mod.DestinationModFolder, mod.DestinationPlugin));
-        mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
+        mod.Unsaved.Typed(new DocumentChange(header, File.ReadAllText(header) + " "));
         var before = SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
 
         var outcome = Copy(mod, CopyMode.New, mod.DestinationPlugin);
@@ -112,7 +112,7 @@ public sealed class ScriptRecordWriteTests
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var header = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
-        mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
+        mod.Unsaved.Typed(new DocumentChange(header, File.ReadAllText(header) + " "));
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
         var outcome = Create(mod);
@@ -149,7 +149,7 @@ public sealed class ScriptRecordWriteTests
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var file = Path.Combine(mod.ModFolder, mod.DocumentFile(mod.Npc.ToString()).Require());
-        mod.Unsaved.Apply([new DocumentChange(file, File.ReadAllText(file) + " ")]);
+        mod.Unsaved.Typed(new DocumentChange(file, File.ReadAllText(file) + " "));
 
         var outcome = Delete(mod, mod.Npc.ToString());
 

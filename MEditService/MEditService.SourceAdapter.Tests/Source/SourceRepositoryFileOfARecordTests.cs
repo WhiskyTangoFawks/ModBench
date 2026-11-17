@@ -156,7 +156,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     public void ADocumentHeldUnsaved_HoldsTheRecordItsUnsavedTextDeclares()
     {
         var unsaved = new UnsavedDocuments();
-        unsaved.Apply([new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}")]);
+        unsaved.Typed(new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}"));
 
         var answer = new GitSourceAdapter(unsaved, TimeProvider.System).RecordOfFile(LoadOrder(), NpcFile);
 
@@ -167,7 +167,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     public void ADeletedFileWithAnUnsavedText_IsNoDocument_ForTheTextMakesNoFile()
     {
         var unsaved = new UnsavedDocuments();
-        unsaved.Apply([new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}")]);
+        unsaved.Typed(new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}"));
         File.Delete(NpcFile);
 
         var answer = new GitSourceAdapter(unsaved, TimeProvider.System).RecordOfFile(LoadOrder(), NpcFile);

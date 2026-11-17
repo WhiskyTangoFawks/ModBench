@@ -2,6 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.RecordIndex.Tests;
@@ -13,6 +14,32 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     internal LoadOrderHolder Holder { get; } = holder;
 
     internal UnsavedDocuments Unsaved { get; } = container.GetRequiredService<UnsavedDocuments>();
+
+    /// <summary>A document typed as VS Code does: held, then handed to the plugins whose trees hold it, and returned once the
+    /// index has read it.</summary>
+    internal void TypeUnsaved(DocumentChange document)
+    {
+        Unsaved.Typed(document);
+        HandOver(document.Path);
+    }
+
+    /// <summary>A document closed as VS Code does: dropped, so its file is read again.</summary>
+    internal void CloseUnsaved(string path)
+    {
+        Unsaved.Closed(path);
+        HandOver(path);
+    }
+
+    private void HandOver(string path)
+    {
+        var handed = container.GetRequiredService<ISourceAdapter>().Touching(Holder.Current, path) switch
+        {
+            PathAnswer.Touches touches => touches.Plugins.Select(plugin => new HandedPlugin(plugin.Key, [path], [])).ToList(),
+            PathAnswer.Unnamed => null,
+            _ => [],
+        };
+        Queries.Hold(handed, CancellationToken.None).GetAwaiter().GetResult();
+    }
 
     internal IQueries Queries { get; } = container.GetRequiredService<IQueries>();
 

@@ -128,8 +128,11 @@ export function loadFailuresOf(indexing: readonly IndexOfPlugin[]): PluginLoadFa
 /** Why mEdit cleared the filter from `source`, until another is set or cleared on purpose. */
 export type FilterCleared = components['schemas']['FilterCleared'];
 
-/** A document with changes VS Code holds unsaved, by absolute path. */
-export interface UnsavedDocument { path: string; text: string }
+/** A plugin-source document VS Code holds unsaved, as it opens or changes, or once it is closed, by absolute path: its
+ *  whole text and its version, which only rises while it stays open. */
+export type UnsavedDocumentChange =
+  | { readonly path: string; readonly text: string; readonly version: number }
+  | { readonly path: string; readonly closed: true };
 
 /** What a gesture changes in plugin source, by absolute path: each move, then each deletion of a file or folder, then
  *  each document's text once moved. */
@@ -452,11 +455,11 @@ export interface MEditClient {
    *  before has answered. Settles once the sweep it starts is over, at once while mEdit is not running. */
   signalChange(paths: readonly string[]): Promise<void>;
 
-  /** Every plugin-source document VS Code holds unsaved, which mEdit reads in place of its file.
-   *  Put at once and in order while mEdit runs, and the newest again whenever the process may hold none. */
-  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void;
-  /** Each put of the unsaved documents as it answers: undefined when mEdit took them, else why not. */
-  onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void;
+  /** A plugin-source document VS Code holds unsaved, mEdit reads in place of its file until closed. Only the
+   *  newest change of each is handed, again until mEdit takes it, and each open one when the process may hold none. */
+  handUnsavedDocument(change: UnsavedDocumentChange): void;
+  /** Told as each hand-over answers: undefined when mEdit holds every document as handed, else why not the first. */
+  onUnsavedHandOver(listener: (failure: WriteRefused | undefined) => void): () => void;
 
   // The backend process: today's four values, read as a current value and observed through a
   // status-changed event.

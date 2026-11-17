@@ -235,7 +235,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var path = Path.Combine(_sourceMod, SourceModTree.DocumentFile(_sourceMod, Old, npc.FormKey).Require());
 
         var unsaved = new UnsavedDocuments();
-        unsaved.Apply([new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal))]);
+        unsaved.Typed(new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal)));
 
         var result = new Read(TestEditService.Over(_holder, unsaved: unsaved).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.esp", namedByFileName: true, sourceFiles: []));
 

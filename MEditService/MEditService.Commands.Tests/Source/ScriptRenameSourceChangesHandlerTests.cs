@@ -54,7 +54,7 @@ public sealed class ScriptRenameSourceChangesHandlerTests : IDisposable
     {
         var file = Saved(Scripted(Quest, "Ns:Quest"));
         var unsaved = $"[ {Scripted(Quest, "Ns:Quest")} ]";
-        _unsaved.Apply([new DocumentChange(file, unsaved)]);
+        _unsaved.Typed(new DocumentChange(file, unsaved));
 
         Assert.Equal([new DocumentChange(file, unsaved.Replace("Ns:Quest", "Ns:Renamed", StringComparison.Ordinal))], Changes([InFile(Quest, file)]).Documents);
     }

@@ -240,6 +240,37 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Null(check.GetAwaiter().GetResult());
     }
 
+    [RealSizeFact]
+    public void OneKeystrokeInABigPluginsDocument_IsHeldWithinOneKeystroke()
+    {
+        var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[4]);
+        var record = Index.DocumentOf(formKey, plugin.Key);
+        var (path, text) = (plugin.SourceFileOf(record), plugin.SourceTextOf(record));
+        var typed = 0;
+        try
+        {
+            Budgets.Ran(OneKeystroke, () =>
+            {
+                var editorId = $"Typed{++typed}";
+                var typedText = text.Replace($"\"{record.EditorId}\"", $"\"{editorId}\"", StringComparison.Ordinal);
+                Index.Unsaved.Typed(new DocumentChange(path, typedText));
+                Assert.Null(Index.Queries.Hold([new HandedPlugin(plugin.Key, [path], [])], CancellationToken.None).GetAwaiter().GetResult());
+                Assert.Equal(editorId, Index.RowOf(formKey, plugin.Key)?.EditorId);
+            }, "One keystroke in a big plugin's document held", Runs);
+        }
+        finally
+        {
+            realSize.Restore(() =>
+            {
+                Index.Unsaved.Closed(path);
+                Assert.Null(Index.Queries.Hold([new HandedPlugin(plugin.Key, [path], [])], CancellationToken.None).GetAwaiter().GetResult());
+            }, () =>
+            {
+                return CheckEnded() && !Index.Status.Validating && Index.RowOf(formKey, plugin.Key)?.EditorId == record.EditorId;
+            });
+        }
+    }
+
     private void Held(PluginChange written) =>
         Assert.Null(Index.Queries.Hold([new HandedPlugin(written.Plugin, written.Files, [])], CancellationToken.None).GetAwaiter().GetResult());
 

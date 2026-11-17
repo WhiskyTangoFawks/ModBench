@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
@@ -17,7 +18,11 @@ public sealed class RealSizeIndex : IDisposable
     {
     }
 
-    internal RealSizeIndex(Func<RealSizeModlist> generate) => _modlist = new(() => Build(generate));
+    internal RealSizeIndex(Func<RealSizeModlist> generate)
+    {
+        _modlist = new(() => Build(generate));
+        Source = new(new GitSourceAdapter(_unsaved, TimeProvider.System));
+    }
 
     internal RealSizeModlist Modlist => _modlist.Value;
 
@@ -47,10 +52,12 @@ public sealed class RealSizeIndex : IDisposable
     }
 
     /// <summary>The source adapter the record index reads through, counting how it reads.</summary>
-    internal CountingTreeSource Source { get; } = new(TestAdapters.Source());
+    internal CountingTreeSource Source { get; }
+
+    private readonly UnsavedDocuments _unsaved = new();
 
     private OpenedIndex Launch(RealSizeModlist modlist) =>
-        Indexes.Reconciled(modlist.DataFolder, modlist.LoadOrder, modlist.InstanceRoot, source: Source, patience: IndexingPatience);
+        Indexes.Reconciled(modlist.DataFolder, modlist.LoadOrder, modlist.InstanceRoot, source: Source, patience: IndexingPatience, unsaved: _unsaved);
 
     /// <summary>The record index closed and launched again over the same file.</summary>
     internal void Relaunch() => Restore(() =>

@@ -134,7 +134,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
 
   it('opens the stream when the backend attaches', async () => {
     const stream = vi.fn(() => Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 })));
-    const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-documents', noContent]]));
+    const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-document', noContent]]));
 
     await client.start();
 
@@ -147,7 +147,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
       sawSignal = req.signal;
       return new Promise<Response>(() => {});
     });
-    const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-documents', noContent]]));
+    const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-document', noContent]]));
     await client.start();
     await vi.waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
 
@@ -1103,7 +1103,7 @@ describe('HttpMEditClient — what a frame names', () => {
       },
     });
     const client = makeClient(routedFetch([
-      ['/notifications/stream', () => Promise.resolve(new Response(body, { status: 200 }))], ['/unsaved-documents', noContent],
+      ['/notifications/stream', () => Promise.resolve(new Response(body, { status: 200 }))], ['/unsaved-document', noContent],
     ]));
     const heard: unknown[] = [];
     client.onDidChange((change) => heard.push(change));
@@ -1162,12 +1162,12 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const requests: string[] = [];
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+      ['/unsaved-document', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
       [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
     await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
 
     const gesturing = gesture(client);
@@ -1192,12 +1192,12 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const requests: string[] = [];
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+      ['/unsaved-document', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
       [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, {})); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
     await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
 
     const asking = reading(client);
@@ -1275,19 +1275,41 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
-  it('fails a refused hand-over with mEdit\'s reason alone', async () => {
+  it('hands one document as a PUT of its path, text and version, opened the first time, and its close as a DELETE of its path', async () => {
+    const requests: string[] = [];
+    const answerAndNote = async (req: Request) => {
+      requests.push(`${req.method} ${new URL(req.url).pathname}${new URL(req.url).search} ${await req.text()}`);
+      return new Response(null, { status: 204 });
+    };
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => Promise.resolve(jsonResponse(400, { detail: 'Not plugin source.' }))],
+      ['/unsaved-document', answerAndNote],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    client.handUnsavedDocument({ path: '/m/Npc.json', text: '{}', version: 3 });
+    client.handUnsavedDocument({ path: '/m/Npc.json', closed: true });
+
+    await vi.waitFor(() => { expect(requests).toEqual([
+      'PUT /unsaved-document {"path":"/m/Npc.json","text":"{}","version":3,"opened":true}',
+      'DELETE /unsaved-document?path=%2Fm%2FNpc.json ',
+    ]); });
+  });
+
+  it('answers a refused hand-over as a WriteRefused carrying mEdit\'s reason', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-document', () => Promise.resolve(jsonResponse(400, { detail: 'Not plugin source.' }))],
     ]);
     const client = makeClient(fetch);
     const settled = vi.fn();
     client.onUnsavedHandOver(settled);
     await client.start();
 
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
 
-    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ failed: 'refused', refusal: 'Not plugin source.' }));
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ refused: true, message: 'mEdit could not take the unsaved plugin source — Not plugin source.' }));
   });
 
   it('leaves a hand-over to finish however long it takes, as a write is never timed', async () => {
@@ -1296,7 +1318,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const handedOver = vi.fn();
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+      ['/unsaved-document', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
     ]);
     vi.useFakeTimers();
     try {
@@ -1304,6 +1326,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
       const settled = vi.fn();
       client.onUnsavedHandOver(settled);
       await client.start();
+      client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
 
       await vi.advanceTimersByTimeAsync(60);
       expect(handedOver).toHaveBeenCalled();
@@ -1334,12 +1357,12 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const requests: string[] = [];
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => handedOver.then(() => new Response(null, { status: 204 }))],
+      ['/unsaved-document', () => handedOver.then(() => new Response(null, { status: 204 }))],
       ['/plugins', (req) => { requests.push(req.url); return Promise.resolve(jsonResponse(200, [])); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
     const { token: held, cancel } = cancellableToken();
 
     const asking = client.getPlugins(undefined, held);
@@ -1356,7 +1379,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     let sent = false;
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', noContent],
+      ['/unsaved-document', noContent],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
       ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
       ['/plugins', (req) => new Promise<Response>((_resolve, reject) => {
@@ -1397,7 +1420,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     let sentRow = false;
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', noContent],
+      ['/unsaved-document', noContent],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
       ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
       ['/records/select', (req) => {
@@ -1449,7 +1472,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(response)],
-      ['/unsaved-documents', noContent],
+      ['/unsaved-document', noContent],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }).loadOrderStatus))],
       ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
     ]);
@@ -1614,14 +1637,14 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => (puts++ === 0 ? noContent() : putAnswered.then(() => new Response(null, { status: 204 })))],
+      ['/unsaved-document', () => (puts++ === 0 ? noContent() : putAnswered.then(() => new Response(null, { status: 204 })))],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
     ]);
     const client = makeClient(fetch);
     await client.start();
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
 
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
@@ -1630,7 +1653,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
   describe.each<[string, (client: MEditClient) => void]>([
     ['a change signal', (client) => { void client.signalChange(['/m/Foo.esp']); }],
-    ['unsaved documents', (client) => { client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]); }],
+    ['unsaved documents', (client) => { client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 }); }],
   ])('after %s are answered', (_what, hand) => {
     async function started() {
       const { response, push } = pushableStreamResponse();
@@ -1641,7 +1664,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       const answerHand = () => { status = statusWhenAnswered; return noContent(); };
       const fetch = routedFetch([
         ['/notifications/stream', () => Promise.resolve(response)],
-        ['/unsaved-documents', answerHand],
+        ['/unsaved-document', answerHand],
         ['/signal-change', answerHand],
         ['/load-order/status', () => {
           statusReads++;

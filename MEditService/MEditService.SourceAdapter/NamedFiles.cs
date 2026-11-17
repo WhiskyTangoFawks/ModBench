@@ -29,7 +29,7 @@ internal static class NamedFiles
             files.UnionWith(listed);
         }
 
-        files.RemoveWhere(file => written.At(file) is null && listing.HoldsWhatWasRead(file));
+        files.RemoveWhere(file => written.At(file) is null && !disk.HoldsUnsavedText(file) && listing.HoldsWhatWasRead(file));
         var held = new HashSet<string>(StringComparer.Ordinal);
         var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
         var settled = new Dictionary<string, FileStamp?>(TreeListing.PathComparer);
@@ -41,7 +41,7 @@ internal static class NamedFiles
                 if (formKey is null) return null;
                 held.Add(formKey);
             }
-            settled[file] = listing.SettledStampOf(file);
+            settled[file] = disk.HoldsUnsavedText(file) ? null : listing.SettledStampOf(file);
             now[file] = documents.DocumentsIn(file, written.At(file));
         }
 

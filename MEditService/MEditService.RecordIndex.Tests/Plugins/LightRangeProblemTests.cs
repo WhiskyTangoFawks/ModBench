@@ -53,14 +53,14 @@ public sealed class LightRangeProblemTests : IDisposable
         Assert.Empty(Problems(index));
 
         var before = _notifications.Notifications.Count;
-        index.Unsaved.Apply([new DocumentChange(HeaderFile, HeaderFlaggedLight)]);
+        index.TypeUnsaved(new DocumentChange(HeaderFile, HeaderFlaggedLight));
         Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_light)(n)), "the problem announced");
 
         Assert.Equal(OutsideFile(index), Assert.Single(Problems(index)).SourceRelativePath);
         Assert.True(index.ReadFromItsPluginSource(_light.Key));
 
         before = _notifications.Notifications.Count;
-        index.Unsaved.Apply([]);
+        index.CloseUnsaved(HeaderFile);
         Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_light)(n)), "the problem cleared");
 
         Assert.Empty(Problems(index));

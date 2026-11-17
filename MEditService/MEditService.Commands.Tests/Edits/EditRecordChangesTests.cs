@@ -40,7 +40,7 @@ public sealed class EditRecordChangesTests : IDisposable
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string unsaved)
     {
         var file = Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require());
-        instance.Unsaved.Apply([new DocumentChange(file, unsaved)]);
+        instance.Unsaved.Typed(new DocumentChange(file, unsaved));
         return instance.EditChangesHandler.Changes(plugin, formKey, envelope, copiesWithNoPluginSource: Envelopes.NoCopies).Seen();
     }
 
@@ -87,7 +87,7 @@ public sealed class EditRecordChangesTests : IDisposable
     {
         var given = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString());
         var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
-        _mod.Unsaved.Apply([new DocumentChange(file, given)]);
+        _mod.Unsaved.Typed(new DocumentChange(file, given));
         File.WriteAllText(file, "not a document");
 
         var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), copiesWithNoPluginSource: Envelopes.NoCopies).Seen();

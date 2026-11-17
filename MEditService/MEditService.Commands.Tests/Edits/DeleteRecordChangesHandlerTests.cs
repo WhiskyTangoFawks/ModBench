@@ -89,7 +89,7 @@ public sealed class DeleteRecordChangesHandlerTests
         var unsaved = new DocumentChange(
             TreeTampering.FileOf(fixture.ModFolder, fixture.Plugin, owner.Identity), owner.Body.Replace(ContainerModPlugin.NavmeshEditorId, "UnsavedNavmesh", StringComparison.Ordinal));
 
-        fixture.Unsaved.Apply([unsaved]);
+        fixture.Unsaved.Typed(unsaved);
 
         var result = fixture.DeleteHandler.DeleteChangesSync([new RecordAt(fixture.Plugin, fixture.TemporaryRef.ToString())]);
 
@@ -105,7 +105,7 @@ public sealed class DeleteRecordChangesHandlerTests
         var npc = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
         var retyped = $"000F00:{mod.Plugin.Name}";
         var file = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
-        mod.Unsaved.Apply([new DocumentChange(file, npc.Body.Replace(mod.Npc.ToString(), retyped, StringComparison.Ordinal))]);
+        mod.Unsaved.Typed(new DocumentChange(file, npc.Body.Replace(mod.Npc.ToString(), retyped, StringComparison.Ordinal)));
 
         var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, retyped)]);
 

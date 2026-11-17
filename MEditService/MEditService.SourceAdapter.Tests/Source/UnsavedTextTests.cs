@@ -51,9 +51,9 @@ public sealed class UnsavedTextTests : IDisposable
         _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
         Reads.StampsOf(Plugin);
 
-        _unsaved.Apply([new DocumentChange(FileOf(Npc, "npc_"), NpcBody("TypedNpc"))]);
+        _unsaved.Typed(new DocumentChange(FileOf(Npc, "npc_"), NpcBody("TypedNpc")));
         var held = Reads.StampsOf(Plugin).ByFormKey[Npc];
-        _unsaved.Apply([]);
+        _unsaved.Closed(FileOf(Npc, "npc_"));
         var dropped = Reads.StampsOf(Plugin).ByFormKey[Npc];
 
         Assert.Equal(TestAdapters.Source().ContentStamp(NpcBody("TypedNpc")), held);
@@ -66,9 +66,9 @@ public sealed class UnsavedTextTests : IDisposable
         var path = FileOf(Npc, "npc_");
         var relative = Path.GetRelativePath(_modFolder.Path, path);
 
-        _unsaved.Apply([new DocumentChange(path, NpcBody("TypedNpc"))]);
+        _unsaved.Typed(new DocumentChange(path, NpcBody("TypedNpc")));
         var held = _adapter.TextOf(_modFolder.Path, relative);
-        _unsaved.Apply([]);
+        _unsaved.Closed(path);
         var dropped = _adapter.TextOf(_modFolder.Path, relative);
 
         Assert.Equal(NpcBody("TypedNpc"), held);

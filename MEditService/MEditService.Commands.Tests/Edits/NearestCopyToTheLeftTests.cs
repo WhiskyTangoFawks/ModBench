@@ -175,7 +175,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         var file = _plugins.DocumentFileOf(middle, TheNpc);
         var unsaved = new DocumentChange(file, File.ReadAllText(file).Replace("Saved", "Unsaved", StringComparison.Ordinal));
 
-        _plugins.Unsaved.Apply([unsaved]);
+        _plugins.Unsaved.Typed(unsaved);
 
         var undeleted = Written(TheNpc, 0);
 

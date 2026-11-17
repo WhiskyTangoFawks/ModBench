@@ -57,6 +57,18 @@ public static class CommandHandlers
             sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
 
+        services.AddSingleton(sp => new PutUnsavedDocumentHandler(
+            sp.GetRequiredService<UnsavedDocuments>(),
+            sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<HeldWrites>()));
+
+        services.AddSingleton(sp => new DeleteUnsavedDocumentHandler(
+            sp.GetRequiredService<UnsavedDocuments>(),
+            sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<HeldWrites>()));
+
         services.AddSingleton(sp => new CopyRecordHandler(
             sp.GetRequiredService<CopyRecordChangesHandler>(),
             sp.GetRequiredService<ISourceAdapter>(),

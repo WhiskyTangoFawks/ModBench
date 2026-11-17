@@ -102,6 +102,7 @@ const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
 const putPlaces: string[][] = [];
 const handedUnsaved: unknown[][] = [];
+const heldUnsaved = new Map<string, unknown>();
 const signalledPaths: string[][] = [];
 const comparedTexts: unknown[] = [];
 const comparedSideBySide: unknown[] = [];
@@ -299,13 +300,18 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    if (method === 'PUT' && url === '/unsaved-documents') {
+    if (url.startsWith('/unsaved-document')) {
       let body = '';
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
-        const handed: unknown = JSON.parse(body);
-        if (!isRecord(handed) || !Array.isArray(handed.documents)) throw new Error(`expected the unsaved documents, got: ${body}`);
-        handedUnsaved.push(handed.documents);
+        if (method === 'DELETE') {
+          heldUnsaved.delete(new URL(url, 'http://localhost').searchParams.get('path') ?? '');
+        } else {
+          const handed: unknown = JSON.parse(body);
+          if (!isRecord(handed) || typeof handed.path !== 'string') throw new Error(`expected an unsaved document, got: ${body}`);
+          heldUnsaved.set(handed.path, { path: handed.path, text: handed.text });
+        }
+        handedUnsaved.push([...heldUnsaved.values()]);
         res.writeHead(204);
         res.end();
       });

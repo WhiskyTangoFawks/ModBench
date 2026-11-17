@@ -115,7 +115,7 @@ public sealed class UnchangedSourceTreeTests : IDisposable
 
         File.WriteAllText(build, buildText);
         var anotherFileOfTheTree = Path.Combine(_plugin.ModFolderOf(), "plugin-source", _plugin.Name, "notes.txt");
-        _index.Unsaved.Apply([new DocumentChange(anotherFileOfTheTree, "unsaved")]);
+        _index.TypeUnsaved(new DocumentChange(anotherFileOfTheTree, "unsaved"));
 
         Assert.True(await Waits.Until(() => _index.ReadFromItsPluginSource(_plugin.Key)));
     }
