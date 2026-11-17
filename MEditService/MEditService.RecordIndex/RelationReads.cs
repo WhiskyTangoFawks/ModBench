@@ -166,15 +166,22 @@ internal sealed class RelationReads(
     {
         using var context = OpenRead();
         var formKey = CanonicalFormKey.Of(name);
+        const string named = "(lower(editor_id) = lower($1) OR form_key = $2)";
+        var candidates = context.Rows(
+            $"SELECT DISTINCT form_key FROM {TableDdlBuilder.MirrorSchema}.records WHERE {named}", reader => reader.GetString(0), name, formKey);
+        if (candidates.Count == 0) return [];
+        // Keys as parameters narrow the scan beneath the view's joins, where a subquery would not.
+        var keys = string.Join(", ", candidates.Select((_, i) => $"${i + 3}"));
         return context.Rows($"""
             SELECT form_key, editor_id FROM (
                 SELECT form_key, editor_id FROM {TableDdlBuilder.PluginRecordsView}
+                WHERE form_key IN ({keys})
                 QUALIFY row_number() OVER (PARTITION BY form_key ORDER BY is_winner DESC, plugin, origin) = 1)
-            WHERE lower(editor_id) = lower($1) OR form_key = $2
+            WHERE {named}
             ORDER BY form_key
             """,
             reader => (reader.GetString(0), reader.GetStringOrNull(1)),
-            name, formKey);
+            [name, formKey, .. candidates]);
     }
 
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order, of the record type the first holds.
@@ -503,17 +510,18 @@ internal sealed class RelationReads(
     public IReadOnlyList<CopyNaming> GetCopiesNaming(string name)
     {
         using var context = OpenRead();
+        // A record's masters leave out its own plugin, so an override that links its plugin's records is found by its links.
         var copies = context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, {InPluginSource}
             FROM {Copies}
-            WHERE (lower(r.form_key_plugin) = lower($1)
-                   OR list_contains(list_transform(r.masters, m -> lower(m)), lower($1))
-                   OR (lower(r.plugin) = lower($1) AND EXISTS (
-                       SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.form_references fr
-                       WHERE fr.source_form_key = r.form_key AND fr.source_plugin = r.plugin AND fr.source_origin = r.origin
-                         AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1))))
+            WHERE (r.form_key_plugin = $1 OR list_contains(list_transform(r.masters, m -> lower(m)), lower($1)))
               AND {ActiveOrCompiled}
-            ORDER BY r.plugin, r.origin, r.form_key
+            UNION ALL
+            SELECT DISTINCT fr.source_form_key, fr.source_plugin, fr.source_origin, {InPluginSource}
+            FROM {ActiveOrCompiledPluginReferrers}
+            WHERE fr.source_plugin = $1 AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1)
+              AND lower(substr(fr.source_form_key, {FormKeyPluginStart})) <> lower($1) AND {ActiveOrCompiled}
+            ORDER BY 2, 3, 1
             """, CopyNamingOf, name);
         var headers = context.Rows($"""
             SELECT d.plugin, d.origin, {InPluginSource}
