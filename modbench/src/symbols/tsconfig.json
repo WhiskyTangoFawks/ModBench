@@ -16,6 +16,7 @@
     { "path": "../modCommands" },
     { "path": "../pluginCommands" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../symbolNames" },
     { "path": "../textDocuments" },
     { "path": "../wire" }

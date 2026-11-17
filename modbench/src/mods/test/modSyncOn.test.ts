@@ -55,19 +55,20 @@ describe('mod sync on the instance', () => {
     expect(order[0]).toBe('written');
   });
 
-  it('writes nothing while a change is in flight, and syncs once it has ended', async () => {
+  it('never runs a sync that waited for a change and was disposed meanwhile', async () => {
     const instance = instanceOver();
     const syncMods = vi.fn(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
-    modSyncOn({ instance, channel: { error: () => undefined, info: () => undefined }, syncMods });
+    const syncing = modSyncOn({ instance, channel: { error: () => undefined, info: () => undefined }, syncMods });
     await instance.refresh();
     syncMods.mockClear();
 
     await handingOneChange(instance, async () => {
       await instance.refresh();
-      expect(syncMods).not.toHaveBeenCalled();
+      syncing.dispose();
     });
+    await instance.refresh();
 
-    expect(syncMods).toHaveBeenCalled();
+    expect(syncMods).not.toHaveBeenCalled();
   });
 
   it('tries a sync that failed again at each value until one lands, though mod order and the mod folders are as they were', async () => {

@@ -15,6 +15,7 @@
     { "path": "../instanceCommands" },
     { "path": "../pluginCommands" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../sortingRules" },
     { "path": "../symbolNames" },
     { "path": "../tables" },

@@ -2,50 +2,62 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { collectingWrites } from '../instanceLoader/ambientWrites';
+import { toldOnceSettled } from '../repositoriesLib/writesTold';
 import { pausableProgress, type Progress } from './pausableProgress';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 
 export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
-type OneChange = <T>(work: () => Promise<T>) => Promise<T>;
-
-let oneChange: OneChange | undefined;
-
-/** Sets the scope that collects the writes of the work it runs and tells the Instance loader of them once the work settles. */
-export function surfaceOneChange(on: OneChange): { dispose: () => void } {
-  oneChange = on;
-  return { dispose: () => { oneChange = undefined; } };
-}
-
 let changesRunning = 0;
-const waitingForChanges = new Set<() => Promise<void>>();
 
-/** Runs `task` now, or once no change is running: a repair is a write, and judges the value holding the whole change.
- *  The caller does not wait: the change's own read waits on its subscribers. */
-export function whenNoChangeIsRunning(task: () => Promise<void>): Promise<void> {
-  if (changesRunning === 0) return task();
-  waitingForChanges.add(task);
-  return Promise.resolve();
+interface Waiting {
+  readonly task: () => Promise<void>;
 }
 
-/** Hands the Instance loader every file `work` wrote in one tell once it ends, so no subscriber sees it half done. */
+const waitingForChanges = new Set<Waiting>();
+
+/** A repair of the disk is a write: `run` runs `task` once no change is running, judging the whole change. The caller
+ *  does not wait, since the change's own read waits on its subscribers. */
+export function whenNoChangeIsRunning(task: () => Promise<void>): { run: () => Promise<void>; dispose: () => void } {
+  const waiting: Waiting = { task };
+  return {
+    run: () => {
+      if (changesRunning === 0) return task();
+      waitingForChanges.add(waiting);
+      return Promise.resolve();
+    },
+    dispose: () => { waitingForChanges.delete(waiting); },
+  };
+}
+
+async function releaseWaiting(): Promise<void> {
+  const released = [...waitingForChanges];
+  waitingForChanges.clear();
+  await Promise.all(released.map(async ({ task }) => {
+    try {
+      await task();
+    } catch (err) {
+      surface?.reporter.report('error', errorMessage(err));
+    }
+  }));
+}
+
+/** Hands the loader every file `work` wrote in one read once it ends, so no subscriber sees it half done. */
 export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, work: (written: WrittenFiles) => Promise<T>): Promise<T> {
   const written = new WrittenFiles();
+  const tellAll = (told: readonly string[]) => {
+    const named = written.named;
+    if (named === undefined) return instance.refresh();
+    const files = [...told, ...named];
+    return files.length === 0 ? Promise.resolve() : instance.refresh(files);
+  };
   changesRunning++;
   try {
-    return await (oneChange ?? ((run) => run()))(() => collectingWrites(written, () => work(written)));
+    return await toldOnceSettled(() => collectingWrites(written, () => work(written)), tellAll);
   } finally {
-    try {
-      await refreshWritten(instance, written);
-    } finally {
-      changesRunning--;
-      if (changesRunning === 0) {
-        const waiting = [...waitingForChanges];
-        waitingForChanges.clear();
-        for (const task of waiting) void task();
-      }
-    }
+    changesRunning--;
+    if (changesRunning === 0) void releaseWaiting();
   }
 }
 

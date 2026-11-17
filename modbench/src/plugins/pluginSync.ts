@@ -21,13 +21,13 @@ interface PluginSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
   const pluginSync = createPluginSync(syncPlugins, channel);
-  const run = async () => {
+  const gated = whenNoChangeIsRunning(async () => {
     const written = new WrittenFiles();
     const synced = await isolatingWrites(written, () => pluginSync.run());
     if (synced?.wrote) await refreshWritten(instance, written);
-  };
-  const subscription = instance.subscribe(() => whenNoChangeIsRunning(run));
-  return { pluginSync, dispose: () => { subscription.dispose(); } };
+  });
+  const subscription = instance.subscribe(gated.run);
+  return { pluginSync, dispose: () => { subscription.dispose(); gated.dispose(); } };
 }
 
 export function registerPluginSyncCommand(

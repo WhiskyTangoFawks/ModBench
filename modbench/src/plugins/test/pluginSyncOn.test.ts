@@ -37,18 +37,18 @@ describe('plugin sync on the instance', () => {
     expect(settled).toBe(true);
   });
 
-  it('waits for a change in flight to end, without holding it, and then syncs once', async () => {
+  it('never runs a sync that waited for a change and was disposed meanwhile', async () => {
     const { instance, hears } = instanceHeard();
     const syncPlugins = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
-    pluginSyncOn({ instance, channel, syncPlugins });
+    const syncing = pluginSyncOn({ instance, channel, syncPlugins });
 
     await handingOneChange(instance, async () => {
       await hears();
-      await hears();
-      expect(syncPlugins).not.toHaveBeenCalled();
+      syncing.dispose();
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(syncPlugins).toHaveBeenCalledTimes(1);
+    expect(syncPlugins).not.toHaveBeenCalled();
   });
 
   it('reads nothing back when the sync wrote nothing', async () => {

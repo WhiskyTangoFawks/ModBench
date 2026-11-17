@@ -6,10 +6,11 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, holdingTheWrite, RefusedWrite, runUnderProgress, runWritingGesture, surfaceManagerRunning, type ManagerState, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, handingOneChange, holdingTheWrite, whenNoChangeIsRunning, RefusedWrite, runUnderProgress, runWritingGesture, surfaceManagerRunning, type ManagerState, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
+import { toldAfter } from '../../repositoriesLib/writesTold';
 
 const unnamed = (): Promise<void> => { ambientWrites.leaveUnnamed(); return Promise.resolve(); };
 
@@ -54,7 +55,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
   it.each([
     ['refreshes at the files a write the command made named, though the command named none itself', () => { ambientWrites.name(['/mods/A/meta.ini']); }, [[['/mods/A/meta.ini']]]],
     ['ends when its writes return, refreshing nothing, when every write told the Instance loader', () => undefined, []],
-    ['checks the whole disk when the command left its writes unnamed', () => { ambientWrites.leaveUnnamed(); }, [[undefined]]],
+    ['checks the whole disk when the command left its writes unnamed', () => { ambientWrites.leaveUnnamed(); }, [[]]],
   ])('%s', async (_name, write, refreshes) => {
     const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
 
@@ -304,5 +305,141 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
 
       await expect(asked('modbench.mod.rename')).rejects.toThrow(/modbench\.mod\.build/);
     });
+  });
+});
+
+describe('handingOneChange', () => {
+  const noFile = '/mods/A/meta.ini';
+  const told = '/mods/A/a.esp';
+
+  it('tells the files its writes told and the files they named in one read, however many writes there were', async () => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+
+    await handingOneChange({ refresh }, async () => {
+      await toldAfter([told], () => Promise.resolve());
+      ambientWrites.name([noFile]);
+    });
+
+    expect(refresh.mock.calls).toEqual([[[told, noFile]]]);
+  });
+
+  it('checks the disk in that one read when a write left its files unnamed', async () => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+
+    await handingOneChange({ refresh }, async () => {
+      await toldAfter([told], () => Promise.resolve());
+      ambientWrites.leaveUnnamed();
+    });
+
+    expect(refresh.mock.calls).toEqual([[]]);
+  });
+
+  it('reads nothing when its writes wrote nothing', async () => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+
+    await handingOneChange({ refresh }, () => Promise.resolve());
+
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('reads once, when the outer change ends, for a change inside another', async () => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+
+    await handingOneChange({ refresh }, async () => {
+      await handingOneChange({ refresh }, () => toldAfter([told], () => Promise.resolve()));
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    expect(refresh.mock.calls).toEqual([[[told]]]);
+  });
+
+  it('reads what a failed change wrote, and lets the failure through', async () => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+
+    await expect(handingOneChange({ refresh }, async () => {
+      await toldAfter([told], () => Promise.resolve());
+      throw new Error('half written');
+    })).rejects.toThrow('half written');
+
+    expect(refresh.mock.calls).toEqual([[[told]]]);
+  });
+});
+
+describe('whenNoChangeIsRunning', () => {
+  const idle = { refresh: () => Promise.resolve() };
+
+  it('runs its task at once when no change is running', async () => {
+    const task = vi.fn(() => Promise.resolve());
+
+    await whenNoChangeIsRunning(task).run();
+
+    expect(task).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs its task once after the change ends, however often it was asked, and does not hold the change', async () => {
+    const task = vi.fn(() => Promise.resolve());
+    const gated = whenNoChangeIsRunning(task);
+
+    await handingOneChange(idle, async () => {
+      await gated.run();
+      await gated.run();
+      expect(task).not.toHaveBeenCalled();
+    });
+
+    await vi.waitFor(() => { expect(task).toHaveBeenCalledTimes(1); });
+  });
+
+  it('runs its task after the outer change of two nested, not the inner', async () => {
+    const task = vi.fn(() => Promise.resolve());
+    const gated = whenNoChangeIsRunning(task);
+
+    await handingOneChange(idle, async () => {
+      await handingOneChange(idle, () => gated.run());
+      expect(task).not.toHaveBeenCalled();
+    });
+
+    await vi.waitFor(() => { expect(task).toHaveBeenCalledTimes(1); });
+  });
+
+  it('runs its task after a change that threw', async () => {
+    const task = vi.fn(() => Promise.resolve());
+    const gated = whenNoChangeIsRunning(task);
+
+    await expect(handingOneChange(idle, async () => { await gated.run(); throw new Error('half written'); })).rejects.toThrow('half written');
+
+    await vi.waitFor(() => { expect(task).toHaveBeenCalledTimes(1); });
+  });
+
+  it('never runs a task disposed while it waited', async () => {
+    const task = vi.fn(() => Promise.resolve());
+    const other = vi.fn(() => Promise.resolve());
+    const gated = whenNoChangeIsRunning(task);
+    const stays = whenNoChangeIsRunning(other);
+
+    await handingOneChange(idle, async () => {
+      await gated.run();
+      await stays.run();
+      gated.dispose();
+    });
+
+    await vi.waitFor(() => { expect(other).toHaveBeenCalledTimes(1); });
+    expect(task).not.toHaveBeenCalled();
+  });
+
+  it('reports a task that fails and still runs the others', async () => {
+    const reporter = recordingReporter();
+    const surface = surfaceRefusedWrites({ reporter, titles: new Map(), redraw: () => undefined });
+    onTestFinished(() => { surface.dispose(); });
+    const other = vi.fn(() => Promise.resolve());
+    const fails = whenNoChangeIsRunning(() => Promise.reject(new Error('disk full')));
+    const stays = whenNoChangeIsRunning(other);
+
+    await handingOneChange(idle, async () => {
+      await fails.run();
+      await stays.run();
+    });
+
+    await vi.waitFor(() => { expect(other).toHaveBeenCalledTimes(1); });
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'disk full', detail: undefined }]);
   });
 });

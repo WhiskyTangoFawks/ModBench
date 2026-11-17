@@ -13,6 +13,7 @@
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

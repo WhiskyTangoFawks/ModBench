@@ -15,6 +15,7 @@
     { "path": "../instanceCommands" },
     { "path": "../nexus" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../sourceCommands" },
     { "path": "../wire" }
   ],

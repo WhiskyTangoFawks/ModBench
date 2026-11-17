@@ -26,6 +26,7 @@ import type { ChangeResult } from '../../ports/changeResult';
 import type { RenameEditing } from '../../modCommands/renameEntry';
 import type { FileChanges } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { ambientWrites } from '../../instanceLoader/ambientWrites';
 
 const RENAME: FileRename = { from: '/mods/Patch Mod/Patch.esp', to: '/mods/Patch Mod/Renamed.esp' };
 const OTHER_RENAME: FileRename = { from: '/mods/Base', to: '/mods/Renamed Base' };
@@ -50,6 +51,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     if ('refusal' in answer) return { applied: false, refusal: answer.refusal };
     const unapplied = await apply([CHANGES]);
     if (unapplied !== undefined) return { applied: false, unapplied };
+    ambientWrites.name([`/instance/${to}`]);
     events.push(`commit ${to}`);
     return { applied: true, cannotFollow: answer.cannotFollow };
   };
@@ -74,7 +76,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
       oneAtATime: (job) => job(),
       refreshSourceControlFor: () => undefined,
     },
-    instance: { refresh: () => Promise.resolve() },
+    instance: { refresh: (named) => { events.push(`refresh ${named?.join(', ') ?? 'the disk'}`); return Promise.resolve(); } },
     reporter,
   });
   return { follow, events, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
@@ -83,7 +85,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
 const renaming = (rename: FileRename, symbol: RenamedSymbol): [string, RenamedSymbol] => [`${rename.from} > ${rename.to}`, symbol];
 
 describe('following a rename VS Code makes of a file or folder that is a symbol (symbols.md, The features, stories 6 and 9)', () => {
-  it('plans against the old name before the rename lands, then applies the edit and commits, all as one change', async () => {
+  it('plans against the old name before the rename lands, then applies the edit and commits, and the instance reads what it wrote once, after the commit', async () => {
     const landing = deferred<boolean>();
     const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
 
@@ -93,7 +95,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
 
     landing.resolve(true);
     await following.done;
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1', 'commit Renamed.esp']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1', 'commit Renamed.esp', 'refresh /instance/Renamed.esp']);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -150,14 +152,6 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: 'Renamed "Patch.esp" (Patch Mod) to "Renamed.esp". 1 references to it could not follow.', detail: 'LOOT\'s masterlist names Patch.esp',
     }]);
-  });
-
-  it('says what it carried', async () => {
-    const { follow, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]), { 'Patch.esp': { cannotFollow: ['LOOT\'s masterlist names Patch.esp'] } });
-
-    await follow([RENAME], Promise.resolve(true)).done;
-
-    expect(reporter.reports).toHaveLength(1);
   });
 
   it('applies and commits nothing when VS Code never says the rename landed, and says so', async () => {

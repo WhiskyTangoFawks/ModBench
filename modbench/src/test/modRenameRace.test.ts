@@ -9,6 +9,7 @@ import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, T
 import { adapterOver, readModlistEntries, sourceOver } from './mo2/adapterOver';
 import { readInstance, type ReadingSource } from '../instanceAdapter/instanceReading';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
+import { recordedSyncs } from './recordedSyncs';
 
 const { handlers, showInputBox } = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -25,8 +26,6 @@ vi.mock('vscode', async () => {
 });
 
 import { Instance } from '../instanceLoader/instance';
-import { surfaceOneChange } from '../drivingLib/writingGesture';
-import { toldOnceSettled } from '../repositoriesLib/writesTold';
 import { modSyncOn } from '../mods/modSync';
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import { registerEntryRenameCommands } from '../mods/entryRenameCommands';
@@ -42,17 +41,15 @@ const RENAMED = 'Renamed Patch';
 
 let root: string | undefined;
 let instance: Instance | undefined;
-let oneChange: { dispose(): void } | undefined;
 
 afterEach(async () => {
   instance?.dispose();
-  oneChange?.dispose();
   if (root !== undefined) await rm(root, { recursive: true, force: true });
   watchers.length = 0;
 });
 
 describe('a rename while a recompute is reading', () => {
-  it('keeps the renamed mod\'s line, its place and its enabled state, whichever files the recompute read after the folder moved', async () => {
+  it('keeps the renamed mod\'s line, its place and its enabled state, and mod sync writes nothing, whichever files the recompute read after the folder moved', async () => {
     root = cloneCorpusFixture();
     const gameFolder = { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } as const;
     const writer = adapterOver(root, { gameFolder });
@@ -78,21 +75,13 @@ describe('a rename while a recompute is reading', () => {
       gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
-    const syncMods = modSyncOver(writer);
-    const syncWrites: unknown[] = [];
-    const { modSync } = modSyncOn({
-      instance, syncMods: async () => {
-        const result = await syncMods();
-        if (result.applied && result.added.length + result.dropped.length > 0) syncWrites.push(result);
-        return result;
-      }, channel: { error: () => {}, info: () => {} },
-    });
+    const { syncMods, wrote: syncWrote } = recordedSyncs(modSyncOver(writer));
+    const { modSync } = modSyncOn({ instance, syncMods, channel: { error: () => {}, info: () => {} } });
     await instance.refresh();
     await modSync.settled();
     const before = (await readModlistEntries(root)).map((line) => ({ ...line, name: line.name === MOD ? RENAMED : line.name }));
 
-    oneChange = surfaceOneChange(toldOnceSettled);
-    syncWrites.length = 0;
+    syncWrote.length = 0;
     holding = true;
     const overlapping = instance.refresh();
     await readBegun;
@@ -113,6 +102,6 @@ describe('a rename while a recompute is reading', () => {
     await modSync.settled();
 
     expect(await readModlistEntries(root)).toEqual(before);
-    expect(syncWrites).toEqual([]);
+    expect(syncWrote).toEqual([]);
   });
 });
