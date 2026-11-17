@@ -577,7 +577,6 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         IReadOnlyList<CopyNaming>? listed = null;
 
         Budgets.Ran(OneGesture, () => listed = Index.Queries.GetPluginNameReferences(Modlist.Master.Name).Value(), "Listing the references to the master's name", Runs);
-        Console.WriteLine($"BUDGET The master's name: {listed?.Count} copies");
         Assert.NotEmpty(listed ?? []);
     }
 

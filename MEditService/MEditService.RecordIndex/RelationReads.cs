@@ -603,16 +603,12 @@ internal sealed class RelationReads(
     }
 
     /// <summary>Each of <paramref name="copies"/> a registered plugin holds, read in batches as the caller takes them.</summary>
-    public IEnumerable<CopyHoldingText> GetCopies(IReadOnlyList<RecordAt> copies)
-    {
-        if (copies.Count == 0) return [];
-        var (filter, values) = CopyBodies.Naming(copies);
-        return CopiesWhere(filter, values);
-    }
+    public IEnumerable<CopyHoldingText> GetCopies(IReadOnlyList<RecordAt> copies) => copies.Count == 0 ? [] : CopiesOf(copies);
 
-    private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, params object[] values)
+    private IEnumerable<CopyHoldingText> CopiesOf(IReadOnlyList<RecordAt> copies)
     {
         using var context = OpenRead();
+        var (recordFilter, values) = CopyBodies.Naming(context, copies);
         // The record filter and the length sit below the join, which would otherwise carry every document it matches (ADR-0010).
         var located = context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}
