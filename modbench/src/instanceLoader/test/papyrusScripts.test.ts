@@ -16,15 +16,15 @@ const dataFolder = (...paths: string[]) =>
   ({ kind: 'listed', files: new Map(paths.map((relativePath) => [relativePath.toLowerCase(), { relativePath, path: `/game/Data/${relativePath}` }])) } as const);
 
 describe('papyrusScriptsOf', () => {
-  it('places each script at the winning copy of its first source the Creation Kit reads, and of its compiled script', () => {
+  it('places each script at the winning copy of its first source the Creation Kit reads, and names the path of its compiled script', () => {
     const files = filesOf({
       Winning: ['Scripts/Ns/Quest.pex', 'Scripts/Source/Base/Ns/Quest.psc', 'Scripts/Compiled.pex'],
       Losing: ['Scripts/Source/User/Ns/Quest.psc', 'scripts/ns/quest.pex', 'Textures/Quest.pex'],
     });
 
     expect(papyrusScriptsOf(files, NO_DATA_FOLDER, 'Fallout4')).toEqual([
-      { name: 'Compiled', compiled: '/mods/Winning/Scripts/Compiled.pex' },
-      { name: 'Ns:Quest', source: '/mods/Losing/Scripts/Source/User/Ns/Quest.psc', compiled: '/mods/Winning/Scripts/Ns/Quest.pex' },
+      { name: 'Compiled', compiledPath: 'Scripts/Compiled.pex' },
+      { name: 'Ns:Quest', source: '/mods/Losing/Scripts/Source/User/Ns/Quest.psc', compiledPath: 'Scripts/Ns/Quest.pex' },
     ]);
   });
 
@@ -32,14 +32,14 @@ describe('papyrusScriptsOf', () => {
     const files = filesOf({ Mod: ['Scripts/Actor.pex'] });
 
     expect(papyrusScriptsOf(files, dataFolder('Scripts/Source/Base/Actor.psc', 'Scripts/Actor.pex'), 'Fallout4')).toEqual([
-      { name: 'Actor', source: '/game/Data/Scripts/Source/Base/Actor.psc', compiled: '/mods/Mod/Scripts/Actor.pex' },
+      { name: 'Actor', source: '/game/Data/Scripts/Source/Base/Actor.psc', compiledPath: 'Scripts/Actor.pex' },
     ]);
   });
 
-  it('holds a script only an archive holds, with no file of its own', () => {
+  it('holds a script only an archive holds, with no source', () => {
     expect(papyrusScriptsOf(filesOf({ Mod: ['Scripts/Actor.pex'] }), NO_DATA_FOLDER, 'Fallout4', ['Scripts/Quest.pex', 'Textures/Quest.pex'])).toEqual([
-      { name: 'Actor', compiled: '/mods/Mod/Scripts/Actor.pex' },
-      { name: 'Quest' },
+      { name: 'Actor', compiledPath: 'Scripts/Actor.pex' },
+      { name: 'Quest', compiledPath: 'Scripts/Quest.pex' },
     ]);
   });
 

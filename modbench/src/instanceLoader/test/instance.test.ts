@@ -1474,13 +1474,13 @@ describe('Instance — what each archive holds', () => {
       ]);
     });
 
-    it('holds the scripts the game folder\'s archives and a mod\'s archives hold, each with no file of its own', async () => {
+    it('holds the scripts the game folder\'s archives and a mod\'s archives hold, each with the path of its compiled script', async () => {
       const { instance, medit } = loader(reading, undefined, fakeWorkspace(true));
       medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, 'Scripts/Quest.pex'), holding(MOD_ARCHIVE_LATER, 'Scripts/Actor.pex')]);
 
       await instance.refresh();
 
-      expect(instance.value.papyrusScripts).toEqual([{ name: 'Actor' }, { name: 'Quest' }]);
+      expect(instance.value.papyrusScripts).toEqual([{ name: 'Actor', compiledPath: 'Scripts/Actor.pex' }, { name: 'Quest', compiledPath: 'Scripts/Quest.pex' }]);
     });
 
     it('ranks each archive by where the game loads it, a mod\'s with the game folder\'s', async () => {
