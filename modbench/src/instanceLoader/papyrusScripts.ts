@@ -2,30 +2,27 @@ import { papyrusScriptAt, papyrusScriptFiles } from '../tables/gamePaths';
 import type { DataFolderFiles } from '../instanceAdapter/instanceAdapter';
 import type { FileWinners, GameFolderArchived, StackedCopies } from './fileConflictIndex';
 
-/** A Papyrus script: the copy of its first source the game folder's Creation Kit reads, and the compiled script the
- *  game takes, each as mod order resolves it, the Data folder's last. */
+/** A Papyrus script: the Data-relative path of the first source the Creation Kit reads that a mod, Overwrite or the Data
+ *  folder holds, and of its compiled script. */
 export interface PapyrusScript {
   readonly name: string;
-  readonly source?: string;
-  readonly compiled?: string;
+  readonly sourceDataPath?: string;
+  readonly compiledDataPath: string;
 }
 
-/** Each Papyrus script an enabled mod, Overwrite, the Data folder or an archive holds, by name; one only an archive
- *  holds has no file. */
+/** Each Papyrus script an enabled mod, Overwrite, the Data folder or an archive holds, by name. */
 export function papyrusScriptsOf(files: FileWinners, dataFolderFiles: DataFolderFiles, release: string | undefined, archivedPaths: Iterable<string> = []): PapyrusScript[] {
   const inData = dataFolderFiles.kind === 'listed' ? dataFolderFiles.files : new Map<string, { relativePath: string; path: string }>();
-  const copyOf = (relativePath: string): string | undefined => files.get(relativePath)?.winner ?? inData.get(relativePath.toLowerCase())?.path;
-  const names = new Map<string, string>();
+  const holds = (relativePath: string): boolean => files.get(relativePath) !== undefined || inData.has(relativePath.toLowerCase());
+  const placed = new Map<string, PapyrusScript>();
   for (const relativePath of [...[...files.values(), ...inData.values()].map((file) => file.relativePath), ...archivedPaths]) {
     const script = papyrusScriptAt(release, relativePath);
-    if (script !== undefined && !names.has(script.name.toLowerCase())) names.set(script.name.toLowerCase(), script.name);
+    const placing = script && papyrusScriptFiles(release, script.name);
+    if (script === undefined || placing === undefined || placed.has(script.name.toLowerCase())) continue;
+    const sourceDataPath = placing.sources.find(holds);
+    placed.set(script.name.toLowerCase(), { name: script.name, ...sourceDataPath === undefined ? {} : { sourceDataPath }, compiledDataPath: placing.compiled });
   }
-  return [...names.values()].sort((a, b) => a.localeCompare(b)).map((name) => {
-    const placed = papyrusScriptFiles(release, name);
-    const source = placed?.sources.map(copyOf).find((file) => file !== undefined);
-    const compiled = placed && copyOf(placed.compiled);
-    return { name, ...source === undefined ? {} : { source }, ...compiled === undefined ? {} : { compiled } };
-  });
+  return [...placed.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Each path an archive holds: one in a mod's archive the game loads, one in the game folder's. */

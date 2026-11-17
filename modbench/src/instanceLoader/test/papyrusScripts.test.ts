@@ -16,30 +16,30 @@ const dataFolder = (...paths: string[]) =>
   ({ kind: 'listed', files: new Map(paths.map((relativePath) => [relativePath.toLowerCase(), { relativePath, path: `/game/Data/${relativePath}` }])) } as const);
 
 describe('papyrusScriptsOf', () => {
-  it('places each script at the winning copy of its first source the Creation Kit reads, and of its compiled script', () => {
+  it('names for each script the first source the Creation Kit reads that a mod or the Data folder holds, and its compiled script, by Data-relative path', () => {
     const files = filesOf({
       Winning: ['Scripts/Ns/Quest.pex', 'Scripts/Source/Base/Ns/Quest.psc', 'Scripts/Compiled.pex'],
       Losing: ['Scripts/Source/User/Ns/Quest.psc', 'scripts/ns/quest.pex', 'Textures/Quest.pex'],
     });
 
     expect(papyrusScriptsOf(files, NO_DATA_FOLDER, 'Fallout4')).toEqual([
-      { name: 'Compiled', compiled: '/mods/Winning/Scripts/Compiled.pex' },
-      { name: 'Ns:Quest', source: '/mods/Losing/Scripts/Source/User/Ns/Quest.psc', compiled: '/mods/Winning/Scripts/Ns/Quest.pex' },
+      { name: 'Compiled', compiledDataPath: 'Scripts/Compiled.pex' },
+      { name: 'Ns:Quest', sourceDataPath: 'Scripts/Source/User/Ns/Quest.psc', compiledDataPath: 'Scripts/Ns/Quest.pex' },
     ]);
   });
 
-  it('takes a script the Data folder holds at the folder\'s own spelling, below every mod\'s copy', () => {
+  it('takes a source the Data folder holds', () => {
     const files = filesOf({ Mod: ['Scripts/Actor.pex'] });
 
     expect(papyrusScriptsOf(files, dataFolder('Scripts/Source/Base/Actor.psc', 'Scripts/Actor.pex'), 'Fallout4')).toEqual([
-      { name: 'Actor', source: '/game/Data/Scripts/Source/Base/Actor.psc', compiled: '/mods/Mod/Scripts/Actor.pex' },
+      { name: 'Actor', sourceDataPath: 'Scripts/Source/Base/Actor.psc', compiledDataPath: 'Scripts/Actor.pex' },
     ]);
   });
 
-  it('holds a script only an archive holds, with no file of its own', () => {
+  it('holds a script only an archive holds, with no source', () => {
     expect(papyrusScriptsOf(filesOf({ Mod: ['Scripts/Actor.pex'] }), NO_DATA_FOLDER, 'Fallout4', ['Scripts/Quest.pex', 'Textures/Quest.pex'])).toEqual([
-      { name: 'Actor', compiled: '/mods/Mod/Scripts/Actor.pex' },
-      { name: 'Quest' },
+      { name: 'Actor', compiledDataPath: 'Scripts/Actor.pex' },
+      { name: 'Quest', compiledDataPath: 'Scripts/Quest.pex' },
     ]);
   });
 

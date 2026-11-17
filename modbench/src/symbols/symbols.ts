@@ -92,7 +92,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const file = fileLanguage({ instance, reporter, client, names, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
-    script: scriptLanguage({ instance, names, client, reporter }),
+    script: scriptLanguage({ instance, names, client, reporter, ...fileCopies }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
   const changed = (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
