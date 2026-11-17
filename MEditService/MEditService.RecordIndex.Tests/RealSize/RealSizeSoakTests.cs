@@ -17,8 +17,7 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
     private const long SmallBound = 64L * 1024 * 1024;
     private const long UnevictableBound = 16L * 1024 * 1024;
 
-    // What a read in flight is using, or the cache of the file's blocks: both go to the limit and give way, so neither is a holder.
-    private static readonly string[] WorkingMemory = ["BASE_TABLE", "HASH_TABLE", "ALLOCATOR", "ORDER_BY"];
+    private static readonly string[] EvictableMemory = ["BASE_TABLE", "HASH_TABLE", "ALLOCATOR", "ORDER_BY"];
     private static readonly int[] UninstalledRanks = [3, 11, 150];
 
     private OpenedIndex Index => realSize.Index;
@@ -65,7 +64,7 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
         Report("end", ended);
         Assert.True(Index.Queries.GetStatus().State == LoadOrderState.Ready);
         Assert.True(WalBytes() <= SmallBound, $"The write-ahead log stands at {Mb(WalBytes())} MiB after {Rounds} rounds.");
-        var held = readsInFlight ? ended.Keys.Union(started.Keys).Except(WorkingMemory) : ended.Keys.Union(started.Keys);
+        var held = readsInFlight ? ended.Keys.Union(started.Keys).Except(EvictableMemory) : ended.Keys.Union(started.Keys);
         foreach (var tag in held)
         {
             var (before, after) = (started.GetValueOrDefault(tag), ended.GetValueOrDefault(tag));
@@ -81,7 +80,6 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
 
     private long WalBytes() => new FileInfo(IndexFiles.In(Modlist.InstanceRoot) + ".wal") is { Exists: true } wal ? wal.Length : 0;
 
-    /// <summary>Reads that overlap with no gap: each opens before the one before it ends, so one is always in flight.</summary>
     private sealed class ReadsInFlight : IDisposable
     {
         private const string Select = "SELECT form_key, editor_id FROM records WHERE record_type = 'NPC_' LIMIT 20000";
