@@ -3,7 +3,7 @@
 import { basename } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type Manifest, type ModAt, type ModStatus,
+  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
 } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
@@ -57,18 +57,6 @@ function judged(mod: ModAt, manifest: ManifestRead, values: Values, flagged: Sta
 
 type Installed = Awaited<ReturnType<InstanceAdapter['installationFile']>>;
 
-// The manifest as judged for what ships: it names the installation file too, in this copy alone.
-function withInstallationFile(manifest: Manifest, values: Values, installed: Installed): { manifest: Manifest; values: Values } {
-  if (values.kind !== 'read' || installed.kind !== 'read' || installed.answer === undefined) return { manifest, values };
-  const { size, hash } = installed.answer;
-  const name = basename(installed.answer.path);
-  if (manifest.packages.some((pkg) => pkg.kind === 'installationFile' && pkg.name === name)) return { manifest, values };
-  return {
-    manifest: { ...manifest, packages: [...manifest.packages, { kind: 'installationFile', name, size, hash }] },
-    values: { ...values, downloadedFiles: new Map([...values.downloadedFiles, [name, installed]]) },
-  };
-}
-
 const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>): string => JSON.stringify([...held].map(([mod, paths]) => [mod, [...paths].sort()]));
 
 const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening => {
@@ -112,7 +100,8 @@ export class ModStatuses {
     return this.derived;
   }
 
-  /** The files of the mod's folder that a package holds, by bytes or by name: its manifest's, and its installation file's. */
+  /** The files of the mod's folder that a package holds, by bytes or by name, as the latest derivation read: its source
+   *  folder's manifest's for a source mod, else its folder's, and its installation file's. */
   heldByPackage(mod: string): ReadonlySet<string> {
     return this.heldByPackages.get(mod) ?? new Set();
   }
@@ -202,10 +191,11 @@ export class ModStatuses {
     const status = judged(mod, manifest, values, flagged, mod.sourcePaths);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
-    const judgedForShipping = named.read !== undefined && 'manifest' in named.read ? withInstallationFile(named.read.manifest, values, await installation) : undefined;
+    const installed = await installation;
+    const installationFile = installed.kind === 'read' && installed.answer !== undefined ? { name: basename(installed.answer.path), entries: installed.answer.entries } : undefined;
     return {
       status: { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() },
-      packaged: judgedForShipping === undefined ? new Set() : filesAPackageHolds(judgedForShipping.manifest, judgedForShipping.values),
+      packaged: named.read !== undefined && 'manifest' in named.read ? filesAPackageHolds(named.read.manifest, values, installationFile) : new Set(),
     };
   }
 

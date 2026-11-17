@@ -154,11 +154,12 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
 
 const fileNameOf = (path: string): string => folded(path.slice(path.lastIndexOf('/') + 1));
 
-/** The paths the folder in `values` holds that a package of `manifest` holds, by bytes or by a file of the same file name in
- *  any case; none while `values` are not read. A package this machine lacks holds nothing. */
-export function filesAPackageHolds(manifest: Manifest, values: StatusValues): ReadonlySet<string> {
+/** The paths the folder in `values` holds that a package of `manifest`, or `installationFile`, holds, by bytes or by file name
+ *  in any case; none while `values` are not read. A manifest's own package takes precedence over `installationFile`. */
+export function filesAPackageHolds(manifest: Manifest, values: StatusValues, installationFile?: { readonly name: string; readonly entries: readonly HashedPath[] }): ReadonlySet<string> {
   if (values.kind !== 'read') return new Set();
-  const { files } = packagesHeld(manifest, values);
+  const named = manifest.packages.some((pkg) => isInstallationFile(pkg) && folded(pkg.name) === folded(installationFile?.name ?? ''));
+  const files = [...packagesHeld(manifest, values).files, ...installationFile === undefined || named ? [] : installationFile.entries];
   const hashes = new Set(files.map(({ hash }) => hash));
   const names = new Set(files.map(({ path }) => fileNameOf(path)));
   return new Set([...values.folder.files].flatMap(([pathInFolder, { path, read }]) =>
