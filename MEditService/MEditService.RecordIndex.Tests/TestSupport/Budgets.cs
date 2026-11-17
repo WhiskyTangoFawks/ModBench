@@ -38,5 +38,5 @@ internal static class Budgets
     }
 
     private static string Over(TimeSpan budget, string what) =>
-        $"{what} ran past {(budget * Tolerance).TotalSeconds:F1} s, {Tolerance} times its budget of {budget.TotalSeconds:F1} s.";
+        $"{what} ran past {(budget * Tolerance).TotalSeconds:F2} s, {Tolerance} times its budget of {budget.TotalSeconds:F2} s.";
 }

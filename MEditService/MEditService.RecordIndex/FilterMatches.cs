@@ -33,7 +33,7 @@ internal sealed class FilterMatches(Store.Store store)
             return null;
         }
 
-        store.CreateRecordTypeViews();
+        store.RequireRecordTypeViews(CancellationToken.None);
         using var context = store.OpenRead();
         if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.ActiveSchema) is { } refusal)
             return refusal;

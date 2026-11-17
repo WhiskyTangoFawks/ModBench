@@ -18,11 +18,6 @@ internal static class SqlDoor
     internal static Answer<SpooledRows, string> Select(Indexer index, string sql, CancellationToken cancel)
     {
         using var reads = index.RequireWholeSetReads(cancel);
-        index.InForce(store =>
-        {
-            store.CreateRecordTypeViews();
-            return true;
-        }, () => false);
         return reads.Select(sql);
     }
 
