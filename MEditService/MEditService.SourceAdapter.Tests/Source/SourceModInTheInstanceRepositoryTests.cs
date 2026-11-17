@@ -315,6 +315,36 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.True(Directory.Exists(_sourceFolder));
     }
 
+    [Theory]
+    [InlineData("Old Name", "!/Old\\ Name.manifest.json", "!/New\\ Name.manifest.json")]
+    [InlineData("Old#[1]!", "!/Old\\#\\[1\\]\\!.manifest.json", "!/New\\#\\[1\\]\\!.manifest.json")]
+    public void AMoveOfASourceFolder_RewritesTheIgnoreListLineThatLetsTheRenamedManifestIn_AndKeepsEveryOtherLine(string oldName, string oldLine, string newLine)
+    {
+        Directory.CreateDirectory(_sourceFolder);
+        File.WriteAllText(Path.Combine(_sourceFolder, ".gitignore"), $"*\n!/.gitignore\r\n{oldLine}\n# mine: {oldLine}\n!/other.json");
+        File.WriteAllText(Path.Combine(_sourceFolder, $"{oldName}.manifest.json"), "{}");
+        var renamed = SourceFolderOf("Renamed");
+
+        var changes = TestAdapters.Source().ChangesToMoveSourceFolder(
+            _sourceFolder, renamed, [new SourceMove($"{oldName}.manifest.json", "New" + oldName[3..] + ".manifest.json")]).Value();
+
+        var document = Assert.Single(changes.Documents);
+        Assert.Equal(Path.Combine(renamed, ".gitignore"), document.Path);
+        Assert.Equal($"*\n!/.gitignore\r\n{newLine}\n# mine: {oldLine}\n!/other.json", document.Text);
+    }
+
+    [Fact]
+    public void AMoveOfASourceFolder_ChangesNoIgnoreList_WhenItLacksTheLine_OrThereIsNone()
+    {
+        Directory.CreateDirectory(_sourceFolder);
+        File.WriteAllText(Path.Combine(_sourceFolder, "TestMod.manifest.json"), "{}");
+        var move = new SourceMove("TestMod.manifest.json", "Renamed.manifest.json");
+        Assert.Empty(TestAdapters.Source().ChangesToMoveSourceFolder(_sourceFolder, SourceFolderOf("Renamed"), [move]).Value().Documents);
+
+        File.WriteAllText(Path.Combine(_sourceFolder, ".gitignore"), "*\n!/build.json\n");
+        Assert.Empty(TestAdapters.Source().ChangesToMoveSourceFolder(_sourceFolder, SourceFolderOf("Renamed"), [move]).Value().Documents);
+    }
+
     [Fact]
     public void AMoveOfASourceFolderOntoAFolderAlreadyThere_IsTaken_NamingIt()
     {

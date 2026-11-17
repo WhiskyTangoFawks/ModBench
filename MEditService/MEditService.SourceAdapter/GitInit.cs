@@ -149,13 +149,15 @@ internal static class GitInit
         "!/.gitattributes\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
         Unignored($"{SourceRepositoryLayout.RootFolderName}/") +
-        (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +
+        (manifest is null ? "" : $"{UnignoredRootFile(manifest.Name)}\n") +
         string.Concat(assets.Select(asset => RootEntryOf(asset.Path)).Distinct(StringComparer.Ordinal).Select(Unignored)) +
         string.Concat(ignored.Select(path => $"/{Escaped(path)}\n"));
 
     private static string RootEntryOf(string path) => path.Split('/') is [var file] ? Escaped(file) : $"{Escaped(path.Split('/')[0])}/";
 
     private static string Unignored(string entry) => entry.EndsWith('/') ? $"!/{entry}\n!/{entry}**\n" : $"!/{entry}\n";
+
+    internal static string UnignoredRootFile(string name) => $"!/{Escaped(name)}";
 
     private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }
