@@ -49,15 +49,17 @@ public sealed class CommitLandingTests : IDisposable
         Waits.Reached(() => Logged(log, Checkpointed), "the first load's checkpoint");
         Waits.Reached(() => IsQuiet(log), "the first load's checkpoints");
         lock (log) log.Clear();
-        using var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value();
-        using var taken = rows.Rows().GetEnumerator();
-        Assert.True(taken.MoveNext());
+        using var left = new CancellationTokenSource();
+        var slow = Task.Run(() => index.Queries.SelectRows(
+            "SELECT max(hash(a.n * b.n)) AS v FROM range(100000) a(n), range(100000) b(n)", left.Token));
+        await Task.Delay(TimeSpan.FromSeconds(1));
 
         await Task.Run(() => index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot))
             .WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.False(Logged(log, Checkpointed));
-        rows.Dispose();
+        await left.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => slow);
         Waits.Reached(() => Logged(log, Checkpointed), "the checkpoint after the read ended");
     }
 

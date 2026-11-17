@@ -16,6 +16,8 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
     private DuckDBDataReader? _reader;
     private int _disposed;
 
+    internal T Observed<T>(Func<T> step) => read.Observed(step);
+
     /// <summary>The next row's JSON object, or null after the last row.</summary>
     public string? Next()
     {

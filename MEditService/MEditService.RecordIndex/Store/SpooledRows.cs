@@ -35,7 +35,9 @@ internal sealed class SpooledRows : IDisposable
 
     /// <summary>The next row's JSON object, or null after the last row. A fault of the query is thrown after the rows
     /// before it.</summary>
-    public string? Next()
+    public string? Next() => _source.Observed(NextRow);
+
+    private string? NextRow()
     {
         lock (_gate)
         {
