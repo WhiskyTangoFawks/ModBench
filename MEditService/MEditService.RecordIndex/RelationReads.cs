@@ -16,20 +16,22 @@ namespace MEditService.RecordIndex;
 /// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's copy.</summary>
 internal sealed class RelationReads(
     Store.Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
-    bool inOneSnapshot = false) : IDisposable
+    bool inOneSnapshot = false, CancellationToken cancel = default) : IDisposable
 {
     private ReadContext? _snapshot;
 
-    /// <summary>These reads, every one on the snapshot the first of them takes, until disposed: a read made of
-    /// several of them.</summary>
-    public RelationReads InOneSnapshot() => new(store, openedPlugins, indexed, inOneSnapshot: true);
+    /// <summary>These reads for one caller, each stopping once <paramref name="caller"/> is cancelled. With
+    /// <paramref name="inOneSnapshot"/>, every one is on the snapshot the first of them takes, until disposed: a read made
+    /// of several of them.</summary>
+    public RelationReads ForCaller(CancellationToken caller, bool inOneSnapshot = false) =>
+        new(store, openedPlugins, indexed, inOneSnapshot, caller);
 
     public void Dispose() => _snapshot?.Dispose();
 
     private ReadContext OpenRead()
     {
-        if (!inOneSnapshot) return store.OpenRead();
-        _snapshot ??= store.OpenRead();
+        if (!inOneSnapshot) return store.OpenRead(cancel);
+        _snapshot ??= store.OpenRead(cancel);
         return _snapshot.Borrowed();
     }
 
@@ -260,7 +262,7 @@ internal sealed class RelationReads(
     public Answer<StreamedRows, string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
-        ReadContext? context = store.OpenRead();
+        ReadContext? context = store.OpenRead(cancel);
         try
         {
             if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;

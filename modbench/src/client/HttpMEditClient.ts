@@ -37,8 +37,8 @@ import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../w
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
-// 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
-// so nothing tries to tell them apart.
+// 30s is an ordinary HTTP-client default for every read: a slow one and a hung one look the same to the tree.
+// A write has no limit: the writer finishes its own write.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 interface PostSpec<T> {
@@ -114,9 +114,9 @@ function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
 type RecordsAsked = components['schemas']['RecordsAsked'];
 
 interface ReadOptions<A> {
-  timed?: boolean;
   absent?: { status: number; answers: A };
   held?: boolean;
+  unlimited?: boolean;
   token?: ReadCancellation;
 }
 
@@ -248,7 +248,7 @@ class HttpMEditClient implements MEditClient {
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
   private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
-    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined, { held: false });
+    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined, { held: false, unlimited: true });
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -709,7 +709,7 @@ class HttpMEditClient implements MEditClient {
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
     answer: (data: D | undefined) => A | ReadFailed | Promise<A | ReadFailed>,
-    { timed = false, absent, held = true }: Omit<ReadOptions<A>, 'token'>,
+    { absent, held = true, unlimited = false }: Omit<ReadOptions<A>, 'token'>,
     controller: AbortController,
   ): Promise<A | ReadFailed> {
     if (held) {
@@ -738,7 +738,7 @@ class HttpMEditClient implements MEditClient {
       this.log.error(`[HttpMEditClient] ${what} threw: ${errorMessage(e)}`);
       return UNREACHABLE;
     });
-    if (!timed) return settled;
+    if (unlimited) return settled;
     // Races rather than trusting the fetch to honor the signal: a hung backend and an
     // uncooperative test double both still settle. The signal is aborted anyway, so a fetch that
     // honors it cancels for real.
@@ -790,7 +790,7 @@ class HttpMEditClient implements MEditClient {
     const ask = async (named: readonly string[] | undefined, withKnown: boolean) => {
       const known = withKnown ? held.known(plugin) : [];
       const answer = await this.read(what, (api, signal) => post(api, signal, plugin, { keys: named ? [...named] : null, known }),
-        noBodyFails, { token, timed: true });
+        noBodyFails, { token });
       return { answer, known, keyed: named !== undefined };
     };
     let asked = await ask(plugin && keys && held.holds(plugin) ? keys : undefined, true);
@@ -807,62 +807,62 @@ class HttpMEditClient implements MEditClient {
   getRecordTypes({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<PluginRecordTypeCount[] | ReadFailed> {
     return this.read(`getRecordTypes(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/record-types', {
       params: { path: { plugin }, query: { origin } }, signal,
-    }), (data) => data ?? [], { token, timed: true });
+    }), (data) => data ?? [], { token });
   }
 
   getWorkingTreeStatesBeneath({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<WorkingTreeStatesBeneath | ReadFailed> {
     return this.read(`getWorkingTreeStatesBeneath(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/working-tree-states-beneath', {
       params: { path: { plugin }, query: { origin } }, signal,
-    }), noBodyFails, { token, timed: true });
+    }), noBodyFails, { token });
   }
 
   getCreatableRecordTypes(token?: ReadCancellation): Promise<RecordTypeChoice[] | ReadFailed> {
-    return this.read('getCreatableRecordTypes', (api, signal) => api.GET('/record-types/creatable', { signal }), (data) => data ?? [], { token, timed: true });
+    return this.read('getCreatableRecordTypes', (api, signal) => api.GET('/record-types/creatable', { signal }), (data) => data ?? [], { token });
   }
 
   getChildRecordTypes({ name: plugin, origin }: PluginAddress, formKey: string, token?: ReadCancellation): Promise<RecordTypeChoice[] | ReadFailed> {
     return this.read(`getChildRecordTypes(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,
-    }), (data) => data ?? [], { token, timed: true });
+    }), (data) => data ?? [], { token });
   }
 
   getCreatablePluginExtensions(token?: ReadCancellation): Promise<string[] | ReadFailed> {
-    return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { token, timed: true });
+    return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { token });
   }
 
   getCreatablePluginFlags(name: string, token?: ReadCancellation): Promise<string[][] | ReadFailed> {
-    return this.read('getCreatablePluginFlags', (api, signal) => api.GET('/plugins/creatable-flags', { params: { query: { name } }, signal }), (data) => data ?? [], { token, timed: true });
+    return this.read('getCreatablePluginFlags', (api, signal) => api.GET('/plugins/creatable-flags', { params: { query: { name } }, signal }), (data) => data ?? [], { token });
   }
 
   getArchiveContents(gameRelease: string, archives: readonly string[], token?: ReadCancellation): Promise<ArchiveContents[] | ReadFailed> {
     return this.read(`getArchiveContents(${archives.length} archives)`, (api, signal) => api.POST('/archives/contents', {
       body: { gameRelease, archives: [...archives] }, signal,
-    }), noBodyFails, { token, timed: true });
+    }), noBodyFails, { token });
   }
 
   getArchiveFile(gameRelease: string, archive: string, file: string, token?: ReadCancellation): Promise<Uint8Array | ReadFailed> {
     return this.read(`getArchiveFile(${archive}, ${file})`, async (api, signal) => {
       const { data, error, response } = await api.POST('/archives/file', { body: { gameRelease, archive, file }, parseAs: 'arrayBuffer', signal });
       return { data: data === undefined ? undefined : new Uint8Array(data), error, response };
-    }, noBodyFails, { token, timed: true });
+    }, noBodyFails, { token });
   }
 
   getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean, token?: ReadCancellation): Promise<ArchivedCopy[] | ReadFailed> {
     return this.read(`getArchiveCopies(${archive}, ${files.length} files)`, (api, signal) => api.POST('/archives/copies', {
       body: { gameRelease, archive, files: [...files], hashed }, signal,
-    }), noBodyFails, { token, timed: true });
+    }), noBodyFails, { token });
   }
 
   getFlaggedPluginHashes(gameRelease: string, files: readonly FlaggedPluginFile[], token?: ReadCancellation): Promise<FlaggedPluginHashes[] | ReadFailed> {
     return this.read(`getFlaggedPluginHashes(${files.length})`, (api, signal) => api.POST('/plugin-files/flagged-hashes', {
       body: { gameRelease, files: [...files] }, signal,
-    }), noBodyFails, { token, timed: true });
+    }), noBodyFails, { token });
   }
 
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number, token?: ReadCancellation): Promise<RecordPage | ReadFailed> {
     return this.read(`getRecords(${plugin}, ${type})`, (api, signal) => api.GET('/records', {
       params: { query: { plugin, type: [type], offset, limit, origin } }, signal,
-    }), (data) => data ?? { items: [], total: 0 }, { token, timed: true });
+    }), (data) => data ?? { items: [], total: 0 }, { token });
   }
 
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress, atMost = 20, token?: ReadCancellation): Promise<RecordPage | ReadFailed> {
@@ -957,18 +957,18 @@ class HttpMEditClient implements MEditClient {
   getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string, token?: ReadCancellation): Promise<RenderedDocument | null | ReadFailed> {
     return this.read(`getRenderedDocument(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,
-    }), noBodyFails, { token, timed: true, absent: { status: 404, answers: null } });
+    }), noBodyFails, { token, absent: { status: 404, answers: null } });
   }
 
   getCopyDocument({ name: plugin, origin }: PluginAddress, formKey: string, token?: ReadCancellation): Promise<CopyDocument | null | ReadFailed> {
     return this.read(`getCopyDocument(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/document', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,
-    }), noBodyFails, { token, timed: true, absent: { status: 404, answers: null } });
+    }), noBodyFails, { token, absent: { status: 404, answers: null } });
   }
 
   getRecordOfFile(path: string, token?: ReadCancellation): Promise<RecordAt | null | ReadFailed> {
     return this.read(`getRecordOfFile(${path})`, (api, signal) => api.GET('/plugin-source/record', { params: { query: { path } }, signal }),
-      noBodyFails, { token, timed: true, absent: { status: 204, answers: null } });
+      noBodyFails, { token, absent: { status: 204, answers: null } });
   }
 
   async setFilter(filter: RecordFilter): Promise<string | null> {
@@ -1018,31 +1018,31 @@ class HttpMEditClient implements MEditClient {
   getWorldspaces({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<WorldspaceSummary[] | ReadFailed> {
     return this.read(`getWorldspaces(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/worldspaces', {
       params: { path: { plugin }, query: { origin } }, signal,
-    }), (data) => data ?? [], { token, timed: true });
+    }), (data) => data ?? [], { token });
   }
 
   getWorldspaceBlocks({ name: plugin, origin }: PluginAddress, worldspaceFormKey: string, token?: ReadCancellation): Promise<WorldspaceBlocks | ReadFailed> {
     return this.read(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, (api, signal) => api.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
       params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } }, signal,
-    }), (data) => data ?? { topCells: [], blocks: [] }, { token, timed: true });
+    }), (data) => data ?? { topCells: [], blocks: [] }, { token });
   }
 
   getCellChildRecords({ name: plugin, origin }: PluginAddress, cellFormKey: string, token?: ReadCancellation): Promise<CellChildRecords | ReadFailed> {
     return this.read(`getCellChildRecords(${plugin}, ${cellFormKey})`, (api, signal) => api.GET('/plugins/{plugin}/cells/{formKey}/children', {
       params: { path: { plugin, formKey: cellFormKey }, query: { origin } }, signal,
-    }), (data) => data ?? { persistent: [], temporary: [] }, { token, timed: true });
+    }), (data) => data ?? { persistent: [], temporary: [] }, { token });
   }
 
   getInteriorCells({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<InteriorCellBlock[] | ReadFailed> {
     return this.read(`getInteriorCells(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/interior-cells', {
       params: { path: { plugin }, query: { origin } }, signal,
-    }), (data) => data ?? [], { token, timed: true });
+    }), (data) => data ?? [], { token });
   }
 
   getContainerChildren({ name: plugin, origin }: PluginAddress, parentFormKey: string, token?: ReadCancellation): Promise<ContainerChildSummary[] | ReadFailed> {
     return this.read(`getContainerChildren(${plugin}, ${parentFormKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/children', {
       params: { path: { plugin, formKey: parentFormKey }, query: { origin } }, signal,
-    }), (data) => data ?? [], { token, timed: true });
+    }), (data) => data ?? [], { token });
   }
 }
 

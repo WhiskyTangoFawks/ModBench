@@ -12,7 +12,7 @@ internal static class FilePathsPanel
 {
     public static IReadOnlyList<PluginFilePaths> Of(
         Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source,
-        Func<RegisteredPlugin, UnreadableSource> whyUnreadable, PluginAddress? only, RecordsAsked? asked = null)
+        Func<RegisteredPlugin, UnreadableSource> whyUnreadable, PluginAddress? only, RecordsAsked? asked, CancellationToken cancel)
     {
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
@@ -25,6 +25,7 @@ internal static class FilePathsPanel
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod())
                 .Select(plugin =>
                 {
+                    cancel.ThrowIfCancellationRequested();
                     if (index.LaterReadFailure(plugin.Key) is { } later)
                         return RecordResults.Of(Failed(plugin, ReadFailures.LaterRead(later), ProblemsFailureKind.LaterRead), NoUnread, asked);
                     if (derivations[plugin.Key] == DerivedFrom.BinaryForUnreadableSource)

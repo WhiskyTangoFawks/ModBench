@@ -142,8 +142,9 @@ internal sealed class Store : IDisposable
 
     // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
     // this process's database instance. Either way the read gets its own snapshot.
-    public ReadContext OpenRead()
+    public ReadContext OpenRead(CancellationToken cancel = default)
     {
+        cancel.ThrowIfCancellationRequested();
         lock (_readsGate)
         {
             if (_closedToReads) throw new IndexNotReadyException("mEdit's record index is closed to new reads while it is replaced.");
@@ -154,7 +155,7 @@ internal sealed class Store : IDisposable
                 lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); }
                 RequestCheckpoint();
             };
-            return new ReadContext(connection);
+            return new ReadContext(connection, cancel);
         }
     }
 

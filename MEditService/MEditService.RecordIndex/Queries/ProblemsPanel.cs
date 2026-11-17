@@ -10,7 +10,7 @@ namespace MEditService.RecordIndex.Queries;
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 internal static class ProblemsPanel
 {
-    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null, RecordsAsked? asked = null)
+    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only, RecordsAsked? asked, CancellationToken cancel)
     {
         var keys = RecordResults.KeysOf(asked);
         keys?.Add("");
@@ -45,7 +45,7 @@ internal static class ProblemsPanel
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         derivations.ContainsKey(plugin.Key) ? heldReasons.GetValueOrDefault(plugin.Key) : null,
                         [.. stopped[plugin.Key].Where(failure => Asked(failure.FormKey)).Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
-                        [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
+                        [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure), cancel);
                 }),
         ];
         return [.. placed.Select(answer => RecordResults.Of(answer, asked))];
@@ -53,7 +53,7 @@ internal static class ProblemsPanel
 
     // A file that cannot be read to place its problems is a failure of the plugin; its problems sit on the first line.
     private static PluginProblems Placed(
-        RegisteredPlugin plugin, ISourceAdapter source, PluginProblems answer)
+        RegisteredPlugin plugin, ISourceAdapter source, PluginProblems answer, CancellationToken cancel)
     {
         var folder = (plugin.Provider as PluginProvider.FromMod)?.SourceFolder;
         var placements = new Dictionary<string, ProblemPlacement?>();
@@ -64,6 +64,7 @@ internal static class ProblemsPanel
             var path = problem.SourceRelativePath;
             if (!placements.TryGetValue(path, out var file))
             {
+                cancel.ThrowIfCancellationRequested();
                 try
                 {
                     var text = source.TextOf(folder, path);
