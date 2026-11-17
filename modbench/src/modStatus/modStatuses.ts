@@ -112,9 +112,7 @@ export class ModStatuses {
     return this.derived;
   }
 
-  /** The files of the mod's folder that one of its packages holds, by bytes or by name, as the latest derivation read them:
-   *  those of its source folder's manifest for a source mod, else of its folder's, and of the installation file the mod
-   *  manager names when this machine holds it. */
+  /** The files of the mod's folder that a package holds, by bytes or by name: its manifest's, and its installation file's. */
   heldByPackage(mod: string): ReadonlySet<string> {
     return this.heldByPackages.get(mod) ?? new Set();
   }
