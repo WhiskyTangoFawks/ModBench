@@ -8,7 +8,7 @@ import type { Reporter } from '../ports/reporter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import { membersNaming } from './memberReferences';
-import { atFile, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
+import { listedAtCopy, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
 import type { Definition, FileNamed, Listed, Named, References, SymbolKind } from './symbolKind';
 
 export type FileClient = Pick<MEditClient, 'getFileReferences'> & RecordDocumentClient;
@@ -29,7 +29,7 @@ interface FileLanguageDeps extends FileCopies {
   tooltip: (path: string) => string | undefined;
 }
 
-const holdsCopy = (found: CopyAt | { none: string }): found is CopyAt => !('none' in found);
+export const holdsCopy = (found: CopyAt | { none: string }): found is CopyAt => !('none' in found);
 
 type FilesValue = Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived'>;
 type FoldedPath = readonly [folded: string, path: string];
@@ -73,8 +73,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
   const dataPaths = (): readonly FoldedPath[] => (instance === undefined ? [] : foldedPathsOf(instance.value));
 
   const listedAt = (path: string, copy: CopyAt): Listed => ({
-    symbol: { kind: 'file', path }, name: path, detail: 'file', icon: vscode.SymbolKind.File, location: atFile(copy.kind === 'loose' ? copy.path : copy.archive),
-    resolve: async () => { await reveal(copy); return undefined; },
+    symbol: { kind: 'file', path }, name: path, detail: 'file', icon: vscode.SymbolKind.File, ...listedAtCopy(copy, reveal),
   });
 
   const kind: SymbolKind<FileNamed> = {

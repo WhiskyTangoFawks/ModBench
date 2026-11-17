@@ -1480,7 +1480,7 @@ describe('Instance — what each archive holds', () => {
 
       await instance.refresh();
 
-      expect(instance.value.papyrusScripts).toEqual([{ name: 'Actor', compiledPath: 'Scripts/Actor.pex' }, { name: 'Quest', compiledPath: 'Scripts/Quest.pex' }]);
+      expect(instance.value.papyrusScripts).toEqual([{ name: 'Actor', compiledDataPath: 'Scripts/Actor.pex' }, { name: 'Quest', compiledDataPath: 'Scripts/Quest.pex' }]);
     });
 
     it('ranks each archive by where the game loads it, a mod\'s with the game folder\'s', async () => {

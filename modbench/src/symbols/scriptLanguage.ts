@@ -9,8 +9,8 @@ import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { membersNaming } from './memberReferences';
 import type { SourceNames } from './sourceNames';
-import type { FileCopies } from './fileLanguage';
-import { atFile, nameHolds, showReferencedBy, type AskedIn } from './symbolPlaces';
+import { holdsCopy, type FileCopies } from './fileLanguage';
+import { listedAtCopy, nameHolds, showReferencedBy, type AskedIn } from './symbolPlaces';
 import type { Definition, References, SymbolKind } from './symbolKind';
 
 export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
@@ -58,8 +58,10 @@ export function scriptLanguage({ instance, names, client, reporter, copyOf, reve
 
   const nameAt = (document: AskedIn, offset: number, token?: vscode.CancellationToken) => names.scriptAt(document.uri.fsPath, heldText(document), offset, token);
 
-  // The source, else the copy of its compiled script the game gets.
-  const definitionAt = ({ source, compiledPath }: PapyrusScript): CopyAt | { none: string } => source === undefined ? copyOf(compiledPath) : { kind: 'loose', path: source };
+  const definitionAt = ({ sourceDataPath, compiledDataPath }: PapyrusScript): CopyAt | { none: string } => {
+    const source = sourceDataPath === undefined ? undefined : copyOf(sourceDataPath);
+    return source !== undefined && holdsCopy(source) ? source : copyOf(compiledDataPath);
+  };
 
   const referencesTo = async ({ name }: ScriptSymbol, token?: vscode.CancellationToken): Promise<References> => {
     const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getScriptReferences(name, token));
@@ -76,7 +78,7 @@ export function scriptLanguage({ instance, names, client, reporter, copyOf, reve
       const held = scripts().find((script) => sameName(script.name, name));
       if (held === undefined) return Promise.resolve({ refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` });
       const at = definitionAt(held);
-      if ('none' in at) return Promise.resolve({ refused: at.none });
+      if (!holdsCopy(at)) return Promise.resolve({ refused: at.none });
       return Promise.resolve(at.kind === 'loose' ? { file: at.path } : { shown: at });
     },
     /** Each member of a record that names it. */
@@ -112,9 +114,7 @@ export function scriptLanguage({ instance, names, client, reporter, copyOf, reve
     symbolsFor(query) {
       return Promise.resolve(scripts().filter(({ name }) => nameHolds(name, query)).flatMap((script) => {
         const at = definitionAt(script);
-        if ('none' in at) return [];
-        const listed = { symbol: { kind: 'script', name: script.name } as const, name: script.name, detail: 'Papyrus script', icon: vscode.SymbolKind.Class };
-        return [at.kind === 'loose' ? { ...listed, location: atFile(at.path) } : { ...listed, location: atFile(at.archive), resolve: async () => { await reveal(at); return undefined; } }];
+        return holdsCopy(at) ? [{ symbol: { kind: 'script', name: script.name } as const, name: script.name, detail: 'Papyrus script', icon: vscode.SymbolKind.Class, ...listedAtCopy(at, reveal) }] : [];
       }));
     },
   };
