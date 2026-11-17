@@ -4,7 +4,7 @@ using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 
-internal readonly record struct CopySize(string FormKey, PluginAddress Plugin, long Length);
+internal readonly record struct CopySize(string FormKey, PluginAddress Plugin, long Length, long? Row = null);
 
 internal sealed record StoredCopy(
     string FormKey, PluginAddress Plugin, int? LoadOrderIndex, bool IsWinner, string? EditorId, string Body,
@@ -46,22 +46,28 @@ internal static class CopyBodies
         if (batch.Count > 0) yield return batch;
     }
 
-    // The engine matches a row against a list of parameters one at a time, so past this many keys the list costs more
-    // than finding the copies' rows by a join, which reads no document, and reading back those rows.
+    // The engine matches a row against a list of parameters one at a time; past this many keys, keys IN (SELECT
+    // unnest(...)), which it hashes and which reads no document, find the copies' rows for less.
     private const int KeysMatchedInTurn = 64;
 
     /// <summary>A filter on the record index's records, with its values, that holds each of <paramref name="copies"/>
-    /// and nothing else, in <paramref name="context"/>'s snapshot.</summary>
-    internal static (string Filter, object[] Values) Naming(ReadContext context, IReadOnlyList<RecordAt> copies)
+    /// and nothing else, in <paramref name="context"/>'s snapshot; given their <paramref name="rows"/>, from those.</summary>
+    internal static (string Filter, object[] Values) Naming(ReadContext context, IReadOnlyList<RecordAt> copies, IReadOnlyList<long>? rows = null)
     {
         var formKeys = copies.Select(copy => copy.FormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (formKeys.Count <= KeysMatchedInTurn) return Listing(copies, formKeys);
+        return (Spanning([.. (rows ?? RowsOf(context, copies, formKeys)).Order()]), []);
+    }
+
+    private static List<long> RowsOf(ReadContext context, IReadOnlyList<RecordAt> copies, List<string> formKeys)
+    {
         var asked = copies.ToHashSet(RecordAt.Comparer);
-        var rows = context.Rows(
-            $"SELECT rowid, form_key, plugin, origin FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key IN (SELECT unnest($1::VARCHAR[]))",
-            reader => (Row: reader.GetInt64(0), Copy: new RecordAt(new PluginAddress(reader.GetString(2), reader.GetString(3)), reader.GetString(1))),
-            formKeys);
-        return (Spanning([.. rows.Where(row => asked.Contains(row.Copy)).Select(row => row.Row).Order()]), []);
+        return [.. context.Rows(
+                $"SELECT rowid, form_key, plugin, origin FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key IN (SELECT unnest($1::VARCHAR[]))",
+                reader => (Row: reader.GetInt64(0), Copy: new RecordAt(new PluginAddress(reader.GetString(2), reader.GetString(3)), reader.GetString(1))),
+                formKeys)
+            .Where(row => asked.Contains(row.Copy))
+            .Select(row => row.Row)];
     }
 
     // Constant bounds narrow the scan itself, so it reads no other row's document; a join of row ids reads every row's.
@@ -97,7 +103,9 @@ internal static class CopyBodies
 
     private static ILookup<string, StoredCopy> Bodies(ReadContext context, List<IReadOnlyList<CopySize>> batch)
     {
-        var (filter, values) = Naming(context, [.. batch.SelectMany(record => record).Select(copy => new RecordAt(copy.Plugin, copy.FormKey))]);
+        var copies = batch.SelectMany(record => record).ToList();
+        var rows = copies.Select(copy => copy.Row).OfType<long>().ToList();
+        var (filter, values) = Naming(context, [.. copies.Select(copy => new RecordAt(copy.Plugin, copy.FormKey))], rows.Count == copies.Count ? rows : null);
         return context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, p.load_order_idx, w.form_key IS NOT NULL, r.editor_id, r.body, r.parse_diagnosis, r.record_type, r.working_tree_state
             FROM (SELECT form_key, plugin, origin, editor_id, body, parse_diagnosis, record_type, working_tree_state

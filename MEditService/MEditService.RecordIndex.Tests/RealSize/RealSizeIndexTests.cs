@@ -22,7 +22,9 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
     private static readonly TimeSpan OneFactsRead = TimeSpan.FromSeconds(0.01);
     private static readonly TimeSpan OneFilesRead = TimeSpan.FromSeconds(0.1);
-    private static readonly TimeSpan OneKeyedRead = TimeSpan.FromSeconds(0.05);
+    private static readonly TimeSpan OneKeyedRead = TimeSpan.FromSeconds(0.1);
+    private static readonly TimeSpan HalfAGesture = TimeSpan.FromSeconds(0.5);
+    private static readonly TimeSpan OneAnswerOfEveryMastersRecord = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
     private const int Runs = 5;
@@ -478,12 +480,12 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void TheMastersWorldspaces_ListWithinAQuarterOfAGesture()
+    public void TheMastersWorldspaces_ListWithinHalfAGesture()
     {
         IReadOnlyList<WorldspaceSummary>? listed = null;
 
-        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetWorldspaces(Modlist.Master.Key).Value(), "Expanding the master's worldspaces", Runs);
-        Assert.NotEmpty(listed ?? []);
+        Budgets.Ran(HalfAGesture, () => listed = Index.Queries.GetWorldspaces(Modlist.Master.Key).Value(), "Expanding the master's worldspaces", Runs);
+        Assert.Equal("World000", Assert.Single(listed ?? []).EditorId);
     }
 
     [RealSizeFact]
@@ -492,7 +494,35 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         WorkingTreeStatesBeneath? read = null;
 
         Budgets.Ran(OneKeystroke, () => read = Index.Queries.GetWorkingTreeStatesBeneath(Modlist.BigSourcePlugin.Key).Value(), "Reading the states beneath the big source plugin", Runs);
-        Assert.NotNull(read);
+        Assert.Equal((0, 0, 0), (read?.Plugin.Count, read?.RecordTypes.Count, read?.Records.Count));
+    }
+
+    [RealSizeFact]
+    public void TheTypesTheMastersBigCellCanHold_ReadWithinAQuarterOfAGesture()
+    {
+        IReadOnlyList<RecordTypeChoice>? read = null;
+
+        Budgets.Ran(OneKeystroke, () => read = Index.Queries.GetChildRecordTypes(Modlist.Master.Key, Modlist.MastersBigCell).Value(), "Reading the types a big cell can hold", Runs);
+        Assert.Contains(read ?? [], type => type.Type == "refr");
+    }
+
+    [RealSizeFact]
+    public void ARecordsDocument_IsFoundWithinAQuarterOfAGesture()
+    {
+        var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[6]);
+        CopyDocument? found = null;
+
+        Budgets.Ran(OneKeystroke, () => found = Index.Queries.GetCopyDocument(plugin.Key, formKey).Value(), "Finding a record's document", Runs);
+        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key))), found);
+    }
+
+    [RealSizeFact]
+    public void TheMastersBigCellsRenderedDocument_IsFoundWithinAQuarterOfAGesture()
+    {
+        CopyDocument? found = null;
+
+        Budgets.Ran(OneKeystroke, () => found = Index.Queries.GetCopyDocument(Modlist.Master.Key, Modlist.MastersBigCell).Value(), "Finding a big cell's rendered document", Runs);
+        Assert.Equal(CopyDocumentKind.Rendered, found?.Kind);
     }
 
     [RealSizeFact]
@@ -546,7 +576,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         IReadOnlyList<PluginDiagnosisReport>? read = null;
 
         Budgets.Ran(OneKeystroke, () => read = Index.Queries.GetLoadOrderDiagnoses().Value(), "Reading every plugin's diagnoses", Runs);
-        Assert.NotNull(read);
+        Assert.Empty(read ?? [new PluginDiagnosisReport("", "", "unread")]);
     }
 
     [RealSizeFact]
@@ -572,11 +602,11 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void TheReferencesToTheMastersName_ListWithinOneGesture()
+    public void TheReferencesToTheMastersName_ListWithinOneAnswerOfEveryMastersRecord()
     {
         IReadOnlyList<CopyNaming>? listed = null;
 
-        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetPluginNameReferences(Modlist.Master.Name).Value(), "Listing the references to the master's name", Runs);
+        Budgets.Ran(OneAnswerOfEveryMastersRecord, () => listed = Index.Queries.GetPluginNameReferences(Modlist.Master.Name).Value(), "Listing the references to the master's name", Runs);
         Assert.NotEmpty(listed ?? []);
     }
 

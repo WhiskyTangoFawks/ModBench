@@ -611,14 +611,14 @@ internal sealed class RelationReads(
         var (recordFilter, values) = CopyBodies.Naming(context, copies);
         // The record filter and the length sit below the join, which would otherwise carry every document it matches (ADR-0010).
         var located = context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}
-            FROM (SELECT form_key, plugin, origin, strlen(body) AS length
+            SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}, r.row
+            FROM (SELECT form_key, plugin, origin, strlen(body) AS length, rowid AS row
                   FROM {TableDdlBuilder.MirrorSchema}.records WHERE {recordFilter}) r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(4)), values);
+            """, reader => (Copy: CopySizeOf(reader) with { Row = reader.GetInt64(5) }, InPluginSource: reader.GetBoolean(4)), values);
         foreach (var (found, stored) in located.Zip(Stored(context, located.Select(found => new[] { found.Copy }))))
             yield return new CopyHoldingText(found.Copy.FormKey, found.Copy.Plugin, stored[0].RecordType, stored[0].EditorId, stored[0].Body, found.InPluginSource);
     }

@@ -49,11 +49,35 @@ public sealed class ReferencePlacementMemoryTests : IDisposable
         Assert.Equal(2L, IndexFiles.StartedCount(_fixture.InstanceRoot, "body"));
     }
 
+    [Fact]
+    public void EachReferrerAmongOtherRecords_IsPlacedInTwoReadsOfDocumentsAndOneOfTheirRows_InMemoryThatHoldsNoWholeStore()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new LinkingAdapter(Plugin, ReferrersAmongOtherRecords));
+        IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryThatHoldsNoWholeStore}'");
+        IndexFiles.LogQueries(_fixture.InstanceRoot);
+
+        var placed = index.Queries.GetPlacedReferences(Target).Value();
+
+        Assert.Equal(Referrers, placed.Copies.Count);
+        Assert.Equal((2L, 1L), (IndexFiles.StartedCount(_fixture.InstanceRoot, "body"), IndexFiles.StartedCount(_fixture.InstanceRoot, "SELECT rowid")));
+    }
+
     private static IEnumerable<(string, IEnumerable<string>)> Records()
     {
         yield return (Target, []);
         for (var i = 1; i <= Referrers; i++) yield return (FormKey(i), [Target]);
-        for (var i = Referrers + 1; i <= Referrers + OtherRecords; i++)
-            yield return (FormKey(i), Enumerable.Range(1, LinksPerOtherRecord).Select(j => FormKey(1 + (i + j) % (Referrers + OtherRecords))));
+        for (var i = Referrers + 1; i <= Referrers + OtherRecords; i++) yield return (FormKey(i), OtherLinks(i));
     }
+
+    private const int OtherRecordsBetweenReferrers = OtherRecords / Referrers;
+
+    private static IEnumerable<(string, IEnumerable<string>)> ReferrersAmongOtherRecords()
+    {
+        yield return (Target, []);
+        for (var i = 1; i <= Referrers + OtherRecords; i++)
+            yield return (FormKey(i), i % (OtherRecordsBetweenReferrers + 1) == 0 ? [Target] : OtherLinks(i));
+    }
+
+    private static IEnumerable<string> OtherLinks(int i) =>
+        Enumerable.Range(1, LinksPerOtherRecord).Select(j => FormKey(1 + (i + j) % (Referrers + OtherRecords)));
 }
