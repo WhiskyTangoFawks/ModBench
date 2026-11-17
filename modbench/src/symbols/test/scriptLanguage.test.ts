@@ -21,6 +21,7 @@ vi.mock('vscode', () => ({
 
 import { scriptLanguage, type ScriptClient } from '../scriptLanguage';
 import type { InstanceValue, PapyrusScript } from '../../instanceLoader/instance';
+import type { CopyAt } from '../../instanceLoader/fileConflictIndex';
 import { sourceNames } from './fakeSourceNames';
 import type { SourceNames } from '../sourceNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -33,10 +34,19 @@ const SPAN = { start: TEXT.indexOf('Ns:Quest'), end: TEXT.indexOf('Ns:Quest') + 
 const PATH = 'VirtualMachineAdapter.Scripts[0].Name';
 
 const QUEST_SOURCE = '/instance/mods/Mod/Scripts/Source/User/Ns/Quest.psc';
+const QUEST_SOURCE_PATH = 'Scripts/Source/User/Ns/Quest.psc';
 const SCRIPTS = [
-  { name: 'Ns:Quest', source: QUEST_SOURCE, compiled: '/instance/mods/Mod/Scripts/Ns/Quest.pex' },
-  { name: 'Other', compiled: '/instance/mods/Mod/Scripts/Other.pex' },
+  { name: 'Ns:Quest', sourceDataPath: QUEST_SOURCE_PATH, compiledDataPath: 'Scripts/Ns/Quest.pex' },
+  { name: 'Other', compiledDataPath: 'Scripts/Other.pex' },
 ];
+const OTHER_PEX = '/instance/mods/Mod/Scripts/Other.pex';
+const ARCHIVED_PEX = { kind: 'archived', gameRelease: 'Fallout4', archive: '/instance/mods/Mod/Mod - Main.ba2', file: 'Scripts/Packed.pex' } as const;
+const ARCHIVE_ONLY = [{ name: 'Packed', compiledDataPath: ARCHIVED_PEX.file }];
+const copyOf = (path: string): CopyAt | { none: string } => {
+  if (path === QUEST_SOURCE_PATH) return { kind: 'loose', path: QUEST_SOURCE };
+  if (path === 'Scripts/Other.pex') return { kind: 'loose', path: OTHER_PEX };
+  return path === ARCHIVED_PEX.file ? ARCHIVED_PEX : { none: `Nothing holds ${path}.` };
+};
 const NAMED = [{ file: SOURCE, name: 'Gone' }, { file: SOURCE, name: 'Ns:Quest' }, { file: '/instance/source/Other/Npc.json', name: 'gone' }, { file: '/instance/source/Held/Npc.json', name: 'ns:quest' }];
 const NONE = { copies: [], unread: [] };
 type Standing = Pick<InstanceValue, 'dataFolderFiles' | 'gameFolder' | 'gameFolderInWorkspace' | 'archiveContents'>;
@@ -59,9 +69,10 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
     membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
       Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
   });
+  const reveal = vi.fn(() => Promise.resolve());
   const instance = { value: { papyrusScripts: scripts, ...JUDGING, ...standing } };
   const reporter = recordingReporter();
-  return { language: scriptLanguage({ instance, names, client, reporter }), instance, reporter };
+  return { language: scriptLanguage({ instance, names, client, reporter, copyOf, reveal }), instance, reporter, reveal };
 }
 
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
@@ -81,8 +92,18 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
 
     expect([...await symbols.symbolsFor('QUEST', SEARCH), ...await symbols.symbolsFor('other', SEARCH)].map(({ name, location }) => [name, location])).toEqual([
       ['Ns:Quest', { uri: Uri.file(QUEST_SOURCE), range: new Range(0, 0, 0, 0) }],
-      ['Other', { uri: Uri.file('/instance/mods/Mod/Scripts/Other.pex'), range: new Range(0, 0, 0, 0) }],
+      ['Other', { uri: Uri.file(OTHER_PEX), range: new Range(0, 0, 0, 0) }],
     ]);
+  });
+
+  it('is found by Go to Symbol when only an archive holds its compiled script, at that archive', async () => {
+    const { language: symbols, reveal } = language(NONE, ARCHIVE_ONLY);
+
+    expect((await symbols.symbolsFor('packed', SEARCH)).map(({ name, location }) => [name, location])).toEqual([
+      ['Packed', { uri: Uri.file(ARCHIVED_PEX.archive), range: new Range(0, 0, 0, 0) }],
+    ]);
+    await (await symbols.symbolsFor('packed', SEARCH))[0]?.resolve?.();
+    expect(reveal.mock.calls).toEqual([[ARCHIVED_PEX]]);
   });
 });
 
@@ -159,7 +180,11 @@ describe('where a Papyrus script is defined, and the records that attach it', ()
 
   it.each([
     ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],
-    ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: '/instance/mods/Mod/Scripts/Other.pex' }],
+    ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: OTHER_PEX }],
+    ['at its archived compiled script when only an archive holds it', 'Packed', ARCHIVE_ONLY, { shown: ARCHIVED_PEX }],
+    ['at its compiled script when its source is a copy the game gets nowhere', 'Outside', [{ name: 'Outside', sourceDataPath: 'Scripts/Source/Base/Outside.psc', compiledDataPath: 'Scripts/Other.pex' }], { file: OTHER_PEX }],
+    ['nowhere when neither its source nor its compiled script is a copy the game gets, refusing', 'Outside', [{ name: 'Outside', sourceDataPath: 'Scripts/Source/Base/Outside.psc', compiledDataPath: 'Scripts/Outside.pex' }], { refused: 'Nothing holds Scripts/Outside.pex.' }],
+    ['nowhere when no copy of its compiled script is held, refusing', 'Packed', [{ name: 'Packed', compiledDataPath: 'Scripts/Gone.pex' }], { refused: 'Nothing holds Scripts/Gone.pex.' }],
     ['nowhere when no mod holds it, refusing', 'Ns:Quest', [], { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' }],
   ])('defines a script %s', async (_case, name, scripts, expected) => {
     expect(await language(NONE, scripts).language.definitionOf({ kind: 'script', name })).toEqual(expected);

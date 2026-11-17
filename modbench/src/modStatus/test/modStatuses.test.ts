@@ -255,6 +255,38 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       expect([...statuses.heldByPackage('ModA')]).toEqual(['copied.json']);
     });
 
+    describe('the installation file the mod manager names', () => {
+      const installedWith = (entries: { path: string; hash: string }[]): Awaited<ReturnType<InstanceAdapter['installationFile']>> =>
+        ({ kind: 'read', answer: { path: join('downloads', 'D.7z'), size: 1, hash: PACKAGE.hash, entries } });
+
+      const heldAfter = async (): Promise<{ held: string[]; sourceFolder: string[] }> => {
+        const mod = await folderOf('ModA', { 'plugin.esp': 'built' });
+        await writeManifestIn(mod, EMPTY);
+        const source = join(root, 'source', 'ModA');
+        await mkdir(source, { recursive: true });
+        await writeManifestIn(source, EMPTY);
+        const statuses = statusesLogging();
+        statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } }));
+        await statuses.current();
+        return { held: [...statuses.heldByPackage('ModA')], sourceFolder: await readdir(source) };
+      };
+
+      it('holds a file it holds by file name, and writes no package for it into the manifest', async () => {
+        installationFiles = new Map([['ModA', installedWith([{ path: 'Data/Plugin.esp', hash: 'author' }])]]);
+
+        expect(await heldAfter()).toEqual({ held: ['plugin.esp'], sourceFolder: ['ModA.manifest.json'] });
+      });
+
+      it.each([
+        ['unreadable', { kind: 'unreadable', reason: 'EACCES' } as const],
+        ['named by no one', { kind: 'read', answer: undefined } as const],
+      ])('holds nothing while it is %s', async (_case, installation) => {
+        installationFiles = new Map([['ModA', installation]]);
+
+        expect((await heldAfter()).held).toEqual([]);
+      });
+    });
+
     it('holds nothing of a mod whose package this machine lacks, or that names none', async () => {
       downloads = new Map();
       const [lacking, bare] = [await folderOf('ModA', { 'copied.json': 'same' }), await folderOf('ModB', { 'copied.json': 'same' })];

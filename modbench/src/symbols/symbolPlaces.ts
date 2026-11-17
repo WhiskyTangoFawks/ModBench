@@ -5,7 +5,8 @@ import { copyOf, RENDERED_DOCUMENT_SCHEME } from '../textDocuments/recordDocumen
 import { locationsList } from './locationsList';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import type { References } from './symbolKind';
+import type { CopyAt } from '../instanceLoader/fileConflictIndex';
+import type { Listed, References } from './symbolKind';
 
 interface Reading<Reference> {
   readonly references: readonly Reference[];
@@ -55,6 +56,12 @@ export interface ListedLocations {
   readonly locations: vscode.Location[];
   readonly unread: number;
 }
+
+/** Where Go to Symbol in Workspace lists a copy: the file, or the archive holding it, which resolving reveals. */
+export const listedAtCopy = (copy: CopyAt, reveal: (copy: CopyAt) => Promise<void>): Pick<Listed, 'location' | 'resolve'> => ({
+  location: atFile(copy.kind === 'loose' ? copy.path : copy.archive),
+  resolve: async () => { await reveal(copy); return undefined; },
+});
 
 export const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
 

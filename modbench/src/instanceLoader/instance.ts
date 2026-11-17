@@ -115,7 +115,7 @@ export interface InstanceValue {
   readonly gameFolderArchived: GameFolderArchived;
   /** Whether the workspace holds the game folder's Data folder: its archives are read, and its files are definitions, only then. */
   readonly gameFolderInWorkspace: boolean;
-  /** Each Papyrus script an enabled mod, Overwrite or the Data folder holds (`papyrusScriptsOf`). */
+  /** Each Papyrus script an enabled mod, Overwrite, the Data folder or an archive holds (`papyrusScriptsOf`). */
   readonly papyrusScripts: readonly PapyrusScript[];
   /** Every plugin file, with origin, line, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
