@@ -315,6 +315,66 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.True(Directory.Exists(_sourceFolder));
     }
 
+    [Theory]
+    [InlineData("Old Name", "New Name", "!/Old\\ Name.manifest.json", "!/New\\ Name.manifest.json", "\n")]
+    [InlineData("Old#[1]!", "New#[1]!", "!/Old\\#\\[1\\]\\!.manifest.json", "!/New\\#\\[1\\]\\!.manifest.json", "\n")]
+    [InlineData("Old Name", "New Name", "!/Old\\ Name.manifest.json", "!/New\\ Name.manifest.json", "\r\n")]
+    public void AMoveOfASourceFolder_RewritesTheIgnoreListLineThatLetsTheRenamedManifestIn_AndKeepsEveryOtherLine(
+        string oldName, string newName, string oldLine, string newLine, string lineEnd)
+    {
+        string Ignores(string line) => $"*{lineEnd}!/.gitignore\r\n{line}{lineEnd}# mine: {oldLine}\n!/other.json";
+        Directory.CreateDirectory(_sourceFolder);
+        File.WriteAllText(Path.Combine(_sourceFolder, ".gitignore"), Ignores(oldLine));
+        File.WriteAllText(Path.Combine(_sourceFolder, $"{oldName}.manifest.json"), "{}");
+        var renamed = SourceFolderOf("Renamed");
+
+        var changes = TestAdapters.Source().ChangesToMoveSourceFolder(
+            _sourceFolder, renamed, [new SourceMove($"{oldName}.manifest.json", $"{newName}.manifest.json")]).Value();
+
+        var document = Assert.Single(changes.Documents);
+        Assert.Equal(Path.Combine(renamed, ".gitignore"), document.Path);
+        Assert.Equal(Ignores(newLine), document.Text);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("*\n!/build.json\n")]
+    public void AMoveOfASourceFolder_ChangesNoIgnoreList_WhenItLacksTheLine_OrThereIsNone(string? ignoreList)
+    {
+        Directory.CreateDirectory(_sourceFolder);
+        File.WriteAllText(Path.Combine(_sourceFolder, "TestMod.manifest.json"), "{}");
+        if (ignoreList is not null) File.WriteAllText(Path.Combine(_sourceFolder, ".gitignore"), ignoreList);
+
+        var changes = TestAdapters.Source().ChangesToMoveSourceFolder(
+            _sourceFolder, SourceFolderOf("Renamed"), [new SourceMove("TestMod.manifest.json", "Renamed.manifest.json")]).Value();
+
+        Assert.Empty(changes.Documents);
+    }
+
+    [Fact]
+    public void AMovedSourceFolderWithItsIgnoreListRewritten_NoLongerIgnoresItsManifest_AndAddRecordsARename()
+    {
+        const string Old = "Old Name";
+        const string New = "New Name";
+        var folder = SourceFolderOf(Old);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, $"{Old}.manifest.json"), "{}");
+        File.WriteAllText(Path.Combine(folder, ".gitignore"), "*\n!/Old\\ Name.manifest.json\n");
+        Git("add", "-f", "--", $"source/{Old}");
+        Git("commit", "-q", "-m", "Source");
+        var renamed = SourceFolderOf(New);
+        var changes = TestAdapters.Source().ChangesToMoveSourceFolder(folder, renamed, [new SourceMove($"{Old}.manifest.json", $"{New}.manifest.json")]).Value();
+
+        Directory.Move(folder, renamed);
+        File.Move(Path.Combine(renamed, $"{Old}.manifest.json"), Path.Combine(renamed, $"{New}.manifest.json"));
+        var document = Assert.Single(changes.Documents);
+        File.WriteAllText(document.Path, document.Text);
+
+        Assert.False(GitProbe.TryRun(Path.Combine(_instance, ".git"), _instance, out _, "check-ignore", "-q", "--", $"source/{New}/{New}.manifest.json"));
+        Git("add", "-A");
+        Assert.StartsWith("R", Git("diff", "--cached", "--name-status", "-M").Split('\n').Single(line => line.Contains(".manifest.json")));
+    }
+
     [Fact]
     public void AMoveOfASourceFolderOntoAFolderAlreadyThere_IsTaken_NamingIt()
     {

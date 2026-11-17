@@ -30,6 +30,9 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     /// <summary>The build file's name at the repository's root.</summary>
     internal const string BuildFileName = "build.json";
 
+    /// <summary>The ignore list's name at the repository's root.</summary>
+    internal const string IgnoreListFileName = ".gitignore";
+
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";

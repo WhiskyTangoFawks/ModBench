@@ -94,7 +94,8 @@ public interface ISourceAdapter
     Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel);
 
     /// <summary>The source folder <paramref name="sourceFolder"/> moving to <paramref name="movedTo"/>, then each of
-    /// <paramref name="files"/> it holds, written nowhere; <see cref="SourceFailure.Taken"/> when a name moved to is.</summary>
+    /// <paramref name="files"/> it holds, and its ignore list naming them; written nowhere. <see cref="SourceFailure.Taken"/>
+    /// when a name moved to is.</summary>
     Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files);
 
     /// <summary>What git holds of the source folder <paramref name="sourceFolder"/> follows it to <paramref name="movedTo"/>:

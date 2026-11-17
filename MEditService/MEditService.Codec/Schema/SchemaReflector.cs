@@ -43,7 +43,8 @@ public sealed class SchemaReflector
     /// <summary>The Mutagen build this schema and every generated serializer came from — part of an
     /// index file's version stamp (ADR-0010).</summary>
     public static string MutagenVersion =>
-        typeof(IModGetter).Assembly.GetName().Version?.ToString() ?? "unknown";
+        typeof(IModGetter).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? throw new InvalidOperationException("The Mutagen assembly carries no informational version, so two builds of it cannot be told apart.");
 
     // Never throws: FileNotFoundException from Assembly.Load means "not referenced in this build" and
     // is cached as null with one warning; GetSchemas turns that into a typed refusal.
