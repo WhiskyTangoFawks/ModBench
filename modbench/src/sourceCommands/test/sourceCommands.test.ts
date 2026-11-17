@@ -249,6 +249,33 @@ describe('sourceCommands build, in mod order', () => {
     expect(await recorded('ModB')).toMatchObject({ packages: [{ kind: 'repository', name: 'Old ModB' }] });
   });
 
+  describe.each<[string, { build?: 'ModA' | 'ModB'; save?: 'ModA' | 'ModB' }, unknown, number]>([
+    ['finishes the step in hand, and runs no step after it and no later mod', { build: 'ModB' },
+      { landed: [{ ...landedOf('ModB'), failure: 'The build was stopped before its step 2.' }], refused: [{ item: 'ModA', reason: 'was not built: the build was stopped.' }] }, 1],
+    ['leaves the mods built before it built', { build: 'ModA' },
+      { landed: [landedOf('ModB'), { ...landedOf('ModA'), failure: 'The build was stopped before its step 2.' }], refused: [] }, 3],
+    ['starts no mod when it is stopped between two mods', { save: 'ModA' },
+      { landed: [landedOf('ModB')], refused: [{ item: 'ModA', reason: 'was not built: the build was stopped.' }] }, 2],
+  ])('stopped by its caller', (stopped, stopAt, expected, calls) => {
+    it(`${stopped} (source.md, Build, story 18)`, async () => {
+      await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [COMPILE, COMPILE] }));
+      await writeBuildFile(SOURCES.ModB, buildFileOf({ steps: [COMPILE, COMPILE] }));
+      const stop = new AbortController();
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
+        if (mods[0]?.name === stopAt.build) stop.abort();
+        return Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] });
+      });
+      const saving = (folder: string) => { if (stopAt.save !== undefined && folder === SOURCES[stopAt.save]) stop.abort(); return Promise.resolve([]); };
+
+      const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: saving, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() })
+        .build(['ModA', 'ModB'], false, stop.signal);
+
+      expect(outcome).toMatchObject(expected);
+      expect(client.calls).toHaveLength(calls);
+    });
+  });
+
   it('stops a mod\'s build at a failed step, running no step after it (source.md, Build, story 18)', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'task', task: 'First', args: [] }, COMPILE, { kind: 'task', task: 'Second', args: [] }] }));
     const client = new InMemoryMEditClient();

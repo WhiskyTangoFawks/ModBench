@@ -388,8 +388,9 @@ function countedOf(outcome: GestureOutcome, read: ReadTool): Record<string, unkn
 export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, [gesture, read]]) => ({
   name: toolName(command),
   input: gesture.input,
-  of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
-    const answer = await vscode.commands.executeCommand<GestureOutcome<Message> | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
+  of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void, cancelled: AbortSignal) => {
+    const call = await gesture.callOf(value, given, mEdit);
+    const answer = await vscode.commands.executeCommand<GestureOutcome<Message> | DeployOutcome>(command, new AgentCall(call.argument, call.options, cancelled));
     const outcome = namedForAgent(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
     if (refusal === undefined && outcome.applied) partialsIn(outcome).forEach(warn);

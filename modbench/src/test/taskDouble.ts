@@ -2,7 +2,7 @@ import { vi, expect } from 'vitest';
 import { EventEmitter } from './vscodeMock';
 import { present } from '../ports/present';
 
-interface Terminal { onDidWrite: (listener: (text: string) => void) => void; onDidClose: (listener: (code: number) => void) => void; open: () => void }
+interface Terminal { onDidWrite: (listener: (text: string) => void) => void; onDidClose: (listener: (code: number) => void) => void; open: () => void; close: () => void }
 interface TaskStandIn { execution: { start: () => Promise<Terminal> } }
 interface Provider { provideTasks: () => { definition: object; name: string }[]; resolveTask: (task: { definition: object }) => TaskStandIn }
 

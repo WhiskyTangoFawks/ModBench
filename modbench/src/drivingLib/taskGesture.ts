@@ -46,6 +46,7 @@ const textOf = ({ message, detail }: TaskProblem): string => (detail === undefin
 function terminalOf<Outcome>(gesture: TaskGesture<Outcome>, definition: vscode.TaskDefinition): vscode.Pseudoterminal {
   const written = new vscode.EventEmitter<string>();
   const closed = new vscode.EventEmitter<number>();
+  const stop = new AbortController();
   const finish = (verdict: TaskVerdict): void => {
     for (const { severity, message, detail } of verdict.problems) gesture.reporter.shownOnSurface(severity, message, detail);
     for (const line of [...verdict.problems.map(textOf), ...verdict.lines]) written.fire(`${line}\r\n`);
@@ -57,13 +58,13 @@ function terminalOf<Outcome>(gesture: TaskGesture<Outcome>, definition: vscode.T
     open: () => {
       void (async () => {
         try {
-          const outcome = await vscode.commands.executeCommand<Outcome>(gesture.command, new AgentCall(gesture.argument(definition), {}));
+          const outcome = await vscode.commands.executeCommand<Outcome>(gesture.command, new AgentCall(gesture.argument(definition), {}, stop.signal));
           finish(gesture.settle(outcome));
         } catch (e) {
           finish({ passed: false, lines: [], problems: [{ severity: 'error', message: errorMessage(e) }] });
         }
       })();
     },
-    close: () => undefined,
+    close: () => { stop.abort(); },
   };
 }
