@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
-import { refreshWritten } from '../drivingLib/writingGesture';
+import { refreshWritten, whenNoChangeIsRunning } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { isolatingWrites } from '../instanceLoader/ambientWrites';
@@ -21,11 +21,12 @@ interface PluginSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
   const pluginSync = createPluginSync(syncPlugins, channel);
-  const subscription = instance.subscribe(async () => {
+  const run = async () => {
     const written = new WrittenFiles();
     const synced = await isolatingWrites(written, () => pluginSync.run());
     if (synced?.wrote) await refreshWritten(instance, written);
-  });
+  };
+  const subscription = instance.subscribe(() => whenNoChangeIsRunning(run));
   return { pluginSync, dispose: () => { subscription.dispose(); } };
 }
 

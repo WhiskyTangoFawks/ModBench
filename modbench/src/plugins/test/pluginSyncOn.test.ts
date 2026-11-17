@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => ({}));
 
 import { pluginSyncOn } from '../pluginSync';
+import { handingOneChange } from '../../drivingLib/writingGesture';
 import { ambientWrites, collectingWrites } from '../../instanceLoader/ambientWrites';
 import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 
@@ -34,6 +35,20 @@ describe('plugin sync on the instance', () => {
     readBack();
     await heard;
     expect(settled).toBe(true);
+  });
+
+  it('waits for a change in flight to end, without holding it, and then syncs once', async () => {
+    const { instance, hears } = instanceHeard();
+    const syncPlugins = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
+    pluginSyncOn({ instance, channel, syncPlugins });
+
+    await handingOneChange(instance, async () => {
+      await hears();
+      await hears();
+      expect(syncPlugins).not.toHaveBeenCalled();
+    });
+
+    expect(syncPlugins).toHaveBeenCalledTimes(1);
   });
 
   it('reads nothing back when the sync wrote nothing', async () => {

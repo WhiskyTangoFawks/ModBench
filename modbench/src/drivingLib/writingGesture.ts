@@ -18,14 +18,34 @@ export function surfaceOneChange(on: OneChange): { dispose: () => void } {
   return { dispose: () => { oneChange = undefined; } };
 }
 
-/** Runs `work`, a gesture's whole work, and hands the Instance loader every file it wrote as one change once it ends, the way a
- *  workspace edit reaches a language server: no subscriber sees the gesture half done. Returns once the value holds the change. */
+let changesRunning = 0;
+const waitingForChanges = new Set<() => Promise<void>>();
+
+/** Runs `task` now, or once no change is running: a repair is a write, and judges the value holding the whole change.
+ *  The caller does not wait: the change's own read waits on its subscribers. */
+export function whenNoChangeIsRunning(task: () => Promise<void>): Promise<void> {
+  if (changesRunning === 0) return task();
+  waitingForChanges.add(task);
+  return Promise.resolve();
+}
+
+/** Hands the Instance loader every file `work` wrote in one tell once it ends, so no subscriber sees it half done. */
 export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, work: (written: WrittenFiles) => Promise<T>): Promise<T> {
   const written = new WrittenFiles();
+  changesRunning++;
   try {
     return await (oneChange ?? ((run) => run()))(() => collectingWrites(written, () => work(written)));
   } finally {
-    await refreshWritten(instance, written);
+    try {
+      await refreshWritten(instance, written);
+    } finally {
+      changesRunning--;
+      if (changesRunning === 0) {
+        const waiting = [...waitingForChanges];
+        waitingForChanges.clear();
+        for (const task of waiting) void task();
+      }
+    }
   }
 }
 

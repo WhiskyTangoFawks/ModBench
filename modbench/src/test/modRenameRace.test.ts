@@ -78,26 +78,32 @@ describe('a rename while a recompute is reading', () => {
       gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
+    const syncMods = modSyncOver(writer);
+    const syncWrites: unknown[] = [];
     const { modSync } = modSyncOn({
-      instance, syncMods: modSyncOver(writer), channel: { error: () => {}, info: () => {} },
+      instance, syncMods: async () => {
+        const result = await syncMods();
+        if (result.applied && result.added.length + result.dropped.length > 0) syncWrites.push(result);
+        return result;
+      }, channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
     await modSync.settled();
     const before = (await readModlistEntries(root)).map((line) => ({ ...line, name: line.name === MOD ? RENAMED : line.name }));
 
     oneChange = surfaceOneChange(toldOnceSettled);
+    syncWrites.length = 0;
     holding = true;
     const overlapping = instance.refresh();
     await readBegun;
-    const lineRenamed: typeof writer.changeModOrder = async (...args) => {
-      const changed = await writer.changeModOrder(...args);
+    const folderRenamed = async (from: string, to: string) => {
+      await writer.renameModFolder(from, to);
       release();
       await overlapping;
       await modSync.settled();
-      return changed;
     };
     showInputBox.mockResolvedValue(RENAMED);
-    const renaming = { ...writer, changeModOrder: lineRenamed };
+    const renaming = { ...writer, renameModFolder: folderRenamed };
     registerEntryRenameCommands({
       commands: modCommands(renaming), renames: entryRenameCommands({ adapter: renaming, client: new InMemoryMEditClient() }),
       source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: oneAtATime(), refreshSourceControlFor: () => undefined },
@@ -107,5 +113,6 @@ describe('a rename while a recompute is reading', () => {
     await modSync.settled();
 
     expect(await readModlistEntries(root)).toEqual(before);
+    expect(syncWrites).toEqual([]);
   });
 });
