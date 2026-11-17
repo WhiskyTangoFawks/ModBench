@@ -29,7 +29,7 @@ export interface PluginsDeps {
 }
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps, 'commands' | 'modStatuses' | 'fileReads'> & {
-  instance: PluginsViewDeps['instance'] & Pick<Instance, 'subscribeWriter'>;
+  instance: PluginsViewDeps['instance'] & Pick<Instance, 'subscribe'>;
   syncPlugins: PluginSyncRun;
 };
 

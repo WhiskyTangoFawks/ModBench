@@ -15,7 +15,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { isPluginAddress } from '../wire/messages';
 import { Refusal } from '../drivingLib/refusal';
-import { holdingTheWrite } from '../drivingLib/writingGesture';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
@@ -24,7 +24,7 @@ export interface RenamePluginDeps {
   commands: Pick<PluginCommands, 'renameRefusal' | 'renamePlugin'>;
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>;
   source: SourceEditing;
-  instance: Pick<Instance, 'value' | 'writing'>;
+  instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
 }
 
@@ -77,8 +77,7 @@ export function registerRenamePluginCommand(
       const plugin = pluginOf(only);
       return { plugin, newName: name };
     },
-    run: ({ plugin, newName }) => holdingTheWrite('modbench.plugin.rename', async () => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.writing(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))))),
+    run: ({ plugin, newName }) => runWritingGesture('modbench.plugin.rename', PLUGINS_KEY_ARGS.view, instance, () => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))),
     report: (result) => {
       if (result.applied) reportPartial(reporter, result.partial);
       else reporter.report('error', result.refusal, result.detail);

@@ -12,7 +12,7 @@ export interface PluginSyncOn {
 }
 
 interface PluginSyncDeps {
-  instance: Pick<Instance, 'refresh'> & { subscribeWriter(subscriber: () => Promise<void>): { dispose(): void } };
+  instance: Pick<Instance, 'refresh'> & { subscribe(subscriber: () => Promise<void>): { dispose(): void } };
   syncPlugins: PluginSyncRun;
   channel: SyncChannel;
 }
@@ -21,7 +21,7 @@ interface PluginSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
   const pluginSync = createPluginSync(syncPlugins, channel);
-  const subscription = instance.subscribeWriter(async () => {
+  const subscription = instance.subscribe(async () => {
     const written = new WrittenFiles();
     const synced = await isolatingWrites(written, () => pluginSync.run());
     if (synced?.wrote) await refreshWritten(instance, written);

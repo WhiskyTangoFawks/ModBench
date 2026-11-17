@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { handingOneChange } from '../drivingLib/writingGesture';
 import { reportPartial } from '../drivingLib/agentGesture';
 import { renameOutcome } from '../drivingLib/renameOutcome';
 import type { InstanceAdapter, RenamedSymbol } from '../instanceAdapter/instanceAdapter';
@@ -37,7 +38,7 @@ interface FollowRenameDeps {
   readonly profiles: Pick<InstanceCommands, 'renameProfile'>;
   readonly scripts: Pick<ScriptRenameCommands, 'renameScript'>;
   readonly source: SourceEditing;
-  readonly instance: Pick<Instance, 'writing'>;
+  readonly instance: Pick<Instance, 'refresh'>;
   readonly reporter: Reporter;
 }
 
@@ -100,7 +101,7 @@ export function followRenames(deps: FollowRenameDeps) {
       const symbols = (await Promise.all(renames.map(({ from, to }) => deps.adapter.renamedSymbol(from, to)))).filter((symbol) => symbol !== undefined);
       let unplanned = symbols.length;
       if (unplanned === 0) return;
-      const reports = await deps.instance.writing(() => deps.source.oneAtATime(async () => {
+      const reports = await handingOneChange(deps.instance, () => deps.source.oneAtATime(async () => {
         const held = heldTexts(unsavedTexts());
         return Promise.all(symbols.map(async (symbol): Promise<() => void> => {
           let isPlanned = false;

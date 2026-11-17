@@ -25,6 +25,8 @@ vi.mock('vscode', async () => {
 });
 
 import { Instance } from '../instanceLoader/instance';
+import { surfaceOneChange } from '../drivingLib/writingGesture';
+import { toldOnceSettled } from '../repositoriesLib/writesTold';
 import { modSyncOn } from '../mods/modSync';
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import { registerEntryRenameCommands } from '../mods/entryRenameCommands';
@@ -40,9 +42,11 @@ const RENAMED = 'Renamed Patch';
 
 let root: string | undefined;
 let instance: Instance | undefined;
+let oneChange: { dispose(): void } | undefined;
 
 afterEach(async () => {
   instance?.dispose();
+  oneChange?.dispose();
   if (root !== undefined) await rm(root, { recursive: true, force: true });
   watchers.length = 0;
 });
@@ -81,17 +85,19 @@ describe('a rename while a recompute is reading', () => {
     await modSync.settled();
     const before = (await readModlistEntries(root)).map((line) => ({ ...line, name: line.name === MOD ? RENAMED : line.name }));
 
+    oneChange = surfaceOneChange(toldOnceSettled);
     holding = true;
     const overlapping = instance.refresh();
     await readBegun;
-    const folderRenamed = async (from: string, to: string) => {
-      await writer.renameModFolder(from, to);
+    const lineRenamed: typeof writer.changeModOrder = async (...args) => {
+      const changed = await writer.changeModOrder(...args);
       release();
       await overlapping;
       await modSync.settled();
+      return changed;
     };
     showInputBox.mockResolvedValue(RENAMED);
-    const renaming = { ...writer, renameModFolder: folderRenamed };
+    const renaming = { ...writer, changeModOrder: lineRenamed };
     registerEntryRenameCommands({
       commands: modCommands(renaming), renames: entryRenameCommands({ adapter: renaming, client: new InMemoryMEditClient() }),
       source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: oneAtATime(), refreshSourceControlFor: () => undefined },

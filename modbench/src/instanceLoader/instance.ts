@@ -19,8 +19,6 @@ import type { Disposable } from '../client/eventEmitter';
 import { FlaggedHashesHeld } from './flaggedHashes';
 import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead } from './archiveContents';
 import { FactsOfReading } from './factsOfReading';
-import { WrittenFiles } from './writtenFiles';
-import { collectingWrites } from './ambientWrites';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -182,7 +180,6 @@ export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
 interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
-  readonly writes: boolean;
 }
 
 const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
@@ -333,10 +330,6 @@ export class Instance implements Subscription {
 
   private next: Run | undefined;
 
-  private writesRunning = 0;
-
-  private readonly heldBack = new Map<Subscribed, { readonly named: Set<string>; disk: boolean }>();
-
   private readonly changes: Subscription;
 
   private readonly workspaceWatch: Subscription;
@@ -394,26 +387,9 @@ export class Instance implements Subscription {
   subscribe<K extends keyof InstanceValue>(
     subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
   ): Subscription {
-    return this.subscribed(subscriber, concerns, false);
-  }
-
-  /** As `subscribe`, for a subscriber that writes files the value reads: a value that lands while a `writing` runs reaches it
-   *  once the last one ends. */
-  subscribeWriter<K extends keyof InstanceValue>(
-    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
-  ): Subscription {
-    return this.subscribed(subscriber, concerns, true);
-  }
-
-  private subscribed<K extends keyof InstanceValue>(subscriber: InstanceSubscriber<K>, concerns: Concerns<K> | undefined, writes: boolean): Subscription {
-    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), writes };
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)) };
     this.subscribers.push(subscribed);
-    return {
-      dispose: () => {
-        this.subscribers = this.subscribers.filter((s) => s !== subscribed);
-        this.heldBack.delete(subscribed);
-      },
-    };
+    return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscribed); } };
   }
 
   /** Called on each failed recompute. A separate channel from `subscribe`, so a
@@ -469,32 +445,6 @@ export class Instance implements Subscription {
    *  the writer's own caller, holding a lock the write took. */
   told(wrote: readonly string[]): Promise<void> {
     return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }).valueLanded;
-  }
-
-  /** Runs `work`, a write to several files the value reads, then reads again what no write told. Values land while it
-   *  runs. */
-  async writing<T>(work: () => Promise<T>): Promise<T> {
-    const written = new WrittenFiles();
-    this.writesRunning++;
-    try {
-      return await collectingWrites(written, work);
-    } finally {
-      try {
-        if (written.named?.length !== 0) await this.refresh(written.named);
-      } finally {
-        this.writesRunning--;
-        if (this.writesRunning === 0) await this.releaseHeldBack();
-      }
-    }
-  }
-
-  private async releaseHeldBack(): Promise<void> {
-    const heldBack = [...this.heldBack];
-    this.heldBack.clear();
-    const value = this.current;
-    const sequence = this.seq;
-    await Promise.all(heldBack.map(([{ subscriber }, { named, disk }]) =>
-      this.notify([subscriber], 'value', () => subscriber(value, sequence, { named: [...named], disk }))));
   }
 
   /** The value once the first read has landed: reads when none has, and holds the read it has. */
@@ -628,17 +578,7 @@ export class Instance implements Subscription {
     const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
-    const held = this.writesRunning > 0 ? told.filter(({ writes }) => writes) : [];
-    for (const subscribed of held) this.holdBack(subscribed, reread);
-    const now = told.filter((subscribed) => !held.includes(subscribed)).map(({ subscriber }) => subscriber);
-    return { settled: this.notify(now, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
-  }
-
-  private holdBack(subscribed: Subscribed, { named, disk }: Reread): void {
-    const heldBack = this.heldBack.get(subscribed) ?? { named: new Set<string>(), disk: false };
-    for (const path of named) heldBack.named.add(path);
-    heldBack.disk ||= disk;
-    this.heldBack.set(subscribed, heldBack);
+    return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute

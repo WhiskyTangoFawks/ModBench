@@ -12,7 +12,6 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
-import type { Instance } from '../instanceLoader/instance';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
@@ -49,7 +48,7 @@ import type { FileReads } from '../sortingRules/lootConditions';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
-  instance: PluginsInstance & Pick<Instance, 'writing'>;
+  instance: PluginsInstance;
   commands: PluginCommands;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;

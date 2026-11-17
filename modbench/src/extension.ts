@@ -8,11 +8,11 @@ import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { workspaceFolders } from './toolbox/workspaceFolders';
 import { commandTitles } from './drivingLib/commandTitles';
-import { surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites, type ManagerState } from './drivingLib/writingGesture';
+import { surfaceManagerRunning, surfaceOneChange, surfaceReadModel, surfaceRefusedWrites, type ManagerState } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
-import { leaveWritesUnnamed, diskCheckedBy, writesToldTo } from './repositoriesLib/writesTold';
+import { leaveWritesUnnamed, diskCheckedBy, toldOnceSettled, writesToldTo } from './repositoriesLib/writesTold';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
@@ -412,6 +412,7 @@ function start(context: vscode.ExtensionContext): void {
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
+  context.subscriptions.push(surfaceOneChange(toldOnceSettled));
   context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), taken: () => meditClient.loadOrderApplied() }));
   context.subscriptions.push(surfaceManagerRunning({ reporter: reporterFor('write'), ...opened.managerRunning }));
   const plugins = createPlugins({

@@ -8,20 +8,39 @@ import type { Reporter } from '../ports/reporter';
 
 export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
+type OneChange = <T>(work: () => Promise<T>) => Promise<T>;
+
+let oneChange: OneChange | undefined;
+
+/** Sets the scope that collects the writes of the work it runs and tells the Instance loader of them once the work settles. */
+export function surfaceOneChange(on: OneChange): { dispose: () => void } {
+  oneChange = on;
+  return { dispose: () => { oneChange = undefined; } };
+}
+
+/** Runs `work`, a gesture's whole work, and hands the Instance loader every file it wrote as one change once it ends, the way a
+ *  workspace edit reaches a language server: no subscriber sees the gesture half done. Returns once the value holds the change. */
+export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, work: (written: WrittenFiles) => Promise<T>): Promise<T> {
+  const written = new WrittenFiles();
+  try {
+    return await (oneChange ?? ((run) => run()))(() => collectingWrites(written, () => work(written)));
+  } finally {
+    await refreshWritten(instance, written);
+  }
+}
+
 /** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is given. */
 export async function runUnderProgress<T>(
   viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress, written: WrittenFiles) => Promise<T>,
 ): Promise<T> {
   const progress = pausableProgress(viewId);
-  const written = new WrittenFiles();
   const handedBefore = readModel?.handed();
   progress.working();
   try {
-    return await collectingWrites(written, () => command(progress, written));
+    return await handingOneChange(instance, (written) => command(progress, written));
   } finally {
     progress.working();
     try {
-      await refreshWritten(instance, written);
       if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.taken();
     } finally {
       await progress.done();

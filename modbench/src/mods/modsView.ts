@@ -66,7 +66,7 @@ type ManifestDeps = Pick<ManifestGestureDeps, 'toolboxView' | 'say'> & {
 };
 
 interface ModsViewDeps {
-  instance: InstanceView & Pick<Instance, 'refresh' | 'writing'>;
+  instance: InstanceView & Pick<Instance, 'refresh'>;
   commands: ModCommands;
   renames: EntryRenameCommands;
   source: SourceEditing;
@@ -91,7 +91,7 @@ interface ModsViewDeps {
 }
 
 const checkForUpdatesDeps = (
-  { checkForUpdates, focusedView }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh' | 'writing'>, reporter: Reporter,
+  { checkForUpdates, focusedView }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
 ): CheckForUpdatesDeps => ({ commands: { checkForUpdates }, instance, reporter, focusedView });
 
 interface ModsView extends vscode.Disposable {
