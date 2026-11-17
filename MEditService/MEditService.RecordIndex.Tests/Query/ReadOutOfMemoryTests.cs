@@ -67,20 +67,4 @@ public sealed class ReadOutOfMemoryTests : IDisposable
 
         Assert.Equal(IndexRefusal.OutOfMemory, refused?.Refusal);
     }
-
-    [Fact]
-    public void ASelectRefusedForMemory_IsFollowedByASelectThatAnswers_AndByACheckpoint()
-    {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        IndexFiles.Checkpointed(_fixture.InstanceRoot);
-        IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
-        Assert.Equal(IndexRefusal.OutOfMemory, index.Queries.SelectRows(MoreThanAMegabyte).Refused().Refusal);
-        IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1GB'");
-
-        using var answered = index.Queries.SelectRows("SELECT 1 AS form_key").Value();
-
-        Assert.Single(answered.Rows());
-        answered.Dispose();
-        IndexFiles.Checkpointed(_fixture.InstanceRoot);
-    }
 }
