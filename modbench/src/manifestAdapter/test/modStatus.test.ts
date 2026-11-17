@@ -5,7 +5,7 @@ import { dirname, join, relative } from 'node:path';
 import type { ManifestAt } from '../manifestFiles';
 import type { HashedPath, StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
-import { manifestAt, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { filesAPackageHolds, manifestAt, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 const HELLO = 'AAAAAAAAAAA=';
 const EDITED = 'BBBBBBBBBBA=';
@@ -357,5 +357,33 @@ describe('a mod\'s status against its manifest', () => {
 
       expect((await status()).differing).toEqual([]);
     });
+  });
+});
+
+describe('the files a package or the installation file holds (publishing.md, What ships, story 2)', () => {
+  const built = { 'plugin.esp': 'built', 'made.dds': 'built' };
+  const pinned = (name: string): ManifestPackage => ({ kind: 'installationFile', name, size: 1, hash: PACK });
+  const installation = (name: string, files: HashedPath[]) => ({ name, entries: files });
+
+  const heldBy = (packages: ManifestPackage[], downloaded: Record<string, string>, installationFile?: ReturnType<typeof installation>): string[] => {
+    const values: ReadValues = {
+      kind: 'read',
+      folder: { files: new Map(Object.entries(built).map(([path, hash]) => [path, { path, excluded: false, read: { kind: 'read' as const, answer: { hash } } }])), exclude: [], ignoresCase: false },
+      downloadedFiles: new Map(Object.entries(downloaded).map(([name, hash]) => [name, { kind: 'read' as const, answer: { hash, entries: [] } }])),
+      gameFiles: [], repositoryPin: 'none',
+    };
+    return [...filesAPackageHolds({ packages, exclude: [], ignore: [], flags: new Map(), files: new Map() }, values, installationFile)].sort();
+  };
+
+  it.each([
+    ['by file name, though the bytes differ', [], {}, installation('D.7z', [{ path: 'Data/Plugin.esp', hash: 'author' }]), ['plugin.esp']],
+    ['by bytes under another name', [], {}, installation('D.7z', [{ path: 'Other.esp', hash: 'built' }]), ['made.dds', 'plugin.esp']],
+    ['nothing, when it holds no file of that name or bytes', [], {}, installation('D.7z', [{ path: 'Data/Else.esp', hash: 'other' }]), []],
+    ['nothing, when the mod manager names none', [], {}, undefined, []],
+    ['what the manifest says, when it names the installation file', [pinned('D.7z')], { 'D.7z': PACK }, installation('D.7z', [{ path: 'Data/Plugin.esp', hash: 'author' }]), []],
+    ['nothing, when the manifest names it pinned to other bytes', [pinned('D.7z')], { 'D.7z': HELLO }, installation('D.7z', [{ path: 'Data/Plugin.esp', hash: 'author' }]), []],
+    ['nothing, when the manifest names it in another case, pinned to other bytes', [pinned('d.7z')], { 'd.7z': HELLO }, installation('D.7z', [{ path: 'Data/Plugin.esp', hash: 'author' }]), []],
+  ])('holds %s', (_name, packages, downloaded, installationFile, held) => {
+    expect(heldBy(packages, downloaded, installationFile)).toEqual(held);
   });
 });
