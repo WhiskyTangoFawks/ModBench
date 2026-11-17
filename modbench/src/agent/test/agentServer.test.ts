@@ -1806,6 +1806,21 @@ describe('the agent server, running a gesture', () => {
     });
   });
 
+  it('hands mod_build the signal of its call, which aborts when the agent cancels the call (commands.md, Principles)', async () => {
+    fired.outcome = new Promise(() => undefined);
+    const { client } = await served();
+    const cancelled = new AbortController();
+    const answered = client.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal });
+    answered.catch(() => undefined);
+    await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
+    const { signal } = (fired.calls[0]?.[1] as AgentCall);
+    expect(signal?.aborted).toBe(false);
+
+    cancelled.abort();
+
+    await vi.waitFor(() => { expect(signal?.aborted).toBe(true); }, { timeout: 5000 });
+  });
+
   it('refuses in whole, answering the command\'s refusal', async () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();
@@ -2281,7 +2296,7 @@ describe('the agent server, running a gesture', () => {
 
     await call(client, tool, args);
 
-    expect(fired.calls).toEqual([[command, new AgentCall(argument, options)]]);
+    expect(fired.calls).toEqual([[command, new AgentCall(argument, options, command === 'modbench.mod.build' ? expect.any(AbortSignal) : undefined)]]);
   });
 
   describe('a file the mod manager marks excluded', () => {

@@ -111,17 +111,21 @@ export function sourceCommands({ client, adapter, saveUnsaved, loadOrderSnapshot
   return {
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder, metadata or package the
      *  Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest. */
-    build: async (asked: readonly string[], everySource = false): Promise<SourceBuildOutcome | WriteRefused> => {
+    build: async (asked: readonly string[], everySource = false, signal?: AbortSignal): Promise<SourceBuildOutcome | WriteRefused> => {
       const sourceMods = await sourceModsNow();
       const mods = toBuild(sourceMods, asked, everySource);
       const pass: BuildPass = {
-        facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()) }, tasks: new Set(await tasks.labels()),
+        facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()) }, tasks: new Set(await tasks.labels()), signal,
       };
       let landed: ModBuilt[] = [];
       const refused: BuildRefusal[] = [];
       const ordered = await inModOrder(adapter, mods);
       let previous: string | undefined;
       for (const [at, mod] of ordered.entries()) {
+        if (signal?.aborted) {
+          refused.push(...ordered.slice(at).map((item) => ({ item, reason: 'was not built: the build was stopped.' })));
+          break;
+        }
         const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
         // source.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.

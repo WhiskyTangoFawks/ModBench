@@ -9,7 +9,8 @@ import { asViewCall } from './writingGesture';
 
 /** The Argument and the Options an agent call gives a gesture (commands.md, The entry point supplies what it knows). */
 export class AgentCall<Options extends object = object> {
-  constructor(readonly argument: readonly Argument[], readonly options: Options) {}
+  /** `signal`: aborts when the caller stops the call, for a gesture that can stop after the step in hand. */
+  constructor(readonly argument: readonly Argument[], readonly options: Options, readonly signal?: AbortSignal) {}
 }
 
 export const isAgentCall = (value: unknown): value is AgentCall => value instanceof AgentCall;

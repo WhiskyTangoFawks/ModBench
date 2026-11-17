@@ -33,7 +33,8 @@ describe('modbench.mod.build', () => {
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [] });
   const builds: (readonly string[] | 'every source')[] = [];
-  beforeEach(() => { builds.length = 0; });
+  const signals: (AbortSignal | undefined)[] = [];
+  beforeEach(() => { builds.length = 0; signals.length = 0; });
 
   const row = (plugin: { name: string; origin: string }) => new PluginRowStandIn(plugin);
   const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
@@ -42,8 +43,9 @@ describe('modbench.mod.build', () => {
     const reporter = recordingReporter();
     registerBuildCommand({
       commands: {
-        build: (mods, everySource) => {
+        build: (mods, everySource, signal) => {
           progressSteps.push('build');
+          signals.push(signal);
           builds.push(everySource === true ? 'every source' : mods);
           return Promise.resolve(outcome);
         },
@@ -278,6 +280,15 @@ describe('modbench.mod.build', () => {
       expect(showQuickPick).not.toHaveBeenCalled();
       expect(reporter.reports).toEqual([]);
       expect(reporter.landings).toEqual([]);
+    });
+
+    it('hands source commands the call\'s signal, so cancelling the call stops the build', async () => {
+      const { handler } = registered({ landed: [built('ModA')], refused: [] });
+      const cancelled = new AbortController();
+
+      await handler(new AgentCall([{ kind: 'mod', name: 'ModA' }], {}, cancelled.signal));
+
+      expect(signals).toEqual([cancelled.signal]);
     });
 
     it('with no mods named, asks source commands for every source, read when it builds, without the pick', async () => {

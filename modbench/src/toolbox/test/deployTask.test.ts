@@ -24,7 +24,7 @@ describe('the deploy task', () => {
     const { written, closedWith, reporter } = await deploy(landed());
 
     expect([registered.type, written, closedWith, reporter.shownFailures]).toEqual(['modbench.instance.deploy', 'Deployed the load order.\r\n', [0], []]);
-    expect(executeCommand).toHaveBeenCalledWith('modbench.instance.deploy', new AgentCall([], {}));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.instance.deploy', new AgentCall([], {}, expect.any(AbortSignal)));
   });
 
   it('passes, and says the deployment folder already held the load order, when deploy wrote nothing', async () => {

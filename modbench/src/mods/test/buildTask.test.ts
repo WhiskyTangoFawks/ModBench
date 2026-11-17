@@ -26,14 +26,14 @@ describe('the build task', () => {
       { ...DEFINITION, mods: ['ModA', 'ModB'] }, applied({ landed: [landed(), landed({ mod: 'ModB' })], refused: [] }),
     );
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], {}));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], {}, expect.any(AbortSignal)));
     expect([written, closedWith, reporter.shownFailures]).toEqual(['Built "ModA".\r\nBuilt "ModB".\r\n', [0], []]);
   });
 
   it('names no mod when its definition names none', async () => {
     await build(DEFINITION, applied({ landed: [], refused: [] }));
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([], {}));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([], {}, expect.any(AbortSignal)));
   });
 
   const WARNING = 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.';

@@ -6,6 +6,7 @@ import { executeCommand, registered, runRegisteredTask } from '../../test/taskDo
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { AgentCall } from '../agentGesture';
 import { Refusal } from '../refusal';
+import { present } from '../../ports/present';
 import { registerTaskGesture, type TaskVerdict } from '../taskGesture';
 
 function register(settle: (outcome: string) => TaskVerdict = () => ({ passed: true, lines: [], problems: [] })) {
@@ -27,7 +28,7 @@ describe('a task over a command', () => {
 
     const { written, closedWith } = await runRegisteredTask({ type: 'modbench.test.run' }, { resolves: 'outcome' });
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.test.run', new AgentCall([], {}));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.test.run', new AgentCall([], {}, expect.any(AbortSignal)));
     expect([written, closedWith]).toEqual(['got outcome\r\nfine\r\n', [0]]);
   });
 
@@ -49,5 +50,19 @@ describe('a task over a command', () => {
 
     expect([written, closedWith]).toEqual(['no such mod\r\n', [1]]);
     expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'no such mod', detail: undefined }]);
+  });
+
+  it('stops the command it runs when the terminal is closed', async () => {
+    register();
+    executeCommand.mockReset();
+    executeCommand.mockReturnValueOnce(new Promise(() => undefined));
+    const terminal = await present(registered.provider, 'the provider').resolveTask({ definition: { type: 'modbench.test.run' } }).execution.start();
+    terminal.open();
+    const { signal } = executeCommand.mock.calls[0]?.[1] as AgentCall;
+    expect(signal?.aborted).toBe(false);
+
+    terminal.close();
+
+    expect(signal?.aborted).toBe(true);
   });
 });

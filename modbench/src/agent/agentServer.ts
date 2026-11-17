@@ -4,7 +4,7 @@ import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import { CancelledNotificationSchema, JSONRPCRequestSchema, type RequestId, type ServerNotification, type ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { CopyReads } from '../mods/sameCopies';
 import { ArchivedCopies } from '../mods/archivedCopies';
@@ -147,7 +147,7 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, te
   register(server, log, reading(...SYMBOL_READS), FIND_DEFINITION, async (args) => FIND_DEFINITION.of({ mEdit, symbols, value: await naming(args) }, args));
   register(server, log, reading(...SYMBOL_READS), LIST_REFERENCES, async (args) => LIST_REFERENCES.of({ mEdit, symbols, value: await naming(args) }, args));
   register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
+  for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args, cancelled) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }, cancelled));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
   const problemFolders = () => {
     const { modDirs, sourceDirs, overwriteDir } = currentValue(instance).paths;
@@ -185,7 +185,11 @@ async function bodyOf(request: IncomingMessage): Promise<{ parsed: unknown } | u
   }
 }
 
-async function handle(options: OpenOptions, request: IncomingMessage, response: ServerResponse): Promise<void> {
+// Each call is a request of its own on a server of its own, so the client's `notifications/cancelled` reaches a server
+// that holds no such request: it closes the server of the call it names, which aborts that call's signal.
+type InFlight = Map<RequestId, () => void>;
+
+async function handle(options: OpenOptions, inFlight: InFlight, request: IncomingMessage, response: ServerResponse): Promise<void> {
   if (!isOwnHost(request) || request.headers.origin !== undefined) {
     response.writeHead(403).end();
     return;
@@ -199,9 +203,22 @@ async function handle(options: OpenOptions, request: IncomingMessage, response: 
     response.writeHead(400).end();
     return;
   }
+  const cancelled = CancelledNotificationSchema.safeParse(body.parsed);
+  if (cancelled.success) {
+    const { requestId } = cancelled.data.params;
+    if (requestId !== undefined) inFlight.get(requestId)?.();
+    response.writeHead(202).end();
+    return;
+  }
   const mcp = mcpServerOf(options);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  response.on('close', () => { void transport.close(); void mcp.close(); });
+  const asked = JSONRPCRequestSchema.safeParse(body.parsed);
+  if (asked.success) inFlight.set(asked.data.id, () => { void mcp.close(); });
+  response.on('close', () => {
+    if (asked.success) inFlight.delete(asked.data.id);
+    void transport.close();
+    void mcp.close();
+  });
   await mcp.connect(transport);
   await transport.handleRequest(request, response, body.parsed);
 }
@@ -212,8 +229,9 @@ export function serveAgent(options: AgentServerOptions): AgentServer {
   const { instance, copyReads, statuses, deployment, pluginsShown, port, reporter, log } = options;
   if (instance === undefined || copyReads === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
   const open = { ...options, instance, copyReads, statuses, deployment, pluginsShown };
+  const inFlight: InFlight = new Map();
   const http = createServer((request, response) => {
-    handle(open, request, response).catch((error: unknown) => {
+    handle(open, inFlight, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);
       if (!response.headersSent) response.writeHead(500);
       response.end();

@@ -249,6 +249,38 @@ describe('sourceCommands build, in mod order', () => {
     expect(await recorded('ModB')).toMatchObject({ packages: [{ kind: 'repository', name: 'Old ModB' }] });
   });
 
+  describe('stopped by its caller', () => {
+    const buildingTwoSteps = async (stopDuring: string) => {
+      await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [COMPILE, COMPILE] }));
+      await writeBuildFile(SOURCES.ModB, buildFileOf({ steps: [COMPILE, COMPILE] }));
+      const stop = new AbortController();
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
+        if (mods[0]?.name === stopDuring) stop.abort();
+        return Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] });
+      });
+      const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() })
+        .build(['ModA', 'ModB'], false, stop.signal);
+      return { outcome, client };
+    };
+
+    it('finishes the step in hand, runs no step after it and no later mod, and names the mod it stopped and the mod it did not build (source.md, Build, story 18)', async () => {
+      const { outcome, client } = await buildingTwoSteps('ModB');
+
+      expect(client.calls).toHaveLength(1);
+      expect(outcome).toEqual({
+        landed: [{ ...landedOf('ModB'), failure: 'The build was stopped after its step 1.' }],
+        refused: [{ item: 'ModA', reason: 'was not built: the build was stopped.' }],
+      });
+    });
+
+    it('leaves the mods built before it built', async () => {
+      const { outcome } = await buildingTwoSteps('ModA');
+
+      expect(outcome).toEqual({ landed: [landedOf('ModB'), { ...landedOf('ModA'), failure: 'The build was stopped after its step 1.' }], refused: [] });
+    });
+  });
+
   it('stops a mod\'s build at a failed step, running no step after it (source.md, Build, story 18)', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'task', task: 'First', args: [] }, COMPILE, { kind: 'task', task: 'Second', args: [] }] }));
     const client = new InMemoryMEditClient();
