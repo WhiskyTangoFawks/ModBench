@@ -2,8 +2,7 @@ import { papyrusScriptAt, papyrusScriptFiles } from '../tables/gamePaths';
 import type { DataFolderFiles } from '../instanceAdapter/instanceAdapter';
 import type { FileWinners, GameFolderArchived, StackedCopies } from './fileConflictIndex';
 
-/** A Papyrus script: the copy of its first source the game folder's Creation Kit reads, as mod order resolves it, the
- *  Data folder's last, and the path of its compiled script, whose copy the game gets is a File symbol's. */
+/** A Papyrus script: the copy of its first source the Creation Kit reads, and the path of its compiled script. */
 export interface PapyrusScript {
   readonly name: string;
   readonly source?: string;
