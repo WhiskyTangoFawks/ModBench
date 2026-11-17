@@ -51,10 +51,21 @@ internal sealed class SpoolFile : IDisposable
         }
     }
 
-    /// <summary>Removes the spool files a killed process left in <paramref name="directory"/>.</summary>
+    /// <summary>Removes the spool files a killed process left in <paramref name="directory"/>. One that cannot be removed
+    /// stays for the next open.</summary>
     internal static void Sweep(string directory)
     {
-        foreach (var path in Directory.EnumerateFiles(directory, $"*{Extension}")) File.Delete(path);
+        foreach (var path in Directory.EnumerateFileSystemEntries(directory, $"*{Extension}"))
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+        }
     }
 
     /// <summary>Closes the file of rows nothing will produce.</summary>

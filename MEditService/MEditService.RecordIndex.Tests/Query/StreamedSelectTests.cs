@@ -73,7 +73,22 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Fact]
-    public void ASelectsRows_AreSpooledBesideTheIndex_AndTheFileIsGoneOnceTheRowsAre()
+    public void ASpoolFileThatCannotBeRemoved_LeavesTheIndexOpenedAndIntact()
+    {
+        Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records)))).Dispose();
+        IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE kept_marker (x INTEGER)");
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
+        var folder = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require();
+        var stuck = Directory.CreateDirectory(Path.Combine(folder, "stuck.spool"));
+        File.WriteAllText(Path.Combine(stuck.FullName, "held"), "rows");
+
+        using var again = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
+
+        Assert.Equal("1", IndexFiles.Rows(_fixture.InstanceRoot, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'kept_marker'").Single().Single());
+    }
+
+    [Fact]
+    public void ASelectsRows_AreAllServed_AndNoSpoolFileOutlivesThem()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
         var folder = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require();
