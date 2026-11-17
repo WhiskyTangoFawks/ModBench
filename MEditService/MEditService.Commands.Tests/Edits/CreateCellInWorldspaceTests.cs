@@ -105,7 +105,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var file = _plugins.DocumentFileOf(_edited, _ownCell);
         var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
 
-        _plugins.Unsaved.Apply([new DocumentChange(file, moved.Text)]);
+        _plugins.Unsaved.Typed(new DocumentChange(file, moved.Text));
 
         var (outcome, changes) = _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(5, 6));
 
@@ -122,7 +122,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var file = compiledPluginMaster.DocumentFileOf(_master, MasterCell);
         var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
 
-        compiledPluginMaster.Unsaved.Apply([new DocumentChange(file, moved.Text)]);
+        compiledPluginMaster.Unsaved.Typed(new DocumentChange(file, moved.Text));
 
         var (outcome, _) = compiledPluginMaster.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(3, 3));
 

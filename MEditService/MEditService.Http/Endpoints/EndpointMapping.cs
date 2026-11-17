@@ -241,6 +241,15 @@ internal static class EndpointMapping
         return Refusal(result);
     }
 
+    /// <summary>A document handed over answers 204, or the 400 that names what is wrong with its path.</summary>
+    internal static IResult Answered(string gesture, ILogger logger, Answer<bool, UnsavedRefused> answer)
+    {
+        if (answer.Holds(out _, out var refused)) return Results.NoContent();
+
+        LogRefusal(logger, gesture, nameof(UnsavedRefused), refused.Message);
+        return BadRequest(refused.Message);
+    }
+
     internal static IResult Answered(string gesture, ILogger logger, Answer<PutLoadOrderApplied, PutLoadOrderRefused> answer)
     {
         if (answer.Holds(out var applied, out var refused)) return Results.Ok(applied);

@@ -1,7 +1,7 @@
 import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { EventEmitter, type Disposable } from '../eventEmitter';
 import type {
-  MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
+  MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocumentChange, WriteRefused,
 } from '../MEditClient';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
@@ -67,7 +67,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
-  private readonly handOverListeners = new Set<(failure: ReadFailed | undefined) => void>();
+  private readonly handOverListeners = new Set<(failure: WriteRefused | undefined) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private signalAnswer: () => Promise<void> = () => Promise.resolve();
@@ -262,15 +262,15 @@ export class InMemoryMEditClient implements MEditClient {
   loadOrdersHanded(): number { return this.sender.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.sender.signalChange(paths); }
 
-  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
+  handUnsavedDocument(change: UnsavedDocumentChange): void { this.record('handUnsavedDocument', [change]); }
 
-  onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void {
+  onUnsavedHandOver(listener: (failure: WriteRefused | undefined) => void): () => void {
     this.handOverListeners.add(listener);
     return () => { this.handOverListeners.delete(listener); };
   }
 
-  /** A put of the unsaved documents answers: undefined when mEdit took them, else why not. */
-  settleHandOver(failure: ReadFailed | undefined): void {
+  /** A hand-over answers: undefined when mEdit took it, else why not. */
+  settleHandOver(failure: WriteRefused | undefined): void {
     for (const listener of this.handOverListeners) listener(failure);
   }
 

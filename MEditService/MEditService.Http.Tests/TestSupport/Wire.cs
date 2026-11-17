@@ -196,10 +196,13 @@ internal static class Wire
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
             new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
 
-    /// <summary>The unsaved documents Modbench hands mEdit, which every changes request after it reads.</summary>
-    internal static async Task HandUnsaved(this HttpClient client, params (string Path, string Text)[] unsaved) =>
-        (await client.PutAsJsonAsync("/unsaved-documents", new { documents = unsaved.Select(d => new { path = d.Path, text = d.Text }) }))
-        .EnsureSuccessStatusCode();
+    /// <summary>The unsaved documents Modbench hands mEdit, one at a time, which every changes request after it reads.</summary>
+    internal static async Task HandUnsaved(this HttpClient client, params (string Path, string Text)[] unsaved)
+    {
+        foreach (var (path, text) in unsaved)
+            (await client.PutAsJsonAsync("/unsaved-document", new { path, text, version = UnsavedDocumentsTyping.NextVersion(), opened = false }))
+                .EnsureSuccessStatusCode();
+    }
 
     /// <summary>A copy as Modbench makes one: mEdit answers the changes each copy makes, and each landed item's are
     /// saved in the order answered. The answer is mEdit's.</summary>

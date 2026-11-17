@@ -140,7 +140,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         var file = index.Queries.GetCopyDocument(Compiled, _npc).Value().Require().Location;
         var onDisk = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc).Ranges.Select(range => range.Start.Line);
         var unsaved = "\n\n" + File.ReadAllText(file);
-        index.Unsaved.Apply([new DocumentChange(file, unsaved)]);
+        index.TypeUnsaved(new DocumentChange(file, unsaved));
 
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc);
 
@@ -156,7 +156,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         using var index = Indexes.Reconciled(_fixture);
         var file = index.Queries.GetCopyDocument(Compiled, _npc).Value().Require().Location;
         var text = VSCodeLineEnd.Replace(File.ReadAllText(file), lineEnd);
-        index.Unsaved.Apply([new DocumentChange(file, text)]);
+        index.TypeUnsaved(new DocumentChange(file, text));
 
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc);
 

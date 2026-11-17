@@ -59,11 +59,12 @@ public sealed class UnsavedDocumentTests : IDisposable
     private void HandUntil(Predicate<INotification> announced, params DocumentChange[] documents) =>
         HandUntil(_index, _notifications, announced, documents);
 
-    private static void HandUntil(
+    private void HandUntil(
         OpenedIndex index, InMemoryNotificationPublisher notifications, Predicate<INotification> announced, params DocumentChange[] documents)
     {
         var before = notifications.Notifications.Count;
-        index.Unsaved.Apply(documents);
+        if (documents.Length == 0) index.CloseUnsaved(_file);
+        foreach (var document in documents) index.TypeUnsaved(document);
         Waits.Reached(() => notifications.Since(before).Any(n => announced(n)), "the hand-over's announcement");
     }
 
@@ -124,6 +125,18 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
+    public void ADroppedDocument_OfAFileSettledLongAgo_IsReadFromItsFileAgain()
+    {
+        File.SetLastWriteTimeUtc(_file, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        _index.SignalChange([new PluginChange(_compiledPlugin.Key, [_file])]);
+        Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
+
+        Hand();
+
+        Assert.Equal("CompiledPluginNpc", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
+    }
+
+    [Fact]
     public void AHandedDocumentThatDoesNotRead_LeavesTheLastGoodRows_AndSaysWhy()
     {
         Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
@@ -173,7 +186,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         _index.Dispose();
         var holder = new LoadOrderHolder();
         using var reopened = Indexes.Open(holder);
-        reopened.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved"))]);
+        reopened.Unsaved.Typed(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved")));
 
         reopened.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
@@ -217,20 +230,20 @@ public sealed class UnsavedDocumentTests : IDisposable
     [InlineData(typeof(InvalidOperationException))]
     [InlineData(typeof(OutOfMemoryException))]
     [InlineData(typeof(OperationCanceledException))]
-    public void AHandOverWhoseValidationFaultsOutright_FailsTheStatus(Type thrownType)
+    public void ACheckWhoseValidationFaultsOutright_FailsTheStatus(Type thrownType)
     {
         var thrown = Faults.Of(thrownType);
         using var faulting = Indexes.Reconciled(
             _fixture, InstanceRootNamed("faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = Faults.On(IsRowsChanged, thrown) });
 
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        EditedOnDisk(faulting, "CompiledPluginNpc", "TypedUnsaved");
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
         Assert.Contains(thrown.Message, faulting.Status.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AHandOverWhoseStatusCannotBePublished_PublishesTheFailedStatusOnceItCan()
+    public void ACheckWhoseStatusCannotBePublished_PublishesTheFailedStatusOnceItCan()
     {
         var statusFault = Faults.InTurn(typeof(NotSupportedException));
         var notifications = new InMemoryNotificationPublisher();
@@ -238,38 +251,11 @@ public sealed class UnsavedDocumentTests : IDisposable
         notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
             + (notification => { if (notification is LoadOrderStatusNotification) statusFault(); });
 
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        EditedOnDisk(faulting, "CompiledPluginNpc", "TypedUnsaved");
 
         Waits.Reached(
             () => notifications.Notifications.OfType<LoadOrderStatusNotification>().Any(n => n.Status.State == LoadOrderState.Failed),
             "the failed status published");
-    }
-
-    [Fact]
-    public async Task AHandOverArrivingWhileAStatusPublishes_IsAcceptedAtOnce_AndValidatedThoughThatPublishIsCancelledOutsideDisposal()
-    {
-        using var failedPublishing = new ManualResetEventSlim();
-        using var secondHandedOver = new ManualResetEventSlim();
-        var statusCancelled = Faults.InTurn(() =>
-        {
-            failedPublishing.Set();
-            secondHandedOver.Wait(TimeSpan.FromMinutes(1));
-            throw new OperationCanceledException();
-        });
-        var notifications = new InMemoryNotificationPublisher();
-        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: notifications);
-        notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
-            + (notification => { if (notification is LoadOrderStatusNotification { Status.State: LoadOrderState.Failed }) statusCancelled(); });
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
-        Assert.True(failedPublishing.Wait(Waits.Patience), "the failed status being published");
-
-        notifications.OnPublish = null;
-        var secondHandOver = Task.Run(() => faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]));
-        var acceptedWhilePublishing = await Waits.CompletesWithin(secondHandOver, TimeSpan.FromSeconds(5));
-        secondHandedOver.Set();
-
-        Assert.True(acceptedWhilePublishing, "the next hand-over accepted while the status was publishing");
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
     }
 
     [Fact]
@@ -288,44 +274,44 @@ public sealed class UnsavedDocumentTests : IDisposable
             throw new OperationCanceledException();
         };
 
-        index.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        var document = new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""));
+        index.Unsaved.Typed(document);
+        var holding = index.Queries.Hold([new HandedPlugin(_compiledPlugin.Key, [_file], [])], CancellationToken.None);
         Waits.Reached(() => disposed, "the disposal");
-        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await Task.WhenAny(holding, Task.Delay(TimeSpan.FromMilliseconds(300)));
 
         lock (log) Assert.DoesNotContain(log, entry => entry.Message.Contains("failed unexpectedly", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void AHandOverThatValidatesCleanly_ClearsTheFailureAnEarlierHandOverSet()
+    public void ACheckThatValidatesCleanly_ClearsTheFailureAnEarlierCheckSet()
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
         using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        EditedOnDisk(faulting, "CompiledPluginNpc", "TypedUnsaved");
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
 
         faults.FaultsOn = null;
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
+        EditedOnDisk(faulting, "TypedUnsaved", "TypedAgain");
 
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
-        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready && faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId == "TypedAgain", "the ready status over the second edit");
     }
 
     [Fact]
-    public void AHandOverWhoseStatusCannotBePublished_LeavesTheNextHandOverValidated()
+    public void ACheckWhoseStatusCannotBePublished_LeavesTheNextCheckValidated()
     {
         var faults = new InMemoryNotificationPublisher();
         using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
         var validationFault = Faults.Of(typeof(InvalidOperationException));
         faults.OnPublish = Faults.On(IsRowsChanged, validationFault)
             + Faults.On(n => n is LoadOrderStatusNotification, Faults.Of(typeof(NotSupportedException)));
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        EditedOnDisk(faulting, "CompiledPluginNpc", "TypedUnsaved");
         Waits.Reached(() => faulting.Status.Message?.Contains(validationFault.Message, StringComparison.Ordinal) == true, "the validation fault in the status");
 
         faults.OnPublish = null;
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
+        EditedOnDisk(faulting, "TypedUnsaved", "TypedAgain");
 
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
-        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready && faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId == "TypedAgain", "the ready status over the second edit");
     }
 
     [Fact]
@@ -338,10 +324,16 @@ public sealed class UnsavedDocumentTests : IDisposable
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the check's failed status");
 
         faults.FaultsOn = null;
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"EditedOnDisk\"", "\"TypedUnsaved\""))]);
+        faulting.TypeUnsaved(new DocumentChange(_file, Typed("\"EditedOnDisk\"", "\"TypedUnsaved\"")));
         Waits.Reached(() => faults.Notifications.Any(RowsChanged(_npc).Invoke), "the hand-over's rows-changed");
 
         Assert.Equal(LoadOrderState.Failed, faulting.Status.State);
+    }
+
+    private void EditedOnDisk(OpenedIndex index, string from, string to)
+    {
+        File.WriteAllText(_file, File.ReadAllText(_file).Replace($"\"{from}\"", $"\"{to}\"", StringComparison.Ordinal));
+        index.SignalChange();
     }
 
     private static bool IsRowsChanged(INotification notification) => notification is RowsChangedNotification;

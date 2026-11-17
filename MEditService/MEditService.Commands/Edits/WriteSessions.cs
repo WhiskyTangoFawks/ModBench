@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -37,34 +36,12 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     {
         if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
         if (Write() is { } failure) return WriteFailure.Refusal(failure, doing, logger);
-        var written = _byFolder.Values.SelectMany(session => session.Written).ToList();
-        var handed = PluginsWritten(loadOrder.Current)?.Select(named => new HandedPlugin(
-            named.Key, named.Value, [.. written.Where(document => named.Value.Contains(document.Path, StringComparer.Ordinal))])).ToList();
+        var made = Made;
+        var paths = made.Moves.SelectMany(move => new[] { move.From, move.To })
+            .Concat(made.Deletions).Concat(made.Documents.Select(document => document.Path));
+        var handed = HandedPlugins.Naming(source, loadOrder.Current, paths, [.. _byFolder.Values.SelectMany(session => session.Written)]);
         await held.Hand(handed, cancel).ConfigureAwait(false);
         return outcome;
-    }
-
-    // Null when a path written names no plugin, so only a check of the whole disk reads it.
-    private Dictionary<PluginAddress, List<string>>? PluginsWritten(LoadOrderSnapshot loadOrder)
-    {
-        var made = Made;
-        var files = new Dictionary<PluginAddress, List<string>>(PluginAddress.Comparer);
-        foreach (var path in made.Moves.SelectMany(move => new[] { move.From, move.To })
-                     .Concat(made.Deletions).Concat(made.Documents.Select(document => document.Path)))
-        {
-            switch (source.Touching(loadOrder, path))
-            {
-                case PathAnswer.Unnamed: return null;
-                case PathAnswer.Touches touches:
-                    foreach (var plugin in touches.Plugins.Select(plugin => plugin.Key))
-                    {
-                        if (files.TryGetValue(plugin, out var named)) named.Add(path);
-                        else files[plugin] = [path];
-                    }
-                    break;
-            }
-        }
-        return files;
     }
 
     private static bool Changes(IWriteSession session) =>

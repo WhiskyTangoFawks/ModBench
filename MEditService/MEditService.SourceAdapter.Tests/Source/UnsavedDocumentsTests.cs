@@ -6,55 +6,81 @@ public sealed class UnsavedDocumentsTests
     private static readonly DocumentChange B = new(Path.GetFullPath("B.json"), "b");
 
     private readonly UnsavedDocuments _unsaved = new();
-    private readonly List<string[]> _arrivals = [];
-
-    public UnsavedDocumentsTests() => _unsaved.Arrived += paths => _arrivals.Add([.. paths]);
 
     [Fact]
-    public void ApplyingASet_ReportsTheDocumentsWhoseTextChanged_WereHanded_OrWereDropped()
+    public void ADocumentHeld_StandsAlongsideTheOthers_AndReplacesItsOwnEarlierText()
     {
-        _unsaved.Apply([A, B]);
-        _unsaved.Apply([A, B with { Text = "typed" }]);
-        _unsaved.Apply([A]);
+        _unsaved.Hold(A, 1, opened: true, out _);
+        _unsaved.Hold(B, 2, opened: true, out _);
+        _unsaved.Hold(A with { Text = "typed" }, 3, opened: false, out var changed);
 
-        Assert.Equal([[A.Path, B.Path], [B.Path], [B.Path]], _arrivals);
+        Assert.True(changed);
+        Assert.Equal([A with { Text = "typed" }, B], _unsaved.Current);
     }
 
     [Fact]
-    public void ApplyingTheSetAlreadyHeld_ReportsNothing()
+    public void TheTextAlreadyHeld_IsNoChange()
     {
-        _unsaved.Apply([A, B]);
-        _arrivals.Clear();
+        _unsaved.Hold(A, 1, opened: true, out _);
 
-        _unsaved.Apply([B, A]);
+        _unsaved.Hold(A, 2, opened: false, out var changed);
 
-        Assert.Empty(_arrivals);
+        Assert.False(changed);
+    }
+
+    [Fact]
+    public void AChangeOfAnOlderVersion_IsIgnored()
+    {
+        _unsaved.Hold(A with { Text = "newer" }, 5, opened: true, out _);
+
+        _unsaved.Hold(A, 4, opened: false, out var changed);
+
+        Assert.False(changed);
+        Assert.Equal([A with { Text = "newer" }], _unsaved.Current);
+    }
+
+    [Fact]
+    public void AnOpenOfAnOlderVersion_ReplacesTheDocumentHeld()
+    {
+        _unsaved.Hold(A with { Text = "before the reload" }, 5, opened: true, out _);
+
+        _unsaved.Hold(A, 1, opened: true, out var changed);
+
+        Assert.True(changed);
+        Assert.Equal([A], _unsaved.Current);
+    }
+
+    [Fact]
+    public void ADocumentDropped_IsHeldNoMore_AndTheOthersStay()
+    {
+        _unsaved.Hold(A, 1, opened: true, out _);
+        _unsaved.Hold(B, 2, opened: true, out _);
+
+        _unsaved.Drop(A.Path, out var changed);
+
+        Assert.True(changed);
+        Assert.Equal([B], _unsaved.Current);
+    }
+
+    [Fact]
+    public void ADocumentNeverHeld_IsNoChangeToDrop()
+    {
+        _unsaved.Drop(A.Path, out var changed);
+
+        Assert.False(changed);
     }
 
     [Fact]
     public void ADocumentByARelativePath_IsRefused_AndNothingNewIsHeld()
     {
-        _unsaved.Apply([A]);
-        _arrivals.Clear();
+        _unsaved.Hold(A, 1, opened: true, out _);
 
-        var refused = _unsaved.Apply([B, new DocumentChange("plugin-source/C.json", "c")]);
+        var held = _unsaved.Hold(new DocumentChange("plugin-source/C.json", "c"), 2, opened: true, out var heldChanged);
+        var dropped = _unsaved.Drop("plugin-source/C.json", out var droppedChanged);
 
-        Assert.Equal("Name each document by its absolute path.", refused?.Message);
+        Assert.Equal("Name each document by its absolute path.", held?.Message);
+        Assert.Equal("Name each document by its absolute path.", dropped?.Message);
+        Assert.False(heldChanged || droppedChanged);
         Assert.Equal([A], _unsaved.Current);
-        Assert.Empty(_arrivals);
-    }
-
-    [Fact]
-    public void NoSet_IsRefused_ForWithoutOneTheIndexWouldReadTheDisk()
-    {
-        var refused = _unsaved.Apply(null);
-
-        Assert.Equal("The unsaved documents are required, empty when none are dirty.", refused?.Message);
-    }
-
-    [Fact]
-    public void AnAbsoluteSet_IsAccepted()
-    {
-        Assert.Null(_unsaved.Apply([A, B]));
     }
 }

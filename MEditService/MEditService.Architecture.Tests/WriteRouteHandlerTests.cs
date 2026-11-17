@@ -29,6 +29,8 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/script-names/rename-source-changes", typeof(ScriptRenameSourceChangesHandler), "ScriptRenameSourceChanges"),
         ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler), "CreateRecordChanges"),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler), "PutLoadOrder"),
+        ("PUT", "/unsaved-document", typeof(PutUnsavedDocumentHandler), "PutUnsavedDocument"),
+        ("DELETE", "/unsaved-document", typeof(DeleteUnsavedDocumentHandler), "DeleteUnsavedDocument"),
         ("POST", "/signal-change", typeof(SignalChangeHandler), "SignalChange"),
         ("POST", "/build", typeof(BuildModHandler), "Build"),
         ("POST", "/version-in-git", typeof(VersionInGitHandler), "VersionInGit"),

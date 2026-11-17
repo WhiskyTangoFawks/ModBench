@@ -38,7 +38,7 @@ public sealed class CreateChildRecordTests : IDisposable
         var held = onDisk.ToJsonString();
         var before = File.ReadAllText(file);
 
-        _fixture.Unsaved.Apply([new DocumentChange(file, held)]);
+        _fixture.Unsaved.Typed(new DocumentChange(file, held));
 
         var (outcome, changes) = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "dial", _fixture.Quest.ToString());
 

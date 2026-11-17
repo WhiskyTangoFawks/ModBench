@@ -24,14 +24,15 @@ internal static class Indexes
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
         ISourceAdapter? source = null,
-        long? memoryLimit = null)
+        long? memoryLimit = null,
+        UnsavedDocuments? unsaved = null)
     {
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var services = new ServiceCollection();
         services.AddSingleton(holder);
         if (adapter is null) services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
         else services.AddSingleton(adapter);
-        services.AddSingleton<UnsavedDocuments>();
+        services.AddSingleton(unsaved ?? new UnsavedDocuments());
         if (source is null) services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
         else services.AddSingleton(source);
         services.AddSingleton(SharedSchemaReflector.Instance);
@@ -50,8 +51,9 @@ internal static class Indexes
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
         ISourceAdapter? source = null,
-        long? memoryLimit = null) =>
-        new(Container(holder, adapter, loggerFactory, notifications, timeProvider, source, memoryLimit), holder);
+        long? memoryLimit = null,
+        UnsavedDocuments? unsaved = null) =>
+        new(Container(holder, adapter, loggerFactory, notifications, timeProvider, source, memoryLimit, unsaved), holder);
 
     internal static OpenedIndex Reconciled(
         PluginFixtureData fixture,
@@ -83,10 +85,11 @@ internal static class Indexes
         INotificationPublisher? notifications = null,
         ISourceAdapter? source = null,
         long? memoryLimit = null,
-        TimeSpan? patience = null)
+        TimeSpan? patience = null,
+        UnsavedDocuments? unsaved = null)
     {
         var holder = new LoadOrderHolder();
-        var index = Open(holder, adapter, loggerFactory, notifications, source: source, memoryLimit: memoryLimit);
+        var index = Open(holder, adapter, loggerFactory, notifications, source: source, memoryLimit: memoryLimit, unsaved: unsaved);
         try
         {
             index.Receive(holder, SnapshotPlugins.Snapshot(dataFolder, instanceRoot, GameRelease.Fallout4, plugins), patience);

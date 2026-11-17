@@ -20,7 +20,6 @@ namespace MEditService.RecordIndex;
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
-    private readonly UnsavedDocuments _unsaved;
     private readonly IPluginAdapter _adapter;
     private readonly ISourceAdapter _source;
     private readonly StoreFactory _storeFactory;
@@ -36,7 +35,6 @@ internal sealed class Indexer : IDisposable
     /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
     public Indexer(
         LoadOrderHolder holder,
-        UnsavedDocuments unsaved,
         IPluginAdapter adapter,
         ISourceAdapter source,
         SchemaReflector schemaReflector,
@@ -47,7 +45,6 @@ internal sealed class Indexer : IDisposable
         TimeProvider? timeProvider = null)
     {
         _holder = holder;
-        _unsaved = unsaved;
         _adapter = adapter;
         _source = source;
         _filter = filter;
@@ -136,7 +133,6 @@ internal sealed class Indexer : IDisposable
 
     private bool _reconcileAsked;
     private bool _checkAsked;
-    private readonly List<string> _handed = [];
     private readonly HashSet<PluginAddress> _named = new(PluginAddress.Comparer);
     private readonly Dictionary<PluginAddress, AskedFiles> _namedFiles = new(PluginAddress.Comparer);
     private readonly List<Hand> _namedHands = [];
@@ -441,17 +437,7 @@ internal sealed class Indexer : IDisposable
     // Lock order: _lock, then _turns. Nothing holding _turns takes _lock.
     private bool ValidationAsked()
     {
-        lock (_turns) return _validatingTurn || _checkAsked || _handed.Count > 0 || _named.Count > 0 || _namedFiles.Count > 0;
-    }
-
-    // A handed path is validated as a change on disk is.
-    private void ValidateTreesHolding(IReadOnlyList<string> paths)
-    {
-        lock (_turns)
-        {
-            _handed.AddRange(paths);
-            WakeWorker();
-        }
+        lock (_turns) return _validatingTurn || _checkAsked || _named.Count > 0 || _namedFiles.Count > 0;
     }
 
     private void WakeWorker()
@@ -494,7 +480,7 @@ internal sealed class Indexer : IDisposable
     {
         lock (_turns)
         {
-            if (_disposed || (!_reconcileAsked && !_checkAsked && _handed.Count == 0 && _named.Count == 0 && _namedFiles.Count == 0 && _namedHands.Count == 0))
+            if (_disposed || (!_reconcileAsked && !_checkAsked && _named.Count == 0 && _namedFiles.Count == 0 && _namedHands.Count == 0))
             {
                 _working = false;
                 return null;
@@ -508,15 +494,13 @@ internal sealed class Indexer : IDisposable
                 (_reconcileAsked, _checkAsked) = (false, false);
                 return () => ReconcileHeld(check, checking);
             }
-            List<string> paths = [.. _handed];
-            _handed.Clear();
             _validatingTurn = true;
-            return TakeNamed(paths, _ => false);
+            return TakeNamed(_ => false);
         }
     }
 
     // Guarded by _turns. Leaves the names of plugins still to land, and every hand naming one with each plugin it names.
-    private Action? TakeNamed(List<string> paths, Func<PluginAddress, bool> stillToLand)
+    private Action? TakeNamed(Func<PluginAddress, bool> stillToLand)
     {
         HashSet<PluginAddress> waiting = new(_named.Concat(_namedFiles.Keys).Where(stillToLand), PluginAddress.Comparer);
         List<Hand> handsWaiting;
@@ -532,11 +516,11 @@ internal sealed class Indexer : IDisposable
         HashSet<PluginAddress> named = new(_named.Where(key => !waiting.Contains(key)), PluginAddress.Comparer);
         Dictionary<PluginAddress, AskedFiles> files = _namedFiles.Where(asked => !waiting.Contains(asked.Key)).ToDictionary(PluginAddress.Comparer);
         List<Hand> hands = [.. _namedHands.Except(handsWaiting)];
-        if (paths.Count == 0 && named.Count == 0 && files.Count == 0 && hands.Count == 0) return null;
+        if (named.Count == 0 && files.Count == 0 && hands.Count == 0) return null;
         _named.ExceptWith(named);
         foreach (var key in files.Keys) _namedFiles.Remove(key);
         _namedHands.RemoveAll(hands.Contains);
-        return () => ValidateAndPublish(paths, named, files, hands);
+        return () => ValidateAndPublish(named, files, hands);
     }
 
     private bool NamedWaits()
@@ -553,7 +537,7 @@ internal sealed class Indexer : IDisposable
         var newerWaits = !ReferenceEquals(_holder.Held?.Snapshot, scope.LoadOrder);
         lock (_turns)
         {
-            if (newerWaits || TakeNamed([], stillToLand) is not { } taken) return false;
+            if (newerWaits || TakeNamed(stillToLand) is not { } taken) return false;
             landing = taken;
             (validating, _validatingTurn) = (_validatingTurn, true);
         }
@@ -567,7 +551,7 @@ internal sealed class Indexer : IDisposable
     }
 
     private void ValidateAndPublish(
-        List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, List<Hand> hands)
+        HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, List<Hand> hands)
     {
         var moved = false;
         string? unread = Stopped;
@@ -575,7 +559,7 @@ internal sealed class Indexer : IDisposable
         _exclusive.Enter();
         try
         {
-            var failure = ValidationFailure(() => read.UnionWith(ValidateNamed(paths, named, files)), CancellationToken.None, out var busy);
+            var failure = ValidationFailure(() => read.UnionWith(ValidateNamed(named, files)), CancellationToken.None, out var busy);
             moved = Swap(standing => standing with { ReReadFailure = failure });
             unread = NotReadBecause(failure ?? (busy ? Busy : null));
         }
@@ -617,14 +601,9 @@ internal sealed class Indexer : IDisposable
         return read.Contains(plugin) ? null : $"{plugin.Name} ({plugin.Origin}) was not read.";
     }
 
-    private List<PluginAddress> ValidateNamed(List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files)
+    private List<PluginAddress> ValidateNamed(HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files)
     {
         var scope = RequireScope();
-        named.UnionWith(paths
-            .Select(path => _source.Touching(scope.LoadOrder, path))
-            .OfType<PathAnswer.Touches>()
-            .SelectMany(touches => touches.Plugins)
-            .Select(plugin => plugin.Key));
         List<PluginAddress> readAlone = [.. scope.Held.Plugins
             .Where(plugin => !named.Contains(plugin.Key) && files.TryGetValue(plugin.Key, out var asked) && ReadFiles(scope, plugin, asked))
             .Select(plugin => plugin.Key)];
@@ -1617,7 +1596,6 @@ internal sealed class Indexer : IDisposable
     public void Subscribe()
     {
         _holder.Arrived += OnArrived;
-        _unsaved.Arrived += ValidateTreesHolding;
         _source.ChangeSignalled += OnChange;
     }
 
@@ -1645,7 +1623,6 @@ internal sealed class Indexer : IDisposable
     public void Dispose()
     {
         _holder.Arrived -= OnArrived;
-        _unsaved.Arrived -= ValidateTreesHolding;
         _source.ChangeSignalled -= OnChange;
 
         lock (_turns)

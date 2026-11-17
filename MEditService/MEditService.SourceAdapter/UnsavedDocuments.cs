@@ -1,39 +1,49 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>The plugin-source documents VS Code holds unsaved, as Modbench last handed them, whole. Each is read in
+/// <summary>The plugin-source documents VS Code holds unsaved, each as Modbench last handed it, whole. Each is read in
 /// place of the file at its absolute path.</summary>
 public sealed class UnsavedDocuments
 {
-    private IReadOnlyList<DocumentChange> _held = [];
+    private readonly Dictionary<string, (DocumentChange Document, long Version)> _held = new(StringComparer.Ordinal);
     private readonly Lock _applying = new();
 
-    public IReadOnlyList<DocumentChange> Current => Volatile.Read(ref _held);
-
-    /// <summary>Raised by an Apply that changes the held set, with the path of each document whose text it changed,
-    /// handed or dropped.</summary>
-    public event Action<IReadOnlyList<string>>? Arrived;
-
-    /// <summary>Holds <paramref name="documents"/> whole, or says why it cannot: without the set the Index would
-    /// read the disk, and a document is named by its absolute path.</summary>
-    public UnsavedRefused? Apply(IReadOnlyList<DocumentChange>? documents)
+    public IReadOnlyList<DocumentChange> Current
     {
-        if (documents is null)
-            return new UnsavedRefused("The unsaved documents are required, empty when none are dirty.");
-        if (documents.Any(document => !Path.IsPathFullyQualified(document.Path)))
-            return new UnsavedRefused("Name each document by its absolute path.");
+        get
+        {
+            lock (_applying) return [.. _held.Values.Select(held => held.Document)];
+        }
+    }
 
-        IReadOnlyList<string> paths;
+    /// <summary>Holds <paramref name="document"/>, or says why it cannot. An open replaces what is held, and a change
+    /// older than the version held is ignored. <paramref name="changed"/> is false when the text held is the text.</summary>
+    public UnsavedRefused? Hold(DocumentChange document, long version, bool opened, out bool changed)
+    {
+        changed = false;
+        if (NotAbsolute(document.Path) is { } refused) return refused;
         lock (_applying)
         {
-            paths = [.. Differing(_held, documents).Concat(Differing(documents, _held)).Distinct(StringComparer.Ordinal)];
-            Volatile.Write(ref _held, documents);
+            var held = _held.TryGetValue(document.Path, out var standing);
+            if (held && !opened && version < standing.Version) return null;
+            changed = !held || standing.Document != document;
+            _held[document.Path] = (document, version);
         }
-        if (paths.Count > 0) Arrived?.Invoke(paths);
         return null;
     }
 
-    private static IEnumerable<string> Differing(IReadOnlyList<DocumentChange> from, IReadOnlyList<DocumentChange> against) =>
-        from.Where(document => !against.Contains(document)).Select(document => document.Path);
+    /// <summary>Drops the document at <paramref name="path"/>, so its file is read again. <paramref name="changed"/> is
+    /// false when none is held.</summary>
+    public UnsavedRefused? Drop(string path, out bool changed)
+    {
+        changed = false;
+        if (NotAbsolute(path) is { } refused) return refused;
+        lock (_applying) changed = _held.Remove(path);
+        return null;
+    }
+
+    // A document is named by its absolute path, or the index would read the disk.
+    private static UnsavedRefused? NotAbsolute(string path) =>
+        Path.IsPathFullyQualified(path) ? null : new UnsavedRefused("Name each document by its absolute path.");
 }
 
 public sealed record UnsavedRefused(string Message);

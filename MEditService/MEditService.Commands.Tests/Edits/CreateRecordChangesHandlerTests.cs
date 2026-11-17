@@ -58,7 +58,7 @@ public sealed class CreateRecordChangesHandlerTests
         var unsavedHeader = Encoding.UTF8.GetString(
             HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900));
 
-        mod.Unsaved.Apply([new DocumentChange(headerFile, unsavedHeader)]);
+        mod.Unsaved.Typed(new DocumentChange(headerFile, unsavedHeader));
 
         var (outcome, _) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 

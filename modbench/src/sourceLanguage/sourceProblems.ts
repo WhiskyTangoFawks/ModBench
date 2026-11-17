@@ -1,4 +1,4 @@
-import type { MEditClient, PluginAddress, PluginProblems } from '../client';
+import type { MEditClient, PluginAddress, PluginProblems, WriteRefused } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { askingOnChange } from '../drivingLib/problemsAsker';
 import { errorMessage } from '../ports/errorMessage';
@@ -8,7 +8,7 @@ import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
-import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
+import { answerOf } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
 
@@ -29,8 +29,6 @@ export interface SourceProblemsDeps {
   /** Says why mEdit could not take the unsaved plugin source; undefined when it could. */
   unsavedStatus: (text: string | undefined) => void;
 }
-
-const unsavedBecause = (why: string): string => `mEdit could not take the unsaved plugin source: ${why}`;
 
 const FIRST_LINE = { line: 0, character: 0 };
 
@@ -127,16 +125,16 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   const showStatus = () => {
     const failed = [...failures.values()][0];
     if (failed !== undefined) languageStatus(lastRead(failed));
-    else if (handOverFailed !== undefined) languageStatus(lastRead(unsavedBecause(handOverFailed)));
+    else if (handOverFailed !== undefined) languageStatus(lastRead(handOverFailed));
     else languageStatus(unplacedStatus());
   };
-  const handedOver = (failure: ReadFailed | undefined) => {
-    const why = failure && failureReason(failure);
+  const handedOver = (failure: WriteRefused | undefined) => {
+    const why = failure?.message;
     if (why !== undefined && why !== handOverFailed) {
       reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why);
     }
     handOverFailed = why;
-    unsavedStatus(why === undefined ? undefined : lastRead(unsavedBecause(why)));
+    unsavedStatus(why === undefined ? undefined : lastRead(why));
     showStatus();
   };
   const unplacedStatus = () => unplacedHeld.size > 0

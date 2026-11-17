@@ -402,23 +402,24 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 });
 
 describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source', () => {
-  const lastRead = (why: string) => `Showing the last good read: mEdit could not take the unsaved plugin source: ${why}`;
+  const CONNECTION_RESET = { refused: true as const, message: 'mEdit could not take the unsaved plugin source — connection reset' };
+  const lastRead = (why: string) => `Showing the last good read: ${why}`;
 
   it('says so in the language status, with one line in the Output for a reason told again', () => {
     const { client, reporter, status } = feed();
 
-    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
-    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
+    client.settleHandOver(CONNECTION_RESET);
+    client.settleHandOver(CONNECTION_RESET);
 
-    expect(status.at(-1)).toBe(lastRead('connection reset'));
+    expect(status.at(-1)).toBe(lastRead(CONNECTION_RESET.message));
     expect(reporter.shownFailures).toEqual([
-      { severity: 'warning', message: 'The Problems panel shows what mEdit last took of the unsaved plugin source.', detail: 'connection reset' },
+      { severity: 'warning', message: 'The Problems panel shows what mEdit last took of the unsaved plugin source.', detail: CONNECTION_RESET.message },
     ]);
   });
 
   it('clears the language status once the next hand-over lands', () => {
     const { client, status } = feed();
-    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
+    client.settleHandOver(CONNECTION_RESET);
 
     client.settleHandOver(undefined);
 
@@ -428,10 +429,10 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
   it('gives the line alone, so a read of a record can carry it, and clears it with the next hand-over', () => {
     const { client, unsaved } = feed();
 
-    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
+    client.settleHandOver(CONNECTION_RESET);
     client.settleHandOver(undefined);
 
-    expect(unsaved).toEqual([lastRead('connection reset'), undefined]);
+    expect(unsaved).toEqual([lastRead(CONNECTION_RESET.message), undefined]);
   });
 
   it('gives no line for an ask of the Problems panel that failed', async () => {

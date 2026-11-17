@@ -19,7 +19,7 @@ import { feedWorkspaceNotice } from './workspaceNotice';
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'handUnsavedDocuments' | 'getComparison'> & SourceProblemsDeps['client'] & PathProblemsDeps['client'];
+  client: Pick<MEditClient, 'handUnsavedDocument' | 'getComparison'> & SourceProblemsDeps['client'] & PathProblemsDeps['client'];
   ask: SourceProblemsDeps['ask'] & PathProblemsDeps['ask'];
   /** What holds a path a plugin source names. */
   pathStanding: PathStanding;

@@ -28,7 +28,7 @@ import {
   type LoadOrderSnapshot, type MEditClient, type ReadCancellation, type RecordIndexChange, type RecordIndexProgress, type FilterCleared, type IndexOfPlugin,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
-  type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
+  type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocumentChange, type RenameSourceChangesOutcome, type RenameSourceAsked,
   type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type PlacedReferences, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, isRefused,
 } from './MEditClient';
@@ -116,7 +116,6 @@ type RecordsAsked = components['schemas']['RecordsAsked'];
 interface ReadOptions<A> {
   absent?: { status: number; answers: A };
   held?: boolean;
-  unlimited?: boolean;
   token?: ReadCancellation;
 }
 
@@ -187,7 +186,7 @@ class HttpMEditClient implements MEditClient {
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
       onReconnected: (listener) => this.notifications.onReconnected(listener),
-      put: (documents) => this.putUnsavedDocuments(documents),
+      put: (change, opened) => this.putUnsavedDocument(change, opened),
     });
     this.handOver.onSettled((failure) => { if (failure === undefined) void this.awaitSweep(); });
     this.loadOrder.onPendingChanged(this.lateness.note);
@@ -244,11 +243,19 @@ class HttpMEditClient implements MEditClient {
   loadOrdersHanded(): number { return this.loadOrder.handed(); }
   signalChange(paths: readonly string[]): Promise<void> { return this.loadOrder.signalChange(paths); }
 
-  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver.hand(documents); }
-  onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
+  handUnsavedDocument(change: UnsavedDocumentChange): void { this.handOver.hand(change); }
+  onUnsavedHandOver(listener: (failure: WriteRefused | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
-  private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
-    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined, { held: false, unlimited: true });
+  private async putUnsavedDocument(change: UnsavedDocumentChange, opened: boolean): Promise<WriteRefused | undefined> {
+    const handed = await this.sendNow({
+      op: `handUnsavedDocument(${change.path})`,
+      failMsg: 'mEdit could not take the unsaved plugin source',
+      post: () => 'closed' in change
+        ? this.apiClient.DELETE('/unsaved-document', { params: { query: { path: change.path } } })
+        : this.apiClient.PUT('/unsaved-document', { body: { path: change.path, text: change.text, version: change.version, opened } }),
+      noContent: true,
+    });
+    return isRefused(handed) ? handed : undefined;
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -268,7 +275,7 @@ class HttpMEditClient implements MEditClient {
     return this.sendNow(spec);
   }
 
-  // POST, map a non-ok response or a thrown request onto WriteRefused, otherwise hand back the wire
+  // POST, PUT or DELETE, map a non-ok response or a thrown request onto WriteRefused, otherwise hand back the wire
   // data untouched. For a request that depends on neither the load order nor the unsaved documents.
   private async sendNow<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
     try {
@@ -709,7 +716,7 @@ class HttpMEditClient implements MEditClient {
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
     answer: (data: D | undefined) => A | ReadFailed | Promise<A | ReadFailed>,
-    { absent, held = true, unlimited = false }: Omit<ReadOptions<A>, 'token'>,
+    { absent, held = true }: Omit<ReadOptions<A>, 'token'>,
     controller: AbortController,
   ): Promise<A | ReadFailed> {
     if (held) {
@@ -738,7 +745,6 @@ class HttpMEditClient implements MEditClient {
       this.log.error(`[HttpMEditClient] ${what} threw: ${errorMessage(e)}`);
       return UNREACHABLE;
     });
-    if (unlimited) return settled;
     // Races rather than trusting the fetch to honor the signal: a hung backend and an
     // uncooperative test double both still settle. The signal is aborted anyway, so a fetch that
     // honors it cancels for real.

@@ -79,7 +79,7 @@ public sealed class EditRecordTests : IDisposable
     public async Task AFieldEditOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges()
     {
         var saved = File.ReadAllText(NpcFile);
-        _mod.Unsaved.Apply([new DocumentChange(NpcFile, saved + " ")]);
+        _mod.Unsaved.Typed(new DocumentChange(NpcFile, saved + " "));
 
         var outcome = await EditHeightMax();
 

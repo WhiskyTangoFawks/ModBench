@@ -139,7 +139,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         Load(masterCompiledPlugin: true);
 
-        _plugins.Unsaved.Apply([MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent")]);
+        _plugins.Unsaved.Typed(MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent"));
         SetFlags("Mover", Persistent);
 
         Assert.Equal("UnsavedPersistent", Document(World)["TopCell"].Require()["EditorID"].Require().GetValue<string>());
@@ -152,7 +152,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         var file = _plugins.DocumentFileOf(Override, World);
         var dirty = new DocumentChange(file, File.ReadAllText(file).Replace("\"World\"", "\"DirtyWorld\"", StringComparison.Ordinal));
 
-        _plugins.Unsaved.Apply([dirty]);
+        _plugins.Unsaved.Typed(dirty);
         SetFlags("Mover", Persistent);
 
         Assert.Equal("DirtyWorld", Document(World)["EditorID"].Require().GetValue<string>());
@@ -163,7 +163,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         Load(masterCompiledPlugin: true);
 
-        _plugins.Unsaved.Apply([MastersUnsaved(MasterGridCell, "MasterGrid", "UnsavedGrid")]);
+        _plugins.Unsaved.Typed(MastersUnsaved(MasterGridCell, "MasterGrid", "UnsavedGrid"));
         SetFlags("Leaver", 0);
 
         Assert.Equal("UnsavedGrid", Document(MasterGridCell)["EditorID"].Require().GetValue<string>());

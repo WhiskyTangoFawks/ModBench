@@ -1158,7 +1158,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/unsaved-documents": {
+    "/unsaved-document": {
         parameters: {
             query?: never;
             header?: never;
@@ -1166,10 +1166,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Every plugin-source document VS Code holds unsaved, each read in place of the file at its absolute path, replacing those put before. Answers once they are held; the plugins whose source holds a document put or dropped are validated after, and announce rows-changed. */
-        put: operations["PutUnsavedDocuments"];
+        /** @description A plugin-source document VS Code opened or changed, read in place of the file at its absolute path. An open replaces what is held; a change of a version older than the one held is ignored. Answers once the record index holds it. */
+        put: operations["PutUnsavedDocument"];
         post?: never;
-        delete?: never;
+        /** @description A plugin-source document VS Code closed: its file is read again. Answers once the record index holds it. */
+        delete: operations["DeleteUnsavedDocument"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2232,8 +2233,12 @@ export interface components {
             reason: string;
             decompileRepairs: boolean;
         };
-        UnsavedDocumentsRequest: {
-            documents: components["schemas"]["DocumentChange"][];
+        UnsavedDocumentRequest: {
+            path: string;
+            text: string;
+            /** Format: int64 */
+            version: number;
+            opened: boolean;
         };
         /** @enum {string} */
         VersionInGitPhase: "Parsing" | "Serializing" | "Committing";
@@ -5475,7 +5480,7 @@ export interface operations {
             };
         };
     };
-    PutUnsavedDocuments: {
+    PutUnsavedDocument: {
         parameters: {
             query?: never;
             header?: never;
@@ -5484,9 +5489,38 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UnsavedDocumentsRequest"];
+                "application/json": components["schemas"]["UnsavedDocumentRequest"];
             };
         };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    DeleteUnsavedDocument: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description No Content */
             204: {

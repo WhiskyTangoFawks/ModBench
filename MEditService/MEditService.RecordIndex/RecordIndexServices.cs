@@ -24,7 +24,6 @@ public static class RecordIndexServices
             var filter = new FilterInForce(sp.GetRequiredService<ILogger<FilterInForce>>(), sp.GetService<INotificationPublisher>());
             var index = new Indexer(
                 sp.GetRequiredService<LoadOrderHolder>(),
-                sp.GetRequiredService<UnsavedDocuments>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),

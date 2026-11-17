@@ -280,7 +280,7 @@ public sealed class PluginFilePathsTests : IDisposable
         var file = SourceFileHolding(Compiled);
         var before = notifications.Notifications.Count;
 
-        index.Unsaved.Apply([new DocumentChange(file, File.ReadAllText(file).Replace("\"Holder\"", "\"Holder", StringComparison.Ordinal))]);
+        index.TypeUnsaved(new DocumentChange(file, File.ReadAllText(file).Replace("\"Holder\"", "\"Holder", StringComparison.Ordinal)));
         Waits.Reached(() => notifications.Since(before).Any(n => Announcements.PluginChanged(Fixture.Plugins.Single())(n)), "the hand-over's announcement");
 
         var answered = Assert.Single(index.Queries.GetFilePaths(null).Value());
