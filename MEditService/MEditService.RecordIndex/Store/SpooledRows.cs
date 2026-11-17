@@ -1,44 +1,57 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using DuckDB.NET.Data;
 
 namespace MEditService.RecordIndex.Store;
 
-/// <summary>The rows of one streamed query, spooled to a file as the query produces them and served at the consumer's
-/// pace, so the query's read ends with the query (ADR-0029).</summary>
+/// <summary>A column of a streamed query: text, which is encoded as a JSON string here, or the JSON text DuckDB made.</summary>
+internal sealed record StreamedColumn(string Name, bool IsText);
+
+/// <summary>The rows of one query as JSON objects, spooled to a file as DuckDB produces them. The query's read ends
+/// with the query, so a slow consumer holds no snapshot open (ADR-0029).</summary>
 internal sealed class SpooledRows : IDisposable
 {
     private const int FlushRows = 256;
     private const int LengthBytes = sizeof(int);
     private static readonly TimeSpan FlushAfter = TimeSpan.FromMilliseconds(5);
+    private static readonly TimeSpan InterruptEvery = TimeSpan.FromMilliseconds(50);
 
     private readonly object _gate = new();
-    private readonly string _path = Path.Combine(Path.GetTempPath(), $"medit-select-{Guid.NewGuid():N}.rows");
-    private readonly StreamedRows _source;
-    private readonly FileStream _writer;
-    private readonly FileStream _reader;
+    private readonly CancellationToken _cancel;
+    private readonly Action _interrupt;
+    private readonly SpoolFile _spool;
     private readonly Thread _producer;
+    private readonly string[] _names;
+    private readonly IReadOnlyList<StreamedColumn> _columns;
+    private long _pending;
     private long _published;
     private long _taken;
     private bool _finished;
+    private bool _readEnded;
     private volatile bool _abandoned;
     private ExceptionDispatchInfo? _fault;
 
-    internal SpooledRows(StreamedRows source)
+    /// <summary>Takes <paramref name="read"/>, <paramref name="command"/> and the writer of <paramref name="spool"/>,
+    /// which the producer ends with the query.</summary>
+    internal SpooledRows(ReadContext read, DuckDBCommand command, IReadOnlyList<StreamedColumn> columns, SpoolFile spool)
     {
-        _source = source;
-        _writer = new FileStream(_path, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
-        _reader = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        _producer = new Thread(() => Produce()) { IsBackground = true, Name = "SELECT rows" };
+        _cancel = read.Cancel;
+        _interrupt = read.Interrupt;
+        _spool = spool;
+        _columns = columns;
+        _names = [.. columns.Select(column => Encoded(column.Name))];
+        _producer = new Thread(() => Produce(read, command)) { IsBackground = true, Name = "SELECT rows" };
         _producer.Start();
     }
 
     /// <summary>The next row's JSON object, or null after the last row. A fault of the query is thrown after the rows
     /// before it.</summary>
-    public string? Next() => _source.Observed(NextRow);
-
-    private string? NextRow()
+    public string? Next()
     {
+        _cancel.ThrowIfCancellationRequested();
         lock (_gate)
         {
             while (_taken == _published && !_finished) Monitor.Wait(_gate);
@@ -50,38 +63,43 @@ internal sealed class SpooledRows : IDisposable
             _taken++;
         }
         Span<byte> length = stackalloc byte[LengthBytes];
-        _reader.ReadExactly(length);
+        _spool.Reader.ReadExactly(length);
         var bytes = new byte[BitConverter.ToInt32(length)];
-        _reader.ReadExactly(bytes);
+        _spool.Reader.ReadExactly(bytes);
         return Encoding.UTF8.GetString(bytes);
     }
 
-    private void Produce()
+    // An exception out of this thread ends the process.
+    private void Produce(ReadContext read, DuckDBCommand command)
     {
-        long pending = 0;
+        DuckDBDataReader? reader = null;
         var sinceFlush = Stopwatch.StartNew();
         try
         {
-            while (!_abandoned && _source.Next() is { } row)
+            reader = read.Observed(() => StoreFaults.Translating(command.ExecuteReader));
+            while (!_abandoned && Row(read, reader) is { } row)
             {
                 var bytes = Encoding.UTF8.GetBytes(row);
-                _writer.Write(BitConverter.GetBytes(bytes.Length));
-                _writer.Write(bytes);
-                pending++;
-                if (pending < FlushRows && sinceFlush.Elapsed < FlushAfter) continue;
-                Publish(ref pending);
+                _spool.Writer.Write(BitConverter.GetBytes(bytes.Length));
+                _spool.Writer.Write(bytes);
+                _pending++;
+                if (_pending < FlushRows && sinceFlush.Elapsed < FlushAfter) continue;
+                Publish();
                 sinceFlush.Restart();
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            _fault = ExceptionDispatchInfo.Capture(ex);
+            Failed(ex);
         }
         finally
         {
-            Publish(ref pending);
-            _writer.Dispose();
-            _source.Dispose();
+            Ending(Publish);
+            Ending(() => reader?.Dispose());
+            Ending(command.Dispose);
+            lock (_gate) _readEnded = true;
+            Ending(read.Dispose);
+            Ending(_spool.Writer.Dispose);
             lock (_gate)
             {
                 _finished = true;
@@ -90,24 +108,76 @@ internal sealed class SpooledRows : IDisposable
         }
     }
 
-    private void Publish(ref long pending)
+    private void Ending(Action step)
     {
-        _writer.Flush();
+        try
+        {
+            step();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Failed(ex);
+        }
+    }
+
+    private void Failed(Exception ex)
+    {
+        Exception reported = ex is IndexFaultException or OperationCanceledException
+            ? ex
+            : new IndexFaultException($"mEdit could not spool this SELECT's rows: {ex.Message}", ex) { Fault = IndexFault.Refused };
+        lock (_gate) _fault ??= ExceptionDispatchInfo.Capture(reported);
+    }
+
+    private void Publish()
+    {
+        _spool.Writer.Flush();
         lock (_gate)
         {
-            _published += pending;
+            _published += _pending;
             Monitor.PulseAll(_gate);
         }
-        pending = 0;
+        _pending = 0;
     }
+
+    private string? Row(ReadContext read, DuckDBDataReader reader)
+    {
+        if (!read.Observed(() => StoreFaults.Translating(() => Read(reader)))) return null;
+        var row = new StringBuilder("{");
+        for (var i = 0; i < _columns.Count; i++)
+        {
+            if (i > 0) row.Append(',');
+            row.Append(_names[i]).Append(':');
+            if (reader.IsDBNull(i)) row.Append("null");
+            else row.Append(_columns[i].IsText ? Encoded(reader.GetString(i)) : reader.GetString(i));
+        }
+        return row.Append('}').ToString();
+    }
+
+    // DuckDB.NET throws an interrupt that reaches the stream in place of the failure as a bare OperationCanceledException.
+    private static bool Read(DuckDBDataReader reader)
+    {
+        try
+        {
+            return reader.Read();
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new IndexFaultException("DuckDB interrupted the SELECT partway, and gave no reason.", ex) { Fault = IndexFault.Refused };
+        }
+    }
+
+    private static string Encoded(string text) => $"\"{JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping)}\"";
 
     public void Dispose()
     {
         _abandoned = true;
-        _producer.Join();
-        _writer.Dispose();
-        _source.Dispose();
-        _reader.Dispose();
-        File.Delete(_path);
+        while (!_producer.Join(InterruptEvery))
+        {
+            lock (_gate)
+            {
+                if (!_readEnded) _interrupt();
+            }
+        }
+        _spool.Dispose();
     }
 }

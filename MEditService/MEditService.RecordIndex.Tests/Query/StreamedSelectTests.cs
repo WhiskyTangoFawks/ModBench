@@ -60,6 +60,30 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.True(taken.MoveNext());
     }
 
+    [Fact]
+    public void AnIndexOpened_RemovesTheSpoolFilesAKilledProcessLeft()
+    {
+        Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records)))).Dispose();
+        var left = Path.Combine(Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require(), "killed.spool");
+        File.WriteAllText(left, "rows");
+
+        using var again = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
+
+        Assert.False(File.Exists(left));
+    }
+
+    [Fact]
+    public void ASelectsRows_AreSpooledBesideTheIndex_AndTheFileIsGoneOnceTheRowsAre()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
+        var folder = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)).Require();
+
+        using (var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value())
+            Assert.True(rows.Rows().Count() >= Records);
+
+        Assert.Empty(Directory.GetFiles(folder, "*.spool"));
+    }
+
     [Theory]
     [InlineData("SELECT body FROM records")]
     [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]

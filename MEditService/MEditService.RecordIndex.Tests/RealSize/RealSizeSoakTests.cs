@@ -132,8 +132,9 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
                 var current = first;
                 while (!_stop.IsCancellationRequested)
                 {
-                    if (!queries.SelectRows(Select, CancellationToken.None).Holds(out var next, out _))
+                    if (!queries.SelectRows(Select, CancellationToken.None).Holds(out var next, out var refused))
                     {
+                        if (refused.Refusal != IndexRefusal.IndexNotReady) throw new InvalidOperationException($"A read in flight was refused: {refused.Message}");
                         Thread.Sleep(TimeSpan.FromMilliseconds(10));
                         continue;
                     }

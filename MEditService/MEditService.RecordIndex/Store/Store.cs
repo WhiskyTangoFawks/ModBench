@@ -114,6 +114,7 @@ internal sealed class Store : IDisposable
         try
         {
             _connection = OpenFile(_databasePath);
+            SpoolFile.Sweep(SpoolDirectory);
             return null;
         }
         catch (Exception ex) when (IsAnotherWriter(ex))
@@ -128,9 +129,12 @@ internal sealed class Store : IDisposable
             _logger.LogWarning(ex, "Could not open the record index at {Path}; rebuilding it from scratch", _databasePath);
             File.Delete(_databasePath);
             _connection = OpenFile(_databasePath);
+            SpoolFile.Sweep(SpoolDirectory);
             return null;
         }
     }
+
+    private string SpoolDirectory => _databasePath is null ? Path.GetTempPath() : Path.GetDirectoryName(_databasePath) ?? throw new InvalidOperationException($"Expected '{_databasePath}' to name a file in a folder.");
 
     /// <summary>Whether another process holds the file, never answered by rebuilding: deleting an open
     /// file can succeed and destroy a live index. Matched on DuckDB's message, all it offers, which
@@ -155,7 +159,7 @@ internal sealed class Store : IDisposable
                 lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); }
                 RequestCheckpoint();
             };
-            return new ReadContext(connection, cancel);
+            return new ReadContext(connection, () => SpoolFile.In(SpoolDirectory), cancel);
         }
     }
 

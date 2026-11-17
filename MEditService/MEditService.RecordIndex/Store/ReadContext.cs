@@ -11,23 +11,30 @@ internal sealed class ReadContext : IDisposable
     private readonly DuckDBConnection _connection;
     private readonly CancellationToken _cancel;
     private readonly CancellationTokenRegistration _interrupting;
+    private readonly Func<SpoolFile> _spoolOf;
     private readonly bool _owned;
 
-    /// <summary>Takes <paramref name="connection"/>, which holds a transaction open, to dispose.</summary>
-    internal ReadContext(DuckDBConnection connection, CancellationToken cancel) : this(connection, owned: true, cancel)
+    /// <summary>Takes <paramref name="connection"/>, which holds a transaction open, to dispose. A SELECT's rows are
+    /// spooled to the file <paramref name="spoolOf"/> opens.</summary>
+    internal ReadContext(DuckDBConnection connection, Func<SpoolFile> spoolOf, CancellationToken cancel) : this(connection, owned: true, spoolOf, cancel)
     {
     }
 
-    private ReadContext(DuckDBConnection connection, bool owned, CancellationToken cancel)
+    private ReadContext(DuckDBConnection connection, bool owned, Func<SpoolFile> spoolOf, CancellationToken cancel)
     {
         _connection = connection;
         _cancel = cancel;
+        _spoolOf = spoolOf;
         _owned = owned;
-        if (owned) _interrupting = cancel.Register(() => NativeMethods.Startup.DuckDBInterrupt(connection.NativeConnection));
+        if (owned) _interrupting = cancel.Register(Interrupt);
     }
 
     /// <summary>The same snapshot, which disposing the borrowed context leaves open.</summary>
-    public ReadContext Borrowed() => new(_connection, owned: false, _cancel);
+    public ReadContext Borrowed() => new(_connection, owned: false, _spoolOf, _cancel);
+
+    internal CancellationToken Cancel => _cancel;
+
+    internal void Interrupt() => NativeMethods.Startup.DuckDBInterrupt(_connection.NativeConnection);
 
     /// <summary>Runs <paramref name="read"/> unless cancellation was requested. A fault of a read interrupted by it is the
     /// cancellation.</summary>
@@ -50,8 +57,8 @@ internal sealed class ReadContext : IDisposable
     // DESCRIBE's name for plain text, which JSON, a text type of its own, is not.
     private const string TextType = "VARCHAR";
 
-    /// <summary>Each row of <paramref name="sql"/> as the JSON text of an object of its columns, read as it is taken.
-    /// The rows take this context, which the query's end releases.</summary>
+    /// <summary>Each row of <paramref name="sql"/> as the JSON text of an object of its columns, spooled as the query
+    /// produces them. The rows take this context, which the query's end releases.</summary>
     public SpooledRows Streamed(string sql)
     {
         // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
@@ -61,10 +68,20 @@ internal sealed class ReadContext : IDisposable
         // SELECT of body would hold every body. Text is encoded as it is read instead.
         var values = string.Join(", ", columns.Select((column, i) => column.IsText ? $"c{i}" : $"to_json(c{i})"));
         var aliases = string.Join(", ", columns.Select((_, i) => $"c{i}"));
-        var command = _connection.CreateCommand();
-        command.CommandText = $"SELECT {values} FROM ({sql}\n) __row({aliases})";
-        command.UseStreamingMode = true;
-        return new SpooledRows(new StreamedRows(this, command, columns));
+        var spool = _spoolOf();
+        try
+        {
+            var command = _connection.CreateCommand();
+            command.CommandText = $"SELECT {values} FROM ({sql}\n) __row({aliases})";
+            command.UseStreamingMode = true;
+            var rows = new SpooledRows(this, command, columns, spool);
+            spool = null;
+            return rows;
+        }
+        finally
+        {
+            spool?.Abandon();
+        }
     }
 
     public int Execute(string sql, params object?[] args) => Observed(() => DuckDbSql.Execute(_connection, sql, args));

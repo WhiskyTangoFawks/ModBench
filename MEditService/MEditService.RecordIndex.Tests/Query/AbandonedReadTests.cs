@@ -7,7 +7,7 @@ namespace MEditService.RecordIndex.Tests.Query;
 public sealed class AbandonedReadTests : IDisposable
 {
     private const string Master = "Master.esm";
-    private const string ForeverSelect = "SELECT max(hash(a.range + b.range)) AS v FROM range(1000000) a, range(1000000) b";
+    internal const string ForeverSelect = "SELECT max(hash(a.range + b.range)) AS v FROM range(1000000) a, range(1000000) b";
     private static readonly TimeSpan WellBeforeTheSelectCouldEnd = TimeSpan.FromSeconds(20);
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("abandoned-read").WithPlugin(Master).Build();
