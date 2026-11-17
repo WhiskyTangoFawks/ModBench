@@ -57,7 +57,7 @@ internal static class GitInit
             foreach (var asset in assets)
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
             git.BeginInit(journal);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
+            journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.IgnoreListFileName), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
             // Each file keeps its line endings as written, whatever the user's git config converts (plugins.md, Version in git, story 4).
             journal.Write(Path.Combine(sourceFolder, ".gitattributes"), "* -text\n"u8.ToArray());
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
@@ -145,17 +145,17 @@ internal static class GitInit
     // excludes. The ignored paths come last: a package yields them (ADR-0022).
     private static string GitignoreContent(RootFile? manifest, IReadOnlyList<FileToCopy> assets, IReadOnlyList<string> ignored) =>
         "*\n" +
-        "!/.gitignore\n" +
+        $"!/{SourceRepositoryLayout.IgnoreListFileName}\n" +
         "!/.gitattributes\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
-        Unignored($"{SourceRepositoryLayout.RootFolderName}/") +
-        (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +
-        string.Concat(assets.Select(asset => RootEntryOf(asset.Path)).Distinct(StringComparer.Ordinal).Select(Unignored)) +
+        $"{Unignored($"{SourceRepositoryLayout.RootFolderName}/")}\n" +
+        (manifest is null ? "" : $"{Unignored(Escaped(manifest.Name))}\n") +
+        string.Concat(assets.Select(asset => RootEntryOf(asset.Path)).Distinct(StringComparer.Ordinal).Select(entry => $"{Unignored(entry)}\n")) +
         string.Concat(ignored.Select(path => $"/{Escaped(path)}\n"));
 
     private static string RootEntryOf(string path) => path.Split('/') is [var file] ? Escaped(file) : $"{Escaped(path.Split('/')[0])}/";
 
-    private static string Unignored(string entry) => entry.EndsWith('/') ? $"!/{entry}\n!/{entry}**\n" : $"!/{entry}\n";
+    internal static string Unignored(string entry) => entry.EndsWith('/') ? $"!/{entry}\n!/{entry}**" : $"!/{entry}";
 
-    private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
+    internal static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }
