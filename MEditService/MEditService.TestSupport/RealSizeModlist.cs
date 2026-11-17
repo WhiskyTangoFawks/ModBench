@@ -58,6 +58,9 @@ public sealed class RealSizeModlist : IDisposable
 
     public string MastersBigCell { get; private set; } = "";
 
+    /// <summary>The record each reference in the master's big cell places.</summary>
+    public string MastersBigCellsBase { get; private set; } = "";
+
     /// <summary>A plugin read from its source tree, holding a big cell and many records each a document of its own.</summary>
     public LoadOrderEntry BigSourcePlugin => LoadOrder[BigSourceRank];
 
@@ -133,7 +136,9 @@ public sealed class RealSizeModlist : IDisposable
 
     private int AddMastersBigCell(Fallout4Mod mod)
     {
-        MastersBigCell = AddBigCell(mod, "MastersBigCell").FormKey.ToString();
+        var cell = AddBigCell(mod, "MastersBigCell");
+        MastersBigCell = cell.FormKey.ToString();
+        MastersBigCellsBase = ((PlacedObject)cell.Temporary[0]).Base.FormKey.ToString();
         return 2 + ReferencesInTheBigCell;
     }
 

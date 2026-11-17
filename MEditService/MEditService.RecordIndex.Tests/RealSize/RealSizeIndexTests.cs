@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -21,6 +22,9 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
     private static readonly TimeSpan OneFactsRead = TimeSpan.FromSeconds(0.01);
     private static readonly TimeSpan OneFilesRead = TimeSpan.FromSeconds(0.1);
+    private static readonly TimeSpan OneKeyedRead = TimeSpan.FromSeconds(0.1);
+    private static readonly TimeSpan HalfAGesture = TimeSpan.FromSeconds(0.5);
+    private static readonly TimeSpan OneAnswerOfEveryMastersRecord = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
     private const int Runs = 5;
@@ -455,6 +459,164 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetScriptReferences(RealSizeModlist.AttachedScript).Value(), "Listing the references to a script", Runs);
         Assert.NotEmpty(listed?.Copies ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheMastersRecordTypes_AreCountedWithinOneGesture()
+    {
+        IReadOnlyList<PluginRecordTypeCount>? listed = null;
+
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetPluginRecordTypes(Modlist.Master.Key).Value(), "Expanding the master", Runs);
+        Assert.Contains(listed ?? [], type => type.Type == "npc_");
+    }
+
+    [RealSizeFact]
+    public void TheMastersNpcs_ListWithinOneGesture()
+    {
+        PagedResult<RecordSummary>? listed = null;
+
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetRecords(["npc_"], Modlist.Master.Key, search: null, limit: int.MaxValue, offset: 0).Value(), "Expanding the master's NPCs", Runs);
+        Assert.NotEmpty(listed?.Items ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheMastersWorldspaces_ListWithinHalfAGesture()
+    {
+        IReadOnlyList<WorldspaceSummary>? listed = null;
+
+        Budgets.Ran(HalfAGesture, () => listed = Index.Queries.GetWorldspaces(Modlist.Master.Key).Value(), "Expanding the master's worldspaces", Runs);
+        Assert.Equal("World000", Assert.Single(listed ?? []).EditorId);
+    }
+
+    [RealSizeFact]
+    public void TheWorkingTreeStatesBeneathTheBigSourcePlugin_ReadWithinAQuarterOfAGesture()
+    {
+        WorkingTreeStatesBeneath? read = null;
+
+        Budgets.Ran(OneKeystroke, () => read = Index.Queries.GetWorkingTreeStatesBeneath(Modlist.BigSourcePlugin.Key).Value(), "Reading the states beneath the big source plugin", Runs);
+        Assert.Equal((0, 0, 0), (read?.Plugin.Count, read?.RecordTypes.Count, read?.Records.Count));
+    }
+
+    [RealSizeFact]
+    public void TheTypesTheMastersBigCellCanHold_ReadWithinAQuarterOfAGesture()
+    {
+        IReadOnlyList<RecordTypeChoice>? read = null;
+
+        Budgets.Ran(OneKeystroke, () => read = Index.Queries.GetChildRecordTypes(Modlist.Master.Key, Modlist.MastersBigCell).Value(), "Reading the types a big cell can hold", Runs);
+        Assert.Contains(read ?? [], type => type.Type == "refr");
+    }
+
+    [RealSizeFact]
+    public void ARecordsDocument_IsFoundWithinAQuarterOfAGesture()
+    {
+        var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[6]);
+        CopyDocument? found = null;
+
+        Budgets.Ran(OneKeystroke, () => found = Index.Queries.GetCopyDocument(plugin.Key, formKey).Value(), "Finding a record's document", Runs);
+        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key))), found);
+    }
+
+    [RealSizeFact]
+    public void TheMastersBigCellsRenderedDocument_IsFoundWithinAQuarterOfAGesture()
+    {
+        CopyDocument? found = null;
+
+        Budgets.Ran(OneKeystroke, () => found = Index.Queries.GetCopyDocument(Modlist.Master.Key, Modlist.MastersBigCell).Value(), "Finding a big cell's rendered document", Runs);
+        Assert.Equal(CopyDocumentKind.Rendered, found?.Kind);
+    }
+
+    [RealSizeFact]
+    public void ARecordsOwner_IsReadWithinAQuarterOfAGesture()
+    {
+        IReadOnlyList<PluginAddress>? owners = null;
+
+        Budgets.Ran(OneKeystroke, () => owners = Index.Queries.GetRecordOwners(Modlist.OverriddenRecord).Value(), "Reading a record's owner", Runs);
+        Assert.Single(owners ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToARecord_ListWithinOneGesture()
+    {
+        IReadOnlyList<ReferenceResult>? listed = null;
+
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetReferencesInActiveOrCompiledPlugins(Modlist.MastersBigCellsBase).Value(), "Listing the references to a record", Runs);
+        Assert.Equal(RealSizeModlist.ReferencesInTheBigCell, listed?.Count);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToARecord_ArePlacedWithinOneGesture()
+    {
+        PlacedReferences? placed = null;
+
+        Budgets.Ran(OneGesture, () => placed = Index.Queries.GetPlacedReferences(Modlist.MastersBigCellsBase).Value(), "Placing the references to a record", Runs);
+        Assert.NotEmpty(placed?.Copies ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheBigSourcePluginsProblems_ReadWithinOneGesture()
+    {
+        IReadOnlyList<PluginProblems>? read = null;
+
+        Budgets.Ran(OneGesture, () => read = Index.Queries.GetProblems(Modlist.BigSourcePlugin.Key).Value(), "Reading the big source plugin's problems", Runs);
+        Assert.Single(read ?? []);
+    }
+
+    [RealSizeFact]
+    public void EveryPluginsProblems_ReadWithinOneGesture()
+    {
+        IReadOnlyList<PluginProblems>? read = null;
+
+        Budgets.Ran(OneGesture, () => read = Index.Queries.GetProblems(null).Value(), "Reading every plugin's problems", Runs);
+        Assert.Equal(RealSizeModlist.SourceTreePlugins, read?.Count);
+    }
+
+    [RealSizeFact]
+    public void EveryPluginsDiagnoses_ReadWithinAQuarterOfAGesture()
+    {
+        IReadOnlyList<PluginDiagnosisReport>? read = null;
+
+        Budgets.Ran(OneKeystroke, () => read = Index.Queries.GetLoadOrderDiagnoses().Value(), "Reading every plugin's diagnoses", Runs);
+        Assert.Empty(read ?? [new PluginDiagnosisReport("", "", "unread")]);
+    }
+
+    [RealSizeFact]
+    public void TheNamesInADocument_AreReadWithinAQuarterOfAGesture()
+    {
+        var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[3]);
+        var record = Index.DocumentOf(formKey, plugin.Key);
+        var (path, text) = (plugin.SourceFileOf(record), plugin.SourceTextOf(record));
+        IReadOnlyList<DocumentName>? named = null;
+
+        Budgets.Ran(OneKeystroke, () => named = Index.Queries.GetPluginSourceNames(path, text, text.IndexOf(formKey, StringComparison.Ordinal)).Value(), "Reading the name under the cursor", Runs);
+        Assert.NotEmpty(named ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToASmallPluginsName_ListWithinOneKeyedRead()
+    {
+        var small = Modlist.SmallBinaryPlugins.First(plugin => plugin.Enabled);
+        IReadOnlyList<CopyNaming>? listed = null;
+
+        Budgets.Ran(OneKeyedRead, () => listed = Index.Queries.GetPluginNameReferences(small.Name).Value(), "Listing the references to a small plugin's name", Runs);
+        Assert.NotEmpty(listed ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToTheMastersName_ListWithinOneAnswerOfEveryMastersRecord()
+    {
+        IReadOnlyList<CopyNaming>? listed = null;
+
+        Budgets.Ran(OneAnswerOfEveryMastersRecord, () => listed = Index.Queries.GetPluginNameReferences(Modlist.Master.Name).Value(), "Listing the references to the master's name", Runs);
+        Assert.NotEmpty(listed ?? []);
+    }
+
+    [RealSizeFact]
+    public void AName_ResolvesWithinOneKeyedRead()
+    {
+        IReadOnlyList<NamedObject>? named = null;
+
+        Budgets.Ran(OneKeyedRead, () => named = Index.Queries.ResolveNames([new NameQuery("Overridden")]).Value(), "Resolving a name", Runs);
+        Assert.Equal(Modlist.OverriddenRecord, Assert.Single(named ?? []).FormKey);
     }
 
     [RealSizeFact]

@@ -216,6 +216,39 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     }
 
     [Fact]
+    public void ManyCopiesWithNoPluginSource_AreEachPlacedInTheirOwnPlugin_NeverInAnotherHoldingTheirRecords()
+    {
+        const int referrers = 100;
+        PluginAddress many = new("Many.esp", "ManyMod"), other = new("Other.esp", "OtherMod");
+        FormKey target = default;
+        using var fixture = new PluginFixtureBuilder("placed-references-many")
+            .WithPlugin("Target.esp", mod => target = mod.Keywords.AddNew("Target").FormKey, origin: "TargetMod")
+            .WithPlugin(many.Name, (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[0].ModKey });
+                for (var n = 0; n < referrers; n++) mod.Npcs.AddNew($"Referrer{n}").Keywords = [new FormLink<IKeywordGetter>(target)];
+            }, origin: many.Origin)
+            .WithPlugin(other.Name, (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[1].ModKey });
+                foreach (var npc in built[1].Npcs)
+                {
+                    var unlinked = npc.DeepCopy();
+                    unlinked.Keywords = null;
+                    mod.Npcs.Set(unlinked);
+                }
+            }, origin: other.Origin)
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+
+        var placed = index.Queries.GetPlacedReferences(target.ToString()).Value();
+
+        Assert.Empty(placed.LeftOut);
+        Assert.Equal(referrers, placed.Copies.Count);
+        Assert.All(placed.Copies, copy => Assert.Equal(many, copy.Plugin, PluginAddress.Comparer));
+    }
+
+    [Fact]
     public void AReferrerItsPluginHoldsNoCopyOf_IsLeftOutNamed()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
