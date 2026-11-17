@@ -56,7 +56,7 @@ public sealed class AbandonedPanelTests : IDisposable
     }
 
     [Fact]
-    public void AProblemsReadWhoseCallerLeftWhilePlacingOnePlugin_PlacesNoOther()
+    public void AProblemsReadWhoseCallerLeftWhilePlacingOnePlugin_Stops()
     {
         Build((mod, _) => mod.Npcs.AddNew("Referrer").Race.SetTo(FormKey.Factory(Absent)), "First.esp", "Second.esp");
         using var left = new CancellationTokenSource();
@@ -68,7 +68,7 @@ public sealed class AbandonedPanelTests : IDisposable
     }
 
     [Fact]
-    public void AFilePathsReadWhoseCallerLeftWhileReadingOnePlugin_ReadsNoOther()
+    public void AFilePathsReadWhoseCallerLeftWhileReadingOnePlugin_Stops()
     {
         Build((mod, _) => mod.Npcs.AddNew("Referrer"), "First.esp", "Second.esp");
         using var left = new CancellationTokenSource();
@@ -80,7 +80,7 @@ public sealed class AbandonedPanelTests : IDisposable
     }
 
     [Fact]
-    public void APlacedReferencesReadWhoseCallerLeftWhilePlacingOneCopy_PlacesNoOther()
+    public void APlacedReferencesReadWhoseCallerLeftWhilePlacingOneCopy_Stops()
     {
         FormKey target = default;
         Build((mod, _) =>

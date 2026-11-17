@@ -38,7 +38,7 @@ import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wi
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default for every read: a slow one and a hung one look the same to the tree.
-// A write has no limit, since the writer finishes its own write (ADR-0029).
+// A write has no limit: the writer finishes its own write.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 interface PostSpec<T> {

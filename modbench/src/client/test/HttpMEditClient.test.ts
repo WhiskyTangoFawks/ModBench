@@ -1298,18 +1298,23 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
     ]);
-    const client = makeClient(fetch, { timeoutMs: 20 });
-    const settled = vi.fn();
-    client.onUnsavedHandOver(settled);
-    await client.start();
+    vi.useFakeTimers();
+    try {
+      const client = makeClient(fetch, { timeoutMs: 20 });
+      const settled = vi.fn();
+      client.onUnsavedHandOver(settled);
+      await client.start();
 
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
-    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(settled).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(60);
+      expect(handedOver).toHaveBeenCalled();
+      expect(settled).not.toHaveBeenCalled();
 
-    answerHandOver();
-    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(undefined));
+      answerHandOver();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toHaveBeenCalledWith(undefined);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('answers a thrown request as an unknown refusal in the words for it, never fetch\'s text', async () => {
