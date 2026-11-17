@@ -193,9 +193,11 @@ async function handle(options: OpenOptions, sessions: Sessions, request: Incomin
     response.writeHead(403).end();
     return;
   }
-  const held = sessions.get(String(request.headers['mcp-session-id']));
-  if (request.method === 'DELETE' && held !== undefined) {
-    await held.handleRequest(request, response);
+  const sessionId = request.headers['mcp-session-id'];
+  const held = typeof sessionId === 'string' ? sessions.get(sessionId) : undefined;
+  if (request.method === 'DELETE') {
+    if (held === undefined) response.writeHead(404).end();
+    else await held.handleRequest(request, response);
     return;
   }
   if (request.method !== 'POST') {

@@ -121,21 +121,22 @@ export function sourceCommands({ client, adapter, saveUnsaved, loadOrderSnapshot
       const refused: BuildRefusal[] = [];
       const ordered = await inModOrder(adapter, mods);
       let previous: string | undefined;
+      const refuseStopped = (from: number): void => {
+        refused.push(...ordered.slice(from).map((item) => ({ item, reason: 'was not built: the build was stopped.' })));
+      };
       for (const [at, mod] of ordered.entries()) {
-        if (signal?.aborted) {
-          refused.push(...ordered.slice(at).map((item) => ({ item, reason: 'was not built: the build was stopped.' })));
-          break;
-        }
+        if (signal?.aborted) { refuseStopped(at); break; }
         const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
         // source.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
-        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter, loadOrderSnapshot }, [previous])).get(previous);
+        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter, loadOrderSnapshot }, [previous], signal)).get(previous);
         if (previous !== undefined && why !== undefined) {
           const waited = previous;
           landed = landed.map((built) => (built.mod === waited ? { ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` } : built));
           refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${waited}'s ${why}` })));
           break;
         }
+        if (signal?.aborted) { refuseStopped(at); break; }
         const outcome = await buildSourceMod({ client, adapter, tasks, trash }, decided, pass);
         if (isRefused(outcome)) {
           if (landed.length === 0 && refused.length === 0) return outcome;

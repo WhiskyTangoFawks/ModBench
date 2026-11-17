@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
 
-import { callWithSignal, executeCommand, registered, runRegisteredTask, signalOf } from '../../test/taskDouble';
+import { executeCommand, registered, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { AgentCall } from '../agentGesture';
 import { Refusal } from '../refusal';
 import { present } from '../../ports/present';
 import { registerTaskGesture, type TaskVerdict } from '../taskGesture';
@@ -27,7 +28,7 @@ describe('a task over a command', () => {
 
     const { written, closedWith } = await runRegisteredTask({ type: 'modbench.test.run' }, { resolves: 'outcome' });
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.test.run', callWithSignal([]));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.test.run', expect.objectContaining({ argument: [], options: {} }));
     expect([written, closedWith]).toEqual(['got outcome\r\nfine\r\n', [0]]);
   });
 
@@ -57,7 +58,8 @@ describe('a task over a command', () => {
     executeCommand.mockReturnValueOnce(new Promise(() => undefined));
     const terminal = await present(registered.provider, 'the provider').resolveTask({ definition: { type: 'modbench.test.run' } }).execution.start();
     terminal.open();
-    const signal = signalOf(executeCommand.mock.calls[0]?.[1]);
+    const sent: unknown = executeCommand.mock.calls[0]?.[1];
+    const signal = sent instanceof AgentCall ? sent.signal : undefined;
     expect(signal?.aborted).toBe(false);
 
     terminal.close();

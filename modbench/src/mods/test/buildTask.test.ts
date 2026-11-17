@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
 
-import { callWithSignal, executeCommand, runRegisteredTask } from '../../test/taskDouble';
+import { executeCommand, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { SourceBuildOutcome as BuildOutcome } from '../../sourceCommands/buildSourceMod';
 import { registerBuildTask } from '../buildTask';
@@ -25,14 +25,24 @@ describe('the build task', () => {
       { ...DEFINITION, mods: ['ModA', 'ModB'] }, applied({ landed: [landed(), landed({ mod: 'ModB' })], refused: [] }),
     );
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', callWithSignal([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }]));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', expect.objectContaining({ argument: [{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], options: {} }));
     expect([written, closedWith, reporter.shownFailures]).toEqual(['Built "ModA".\r\nBuilt "ModB".\r\n', [0], []]);
   });
 
   it('names no mod when its definition names none', async () => {
     await build(DEFINITION, applied({ landed: [], refused: [] }));
 
-    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', callWithSignal([]));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', expect.objectContaining({ argument: [], options: {} }));
+  });
+
+  it('fails the task when the build was stopped, naming the mod it stopped and the mod it did not build (source.md, Build, story 14)', async () => {
+    const { written, closedWith } = await build(DEFINITION, applied({
+      landed: [landed({ failure: 'The build was stopped before its step 2.' })], refused: [{ item: 'ModB', reason: 'was not built: the build was stopped.' }],
+    }));
+
+    expect(closedWith).toEqual([1]);
+    expect(written).toContain('Could not build "ModB": was not built: the build was stopped.');
+    expect(written).toContain('Built 1 mod only in part. "ModA" (The build was stopped before its step 2.)');
   });
 
   const WARNING = 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.';

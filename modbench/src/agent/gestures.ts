@@ -17,8 +17,6 @@ import { countsOf, fitting } from './tooLarge';
 interface GestureInput {
   readonly input: z.ZodRawShape;
   readonly callOf: (value: InstanceValue, given: unknown, mEdit: NameResolver) => AgentCall | Promise<AgentCall>;
-  /** The gesture stops after the step in hand when its call is cancelled, so it is handed the call's signal. */
-  readonly stops?: true;
 }
 
 type NameResolver = Pick<MEditClient, 'resolveNames'>;
@@ -187,10 +185,10 @@ const UPDATE_MANIFEST = gestureInput(
   ], {}),
 );
 
-const BUILD: GestureInput = {
-  ...gestureInput(EVERY_MOD_BY_DEFAULT, (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {})),
-  stops: true,
-};
+const BUILD = gestureInput(
+  EVERY_MOD_BY_DEFAULT,
+  (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {}),
+);
 
 const PLUGIN_NAME = z.strictObject({ name: z.string(), origin: z.string().optional() });
 
@@ -392,7 +390,7 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, [gesture, read]]
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void, cancelled: AbortSignal) => {
     const call = await gesture.callOf(value, given, mEdit);
-    const answer = await vscode.commands.executeCommand<GestureOutcome<Message> | DeployOutcome>(command, gesture.stops === true ? new AgentCall(call.argument, call.options, cancelled) : call);
+    const answer = await vscode.commands.executeCommand<GestureOutcome<Message> | DeployOutcome>(command, new AgentCall(call.argument, call.options, cancelled));
     const outcome = namedForAgent(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
     if (refusal === undefined && outcome.applied) partialsIn(outcome).forEach(warn);
