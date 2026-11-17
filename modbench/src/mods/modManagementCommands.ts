@@ -194,7 +194,7 @@ async function confirmUninstall(names: readonly string[], ask: AskQuestion): Pro
 
 interface ModContextDeps {
   commands: ModCommands;
-  instance: Pick<Instance, 'value' | 'refresh' | 'writing'>;
+  instance: Pick<Instance, 'value' | 'refresh'>;
   viewSelection: () => readonly ModlistNode[];
   reporter: Reporter;
   ask: AskQuestion;

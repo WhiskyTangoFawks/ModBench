@@ -16,6 +16,7 @@
     { "path": "../instanceLoader" },
     { "path": "../modCommands" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../sourceCommands" },
     { "path": "../symbolNames" },
     { "path": "../tables" },

@@ -26,6 +26,7 @@ import type { ChangeResult } from '../../ports/changeResult';
 import type { RenameEditing } from '../../modCommands/renameEntry';
 import type { FileChanges } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { ambientWrites } from '../../instanceLoader/ambientWrites';
 
 const RENAME: FileRename = { from: '/mods/Patch Mod/Patch.esp', to: '/mods/Patch Mod/Renamed.esp' };
 const OTHER_RENAME: FileRename = { from: '/mods/Base', to: '/mods/Renamed Base' };
@@ -43,7 +44,6 @@ function deferred<T>() {
 
 function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: Readonly<Record<string, Answer>> = {}) {
   const events: string[] = [];
-  let writing = 0;
   const reporter = recordingReporter();
   const rename = async ({ apply }: RenameEditing, from: string, to: string): Promise<ChangeResult> => {
     events.push(`plan ${from} as ${to}`);
@@ -51,7 +51,8 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     if ('refusal' in answer) return { applied: false, refusal: answer.refusal };
     const unapplied = await apply([CHANGES]);
     if (unapplied !== undefined) return { applied: false, unapplied };
-    events.push(`commit ${to}${writing > 0 ? ', writing' : ''}`);
+    ambientWrites.name([`/instance/${to}`]);
+    events.push(`commit ${to}`);
     return { applied: true, cannotFollow: answer.cannotFollow };
   };
   const renamePlugin = vi.fn((editing: RenameEditing, { name }: { name: string }, to: string) => rename(editing, name, to));
@@ -71,16 +72,11 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     profiles: { renameProfile },
     scripts: { renameScript: (editing, { name, to }) => renameScript(editing, name, to.name ?? '') },
     source: {
-      applyWorkspaceChanges: (items) => { events.push(`apply ${String(items.length)}${writing > 0 ? ', writing' : ''}`); return Promise.resolve(); },
+      applyWorkspaceChanges: (items) => { events.push(`apply ${String(items.length)}`); return Promise.resolve(); },
       oneAtATime: (job) => job(),
       refreshSourceControlFor: () => undefined,
     },
-    instance: {
-      writing: async (work) => {
-        writing += 1;
-        try { return await work(); } finally { writing -= 1; events.push(`writing ends, ${String(reporter.reports.length)} reported`); }
-      },
-    },
+    instance: { refresh: (named) => { events.push(`refresh ${named?.join(', ') ?? 'the disk'}`); return Promise.resolve(); } },
     reporter,
   });
   return { follow, events, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
@@ -89,7 +85,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
 const renaming = (rename: FileRename, symbol: RenamedSymbol): [string, RenamedSymbol] => [`${rename.from} > ${rename.to}`, symbol];
 
 describe('following a rename VS Code makes of a file or folder that is a symbol (symbols.md, The features, stories 6 and 9)', () => {
-  it('plans against the old name before the rename lands, then applies the edit and commits, all one write of several files', async () => {
+  it('plans against the old name before the rename lands, then applies the edit and commits, and the instance reads what it wrote once, after the commit', async () => {
     const landing = deferred<boolean>();
     const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
 
@@ -99,7 +95,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
 
     landing.resolve(true);
     await following.done;
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1, writing', 'commit Renamed.esp, writing', 'writing ends, 0 reported']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1', 'commit Renamed.esp', 'refresh /instance/Renamed.esp']);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -129,7 +125,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
 
     landing.resolve(true);
     await following.done;
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'writing ends, 0 reported']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp']);
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: '"Patch.esp" (Patch Mod) was renamed to "Renamed.esp", and no reference to it followed: Not a valid plugin file name: "Renamed.esp"', detail: undefined,
     }]);
@@ -158,21 +154,12 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     }]);
   });
 
-  it('says what it carried once its write of several files, and each sync it held back, has ended', async () => {
-    const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]), { 'Patch.esp': { cannotFollow: ['LOOT\'s masterlist names Patch.esp'] } });
-
-    await follow([RENAME], Promise.resolve(true)).done;
-
-    expect(events.at(-1)).toBe('writing ends, 0 reported');
-    expect(reporter.reports).toHaveLength(1);
-  });
-
   it('applies and commits nothing when VS Code never says the rename landed, and says so', async () => {
     const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
 
     await follow([RENAME], Promise.resolve(false)).done;
 
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'writing ends, 0 reported']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp']);
     expect(reporter.reports.map(({ severity, message }) => ({ severity, message }))).toEqual([
       { severity: 'warning', message: 'VS Code did not report renaming "Patch.esp" (Patch Mod), so no reference to it followed.' },
     ]);

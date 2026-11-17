@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { ModSyncRun } from '../modCommands/modCommands';
+import { whenNoChangeIsRunning } from '../drivingLib/writingGesture';
 import { createModSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
 
 export interface ModSyncOn {
@@ -9,7 +10,7 @@ export interface ModSyncOn {
 }
 
 interface ModSyncDeps {
-  instance: Pick<Instance, 'subscribeWriter' | 'value'>;
+  instance: Pick<Instance, 'subscribe' | 'value'>;
   syncMods: ModSyncRun;
   channel: SyncChannel;
 }
@@ -18,12 +19,14 @@ interface ModSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function modSyncOn({ instance, syncMods, channel }: ModSyncDeps): ModSyncOn {
   const modSync = createModSync(syncMods, channel, instance.value.managerNames.modOrderFile);
+  const onChange = whenNoChangeIsRunning(async () => { await modSync.run(); });
+  // Recovery is not gated (ADR-0003).
+  const onFailure = whenNoChangeIsRunning(async () => { if (modSync.message() !== undefined) await modSync.run(); });
   const subscriptions = [
-    instance.subscribeWriter(async () => { await modSync.run(); }, { mods: true, modFolders: true }),
-    // Recovery is not gated (ADR-0003): a sync whose failure stands is tried again at each value, as the first one was.
-    instance.subscribeWriter(async () => { if (modSync.message() !== undefined) await modSync.run(); }),
+    instance.subscribe(onChange.run, { mods: true, modFolders: true }),
+    instance.subscribe(onFailure.run),
   ];
-  return { modSync, dispose: () => { for (const subscription of subscriptions) subscription.dispose(); } };
+  return { modSync, dispose: () => { for (const subscription of subscriptions) subscription.dispose(); onChange.dispose(); onFailure.dispose(); } };
 }
 
 export function registerModSyncCommand(

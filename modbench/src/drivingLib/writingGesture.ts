@@ -2,26 +2,77 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { collectingWrites } from '../instanceLoader/ambientWrites';
+import { toldOnceSettled } from '../repositoriesLib/writesTold';
 import { pausableProgress, type Progress } from './pausableProgress';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 
 export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
+let changesRunning = 0;
+
+interface Waiting {
+  readonly task: () => Promise<void>;
+}
+
+const waitingForChanges = new Set<Waiting>();
+
+/** A repair of the disk is a write: `run` runs `task` once no change is running, judging the whole change. The caller
+ *  does not wait, since the change's own read waits on its subscribers. */
+export function whenNoChangeIsRunning(task: () => Promise<void>): { run: () => Promise<void>; dispose: () => void } {
+  const waiting: Waiting = { task };
+  return {
+    run: () => {
+      if (changesRunning === 0) return task();
+      waitingForChanges.add(waiting);
+      return Promise.resolve();
+    },
+    dispose: () => { waitingForChanges.delete(waiting); },
+  };
+}
+
+async function releaseWaiting(): Promise<void> {
+  const released = [...waitingForChanges];
+  waitingForChanges.clear();
+  await Promise.all(released.map(async ({ task }) => {
+    try {
+      await task();
+    } catch (err) {
+      surface?.reporter.report('error', errorMessage(err));
+    }
+  }));
+}
+
+/** Hands the loader every file `work` wrote in one read once it ends, so no subscriber sees it half done. */
+export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, work: (written: WrittenFiles) => Promise<T>): Promise<T> {
+  const written = new WrittenFiles();
+  const tellAll = (told: readonly string[]) => {
+    const named = written.named;
+    if (named === undefined) return instance.refresh();
+    const files = [...told, ...named];
+    return files.length === 0 ? Promise.resolve() : instance.refresh(files);
+  };
+  changesRunning++;
+  try {
+    return await toldOnceSettled(() => collectingWrites(written, () => work(written)), tellAll);
+  } finally {
+    changesRunning--;
+    if (changesRunning === 0) void releaseWaiting();
+  }
+}
+
 /** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is given. */
 export async function runUnderProgress<T>(
   viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress, written: WrittenFiles) => Promise<T>,
 ): Promise<T> {
   const progress = pausableProgress(viewId);
-  const written = new WrittenFiles();
   const handedBefore = readModel?.handed();
   progress.working();
   try {
-    return await collectingWrites(written, () => command(progress, written));
+    return await handingOneChange(instance, (written) => command(progress, written));
   } finally {
     progress.working();
     try {
-      await refreshWritten(instance, written);
       if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.taken();
     } finally {
       await progress.done();

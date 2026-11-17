@@ -12,6 +12,7 @@
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../textDocuments" },
     { "path": "../wire" }
   ],

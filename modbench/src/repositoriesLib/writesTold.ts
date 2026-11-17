@@ -21,9 +21,9 @@ interface HeldBack { readonly paths: string[]; open: boolean }
 
 const heldBack = new AsyncLocalStorage<HeldBack>();
 
-/** Runs `locked`, work that holds a lock, and tells the loader the files its writes wrote once it has settled: the loader's
- *  answer may wait on work that takes the same lock. */
-export async function toldOnceSettled<T>(locked: () => Promise<T>): Promise<T> {
+/** Runs `locked`, work that holds a lock, and tells its writes' files once it has settled, by `tellAll`: the answer may wait
+ *  on work that takes the same lock. A scope inside another leaves the telling to the outer. */
+export async function toldOnceSettled<T>(locked: () => Promise<T>, tellAll: (paths: readonly string[]) => Promise<void> = tell): Promise<T> {
   if (heldBack.getStore()?.open === true) return locked();
   const scope: HeldBack = { paths: [], open: true };
   let answer: T;
@@ -31,11 +31,11 @@ export async function toldOnceSettled<T>(locked: () => Promise<T>): Promise<T> {
     answer = await heldBack.run(scope, locked);
   } catch (err) {
     scope.open = false;
-    await tell(scope.paths).catch(() => undefined);
+    await tellAll(scope.paths).catch(() => undefined);
     throw err;
   }
   scope.open = false;
-  await tell(scope.paths);
+  await tellAll(scope.paths);
   return answer;
 }
 

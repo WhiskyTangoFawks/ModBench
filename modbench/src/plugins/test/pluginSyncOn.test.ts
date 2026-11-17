@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => ({}));
 
 import { pluginSyncOn } from '../pluginSync';
+import { handingOneChange } from '../../drivingLib/writingGesture';
 import { ambientWrites, collectingWrites } from '../../instanceLoader/ambientWrites';
 import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 
@@ -11,7 +12,7 @@ const channel = { error: () => undefined, info: () => undefined };
 function instanceHeard() {
   let subscriber!: () => Promise<void>;
   const refresh = vi.fn((wrote?: readonly string[]) => { void wrote; return Promise.resolve(); });
-  const instance = { refresh, subscribeWriter: (s: () => Promise<void>) => { subscriber = s; return { dispose: () => undefined }; } };
+  const instance = { refresh, subscribe: (s: () => Promise<void>) => { subscriber = s; return { dispose: () => undefined }; } };
   const hears = () => subscriber();
   return { instance, refresh, hears };
 }
@@ -34,6 +35,20 @@ describe('plugin sync on the instance', () => {
     readBack();
     await heard;
     expect(settled).toBe(true);
+  });
+
+  it('never runs a sync that waited for a change and was disposed meanwhile', async () => {
+    const { instance, hears } = instanceHeard();
+    const syncPlugins = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
+    const syncing = pluginSyncOn({ instance, channel, syncPlugins });
+
+    await handingOneChange(instance, async () => {
+      await hears();
+      syncing.dispose();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(syncPlugins).not.toHaveBeenCalled();
   });
 
   it('reads nothing back when the sync wrote nothing', async () => {

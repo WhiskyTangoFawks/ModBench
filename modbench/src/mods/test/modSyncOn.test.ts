@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 vi.mock('vscode', () => ({}));
 
 import { modSyncOn } from '../modSync';
+import { handingOneChange } from '../../drivingLib/writingGesture';
 import { Instance } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -52,6 +53,22 @@ describe('mod sync on the instance', () => {
     await refreshed;
 
     expect(order[0]).toBe('written');
+  });
+
+  it('never runs a sync that waited for a change and was disposed meanwhile', async () => {
+    const instance = instanceOver();
+    const syncMods = vi.fn(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
+    const syncing = modSyncOn({ instance, channel: { error: () => undefined, info: () => undefined }, syncMods });
+    await instance.refresh();
+    syncMods.mockClear();
+
+    await handingOneChange(instance, async () => {
+      await instance.refresh();
+      syncing.dispose();
+    });
+    await instance.refresh();
+
+    expect(syncMods).not.toHaveBeenCalled();
   });
 
   it('tries a sync that failed again at each value until one lands, though mod order and the mod folders are as they were', async () => {

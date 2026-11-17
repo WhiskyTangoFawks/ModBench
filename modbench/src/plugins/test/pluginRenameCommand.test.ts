@@ -59,13 +59,7 @@ function setup(selection: readonly PluginsTreeNode[] = []) {
   }), instanceAnswers);
   const instance = {
     value: instanceValueFixture(),
-    writing: async <T>(work: () => Promise<T>): Promise<T> => {
-      try {
-        return await work();
-      } finally {
-        progressSteps.push('Instance loader: read every file again');
-      }
-    },
+    refresh: () => Promise.resolve(),
   };
   const reporter = recordingReporter();
   const apply = vi.fn<SourceEditing['applyWorkspaceChanges']>().mockResolvedValue();
@@ -99,7 +93,7 @@ beforeEach(() => {
 });
 
 describe('modbench.plugin.rename', () => {
-  it('asks with the current name filled in, then renames the source and the file, under the Plugins bar and a read after', async () => {
+  it('asks with the current name filled in, then renames the source and the file, under the Plugins bar', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { client, fake, reporter, run } = setup();
 
@@ -108,7 +102,7 @@ describe('modbench.plugin.rename', () => {
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Patch.esp' }));
     expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
-    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'progress closes']);
     expect(reporter.reports).toEqual([]);
   });
 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
-import { refreshWritten } from '../drivingLib/writingGesture';
+import { refreshWritten, whenNoChangeIsRunning } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { isolatingWrites } from '../instanceLoader/ambientWrites';
@@ -12,7 +12,7 @@ export interface PluginSyncOn {
 }
 
 interface PluginSyncDeps {
-  instance: Pick<Instance, 'refresh'> & { subscribeWriter(subscriber: () => Promise<void>): { dispose(): void } };
+  instance: Pick<Instance, 'refresh'> & { subscribe(subscriber: () => Promise<void>): { dispose(): void } };
   syncPlugins: PluginSyncRun;
   channel: SyncChannel;
 }
@@ -21,12 +21,13 @@ interface PluginSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
   const pluginSync = createPluginSync(syncPlugins, channel);
-  const subscription = instance.subscribeWriter(async () => {
+  const gated = whenNoChangeIsRunning(async () => {
     const written = new WrittenFiles();
     const synced = await isolatingWrites(written, () => pluginSync.run());
     if (synced?.wrote) await refreshWritten(instance, written);
   });
-  return { pluginSync, dispose: () => { subscription.dispose(); } };
+  const subscription = instance.subscribe(gated.run);
+  return { pluginSync, dispose: () => { subscription.dispose(); gated.dispose(); } };
 }
 
 export function registerPluginSyncCommand(
