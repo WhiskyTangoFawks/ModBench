@@ -19,14 +19,11 @@ internal static class SourceFolderMove
 
     private static List<DocumentChange> IgnoreListFollowing(string from, string to, List<SourceMove> held)
     {
-        var path = Path.Combine(from, ".gitignore");
+        var path = Path.Combine(from, SourceRepositoryLayout.IgnoreListFileName);
         if (!File.Exists(path)) return [];
-        var renames = held
-            .Where(file => !file.From.Contains('/') && !file.From.Contains('\\') && !file.To.Contains('/') && !file.To.Contains('\\'))
-            .ToDictionary(file => GitInit.UnignoredRootFile(file.From), file => GitInit.UnignoredRootFile(file.To), StringComparer.Ordinal);
-        var text = File.ReadAllText(path);
-        var lines = text.Split('\n');
-        var followed = lines.Select(line => line.EndsWith('\r') && renames.TryGetValue(line[..^1], out var renamed) ? renamed + "\r" : renames.GetValueOrDefault(line, line)).ToArray();
-        return followed.SequenceEqual(lines) ? [] : [new DocumentChange(Path.Combine(to, ".gitignore"), string.Join('\n', followed))];
+        var renames = held.ToDictionary(file => GitInit.Unignored(GitInit.Escaped(file.From)), file => GitInit.Unignored(GitInit.Escaped(file.To)), StringComparer.Ordinal);
+        var lines = File.ReadAllText(path).Split('\n');
+        var followed = lines.Select(line => line.EndsWith('\r') && renames.TryGetValue(line[..^1], out var crlf) ? crlf + "\r" : renames.GetValueOrDefault(line, line)).ToArray();
+        return followed.SequenceEqual(lines) ? [] : [new DocumentChange(Path.Combine(to, SourceRepositoryLayout.IgnoreListFileName), string.Join('\n', followed))];
     }
 }
