@@ -1,8 +1,9 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
+import { basename } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
+  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type Manifest, type ModAt, type ModStatus,
 } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
@@ -54,6 +55,20 @@ function judged(mod: ModAt, manifest: ManifestRead, values: Values, flagged: Sta
   return 'cannotTell' in hashes ? unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${hashes.cannotTell}`) : statusFrom(mod, manifest, values, hashes);
 }
 
+type Installed = Awaited<ReturnType<InstanceAdapter['installationFile']>>;
+
+// The manifest as judged for what ships: it names the installation file too, in this copy alone.
+function withInstallationFile(manifest: Manifest, values: Values, installed: Installed): { manifest: Manifest; values: Values } {
+  if (values.kind !== 'read' || installed.kind !== 'read' || installed.answer === undefined) return { manifest, values };
+  const { size, hash } = installed.answer;
+  const name = basename(installed.answer.path);
+  if (manifest.packages.some((pkg) => pkg.kind === 'installationFile' && pkg.name === name)) return { manifest, values };
+  return {
+    manifest: { ...manifest, packages: [...manifest.packages, { kind: 'installationFile', name, size, hash }] },
+    values: { ...values, downloadedFiles: new Map([...values.downloadedFiles, [name, installed]]) },
+  };
+}
+
 const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>): string => JSON.stringify([...held].map(([mod, paths]) => [mod, [...paths].sort()]));
 
 const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening => {
@@ -98,7 +113,8 @@ export class ModStatuses {
   }
 
   /** The files of the mod's folder that one of its packages holds, by bytes or by name, as the latest derivation read them:
-   *  those of its source folder's manifest for a source mod, else of its folder's. */
+   *  those of its source folder's manifest for a source mod, else of its folder's, and of the installation file the mod
+   *  manager names when this machine holds it. */
   heldByPackage(mod: string): ReadonlySet<string> {
     return this.heldByPackages.get(mod) ?? new Set();
   }
@@ -181,23 +197,25 @@ export class ModStatuses {
     }
   }
 
-  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes']): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes'], installation: Promise<Installed>): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
     const manifest = await manifestAt(mod.folder);
     const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
     const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
     const status = judged(mod, manifest, values, flagged, mod.sourcePaths);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
+    const judgedForShipping = named.read !== undefined && 'manifest' in named.read ? withInstallationFile(named.read.manifest, values, await installation) : undefined;
     return {
       status: { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() },
-      packaged: named.read !== undefined && 'manifest' in named.read ? filesAPackageHolds(named.read.manifest, values) : new Set(),
+      packaged: judgedForShipping === undefined ? new Set() : filesAPackageHolds(judgedForShipping.manifest, judgedForShipping.values),
     };
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
   private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes']): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+    const installation = this.reads.installationFile(mod.name, mod.folder);
     const [{ status, packaged }, installed, buildFile] = await Promise.all([
-      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit, flagged), this.reads.installationFile(mod.name, mod.folder),
+      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit, flagged, installation), installation,
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
     return { status: { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } }, packaged };

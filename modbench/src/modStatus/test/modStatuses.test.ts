@@ -255,6 +255,77 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       expect([...statuses.heldByPackage('ModA')]).toEqual(['copied.json']);
     });
 
+    describe('the installation file the mod manager names', () => {
+      const INSTALLATION = (entries: { path: string; hash: string }[]) => ({ kind: 'read' as const, answer: { path: 'D.7z', size: 1, hash: 'AAAAAAAAAAA=', entries } });
+
+      const authoredMod = async (): Promise<StatusSource> => {
+        const mod = await folderOf('ModA', { 'plugin.esp': 'built', 'made.dds': 'built' });
+        await writeManifestIn(mod, EMPTY);
+        const source = join(root, 'source', 'ModA');
+        await mkdir(source, { recursive: true });
+        await writeManifestIn(source, EMPTY);
+        return valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } });
+      };
+
+      const heldAfter = async (value: StatusSource): Promise<{ held: string[]; manifests: string[] }> => {
+        const statuses = statusesLogging();
+        statuses.derive(value);
+        await statuses.current();
+        return { held: [...statuses.heldByPackage('ModA')], manifests: (await readdir(join(root, 'source', 'ModA'))).sort() };
+      };
+
+      it('holds a file the installation file holds by file name, though the bytes differ, and writes no manifest for it', async () => {
+        installationFiles = new Map([['ModA', INSTALLATION([{ path: 'Data/Plugin.esp', hash: 'author' }])]]);
+
+        expect(await heldAfter(await authoredMod())).toEqual({ held: ['plugin.esp'], manifests: ['ModA.manifest.json'] });
+      });
+
+      it('holds a file the installation file holds by bytes under another name', async () => {
+        installationFiles = new Map([['ModA', INSTALLATION([{ path: 'Other.esp', hash: 'built' }])]]);
+
+        expect((await heldAfter(await authoredMod())).held.sort()).toEqual(['made.dds', 'plugin.esp']);
+      });
+
+      it('holds nothing when the installation file holds no file of that name or bytes', async () => {
+        installationFiles = new Map([['ModA', INSTALLATION([{ path: 'Data/Else.esp', hash: 'other' }])]]);
+
+        expect((await heldAfter(await authoredMod())).held).toEqual([]);
+      });
+
+      it('judges against the manifest alone while the installation file is unreadable or the mod manager names none', async () => {
+        installationFiles = new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]);
+        const unreadable = (await heldAfter(await authoredMod())).held;
+        installationFiles = new Map();
+
+        expect([unreadable, (await heldAfter(await authoredMod())).held]).toEqual([[], []]);
+      });
+
+      it('holds what it held when the manifest already names the installation file', async () => {
+        downloads = new Map([['D.7z', { hash: 'AAAAAAAAAAA=', entries: [{ path: 'Data/Plugin.esp', hash: 'author' }] }]]);
+        const mod = await folderOf('ModA', { 'plugin.esp': 'built' });
+        await writeManifestIn(mod, { ...EMPTY, packages: [{ ...PACKAGE, name: 'D.7z', hash: 'AAAAAAAAAAA=' }] });
+        installationFiles = new Map([['ModA', INSTALLATION([{ path: 'Data/Plugin.esp', hash: 'author' }])]]);
+        const statuses = statusesLogging();
+
+        statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+        await statuses.current();
+
+        expect([...statuses.heldByPackage('ModA')]).toEqual(['plugin.esp']);
+      });
+      it('holds nothing when the manifest names the installation file by other bytes, as the manifest alone judges', async () => {
+        downloads = new Map([['D.7z', { hash: 'AAAAAAAAAAE=', entries: [{ path: 'Data/Plugin.esp', hash: 'author' }] }]]);
+        const mod = await folderOf('ModA', { 'plugin.esp': 'built' });
+        await writeManifestIn(mod, { ...EMPTY, packages: [{ ...PACKAGE, name: 'D.7z' }] });
+        installationFiles = new Map([['ModA', { kind: 'read', answer: { path: 'D.7z', size: 1, hash: 'AAAAAAAAAAE=', entries: [{ path: 'Data/Plugin.esp', hash: 'author' }] } }]]);
+        const statuses = statusesLogging();
+
+        statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+        await statuses.current();
+
+        expect(statuses.heldByPackage('ModA').size).toBe(0);
+      });
+    });
+
     it('holds nothing of a mod whose package this machine lacks, or that names none', async () => {
       downloads = new Map();
       const [lacking, bare] = [await folderOf('ModA', { 'copied.json': 'same' }), await folderOf('ModB', { 'copied.json': 'same' })];
