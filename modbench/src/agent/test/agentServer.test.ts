@@ -3,12 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
 const pathsHeld = vi.hoisted(() => ({ existing: new Set<string>() }));
-const fired = vi.hoisted((): { calls: unknown[][]; outcome: unknown; failure: Error | undefined } => ({ calls: [], outcome: undefined, failure: undefined }));
+const fired = vi.hoisted((): { calls: unknown[][]; signals: (AbortSignal | undefined)[]; outcome: unknown; failure: Error | undefined } => ({ calls: [], signals: [], outcome: undefined, failure: undefined }));
 vi.mock('vscode', () => ({
   languages: { getDiagnostics: () => diagnosticsHeld.held },
   Uri: { file: (fsPath: string) => ({ fsPath }) },
   workspace: { fs: { stat: ({ fsPath }: { fsPath: string }) => (pathsHeld.existing.has(fsPath) ? Promise.resolve({}) : Promise.reject(new Error('ENOENT'))) } },
-  commands: { executeCommand: (...args: unknown[]) => { fired.calls.push(args); return fired.failure ? Promise.reject(fired.failure) : Promise.resolve(fired.outcome); } },
+  commands: {
+    executeCommand: (command: unknown, call?: unknown, ...rest: unknown[]) => {
+      const signed = typeof call === 'object' && call !== null && 'signal' in call;
+      fired.signals.push(signed && call.signal instanceof AbortSignal ? call.signal : undefined);
+      fired.calls.push([command, signed ? { ...call, signal: undefined } : call, ...rest]);
+      return fired.failure ? Promise.reject(fired.failure) : Promise.resolve(fired.outcome);
+    },
+  },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
 }));
 import { z } from 'zod';
@@ -1627,7 +1634,7 @@ describe('the agent server, finding a symbol\'s definition and references', () =
 });
 
 describe('the agent server, running a gesture', () => {
-  beforeEach(() => { fired.calls = []; fired.outcome = undefined; fired.failure = undefined; });
+  beforeEach(() => { fired.calls = []; fired.signals = []; fired.outcome = undefined; fired.failure = undefined; });
 
   const served = (value: InstanceValue = CONFLICTED) => clientOf(new FakeInstance(value));
   const fire = async (tool: string, args: Record<string, unknown> = {}, value: InstanceValue = CONFLICTED) => {
@@ -1804,6 +1811,45 @@ describe('the agent server, running a gesture', () => {
 
       expect(errors).toEqual([]);
     });
+  });
+
+  it('hands mod_build the signal of its call, which aborts when the agent cancels the call (commands.md, Principles)', async () => {
+    fired.outcome = new Promise(() => undefined);
+    const { client } = await served();
+    const cancelled = new AbortController();
+    const answered = client.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal });
+    answered.catch(() => undefined);
+    await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
+    const [signal] = fired.signals;
+    expect(signal?.aborted).toBe(false);
+
+    cancelled.abort();
+
+    await vi.waitFor(() => { expect(signal?.aborted).toBe(true); });
+  });
+
+  it('cancels only the call of the client that cancels, though another client\'s call has the same request id', async () => {
+    fired.outcome = new Promise(() => undefined);
+    const { bound } = await serve(new FakeInstance(CONFLICTED));
+    const connected = async (name: string) => {
+      const client = new Client({ name, version: '0' });
+      await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
+      clients.push(client);
+      return client;
+    };
+    const first = await connected('first');
+    const second = await connected('second');
+    const cancelled = new AbortController();
+    first.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal }).catch(() => undefined);
+    await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
+    second.callTool({ name: 'mod_build', arguments: { argument: [] } }).catch(() => undefined);
+    await vi.waitFor(() => { expect(fired.calls).toHaveLength(2); });
+    const [firstSignal, secondSignal] = fired.signals;
+
+    cancelled.abort();
+
+    await vi.waitFor(() => { expect(firstSignal?.aborted).toBe(true); });
+    expect(secondSignal?.aborted).toBe(false);
   });
 
   it('refuses in whole, answering the command\'s refusal', async () => {

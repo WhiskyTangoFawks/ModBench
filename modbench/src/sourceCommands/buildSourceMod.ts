@@ -38,6 +38,7 @@ export interface SourceModToBuild {
 export interface BuildPass {
   readonly facts: BuildFacts;
   readonly tasks: ReadonlySet<string>;
+  readonly signal?: AbortSignal;
 }
 
 /** A mod that built, as mEdit answers its steps without the files they made. `trashed`: each other file its folder held. */
@@ -234,6 +235,7 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
   let outcome: ModBuilt = { mod: mod.name, compiled: [], refused: [], archivesRefused: [] };
   const ran = (failure?: string): Ran => ({ outcome, made, ...failure === undefined ? {} : { failure } });
   for (const [at, step] of mod.buildFile.steps.entries()) {
+    if (pass.signal?.aborted) return ran(`The build was stopped before its step ${at + 1}.`);
     if (step.kind === 'task' || step.kind === 'script' || step.kind === 'defaultScript') {
       const failed = await stepRan(deps, mod, step, made);
       if (failed !== undefined) return ran(`The build stopped as its ${failed}.`);

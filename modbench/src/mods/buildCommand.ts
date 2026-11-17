@@ -34,7 +34,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
       const mods = await pickSourceMods(deps.sourceModNames());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view, everySource: false };
     },
-    fromAgent: ({ argument }) => ({ ...givenByAgent(argument), everySource: argument.length === 0 }),
+    fromAgent: ({ argument, signal }) => ({ ...givenByAgent(argument), everySource: argument.length === 0, signal }),
     run: (given) => buildMods(deps, given),
     report: (result) => reportBuildResult(deps.reporter, result),
   };
@@ -50,13 +50,14 @@ async function pickSourceMods(sourceModNames: Iterable<string>): Promise<string[
 
 interface BuildGiven extends ModsGiven {
   readonly everySource: boolean;
+  readonly signal?: AbortSignal;
 }
 
-async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource }: BuildGiven): Promise<Built> {
+async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource, signal }: BuildGiven): Promise<Built> {
   const { commands, instance } = deps;
   if (mods.length === 0 && !everySource) return { applied: true, outcome: { landed: [], refused: refusedRows } };
   return runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
-    const outcome = await commands.build(mods, everySource);
+    const outcome = await commands.build(mods, everySource, signal);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     return {
       applied: true,
