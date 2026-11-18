@@ -1347,7 +1347,7 @@ internal sealed class Store : IDisposable
         WHERE NOT EXISTS (
             SELECT 1 FROM mirror.holdings h
             WHERE h.child = r.form_key AND h.plugin = r.plugin AND h.origin = r.origin
-              AND h.slot <> {HoldingSlots.Exterior})
+              AND {HoldingSlots.CarriedInTheParentsDocument("h.slot")})
         """;
 
     /// <summary>The content stamp of each source document the rows of each of <paramref name="keys"/> were derived

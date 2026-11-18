@@ -194,7 +194,7 @@ internal sealed class WorkingTreeOverlay
     private void ReplaceContainment(PluginAddress key, List<PluginIngest.PreparedRecord> prepared)
     {
         DuckDbSql.Execute(_connection,
-            $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND slot <> {HoldingSlots.Exterior} AND parent {AmongKeys}",
+            $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND {HoldingSlots.CarriedInTheParentsDocument("slot")} AND parent {AmongKeys}",
             key.Name, key.Origin, prepared.Select(p => p.FormKey).ToList());
         using (var appender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings"))
         {

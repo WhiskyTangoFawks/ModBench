@@ -91,24 +91,27 @@ internal sealed class RelationReads(
         return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
     }
 
-    /// <summary>The record whose own document carries <paramref name="formKey"/>'s copy in <paramref name="plugin"/>: the
-    /// container its text is embedded in, walked up to the one filed alone, or the copy itself.</summary>
-    public RecordIdentity? GetDocumentOwner(string formKey, PluginAddress plugin)
+    /// <summary>The carrying record of <paramref name="formKey"/>'s copy in <paramref name="plugin"/>: the record whose own
+    /// document carries it, which is the copy itself unless a container's document carries its text.</summary>
+    public RecordIdentity? GetCarryingRecord(string formKey, PluginAddress plugin)
     {
         using var context = OpenRead();
-        var owner = formKey;
-        while (context.ScalarString($"""
-                   SELECT parent FROM holdings
-                   WHERE child = $1 AND plugin = $2 AND origin = $3 AND slot <> {HoldingSlots.Exterior}
-                   LIMIT 1
-                   """, owner, plugin.Name, plugin.Origin) is { } parent)
-        {
-            owner = parent;
-        }
-        return context.Rows(
-                $"SELECT record_type, editor_id FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                reader => new RecordIdentity(owner, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)),
-                owner, plugin.Name, plugin.Origin)
+        return context.Rows($"""
+                WITH RECURSIVE carried(form_key, depth) AS (
+                    SELECT $1, 0
+                    UNION ALL
+                    SELECT h.parent, c.depth + 1 FROM holdings h
+                    JOIN carried c ON h.child = c.form_key
+                    WHERE h.plugin = $2 AND h.origin = $3 AND {HoldingSlots.CarriedInTheParentsDocument("h.slot")}
+                )
+                SELECT r.form_key, r.record_type, r.editor_id
+                FROM carried c
+                JOIN {TableDdlBuilder.PluginRecordsView} r ON r.form_key = c.form_key AND r.plugin = $2 AND r.origin = $3
+                ORDER BY c.depth DESC
+                LIMIT 1
+                """,
+                reader => new RecordIdentity(reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2)),
+                formKey, plugin.Name, plugin.Origin)
             .FirstOrDefault();
     }
 

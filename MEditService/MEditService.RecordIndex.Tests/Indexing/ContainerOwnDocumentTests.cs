@@ -6,7 +6,6 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog;
 
 namespace MEditService.RecordIndex.Tests.Indexing;
 
@@ -34,7 +33,8 @@ public sealed class ContainerOwnDocumentTests
                     t.Responses.Add(r);
                     q.DialogTopics.Add(t);
                     (quest, topic, response) = (q.FormKey, t.FormKey, r.FormKey);
-                    (exteriorCell, exteriorRef) = AddExteriorCellWithARef(mod);
+                    var spatial = SpatialPlugin.AddTo(mod);
+                    (exteriorCell, exteriorRef) = (spatial.ExteriorCell.FormKey, spatial.ExteriorRef.FormKey);
                 }, origin: Origin)
                 .BuildScattered();
             if (compiledPlugin) _data.CompiledPlugin();
@@ -69,21 +69,6 @@ public sealed class ContainerOwnDocumentTests
             Index.Dispose();
             _data.Dispose();
         }
-    }
-
-    private static (FormKey Cell, FormKey Ref) AddExteriorCellWithARef(Fallout4Mod mod)
-    {
-        var cell = new Cell(mod) { EditorID = "OwnExteriorCell", Grid = new CellGrid { Point = new P2Int(3, 4) } };
-        var placed = new PlacedObject(mod) { EditorID = "OwnExteriorRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
-        cell.Temporary.Add(placed);
-        var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        subBlock.Items.Add(cell);
-        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        block.Items.Add(subBlock);
-        var world = new Worldspace(mod) { EditorID = "OwnExteriorWorld" };
-        world.SubCells.Add(block);
-        mod.Worldspaces.Add(world);
-        return (cell.FormKey, placed.FormKey);
     }
 
     private static List<string> MembersOf(JsonElement document) => [.. document.EnumerateObject().Select(p => p.Name)];
