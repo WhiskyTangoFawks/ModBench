@@ -191,7 +191,7 @@ public sealed class PluginTreeReadTests
     }
 
     [Fact]
-    public async Task WriteFromTree_WritesTheNextObjectIdTheSourceHolds_NotOnePastItsHighestRecord()
+    public async Task WriteFromTree_DerivesTheNextObjectId_FromTheHighestRecordNotTheOneTheSourceHolds()
     {
         using var data = new PluginFixtureBuilder("writetree-next-object-id")
             .WithPlugin(
@@ -210,7 +210,37 @@ public sealed class PluginTreeReadTests
 
         using var written = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Counter.esp"), recompiledPath), Fallout4Release.Fallout4);
-        Assert.Equal(0x900u, written.ModHeader.Stats.NextFormID);
+        Assert.Equal(0x801u, written.ModHeader.Stats.NextFormID);
+    }
+
+    [Fact]
+    public async Task WriteFromTree_RebuildsTheOverriddenForms_OfASourceHoldingNone()
+    {
+        var placedKey = default(FormKey);
+        using var data = new PluginFixtureBuilder("writetree-overridden-forms")
+            .WithPlugin("Base.esm", mod =>
+            {
+                var cell = new Cell(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "HarborCell" };
+                var placed = new PlacedObject(mod.GetNextFormKey(), Fallout4Release.Fallout4);
+                placedKey = placed.FormKey;
+                cell.Temporary.Add(placed);
+                mod.AddInteriorCells(cell);
+            })
+            .WithPlugin("Child.esp", (mod, built) =>
+            {
+                var baseMod = built.Single();
+                var context = baseMod.EnumerateMajorRecordContexts<IPlacedObject, IPlacedObjectGetter>(baseMod.ToImmutableLinkCache()).Single();
+                context.GetOrAddAsOverride(mod);
+            })
+            .Build();
+        var files = await ReadTreeFiles(data, "Child.esp");
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Child.esp");
+
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, ["Base.esm"], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
+
+        using var written = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Child.esp"), recompiledPath), Fallout4Release.Fallout4);
+        Assert.Equal([placedKey], written.ModHeader.OverriddenForms?.Select(link => link.FormKey));
     }
 
     [Fact]

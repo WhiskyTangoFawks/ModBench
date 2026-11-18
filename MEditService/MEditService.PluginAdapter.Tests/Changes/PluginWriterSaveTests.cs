@@ -18,17 +18,17 @@ public sealed class PluginWriterSaveTests
         });
     }
 
-    public static TheoryData<string, uint> GeneratedPluginsWithAStaleHeader => new()
+    public static TheoryData<string, uint, uint> GeneratedPluginsWithAStaleHeader => new()
     {
-        { StaleHeaderPlugins.SettingsFileName, 5 },
-        { StaleHeaderPlugins.LightFileName, 4 },
-        { StaleHeaderPlugins.FullFileName, 12 },
+        { StaleHeaderPlugins.SettingsFileName, 5, 0x804 },
+        { StaleHeaderPlugins.LightFileName, 4, 0x803 },
+        { StaleHeaderPlugins.FullFileName, 12, 0x813 },
     };
 
     [Theory]
     [MemberData(nameof(GeneratedPluginsWithAStaleHeader))]
-    public async Task Save_OfAGeneratedPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
-        string fileName, uint derivedNumRecords)
+    public async Task Save_OfAGeneratedPluginWithAStaleHeader_DerivesItsNextObjectIdAndNumRecordsFromContent(
+        string fileName, uint derivedNumRecords, uint derivedNextObjectId)
     {
         using var folder = new ScratchDirectory("pw-save-stale-header");
         var stale = StaleHeaderPlugins.Named(fileName);
@@ -38,7 +38,9 @@ public sealed class PluginWriterSaveTests
 
         await RewriteAsync(pluginPath);
 
-        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), HeaderStatsOf(pluginPath));
+        var (nextObjectId, numRecords) = HeaderStatsOf(pluginPath);
+        Assert.Equal(derivedNumRecords, numRecords);
+        Assert.Equal(derivedNextObjectId, nextObjectId);
     }
 
     private static (uint NextObjectId, uint NumRecords) HeaderStatsOf(string pluginPath)
