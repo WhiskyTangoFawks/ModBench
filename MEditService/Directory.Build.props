@@ -18,6 +18,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
     <MutagenVersion>0.55.0-modbench-dev.3</MutagenVersion>
+    <SerializationVersion>1.38.6</SerializationVersion>
   </PropertyGroup>
 
   <!-- Every production box, by the same naming rule the architecture gates read the solution

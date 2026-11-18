@@ -15,12 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pinned with MEditService.Codec's Mutagen and Serialization references; its comments say what
-         the versions wait on. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="$(MutagenVersion)" />
-    <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.38.6" />
-    <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="1.38.6" />
-    <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="1.38.6">
+    <PackageReference Include="Mutagen.Bethesda.Serialization" Version="$(SerializationVersion)" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="$(SerializationVersion)" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="$(SerializationVersion)">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
