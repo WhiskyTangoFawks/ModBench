@@ -53,8 +53,8 @@ internal sealed class OverrideCopy
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
 
-        if (!destination.Repository.FormKeysUsed(destinationPlugin).Holds(out var used, out var unread)) return unread;
-        if (used.Contains(formKey))
+        if (!_recordCopy.Uses(destination, formKey).Holds(out var used, out var unread)) return unread;
+        if (used)
         {
             if (!RecordCopy.Identity(destination, formKey).Holds(out var held, out unread)) return unread;
             if (held is not { } existingTarget) return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);

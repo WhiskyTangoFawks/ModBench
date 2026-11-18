@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -13,8 +14,17 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>The container half of both copy modes: a child lands in its container, the
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
-internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
+internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, IQueries index, ILogger logger)
 {
+    /// <summary>Whether the destination uses <paramref name="formKey"/>: the record index's rows once it holds the plugin as on
+    /// disk, else every document of its tree.</summary>
+    internal Answer<bool, SourceFailure> Uses(Destination destination, string formKey)
+    {
+        if (index.GetPluginHolds(destination.Plugin, formKey, CancellationToken.None).Holds(out var held, out _) && held is { } answered)
+            return answered;
+        return destination.Repository.FormKeysUsed(destination.Plugin).Then(used => SourceAnswer.Of(used.Contains(formKey)));
+    }
+
     /// <summary>The compiled plugin a copy lands in: its session and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
     internal readonly record struct Destination(IWriteSession Session, PluginAddress Plugin, Language? NotLocalizedIn = null)
@@ -170,8 +180,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
-        if (!destination.Repository.FormKeysUsed(destination.Plugin).Holds(out var used, out var unread)) return unread;
-        if (used.Contains(cellFormKey)) return RefuseKeyWithNoDocument(destination, cellFormKey);
+        if (!Uses(destination, cellFormKey).Holds(out var used, out var unread)) return unread;
+        if (used) return RefuseKeyWithNoDocument(destination, cellFormKey);
 
         SourceDocument? worldspaceCopy = null;
         if (!Identity(destination, worldspaceFormKey).Holds(out var destinationWorldspace, out unread)) return unread;

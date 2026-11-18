@@ -112,6 +112,9 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) =>
         _answer.Of(() => ReadingWholeSet(reads => reads.GetOwners(formKey), cancel));
 
+    public Answer<bool?, IndexRefused> GetPluginHolds(PluginAddress plugin, string formKey, CancellationToken cancel) =>
+        _answer.Of(() => _index.IndexedState(plugin).State == PluginIndexing.AsOnDisk ? Reading(reads => reads.Holds(plugin, formKey), cancel) : (bool?)null);
+
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         _answer.Of(() => CompareOf(formKey, text, cancel));
 

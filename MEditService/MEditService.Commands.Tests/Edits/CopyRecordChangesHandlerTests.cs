@@ -58,6 +58,21 @@ public sealed class CopyRecordChangesHandlerTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, refused.Refusal);
     }
 
+    [Fact]
+    public void CopyingAsOverride_IntoAPluginTheRecordIndexHolds_ReadsNoOtherDocumentOfItsTree()
+    {
+        using var mod = CopyFixture.Create();
+        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
+        mod.Index.Holds = (_, _) => false;
+        TreeTampering.Stray(
+            mod.DestinationModFolder, mod.DestinationPlugin, mod.Document(mod.DestinationPlugin, mod.DestinationNpc.ToString()).Require().Identity,
+            "Unreadable.json", "{ \"FormKey\": \"no FormKey\" }");
+
+        var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.DestinationPlugin], replace: false);
+
+        Assert.Equal([new CopyItem(npc, mod.DestinationPlugin)], result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
