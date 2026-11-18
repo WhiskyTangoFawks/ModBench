@@ -1,4 +1,7 @@
+using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -19,7 +22,22 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var reserialized = CutDownPluginFixture.DeriveSourceTreeFromBinary(fixture.CompiledPluginPath);
 
         Assert.Equal(fixture.EditedTree.Keys.Order(StringComparer.Ordinal), reserialized.Keys.Order(StringComparer.Ordinal));
-        Assert.All(fixture.EditedTree, kv => Assert.True(kv.Value.AsSpan().SequenceEqual(reserialized[kv.Key]), $"{kv.Key}'s content changed across compile."));
+        var headerKey = PluginHeader.IdentityOf(CutDownPluginFixture.PluginFileName).FormKey;
+        Assert.All(
+            fixture.EditedTree.Where(kv => kv.Key != headerKey),
+            kv => Assert.True(kv.Value.AsSpan().SequenceEqual(reserialized[kv.Key]), $"{kv.Key}'s content changed across compile."));
+        Assert.Equal(WithoutWhatCompileDerives(fixture.EditedTree[headerKey]), WithoutWhatCompileDerives(reserialized[headerKey]));
+    }
+
+    private static string WithoutWhatCompileDerives(byte[] headerDocument)
+    {
+        var document = JsonNode.Parse(headerDocument).Require();
+        var modHeader = document["ModHeader"].Require();
+        modHeader.AsObject().Remove("OverriddenForms");
+        var stats = modHeader["Stats"].Require().AsObject();
+        stats.Remove("NextFormID");
+        stats.Remove("NumRecords");
+        return document.ToJsonString();
     }
 
     [Fact]

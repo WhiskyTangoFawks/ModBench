@@ -375,7 +375,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_WhereItCreatesACellAtItsGrid_MovesTheNextObjectIdPastTheCell()
+    public void ClearingPersistent_WhereItCreatesACellAtItsGrid_NamesTheCellAfterTheHighestOfTheOverridesRecords()
     {
         Load(masterCompiledPlugin: true);
 
@@ -383,17 +383,15 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Value().Require();
         Assert.Equal("000805:Override.esp", created.FormKey);
-        Assert.Equal(0x806u, SourceModTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
     }
 
     [Fact]
-    public void SettingPersistent_WhereItCreatesThePersistentCell_MovesTheNextObjectIdPastTheCell()
+    public void SettingPersistent_WhereItCreatesThePersistentCell_NamesTheCellAfterTheHighestOfTheOverridesRecords()
     {
         Load(masterCompiledPlugin: false, masterHasPersistentCell: false);
 
         SetFlags("Mover", Persistent);
 
         Assert.Equal("000805:Override.esp", Document(World)["TopCell"].Require()["FormKey"].Require().GetValue<string>());
-        Assert.Equal(0x806u, SourceModTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
     }
 }

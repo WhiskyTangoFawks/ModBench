@@ -79,10 +79,7 @@ internal sealed class FormKeyChange(ILogger logger)
         var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed";
         return WriteFailure.Refused(
             RecordEditResult.Making(RecordEditResult.Success(targetFormKey), session, () =>
-            {
-                session.Apply(repository.ChangesToRekey(plugin, identity, targetFormKey));
-                session.Apply(allocator.HeaderChanges());
-            }),
+                session.Apply(repository.ChangesToRekey(plugin, identity, targetFormKey))),
             refused => refused, failed, logger);
     }
 }

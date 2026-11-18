@@ -244,11 +244,10 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         [.. Directory.GetFiles(_plugins.FolderOf(_edited), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void ACellCreatedOnAWorldspace_MovesTheNextObjectIdPastItsFormKey()
+    public void ACellCreatedOnAWorldspace_TakesTheFormKeyAfterTheHighestOfThePluginsOwnRecords()
     {
         var result = CreateCellAt(7, 7);
 
         Assert.Equal("000802:Override.esp", result.NewFormKey);
-        Assert.Equal(0x803u, SourceModTree.NextObjectId(_plugins.FolderOf(_edited), Edited));
     }
 }

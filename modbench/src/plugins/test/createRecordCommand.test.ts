@@ -201,7 +201,7 @@ describe('modbench.record.create', () => {
 
   it('reports a refusal as mEdit words it, and stops awaiting a record it did not write', async () => {
     const { client, steps, reporter, create } = harness();
-    const message = 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.';
+    const message = 'MyPatch.esp has no FormKey free after the highest of its own records, up to 0xFFF, the last a light plugin can address. Clear the light flag to draw above it.';
     client.setCommandHandler('getCreateChanges', () => Promise.resolve({ refused: true, message }));
 
     await create(NPC_GROUP);

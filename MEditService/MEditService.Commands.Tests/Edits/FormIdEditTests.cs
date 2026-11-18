@@ -301,17 +301,6 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_MovesTheNextObjectIdPastTheNewFormKey()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "000F00:Fixture.esp");
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(0xF01u, mod.NextObjectId());
-    }
-
-    [Fact]
     public void EditingTheFormId_OnATreeWithNoHeaderDocument_RefusesAsUnreadable_AndWritesNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();

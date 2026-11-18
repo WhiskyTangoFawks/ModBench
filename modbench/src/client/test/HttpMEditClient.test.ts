@@ -538,8 +538,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const writes: { name: string; verb: Verb; status: number; body: unknown; text: string; refusal: string }[] = [
       { name: 'getDeleteChanges', verb: (c) => c.getDeleteChanges([kept, gone]), status: 400, body: 'Bad Request', text: 'Bad Request', refusal: 'Could not delete 2 records' },
       { name: 'getCreateChanges', verb: (c) => c.getCreateChanges(myPatch, 'npc_'), status: 422,
-        body: { detail: 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.' },
-        text: 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.',
+        body: { detail: 'MyPatch.esp has no FormKey free after the highest of its own records, up to 0xFFF, the last a light plugin can address. Clear the light flag to draw above it.' },
+        text: 'MyPatch.esp has no FormKey free after the highest of its own records, up to 0xFFF, the last a light plugin can address. Clear the light flag to draw above it.',
         refusal: 'Could not create a new npc_ record in "MyPatch.esp"' },
       { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([kept], 'Override', [other], false), status: 503, body: { detail }, text: detail, refusal: 'Could not copy 1 record' },
       { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA', undefined), status: 409,

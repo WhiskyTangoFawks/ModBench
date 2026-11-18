@@ -92,10 +92,7 @@ public sealed class CreateRecordChangesHandler
         if (RecordTypes.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
         if (session.Atomically(() =>
-            {
-                session.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
-                session.Apply(allocator.HeaderChanges());
-            }) is { } unwritten)
+                session.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)))) is { } unwritten)
         {
             return unwritten;
         }
@@ -188,10 +185,7 @@ public sealed class CreateRecordChangesHandler
         var formKey = GridCellHolder.FormKeyOf(cell);
         var text = RecordTextCodec.RoundTrip(cell.Text, release, recordType);
         if (session.Atomically(() =>
-            {
-                session.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
-                session.Apply(allocator.HeaderChanges());
-            }) is { } unwritten)
+                session.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace))) is { } unwritten)
         {
             return unwritten;
         }
@@ -220,10 +214,7 @@ public sealed class CreateRecordChangesHandler
         var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.Text);
 
         if (session.Atomically(() =>
-            {
-                session.Apply(repository.ChangesToPutChild(plugin, container, slot, childDocument));
-                session.Apply(allocator.HeaderChanges());
-            }) is { } unwritten)
+                session.Apply(repository.ChangesToPutChild(plugin, container, slot, childDocument))) is { } unwritten)
         {
             return unwritten;
         }

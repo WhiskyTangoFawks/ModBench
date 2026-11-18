@@ -202,7 +202,7 @@ public sealed class StarfieldGestureTests : TestInstance
 
         Assert.Equal(
             (RecordEditRefusal.FormKeySpaceExhausted,
-             $"{CompiledPluginName} has no FormKey free at or above its Next Object ID, up to 0xFFFF, the last a medium plugin can address. " +
+             $"{CompiledPluginName} has no FormKey free after the highest of its own records, up to 0xFFFF, the last a medium plugin can address. " +
              "Clear the medium flag to draw above it."),
             (result.Refusal, result.Message));
     }

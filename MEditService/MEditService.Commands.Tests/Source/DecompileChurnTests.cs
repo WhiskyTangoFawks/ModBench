@@ -51,16 +51,17 @@ public sealed class DecompileChurnTests : TestInstance
     }
 
     [Fact]
-    public async Task DeleteRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheDeletedRecordsFile()
+    public async Task DeleteRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheDeletedRecordsFileAndTheHeader()
     {
         var victimFile = SourceModTree.DocumentFile(ModFolder, _plugin, _taggedNpc.ToString()).Require();
+        var headerFile = SourceModTree.HeaderDocumentFile(ModFolder, _plugin);
         var deleted = DeleteHandler.DeleteRecordsSync([new RecordAt(_plugin, _taggedNpc.ToString())]);
         Assert.Empty(deleted.Refused);
 
         await CompileHandler.CompileLandedAsync(_plugin);
         await Decompile();
 
-        Assert.Equal([$" D {ToGitPath(victimFile)}"], SourceStatus());
+        Assert.Equal([$" M {ToGitPath(headerFile)}", $" D {ToGitPath(victimFile)}"], SourceStatus());
     }
 
     [Fact]
