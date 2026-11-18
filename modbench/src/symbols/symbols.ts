@@ -7,8 +7,9 @@ import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { Instance } from '../instanceLoader/instance';
+import { pluginRowsOf } from './pluginRows';
 import { symbolIndex, type SymbolIndex } from './symbolIndex';
-import { pluginRowsOf, type EntryNames, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage, type RenamableEntry } from './entryLanguage';
@@ -83,8 +84,9 @@ interface Symbols extends vscode.Disposable {
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedRecord } = deps;
   const names = sourceNames({ names: deps.names, paths: deps.asker, sourceFiles: deps.sourceFiles, reporter });
+  const pluginRows = () => (instance === undefined ? [] : pluginRowsOf(instance.value));
   const plugin = pluginLanguage({
-    instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
+    plugins: pluginRows, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
   });
   const { entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf } = deps;
@@ -98,7 +100,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const changed = (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
   const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
-    plugin, entry, names, client, plugins: () => (instance === undefined ? [] : pluginRowsOf(instance.value)),
+    plugin, entry, names, client, plugins: pluginRows,
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const disposable = vscode.Disposable.from(

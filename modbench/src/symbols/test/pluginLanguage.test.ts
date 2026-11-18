@@ -34,16 +34,15 @@ const ownerThatCannotReadAFile: SymbolOwner = {
 interface Options {
   owner?: SymbolOwner;
   plugins?: InstanceValue['plugins'];
-  loadedWithNoLine?: InstanceValue['pluginsLoadedWithNoLine'];
   show?: (plugin: { name: string; origin: string }) => (() => Promise<void>) | undefined;
   tooltip?: (plugin: { name: string; origin: string }) => readonly string[];
 }
 
-function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }], loadedWithNoLine, show = () => undefined, tooltip = () => [] }: Options = {}) {
+function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }], show = () => undefined, tooltip = () => [] }: Options = {}) {
   const reporter = recordingReporter();
   const renamePlugin = vi.fn(() => Promise.resolve());
   const kind = pluginLanguage({
-    instance: { value: { plugins, pluginsLoadedWithNoLine: loadedWithNoLine } },
+    plugins: () => plugins,
     reporter,
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwners: () => Promise.resolve([]) },
     owners: [owner],
@@ -77,6 +76,19 @@ describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md,
     expect(await naming().kind.renameRangeAt(gone, 3)).toBeUndefined();
     expect(await naming().kind.renameAt(gone, 3, 'New.esp')).toBe(false);
     await expect(kind.renameAt(gone, 3, 'New.esp')).rejects.toThrow('Mod order resolves Gone.esp to no plugin.');
+    expect(renamePlugin).not.toHaveBeenCalled();
+  });
+});
+
+const DATA = { name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm', line: null, enabled: true, winning: true };
+
+describe('Rename Symbol on a plugin in the game folder', () => {
+  it('is refused, saying it is no mod\'s plugin, and renames nothing', async () => {
+    const document = { uri: Uri.file(PLUGINS_TXT), getText: () => 'Fallout4.esm\r\n' };
+    const owner: SymbolOwner = { ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve({ name: 'Fallout4.esm' }) };
+    const { kind, renamePlugin } = language({ owner, plugins: [DATA] });
+
+    await expect(kind.renameAt(document, 3, 'New.esm')).rejects.toThrow('Fallout4.esm is a plugin in the game folder, not in a mod: only a plugin in a mod renames.');
     expect(renamePlugin).not.toHaveBeenCalled();
   });
 });
@@ -186,21 +198,6 @@ describe('where a plugin is defined, and the places files name it (symbols.md, T
 
   it('lists each place an owner reports, and each file it could not read', async () => {
     expect(await indexed().referencesTo(plugin({ name: 'Base.esm' }))).toEqual({
-      locations: [{ uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }], unread: [UNREAD],
-    });
-  });
-});
-
-describe('a plugin the game loads with no line (ADR-0013) is a plugin of the instance', () => {
-  const DATA = { name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' };
-  const owner: SymbolOwner = { ...ownerThatCannotReadAFile, read: () => Promise.resolve({ references: [namedAt(0, 'Fallout4.esm')], leftOut: [UNREAD] }) };
-  const held = () => language({ owner, plugins: [], loadedWithNoLine: [DATA] }).kind;
-
-  it.each([
-    ['with its origin', { name: 'Fallout4.esm', origin: 'Data/' }],
-    ['by its file name alone', { name: 'fallout4.esm' }],
-  ])('lists what names it %s', async (_case, named) => {
-    expect(await held().referencesTo(plugin(named))).toEqual({
       locations: [{ uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }], unread: [UNREAD],
     });
   });

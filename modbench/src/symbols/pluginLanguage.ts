@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import type { PluginRows } from '../drivingLib/symbolRows';
-import type { InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, pluginNamed, pluginRowsOf, samePlugin, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import { heldTexts, pluginNamed, samePlugin, type PluginName, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
@@ -13,11 +12,13 @@ import { atFile, nameHolds, showReferencedBy, spelledAround, type AskedIn, type 
 import { pluginReferencesOf } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { selectingItsRow } from './definitionShown';
+import { refuseGameFolderPlugin } from './gameFolderPlugin';
 import type { SourceNames } from './sourceNames';
 import type { Definition, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
 
 interface PluginLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'plugins' | 'pluginsLoadedWithNoLine'> } | undefined;
+  /** The instance's plugin rows, the plugins the game loads with no line among them. */
+  plugins: () => readonly (ResolvedPlugin & { readonly path?: string })[];
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: RecordDocumentClient;
   owners: readonly SymbolOwner[];
@@ -31,8 +32,7 @@ interface PluginLanguageDeps {
 }
 
 /** A plugin as a symbol, wherever an owner's file names it (symbols.md, The symbols, Plugin). */
-export function pluginLanguage({ instance, reporter, client, owners, names, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
-  const plugins = () => (instance === undefined ? [] : pluginRowsOf(instance.value));
+export function pluginLanguage({ plugins, reporter, client, owners, names, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
   const read = pluginReferencesOf({
     owners,
     plugins,
@@ -149,6 +149,7 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
       if (named === undefined) return false;
       const plugin = pluginNamed(named, plugins());
       if (plugin === undefined) throw new Error(unresolved(named).refused);
+      refuseGameFolderPlugin(plugin);
       await renamePlugin(plugin, newName);
       return true;
     },
