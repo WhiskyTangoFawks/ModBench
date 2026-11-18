@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { wabbajackPublisher } from '../wabbajackPublisher';
 import { expectKind } from '../../../test/expectKind';
+import type { FileRead } from '../../instanceAdapter';
 import { heldTexts } from '../../../symbolNames/symbolNames';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -169,9 +170,9 @@ describe('a file the compiler has no way to ship, once no package holds its byte
   const COMPILE_PROFILES = { Profile: 'Main' };
   const REASON = 'no package holds its bytes or a file of its name, and no Include or No Match Include publisher tag covers it';
 
-  async function unshippable(mod: string, pathInMod: string, folder: readonly string[] = ['mods', mod], heldByPackage = false): Promise<string | undefined> {
+  async function unshippable(mod: string, pathInMod: string, folder: readonly string[] = ['mods', mod], heldByPackage = false, entries?: FileRead<readonly string[]>): Promise<string | undefined> {
     const { unshippable: judged } = expectKind(await publisherOver().configuration(), 'read');
-    return judged.reason(join(root, ...folder), pathInMod, mod, heldByPackage);
+    return judged.reason(join(root, ...folder), pathInMod, mod, heldByPackage, entries);
   }
 
   describe('hands back the same judgement while what it judges by is unchanged', () => {
@@ -249,6 +250,36 @@ describe('a file the compiler has no way to ship, once no package holds its byte
     await writeSettings(COMPILE_PROFILES);
 
     expect(await unshippable('Enabled', 'x.esp', ['mods', 'Enabled'], true)).toBeUndefined();
+  });
+
+  describe('an archive, judged entry by entry as the compiler deconstructs it', () => {
+    const NOT_COVERED = 'and no Include or No Match Include publisher tag covers it';
+
+    it('judges it shippable when a package holds every entry', async () => {
+      await writeSettings(COMPILE_PROFILES);
+
+      expect(await unshippable('Enabled', 'a.ba2', ['mods', 'Enabled'], false, { kind: 'read', answer: [] })).toBeUndefined();
+    });
+
+    it('judges it unshippable, naming the entry no package holds, though other entries are held', async () => {
+      await writeSettings(COMPILE_PROFILES);
+
+      expect(await unshippable('Enabled', 'a.ba2', ['mods', 'Enabled'], false, { kind: 'read', answer: ['textures/a.dds', 'textures/b.dds'] }))
+        .toBe(`no package holds its entry 'textures/a.dds', nor 1 other, ${NOT_COVERED}`);
+    });
+
+    it('judges it unshippable, saying why, when its entries cannot be read', async () => {
+      await writeSettings(COMPILE_PROFILES);
+
+      expect(await unshippable('Enabled', 'a.ba2', ['mods', 'Enabled'], false, { kind: 'unreadable', reason: 'not a BA2' }))
+        .toBe(`its entries cannot be read (not a BA2), ${NOT_COVERED}`);
+    });
+
+    it('judges it shippable when Include covers it, though an entry is unheld', async () => {
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\Enabled\\a.ba2'] });
+
+      expect(await unshippable('Enabled', 'a.ba2', ['mods', 'Enabled'], false, { kind: 'read', answer: ['textures/a.dds'] })).toBeUndefined();
+    });
   });
 
   it('judges a file outside the instance shippable', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ArchivedCopies, type ArchiveCopyReader, type FileRead, type FileStamp } from '../archivedCopies';
+import { ArchivedCopies, hashesOfEntries, type ArchiveCopyReader, type FileRead, type FileStamp } from '../archivedCopies';
 import type { ReadFailed } from '../../wire/readFailed';
 
 type Answer = Awaited<ReturnType<ArchiveCopyReader['getArchiveCopies']>>;
@@ -96,5 +96,27 @@ describe('the hashes of copies in archives', () => {
       { kind: 'unreadable', reason: 'mEdit did not answer in time.' },
     ]);
     expect(again).toEqual([{ kind: 'read', answer: 'ha' }, { kind: 'read', answer: 'hb' }, { kind: 'read', answer: 'hc' }]);
+  });
+});
+
+describe('the hashes of entries in an archive, for the game an instance names', () => {
+  it('reads the size of each entry before its bytes, so the bytes are read in bounded batches', async () => {
+    const big = 40 * 1024 * 1024;
+    const { medit, copies } = reading();
+    medit.answerOnce([sized('a.dds', big), sized('b.dds', big)]);
+    medit.answerOnce([hashed('a.dds', big, 'A')]);
+    medit.answerOnce([hashed('b.dds', big, 'B')]);
+
+    const read = await hashesOfEntries(copies)('Fallout 4', ARCHIVE, ['a.dds', 'b.dds']);
+
+    expect(medit.asked.map(([, , files, hashedBytes]) => [files, hashedBytes])).toEqual([[['a.dds', 'b.dds'], false], [['a.dds'], true], [['b.dds'], true]]);
+    expect(read).toEqual([{ kind: 'read', answer: 'A' }, { kind: 'read', answer: 'B' }]);
+  });
+
+  it('answers each entry unreadable, asking mEdit nothing, for a game whose archives it has no release for', async () => {
+    const { medit, copies } = reading();
+
+    expect(await hashesOfEntries(copies)('Unknown Game', ARCHIVE, ['a.dds'])).toEqual([{ kind: 'unreadable', reason: 'Unknown Game is not a game mEdit reads archives of' }]);
+    expect(medit.asked).toEqual([]);
   });
 });

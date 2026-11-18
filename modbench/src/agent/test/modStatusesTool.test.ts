@@ -19,8 +19,8 @@ describe('list_mod_statuses while git cannot say which folders it holds', () => 
         { kind: 'mod', name: 'ModA', path: '/i/mods/ModA', modName: 'ModA' }, { kind: 'mod', name: 'ModB', path: '/i/mods/ModB', modName: 'ModB' },
       ],
     });
-    const statuses = new ModStatuses(gitGone, () => undefined);
-    statuses.derive({ holdsRepository: true, flaggedHashes: new Map(), mods: value.mods, modFolders: value.modFolders, entryKey: ({ name }) => name, paths: value.paths, filesByMod: value.filesByMod });
+    const statuses = new ModStatuses(gitGone, () => undefined, () => Promise.resolve([]));
+    statuses.derive({ holdsRepository: true, flaggedHashes: new Map(), mods: value.mods, modFolders: value.modFolders, entryKey: ({ name }) => name, paths: value.paths, filesByMod: value.filesByMod, archiveContents: value.archiveContents, gameName: value.gameName });
 
     expect(await LIST_MOD_STATUSES.of(value, statuses, {})).toEqual([{ mods: ['ModA', 'ModB'], unreadable: 'git could not say which folders it holds: git is gone' }]);
   });
