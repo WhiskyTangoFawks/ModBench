@@ -22,7 +22,6 @@ import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { publisherKeyContext, registerPublisherTagCommands } from './publisherTagCommands';
 import { onModCheckboxChanged } from './modCheckboxHandler';
-import type { MEditClient } from '../client';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { registerModDecorations } from './modDecorations';
@@ -45,7 +44,7 @@ import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './che
 import type { CheckForUpdates } from '../modCommands/checkForUpdates';
 import { registerConflictTable } from './conflictTableEditor';
 import { sameCopies, type CopyReads } from './sameCopies';
-import { ArchivedCopies } from './archivedCopies';
+import type { ArchivedCopies } from './archivedCopies';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerFileIgnoreCommands, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
@@ -86,8 +85,7 @@ interface ModsViewDeps {
   checkForUpdates: CheckForUpdates;
   /** Each mod's status, as mEdit last answered it. */
   statuses: ModStatuses;
-  /** Reads the copies of files in archives. */
-  archives: Pick<MEditClient, 'getArchiveCopies'>;
+  archivedCopies: ArchivedCopies;
 }
 
 const checkForUpdatesDeps = (
@@ -162,7 +160,6 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     const walk = ++walks;
     void expandFilteredRows(view, provider, log, () => walk !== walks);
   };
-  const archivedCopies = new ArchivedCopies(deps.archives, (path) => deps.copyReads.fileStamp(path));
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
     ...owned,
@@ -203,7 +200,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       reveal: (row) => view.reveal(row, { select: true, focus: true }),
     }),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
-    ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, archivedCopies, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
+    ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, deps.archivedCopies, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
       commands, instance, reporterFor, trash, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting,
     }),

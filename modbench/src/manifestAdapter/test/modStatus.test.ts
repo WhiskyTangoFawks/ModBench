@@ -5,7 +5,7 @@ import { dirname, join, relative } from 'node:path';
 import type { ManifestAt } from '../manifestFiles';
 import type { HashedPath, StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
-import { filesAPackageHolds, manifestAt, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { filesAPackageHolds, manifestAt, packageFilesOf, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 const HELLO = 'AAAAAAAAAAA=';
 const EDITED = 'BBBBBBBBBBA=';
@@ -372,7 +372,7 @@ describe('the files a package or the installation file holds (publishing.md, Wha
       downloadedFiles: new Map(Object.entries(downloaded).map(([name, hash]) => [name, { kind: 'read' as const, answer: { hash, entries: [] } }])),
       gameFiles: [], repositoryPin: 'none',
     };
-    return [...filesAPackageHolds({ packages, exclude: [], ignore: [], flags: new Map(), files: new Map() }, values, installationFile)].sort();
+    return [...filesAPackageHolds(packageFilesOf({ packages, exclude: [], ignore: [], flags: new Map(), files: new Map() }, values, installationFile), values)].sort();
   };
 
   it.each([

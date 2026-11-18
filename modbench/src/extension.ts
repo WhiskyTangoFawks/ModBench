@@ -47,6 +47,7 @@ import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { showProgressWhileLate } from './drivingLib/lateProgress';
 import { reportUnwatchedFolders } from './drivingLib/unwatchedFolders';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
+import { ArchivedCopies, hashesOfEntries } from './mods/archivedCopies';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import { copyTheGameGets, revealCopy } from './mods/fileCopy';
@@ -139,6 +140,7 @@ interface InstanceSide {
   statuses?: ModStatuses;
   deployment?: DeploymentRead;
   copyReads?: CopyReads;
+  archivedCopies?: ArchivedCopies;
   pluginsShown?: PluginsShown;
   symbolRows?: SymbolRows;
   toolbox: ToolboxView;
@@ -236,7 +238,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
   const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
-  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
+  const archivedCopies = new ArchivedCopies(client, (path) => adapter.fileStamp(path));
+  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line), hashesOfEntries(archivedCopies)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
     await modStatuses.current();
@@ -271,7 +274,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
-    archives: client,
+    archivedCopies,
   }));
   own(registerArchiveOpen({ gameRelease: () => adapter.gameRelease(), reporter: reporterFor('archive.open') }));
   const editing = own(editingFlow({
@@ -313,7 +316,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, reporterFor,
   }));
   return {
-    instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
+    instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter, archivedCopies,
     modsLines: () => mods.standingLines(),
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
@@ -454,7 +457,7 @@ function start(context: vscode.ExtensionContext): void {
     pathStanding: views.pathStanding,
   });
   const symbols = symbolsOver({ meditClient, asker, outputChannel, reporterFor, opened, views, focusedRecord: editor.focusedRecord });
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: symbols.symbols, problemsCaughtUp: () => sourceLanguage.problemsCaughtUp(), statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages(), unsavedSource: () => sourceLanguage.unsavedSourceMessages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, archivedCopies: views.archivedCopies, symbols: symbols.symbols, problemsCaughtUp: () => sourceLanguage.problemsCaughtUp(), statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages(), unsavedSource: () => sourceLanguage.unsavedSourceMessages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     asker,
     views,

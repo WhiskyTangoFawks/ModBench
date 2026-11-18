@@ -9,7 +9,7 @@ import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { lastHanded, noneLeft } from '../../ports/lastBuilt';
 import { listDir, putIfChanged, putIfChangedUntold, readOrAbsent, textByStamp } from '../files';
-import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
+import type { Covering, FileRead, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedReplacement, sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -238,12 +238,21 @@ const coveringIn = (compiled: ReturnType<typeof compiledIn>): Covering => (path,
   return judged === undefined || !(judged.reached || judged.covers.some(({ appliedFirst }) => appliedFirst)) ? [] : judged.covers.map(({ tag }) => tag);
 };
 
-const UNSHIPPABLE = 'no package holds its bytes or a file of its name, and no Include or No Match Include publisher tag covers it';
+const NOT_COVERED = 'and no Include or No Match Include publisher tag covers it';
+const UNSHIPPABLE = `no package holds its bytes or a file of its name, ${NOT_COVERED}`;
 
-const unshippableIn = (compiled: ReturnType<typeof compiledIn>): UnshippableReason => (folder, pathInFolder, mod, heldByPackage) => {
-  if (heldByPackage) return undefined;
+// The compiler deconstructs an archive and judges each entry as it does a file.
+function unshippableEntries(entries: FileRead<readonly string[]>): string {
+  if (entries.kind === 'unreadable') return `its entries cannot be read (${entries.reason}), ${NOT_COVERED}`;
+  const [first, ...rest] = entries.answer;
+  return `no package holds its entry '${first}'${rest.length === 0 ? '' : `, nor ${rest.length} other`}, ${NOT_COVERED}`;
+}
+
+const unshippableIn = (compiled: ReturnType<typeof compiledIn>): UnshippableReason => (folder, pathInFolder, mod, heldByPackage, entriesNoPackageHolds) => {
+  if (heldByPackage || (entriesNoPackageHolds?.kind === 'read' && entriesNoPackageHolds.answer.length === 0)) return undefined;
   const judged = compiled(join(folder, pathInFolder), mod);
-  return judged?.reached === true && !judged.covers.some(({ shipsUnmatched }) => shipsUnmatched) ? UNSHIPPABLE : undefined;
+  if (judged?.reached !== true || judged.covers.some(({ shipsUnmatched }) => shipsUnmatched)) return undefined;
+  return entriesNoPackageHolds === undefined ? UNSHIPPABLE : unshippableEntries(entriesNoPackageHolds);
 };
 
 interface ListChange {
