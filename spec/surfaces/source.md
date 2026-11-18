@@ -6,16 +6,17 @@ Each story cites what decides it. A story that cites nothing is owned here.
 
 ## Plugin source
 
-The plugin source is a compiled plugin's text, and compile makes the plugin from it ([ADR-0006](../adr/0006-a-compiled-plugins-truth-is-its-plugin-source.md)). Version in git, and decompile, write it into the mod source ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)), under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is Modbench's schema: Mutagen's serialization gives the structure, and Modbench changes it where the stories below need. Mutagen decides what a record holds; Modbench decides where the text departs from Mutagen's.
+The plugin source is a compiled plugin's text, and compile makes the plugin from it ([ADR-0006](../adr/0006-a-compiled-plugins-truth-is-its-plugin-source.md)). Version in git, and decompile, write it into the mod source ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)), under `plugin-source/`, and I read, diff and edit it as I would any source code. Its format is Spriggit's JSON format ([ADR-0030](../adr/0030-the-plugin-source-is-spriggits-json-format.md)).
 
 ### The tree
 
 As a user, I want:
 
-1. To find a record by its file: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey, except a child record (story 3).
-2. A diff to hold only what changed in the plugin. An insert or a delete touches one record's file, and an insert also moves the Next Object ID in the plugin header's file. A reorder reads as a reorder, nothing is re-sorted, and decompiling an unchanged plugin changes nothing. Cites: ADR-0006
-3. A record and its child records in one file, so a change to a cell or a quest is one file to review. A worldspace's grid cells are each a file of their own. Cites: ADR-0020
-4. Never to edit or merge a value the plugin derives, in the header or in a record: it is not in the source, so branches never conflict over it. The masters and the record count are such values. The Next Object ID is in the source, as Mutagen holds it, so two branches that add records both move it in the header. Cites: ADR-0008; Mutagen's data; ruling
+1. To find a record by its file: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey, except an embedded child record (story 3).
+2. A diff to hold only what changed in the plugin. An insert or a delete touches one record's file, and decompiling an unchanged plugin changes nothing. Cites: ADR-0006; ADR-0030
+3. A cell and the records it holds in one file, so a change to a cell is one file to review. Cites: ADR-0030
+4. Never to manage a value the plugin derives, in the header or in a record: the build manages it. Cites: ADR-0008
+5. A plugin to decompile to the same text on Windows and Linux. Cites: Windows and Linux alike
 
 ### Decompile and compile
 
@@ -25,6 +26,7 @@ As a user, I want:
 2. To trust the source: it says what the plugin means, and compiling it unchanged gives a plugin that means the same. Cites: ADR-0006
 3. To be told when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. The refusal names the record, and says whether the plugin is malformed or Mutagen mishandles it, because the remedy differs. Cites: Never silently wrong; GLOSSARY.md, Malformed plugin
 4. To take the author's new release into my edits myself, with git, where each conflict lands in one record's file. Cites: ADR-0007; GLOSSARY.md, Vendored workflow
+5. A plugin source of another version of Spriggit's format refused, naming both versions and pointing at Spriggit's upgrade or a fresh decompile. Cites: ADR-0030
 
 ### Decompile and repair
 

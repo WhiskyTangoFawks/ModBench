@@ -249,7 +249,7 @@ describe('sourceCommands build, in mod order', () => {
     expect(await recorded('ModB')).toMatchObject({ packages: [{ kind: 'repository', name: 'Old ModB' }] });
   });
 
-  describe.each<[string, { build?: 'ModA' | 'ModB'; save?: 'ModA' | 'ModB' }, unknown, number]>([
+  describe.each<[string, { build?: 'ModA' | 'ModB'; save?: 'ModA' | 'ModB' }, object, number]>([
     ['finishes the step in hand, and runs no step after it and no later mod', { build: 'ModB' },
       { landed: [{ ...landedOf('ModB'), failure: 'The build was stopped before its step 2.' }], refused: [{ item: 'ModA', reason: 'was not built: the build was stopped.' }] }, 1],
     ['leaves the mods built before it built', { build: 'ModA' },

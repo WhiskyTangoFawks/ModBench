@@ -18,7 +18,7 @@ As a user, I want:
 6. Every list to let me select several rows. Cites: commands.md, Argument; A selection is one gesture, and each item lands on its own
 7. Every list to reverse its order from its title bar. The direction never changes what the order means, such as which item wins. Cites: GLOSSARY.md, Sort direction
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line. Cites: catalog `copy value`
-9. A copy of a record to open in the tab of its file, whichever view or VS Code feature opens it, and a tab restored after a restart to show the same copy again. Cites: VS Code's interaction; ADR-0012; ADR-0020
+9. A copy of a record to open in the tab of its file, whichever view or VS Code feature opens it, and a tab restored after a restart to show the same copy again. Cites: VS Code's interaction; ADR-0012
 10. Every page Modbench draws to take VS Code's theme, so they look as the rest of VS Code does. Cites: VS Code's interaction
 11. A collapsed row to carry the badges of the rows beneath it, and an expanded row only its own, so each change shows once, on the row I can see.
 12. Ctrl+F in a page Modbench draws to find text as in any editor, among what the page shows. Cites: VS Code's interaction
