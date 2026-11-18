@@ -25,7 +25,7 @@ internal static class NamedFiles
             var listed = listing.Files.Select(file => file.Key).Where(file => Under(path, file)).ToList();
             if (disk.DirectoryExists(path)) files.UnionWith(disk.FilesIn(path, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories));
             else if (disk.FileExists(path) || listing.KnowsGone(path)) files.Add(path);
-            else if (listed.Count == 0) return null;
+            else if (listed.Count == 0 && !SourceRepositoryLayout.CarriesNoRecord(path)) return null;
             files.UnionWith(listed);
         }
 

@@ -181,8 +181,6 @@ internal sealed class SourceRepository : ISourceRepository
 
     internal static PathAnswer Touching(LoadOrderSnapshot loadOrder, string fullPath)
     {
-        // A writer's temp is renamed into place, which names the file it becomes.
-        if (TempName.HoldsTemp(Path.GetFileName(fullPath))) return new PathAnswer.Untouched();
         var holding = loadOrder.Plugins.Where(plugin => TreeFolderHolding(plugin, fullPath) is not null).ToList();
         if (holding.Count > 0) return new PathAnswer.Touches(holding);
         return loadOrder.Plugins

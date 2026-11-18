@@ -96,6 +96,14 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     }
 
     [Fact]
+    public void APathGoneAndNeverListedThatCarriesNoRecord_ReadsNothing_AndTheFileNamedBesideItReadsAlone()
+    {
+        var files = Listed([Path.Combine(Path.GetDirectoryName(NpcFile).Require(), ".medit_tmp_1_written.tmp"), NpcFile]);
+
+        Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, files, []).Value().Require().Documents.Select(document => document.FormKey));
+    }
+
+    [Fact]
     public void ANamedFileReadGone_ReadsAloneAgain_HoldingNothing()
     {
         var npc = NpcFile;
