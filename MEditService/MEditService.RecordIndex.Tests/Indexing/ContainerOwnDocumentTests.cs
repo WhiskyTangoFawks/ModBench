@@ -22,7 +22,7 @@ public sealed class ContainerOwnDocumentTests
         public Fixture(bool compiledPlugin)
         {
             ContainerModPlugin.Keys keys = default;
-            FormKey quest = default, topic = default, response = default;
+            FormKey quest = default, topic = default, response = default, exteriorCell = default, exteriorRef = default;
             _data = new PluginFixtureBuilder("container-own-document")
                 .WithPlugin(PluginName, mod =>
                 {
@@ -33,10 +33,13 @@ public sealed class ContainerOwnDocumentTests
                     t.Responses.Add(r);
                     q.DialogTopics.Add(t);
                     (quest, topic, response) = (q.FormKey, t.FormKey, r.FormKey);
+                    var spatial = SpatialPlugin.AddTo(mod);
+                    (exteriorCell, exteriorRef) = (spatial.ExteriorCell.FormKey, spatial.ExteriorRef.FormKey);
                 }, origin: Origin)
                 .BuildScattered();
             if (compiledPlugin) _data.CompiledPlugin();
             (Keys, Quest, Topic, Response) = (keys, quest.ToString(), topic.ToString(), response.ToString());
+            (ExteriorCell, ExteriorRef) = (exteriorCell.ToString(), exteriorRef.ToString());
             Index = Indexes.Reconciled(_data);
         }
 
@@ -44,12 +47,19 @@ public sealed class ContainerOwnDocumentTests
         public string Quest { get; }
         public string Topic { get; }
         public string Response { get; }
+        public string ExteriorCell { get; }
+        public string ExteriorRef { get; }
         public OpenedIndex Index { get; }
         public LoadOrderEntry Entry => _data.Plugins.Single();
 
         public JsonElement Stored(string formKey) =>
             JsonDocument.Parse(Index.Queries.GetRenderedDocument(Plugin, formKey).Value()?.Text
                 ?? throw new InvalidOperationException($"Expected the record index to store {formKey}.")).RootElement;
+
+        public string RenderedFileName(string formKey) =>
+            Index.Queries.GetRenderedDocument(Plugin, formKey).Value().Require().FileName;
+
+        public string FileNameOf(string formKey) => Path.GetFileName(Entry.SourceFileOf(Index.DocumentOf(formKey, Plugin)));
 
         public List<string> Children(string formKey) =>
             [.. Index.Queries.GetContainerChildren(Plugin, formKey).Value().Select(c => c.FormKey)];
@@ -108,6 +118,17 @@ public sealed class ContainerOwnDocumentTests
         Assert.Equal(
             new[] { keys.PersistentRef, keys.TemporaryRef, keys.Navmesh, keys.Landscape }.Select(formKey => formKey.ToString()),
             held.Persistent.Concat(held.Temporary).Select(c => c.FormKey));
+    }
+
+    [Fact]
+    public void AnEmbeddedChildsRenderedDocument_IsNamedAsTheDocumentCarryingIt()
+    {
+        using var fixture = new Fixture(compiledPlugin: true);
+        var keys = fixture.Keys;
+
+        Assert.Equal(
+            new[] { keys.EmbedCell, keys.Worldspace, keys.Worldspace }.Select(carrier => carrier.ToString()).Append(fixture.ExteriorCell).Select(fixture.FileNameOf),
+            new[] { keys.TemporaryRef, keys.TopCell, keys.TopCellRef }.Select(child => child.ToString()).Append(fixture.ExteriorRef).Select(fixture.RenderedFileName));
     }
 
     [Fact]

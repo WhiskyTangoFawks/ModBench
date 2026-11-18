@@ -22,6 +22,9 @@ internal static class HoldingSlots
     internal static readonly string TopCell = $"'{PlacedCell.WorldspacePersistentCellMember}'";
 
     internal static readonly string Exterior = $"'{ExteriorCell}'";
+
+    /// <summary>Whether the holding in <paramref name="slot"/> is carried in its parent's document.</summary>
+    internal static string CarriedInTheParentsDocument(string slot) => $"{slot} <> {Exterior}";
 }
 
 /// <summary>A cell's grid out of its own text, the block coordinates out of the structure handed

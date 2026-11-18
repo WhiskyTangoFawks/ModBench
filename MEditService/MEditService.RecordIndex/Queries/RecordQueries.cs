@@ -357,7 +357,7 @@ internal sealed class RecordQueries(
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
-            return ReferencePlacement.Of(reads, targetFormKey, TreeOf, RenderedFileName, source.TextAt, cancel);
+            return ReferencePlacement.Of(reads, targetFormKey, TreeOf, (plugin, identity) => RenderedFileName(plugin, identity, identity), source.TextAt, cancel);
         });
 
     // A plugin the record index has not reached would read as naming nothing.
@@ -416,8 +416,16 @@ internal sealed class RecordQueries(
 
     private Answer<RenderedDocument?, SourceFailure> RenderedDocumentOf(PluginAddress plugin, string formKey, CancellationToken cancel)
     {
-        if (Reading(reads => reads.GetCopyText(formKey, plugin), cancel) is not var (identity, body)) return SourceAnswer.Of<RenderedDocument?>(null);
-        return RenderedFileName(plugin, identity).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
+        if (CopyAndItsCarryingRecord(plugin, formKey, cancel) is not var (identity, body, carrying)) return SourceAnswer.Of<RenderedDocument?>(null);
+        return RenderedFileName(plugin, identity, carrying).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
+    }
+
+    // The record index names an embedded copy's carrying record, so the tree is never searched for it.
+    private (RecordIdentity Identity, string Body, RecordIdentity Carrying)? CopyAndItsCarryingRecord(PluginAddress plugin, string formKey, CancellationToken cancel)
+    {
+        using var reads = RequireReads(cancel, inOneSnapshot: true);
+        if (reads.GetCopyText(formKey, plugin) is not var (identity, body)) return null;
+        return (identity, body, reads.GetCarryingRecord(formKey, plugin) ?? identity);
     }
 
     // A compiled plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
@@ -437,7 +445,7 @@ internal sealed class RecordQueries(
     {
         if (TreeOf(plugin) is not { } tree)
         {
-            return RenderedFileName(plugin, identity)
+            return RenderedFileName(plugin, identity, identity)
                 .Then(name => SourceAnswer.Of<CopyDocument?>(new CopyDocument(CopyDocumentKind.Rendered, name)));
         }
         return tree.DocumentOf(plugin, identity).Then(file => SourceAnswer.Of(file is null ? null : CopyDocumentAt(file)));
@@ -446,8 +454,9 @@ internal sealed class RecordQueries(
     internal static CopyDocument CopyDocumentAt(DocumentFile file) =>
         new(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path);
 
-    // A compiled plugin copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
-    private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
+    // A compiled plugin copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's: the
+    // name of its carrying record's document.
+    private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity, RecordIdentity carrying)
     {
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { } registered || !source.IsSourceMod(registered)
@@ -455,7 +464,7 @@ internal sealed class RecordQueries(
         {
             return source.FileNameOf(identity);
         }
-        return compiledPlugin.FileNameOf(plugin, identity).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
+        return compiledPlugin.FileNameOf(plugin, carrying).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
     }
 
     private ISourceRepositoryReads? TreeOf(PluginAddress plugin)

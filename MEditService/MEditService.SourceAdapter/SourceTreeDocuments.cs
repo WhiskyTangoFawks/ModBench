@@ -298,7 +298,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             // reaches it as the file spells it.
             var text = ContainerDocumentEdits.ChildTextAt(ownerBytes, span, _release);
             yield return (child, text, ownerFormKey);
-            if (child.RecordType is not { } childType) continue;
+            if (child.RecordType is not { } childType || !_types.HasChildSlots(childType)) continue;
             foreach (var deeper in EmbeddedTexts(childType, child.FormKey, text)) yield return deeper;
         }
     }

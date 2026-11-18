@@ -135,10 +135,10 @@ internal sealed class Projector(
             .Where(formKey => !EqualityComparer<T>.Default.Equals(
                 before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
-    /// <summary>Re-derives <paramref name="formKeys"/>' rows from the Source repository,
-    /// idempotent by content, the whole plugin for a key the record index does not hold. Answers what stopped
-    /// the tree.</summary>
-    internal SourceFailure? RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys) => index.Commit(projection =>
+    /// <summary>Re-derives <paramref name="formKeys"/>' rows from the Source repository, the whole plugin for a key the
+    /// record index does not hold, and takes out <paramref name="documentsGone"/>' rows without looking them up. Answers
+    /// what stopped the tree.</summary>
+    internal SourceFailure? RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys, IReadOnlyList<string> documentsGone) => index.Commit(projection =>
     {
         var key = plugin.Key;
         _matched.TryRemove(key, out _);
@@ -167,7 +167,7 @@ internal sealed class Projector(
         var touched = index.ProjectDocuments(
             key,
             [.. deltas.Select(delta => delta.Body is { } body ? new PluginDocument(stored[delta.FormKey].RecordType, delta.FormKey, body) : null).OfType<PluginDocument>()],
-            [.. deltas.Where(delta => delta.Body is null).Select(delta => delta.FormKey)]);
+            [.. documentsGone, .. deltas.Where(delta => delta.Body is null).Select(delta => delta.FormKey)]);
         if (!LearnWorkingTreeStates(plugin).Holds(out var moved, out var unlearned)) return unlearned;
         touched.AddRange(moved);
 
@@ -311,12 +311,12 @@ internal sealed class Projector(
                 drifted.Count, key.Name, key.Origin);
         }
 
-        // A held record with no document here is refreshed by key too, so the rows-changed it
+        // A held record with no document here is taken out by the refresh, so the rows-changed it
         // publishes names it. A refresh learns the working tree states itself.
-        var deleted = heldStamps.Keys.Except(onDisk.Keys, StringComparer.Ordinal);
-        List<string> stale = [.. deleted, .. drifted];
-        var stopped = stale.Count > 0
-            ? RefreshByKeys(plugin, stale)
+        List<string> deleted = [.. heldStamps.Keys.Except(onDisk.Keys, StringComparer.Ordinal)];
+        var stale = deleted.Count + drifted.Count;
+        var stopped = stale > 0
+            ? RefreshByKeys(plugin, drifted, deleted)
             : index.Commit(projection =>
             {
                 if (!LearnWorkingTreeStates(plugin).Holds(out var moved, out var unlearned)) return unlearned;
@@ -327,7 +327,7 @@ internal sealed class Projector(
         // A tree that stopped the refresh is read whole, which reads the binary in its place and says why.
         if (stopped is not null) return new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
         index.ReclaimTreeBinary(key, plugin.Path, index.IndexedFile(key)?.ContentHash);
-        if (stale.Count == 0 && repository.Vouches) _matched[key] = (stamps, repository);
+        if (stale == 0 && repository.Vouches) _matched[key] = (stamps, repository);
         return ValidationReport.Clean;
     }
 }

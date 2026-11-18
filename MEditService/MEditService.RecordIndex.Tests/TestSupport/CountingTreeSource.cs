@@ -96,7 +96,11 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
 
         public Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin) => reads.WorkingTreeChangesOf(plugin);
 
-        public Answer<SourceDocument?, SourceFailure> RecordOf(PluginAddress plugin, RecordIdentity identity) => reads.RecordOf(plugin, identity);
+        public Answer<SourceDocument?, SourceFailure> RecordOf(PluginAddress plugin, RecordIdentity identity)
+        {
+            Interlocked.Increment(ref owner._locates);
+            return reads.RecordOf(plugin, identity);
+        }
 
         public SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body) => reads.WhyUnreadable(plugin, identity, body);
 

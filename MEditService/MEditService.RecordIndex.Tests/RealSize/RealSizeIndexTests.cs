@@ -27,8 +27,10 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneAnswerOfEveryMastersRecord = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
+    private static readonly TimeSpan OneWholeDiskCheckReadingEveryTreesStamps = TimeSpan.FromSeconds(1.5);
     private const int Runs = 5;
     private const int Launches = 3;
+    private const int ScriptDeletes = 20;
 
     private OpenedIndex Index => realSize.Index;
 
@@ -109,7 +111,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void AnEditToOneReferenceInABigCell_ReachesReadsWithinOneSecond()
+    public void AnEditMadeOutsideModbenchToOneReferenceInABigCell_ReachesReadsThroughAWholeDiskCheckOfEveryTreesStamps()
     {
         var reference = Index.DocumentOf(Modlist.AReferenceInTheBigCell, Modlist.BigSourcePlugin.Key);
         using var restored = Restoring(Modlist.BigSourcePlugin.SourceFileOf(reference), () => !ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal));
@@ -117,14 +119,32 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal), "An edit to one reference reaching reads");
+        Budgets.Reached(OneWholeDiskCheckReadingEveryTreesStamps, () => ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal),
+            "An edit made outside Modbench to one reference reaching reads through a check of the whole disk");
+    }
+
+    [RealSizeFact]
+    public void AnEditItsWriterMadeToOneReferenceInABigCell_IsReadWithinOneGesture()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var reference = Index.DocumentOf(Modlist.AReferenceInTheBigCell, plugin.Key);
+        var path = plugin.SourceFileOf(reference);
+        using var landed = CheckpointOfEarlierWritesLanded();
+        using var restored = Restoring(path, () => CheckEnded() && !ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal));
+        plugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
+
+        ReadAlone(OneGesture, () =>
+        {
+            Held(new PluginChange(plugin.Key, [path]));
+            Assert.Contains("\"Edited\"", ReferenceRead(), StringComparison.Ordinal);
+        }, "Reading an edit its writer made to one reference in a big cell");
     }
 
     private string ReferenceRead() =>
         Index.Queries.GetRenderedDocument(Modlist.BigSourcePlugin.Key, Modlist.AReferenceInTheBigCell).Value()?.Text ?? "";
 
     [RealSizeFact]
-    public void ACheckAfterAThousandSeparateDocumentsChange_ReachesReadsWithinOneSecond()
+    public void AThousandSeparateDocumentsChangedOutsideModbench_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         var plugin = Modlist.BigSourcePlugin;
         var identities = Modlist.TheManyDocuments.Select((formKey, d) => new RecordIdentity(formKey, "KYWD", $"Document{d:D4}")).ToList();
@@ -134,7 +154,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => Edited() == RealSizeModlist.ManyDocuments, "A check after 1,000 documents changed reaching reads");
+        Budgets.Reached(OneGesture, () => Edited() == RealSizeModlist.ManyDocuments, "1,000 documents changed outside Modbench reaching reads through a check of the whole disk");
     }
 
     private int Edited() =>
@@ -142,7 +162,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
             .Value().Items.Count(row => row.EditorId == "Edited");
 
     [RealSizeFact]
-    public void AThousandReferencesTakenOutOfABigCellsDocument_ReachReadsWithinOneSecond()
+    public void AThousandReferencesTakenOutsideModbenchOutOfABigCellsDocument_ReachReadsThroughAWholeDiskCheckOfEveryTreesStamps()
     {
         var path = BigCellsDocument();
         using var restored = Restoring(path, () => CheckEnded() && ReferencesListed() == RealSizeModlist.ReferencesInTheBigCell);
@@ -153,11 +173,12 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => CheckEnded() && ReferencesListed() == RealSizeModlist.ReferencesInTheBigCell - 1_000, "Taking 1,000 references out of a big cell reaching reads");
+        Budgets.Reached(OneWholeDiskCheckReadingEveryTreesStamps, () => CheckEnded() && ReferencesListed() == RealSizeModlist.ReferencesInTheBigCell - 1_000,
+            "1,000 references taken outside Modbench out of a big cell reaching reads through a check of the whole disk");
     }
 
     [RealSizeFact]
-    public void ABigCellsDocumentDeleted_ReachesReadsWithinOneSecond()
+    public void ABigCellsDocumentDeletedOutsideModbench_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         var path = BigCellsDocument();
         using var restored = Restoring(path, () => CheckEnded() && ReferencesListed() == RealSizeModlist.ReferencesInTheBigCell);
@@ -165,7 +186,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => CheckEnded() && ReferencesListed() == 0, "Deleting a big cell's document reaching reads");
+        Budgets.Reached(OneGesture, () => CheckEnded() && ReferencesListed() == 0, "A big cell's document deleted outside Modbench reaching reads through a check of the whole disk");
         Assert.Null(Index.CopyIn(Modlist.BigCell, Modlist.BigSourcePlugin.Key));
     }
 
@@ -182,11 +203,31 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Null(Index.CopyIn(formKey, plugin.Key));
     }
 
-    private void ReadAlone(TimeSpan budget, Action gesture, string what)
+    [RealSizeFact]
+    public void AScriptsRunOfSingleRecordDeletes_IsReadWithinLitRsIndexWorkForEachDeletedRecord()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var formKeys = Modlist.TheManyDocuments.Skip(10).Take(ScriptDeletes).ToList();
+        var paths = formKeys.Select(formKey => plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key))).ToList();
+        using var landed = CheckpointOfEarlierWritesLanded();
+        using var restored = Restoring(paths, () => CheckEnded() && formKeys.TrueForAll(formKey => Index.CopyIn(formKey, plugin.Key) is not null));
+
+        ReadAlone(LitRsIndexWorkForOneDeletedRecord * ScriptDeletes, () =>
+        {
+            foreach (var path in paths)
+            {
+                File.Delete(path);
+                Held(new PluginChange(plugin.Key, [path]));
+            }
+        }, $"Reading {ScriptDeletes} records a script deleted one at a time", ScriptDeletes);
+        Assert.All(formKeys, formKey => Assert.Null(Index.CopyIn(formKey, plugin.Key)));
+    }
+
+    private void ReadAlone(TimeSpan budget, Action gesture, string what, int reads = 1)
     {
         var (named, whole) = (realSize.Source.NamedReads, realSize.Source.WholeTreeReads);
         Budgets.Ran(budget, gesture, what);
-        Assert.Equal((named + 1, whole), (realSize.Source.NamedReads, realSize.Source.WholeTreeReads));
+        Assert.Equal((named + reads, whole), (realSize.Source.NamedReads, realSize.Source.WholeTreeReads));
     }
 
     private FilesPutBack CheckpointOfEarlierWritesLanded()
@@ -365,6 +406,55 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal("Created", Index.RowOf(formKey, plugin.Key)?.EditorId);
     }
 
+    [RealSizeFact]
+    public void APluginReadWholeAgain_IsReadAndSweptWithinHalfAGesture()
+    {
+        var small = Modlist.SmallBinaryPlugins[0];
+        var bytes = File.ReadAllBytes(small.Path);
+        IndexFiles.Checkpointed(Modlist.InstanceRoot);
+        try
+        {
+            Budgets.Ran(HalfAGesture, () =>
+            {
+                PluginBinaries.Touch(small.Path);
+                ReadBack(small.Key);
+            }, $"Changing {small.Name} and reading it whole again, sweeping its winners", Runs);
+        }
+        finally
+        {
+            realSize.Restore(() =>
+            {
+                File.WriteAllBytes(small.Path, bytes);
+                ReadBack(small.Key);
+            }, () => true);
+        }
+    }
+
+    private void ReadBack(PluginAddress plugin) =>
+        Assert.Null(Index.Queries.Hold([HandedPlugin.ReadBack(plugin)], CancellationToken.None).GetAwaiter().GetResult());
+
+    [RealSizeFact]
+    public void AReferenceItsWriterCopiedAsNewIntoABigCell_IsReadWithinOneGesture()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var copied = $"FFF001:{plugin.Name}";
+        var path = BigCellsDocument();
+        using var landed = CheckpointOfEarlierWritesLanded();
+        using var restored = Restoring(path, () => CheckEnded() && Index.CopyIn(copied, plugin.Key) is null);
+        var cell = JsonNode.Parse(File.ReadAllText(path)).Require().AsObject();
+        var temporary = cell["Temporary"].Require().AsArray();
+        var copy = temporary[0].Require().DeepClone().AsObject();
+        (copy["FormKey"], copy["EditorID"]) = (copied, "Copied");
+        temporary.Add(copy);
+        File.WriteAllText(path, RecordTextCodec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell"));
+
+        ReadAlone(OneGesture, () =>
+        {
+            Held(new PluginChange(plugin.Key, [path]));
+            Assert.Contains("\"Copied\"", Index.Queries.GetRenderedDocument(plugin.Key, copied).Value()?.Text, StringComparison.Ordinal);
+        }, "Reading a reference its writer copied as new into a big cell");
+    }
+
     private sealed class CreatedPutBack(string path, RealSizeIndex realSize, Func<bool> restored) : IDisposable
     {
         public void Dispose() => realSize.Restore(() =>
@@ -403,6 +493,16 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneGesture, () => opened = queries.GetRenderedDocument(modlist.Master.Key, modlist.MastersBigCell).Value(), "Opening the master's big cell", Runs);
         Assert.Contains("\"MastersBigCell\"", opened?.Text, StringComparison.Ordinal);
+    }
+
+    [RealSizeFact]
+    public void AReferenceInABigSourceCell_OpensWithinAQuarterOfAGesture()
+    {
+        RenderedDocument? opened = null;
+
+        Budgets.Ran(OneKeystroke, () => opened = Index.Queries.GetRenderedDocument(Modlist.BigSourcePlugin.Key, Modlist.AReferenceInTheBigCell).Value(),
+            "Opening a reference in a source plugin's big cell", Runs);
+        Assert.Equal(Path.GetFileName(BigCellsDocument()), opened?.FileName);
     }
 
     [RealSizeFact]
