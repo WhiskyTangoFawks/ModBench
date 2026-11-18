@@ -8,7 +8,11 @@ public static class TempName
 {
     private const string Prefix = ".medit_tmp_";
 
-    public static string FileIn(string folder) => Combine(folder) + ".tmp";
+    private const string FileSuffix = ".tmp";
+
+    public static string FileIn(string folder) => Combine(folder) + FileSuffix;
+
+    public static bool IsTempFile(string name) => IsTemp(name) && name.EndsWith(FileSuffix, StringComparison.Ordinal);
 
     public static string FolderIn(string folder) => Combine(folder);
 

@@ -74,6 +74,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
             Path.Combine(Path.GetDirectoryName(test.CellFile).Require(), "Stray.json"), NpcBody(StrayFormKey))]),
         ["a group's document"] = test => test.Listed([Directory.GetFiles(test._modFolder, "GroupRecordData.json", SearchOption.AllDirectories).First()]),
         ["a file neither on disk nor listed"] = test => test.Listed([Path.Combine(Path.GetDirectoryName(test.NpcFile).Require(), "Never.json")]),
+        ["a folder neither on disk nor listed"] = test => test.Listed([Path.Combine(Path.GetDirectoryName(test.NpcFile).Require(), "Never - 000900_Fixture.esp")]),
     };
 
     public static TheoryData<string> FallBacks() => [.. FallingBack.Keys];
@@ -91,6 +92,14 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     public void ANamedFileOfAListedTree_ReadsAlone()
     {
         var files = Listed([NpcFile]);
+
+        Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, files, []).Value().Require().Documents.Select(document => document.FormKey));
+    }
+
+    [Fact]
+    public void AWritersGoneTempFile_ReadsNothing_AndTheFileNamedBesideItReadsAlone()
+    {
+        var files = Listed([Path.Combine(Path.GetDirectoryName(NpcFile).Require(), ".medit_tmp_1_written.tmp"), NpcFile]);
 
         Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, files, []).Value().Require().Documents.Select(document => document.FormKey));
     }
