@@ -228,6 +228,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id       VARCHAR,
                 working_tree_state VARCHAR NOT NULL DEFAULT '{WorkingTreeState.None.Stored()}',
                 body            VARCHAR NOT NULL,
+                document_length BIGINT NOT NULL,
+                copy_id         BIGINT NOT NULL,
                 content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR,
                 masters         VARCHAR[] NOT NULL DEFAULT [],

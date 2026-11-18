@@ -25,7 +25,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneKeyedRead = TimeSpan.FromSeconds(0.1);
     private static readonly TimeSpan HalfAGesture = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan OneAnswerOfEveryMastersRecord = TimeSpan.FromSeconds(1.5);
-    private static readonly TimeSpan OneDocumentRead = TimeSpan.FromSeconds(0.006);
+    private static readonly TimeSpan OneDocumentRead = TimeSpan.FromSeconds(0.0007);
     private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan OneWholeDiskCheckReadingEveryTreesStamps = TimeSpan.FromSeconds(1.5);

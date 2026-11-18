@@ -37,7 +37,7 @@ public sealed class ReferencePlacementMemoryTests : IDisposable
     }
 
     [Fact]
-    public void EachReferrer_IsPlacedInTwoReadsOfDocuments_InMemoryThatHoldsNoWholeStore()
+    public void EachReferrer_IsPlacedInOneReadOfDocuments_InMemoryThatHoldsNoWholeStore()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new LinkingAdapter(Plugin, Records));
         IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryThatHoldsNoWholeStore}'");
@@ -46,11 +46,11 @@ public sealed class ReferencePlacementMemoryTests : IDisposable
         var placed = index.Queries.GetPlacedReferences(Target).Value();
 
         Assert.Equal(Referrers, placed.Copies.Count);
-        Assert.Equal(2L, IndexFiles.StartedCount(_fixture.InstanceRoot, "body"));
+        Assert.Equal(1L, IndexFiles.StartedCount(_fixture.InstanceRoot, "body"));
     }
 
     [Fact]
-    public void EachReferrerAmongOtherRecords_IsPlacedInTwoReadsOfDocumentsAndOneOfTheirRows_InMemoryThatHoldsNoWholeStore()
+    public void EachReferrerAmongOtherRecords_IsPlacedInOneReadOfDocuments_InMemoryThatHoldsNoWholeStore()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new LinkingAdapter(Plugin, ReferrersAmongOtherRecords));
         IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryThatHoldsNoWholeStore}'");
@@ -59,7 +59,7 @@ public sealed class ReferencePlacementMemoryTests : IDisposable
         var placed = index.Queries.GetPlacedReferences(Target).Value();
 
         Assert.Equal(Referrers, placed.Copies.Count);
-        Assert.Equal((2L, 1L), (IndexFiles.StartedCount(_fixture.InstanceRoot, "body"), IndexFiles.StartedCount(_fixture.InstanceRoot, "SELECT rowid")));
+        Assert.Equal(1L, IndexFiles.StartedCount(_fixture.InstanceRoot, "body"));
     }
 
     private static IEnumerable<(string, IEnumerable<string>)> Records()

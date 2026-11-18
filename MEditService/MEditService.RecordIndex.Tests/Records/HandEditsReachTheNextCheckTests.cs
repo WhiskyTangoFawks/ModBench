@@ -23,7 +23,7 @@ public sealed class HandEditsReachTheNextCheckTests : IDisposable
             .CompiledPlugin();
         _mod = _fixture.Plugins.Single();
         _npc = npc.ToString();
-        _index = Indexes.Reconciled(_fixture);
+        _index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
     }
 
     public void Dispose()
@@ -61,6 +61,18 @@ public sealed class HandEditsReachTheNextCheckTests : IDisposable
         Assert.Equal("HandCreated", _index.CopyIn(formKey, _mod.Key)?.EditorId);
         var listing = _index.Queries.GetRecords(["npc_"], _mod.Key, search: null, limit: 50, offset: 0).Value();
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
+    }
+
+    [Fact]
+    public void ADocumentACheckRewrites_IsSizedByItsNewText()
+    {
+        var grown = new string('x', 1_000);
+        _mod.HandEdit(_index.DocumentOf(_npc, _mod.Key), "\"FixtureNpc\"", $"\"{grown}\"");
+
+        _index.NextCheck();
+
+        Assert.Equal(grown, _index.CopyIn(_npc, _mod.Key)?.EditorId);
+        Assert.Equal("0", IndexFiles.Rows(_fixture.InstanceRoot, "SELECT count(*) FROM mirror.records WHERE document_length <> strlen(body)").Single().Single());
     }
 
     [Fact]

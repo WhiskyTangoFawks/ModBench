@@ -140,7 +140,7 @@ internal sealed class WorkingTreeOverlay
         {
             DuckDbSql.Execute(_connection, """
                 UPDATE mirror.records r
-                SET body = m.body, content_hash = m.content_hash, editor_id = json_extract_string(m.body, '$.EditorID'),
+                SET body = m.body, document_length = strlen(m.body), content_hash = m.content_hash, editor_id = json_extract_string(m.body, '$.EditorID'),
                     masters = coalesce(m.masters, r.masters), full_name = m.full_name, base = m.base
                 FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS body,
                              unnest($5::VARCHAR[]) AS content_hash, unnest($6::VARCHAR[][]) AS masters,
@@ -159,8 +159,9 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
         DuckDbSql.Execute(_connection, """
-            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, masters, form_key_plugin, full_name, base)
-            SELECT form_key, $1, $2, record_type, json_extract_string(body, '$.EditorID'), body, content_hash, coalesce(masters, []), form_key_plugin, full_name, base
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, document_length, copy_id, content_hash, masters, form_key_plugin, full_name, base)
+            SELECT form_key, $1, $2, record_type, json_extract_string(body, '$.EditorID'), body, strlen(body),
+                   (SELECT coalesce(max(copy_id), -1) FROM mirror.records) + row_number() OVER (), content_hash, coalesce(masters, []), form_key_plugin, full_name, base
             FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS record_type, unnest($5::VARCHAR[]) AS body,
                          unnest($6::VARCHAR[]) AS content_hash, unnest($7::VARCHAR[][]) AS masters, unnest($8::VARCHAR[]) AS form_key_plugin,
                          unnest($9::VARCHAR[]) AS full_name, unnest($10::VARCHAR[]) AS base)
