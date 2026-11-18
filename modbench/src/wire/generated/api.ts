@@ -497,7 +497,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin Header record of each plugin with no plugin source that lists it as a master, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. */
+        /** @description Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin Header record of each plugin with no plugin source that lists it as a master, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document. A copy whose rendered document names the symbol nowhere sits at its own FormKey, and at the start of the text where the document holds no FormKey, such as a plugin header, for a script, a file or a plugin; one whose file names it nowhere is left out. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. */
         get: operations["GetPlacedPluginNameReferences"];
         put?: never;
         post?: never;
@@ -1012,7 +1012,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active or compiled plugin, that attaches the Papyrus script of that name in any case, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. Each copy that may attach it and went unread is left out. */
+        /** @description Each copy, in an active or compiled plugin, that attaches the Papyrus script of that name in any case, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document. A copy whose rendered document names the symbol nowhere sits at its own FormKey, and at the start of the text where the document holds no FormKey, such as a plugin header, for a script, a file or a plugin; one whose file names it nowhere is left out. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. Each copy that may attach it and went unread is left out. */
         get: operations["GetPlacedScriptReferences"];
         put?: never;
         post?: never;
@@ -1046,7 +1046,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active or compiled plugin, that names the file at that path in the Data folder, in any case, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. Each copy that may name it and went unread is left out. */
+        /** @description Each copy, in an active or compiled plugin, that names the file at that path in the Data folder, in any case, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document. A copy whose rendered document names the symbol nowhere sits at its own FormKey, and at the start of the text where the document holds no FormKey, such as a plugin header, for a script, a file or a plugin; one whose file names it nowhere is left out. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. Each copy that may name it and went unread is left out. */
         get: operations["GetPlacedFileReferences"];
         put?: never;
         post?: never;
