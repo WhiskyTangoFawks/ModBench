@@ -8,7 +8,7 @@ import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { Instance } from '../instanceLoader/instance';
 import { symbolIndex, type SymbolIndex } from './symbolIndex';
-import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
+import { pluginRowsOf, type EntryNames, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage, type RenamableEntry } from './entryLanguage';
@@ -98,7 +98,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const changed = (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
   const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
-    plugin, entry, names, client, plugins: () => instance?.value.plugins ?? [],
+    plugin, entry, names, client, plugins: () => (instance === undefined ? [] : pluginRowsOf(instance.value)),
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const disposable = vscode.Disposable.from(

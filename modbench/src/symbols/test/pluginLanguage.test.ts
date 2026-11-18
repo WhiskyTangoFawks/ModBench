@@ -22,7 +22,7 @@ const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const PLUGINS_TXT = '/profiles/Default/plugins.txt';
 const UNREAD = '/userlist.yaml: it does not read';
 
-const namedAt = (line: number) => ({ place: { file: PLUGINS_TXT, start: { line, character: 1 }, end: { line, character: 9 } }, names: { name: 'Base.esm' } });
+const namedAt = (line: number, name = 'Base.esm') => ({ place: { file: PLUGINS_TXT, start: { line, character: 1 }, end: { line, character: 9 } }, names: { name } });
 const plugin = (named: PluginName) => ({ kind: 'plugin' as const, ...named });
 
 const ownerThatCannotReadAFile: SymbolOwner = {
@@ -34,15 +34,16 @@ const ownerThatCannotReadAFile: SymbolOwner = {
 interface Options {
   owner?: SymbolOwner;
   plugins?: InstanceValue['plugins'];
+  loadedWithNoLine?: InstanceValue['pluginsLoadedWithNoLine'];
   show?: (plugin: { name: string; origin: string }) => (() => Promise<void>) | undefined;
   tooltip?: (plugin: { name: string; origin: string }) => readonly string[];
 }
 
-function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }], show = () => undefined, tooltip = () => [] }: Options = {}) {
+function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }], loadedWithNoLine, show = () => undefined, tooltip = () => [] }: Options = {}) {
   const reporter = recordingReporter();
   const renamePlugin = vi.fn(() => Promise.resolve());
   const kind = pluginLanguage({
-    instance: { value: { plugins } },
+    instance: { value: { plugins, pluginsLoadedWithNoLine: loadedWithNoLine } },
     reporter,
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwners: () => Promise.resolve([]) },
     owners: [owner],
@@ -185,6 +186,21 @@ describe('where a plugin is defined, and the places files name it (symbols.md, T
 
   it('lists each place an owner reports, and each file it could not read', async () => {
     expect(await indexed().referencesTo(plugin({ name: 'Base.esm' }))).toEqual({
+      locations: [{ uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }], unread: [UNREAD],
+    });
+  });
+});
+
+describe('a plugin the game loads with no line (ADR-0013) is a plugin of the instance', () => {
+  const DATA = { name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' };
+  const owner: SymbolOwner = { ...ownerThatCannotReadAFile, read: () => Promise.resolve({ references: [namedAt(0, 'Fallout4.esm')], leftOut: [UNREAD] }) };
+  const held = () => language({ owner, plugins: [], loadedWithNoLine: [DATA] }).kind;
+
+  it.each([
+    ['with its origin', { name: 'Fallout4.esm', origin: 'Data/' }],
+    ['by its file name alone', { name: 'fallout4.esm' }],
+  ])('lists what names it %s', async (_case, named) => {
+    expect(await held().referencesTo(plugin(named))).toEqual({
       locations: [{ uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }], unread: [UNREAD],
     });
   });

@@ -3,7 +3,7 @@ import type { PluginRows } from '../drivingLib/symbolRows';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, pluginNamed, samePlugin, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import { heldTexts, pluginNamed, pluginRowsOf, samePlugin, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
@@ -17,7 +17,7 @@ import type { SourceNames } from './sourceNames';
 import type { Definition, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
 
 interface PluginLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'plugins'> } | undefined;
+  instance: { readonly value: Pick<InstanceValue, 'plugins' | 'pluginsLoadedWithNoLine'> } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: RecordDocumentClient;
   owners: readonly SymbolOwner[];
@@ -32,12 +32,12 @@ interface PluginLanguageDeps {
 
 /** A plugin as a symbol, wherever an owner's file names it (symbols.md, The symbols, Plugin). */
 export function pluginLanguage({ instance, reporter, client, owners, names, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
+  const plugins = () => (instance === undefined ? [] : pluginRowsOf(instance.value));
   const read = pluginReferencesOf({
     owners,
-    plugins: () => instance?.value.plugins ?? [],
+    plugins,
     held: () => heldTexts(unsavedTexts()),
   });
-  const plugins = () => instance?.value.plugins ?? [];
 
   const nameAt = async (document: AskedIn, offset: number): Promise<PluginName | undefined> => {
     const text = heldText(document);

@@ -30,6 +30,15 @@ export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b
 
 export const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameName(a.name, b.name) && sameName(a.origin, b.origin);
 
+/** Every plugin row of the instance: the plugins with a line, and the ones the game loads with no line (ADR-0013), which
+ *  nothing else resolves. */
+export function pluginRowsOf<R extends ResolvedPlugin, N extends PluginSymbol>(
+  { plugins, pluginsLoadedWithNoLine }: { readonly plugins: readonly R[]; readonly pluginsLoadedWithNoLine?: readonly N[] },
+): (R | (N & { readonly winning: true }))[] {
+  const lacking = (pluginsLoadedWithNoLine ?? []).filter((loaded) => !plugins.some((row) => samePlugin(row, loaded)));
+  return [...plugins, ...lacking.map((loaded) => ({ ...loaded, winning: true as const }))];
+}
+
 /** The plugin `named` names: with its mod, that copy; by its file name alone, the copy mod order resolves it to, if any. */
 export function pluginNamed({ name, origin }: PluginName, plugins: readonly ResolvedPlugin[]): PluginSymbol | undefined {
   if (origin !== undefined) return { name, origin };
