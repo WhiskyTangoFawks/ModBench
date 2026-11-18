@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
+using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -56,10 +57,12 @@ internal sealed class PluginIngest
         var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
         var records = 0;
+        var nextCopyId = DuckDbSql.Scalar<long>(_connection, $"SELECT coalesce(max(copy_id) + 1, 0) FROM {TableDdlBuilder.MirrorSchema}.records");
         foreach (var prepared in Pipelined(Batches(documents.Records, token), batch => Prepared(batch, plugin, schemas, counters), token))
         {
             var appendTimer = Stopwatch.StartNew();
-            Append(prepared, plugin, origin);
+            Append(prepared, plugin, origin, nextCopyId);
+            nextCopyId += prepared.Count;
             counters.AppendMs += appendTimer.ElapsedMilliseconds;
             records += prepared.Count;
         }
@@ -67,7 +70,7 @@ internal sealed class PluginIngest
         if (schemas.ContainsKey(PluginHeader.RecordType))
         {
             using var headerAppender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
-            HeaderIndexer.Index(documents.Header, plugin, origin, headerAppender, _contentStamp);
+            HeaderIndexer.Index(documents.Header, plugin, origin, nextCopyId, headerAppender, _contentStamp);
         }
         WriteTypeFailures(plugin, origin, documents.Failures);
         return new Ingested(records, timer.ElapsedMilliseconds, counters.PrepareMs, counters.AppendMs);
@@ -198,8 +201,9 @@ internal sealed class PluginIngest
         }
     }
 
-    private void Append(List<PreparedRecord> prepared, string plugin, string origin)
+    private void Append(List<PreparedRecord> prepared, string plugin, string origin, long firstCopyId)
     {
+        var copyId = firstCopyId;
         using var records = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
         using var formReferences = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
         using var holdings = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings");
@@ -216,7 +220,7 @@ internal sealed class PluginIngest
 
             try
             {
-                AppendPrepared(records, p, plugin, origin);
+                AppendPrepared(records, p, plugin, origin, copyId++);
             }
             catch (Exception ex)
             {
@@ -293,7 +297,7 @@ internal sealed class PluginIngest
     }
 
     private static void AppendPrepared(
-        DuckDBAppender documentAppender, PreparedRecord prepared, string plugin, string origin)
+        DuckDBAppender documentAppender, PreparedRecord prepared, string plugin, string origin, long copyId)
     {
         var row = documentAppender.CreateRow();
         row.AppendValue(prepared.FormKey);
@@ -303,6 +307,8 @@ internal sealed class PluginIngest
         row.AppendValue(prepared.EditorId);
         row.AppendValue(WorkingTreeState.None.Stored());
         row.AppendValue(prepared.Body);
+        row.AppendValue((long)Encoding.UTF8.GetByteCount(prepared.Body));
+        row.AppendValue(copyId);
         row.AppendValue(prepared.ContentHash);
         row.AppendValue(prepared.ParseDiagnosis);
         row.AppendValue(prepared.Masters);

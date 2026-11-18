@@ -1,3 +1,4 @@
+using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -11,7 +12,7 @@ namespace MEditService.RecordIndex.Store;
 internal static class HeaderIndexer
 {
     public static void Index(
-        PluginDocument header, string plugin, string origin, DuckDBAppender documentAppender, Func<string, string> contentStamp)
+        PluginDocument header, string plugin, string origin, long copyId, DuckDBAppender documentAppender, Func<string, string> contentStamp)
     {
         var row = documentAppender.CreateRow();
         row.AppendValue(header.FormKey);
@@ -21,6 +22,8 @@ internal static class HeaderIndexer
         row.AppendNullValue();    // editor_id: headers have no EditorID concept
         row.AppendValue(WorkingTreeState.None.Stored());
         row.AppendValue(header.Text);
+        row.AppendValue((long)Encoding.UTF8.GetByteCount(header.Text));
+        row.AppendValue(copyId);
         row.AppendValue(contentStamp(header.Text));
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed
         row.AppendValue(new List<string>());

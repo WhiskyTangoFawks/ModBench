@@ -76,13 +76,15 @@ public sealed class SqlDoorSchemaTests : IDisposable
         Assert.NotEmpty(Listing());
     }
 
-    [Fact]
-    public void Holdings_ExposesNoWinner()
+    [Theory]
+    [InlineData("SELECT child AS form_key FROM holdings WHERE is_winner", "is_winner")]
+    [InlineData("SELECT form_key FROM records WHERE copy_id >= 0", "copy_id")]
+    public void ARelation_ExposesNoColumnThatIsNotItsOwn(string filter, string column)
     {
-        var refused = _index.Queries.SetFilter("SELECT child AS form_key FROM holdings WHERE is_winner", "filter.sql");
+        var refused = _index.Queries.SetFilter(filter, "filter.sql");
 
         Assert.Equal(IndexRefusal.FilterRejected, refused?.Refusal);
-        Assert.Contains("\"is_winner\" not found", refused?.Message, StringComparison.Ordinal);
+        Assert.Contains($"\"{column}\" not found", refused?.Message, StringComparison.Ordinal);
     }
 
     [Theory]

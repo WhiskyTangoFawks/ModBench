@@ -40,7 +40,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // `registrations` and `winners`.
     private static readonly PublicView[] PublicViews =
     [
-        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true, Columns: "t.* EXCLUDE (masters)"),
+        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true, Columns: "t.* EXCLUDE (masters, copy_id)"),
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("holdings", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
@@ -228,6 +228,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id       VARCHAR,
                 working_tree_state VARCHAR NOT NULL DEFAULT '{WorkingTreeState.None.Stored()}',
                 body            VARCHAR NOT NULL,
+                document_length BIGINT NOT NULL,
+                copy_id         BIGINT NOT NULL,
                 content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR,
                 masters         VARCHAR[] NOT NULL DEFAULT [],

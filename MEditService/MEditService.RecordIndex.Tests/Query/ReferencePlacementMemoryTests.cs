@@ -36,30 +36,22 @@ public sealed class ReferencePlacementMemoryTests : IDisposable
         });
     }
 
-    [Fact]
-    public void EachReferrer_IsPlacedInTwoReadsOfDocuments_InMemoryThatHoldsNoWholeStore()
+    public static TheoryData<Func<IEnumerable<(string, IEnumerable<string>)>>> ReferrersNextToEachOtherAndAmongOtherRecords =>
+        [Records, ReferrersAmongOtherRecords];
+
+    [Theory]
+    [MemberData(nameof(ReferrersNextToEachOtherAndAmongOtherRecords))]
+    public void EachReferrer_IsPlacedInOneReadOfDocumentsThatTestsNoRowAgainstEveryReferrer_InMemoryThatHoldsNoWholeStore(
+        Func<IEnumerable<(string, IEnumerable<string>)>> records)
     {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new LinkingAdapter(Plugin, Records));
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new LinkingAdapter(Plugin, records));
         IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryThatHoldsNoWholeStore}'");
         IndexFiles.LogQueries(_fixture.InstanceRoot);
 
         var placed = index.Queries.GetPlacedReferences(Target).Value();
 
         Assert.Equal(Referrers, placed.Copies.Count);
-        Assert.Equal(2L, IndexFiles.StartedCount(_fixture.InstanceRoot, "body"));
-    }
-
-    [Fact]
-    public void EachReferrerAmongOtherRecords_IsPlacedInTwoReadsOfDocumentsAndOneOfTheirRows_InMemoryThatHoldsNoWholeStore()
-    {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new LinkingAdapter(Plugin, ReferrersAmongOtherRecords));
-        IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryThatHoldsNoWholeStore}'");
-        IndexFiles.LogQueries(_fixture.InstanceRoot);
-
-        var placed = index.Queries.GetPlacedReferences(Target).Value();
-
-        Assert.Equal(Referrers, placed.Copies.Count);
-        Assert.Equal((2L, 1L), (IndexFiles.StartedCount(_fixture.InstanceRoot, "body"), IndexFiles.StartedCount(_fixture.InstanceRoot, "SELECT rowid")));
+        Assert.Equal((1L, 0L), (IndexFiles.StartedCount(_fixture.InstanceRoot, "body"), IndexFiles.StartedMatching(_fixture.InstanceRoot, @"\bbody\b[\s\S]*\bOR\b")));
     }
 
     private static IEnumerable<(string, IEnumerable<string>)> Records()

@@ -4,7 +4,9 @@ using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 
-internal readonly record struct CopySize(string FormKey, PluginAddress Plugin, long Length, long? Row = null);
+// A copy_id names its row from one query of a read to the next, where rowid does not: a checkpoint that compacts
+// deleted rows renumbers rowids under an open read.
+internal readonly record struct CopySize(string FormKey, PluginAddress Plugin, long Length, long CopyId);
 
 internal sealed record StoredCopy(
     string FormKey, PluginAddress Plugin, int? LoadOrderIndex, bool IsWinner, string? EditorId, string Body,
@@ -46,76 +48,40 @@ internal static class CopyBodies
         if (batch.Count > 0) yield return batch;
     }
 
-    // The engine matches a row against a list of parameters one at a time; past this many keys, keys IN (SELECT
-    // unnest(...)), which it hashes and which reads no document, find the copies' rows for less.
-    private const int KeysMatchedInTurn = 64;
-
-    /// <summary>A filter on the record index's records, with its values, that holds each of <paramref name="copies"/>
-    /// and nothing else, in <paramref name="context"/>'s snapshot; given their <paramref name="rows"/>, from those.</summary>
-    internal static (string Filter, object[] Values) Naming(ReadContext context, IReadOnlyList<RecordAt> copies, IReadOnlyList<long>? rows = null)
+    // Constant bounds narrow the scan itself, so it reads no other row's document, where a join of ids reads every
+    // row's. An OR tests each row against every span, so the spans are searched by halves.
+    private static string Spanning(IEnumerable<long> copyIds)
     {
-        var formKeys = copies.Select(copy => copy.FormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (formKeys.Count <= KeysMatchedInTurn) return Listing(copies, formKeys);
-        return (Spanning([.. (rows ?? RowsOf(context, copies, formKeys)).Order()]), []);
-    }
-
-    private static List<long> RowsOf(ReadContext context, IReadOnlyList<RecordAt> copies, List<string> formKeys)
-    {
-        var asked = copies.ToHashSet(RecordAt.Comparer);
-        return [.. context.Rows(
-                $"SELECT rowid, form_key, plugin, origin FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key IN (SELECT unnest($1::VARCHAR[]))",
-                reader => (Row: reader.GetInt64(0), Copy: new RecordAt(new PluginAddress(reader.GetString(2), reader.GetString(3)), reader.GetString(1))),
-                formKeys)
-            .Where(row => asked.Contains(row.Copy))
-            .Select(row => row.Row)];
-    }
-
-    // Constant bounds narrow the scan itself, so it reads no other row's document; a join of row ids reads every row's.
-    private static string Spanning(List<long> rows)
-    {
-        if (rows.Count == 0) return "FALSE";
-        List<string> spans = [];
-        var from = rows[0];
-        for (var i = 1; i <= rows.Count; i++)
+        List<(long From, long To)> spans = [];
+        foreach (var id in copyIds.Order())
         {
-            if (i < rows.Count && rows[i] == rows[i - 1] + 1) continue;
-            spans.Add(string.Create(CultureInfo.InvariantCulture, $"rowid BETWEEN {from} AND {rows[i - 1]}"));
-            if (i < rows.Count) from = rows[i];
+            if (spans.Count > 0 && spans[^1].To == id - 1) spans[^1] = (spans[^1].From, id);
+            else spans.Add((id, id));
         }
-        return $"({string.Join(" OR ", spans)})";
+        if (spans.Count == 0) return "FALSE";
+        var within = Between(spans[0].From, spans[^1].To);
+        return spans.Count == 1 ? within : $"{within} AND {Searched(spans, 0, spans.Count)}";
     }
 
-    // An OR naming each copy takes ten times as long as lists of keys, plugins and origins, which narrow the scan.
-    // The list of copies drops a key the batch asked of another plugin. No FormKey or filename holds a '/'.
-    private static (string Filter, object[] Values) Listing(IReadOnlyList<RecordAt> copies, List<string> formKeys)
+    private static string Searched(List<(long From, long To)> spans, int first, int count)
     {
-        var plugins = copies.Select(copy => copy.Plugin.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var origins = copies.Select(copy => copy.Plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        List<string> named = [.. copies.Select(copy => $"{copy.FormKey}/{copy.Plugin.Name}/{copy.Plugin.Origin}")];
-        static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 2, count).Select(i => $"${i}"));
-        return ($"""
-            form_key IN ({Parameters(0, formKeys.Count)})
-              AND plugin IN ({Parameters(formKeys.Count, plugins.Count)})
-              AND origin IN ({Parameters(formKeys.Count + plugins.Count, origins.Count)})
-              AND list_contains($1::VARCHAR[], form_key || '/' || plugin || '/' || origin)
-            """, [named, .. formKeys, .. plugins, .. origins]);
+        if (count == 1) return Between(spans[first].From, spans[first].To);
+        var half = count / 2;
+        return string.Create(CultureInfo.InvariantCulture,
+            $"CASE WHEN copy_id < {spans[first + half].From} THEN {Searched(spans, first, half)} ELSE {Searched(spans, first + half, count - half)} END");
     }
 
-    private static ILookup<string, StoredCopy> Bodies(ReadContext context, List<IReadOnlyList<CopySize>> batch)
-    {
-        var copies = batch.SelectMany(record => record).ToList();
-        var rows = copies.Select(copy => copy.Row).OfType<long>().ToList();
-        var (filter, values) = Naming(context, [.. copies.Select(copy => new RecordAt(copy.Plugin, copy.FormKey))], rows.Count == copies.Count ? rows : null);
-        return context.Rows($"""
+    private static string Between(long from, long to) => string.Create(CultureInfo.InvariantCulture, $"copy_id BETWEEN {from} AND {to}");
+
+    private static ILookup<string, StoredCopy> Bodies(ReadContext context, List<IReadOnlyList<CopySize>> batch) =>
+        context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, p.load_order_idx, w.form_key IS NOT NULL, r.editor_id, r.body, r.parse_diagnosis, r.record_type, r.working_tree_state
             FROM (SELECT form_key, plugin, origin, editor_id, body, parse_diagnosis, record_type, working_tree_state
-                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE {filter}) r
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE {Spanning(batch.SelectMany(record => record).Select(copy => copy.CopyId))}) r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             {TableDdlBuilder.WinnerJoin("r", "plugin", "origin")}
             """, reader => new StoredCopy(
                 reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.IsDBNull(3) ? null : reader.GetInt32(3), reader.GetBoolean(4),
-                reader.GetStringOrNull(5), reader.GetString(6), reader.GetStringOrNull(7), reader.GetString(8), reader.GetString(9)),
-            values)
+                reader.GetStringOrNull(5), reader.GetString(6), reader.GetStringOrNull(7), reader.GetString(8), reader.GetString(9)))
             .ToLookup(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase);
-    }
 }

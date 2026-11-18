@@ -53,13 +53,19 @@ internal sealed class RelationReads(
             """, reader => reader.GetPluginAddress(), formKey);
     }
 
-    // Each caller names a record or a few copies, so the length taken above the view's joins carries few documents.
-    private static List<CopySize> Located(ReadContext context, string view, string where, params object?[] values) =>
-        context.Rows($"SELECT form_key, plugin, origin, strlen(body) FROM {view} WHERE {where} ORDER BY load_order_idx",
-            CopySizeOf, values);
+    private static readonly string Active = TableDdlBuilder.ActiveJoin("r", "plugin", "origin");
+    private static readonly string Registered = TableDdlBuilder.RegisteredJoin("r", "plugin", "origin");
+
+    private static List<CopySize> Located(ReadContext context, string scope, string where, params object?[] values) =>
+        context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, r.document_length, r.copy_id
+            FROM (SELECT form_key, plugin, origin, document_length, copy_id FROM {TableDdlBuilder.MirrorSchema}.records WHERE {where}) r
+            {scope}
+            ORDER BY p.load_order_idx
+            """, CopySizeOf, values);
 
     private static CopySize CopySizeOf(DbDataReader reader) =>
-        new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3));
+        new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3), reader.GetInt64(4));
 
     private IEnumerable<List<StoredCopy>> Stored(ReadContext context, IEnumerable<IReadOnlyList<CopySize>> records) =>
         CopyBodies.Read(context, records, store.DocumentBatchBytes);
@@ -85,7 +91,7 @@ internal sealed class RelationReads(
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
         using var context = OpenRead();
-        var located = Located(context, TableDdlBuilder.PluginRecordsView, "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin);
+        var located = Located(context, Registered, "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin);
         if (located.Count == 0) return null;
         var copy = Stored(context, [located]).Single().Single();
         return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
@@ -120,7 +126,7 @@ internal sealed class RelationReads(
     {
         var named = copies.Select((_, i) => $"(form_key = ${3 * i + 1} AND plugin = ${3 * i + 2} AND origin = ${3 * i + 3})");
         using var context = OpenRead();
-        var located = Located(context, "records", string.Join(" OR ", named),
+        var located = Located(context, Active, string.Join(" OR ", named),
             [.. copies.SelectMany(copy => new[] { copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin })]);
         var stored = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
             .SelectMany(record => record).ToList();
@@ -163,11 +169,10 @@ internal sealed class RelationReads(
                 """;
             narrowedByPlugin = "WHERE (c.plugin, c.origin) IN (SELECT plugin, origin FROM stack)";
         }
-        // The length is taken below the join, which would otherwise carry every body (ADR-0010).
         return context.Rows($"""
             {prefix}
-            SELECT c.form_key, c.plugin, c.origin, c.length
-            FROM (SELECT form_key, plugin, origin, strlen(body) AS length
+            SELECT c.form_key, c.plugin, c.origin, c.document_length, c.copy_id
+            FROM (SELECT form_key, plugin, origin, document_length, copy_id
                   FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key IN ({keys})) c
             {TableDdlBuilder.ActiveJoin("c", "plugin", "origin")}
             {narrowedByPlugin}
@@ -212,7 +217,7 @@ internal sealed class RelationReads(
     public OverrideStack? GetOverrideStack(string formKey, LinkResolver resolver)
     {
         using var context = OpenRead();
-        var located = Located(context, "records", "form_key = $1", formKey);
+        var located = Located(context, Active, "form_key = $1", formKey);
         if (located.Count == 0) return null;
         var stored = Stored(context, [located]).Single();
         var recordType = stored[0].RecordType;
@@ -638,17 +643,18 @@ internal sealed class RelationReads(
     private IEnumerable<CopyHoldingText> CopiesOf(IReadOnlyList<RecordAt> copies)
     {
         using var context = OpenRead();
-        var (recordFilter, values) = CopyBodies.Naming(context, copies);
-        // The record filter and the length sit below the join, which would otherwise carry every document it matches (ADR-0010).
-        var located = context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}, r.row
-            FROM (SELECT form_key, plugin, origin, strlen(body) AS length, rowid AS row
-                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE {recordFilter}) r
+        var asked = copies.ToHashSet(RecordAt.Comparer);
+        List<(CopySize Copy, bool InPluginSource)> located = [.. context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, r.document_length, r.copy_id, {InPluginSource}
+            FROM (SELECT form_key, plugin, origin, document_length, copy_id
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key IN (SELECT unnest($1::VARCHAR[]))) r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => (Copy: CopySizeOf(reader) with { Row = reader.GetInt64(5) }, InPluginSource: reader.GetBoolean(4)), values);
+            """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(5)),
+            copies.Select(copy => copy.FormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+            .Where(found => asked.Contains(new RecordAt(found.Copy.Plugin, found.Copy.FormKey)))];
         foreach (var (found, stored) in located.Zip(Stored(context, located.Select(found => new[] { found.Copy }))))
             yield return new CopyHoldingText(found.Copy.FormKey, found.Copy.Plugin, stored[0].RecordType, stored[0].EditorId, stored[0].Body, found.InPluginSource);
     }
