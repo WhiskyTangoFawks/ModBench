@@ -5,7 +5,6 @@ vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState, Range, Locat
 
 import { pluginReferencesOf } from '../pluginReferences';
 import { heldTexts, type HeldTexts, type PlaceInFile, type PlacedCopy, type PluginSymbol, type SymbolOwner, type SymbolReading } from '../../symbolNames/symbolNames';
-import { copyDocumentUri } from '../../textDocuments/recordDocument';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const BASE_LOSING = { name: 'Base.esm', origin: 'Old Base Mod' };
@@ -58,9 +57,9 @@ describe('Find All References on a plugin (symbols.md, The features, story 2)', 
     const { found } = await references([owner]).referencesTo(BASE);
 
     expect(found).toEqual([
-      { uri: copyDocumentUri(header, header.document), range: new Range(0, 0, 0, 9) },
-      { uri: copyDocumentUri(npc, npc.document), range: new Range(1, 4, 1, 13) },
-      { uri: copyDocumentUri(npc, npc.document), range: new Range(2, 4, 2, 13) },
+      { uri: Uri.from({ scheme: 'modbench-rendered', path: '/Child%20Mod/Child.esp/Header.json', query: 'formKey=000000%3AChild.esp&name=Child.esp&origin=Child+Mod' }), range: new Range(0, 0, 0, 9) },
+      { uri: Uri.file('/source/Child Mod/Npc.json'), range: new Range(1, 4, 1, 13) },
+      { uri: Uri.file('/source/Child Mod/Npc.json'), range: new Range(2, 4, 2, 13) },
     ]);
   });
 
@@ -69,6 +68,14 @@ describe('Find All References on a plugin (symbols.md, The features, story 2)', 
     const owner = fakeOwner({ references: [{ copy, names: { name: 'Base.esm' } }], leftOut: [] });
 
     expect((await references([owner]).referencesTo(BASE_LOSING)).found).toEqual([]);
+  });
+
+  it('says why a copy it could not place went unread only where the copy names the plugin asked of', async () => {
+    const owner = fakeOwner({ references: [{ unread: '000800:Child.esp in Child.esp (Child Mod): its file is gone.', names: { name: 'Base.esm' } }], leftOut: [] });
+
+    expect([(await references([owner]).referencesTo(BASE)).unread, (await references([owner]).referencesTo(BASE_LOSING)).unread]).toEqual([
+      ['000800:Child.esp in Child.esp (Child Mod): its file is gone.'], [],
+    ]);
   });
 
   it('says why each file an owner could not read, or that threw, went unread (common.md, Reporting)', async () => {

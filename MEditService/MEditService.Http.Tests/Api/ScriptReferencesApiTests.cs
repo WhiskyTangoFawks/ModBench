@@ -30,7 +30,7 @@ public sealed class ScriptReferencesApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetPlacedScriptReferences_AfterALoad_PlacesEachCopyThatAttachesTheScript()
+    public async Task ThePlacedReferencesToAScript_AreEachCopyThatAttachesItAtItsRanges()
     {
         var fx = Owned(new PluginFixtureBuilder("api-placed-script-references")
             .WithPlugin("Holding.esp", mod =>

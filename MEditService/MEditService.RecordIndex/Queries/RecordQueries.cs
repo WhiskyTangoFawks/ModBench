@@ -358,20 +358,22 @@ internal sealed class RecordQueries(
         {
             using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
             var referrers = reads.GetReferencedByInActiveOrCompiledPlugins(targetFormKey)
-                .Select(row => new Referrer(new RecordAt(new PluginAddress(row.Plugin, row.Origin), row.FormKey), new RecordIdentity(row.FormKey, row.RecordType, row.EditorId)));
-            return Placed(reads, targetFormKey, referrers, [],
-                (copy, names) => names.Where(name => name.Kind == DocumentNameKind.Record && name.FieldPath != RecordMembers.FormKey && string.Equals(name.Value, targetFormKey, StringComparison.OrdinalIgnoreCase)),
-                false, _ => null, cancel);
+                .Select(row => (new RecordAt(new PluginAddress(row.Plugin, row.Origin), row.FormKey), new RecordIdentity(row.FormKey, row.RecordType, row.EditorId)));
+            var naming = new Naming(targetFormKey,
+                (_, names) => names.Where(name => name.Kind == DocumentNameKind.Record && name.FieldPath != RecordMembers.FormKey && string.Equals(name.Value, targetFormKey, StringComparison.OrdinalIgnoreCase)),
+                _ => null, UnnamedRenderedAtStart: false);
+            return Placement.Of(reads, naming, referrers, [], cancel);
         });
 
     public Answer<PlacedReferences, IndexRefused> GetPlacedPluginNameReferences(string name, CancellationToken cancel) =>
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
-            var referrers = reads.GetCopiesNaming(name).Select(found => new Referrer(new RecordAt(found.Copy.Plugin, found.Copy.FormKey), found.Identity));
-            return Placed(reads, name, referrers, [],
-                (copy, names) => names.Where(found => found.Kind == DocumentNameKind.Plugin && string.Equals(found.Value, name, StringComparison.OrdinalIgnoreCase)),
-                true, _ => null, cancel);
+            var referrers = reads.GetCopiesNaming(name).Select(found => (new RecordAt(found.Copy.Plugin, found.Copy.FormKey), found.Identity));
+            var naming = new Naming(name,
+                (_, names) => names.Where(found => found.Kind == DocumentNameKind.Plugin && string.Equals(found.Value, name, StringComparison.OrdinalIgnoreCase)),
+                _ => null, UnnamedRenderedAtStart: true);
+            return Placement.Of(reads, naming, referrers, [], cancel);
         });
 
     public Answer<PlacedReferences, IndexRefused> GetPlacedScriptReferences(string name, CancellationToken cancel) =>
@@ -397,18 +399,15 @@ internal sealed class RecordQueries(
         var fieldPaths = members.Copies.ToDictionary(copy => new RecordAt(copy.Plugin, copy.FormKey), copy => copy.FieldPaths, RecordAt.Comparer);
         var types = members.Copies.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).ToDictionary(copies => copies.Key, copies => copies.First().RecordType, StringComparer.OrdinalIgnoreCase);
         var schemas = RequireSchemas();
-        var referrers = members.Copies.Select(copy => new Referrer(new RecordAt(copy.Plugin, copy.FormKey), new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId)));
-        return Placed(reads, symbol, referrers, members.Unread,
-            (copy, names) => names.Where(found => found.Kind is DocumentNameKind.Script or DocumentNameKind.File
-                && fieldPaths[copy].Contains(found.FieldPath ?? "")),
-            true, formKey => types.TryGetValue(formKey, out var type) && schemas.TryGetValue(type, out var schema) ? schema.RecordColumns : null, cancel);
+        var referrers = members.Copies.Select(copy => (new RecordAt(copy.Plugin, copy.FormKey), new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId)));
+        var naming = new Naming(symbol,
+            (copy, names) => names.Where(found => fieldPaths[copy].Contains(found.FieldPath ?? "")),
+            formKey => types.TryGetValue(formKey, out var type) && schemas.TryGetValue(type, out var schema) ? schema.RecordColumns : null,
+            UnnamedRenderedAtStart: true);
+        return Placement.Of(reads, naming, referrers, members.Unread, cancel);
     }
 
-    private PlacedReferences Placed(
-        RelationReads reads, string symbol, IEnumerable<Referrer> referrers, IEnumerable<string> unread, NamesOf namesOf, bool atStartWhereRenderedNamesNothing,
-        Func<string, IReadOnlyList<ColumnSpec>?> columnsOf, CancellationToken cancel) =>
-        ReferencePlacement.Of(
-            reads, symbol, referrers, unread, namesOf, atStartWhereRenderedNamesNothing, TreeOf, (plugin, identity) => RenderedFileName(plugin, identity, identity), source.TextAt, columnsOf, cancel);
+    private ReferencePlacement Placement => new(TreeOf, (plugin, identity) => RenderedFileName(plugin, identity, identity), source.TextAt);
 
     // A plugin the record index has not reached would read as naming nothing.
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name, CancellationToken cancel) =>

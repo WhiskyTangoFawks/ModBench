@@ -5,7 +5,7 @@ import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue, PapyrusScript } from '../instanceLoader/instance';
 import { sameName, type ScriptSymbol } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
-import { membersNaming } from './memberReferences';
+import { listedPlaced } from './placedReferences';
 import type { SourceNames } from './sourceNames';
 import { holdsCopy, type FileCopies } from './fileLanguage';
 import { listedAtCopy, nameHolds, showReferencedBy, type AskedIn } from './symbolPlaces';
@@ -62,7 +62,7 @@ export function scriptLanguage({ instance, names, client, reporter, copyOf, reve
   };
 
   const referencesTo = async ({ name }: ScriptSymbol, token?: vscode.CancellationToken): Promise<References> => {
-    const { found, unread } = membersNaming(await client.getPlacedScriptReferences(name, token));
+    const { found, unread } = listedPlaced(await client.getPlacedScriptReferences(name, token));
     return { locations: found, unread };
   };
 

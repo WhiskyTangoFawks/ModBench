@@ -506,8 +506,8 @@ internal sealed class RelationReads(
 
     private static readonly string InPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
 
-    private static NamingCopy CopyNamingOf(System.Data.Common.DbDataReader reader) =>
-        new(new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)),
+    private static (CopyNaming Copy, RecordIdentity Identity) CopyNamingOf(System.Data.Common.DbDataReader reader) =>
+        (new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)),
             new RecordIdentity(reader.GetString(0), reader.GetString(4), reader.GetStringOrNull(5)));
 
     /// <summary>Each copy that references the record, in an active plugin or a compiled one (ADR-0012).</summary>
@@ -531,7 +531,7 @@ internal sealed class RelationReads(
 
     /// <summary>Each copy naming the plugin file <paramref name="name"/> in an active or compiled plugin, by its own
     /// FormKey or a link, and the Plugin Header of each such plugin read from its binary that lists it.</summary>
-    public IReadOnlyList<NamingCopy> GetCopiesNaming(string name)
+    public IReadOnlyList<(CopyNaming Copy, RecordIdentity Identity)> GetCopiesNaming(string name)
     {
         using var context = OpenRead();
         // A record's masters leave out its own plugin, so an override that links its plugin's records is found by its links.
@@ -560,10 +560,10 @@ internal sealed class RelationReads(
         return [.. headers.Concat(copies).DistinctBy(found => (found.Copy.FormKey, found.Copy.Plugin.Name, found.Copy.Plugin.Origin))];
     }
 
-    private static NamingCopy HeaderNaming(PluginAddress plugin, bool inPluginSource)
+    private static (CopyNaming Copy, RecordIdentity Identity) HeaderNaming(PluginAddress plugin, bool inPluginSource)
     {
         var formKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        return new(new CopyNaming(formKey, plugin, inPluginSource), new RecordIdentity(formKey, PluginHeader.RecordType, null));
+        return (new CopyNaming(formKey, plugin, inPluginSource), new RecordIdentity(formKey, PluginHeader.RecordType, null));
     }
 
     /// <summary>Each copy of the record <paramref name="formKey"/> names in an active plugin with no plugin source, and

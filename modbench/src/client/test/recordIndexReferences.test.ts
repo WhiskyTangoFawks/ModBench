@@ -72,7 +72,7 @@ describe('the record index says where plugins name a plugin (ADR-0028)', () => {
     }), sourceFiles, NAMES_UNASKED);
 
     expect(await owner.read(symbol, heldTexts([]))).toEqual({
-      references: [{ copy, names: { name: 'Base.esm' } }], leftOut: ['000801:Base.esm in Child.esp (ChildMod): its file is gone.'],
+      references: [{ copy, names: { name: 'Base.esm' } }, { unread: '000801:Base.esm in Child.esp (ChildMod): its file is gone.', names: { name: 'Base.esm' } }], leftOut: [],
     });
   });
 

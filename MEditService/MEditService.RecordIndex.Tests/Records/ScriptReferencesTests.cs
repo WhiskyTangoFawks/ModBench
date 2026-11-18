@@ -78,16 +78,15 @@ public sealed class ScriptReferencesTests
     }
 
     [Fact]
-    public void ACopyThatAttachesAScript_IsPlacedAtTheNameOfTheScript_NotAtAPropertyThatNamesIt()
+    public void ACopyThatAttachesAScript_IsPlacedAtThatScriptsName_NotAtAnotherScriptItAttaches()
     {
         string attaching = "";
         using var plugins = new PluginFixtureBuilder("placed-script-references")
             .WithPlugin(Holding.Name, mod =>
             {
-                attaching = Attaching(mod, "Holder", new ScriptEntry { Name = "Ns:Attached" }).FormKey.ToString();
-                var naming = new ScriptEntry { Name = "Ns:Other" };
-                naming.Properties.Add(new ScriptStringProperty { Name = "Names", Data = "Ns:Attached" });
-                Attaching(mod, "Other", naming);
+                var npc = Attaching(mod, "Holder", new ScriptEntry { Name = "Ns:Other" });
+                npc.VirtualMachineAdapter.Require().Scripts.Add(new ScriptEntry { Name = "Ns:Attached" });
+                attaching = npc.FormKey.ToString();
             }, origin: Holding.Origin)
             .BuildScattered();
         using var index = Indexes.Reconciled(plugins);
@@ -97,8 +96,7 @@ public sealed class ScriptReferencesTests
         var copy = Assert.Single(placed.Copies);
         Assert.Equal((attaching, Holding, CopyDocumentKind.Rendered), (copy.FormKey, copy.Plugin, copy.Document.Kind));
         var text = index.Queries.GetRenderedDocument(Holding, attaching).Value().Require().Text;
-        var range = Assert.Single(copy.Ranges);
-        Assert.Equal("Ns:Attached", text.Split('\n')[range.Start.Line][range.Start.Character..range.End.Character]);
+        Assert.Equal(["Ns:Attached"], copy.Ranges.Select(range => PlacedText.TextAt(text, range)));
         Assert.Empty(placed.LeftOut);
     }
 }

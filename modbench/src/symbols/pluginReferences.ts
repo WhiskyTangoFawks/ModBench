@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { namesPlugin, type HeldTexts, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
-import { placedLocations } from './formKeyReferences';
+import { placedLocations } from './placedReferences';
 import { placeLocation, readBy } from './symbolPlaces';
 
 interface PluginReferencesDeps {
@@ -23,6 +23,7 @@ export function pluginReferencesOf({ owners, plugins, held }: PluginReferencesDe
     const naming = readings.flatMap(({ references }) => references).filter(({ names }) => namesPlugin(names, symbol, rows));
     const places = naming.flatMap((reference) => ('place' in reference ? [placeLocation(reference.place)] : []));
     const copies = placedLocations(naming.flatMap((reference) => ('copy' in reference ? [reference.copy] : [])));
-    return { found: [...places, ...copies], unread: readings.flatMap((reading) => reading.leftOut) };
+    const unreadCopies = naming.flatMap((reference) => ('unread' in reference ? [reference.unread] : []));
+    return { found: [...places, ...copies], unread: [...readings.flatMap((reading) => reading.leftOut), ...unreadCopies] };
   };
 }

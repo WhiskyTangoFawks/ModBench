@@ -11,12 +11,6 @@ public class FileReferencesTests
 {
     private static readonly PluginAddress Holding = new("Holding.esp", "ModA");
 
-    private static string TextAt(string text, SourceRange range)
-    {
-        Assert.Equal(range.Start.Line, range.End.Line);
-        return text.Split('\n')[range.Start.Line][range.Start.Character..range.End.Character];
-    }
-
     [Fact]
     public void ACopyThatNamesAFile_IsPlacedAtTheMemberThatNamesItsPathInTheDataFolder_InAnyCaseAndSeparator()
     {
@@ -39,7 +33,7 @@ public class FileReferencesTests
 
         var copy = Assert.Single(placed.Copies);
         Assert.Equal((naming, Holding, CopyDocumentKind.Rendered), (copy.FormKey, copy.Plugin, copy.Document.Kind));
-        Assert.Equal(@"Decals\\Stain_d.dds", TextAt(index.Queries.GetRenderedDocument(Holding, naming).Value().Require().Text, Assert.Single(copy.Ranges)));
+        Assert.Equal(@"Decals\\Stain_d.dds", PlacedText.TextAt(index.Queries.GetRenderedDocument(Holding, naming).Value().Require().Text, Assert.Single(copy.Ranges)));
         Assert.Empty(placed.LeftOut);
     }
 
@@ -67,7 +61,7 @@ public class FileReferencesTests
 
         var copy = Assert.Single(placed.Copies);
         Assert.Equal(naming.ToString(), copy.FormKey);
-        Assert.Equal(@"Decals\\Stain_d.dds", TextAt(File.ReadAllText(copy.Document.Location), Assert.Single(copy.Ranges)));
+        Assert.Equal(@"Decals\\Stain_d.dds", PlacedText.TextAt(File.ReadAllText(copy.Document.Location), Assert.Single(copy.Ranges)));
         Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(placed.LeftOut));
     }
 

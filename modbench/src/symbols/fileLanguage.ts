@@ -5,7 +5,7 @@ import { foldPath, type CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { heldText } from '../textDocuments/heldText';
 import type { Reporter } from '../ports/reporter';
-import { membersNaming } from './memberReferences';
+import { listedPlaced } from './placedReferences';
 import { listedAtCopy, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
 import type { Definition, FileNamed, Listed, Named, References, SymbolKind } from './symbolKind';
 
@@ -64,7 +64,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
   };
 
   const referencesTo = async ({ path }: FileNamed, token?: vscode.CancellationToken): Promise<References> => {
-    const { found, unread } = membersNaming(await client.getPlacedFileReferences(path, token));
+    const { found, unread } = listedPlaced(await client.getPlacedFileReferences(path, token));
     return { locations: found, unread };
   };
 

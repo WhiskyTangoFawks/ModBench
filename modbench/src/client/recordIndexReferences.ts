@@ -23,7 +23,7 @@ export function recordIndexReferences(
     async read({ name }) {
       const placed = await client.getPlacedPluginNameReferences(name);
       if (isReadFailed(placed)) return { references: [], leftOut: [`${MEDIT_READS}: ${failureReason(placed)}`] };
-      return { references: placed.copies.map((copy) => ({ copy, names: { name } })), leftOut: placed.leftOut };
+      return { references: [...placed.copies.map((copy) => ({ copy, names: { name } })), ...placed.leftOut.map((unread) => ({ unread, names: { name } }))], leftOut: [] };
     },
     async plan(symbol, newName, held, plugins) {
       // A FormKey names a plugin by its file name alone.

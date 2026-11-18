@@ -7,24 +7,26 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.RecordIndex.Queries;
 
-/// <summary>A copy that names a symbol, with what finds its document.</summary>
-internal sealed record Referrer(RecordAt At, RecordIdentity Identity);
-
 /// <summary>Of the names a copy's record holds in its document, those that are the symbol.</summary>
 internal delegate IEnumerable<DocumentName> NamesOf(RecordAt copy, IEnumerable<DocumentName> recordNames);
 
+/// <summary>What names the symbol in a document. <paramref name="UnnamedRenderedAtStart"/> places a rendered document that
+/// names it nowhere, such as a plugin header, at the start of its text, where otherwise its own FormKey, else the copy is
+/// left out.</summary>
+internal sealed record Naming(string Symbol, NamesOf Of, Func<string, IReadOnlyList<ColumnSpec>?> ColumnsOf, bool UnnamedRenderedAtStart);
+
 /// <summary>Each copy that names a symbol, at its document: its file in plugin source, else its rendered document.
 /// A copy that cannot be placed is left out, saying why.</summary>
-internal static class ReferencePlacement
+internal sealed class ReferencePlacement(
+    Func<PluginAddress, ISourceRepositoryReads?> treeOf, Func<PluginAddress, RecordIdentity, Answer<string, SourceFailure>> renderedFileName,
+    Func<string, string> textAt)
 {
-    public static PlacedReferences Of(
-        RelationReads reads, string symbol, IEnumerable<Referrer> named, IEnumerable<string> unread, NamesOf namesOf, bool atStartWhereRenderedNamesNothing,
-        Func<PluginAddress, ISourceRepositoryReads?> treeOf, Func<PluginAddress, RecordIdentity, Answer<string, SourceFailure>> renderedFileName,
-        Func<string, string> textAt, Func<string, IReadOnlyList<ColumnSpec>?> columnsOf, CancellationToken cancel)
+    public PlacedReferences Of(
+        RelationReads reads, Naming naming, IEnumerable<(RecordAt At, RecordIdentity Identity)> named, IEnumerable<string> unread, CancellationToken cancel)
     {
         var referrers = named.DistinctBy(referrer => referrer.At, RecordAt.Comparer).ToList();
         var trees = referrers.Select(referrer => referrer.At.Plugin).Distinct(PluginAddress.Comparer).ToDictionary(plugin => plugin, treeOf, PluginAddress.Comparer);
-        var placing = new Placing(symbol, namesOf, atStartWhereRenderedNamesNothing, columnsOf, unread);
+        var placing = new Placing(naming, unread);
         foreach (var (at, identity) in referrers)
         {
             cancel.ThrowIfCancellationRequested();
@@ -43,7 +45,7 @@ internal static class ReferencePlacement
         return placing.Placed;
     }
 
-    private sealed class Placing(string target, NamesOf namesOf, bool atStartWhereRenderedNamesNothing, Func<string, IReadOnlyList<ColumnSpec>?> columnsOf, IEnumerable<string> unread)
+    private sealed class Placing(Naming naming, IEnumerable<string> unread)
     {
         private readonly List<PlacedCopy> _placed = [];
         private readonly List<string> _leftOut = [.. unread];
@@ -63,7 +65,7 @@ internal static class ReferencePlacement
             {
                 try
                 {
-                    document = ReadDocument.From(textAt(file.Path), columnsOf);
+                    document = ReadDocument.From(textAt(file.Path), naming.ColumnsOf);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -72,26 +74,23 @@ internal static class ReferencePlacement
                 }
                 _files[file.Path] = document;
             }
-            var ranges = document.RangesOf(namesOf(copy, NamesIn(copy, document.Names)));
+            var ranges = document.RangesOf(naming.Of(copy, document.RecordNames(copy)));
             if (ranges.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, RecordQueries.CopyDocumentAt(file), ranges));
-            else LeaveOut(copy, $"its text in {file.Path} names {target} nowhere.");
+            else LeaveOut(copy, $"its text in {file.Path} names {naming.Symbol} nowhere.");
         }
 
         // A copy with no plugin source sits at the record that holds it (symbols.md, story 10).
         public void Rendered(RecordAt copy, Answer<string, SourceFailure> fileName, string text)
         {
             if (!Answered(copy, fileName, out var name)) return;
-            var document = ReadDocument.From(text, columnsOf);
-            var references = namesOf(copy, NamesIn(copy, document.Names)).ToList();
-            if (references.Count == 0 && NamesIn(copy, document.Names).FirstOrDefault(found => found.Kind == DocumentNameKind.Record && found.FieldPath == RecordMembers.FormKey) is { } declared) references.Add(declared);
+            var document = ReadDocument.From(text, naming.ColumnsOf);
+            var references = naming.Of(copy, document.RecordNames(copy)).ToList();
+            if (references.Count == 0 && document.RecordNames(copy).FirstOrDefault(found => found.Kind == DocumentNameKind.Record && found.FieldPath == RecordMembers.FormKey) is { } declared) references.Add(declared);
             var ranges = document.RangesOf(references);
-            if (ranges.Count == 0 && atStartWhereRenderedNamesNothing) ranges.Add(document.Lines.RangeOf(0, 0));
+            if (ranges.Count == 0 && naming.UnnamedRenderedAtStart) ranges.Add(document.Lines.RangeOf(0, 0));
             if (ranges.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, new CopyDocument(CopyDocumentKind.Rendered, name), ranges));
             else LeaveOut(copy, $"its rendered document {name} states no {copy.FormKey}.");
         }
-
-        private static IEnumerable<DocumentName> NamesIn(RecordAt copy, IReadOnlyList<DocumentName> names) =>
-            names.Where(name => string.Equals(name.Record, copy.FormKey, StringComparison.OrdinalIgnoreCase));
 
         public void LeaveOut(RecordAt copy, string why) => _leftOut.Add($"{ReadFailures.Copy(copy.FormKey, copy.Plugin)}: {why}");
 
@@ -103,9 +102,12 @@ internal static class ReferencePlacement
         }
     }
 
-    private sealed record ReadDocument(IReadOnlyList<DocumentName> Names, TextLines Lines)
+    private sealed record ReadDocument(ILookup<string, DocumentName> NamesByRecord, TextLines Lines)
     {
-        public static ReadDocument From(string text, Func<string, IReadOnlyList<ColumnSpec>?> columnsOf) => new(DocumentNames.In(DocumentSpans.Read(text), columnsOf, null), new TextLines(text));
+        public static ReadDocument From(string text, Func<string, IReadOnlyList<ColumnSpec>?> columnsOf) =>
+            new(DocumentNames.In(DocumentSpans.Read(text), columnsOf, null).ToLookup(name => name.Record ?? string.Empty, StringComparer.OrdinalIgnoreCase), new TextLines(text));
+
+        public IEnumerable<DocumentName> RecordNames(RecordAt copy) => NamesByRecord[copy.FormKey];
 
         public List<SourceRange> RangesOf(IEnumerable<DocumentName> names) => [.. names.Select(name => Lines.RangeOf(name.Start, name.End))];
     }

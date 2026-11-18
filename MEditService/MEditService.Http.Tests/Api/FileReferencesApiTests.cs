@@ -9,7 +9,7 @@ namespace MEditService.Http.Tests.Api;
 public sealed class FileReferencesApiTests : HostedTests
 {
     [Fact]
-    public async Task GetPlacedFileReferences_AfterALoad_PlacesEachCopyThatNamesTheFile()
+    public async Task ThePlacedReferencesToAFile_AreEachCopyThatNamesItAtItsRanges()
     {
         var fx = Owned(new PluginFixtureBuilder("api-file-references")
             .WithPlugin("Holding.esp", mod => mod.TextureSets.AddNew("Holder").Diffuse = @"Decals\Stain_d.dds", origin: "HoldingMod")

@@ -15,8 +15,9 @@ namespace MEditService.Http.Endpoints;
 internal static class RecordEndpoints
 {
     internal const string PlacedReading =
-        "A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a " +
-        "rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code " +
+        "A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document. A copy " +
+        "whose rendered document names the symbol nowhere sits at its own FormKey, and at the start of the text where the document " +
+        "holds no FormKey, such as a plugin header, for a script, a file or a plugin; one whose file names it nowhere is left out. Each range is by line and character as VS Code " +
         "counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready.";
 
     public static IEndpointRouteBuilder MapRecordEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)

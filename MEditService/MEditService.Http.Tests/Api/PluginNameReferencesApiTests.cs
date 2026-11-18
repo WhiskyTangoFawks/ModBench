@@ -31,7 +31,7 @@ public sealed class PluginNameReferencesApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetPlacedPluginNameReferences_AfterALoad_PlacesEachCopyThatNamesTheFileName()
+    public async Task ThePlacedReferencesToAPluginName_AreEachCopyThatNamesItAtItsRanges()
     {
         var fx = Owned(new PluginFixtureBuilder("api-placed-plugin-name-references")
             .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("Base"), origin: "BaseMod")

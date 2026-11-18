@@ -349,12 +349,6 @@ public class RegistrationScopingTests
             c => c.FormKey == overriddenNpc && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
     }
 
-    private static string TextAt(string text, SourceRange range)
-    {
-        Assert.Equal(range.Start.Line, range.End.Line);
-        return text.Split('\n')[range.Start.Line][range.Start.Character..range.End.Character];
-    }
-
     [Fact]
     public void ACopyLinkingARecordOfAPlugin_IsPlacedAtThePluginsNameInEachLink()
     {
@@ -375,7 +369,7 @@ public class RegistrationScopingTests
 
         var copy = Assert.Single(placed.Copies, c => c.FormKey == linking);
         var text = index.Queries.GetRenderedDocument(BetaKey, linking).Value().Require().Text;
-        Assert.Equal(["Alpha.esp", "Alpha.esp"], copy.Ranges.Select(range => TextAt(text, range)));
+        Assert.Equal(["Alpha.esp", "Alpha.esp"], copy.Ranges.Select(range => PlacedText.TextAt(text, range)));
     }
 
     [Fact]
