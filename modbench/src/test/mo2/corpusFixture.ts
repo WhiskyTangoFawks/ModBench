@@ -24,7 +24,8 @@ export const modFolderNames = async (root: string): Promise<string[]> =>
 /** Caller owns cleanup of the returned temp root. */
 export function cloneCorpusFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'medit-corpus-'));
-  cpSync(CORPUS_FIXTURE, root, { recursive: true });
+  // A copy on Windows keeps each file's date modified and one on Linux does not, so a clone keeps it on both.
+  cpSync(CORPUS_FIXTURE, root, { recursive: true, preserveTimestamps: true });
   return root;
 }
 

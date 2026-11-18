@@ -427,12 +427,12 @@ describe('the MO2 Instance adapter', () => {
           await adapter.reading(reread);
           return [...asked].sort();
         };
-        const unrelated = { named: [join(root, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false };
         const first = await askedBy(CHECK_THE_DISK);
         const settings = join(root, 'ModOrganizer.ini');
         await writeFile(settings, (await readFile(settings, 'utf8')).replace(/^gamePath=.*$/m, `gamePath=@ByteArray(${join(root, 'elsewhere')})`));
 
-        expect([first, await askedBy(unrelated), await askedBy({ named: [join(game, 'Data')], disk: false })]).toEqual([['game', 'running'], ['game'], ['game']]);
+        expect([first, await askedBy({ named: [settings], disk: false }), await askedBy({ named: [join(game, 'Data')], disk: false })])
+          .toEqual([['game', 'running'], ['game'], ['game']]);
       });
 
       it('answers the meta of a mod folder the mod order does not list, beside the listed ones', async () => {

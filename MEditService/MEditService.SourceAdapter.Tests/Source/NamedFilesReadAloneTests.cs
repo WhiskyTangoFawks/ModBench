@@ -122,6 +122,8 @@ public sealed class NamedFilesReadAloneTests : IDisposable
 
     private static string ReadText(FilesRead read) => read.Documents.Single().Text;
 
+    private void PastTheSettleWindow() => _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
+
     [Fact]
     public void AWrittenDocument_IsReadInPlaceOfItsFile_WhileTheFileKeepsItsStamp()
     {
@@ -159,7 +161,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     public void AFileReadOnceItsStampSettled_IsNotReadAgainWhileItKeepsIt()
     {
         var npc = Listed([NpcFile])[0];
-        _clock.Advance(TimeSpan.FromSeconds(3));
+        PastTheSettleWindow();
         _ = _repository.ReadFiles(Plugin, [npc], []).Value();
 
         var again = _repository.ReadFiles(Plugin, [npc], []).Value().Require();
@@ -171,7 +173,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     public void AFileReadOnceItsStampSettled_IsReadAgainOnceWrittenAgain()
     {
         var npc = Listed([NpcFile])[0];
-        _clock.Advance(TimeSpan.FromSeconds(3));
+        PastTheSettleWindow();
         _ = _repository.ReadFiles(Plugin, [npc], []).Value();
         File.AppendAllText(npc, " ");
 
