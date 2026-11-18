@@ -66,13 +66,19 @@ internal static class IndexFiles
 
     /// <summary>How many queries holding <paramref name="fragment"/> have started on the open Index's DuckDB since
     /// <see cref="LogQueries"/>.</summary>
-    internal static long StartedCount(string instanceRoot, string fragment)
+    internal static long StartedCount(string instanceRoot, string fragment) => Started(instanceRoot, "contains(message, $1)", fragment);
+
+    /// <summary>How many queries the regular expression <paramref name="pattern"/> matches have started on the open
+    /// Index's DuckDB since <see cref="LogQueries"/>.</summary>
+    internal static long StartedMatching(string instanceRoot, string pattern) => Started(instanceRoot, "regexp_matches(message, $1)", pattern);
+
+    private static long Started(string instanceRoot, string holding, string value)
     {
         using var connection = new DuckDBConnection($"DataSource={In(instanceRoot)}");
         connection.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT count(*) FROM duckdb_logs WHERE type = 'QueryLog' AND contains(message, $1)";
-        cmd.Parameters.Add(new DuckDBParameter(fragment));
+        cmd.CommandText = $"SELECT count(*) FROM duckdb_logs WHERE type = 'QueryLog' AND {holding}";
+        cmd.Parameters.Add(new DuckDBParameter(value));
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
