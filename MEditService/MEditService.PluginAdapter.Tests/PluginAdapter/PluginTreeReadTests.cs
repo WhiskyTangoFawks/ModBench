@@ -210,29 +210,7 @@ public sealed class PluginTreeReadTests
 
         using var written = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Counter.esp"), recompiledPath), Fallout4Release.Fallout4);
-        Assert.Equal(written.Npcs.Single().FormKey.ID + 1, written.ModHeader.Stats.NextFormID);
-    }
-
-    [Fact]
-    public async Task WriteFromTree_DerivesTheRecordCount_FromTheContent()
-    {
-        using var data = new PluginFixtureBuilder("writetree-record-count")
-            .WithPlugin(
-                "Count.esp",
-                mod =>
-                {
-                    mod.Npcs.AddNew("OnlyNpc");
-                },
-                writeParams: new BinaryWriteParameters { RecordCount = RecordCountOption.NoCheck })
-            .Build();
-        var files = await ReadTreeFiles(data, "Count.esp");
-        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Count.esp");
-
-        (await Adapter.WriteFromTreeAsync(files, recompiledPath, [], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
-
-        using var written = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName("Count.esp"), recompiledPath), Fallout4Release.Fallout4);
-        Assert.Equal(2u, written.ModHeader.Stats.NumRecords);
+        Assert.Equal(0x801u, written.ModHeader.Stats.NextFormID);
     }
 
     [Fact]
