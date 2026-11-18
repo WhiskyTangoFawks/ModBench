@@ -269,7 +269,7 @@ internal sealed class RelationReads(
     public Answer<SpooledRows, string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
-        ReadContext? context = store.OpenRead(cancel);
+        ReadContext? context = store.OpenSqlDoorRead(cancel);
         try
         {
             if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;

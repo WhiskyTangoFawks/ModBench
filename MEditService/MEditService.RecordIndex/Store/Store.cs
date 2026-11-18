@@ -43,7 +43,6 @@ internal sealed class Store : IDisposable
     private PluginIngest? _pluginIngest;
     private Language _stringsLanguage = Language.English;
     private WorkingTreeOverlay? _workingTreeOverlay;
-    private bool _recordTypeViewsCreated;
 
     private DuckDBConnection? _connection;
 
@@ -260,6 +259,7 @@ internal sealed class Store : IDisposable
             _closed = true;
             _connection?.Dispose();
         }
+        _recordTypeViews.Dispose();
     }
 
     // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
@@ -291,17 +291,39 @@ internal sealed class Store : IDisposable
         _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp, () => _stringsLanguage);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp, () => _stringsLanguage);
         TableDdlBuilder.CreateTables(Connection);
+        lock (_projectionLock) _sequence = DuckDbSql.Scalar<long>(Connection, $"SELECT value FROM {SequenceRelation}");
         _stringsLanguage = Enum.Parse<Language>(DuckDbSql.ScalarString(Connection, $"SELECT language FROM {TableDdlBuilder.StringsLanguageRelation}")
             ?? throw new InvalidOperationException("The strings language has no row."));
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
-    public void CreateRecordTypeViews()
+    private readonly SemaphoreSlim _recordTypeViews = new(1, 1);
+    private volatile bool _recordTypeViewsCreated;
+
+    /// <summary>A read through the SQL door. Its first use creates each record type's view on a connection of its own, so
+    /// a SELECT waits on no write, and stops at <paramref name="cancel"/>.</summary>
+    public ReadContext OpenSqlDoorRead(CancellationToken cancel)
     {
-        if (_recordTypeViewsCreated) return;
-        _ddlBuilder.CreateRecordTypeViews(Connection, Release);
-        _recordTypeViewsCreated = true;
+        if (!_recordTypeViewsCreated) CreateRecordTypeViews(cancel);
+        return OpenRead(cancel);
+    }
+
+    private void CreateRecordTypeViews(CancellationToken cancel)
+    {
+        _recordTypeViews.Wait(cancel);
+        try
+        {
+            if (_recordTypeViewsCreated) return;
+            using var views = OpenRead(cancel);
+            foreach (var view in _ddlBuilder.RecordTypeViews(Release)) views.Execute(view);
+            views.Execute("COMMIT");
+            _recordTypeViewsCreated = true;
+        }
+        finally
+        {
+            _recordTypeViews.Release();
+        }
     }
 
     // ADR-0010, with no in-place migration.
@@ -712,8 +734,8 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) scope.Told.Add(key);
     }
 
-    private void Advance() =>
-        DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+    private long Advance() =>
+        DuckDbSql.Scalar<long>(Connection, $"UPDATE {SequenceRelation} SET value = value + 1 RETURNING value");
 
     // A transaction that rolled back inside the scope still leaves the advance owed, so this can
     // over-signal — a re-read finding nothing changed — but never under-signal.
@@ -744,7 +766,7 @@ internal sealed class Store : IDisposable
             var advanced = scope.BumpOwed;
             if (advanced)
             {
-                Advance();
+                _sequence = Advance();
                 scope.BumpOwed = false;
             }
             var anythingNamed = scope.Told.Count > 0 || scope.NamedRows.Count > 0;
@@ -803,18 +825,14 @@ internal sealed class Store : IDisposable
         public void Dispose() => Interlocked.Exchange(ref _endProjection, null)?.Invoke(this);
     }
 
+    // Guarded by _projectionLock: the value mirror.sequence holds.
+    private long _sequence;
+
     /// <summary>One monotonic counter, advanced in the same transaction as any row change.
     /// Zero until the first change lands.</summary>
     public long Sequence
     {
-        get
-        {
-            lock (_projectionLock)
-            {
-                using var connection = OpenRead();
-                return connection.Scalar<long>($"SELECT value FROM {SequenceRelation}");
-            }
-        }
+        get { lock (_projectionLock) return _sequence; }
     }
 
     // Raises the sequence to at least atLeast, never lowers it — Sequence
@@ -822,6 +840,7 @@ internal sealed class Store : IDisposable
     internal void SeedSequence(long atLeast)
     {
         DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $1", atLeast);
+        lock (_projectionLock) _sequence = Math.Max(_sequence, atLeast);
     }
 
     /// <summary>The one way the rows change. The outermost commit then lands them, thrown or not: the sweep

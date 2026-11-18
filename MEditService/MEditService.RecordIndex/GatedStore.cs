@@ -8,6 +8,4 @@ internal readonly ref struct GatedStore(Store.Store store, IndexScope scope)
 
     /// <summary>Why the SQL cannot be a filter, or null once it is materialized; null clears it.</summary>
     public string? SetFilter(string? sql) => store.Filter.Set(sql);
-
-    public void CreateRecordTypeViews() => store.CreateRecordTypeViews();
 }

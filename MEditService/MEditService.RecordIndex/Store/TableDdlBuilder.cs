@@ -135,14 +135,14 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release)
+    public IEnumerable<string> RecordTypeViews(GameRelease release)
     {
         // The header's columns sit a level deeper in the document ($.ModHeader.Author); that nesting
         // is in the column's own PropertyName, so Projection needs nothing special.
         foreach (var (tableName, schema) in _reflector.GetSchemas(release))
         {
-            DuckDbSql.Execute(connection, RecordViewBuilder.BuildViewSql(tableName, schema, ActiveSchema));
-            DuckDbSql.Execute(connection, RecordViewBuilder.BuildViewSql(tableName, schema, IndexedSchema));
+            yield return RecordViewBuilder.BuildViewSql(tableName, schema, ActiveSchema);
+            yield return RecordViewBuilder.BuildViewSql(tableName, schema, IndexedSchema);
         }
     }
 

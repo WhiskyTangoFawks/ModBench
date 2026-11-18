@@ -57,13 +57,14 @@ internal sealed class Indexer : IDisposable
     }
 
     // Lock order: _lock, then the Store's projection lock, which a projection's announcements run
-    // under. An announcement reads the record index's own Sequence, never this class's Sequence, Status or
-    // RequireReads, which take _lock.
+    // under. An announcement never reads this class's Status or RequireReads, which take _lock.
+    // No query runs under _lock.
     private readonly Lock _lock = new();
-    private OpenScope? _scope;
+    // Written under _lock, and detached only under the write gate, so a write handed the store finishes before it closes.
+    private volatile OpenScope? _scope;
 
-    // The reconcile's own progress. Guarded by _lock like _scope: written by the reconciling thread
-    // as each plugin lands, read by whoever asks for Status meanwhile.
+    // The reconcile's own progress. Guarded by _lock: written by the reconciling thread as each
+    // plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<PluginAddress> _indexed = [];
     private readonly Dictionary<PluginAddress, (string? Path, string? Hash)> _failedFileHashes = new(PluginAddress.Comparer);
     private bool _conflictsComputed;
@@ -194,10 +195,13 @@ internal sealed class Indexer : IDisposable
     public RelationReads RequireReads(CancellationToken cancel, bool inOneSnapshot = false) =>
         RequireScope().Store.Reads.ForCaller(cancel, inOneSnapshot);
 
+    /// <summary>ADR-0029: long work never closes a read model, so a reconcile answers with what the index holds now, and
+    /// its announcements say what moved after.</summary>
     public RelationReads RequireWholeSetReads(CancellationToken cancel, bool inOneSnapshot = false)
     {
         var status = Status;
-        if (status.State == LoadOrderState.Ready) return RequireReads(cancel, inOneSnapshot);
+        if (status.State is LoadOrderState.Ready or LoadOrderState.Reconciling && _scope is { } scope)
+            return scope.Store.Reads.ForCaller(cancel, inOneSnapshot);
         if (_holder.Held is null) throw new NoLoadOrderException();
         throw new IndexNotReadyException(
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
@@ -215,16 +219,19 @@ internal sealed class Indexer : IDisposable
     public PluginIndexedState IndexedState(PluginAddress key)
     {
         var scope = RequireScope();
+        (string? Path, string? Hash) at;
+        bool indexed;
         lock (_lock)
         {
-            if (scope.Held.FailureOf(key) is { } failed)
-            {
-                var stillTheFileItFailedOn = _failedFileHashes.TryGetValue(key, out var at) && at.Path is not null && at.Hash is not null
-                    && scope.Store.FileContentHash(at.Path) == at.Hash;
-                return stillTheFileItFailedOn ? new(PluginIndexing.ReadFailed, failed.Reason) : new(PluginIndexing.NotYet);
-            }
-            if (!_indexed.Exists(held => PluginAddress.Comparer.Equals(held, key))) return new(PluginIndexing.NotYet);
+            at = _failedFileHashes.GetValueOrDefault(key);
+            indexed = _indexed.Exists(held => PluginAddress.Comparer.Equals(held, key));
         }
+        if (scope.Held.FailureOf(key) is { } failed)
+        {
+            var stillTheFileItFailedOn = at.Path is not null && at.Hash is not null && scope.Store.FileContentHash(at.Path) == at.Hash;
+            return stillTheFileItFailedOn ? new(PluginIndexing.ReadFailed, failed.Reason) : new(PluginIndexing.NotYet);
+        }
+        if (!indexed) return new(PluginIndexing.NotYet);
         var asOnDisk = scope.Store.IndexedFile(key) is not { } claim || scope.Store.FileContentHash(claim.FilePath) == claim.ContentHash;
         return new(asOnDisk ? PluginIndexing.AsOnDisk : PluginIndexing.NotYet);
     }
@@ -312,7 +319,7 @@ internal sealed class Indexer : IDisposable
     }
 
 
-    public long Sequence { get { lock (_lock) return _scope?.Store.Sequence ?? 0; } }
+    public long Sequence => _scope?.Store.Sequence ?? 0;
 
     // Polling, not the notification port: this answers one caller's own bound, not every
     // subscriber, and every write already serializes through IndexWriteGate, so a short poll
@@ -775,10 +782,13 @@ internal sealed class Indexer : IDisposable
     private string? ReopenStore()
     {
         OpenScope? current;
-        lock (_lock)
+        using (_gate.Enter())
         {
-            current = _scope;
-            _scope = null;
+            lock (_lock)
+            {
+                current = _scope;
+                _scope = null;
+            }
         }
         if (current is null) return null;
         if (!_storeFactory.Close(current.Store))
@@ -829,15 +839,16 @@ internal sealed class Indexer : IDisposable
     private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere, out string? failure)
     {
         (heldElsewhere, failure) = (null, null);
-        OpenScope? leaving;
-        lock (_lock)
+        if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.IsInvalidated())
         {
-            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.IsInvalidated())
-            {
-                _scope = current with { LoadOrder = snapshot };
-                return _scope;
-            }
-            leaving = DetachCurrent();
+            var kept = current with { LoadOrder = snapshot };
+            lock (_lock) _scope = kept;
+            return kept;
+        }
+        OpenScope? leaving;
+        using (_gate.Enter())
+        {
+            lock (_lock) leaving = DetachCurrent();
             _filter.DropWhenOutside(snapshot);
         }
         if (!_storeFactory.Close(leaving?.Store, snapshot.InstanceRoot))
@@ -1559,7 +1570,7 @@ internal sealed class Indexer : IDisposable
     internal T InForce<T>(Func<GatedStore, T> write, Func<T> noStore)
     {
         using var _ = _gate.Enter();
-        lock (_lock) return _scope is { } scope ? write(new GatedStore(scope.Store, IndexScope.Of(scope.Held))) : noStore();
+        return _scope is { } scope ? write(new GatedStore(scope.Store, IndexScope.Of(scope.Held))) : noStore();
     }
 
     /// <summary>Hands <paramref name="whileClosed"/> the file with the store closed and no reconcile running, then
@@ -1610,9 +1621,7 @@ internal sealed class Indexer : IDisposable
         bool readsEnded;
         try
         {
-            OpenScope? closing;
-            lock (_lock) closing = DetachCurrent();
-            readsEnded = _storeFactory.Close(closing?.Store);
+            readsEnded = _storeFactory.Close(DetachUnderTheGate()?.Store);
         }
         finally { ExitExclusive(); }
 
@@ -1641,8 +1650,7 @@ internal sealed class Indexer : IDisposable
         }
         try
         {
-            OpenScope? closing;
-            lock (_lock) closing = DetachCurrent();
+            var closing = DetachUnderTheGate();
             lock (_turns)
             {
                 // EndReconcile already clears this on every reconcile's own exit path; this is the
@@ -1657,8 +1665,13 @@ internal sealed class Indexer : IDisposable
         _disposal.Dispose();
     }
 
-    // Disposing the scope waits out its reads, so its caller does that outside _lock, which every
-    // Status and read takes.
+    private OpenScope? DetachUnderTheGate()
+    {
+        using var _ = _gate.Enter();
+        lock (_lock) return DetachCurrent();
+    }
+
+    // Disposing the scope waits out its reads, so its caller does that outside _lock, which Status takes.
     private OpenScope? DetachCurrent()
     {
         var detached = _scope;

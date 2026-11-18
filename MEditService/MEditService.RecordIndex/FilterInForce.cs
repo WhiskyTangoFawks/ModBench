@@ -9,6 +9,7 @@ namespace MEditService.RecordIndex;
 /// cannot apply again (plugins.md, States, story 7): a rebuild of its scope keeps it, another scope drops it.</summary>
 internal sealed class FilterInForce(ILogger logger, INotificationPublisher? notifications)
 {
+    // Guards the fields alone: every change runs inside the write gate, so the filter's SQL runs outside it.
     private readonly Lock _lock = new();
     private (string Sql, string Source, IndexScope Scope)? _current;
     private FilterCleared? _cleared;
@@ -37,13 +38,13 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 
     private string? Materialize(GatedStore store, (string Sql, string Source)? filter)
     {
+        if (store.SetFilter(filter?.Sql) is { } rejection) return rejection;
         lock (_lock)
         {
-            if (store.SetFilter(filter?.Sql) is { } rejection) return rejection;
             _cleared = null;
             _current = filter is { } set ? (set.Sql, set.Source, store.Scope) : null;
-            return null;
         }
+        return null;
     }
 
     public void DropWhenOutside(LoadOrderSnapshot snapshot)
@@ -63,21 +64,23 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 
     private bool ReapplyOrClear(Store.Store store, bool sequenceAdvances)
     {
+        (string Sql, string Source, IndexScope Scope)? current;
+        lock (_lock) current = _current;
+        if (current is not { } filter)
+        {
+            store.Filter.Set(null);
+            return false;
+        }
+        if (!sequenceAdvances && store.Filter.Active) return false;
+        if (store.Filter.Set(filter.Sql) is not { } rejection) return false;
+        logger.LogWarning(
+            "Could not re-materialize the active filter ({Error}); the filter is cleared", rejection);
+        store.Filter.Set(null);
         lock (_lock)
         {
-            if (_current is not { } filter)
-            {
-                store.Filter.Set(null);
-                return false;
-            }
-            if (!sequenceAdvances && store.Filter.Active) return false;
-            if (store.Filter.Set(filter.Sql) is not { } rejection) return false;
-            logger.LogWarning(
-                "Could not re-materialize the active filter ({Error}); the filter is cleared", rejection);
-            store.Filter.Set(null);
             _current = null;
             _cleared = new FilterCleared(filter.Source, rejection, store.Sequence);
-            return true;
         }
+        return true;
     }
 }

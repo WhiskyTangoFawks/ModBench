@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
@@ -65,6 +66,19 @@ public sealed class RealSizeIndex : IDisposable
         Index.Dispose();
         _index = Launch(Modlist);
     }, () => true);
+
+    /// <summary>The record index closed and launched again over the same file, answered once its reconcile has opened
+    /// the file. The task ends with the reconcile.</summary>
+    internal Task Relaunching()
+    {
+        Index.Dispose();
+        var holder = new LoadOrderHolder();
+        var index = Indexes.Open(holder, source: Source, unsaved: _unsaved);
+        _index = index;
+        holder.Apply(Modlist.Snapshot());
+        Waits.Reached(() => index.Status.State == LoadOrderState.Reconciling, "the relaunch's reconcile", IndexingPatience);
+        return Task.Run(() => Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the relaunch's end", IndexingPatience));
+    }
 
     /// <summary>Applies <paramref name="snapshot"/> and waits for the index to answer it.</summary>
     internal void Receive(LoadOrderSnapshot snapshot) => Index.Receive(Index.Holder, snapshot);

@@ -275,6 +275,74 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         }
     }
 
+    [RealSizeFact]
+    public void AViewsReads_AnswerWithinTheirBudgets_WhileARecordFilterLands()
+    {
+        WarmedReads();
+        var filter = Task.Run(() => Index.Queries.SetFilter("SELECT form_key FROM records WHERE hash(body) = 0", "slow.sql"));
+        try
+        {
+            Answering("while a record filter lands", filter);
+            Assert.Null(filter.GetAwaiter().GetResult());
+        }
+        finally
+        {
+            filter.GetAwaiter().GetResult();
+            Index.Queries.ClearFilter();
+        }
+    }
+
+    [RealSizeFact]
+    public void AViewsReads_AnswerWithinTheirBudgets_WhileACheckOfTheDiskRuns()
+    {
+        var rewritten = Modlist.SmallBinaryPlugins;
+        using var restored = Restoring([.. rewritten.Select(small => small.Path)], () => CheckEnded() && !Index.Status.Validating);
+        foreach (var small in rewritten) PluginBinaries.Touch(small.Path);
+        WarmedReads();
+
+        var check = Index.Queries.Hold(null, CancellationToken.None);
+
+        Answering($"while a check of the disk reads {rewritten.Count} plugins", check);
+        Assert.Null(check.GetAwaiter().GetResult());
+    }
+
+    [RealSizeFact]
+    public void AViewsReads_AnswerWithinTheirBudgets_WhileALaunchReconcilesEveryPlugin()
+    {
+        var launch = realSize.Relaunching();
+        try
+        {
+            WarmedReads();
+            Answering($"while a launch reconciles {RealSizeModlist.Plugins} plugins", launch);
+        }
+        finally
+        {
+            realSize.Restore(() => launch.GetAwaiter().GetResult(), () => Index.Status.State == LoadOrderState.Ready);
+        }
+    }
+
+    private (TimeSpan Budget, Action Read, string What)[] Reads =>
+    [
+        (OneFactsRead, () => _ = Index.Status, "The record index's status"),
+        (OneFactsRead, () => _ = Index.Sequence, "The record index's sequence"),
+        (OneKeystroke, () => Index.Queries.GetRecords(types: null, plugin: null, search: "Quest", limit: 20, offset: 0).Value(), "Searching every plugin's records"),
+        (OneKeystroke, () => Assert.NotEmpty(Index.Queries.Selected($"SELECT editor_id FROM records WHERE form_key = '{Modlist.OverriddenRecord}'")), "A script's SELECT"),
+    ];
+
+    private void WarmedReads()
+    {
+        foreach (var (_, read, _) in Reads) read();
+    }
+
+    private void Answering(string whileWorking, Task work)
+    {
+        Thread.Sleep(HalfAGesture);
+
+        foreach (var (budget, read, what) in Reads) Budgets.Ran(budget, read, $"{what} {whileWorking}");
+
+        Assert.False(work.IsCompleted, $"The work ended before the reads {whileWorking} were timed.");
+    }
+
     private void Held(PluginChange written) =>
         Assert.Null(Index.Queries.Hold([new HandedPlugin(written.Plugin, written.Files, [])], CancellationToken.None).GetAwaiter().GetResult());
 

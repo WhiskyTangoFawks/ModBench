@@ -57,9 +57,8 @@ public sealed class WholeSetRefusalTests
         Assert.Contains("No load order", refused.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(WholeSetGuard))]
-    public async Task WhileReconciling_IsNotReady_ForAPluginNotYetReachedHasNoRowsAndWouldReadAsAbsent(string query)
+    [Fact]
+    public async Task WhileReconciling_AWholeSetReadAnswersWithWhatTheIndexHolds()
     {
         using var fixture = Fixture();
         var holder = new LoadOrderHolder();
@@ -70,7 +69,8 @@ public sealed class WholeSetRefusalTests
 
         try
         {
-            Assert.Equal(IndexRefusal.IndexNotReady, BehindTheWholeSetGuard[query](index.Queries).Refusal);
+            Assert.Equal(LoadOrderState.Reconciling, index.Status.State);
+            Assert.Equal("FirstNpc", Assert.Single(index.Queries.Selected("SELECT editor_id FROM npc_")).GetProperty("editor_id").GetString());
         }
         finally
         {
