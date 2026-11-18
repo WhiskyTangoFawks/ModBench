@@ -83,14 +83,14 @@ public sealed class RealSizeIndex : IDisposable
     /// <summary>Applies <paramref name="snapshot"/> and waits for the index to answer it.</summary>
     internal void Receive(LoadOrderSnapshot snapshot) => Index.Receive(Index.Holder, snapshot);
 
-    /// <summary>Runs <paramref name="putBack"/> and waits until <paramref name="restored"/> holds. A restore that fails
-    /// fails every test after it, naming itself.</summary>
+    /// <summary>Runs <paramref name="putBack"/> and waits until <paramref name="restored"/> holds and the work it set off is
+    /// ended and checkpointed, so no later test meets it. A failed restore fails every later test, naming itself.</summary>
     internal void Restore(Action putBack, Func<bool> restored, TimeSpan? patience = null)
     {
         try
         {
             putBack();
-            Waits.Reached(restored, "the shared index restored", patience);
+            Waits.Reached(() => restored() && !_index.Require().Status.Validating, "the shared index restored and its work ended", patience);
             IndexFiles.Checkpointed(_modlist.Value.InstanceRoot);
         }
         catch (Exception ex)

@@ -1,6 +1,7 @@
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -43,33 +44,76 @@ public sealed class RecordTypeViewsTests
     [Fact]
     public async Task ASelectWaitingWhileAnotherCreatesTheViews_StopsAtItsCancellation()
     {
-        using var parked = new SemaphoreSlim(0);
-        using var released = new SemaphoreSlim(0);
-        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
+        using var creation = new FirstSelectParkedCreatingTheViews("lazy-views-cancelled");
+        await creation.Parked();
+        using var cancel = new CancellationTokenSource();
+        var waiting = await creation.SecondSelectSeenWaiting(cancel.Token);
+
+        await cancel.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting.WaitAsync(Patience));
+        creation.Release();
+        (await creation.Creating).Value().Dispose();
+    }
+
+    [Fact]
+    public async Task ASelectWaitingWhileAnotherCreatesTheViews_IsNotReadyWhenTheIndexCloses()
+    {
+        using var creation = new FirstSelectParkedCreatingTheViews("lazy-views-closed");
+        await creation.Parked();
+        var waiting = await creation.SecondSelectSeenWaiting(CancellationToken.None);
+
+        var closing = Task.Run(creation.Index.Dispose);
+
+        Assert.Equal(IndexRefusal.IndexNotReady, (await waiting.WaitAsync(Patience)).Refused().Refusal);
+        creation.Release();
+        await closing.WaitAsync(Patience);
+    }
+
+    private sealed class FirstSelectParkedCreatingTheViews : IDisposable
+    {
+        private readonly SemaphoreSlim _parked = new(0);
+        private readonly SemaphoreSlim _released = new(0);
+        private readonly ILoggerFactory _loggers;
+        private readonly PluginFixtureData _fixture;
+
+        public FirstSelectParkedCreatingTheViews(string name)
         {
-            if (!entry.Message.StartsWith("Created the record type views", StringComparison.Ordinal)) return;
-            parked.Release();
-            released.Wait(CreationHeldAtMost);
-        })));
-        using var fixture = new PluginFixtureBuilder("lazy-views-cancelled").WithPlugin(Plugin.Name, mod => mod.Npcs.AddNew("LazyNpc")).Build();
-        using var index = Indexes.Reconciled(fixture, loggerFactory: loggers);
-        var creating = Task.Run(() => index.Queries.SelectRows("SELECT 1", CancellationToken.None));
-        try
+            _loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
+            {
+                if (!entry.Message.StartsWith("Created the record type views", StringComparison.Ordinal)) return;
+                _parked.Release();
+                _released.Wait(CreationHeldAtMost);
+            })));
+            _fixture = new PluginFixtureBuilder(name).WithPlugin(Plugin.Name, mod => mod.Npcs.AddNew("LazyNpc")).Build();
+            Index = Indexes.Reconciled(_fixture, loggerFactory: _loggers);
+            Creating = Task.Run(() => Index.Queries.SelectRows("SELECT 1", CancellationToken.None));
+        }
+
+        public OpenedIndex Index { get; }
+
+        public Task<Answer<SelectedRows, IndexRefused>> Creating { get; }
+
+        public async Task Parked() => Assert.True(await _parked.WaitAsync(Patience), "the first SELECT creating the views");
+
+        public async Task<Task<Answer<SelectedRows, IndexRefused>>> SecondSelectSeenWaiting(CancellationToken cancel)
         {
-            Assert.True(await parked.WaitAsync(Patience), "the first SELECT creating the views");
-            using var cancel = new CancellationTokenSource();
-            var waiting = Task.Run(() => index.Queries.SelectRows("SELECT 1", cancel.Token));
-            await Task.Delay(TimeSpan.FromSeconds(0.5));
+            var waiting = Task.Run(() => Index.Queries.SelectRows("SELECT 1", cancel));
+            await Task.Delay(TimeSpan.FromSeconds(0.5), CancellationToken.None);
             Assert.False(waiting.IsCompleted, "The second SELECT answered while the first was creating the views.");
-
-            await cancel.CancelAsync();
-
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting.WaitAsync(Patience));
+            return waiting;
         }
-        finally
+
+        public void Release() => _released.Release();
+
+        public void Dispose()
         {
-            released.Release();
+            Release();
+            Index.Dispose();
+            _fixture.Dispose();
+            _loggers.Dispose();
+            _parked.Dispose();
+            _released.Dispose();
         }
-        (await creating).Value().Dispose();
     }
 }

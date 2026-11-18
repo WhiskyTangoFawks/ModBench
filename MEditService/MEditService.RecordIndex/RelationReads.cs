@@ -96,7 +96,7 @@ internal sealed class RelationReads(
     public RecordIdentity? GetCarryingRecord(string formKey, PluginAddress plugin)
     {
         using var context = OpenRead();
-        var carrying = context.ScalarString($"""
+        var carrying = context.Rows($"""
             WITH RECURSIVE carried(form_key, depth) AS (
                 SELECT $1, 0
                 UNION ALL
@@ -105,12 +105,12 @@ internal sealed class RelationReads(
                 WHERE h.plugin = $2 AND h.origin = $3 AND {HoldingSlots.CarriedInTheParentsDocument("h.slot")}
             )
             SELECT form_key FROM carried ORDER BY depth DESC LIMIT 1
-            """, formKey, plugin.Name, plugin.Origin);
+            """, reader => reader.GetString(0), formKey, plugin.Name, plugin.Origin).Single();
         // Found by its key alone: a join of the records to the walk reads every record's columns.
         return context.Rows(
                 $"SELECT record_type, editor_id FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                reader => new RecordIdentity(carrying ?? formKey, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)),
-                carrying ?? formKey, plugin.Name, plugin.Origin)
+                reader => new RecordIdentity(carrying, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)),
+                carrying, plugin.Name, plugin.Origin)
             .FirstOrDefault();
     }
 

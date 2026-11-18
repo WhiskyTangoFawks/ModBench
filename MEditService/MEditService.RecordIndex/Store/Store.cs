@@ -246,8 +246,11 @@ internal sealed class Store : IDisposable
         }
     }
 
+    private int _disposed;
+
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
         bool closedToReads;
         lock (_readsGate) closedToReads = _closedToReads;
         if (!closedToReads && !EndReads())

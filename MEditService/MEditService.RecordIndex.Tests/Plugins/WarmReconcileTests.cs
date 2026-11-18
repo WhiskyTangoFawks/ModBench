@@ -1,6 +1,7 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -214,6 +215,27 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(["A.esp"], next.Hashed.Distinct());
         Assert.Empty(after.Hashed);
+    }
+
+    [Fact]
+    public async Task APluginReadWholeAgain_SweepsTheWinnersOfItsOwnRecordsAlone()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("whole-read-sweep")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var b = data.Plugins.Single(p => p.Name == "B.esp");
+        PluginBinaries.Rewrite(b.Path, m => m.Npcs.AddNew("NpcBAgain"));
+        IndexFiles.LogQueries(data.InstanceRoot);
+
+        Assert.Null(await index.Queries.Hold([HandedPlugin.ReadBack(b.Key)], CancellationToken.None));
+
+        Assert.Equal(["NpcBAgain"], index.ListedIn(b.Key).Select(r => r.EditorId));
+        Assert.True(IndexFiles.Started(data.InstanceRoot, "DELETE FROM winners WHERE form_key IN"));
+        Assert.False(IndexFiles.Started(data.InstanceRoot, "DELETE FROM winners WHERE TRUE"));
     }
 
     [Fact]
