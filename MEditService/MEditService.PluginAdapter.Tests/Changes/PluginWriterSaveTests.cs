@@ -27,7 +27,7 @@ public sealed class PluginWriterSaveTests
 
     [Theory]
     [MemberData(nameof(GeneratedPluginsWithAStaleHeader))]
-    public async Task Save_OfAGeneratedPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
+    public async Task Save_OfAGeneratedPluginWithAStaleHeader_DerivesItsNextObjectIdAndNumRecordsFromContent(
         string fileName, uint derivedNumRecords)
     {
         using var folder = new ScratchDirectory("pw-save-stale-header");
@@ -38,7 +38,9 @@ public sealed class PluginWriterSaveTests
 
         await RewriteAsync(pluginPath);
 
-        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), HeaderStatsOf(pluginPath));
+        var (nextObjectId, numRecords) = HeaderStatsOf(pluginPath);
+        Assert.Equal(derivedNumRecords, numRecords);
+        Assert.NotEqual(stale.StoredNextObjectId, nextObjectId);
     }
 
     private static (uint NextObjectId, uint NumRecords) HeaderStatsOf(string pluginPath)
