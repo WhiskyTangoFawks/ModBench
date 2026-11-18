@@ -411,11 +411,14 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     {
         var small = Modlist.SmallBinaryPlugins[0];
         var bytes = File.ReadAllBytes(small.Path);
-        using var landed = CheckpointOfEarlierWritesLanded();
-        PluginBinaries.Touch(small.Path);
+        IndexFiles.Checkpointed(Modlist.InstanceRoot);
         try
         {
-            Budgets.Ran(OneKeystroke, () => ReadBack(small.Key), $"Reading {small.Name} whole again and sweeping its winners");
+            Budgets.Ran(OneKeystroke, () =>
+            {
+                PluginBinaries.Touch(small.Path);
+                ReadBack(small.Key);
+            }, $"Changing {small.Name} and reading it whole again, sweeping its winners", Runs);
         }
         finally
         {
