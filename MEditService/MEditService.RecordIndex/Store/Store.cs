@@ -155,7 +155,7 @@ internal sealed class Store : IDisposable
         cancel.ThrowIfCancellationRequested();
         lock (_readsGate)
         {
-            if (_closedToReads) throw new IndexNotReadyException("mEdit's record index is closed to new reads while it is replaced.");
+            if (_closedToReads) throw ClosedToNewReads();
             var connection = _databasePath == null ? OpenedInOneSnapshot(Connection.Duplicate()) : OpenedInOneSnapshot($"DataSource={_databasePath}");
             _readsInFlight++;
             connection.Disposed += (_, _) =>
@@ -166,6 +166,8 @@ internal sealed class Store : IDisposable
             return new ReadContext(connection, () => SpoolFile.In(SpoolDirectory), cancel);
         }
     }
+
+    private static IndexNotReadyException ClosedToNewReads() => new("mEdit's record index is closed to new reads while it is replaced.");
 
     private readonly object _readsGate = new();
     private int _readsInFlight;
@@ -259,6 +261,11 @@ internal sealed class Store : IDisposable
             _closed = true;
             _connection?.Dispose();
         }
+        // A creation in hand releases the semaphore before it goes; a waiter leaves at the cancel.
+        _closing.Cancel();
+        _recordTypeViews.Wait(IndexWriteGate.HoldLimit);
+        _recordTypeViews.Dispose();
+        _closing.Dispose();
     }
 
     // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
@@ -297,7 +304,8 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
-    private readonly Lock _recordTypeViews = new();
+    private readonly SemaphoreSlim _recordTypeViews = new(1, 1);
+    private readonly CancellationTokenSource _closing = new();
     private volatile bool _recordTypeViewsCreated;
 
     /// <summary>A read through the SQL door. Its first use creates each record type's view on a connection of its own, so
@@ -310,13 +318,41 @@ internal sealed class Store : IDisposable
 
     private void CreateRecordTypeViews(CancellationToken cancel)
     {
-        lock (_recordTypeViews)
+        WaitForTheRecordTypeViews(cancel);
+        try
         {
             if (_recordTypeViewsCreated) return;
-            using var views = OpenRead(cancel);
-            foreach (var view in _ddlBuilder.RecordTypeViews(Release)) views.Execute(view);
-            views.Execute("COMMIT");
+            var timer = Stopwatch.StartNew();
+            using (var views = OpenRead(cancel))
+            {
+                foreach (var view in _ddlBuilder.RecordTypeViews(Release)) views.Execute(view);
+                views.Execute("COMMIT");
+            }
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("Created the record type views in {ElapsedMs} ms", timer.ElapsedMilliseconds);
             _recordTypeViewsCreated = true;
+        }
+        finally
+        {
+            _recordTypeViews.Release();
+        }
+    }
+
+    // A store that closes beneath a waiter answers it as it answers any read it is closed to.
+    private void WaitForTheRecordTypeViews(CancellationToken cancel)
+    {
+        try
+        {
+            using var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancel, _closing.Token);
+            _recordTypeViews.Wait(waiting.Token);
+        }
+        catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+        {
+            throw ClosedToNewReads();
+        }
+        catch (ObjectDisposedException)
+        {
+            throw ClosedToNewReads();
         }
     }
 
