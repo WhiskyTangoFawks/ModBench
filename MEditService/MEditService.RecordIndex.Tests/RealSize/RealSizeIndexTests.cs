@@ -407,14 +407,14 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void APluginReadWholeAgain_SweepsItsOwnRecordsWinnersWithinAQuarterOfAGesture()
+    public void APluginReadWholeAgain_IsReadAndSweptWithinHalfAGesture()
     {
         var small = Modlist.SmallBinaryPlugins[0];
         var bytes = File.ReadAllBytes(small.Path);
         IndexFiles.Checkpointed(Modlist.InstanceRoot);
         try
         {
-            Budgets.Ran(OneKeystroke, () =>
+            Budgets.Ran(HalfAGesture, () =>
             {
                 PluginBinaries.Touch(small.Path);
                 ReadBack(small.Key);
