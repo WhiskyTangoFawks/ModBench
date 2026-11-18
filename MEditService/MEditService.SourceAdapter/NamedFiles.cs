@@ -25,7 +25,8 @@ internal static class NamedFiles
             var listed = listing.Files.Select(file => file.Key).Where(file => Under(path, file)).ToList();
             if (disk.DirectoryExists(path)) files.UnionWith(disk.FilesIn(path, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories));
             else if (disk.FileExists(path) || listing.KnowsGone(path)) files.Add(path);
-            else if (listed.Count == 0 && !SourceRepositoryLayout.CarriesNoRecord(path)) return null;
+            // A gone path's name alone says whether it was a file, and a writer's temp file carries no record.
+            else if (listed.Count == 0 && !TempName.IsTempFile(Path.GetFileName(path))) return null;
             files.UnionWith(listed);
         }
 

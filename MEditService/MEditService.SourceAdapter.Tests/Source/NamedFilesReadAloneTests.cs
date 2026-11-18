@@ -74,6 +74,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
             Path.Combine(Path.GetDirectoryName(test.CellFile).Require(), "Stray.json"), NpcBody(StrayFormKey))]),
         ["a group's document"] = test => test.Listed([Directory.GetFiles(test._modFolder, "GroupRecordData.json", SearchOption.AllDirectories).First()]),
         ["a file neither on disk nor listed"] = test => test.Listed([Path.Combine(Path.GetDirectoryName(test.NpcFile).Require(), "Never.json")]),
+        ["a folder neither on disk nor listed"] = test => test.Listed([Path.Combine(Path.GetDirectoryName(test.NpcFile).Require(), "Never - 000900_Fixture.esp")]),
     };
 
     public static TheoryData<string> FallBacks() => [.. FallingBack.Keys];
