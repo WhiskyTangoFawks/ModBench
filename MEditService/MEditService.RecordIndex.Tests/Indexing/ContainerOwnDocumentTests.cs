@@ -6,6 +6,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Noggog;
 
 namespace MEditService.RecordIndex.Tests.Indexing;
 
@@ -22,7 +23,7 @@ public sealed class ContainerOwnDocumentTests
         public Fixture(bool compiledPlugin)
         {
             ContainerModPlugin.Keys keys = default;
-            FormKey quest = default, topic = default, response = default;
+            FormKey quest = default, topic = default, response = default, exteriorCell = default, exteriorRef = default;
             _data = new PluginFixtureBuilder("container-own-document")
                 .WithPlugin(PluginName, mod =>
                 {
@@ -33,10 +34,12 @@ public sealed class ContainerOwnDocumentTests
                     t.Responses.Add(r);
                     q.DialogTopics.Add(t);
                     (quest, topic, response) = (q.FormKey, t.FormKey, r.FormKey);
+                    (exteriorCell, exteriorRef) = AddExteriorCellWithARef(mod);
                 }, origin: Origin)
                 .BuildScattered();
             if (compiledPlugin) _data.CompiledPlugin();
             (Keys, Quest, Topic, Response) = (keys, quest.ToString(), topic.ToString(), response.ToString());
+            (ExteriorCell, ExteriorRef) = (exteriorCell.ToString(), exteriorRef.ToString());
             Index = Indexes.Reconciled(_data);
         }
 
@@ -44,12 +47,19 @@ public sealed class ContainerOwnDocumentTests
         public string Quest { get; }
         public string Topic { get; }
         public string Response { get; }
+        public string ExteriorCell { get; }
+        public string ExteriorRef { get; }
         public OpenedIndex Index { get; }
         public LoadOrderEntry Entry => _data.Plugins.Single();
 
         public JsonElement Stored(string formKey) =>
             JsonDocument.Parse(Index.Queries.GetRenderedDocument(Plugin, formKey).Value()?.Text
                 ?? throw new InvalidOperationException($"Expected the record index to store {formKey}.")).RootElement;
+
+        public string RenderedFileName(string formKey) =>
+            Index.Queries.GetRenderedDocument(Plugin, formKey).Value().Require().FileName;
+
+        public string FileNameOf(string formKey) => Path.GetFileName(Entry.SourceFileOf(Index.DocumentOf(formKey, Plugin)));
 
         public List<string> Children(string formKey) =>
             [.. Index.Queries.GetContainerChildren(Plugin, formKey).Value().Select(c => c.FormKey)];
@@ -59,6 +69,21 @@ public sealed class ContainerOwnDocumentTests
             Index.Dispose();
             _data.Dispose();
         }
+    }
+
+    private static (FormKey Cell, FormKey Ref) AddExteriorCellWithARef(Fallout4Mod mod)
+    {
+        var cell = new Cell(mod) { EditorID = "OwnExteriorCell", Grid = new CellGrid { Point = new P2Int(3, 4) } };
+        var placed = new PlacedObject(mod) { EditorID = "OwnExteriorRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
+        cell.Temporary.Add(placed);
+        var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+        subBlock.Items.Add(cell);
+        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+        block.Items.Add(subBlock);
+        var world = new Worldspace(mod) { EditorID = "OwnExteriorWorld" };
+        world.SubCells.Add(block);
+        mod.Worldspaces.Add(world);
+        return (cell.FormKey, placed.FormKey);
     }
 
     private static List<string> MembersOf(JsonElement document) => [.. document.EnumerateObject().Select(p => p.Name)];
@@ -108,6 +133,17 @@ public sealed class ContainerOwnDocumentTests
         Assert.Equal(
             new[] { keys.PersistentRef, keys.TemporaryRef, keys.Navmesh, keys.Landscape }.Select(formKey => formKey.ToString()),
             held.Persistent.Concat(held.Temporary).Select(c => c.FormKey));
+    }
+
+    [Fact]
+    public void AnEmbeddedChildsRenderedDocument_IsNamedAsTheDocumentCarryingIt()
+    {
+        using var fixture = new Fixture(compiledPlugin: true);
+        var keys = fixture.Keys;
+
+        Assert.Equal(
+            new[] { keys.EmbedCell, keys.Worldspace, keys.Worldspace }.Select(carrier => carrier.ToString()).Append(fixture.ExteriorCell).Select(fixture.FileNameOf),
+            new[] { keys.TemporaryRef, keys.TopCell, keys.TopCellRef }.Select(child => child.ToString()).Append(fixture.ExteriorRef).Select(fixture.RenderedFileName));
     }
 
     [Fact]

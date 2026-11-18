@@ -1457,7 +1457,7 @@ internal sealed class Indexer : IDisposable
             // Gained records are refreshed by key so the rows that moved are named.
             if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod)
             {
-                if (scope.Projector.RefreshByKeys(plugin.Registered, report.ChangedKeys) is not { } stopped) return false;
+                if (scope.Projector.RefreshByKeys(plugin.Registered, report.ChangedKeys, []) is not { } stopped) return false;
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}; reading it whole", key.Name, stopped.Reason);
                 return true;
             }

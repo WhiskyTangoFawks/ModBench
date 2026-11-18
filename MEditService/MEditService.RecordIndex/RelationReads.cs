@@ -91,6 +91,27 @@ internal sealed class RelationReads(
         return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
     }
 
+    /// <summary>The record whose own document carries <paramref name="formKey"/>'s copy in <paramref name="plugin"/>: the
+    /// container its text is embedded in, walked up to the one filed alone, or the copy itself.</summary>
+    public RecordIdentity? GetDocumentOwner(string formKey, PluginAddress plugin)
+    {
+        using var context = OpenRead();
+        var owner = formKey;
+        while (context.ScalarString($"""
+                   SELECT parent FROM holdings
+                   WHERE child = $1 AND plugin = $2 AND origin = $3 AND slot <> {HoldingSlots.Exterior}
+                   LIMIT 1
+                   """, owner, plugin.Name, plugin.Origin) is { } parent)
+        {
+            owner = parent;
+        }
+        return context.Rows(
+                $"SELECT record_type, editor_id FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+                reader => new RecordIdentity(owner, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)),
+                owner, plugin.Name, plugin.Origin)
+            .FirstOrDefault();
+    }
+
     /// <summary>Each of <paramref name="copies"/>' documents, null where that copy's plugin holds no indexed
     /// copy, and the resolver for the links of their records.</summary>
     public (List<RecordDocument?> Documents, LinkResolver Resolver) GetDocuments(IReadOnlyList<RecordCopy> copies)

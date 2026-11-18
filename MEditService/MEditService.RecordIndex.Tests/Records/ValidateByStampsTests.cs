@@ -17,6 +17,7 @@ public sealed class ValidateByStampsTests : IDisposable
     private readonly LoadOrderEntry _mod;
     private readonly LoadOrderEntry _partner;
     private readonly InMemoryNotificationPublisher _notifications = new();
+    private readonly CountingTreeSource _source;
     private readonly OpenedIndex _index;
     private readonly string _npc;
 
@@ -41,7 +42,8 @@ public sealed class ValidateByStampsTests : IDisposable
         _mod = _fixture.Plugins.Single(p => p.Name == "Fixture.esp");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _npc = npc.ToString();
-        _index = Indexes.Reconciled(_fixture, notifications: _notifications, source: TestAdapters.Source(_clock));
+        _source = new CountingTreeSource(TestAdapters.Source(_clock));
+        _index = Indexes.Reconciled(_fixture, notifications: _notifications, source: _source);
     }
 
     public void Dispose()
@@ -132,6 +134,17 @@ public sealed class ValidateByStampsTests : IDisposable
 
         Assert.Equal("FixtureNpc", Npc.EditorId);
         Assert.Equal(WorkingTreeState.None, NpcState);
+    }
+
+    [Fact]
+    public void ADocumentDeletedByHand_LosesItsRows_WithoutItsRecordLookedForInTheTree()
+    {
+        File.Delete(NpcFile);
+        var locatesBefore = _source.LocatesAsked;
+
+        _index.NextCheckUntil(() => _index.CopyIn(_npc, _mod.Key) is null, "the record gone");
+
+        Assert.Equal(locatesBefore, _source.LocatesAsked);
     }
 
     [Fact]

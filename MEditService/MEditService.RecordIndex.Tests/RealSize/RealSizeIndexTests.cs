@@ -29,6 +29,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
     private const int Runs = 5;
     private const int Launches = 3;
+    private const int ScriptDeletes = 20;
 
     private OpenedIndex Index => realSize.Index;
 
@@ -120,6 +121,23 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Budgets.Reached(OneGesture, () => ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal), "An edit to one reference reaching reads");
     }
 
+    [RealSizeFact]
+    public void AnEditItsWriterMadeToOneReferenceInABigCell_IsReadWithinOneGesture()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var reference = Index.DocumentOf(Modlist.AReferenceInTheBigCell, plugin.Key);
+        var path = plugin.SourceFileOf(reference);
+        using var landed = CheckpointOfEarlierWritesLanded();
+        using var restored = Restoring(path, () => CheckEnded() && !ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal));
+        plugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
+
+        ReadAlone(OneGesture, () =>
+        {
+            Held(new PluginChange(plugin.Key, [path]));
+            Assert.Contains("\"Edited\"", ReferenceRead(), StringComparison.Ordinal);
+        }, "Reading an edit its writer made to one reference in a big cell");
+    }
+
     private string ReferenceRead() =>
         Index.Queries.GetRenderedDocument(Modlist.BigSourcePlugin.Key, Modlist.AReferenceInTheBigCell).Value()?.Text ?? "";
 
@@ -182,11 +200,31 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Null(Index.CopyIn(formKey, plugin.Key));
     }
 
-    private void ReadAlone(TimeSpan budget, Action gesture, string what)
+    [RealSizeFact]
+    public void AScriptsRunOfSingleRecordDeletes_IsReadWithinLitRsIndexWorkForEachDeletedRecord()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var formKeys = Modlist.TheManyDocuments.Skip(10).Take(ScriptDeletes).ToList();
+        var paths = formKeys.Select(formKey => plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key))).ToList();
+        using var landed = CheckpointOfEarlierWritesLanded();
+        using var restored = Restoring(paths, () => CheckEnded() && formKeys.TrueForAll(formKey => Index.CopyIn(formKey, plugin.Key) is not null));
+
+        ReadAlone(LitRsIndexWorkForOneDeletedRecord * ScriptDeletes, () =>
+        {
+            foreach (var path in paths)
+            {
+                File.Delete(path);
+                Held(new PluginChange(plugin.Key, [path]));
+            }
+        }, $"Reading {ScriptDeletes} records a script deleted one at a time", ScriptDeletes);
+        Assert.All(formKeys, formKey => Assert.Null(Index.CopyIn(formKey, plugin.Key)));
+    }
+
+    private void ReadAlone(TimeSpan budget, Action gesture, string what, int reads = 1)
     {
         var (named, whole) = (realSize.Source.NamedReads, realSize.Source.WholeTreeReads);
         Budgets.Ran(budget, gesture, what);
-        Assert.Equal((named + 1, whole), (realSize.Source.NamedReads, realSize.Source.WholeTreeReads));
+        Assert.Equal((named + reads, whole), (realSize.Source.NamedReads, realSize.Source.WholeTreeReads));
     }
 
     private FilesPutBack CheckpointOfEarlierWritesLanded()
@@ -403,6 +441,16 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneGesture, () => opened = queries.GetRenderedDocument(modlist.Master.Key, modlist.MastersBigCell).Value(), "Opening the master's big cell", Runs);
         Assert.Contains("\"MastersBigCell\"", opened?.Text, StringComparison.Ordinal);
+    }
+
+    [RealSizeFact]
+    public void AReferenceInABigSourceCell_OpensWithinAQuarterOfAGesture()
+    {
+        RenderedDocument? opened = null;
+
+        Budgets.Ran(OneKeystroke, () => opened = Index.Queries.GetRenderedDocument(Modlist.BigSourcePlugin.Key, Modlist.AReferenceInTheBigCell).Value(),
+            "Opening a reference in a source plugin's big cell", Runs);
+        Assert.Equal(Path.GetFileName(BigCellsDocument()), opened?.FileName);
     }
 
     [RealSizeFact]

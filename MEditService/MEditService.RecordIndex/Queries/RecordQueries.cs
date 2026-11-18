@@ -416,8 +416,16 @@ internal sealed class RecordQueries(
 
     private Answer<RenderedDocument?, SourceFailure> RenderedDocumentOf(PluginAddress plugin, string formKey, CancellationToken cancel)
     {
-        if (Reading(reads => reads.GetCopyText(formKey, plugin), cancel) is not var (identity, body)) return SourceAnswer.Of<RenderedDocument?>(null);
-        return RenderedFileName(plugin, identity).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
+        if (CopyAndItsDocumentOwner(plugin, formKey, cancel) is not var (identity, body, filedIn)) return SourceAnswer.Of<RenderedDocument?>(null);
+        return RenderedFileName(plugin, identity, filedIn).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
+    }
+
+    // The record index names the container an embedded copy is filed in, so the tree is never searched for its carrier.
+    private (RecordIdentity Identity, string Body, RecordIdentity FiledIn)? CopyAndItsDocumentOwner(PluginAddress plugin, string formKey, CancellationToken cancel)
+    {
+        using var reads = RequireReads(cancel, inOneSnapshot: true);
+        if (reads.GetCopyText(formKey, plugin) is not var (identity, body)) return null;
+        return (identity, body, reads.GetDocumentOwner(formKey, plugin) ?? identity);
     }
 
     // A compiled plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
@@ -447,7 +455,9 @@ internal sealed class RecordQueries(
         new(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path);
 
     // A compiled plugin copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
-    private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
+    private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity) => RenderedFileName(plugin, identity, identity);
+
+    private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity, RecordIdentity filedIn)
     {
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { } registered || !source.IsSourceMod(registered)
@@ -455,7 +465,7 @@ internal sealed class RecordQueries(
         {
             return source.FileNameOf(identity);
         }
-        return compiledPlugin.FileNameOf(plugin, identity).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
+        return compiledPlugin.FileNameOf(plugin, filedIn).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
     }
 
     private ISourceRepositoryReads? TreeOf(PluginAddress plugin)
