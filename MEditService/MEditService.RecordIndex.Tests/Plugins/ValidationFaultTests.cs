@@ -44,7 +44,10 @@ public sealed class ValidationFaultTests : IDisposable
     [Fact]
     public void AValidationThatFaultsOutright_ReachesTheOutput_AndFailsTheStatus()
     {
-        using var index = Subscribed(notifications: new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification });
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Subscribed(notifications);
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        notifications.FaultsOn = n => n is PluginChangedNotification;
         RewriteThePlugin();
 
         index.NextCheckUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");

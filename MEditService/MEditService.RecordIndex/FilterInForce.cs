@@ -9,7 +9,7 @@ namespace MEditService.RecordIndex;
 /// cannot apply again (plugins.md, States, story 7): a rebuild of its scope keeps it, another scope drops it.</summary>
 internal sealed class FilterInForce(ILogger logger, INotificationPublisher? notifications)
 {
-    // Every change runs inside the write gate, so the filter's SQL runs outside this lock, which only its readers take.
+    // Guards the fields alone: every change runs inside the write gate, so the filter's SQL runs outside it.
     private readonly Lock _lock = new();
     private (string Sql, string Source, IndexScope Scope)? _current;
     private FilterCleared? _cleared;

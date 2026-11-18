@@ -63,8 +63,8 @@ internal sealed class Indexer : IDisposable
     // Written under _lock, and detached only under the write gate, so a write handed the store finishes before it closes.
     private volatile OpenScope? _scope;
 
-    // The reconcile's own progress. Guarded by _lock like _scope: written by the reconciling thread
-    // as each plugin lands, read by whoever asks for Status meanwhile.
+    // The reconcile's own progress. Guarded by _lock: written by the reconciling thread as each
+    // plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<PluginAddress> _indexed = [];
     private readonly Dictionary<PluginAddress, (string? Path, string? Hash)> _failedFileHashes = new(PluginAddress.Comparer);
     private bool _conflictsComputed;
@@ -195,10 +195,13 @@ internal sealed class Indexer : IDisposable
     public RelationReads RequireReads(CancellationToken cancel, bool inOneSnapshot = false) =>
         RequireScope().Store.Reads.ForCaller(cancel, inOneSnapshot);
 
+    /// <summary>ADR-0029: long work never closes a read model, so a reconcile answers with what the index holds now, and
+    /// its announcements say what moved after.</summary>
     public RelationReads RequireWholeSetReads(CancellationToken cancel, bool inOneSnapshot = false)
     {
         var status = Status;
-        if (status.State == LoadOrderState.Ready) return RequireReads(cancel, inOneSnapshot);
+        if (status.State is LoadOrderState.Ready or LoadOrderState.Reconciling && _scope is { } scope)
+            return scope.Store.Reads.ForCaller(cancel, inOneSnapshot);
         if (_holder.Held is null) throw new NoLoadOrderException();
         throw new IndexNotReadyException(
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
@@ -1668,8 +1671,7 @@ internal sealed class Indexer : IDisposable
         lock (_lock) return DetachCurrent();
     }
 
-    // Disposing the scope waits out its reads, so its caller does that outside _lock, which every
-    // Status and read takes.
+    // Disposing the scope waits out its reads, so its caller does that outside _lock, which Status takes.
     private OpenScope? DetachCurrent()
     {
         var detached = _scope;

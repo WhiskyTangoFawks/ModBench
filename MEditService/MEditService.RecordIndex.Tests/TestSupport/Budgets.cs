@@ -21,7 +21,7 @@ internal static class Budgets
     internal static void Ran(TimeSpan budget, Action gesture, string what, int runs = 1)
     {
         var fastest = Fastest(gesture, runs);
-        Assert.True(fastest <= budget * Tolerance, $"{Over(budget, what)} It took {fastest.TotalSeconds:F1} s.");
+        Assert.True(fastest <= budget * Tolerance, $"{Over(budget, what)} It took {fastest.TotalSeconds:F2} s.");
         Console.WriteLine($"BUDGET {what}: {fastest.TotalSeconds:F2} s");
     }
 

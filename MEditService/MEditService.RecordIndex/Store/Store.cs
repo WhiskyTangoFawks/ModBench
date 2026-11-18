@@ -259,6 +259,7 @@ internal sealed class Store : IDisposable
             _closed = true;
             _connection?.Dispose();
         }
+        _recordTypeViews.Dispose();
     }
 
     // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
@@ -297,20 +298,31 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
-    private readonly Lock _recordTypeViews = new();
-    private bool _recordTypeViewsCreated;
+    private readonly SemaphoreSlim _recordTypeViews = new(1, 1);
+    private volatile bool _recordTypeViewsCreated;
 
-    /// <summary>Creates each record type's view on first use, on a connection of its own, so a SELECT waits on no
-    /// write. Stops once <paramref name="cancel"/> is cancelled.</summary>
-    public void RequireRecordTypeViews(CancellationToken cancel)
+    /// <summary>A read through the SQL door. Its first use creates each record type's view on a connection of its own, so
+    /// a SELECT waits on no write, and stops at <paramref name="cancel"/>.</summary>
+    public ReadContext OpenSqlDoorRead(CancellationToken cancel)
     {
-        lock (_recordTypeViews)
+        if (!_recordTypeViewsCreated) CreateRecordTypeViews(cancel);
+        return OpenRead(cancel);
+    }
+
+    private void CreateRecordTypeViews(CancellationToken cancel)
+    {
+        _recordTypeViews.Wait(cancel);
+        try
         {
             if (_recordTypeViewsCreated) return;
             using var views = OpenRead(cancel);
             foreach (var view in _ddlBuilder.RecordTypeViews(Release)) views.Execute(view);
             views.Execute("COMMIT");
             _recordTypeViewsCreated = true;
+        }
+        finally
+        {
+            _recordTypeViews.Release();
         }
     }
 

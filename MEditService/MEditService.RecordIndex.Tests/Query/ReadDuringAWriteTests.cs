@@ -7,7 +7,7 @@ namespace MEditService.RecordIndex.Tests.Query;
 public sealed class ReadDuringAWriteTests : IDisposable
 {
     private const string Written = "B.esp";
-    private static readonly TimeSpan NoWaitOnTheWrite = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan Generous = TimeSpan.FromSeconds(10);
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("read-during-a-write")
         .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
@@ -29,7 +29,7 @@ public sealed class ReadDuringAWriteTests : IDisposable
 
         try
         {
-            var selected = await Task.Run(() => index.Queries.Selected("SELECT editor_id FROM npc_ WHERE editor_id = 'FromA'")).WaitAsync(NoWaitOnTheWrite);
+            var selected = await Task.Run(() => index.Queries.Selected("SELECT editor_id FROM npc_ WHERE editor_id = 'FromA'")).WaitAsync(Generous);
             Assert.Single(selected);
         }
         finally
