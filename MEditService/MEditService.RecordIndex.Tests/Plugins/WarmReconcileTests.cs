@@ -204,7 +204,8 @@ public sealed class WarmReconcileTests
         using var data = new PluginFixtureBuilder("warm-restamped")
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .Build();
-        using (var cold = Indexes.Open(holder, TestAdapters.Mutagen())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var clockStoppedAtTheWrite = new MutagenPluginAdapter(new FakeTimeProvider(TimeProvider.System.GetUtcNow()));
+        using (var cold = Indexes.Open(holder, clockStoppedAtTheWrite)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var next = new HashCountingAdapter();
         using (var launch = Indexes.Open(holder, next)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
