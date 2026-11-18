@@ -106,7 +106,6 @@ public static class CommandHandlers
         services.AddSingleton(sp => new RecordCopy(
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IQueries>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy))));
 
         services.AddSingleton(sp => new CopyRecordChangesHandler(

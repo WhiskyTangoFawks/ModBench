@@ -1,13 +1,12 @@
 using System.Reflection;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
-using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The record index a writer hands its write to: it keeps each hand, and answers it as <see cref="Answer"/> does.
-/// Of the reads, it answers only whether a plugin holds a FormKey.</summary>
+/// It serves no read.</summary>
 public class HandedWrites : DispatchProxy
 {
     private readonly List<IReadOnlyList<HandedPlugin>?> _hands = [];
@@ -28,13 +27,8 @@ public class HandedWrites : DispatchProxy
     /// <summary>What the writer last told of each plugin of a mod changed outside Modbench.</summary>
     public IReadOnlyList<string> ChangedOutside(string origin) => _changedOutside.TryGetValue(origin, out var held) ? held : [];
 
-    /// <summary>What the record index answers of a plugin's FormKey; null, as for a plugin it does not yet hold, by default.</summary>
-    public Func<PluginAddress, string, bool?> Holds { get; set; } = (_, _) => null;
-
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
-        if (targetMethod?.Name == nameof(IQueries.GetPluginHolds))
-            return (Answer<bool?, IndexRefused>)Holds((PluginAddress)args.Require()[0].Require(), (string)args.Require()[1].Require());
         if (targetMethod?.Name == nameof(IQueries.SetChangedOutside))
         {
             var (origin, plugins) = ((string)args.Require()[0].Require(), (IReadOnlyList<string>)args.Require()[1].Require());

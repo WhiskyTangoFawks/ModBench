@@ -97,14 +97,6 @@ internal sealed class RelationReads(
         return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
     }
 
-    public bool Holds(PluginAddress plugin, string formKey)
-    {
-        using var context = OpenRead();
-        return context.Rows(
-            $"SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1",
-            _ => true, formKey, plugin.Name, plugin.Origin).Count > 0;
-    }
-
     /// <summary>The carrying record of <paramref name="formKey"/>'s copy in <paramref name="plugin"/>: the record whose own
     /// document carries it, which is the copy itself unless a container's document carries its text.</summary>
     public RecordIdentity? GetCarryingRecord(string formKey, PluginAddress plugin)

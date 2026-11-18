@@ -20,9 +20,6 @@ public interface IQueries
     /// <summary>The plugin of the winning copy of <paramref name="formKey"/>; with no active plugin holding it, each compiled
     /// plugin that does (ADR-0012).</summary>
     Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel);
-    /// <summary>Whether <paramref name="plugin"/>'s rows hold <paramref name="formKey"/>, a child its documents embed among
-    /// them; null until the record index holds the plugin as it is on disk.</summary>
-    Answer<bool?, IndexRefused> GetPluginHolds(PluginAddress plugin, string formKey, CancellationToken cancel);
 
     Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel);
 

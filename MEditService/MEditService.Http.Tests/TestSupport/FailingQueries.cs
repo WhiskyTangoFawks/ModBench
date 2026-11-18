@@ -21,8 +21,6 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
 
     public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) => throw Failed();
 
-    public Answer<bool?, IndexRefused> GetPluginHolds(PluginAddress plugin, string formKey, CancellationToken cancel) => throw Failed();
-
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         throw Failed();
 
