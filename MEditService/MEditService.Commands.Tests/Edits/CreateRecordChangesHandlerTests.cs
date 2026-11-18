@@ -40,32 +40,17 @@ public sealed class CreateRecordChangesHandlerTests
 
         var (outcome, changes) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
-        Assert.Equal(FixtureNextObjectId, outcome.NewFormKey);
+        Assert.Equal(FirstFreeFormKey, outcome.NewFormKey);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
         Assert.Empty(changes.Require().Moves);
         Assert.Empty(changes.Require().Deletions);
         var document = Assert.Single(changes.Require().Documents);
-        Assert.Contains(FixtureNextObjectId, document.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CreateRecord_OverAnUnsavedHeaderHoldingAHigherNextObjectId_TakesTheKeyAfterItsOwnHighestRecord()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var headerFile = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
-        var unsavedHeader = Encoding.UTF8.GetString(
-            HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900));
-
-        mod.Unsaved.Typed(new DocumentChange(headerFile, unsavedHeader));
-
-        var (outcome, _) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
-
-        Assert.Equal(FixtureNextObjectId, outcome.NewFormKey);
+        Assert.Contains(FirstFreeFormKey, document.Text, StringComparison.Ordinal);
     }
 
     public static TheoryData<Action<SourceEditFixture>, RecordEditRefusal> UnwritableTrees() => new()
     {
-        { mod => TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(FixtureNextObjectId, "npc_", null)), RecordEditRefusal.SourceAccessFailed },
+        { mod => TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(FirstFreeFormKey, "npc_", null)), RecordEditRefusal.SourceAccessFailed },
         { mod => File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name))), RecordEditRefusal.PluginSourceUnreadable },
     };
 
@@ -198,10 +183,10 @@ public sealed class CreateRecordChangesHandlerTests
         Assert.DoesNotContain(result.NewFormKey, mod.ChangedFormKeys());
     }
 
-    public static TheoryData<Action<SourceEditFixture>, string> NextObjectIdArrangements() => new()
+    public static TheoryData<Action<SourceEditFixture>, string> HighestRecordArrangements() => new()
     {
-        { mod => Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.OtherNpc.ToString())]).Refused), FixtureNextObjectId },
-        { mod => SourceModTree.Seed(mod.ModFolder, mod.Plugin, FixtureNextObjectId), "000808:Fixture.esp" },
+        { mod => Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.OtherNpc.ToString())]).Refused), FirstFreeFormKey },
+        { mod => SourceModTree.Seed(mod.ModFolder, mod.Plugin, FirstFreeFormKey), "000808:Fixture.esp" },
         {
             mod =>
             {
@@ -210,10 +195,20 @@ public sealed class CreateRecordChangesHandlerTests
             },
             "000806:Fixture.esp"
         },
+        {
+            mod =>
+            {
+                var headerFile = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
+                mod.Unsaved.Typed(new DocumentChange(
+                    headerFile,
+                    Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900))));
+            },
+            FirstFreeFormKey
+        },
     };
 
     [Theory]
-    [MemberData(nameof(NextObjectIdArrangements))]
+    [MemberData(nameof(HighestRecordArrangements))]
     public void CreateRecord_TakesTheFormKeyAfterTheHighestOfThePluginsOwnRecords(Action<SourceEditFixture> arrange, string expected)
     {
         using var mod = SourceEditFixture.CompiledPlugin();
@@ -240,7 +235,7 @@ public sealed class CreateRecordChangesHandlerTests
         Assert.True(LocalId(result.NewFormKey) < LocalId(masterKey), result.NewFormKey);
     }
 
-    private const string FixtureNextObjectId = "000807:Fixture.esp";
+    private const string FirstFreeFormKey = "000807:Fixture.esp";
 
     private static void Commit(SourceEditFixture mod)
     {
@@ -267,7 +262,7 @@ public sealed class CreateRecordChangesHandlerTests
         using var mod = SourceEditFixture.CompiledPlugin();
         var held = Path.Combine(mod.ModFolder, PluginSourceRoot.For(mod.Plugin.Name), "Npcs", "RenamedByHand.json");
         Directory.CreateDirectory(Path.GetDirectoryName(held).Require());
-        File.WriteAllText(held, $"{{\"FormKey\": \"{FixtureNextObjectId}\", \"EditorID\": \"Hidden\"}}");
+        File.WriteAllText(held, $"{{\"FormKey\": \"{FirstFreeFormKey}\", \"EditorID\": \"Hidden\"}}");
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
         FileModes.Set(held, "000");
 
