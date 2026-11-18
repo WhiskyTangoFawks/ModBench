@@ -152,7 +152,7 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
   return { lacking, files };
 }
 
-export const fileNameOf = (path: string): string => folded(path.slice(path.lastIndexOf('/') + 1));
+const fileNameOf = (path: string): string => folded(path.slice(path.lastIndexOf('/') + 1));
 
 /** The files a package of `manifest`, or `installationFile`, holds; none while `values` are not read. A manifest's own
  *  package takes precedence over `installationFile`. */
@@ -162,15 +162,20 @@ export function packageFilesOf(manifest: Manifest, values: StatusValues, install
   return [...packagesHeld(manifest, values).files, ...installationFile === undefined || named ? [] : installationFile.entries];
 }
 
+/** What `packageFiles` hold: a file name in any case, or bytes by their hash. */
+export function packageHolds(packageFiles: readonly HashedPath[]): { readonly name: (path: string) => boolean; readonly bytes: (hash: string) => boolean } {
+  const names = new Set(packageFiles.map(({ path }) => fileNameOf(path)));
+  const hashes = new Set(packageFiles.map(({ hash }) => hash));
+  return { name: (path) => names.has(fileNameOf(path)), bytes: (hash) => hashes.has(hash) };
+}
+
 /** The paths the folder in `values` holds that a package of `manifest`, or `installationFile`, holds, by bytes or by file name
  *  in any case; none while `values` are not read. */
 export function filesAPackageHolds(manifest: Manifest, values: StatusValues, installationFile?: { readonly name: string; readonly entries: readonly HashedPath[] }): ReadonlySet<string> {
   if (values.kind !== 'read') return new Set();
-  const packageFiles = packageFilesOf(manifest, values, installationFile);
-  const hashes = new Set(packageFiles.map(({ hash }) => hash));
-  const names = new Set(packageFiles.map(({ path }) => fileNameOf(path)));
+  const holds = packageHolds(packageFilesOf(manifest, values, installationFile));
   return new Set([...values.folder.files].flatMap(([pathInFolder, { path, read }]) =>
-    (!isManifestPath(pathInFolder) && (names.has(fileNameOf(path)) || (read.kind === 'read' && hashes.has(read.answer.hash))) ? [pathInFolder] : [])));
+    (!isManifestPath(pathInFolder) && (holds.name(path) || (read.kind === 'read' && holds.bytes(read.answer.hash))) ? [pathInFolder] : [])));
 }
 
 /** The mod's folder against its manifest (instance-repository.md, Status). Which files no package holds waits for every

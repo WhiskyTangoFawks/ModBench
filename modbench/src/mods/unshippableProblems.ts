@@ -2,11 +2,10 @@ import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InstanceOf } from '../instanceLoader/instance';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
-import type { FileRead } from '../instanceAdapter/instanceAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
 
 type Entries = ReturnType<ModStatuses['entriesNoPackageHolds']>;
-type UnshippableReason = (folder: string, pathInFolder: string, mod: string, heldByPackage: boolean, entriesNoPackageHolds: FileRead<readonly string[]> | undefined) => string | undefined;
+type UnshippableReason = Extract<InstanceOf<'publisherConfiguration'>['value']['publisherConfiguration'], { kind: 'read' }>['unshippable']['reason'];
 
 interface Unshippable {
   readonly path: string;

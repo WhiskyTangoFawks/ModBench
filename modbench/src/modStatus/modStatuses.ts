@@ -19,10 +19,10 @@ export interface StatusSource {
   readonly entryKey: (entry: EntryRef) => string;
   /** Each source mod's source folder, by its entry's name. */
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
-  /** Each listed mod's own files, by its entry's name: what the reading already holds. */
   /** What each archive at the root of a listed mod holds, by the path it is read from. */
   readonly archiveContents: ReadonlyMap<string, ArchiveEntries>;
   readonly gameName: string;
+  /** Each listed mod's own files, by its entry's name: what the reading already holds. */
   readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string; readonly sourcePath: string }[]>;
 }
 
@@ -214,16 +214,17 @@ export class ModStatuses {
     const packaged = packaging === undefined ? new Set<string>() : filesAPackageHolds(packaging, values, installationFile);
     const packageFiles = packaging === undefined ? [] : packageFilesOf(packaging, values, installationFile);
     const unpackagedPaths = [...new Set([...unpackaged, ...heldByGit])].sort();
-    return { status: { ...status, unpackaged: unpackagedPaths }, packaged, entries: await this.entriesOf(mod, unpackagedPaths.filter((path) => !packaged.has(path)), packageFiles, value) };
-  }
-
-  private async entriesOf(mod: ModAndSourceFolder, paths: readonly string[], packageFiles: Parameters<typeof entriesNoPackageHolds>[3], value: StatusSource): Promise<ReadonlyMap<string, EntriesNoPackageHolds>> {
-    const archives = paths.flatMap((path) => {
-      const contents = value.archiveContents.get(mod.sourcePaths.get(path) ?? '');
-      return contents === undefined ? [] : [{ path, sourcePath: mod.sourcePaths.get(path) ?? '', contents }];
+    const archives = unpackagedPaths.filter((path) => !packaged.has(path)).flatMap((path) => {
+      const sourcePath = mod.sourcePaths.get(path) ?? '';
+      const contents = value.archiveContents.get(sourcePath);
+      return contents === undefined ? [] : [{ path, sourcePath, contents }];
     });
-    return new Map(await Promise.all(archives.map(async ({ path, sourcePath, contents }) =>
+    const unanswered = archives.find(({ contents }) => contents.kind === 'unanswered');
+    if (unanswered !== undefined) return { status: unreadableStatus(mod.name, `mEdit has not said what '${unanswered.path}' holds`), packaged: new Set(), entries: new Map() };
+    const answered = archives.flatMap(({ path, sourcePath, contents }) => (contents.kind === 'unanswered' ? [] : [{ path, sourcePath, contents }]));
+    const entries = new Map(await Promise.all(answered.map(async ({ path, sourcePath, contents }) =>
       [path, await entriesNoPackageHolds(value.gameName, sourcePath, contents, packageFiles, this.hashEntries)] as const)));
+    return { status: { ...status, unpackaged: unpackagedPaths }, packaged, entries };
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.

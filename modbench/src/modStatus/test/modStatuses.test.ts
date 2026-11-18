@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, FileRead, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
-import type { FlaggedRead, Manifest, ModStatus } from '../../manifestAdapter/manifestAdapter';
+import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
+import type { ArchiveEntries } from '../archiveEntries';
 import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
 
 let root: string;
@@ -267,12 +268,12 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     describe('the entries of an archive no package holds, by bytes or by name', () => {
       const ARCHIVE = 'Packed - Main.ba2';
 
-      const entriesOf = async (entries: FileRead<readonly string[]> | { readonly kind: 'unanswered' }) => {
+      const statusesOf = async (entries: ArchiveEntries, packages: readonly ManifestPackage[] = [PACKAGE]) => {
         const mod = await folderOf('ModA', { [ARCHIVE]: 'built' });
         await writeManifestIn(mod, EMPTY);
         const source = join(root, 'source', 'ModA');
         await mkdir(source, { recursive: true });
-        await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
+        await writeManifestIn(source, { ...EMPTY, packages: [...packages] });
         const sourcePath = join(mod, ARCHIVE);
         const statuses = statusesLogging();
         statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], {
@@ -281,8 +282,11 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
           archiveContents: new Map([[sourcePath, entries]]),
         }));
         await statuses.current();
-        return statuses.entriesNoPackageHolds('ModA').get(ARCHIVE);
+        return statuses;
       };
+
+      const entriesOf = async (entries: ArchiveEntries, packages?: readonly ManifestPackage[]) =>
+        (await statusesOf(entries, packages)).entriesNoPackageHolds('ModA').get(ARCHIVE);
 
       it('holds no entry of an archive whose every entry a package holds by file name, and hashes none', async () => {
         expect(await entriesOf({ kind: 'read', answer: ['textures/COPIED.json', 'meshes/plugin.esp'] })).toEqual({ kind: 'read', answer: [] });
@@ -302,9 +306,20 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
         expect(await entriesOf({ kind: 'read', answer: ['textures/copied.json', 'textures/made.dds'] })).toEqual({ kind: 'read', answer: ['textures/made.dds'] });
       });
 
-      it('says why when the archive cannot be read, or when mEdit has not said what it holds', async () => {
+      it('says why when the archive cannot be read', async () => {
         expect(await entriesOf({ kind: 'unreadable', reason: 'not a BA2' })).toEqual({ kind: 'unreadable', reason: 'not a BA2' });
-        expect(await entriesOf({ kind: 'unanswered' })).toEqual({ kind: 'unreadable', reason: 'mEdit has not yet said what it holds' });
+      });
+
+      it('holds the last good status, and names no entry, while mEdit has not said what an archive holds', async () => {
+        const statuses = await statusesOf({ kind: 'unanswered' });
+
+        expect([statuses.entriesNoPackageHolds('ModA').size, (await statuses.current()).get('ModA')?.unreadable])
+          .toEqual([0, `mEdit has not said what '${ARCHIVE}' holds`]);
+      });
+
+      it('hashes nothing while no package holds a file, since none can hold an entry', async () => {
+        expect(await entriesOf({ kind: 'read', answer: ['textures/a.dds'] }, [])).toEqual({ kind: 'read', answer: ['textures/a.dds'] });
+        expect(hashedEntries).toEqual([]);
       });
 
       it('says why when an entry cannot be hashed', async () => {

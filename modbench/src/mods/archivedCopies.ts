@@ -113,10 +113,10 @@ export class ArchivedCopies {
   }
 }
 
-/** The hash of each of `entries` in `archive`, read as the game named `gameName` reads it. */
-export const hashesOfEntries = (archived: Pick<ArchivedCopies, 'hashes'>) => (gameName: string, archive: string, entries: readonly string[]): Promise<FileRead<string>[]> => {
+export const hashesOfEntries = (archived: Pick<ArchivedCopies, 'stamps' | 'hashes'>) => async (gameName: string, archive: string, entries: readonly string[]): Promise<FileRead<string>[]> => {
   const gameRelease = gameReleaseForGame(gameName);
-  return gameRelease === undefined
-    ? Promise.resolve(entries.map(() => ({ kind: 'unreadable', reason: `${gameName} is not a game mEdit reads archives of` })))
-    : archived.hashes(entries.map((file) => ({ gameRelease, archive, file })));
+  if (gameRelease === undefined) return entries.map(() => ({ kind: 'unreadable', reason: `${gameName} is not a game mEdit reads archives of` }));
+  const addresses = entries.map((file) => ({ gameRelease, archive, file }));
+  await archived.stamps(addresses);
+  return archived.hashes(addresses);
 };

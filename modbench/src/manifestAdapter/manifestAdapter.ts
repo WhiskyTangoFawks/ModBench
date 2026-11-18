@@ -1,7 +1,7 @@
 export type * from './manifest';
 export * from './buildFile';
 export {
-  fileNameOf, filesAPackageHolds, filesNoPackageHolds, packageFilesOf, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FlaggedHashes, type FolderAgainst, type ModAt, type ModStatus,
+  filesAPackageHolds, filesNoPackageHolds, packageFilesOf, packageHolds, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FlaggedHashes, type FolderAgainst, type ModAt, type ModStatus,
 } from './modStatus';
 export { flaggedFilesIn, flaggedHashesFrom, flaggedHashesIn, type FlaggedRead, type PossibleHashes } from './flaggedHashes';
 export { manifestText, ordinal } from './manifestText';
