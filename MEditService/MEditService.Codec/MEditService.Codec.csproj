@@ -14,7 +14,7 @@
   <ItemGroup>
     <!-- Library-level integration of Mutagen.Bethesda.Serialization (ADR-0004, pinned by ADR-0030), not the
          Spriggit tool itself: avoids its exe-per-version machinery and its exact Mutagen pin. Serialization
-         1.38.6 depends on Mutagen.Bethesda.Core >= 0.54.0 (a floor), so it builds against the pinned Mutagen.
+         takes Mutagen.Bethesda.Core as a floor, so it builds against the pinned Mutagen.
          The JSON kernel (ADR-0005) is the Newtonsoft translation package, not a package literally named ".Json". -->
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="$(SerializationVersion)" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="$(SerializationVersion)" />
