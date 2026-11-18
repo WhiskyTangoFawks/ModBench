@@ -3,6 +3,10 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -71,6 +75,40 @@ public sealed class CopyRecordChangesHandlerTests
         var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
         Assert.Equal([new CopyItem(npc, mod.DestinationPlugin)], result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
+    }
+
+    private sealed class TwoCopiesOfOneRecord : TestInstance
+    {
+        public PluginAddress Master { get; }
+        public PluginAddress Override { get; }
+        public PluginAddress Destination { get; }
+        public string Npc { get; }
+
+        public TwoCopiesOfOneRecord()
+        {
+            var master = new Fallout4Mod(ModKey.FromFileName("Master.esm"), Fallout4Release.Fallout4);
+            var npc = master.Npcs.AddNew("SharedNpc");
+            Master = Add(master, "MasterMod", compiledPlugin: false);
+            var over = new Fallout4Mod(ModKey.FromFileName("Override.esp"), Fallout4Release.Fallout4);
+            over.ModHeader.MasterReferences.Add(new MasterReference { Master = master.ModKey });
+            over.Npcs.Set(npc.DeepCopy());
+            Override = Add(over, "OverrideMod", compiledPlugin: false);
+            Destination = Add(new Fallout4Mod(ModKey.FromFileName("Destination.esp"), Fallout4Release.Fallout4), "DestinationMod");
+            Npc = npc.FormKey.ToString();
+        }
+    }
+
+    [Fact]
+    public void CopyingAsOverride_TwoCopiesOfOneRecordInOneSelection_WithoutReplace_RefusesTheSecond_ThoughTheRecordIndexHoldsNeither()
+    {
+        using var mod = new TwoCopiesOfOneRecord();
+        mod.Index.Holds = (_, _) => false;
+
+        var result = mod.CopyHandler.CopySync(
+            [new RecordAt(mod.Master, mod.Npc), new RecordAt(mod.Override, mod.Npc)], CopyMode.Override, [mod.Destination], replace: false);
+
+        Assert.Equal([mod.Master], result.Applied.Select(applied => applied.Record.Plugin));
+        Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, Assert.Single(result.Refused).Refusal);
     }
 
     [Theory]

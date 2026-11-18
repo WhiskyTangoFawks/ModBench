@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -16,10 +17,15 @@ namespace MEditService.Commands.Edits;
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, IQueries index, ILogger logger)
 {
-    /// <summary>Whether the destination uses <paramref name="formKey"/>: the record index's rows once it holds the plugin as on
-    /// disk, else every document of its tree.</summary>
-    internal Answer<bool, SourceFailure> Uses(Destination destination, string formKey)
+    /// <summary>Whether the destination uses <paramref name="formKey"/>: a document this gesture put there, else the record
+    /// index's rows once it holds the plugin as on disk, else every document of its tree.</summary>
+    internal Answer<bool, SourceFailure> Uses(Destination destination, string formKey, GameRelease release)
     {
+        if (destination.Session.Changes.Documents.Any(document => DocumentTokens.FormKeysIn(Encoding.UTF8.GetBytes(document.Text), release)
+                .Any(key => string.Equals(key.FormKey, formKey, StringComparison.OrdinalIgnoreCase))))
+        {
+            return true;
+        }
         if (index.GetPluginHolds(destination.Plugin, formKey, CancellationToken.None).Holds(out var held, out _) && held is { } answered)
             return answered;
         return destination.Repository.FormKeysUsed(destination.Plugin).Then(used => SourceAnswer.Of(used.Contains(formKey)));
@@ -180,7 +186,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
-        if (!Uses(destination, cellFormKey).Holds(out var used, out var unread)) return unread;
+        if (!Uses(destination, cellFormKey, release).Holds(out var used, out var unread)) return unread;
         if (used) return RefuseKeyWithNoDocument(destination, cellFormKey);
 
         SourceDocument? worldspaceCopy = null;
