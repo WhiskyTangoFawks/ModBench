@@ -37,17 +37,16 @@ public sealed class DecompileChurnTests : TestInstance
     }
 
     [Fact]
-    public async Task CreateRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheNewRecordsFileAndTheHeader()
+    public async Task CreateRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheNewRecordsFile()
     {
         var created = CreateHandler.CreateRecordSync(_plugin, "npc_");
         Assert.True(created.Applied, created.Message);
         var newFile = SourceModTree.DocumentFile(ModFolder, _plugin, created.NewFormKey.Require()).Require();
-        var headerFile = SourceModTree.HeaderDocumentFile(ModFolder, _plugin);
 
         await CompileHandler.CompileLandedAsync(_plugin);
         await Decompile();
 
-        Assert.Equal([$" M {ToGitPath(headerFile)}", $"?? {ToGitPath(newFile)}"], SourceStatus());
+        Assert.Equal([$"?? {ToGitPath(newFile)}"], SourceStatus());
     }
 
     [Fact]

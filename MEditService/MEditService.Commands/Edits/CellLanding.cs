@@ -13,10 +13,7 @@ namespace MEditService.Commands.Edits;
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
-    private sealed record Landed(RecordIdentity Cell, Func<Answer<SourceChanges, SourceFailure>>? PutCell, Answer<SourceChanges, SourceFailure> HeaderChanges);
-
-    // A cell copied in or minted, and the header's changes a minted one needs.
-    private sealed record CellIn(SourceDocument Cell, Answer<SourceChanges, SourceFailure> HeaderChanges);
+    private sealed record Landed(RecordIdentity Cell, Func<Answer<SourceChanges, SourceFailure>>? PutCell);
 
     private sealed record Move(
         PluginAddress Plugin, IWriteSession Session, GameRelease Release, RecordIdentity Moved, string Worldspace,
@@ -85,7 +82,6 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
             session.Apply(repository.ChangesToRemove(plugin, moved.Identity));
             if (landed.PutCell is { } putCell) session.Apply(putCell());
             session.Apply(repository.ChangesToPutChild(plugin, landed.Cell, into.Group, moved));
-            session.Apply(landed.HeaderChanges);
         }));
     }
 
@@ -99,7 +95,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         }
 
         if (Document.Parse(worldspace.Body).DocumentAt(PlacedCell.WorldspacePersistentCellMember) is { } persistentCell)
-            return new Step<Landed>.Done(new(new(GridCellHolder.FormKeyOf(persistentCell), move.CellType, null), null, SourceChanges.None));
+            return new Step<Landed>.Done(new(new(GridCellHolder.FormKeyOf(persistentCell), move.CellType, null), null));
 
         return CopiedOrNew(
                 move,
@@ -107,10 +103,9 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
                 copy => Document.Parse(copy).DocumentAt(PlacedCell.WorldspacePersistentCellMember),
                 PersistentFlag.Bit, (0, 0))
             .Then<Landed>(copied => new Step<Landed>.Done(new(
-                copied.Cell.Identity,
+                copied.Identity,
                 () => move.Repository.ChangesToPutChild(
-                    move.Plugin, worldspace.Identity, PlacedCell.WorldspacePersistentCellMember, copied.Cell),
-                copied.HeaderChanges)));
+                    move.Plugin, worldspace.Identity, PlacedCell.WorldspacePersistentCellMember, copied))));
     }
 
     private Step<Landed> IntoGridCell(Move move, AnotherCell.GridCell grid)
@@ -120,7 +115,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
             move.Spelled, $"the cell {move.Moved.FormKey} moves into", move.Sessions);
         return holder switch
         {
-            GridCellHolder.Plugins(var held) => new Step<Landed>.Done(new(held.Identity, null, SourceChanges.None)),
+            GridCellHolder.Plugins(var held) => new Step<Landed>.Done(new(held.Identity, null)),
             GridCellHolder.Unreadable(var why) => new Step<Landed>.Refused(why),
             GridCellHolder.Masters(var copy, _) => New(copy),
             GridCellHolder.Nobody => New(new LeftCopy.None()),
@@ -129,9 +124,8 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
         Step<Landed> New(LeftCopy left) =>
             CopiedOrNew(move, left, Document.Parse, 0, (grid.X, grid.Y)).Then<Landed>(copied => new Step<Landed>.Done(new(
-                copied.Cell.Identity,
-                () => move.Repository.ChangesToPutInWorldspace(move.Plugin, copied.Cell, move.Worldspace),
-                copied.HeaderChanges)));
+                copied.Identity,
+                () => move.Repository.ChangesToPutInWorldspace(move.Plugin, copied, move.Worldspace))));
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
@@ -139,30 +133,29 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Sessions);
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
-    private Step<CellIn> CopiedOrNew(Move move, LeftCopy left, Func<string, Document?> cellIn, long flags, (int X, int Y) grid)
+    private Step<SourceDocument> CopiedOrNew(Move move, LeftCopy left, Func<string, Document?> cellIn, long flags, (int X, int Y) grid)
     {
         switch (left)
         {
             case LeftCopy.Unreadable unreadable:
-                return new Step<CellIn>.Refused(unreadable.Refusal(
+                return new Step<SourceDocument>.Refused(unreadable.Refusal(
                     move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from the nearest of {move.Plugin.Name}'s masters to hold it"));
             case LeftCopy.Found found:
                 var copy = cellIn(found.Text)?.Text
                     ?? throw new InvalidOperationException($"The copy of a master of {move.Plugin.Name} holds no cell where it was found.");
-                return new Step<CellIn>.Done(new(
-                    CellOf(ContainerDocumentEdits.WithoutChildren(copy, move.Release, move.CellType), move), SourceChanges.None));
+                return new Step<SourceDocument>.Done(
+                    CellOf(ContainerDocumentEdits.WithoutChildren(copy, move.Release, move.CellType), move));
         }
 
         if (!FormKeyAllocator.Over(move.Repository, move.Plugin, move.Release).Holds(out var allocator, out var unread))
-            return new Step<CellIn>.Stopped(unread);
+            return new Step<SourceDocument>.Stopped(unread);
         if (GridCells.Mint(
                 allocator, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, grid,
                 out var minted) is { } exhausted)
-            return new Step<CellIn>.Refused(exhausted with { Path = move.Spelled });
+            return new Step<SourceDocument>.Refused(exhausted with { Path = move.Spelled });
         var cell = minted ?? throw new InvalidOperationException("Expected Mint to answer a cell when it does not refuse.");
         if (flags != 0) cell = cell.With(flags, RecordHeaderFlags.Member);
-        return new Step<CellIn>.Done(new(
-            CellOf(RecordTextCodec.RoundTrip(cell.Text, move.Release, move.CellType), move), allocator.HeaderChanges()));
+        return new Step<SourceDocument>.Done(CellOf(RecordTextCodec.RoundTrip(cell.Text, move.Release, move.CellType), move));
     }
 
     private static SourceDocument CellOf(string text, Move move) =>
