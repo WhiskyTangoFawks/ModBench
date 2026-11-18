@@ -25,6 +25,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneKeyedRead = TimeSpan.FromSeconds(0.1);
     private static readonly TimeSpan HalfAGesture = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan OneAnswerOfEveryMastersRecord = TimeSpan.FromSeconds(1.5);
+    private static readonly TimeSpan OneDocumentRead = TimeSpan.FromSeconds(0.006);
     private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan OneWholeDiskCheckReadingEveryTreesStamps = TimeSpan.FromSeconds(1.5);
@@ -612,11 +613,11 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void TheReferencesToAFilePath_ListWithinAQuarterOfAGesture()
+    public void TheReferencesToAFilePath_ArePlacedWithinOneGesture()
     {
-        MemberReferences? listed = null;
+        PlacedReferences? listed = null;
 
-        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetFileReferences(RealSizeModlist.AFileTheBigSourcePluginNames).Value(), "Listing the references to a file path", Runs);
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetPlacedFileReferences(RealSizeModlist.AFileTheBigSourcePluginNames).Value(), "Placing the references to a file path", Runs);
         Assert.NotEmpty(listed?.Copies ?? []);
     }
 
@@ -776,6 +777,27 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneAnswerOfEveryMastersRecord, () => listed = Index.Queries.GetPluginNameReferences(Modlist.Master.Name).Value(), "Listing the references to the master's name", Runs);
         Assert.NotEmpty(listed ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToAScript_ArePlacedWithinTheTimeToReadEachCopysDocument()
+    {
+        var copies = Index.Queries.GetScriptReferences(RealSizeModlist.AttachedScript).Value().Copies.Count;
+        PlacedReferences? placed = null;
+
+        Budgets.Ran(OneKeyedRead + copies * OneDocumentRead, () => placed = Index.Queries.GetPlacedScriptReferences(RealSizeModlist.AttachedScript).Value(), "Placing the references to a script", Runs);
+        Assert.Equal(copies, placed?.Copies.Count);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToASmallPluginsName_ArePlacedWithinTheTimeToReadEachCopysDocument()
+    {
+        var small = Modlist.SmallBinaryPlugins.First(plugin => plugin.Enabled);
+        var copies = Index.Queries.GetPluginNameReferences(small.Name).Value().Count;
+        PlacedReferences? placed = null;
+
+        Budgets.Ran(OneKeyedRead + copies * OneDocumentRead, () => placed = Index.Queries.GetPlacedPluginNameReferences(small.Name).Value(), "Placing the references to a small plugin's name", Runs);
+        Assert.Equal(copies, placed?.Copies.Count);
     }
 
     [RealSizeFact]

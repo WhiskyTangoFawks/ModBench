@@ -7,10 +7,9 @@ const { setInput, TEXT } = vi.hoisted(() => ({ setInput: vi.fn(), TEXT: '{ "Form
 vi.mock('vscode', () => ({
   Uri, TreeItem, TreeItemCollapsibleState, SymbolKind, CompletionItemKind,
   Position: class { constructor(readonly line: number, readonly character: number) {} },
-  Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
+  Range: class { readonly start: unknown; readonly end: unknown; constructor(startLine: number, startCharacter: number, endLine: number, endCharacter: number) { this.start = { line: startLine, character: startCharacter }; this.end = { line: endLine, character: endCharacter }; } },
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
   extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
-  workspace: { openTextDocument: () => Promise.resolve({ getText: () => TEXT, positionAt: (offset: number) => ({ line: 0, character: offset }) }) },
 }));
 
 import { fileLanguage, type FileClient } from '../fileLanguage';
@@ -25,13 +24,14 @@ const NAMED = TEXT.indexOf('Decals');
 const FILE = 'textures/decals/stain_d.dds';
 const UNREAD = '000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx';
 const ARCHIVE = '/instance/mods/Mod/Mod - Textures.ba2';
+const PLACED = { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } };
 const SPAN = { start: NAMED, end: NAMED + 'Decals\\\\Stain_d.dds'.length };
 
 const LOOSE: CopyAt = { kind: 'loose', path: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' };
 const ARCHIVED = { kind: 'archived', gameRelease: 'Fallout4', archive: ARCHIVE, file: 'textures/decals/other_d.dds' } as const satisfies CopyAt;
 
 const NO_COPY = { none: `No enabled mod, Overwrite or loose file in the Data folder holds ${FILE}.` };
-const NONE = { copies: [], unread: [] };
+const NONE = { copies: [], leftOut: [] };
 
 interface Doubles {
   copy?: CopyAt | { none: string };
@@ -41,15 +41,11 @@ interface Doubles {
   rocks?: number;
 }
 
-function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, named, typedAt, tooltip, rocks = 0 }: Doubles = {}) {
+function language(answer: Awaited<ReturnType<FileClient['getPlacedFileReferences']>>, { copy = LOOSE, named, typedAt, tooltip, rocks = 0 }: Doubles = {}) {
   const reporter = recordingReporter();
-  const getFileReferences = vi.fn(() => Promise.resolve(answer));
+  const getPlacedFileReferences = vi.fn(() => Promise.resolve(answer));
   const reveal = vi.fn(() => Promise.resolve());
-  const client: FileClient = {
-    getFileReferences,
-    getRecordOwners: () => Promise.resolve([]),
-    getCopyDocument: () => Promise.resolve({ kind: 'OwnFile' as const, location: SOURCE }),
-  };
+  const client: FileClient = { getPlacedFileReferences };
   const stackedCopies = new FileConflictLookup<StackedFile>();
   stackedCopies.set({ relativePath: 'Textures/Decals/Stain_d.dds', copies: [] });
   for (let rock = 0; rock < rocks; rock += 1) stackedCopies.set({ relativePath: `meshes/rocks/rock${rock}.nif`, copies: [] });
@@ -69,9 +65,8 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   const names = sourceNames({
     fileAt: () => Promise.resolve(named),
     pathTypedAt: () => Promise.resolve(typedAt),
-    membersIn: (text, formKey, fieldPaths) => Promise.resolve(formKey === HOLDER && fieldPaths.includes('Diffuse') && text === TEXT ? [SPAN] : []),
   });
-  return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
+  return { reporter, getPlacedFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
 }
 
 describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
@@ -104,7 +99,7 @@ describe('where a file is defined, and the records that name it (symbols.md, The
 
   it('lists each record that names it at its member, and each copy it could not read', async () => {
     const kind = language({
-      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'], recordType: 'TXST' }], unread: [UNREAD],
+      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, document: { kind: 'OwnFile', location: SOURCE }, ranges: [PLACED] }], leftOut: [UNREAD],
     });
 
     expect(await kind.referencesTo({ kind: 'file', path: FILE })).toEqual({
@@ -119,8 +114,8 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
     const found = await language(NONE).symbolsFor('DECALS', SEARCH);
 
     expect(found.map(({ name, location }) => [name, location])).toEqual([
-      ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { start: 0, end: 0 } }],
-      ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { start: 0, end: 0 } }],
+      ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }],
+      ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }],
     ]);
   });
 
@@ -217,12 +212,12 @@ describe('referenced by on a file (commands.md, `referenced by` under Symbol)', 
 
   it('lists the records that name its path in the Data folder, titled with the path', async () => {
     const files = language({
-      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'], recordType: 'TXST' }], unread: [],
+      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, document: { kind: 'OwnFile', location: SOURCE }, ranges: [PLACED] }], leftOut: [],
     });
 
     await files.referencedBy({ kind: 'file', path: FILE });
 
-    expect(files.getFileReferences.mock.calls).toEqual([[FILE, undefined]]);
+    expect(files.getPlacedFileReferences.mock.calls).toEqual([[FILE, undefined]]);
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
       title: `Referenced By: ${FILE}`, contextValue: 'modbench.fileReferencedBy',
       location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },

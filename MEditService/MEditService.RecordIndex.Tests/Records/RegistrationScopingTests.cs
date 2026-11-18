@@ -350,6 +350,41 @@ public class RegistrationScopingTests
     }
 
     [Fact]
+    public void ACopyLinkingARecordOfAPlugin_IsPlacedAtThePluginsNameInEachLink()
+    {
+        string linking = "";
+        using var plugins = new PluginFixtureBuilder("placed-plugin-name-links")
+            .WithPlugin(AlphaKey.Name, mod => mod.Keywords.AddNew("Linked"), origin: AlphaKey.Origin)
+            .WithPlugin(BetaKey.Name, (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[0].ModKey });
+                var npc = mod.Npcs.AddNew("Linking");
+                npc.Keywords = [new FormLink<IKeywordGetter>(built[0].Keywords.Single().FormKey), new FormLink<IKeywordGetter>(built[0].Keywords.Single().FormKey)];
+                linking = npc.FormKey.ToString();
+            }, origin: BetaKey.Origin)
+            .BuildScattered();
+        using var index = Indexes.Reconciled(plugins);
+
+        var placed = index.Queries.GetPlacedPluginNameReferences("alpha.ESP").Value();
+
+        var copy = Assert.Single(placed.Copies, c => c.FormKey == linking);
+        var text = index.Queries.GetRenderedDocument(BetaKey, linking).Value().Require().Text;
+        Assert.Equal(["Alpha.esp", "Alpha.esp"], copy.Ranges.Select(range => PlacedText.TextAt(text, range)));
+    }
+
+    [Fact]
+    public void AMasterListedByAPluginWithNoPluginSource_IsPlacedAtTheStartOfItsPluginHeader()
+    {
+        using var fx = Build("placed-plugin-name-master");
+
+        var placed = fx.Index.Queries.GetPlacedPluginNameReferences("Alpha.esp").Value();
+
+        var header = Assert.Single(placed.Copies, c => c.FormKey == "000000:Beta.esp");
+        Assert.Equal(new SourceRange(new(0, 0), new(0, 0)), Assert.Single(header.Ranges));
+        Assert.Empty(placed.LeftOut);
+    }
+
+    [Fact]
     public void APluginWithNoPluginSourceThatListsAMaster_NamesItAtItsPluginHeader()
     {
         using var fx = Build("plugin-name-references-master");

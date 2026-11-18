@@ -10,7 +10,7 @@ export type SourceFilesOf = (symbol: PluginSymbol, newName: string, held: HeldTe
 /** The plugins mEdit reads, as an owner of files that name a plugin: by a FormKey, or a master. `names` answers what a
  *  place in plugin source names. A rename moves the files `sourceFilesOf` names too. */
 export function recordIndexReferences(
-  client: Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>, sourceFilesOf: SourceFilesOf,
+  client: Pick<MEditClient, 'getPluginNameReferences' | 'getPlacedPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>, sourceFilesOf: SourceFilesOf,
   names: Pick<MEditClient, 'getPluginSourceNames'>,
 ): SymbolOwner {
   return {
@@ -21,9 +21,9 @@ export function recordIndexReferences(
       return plugin && { name: plugin.value };
     },
     async read({ name }) {
-      const copies = await client.getPluginNameReferences(name);
-      if (isReadFailed(copies)) return { references: [], leftOut: [`${MEDIT_READS}: ${failureReason(copies)}`] };
-      return { references: copies.map(({ formKey, plugin }) => ({ copy: { formKey, plugin }, names: { name } })), leftOut: [] };
+      const placed = await client.getPlacedPluginNameReferences(name);
+      if (isReadFailed(placed)) return { references: [], leftOut: [`${MEDIT_READS}: ${failureReason(placed)}`] };
+      return { references: [...placed.copies.map((copy) => ({ copy, names: { name } })), ...placed.leftOut.map((unread) => ({ unread, names: { name } }))], leftOut: [] };
     },
     async plan(symbol, newName, held, plugins) {
       // A FormKey names a plugin by its file name alone.

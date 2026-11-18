@@ -5,19 +5,17 @@ import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue, PapyrusScript } from '../instanceLoader/instance';
 import { sameName, type ScriptSymbol } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
-import { openPluginSourceDocument } from '../textDocuments/pluginSource';
-import type { RecordDocumentClient } from '../textDocuments/recordDocument';
-import { membersNaming } from './memberReferences';
+import { listedPlaced } from './placedReferences';
 import type { SourceNames } from './sourceNames';
 import { holdsCopy, type FileCopies } from './fileLanguage';
 import { listedAtCopy, nameHolds, showReferencedBy, type AskedIn } from './symbolPlaces';
 import type { Definition, References, SymbolKind } from './symbolKind';
 
-export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
+export type ScriptClient = Pick<MEditClient, 'getPlacedScriptReferences'>;
 
 interface ScriptLanguageDeps extends FileCopies {
   instance: { readonly value: ScriptsValue } | undefined;
-  names: Pick<SourceNames, 'scriptAt' | 'scriptsIn' | 'scriptsNamed' | 'membersIn' | 'formKeyIn'>;
+  names: Pick<SourceNames, 'scriptAt' | 'scriptsIn' | 'scriptsNamed'>;
   client: ScriptClient;
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
@@ -64,7 +62,7 @@ export function scriptLanguage({ instance, names, client, reporter, copyOf, reve
   };
 
   const referencesTo = async ({ name }: ScriptSymbol, token?: vscode.CancellationToken): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getScriptReferences(name, token));
+    const { found, unread } = listedPlaced(await client.getPlacedScriptReferences(name, token));
     return { locations: found, unread };
   };
 

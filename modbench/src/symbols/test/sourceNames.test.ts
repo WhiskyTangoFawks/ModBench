@@ -7,7 +7,6 @@ import { cancellableToken } from '../../client/test/fixtures';
 import { localFailure, type ReadFailed } from '../../wire/readFailed';
 
 const NPC = '000801:Mod.esp';
-const GUN = '000900:Mod.esp';
 const FILE = '/instance/source/Mod/plugin-source/Mod.esp/Npc.json';
 const TEXT = '{ "FormKey": "000801:Mod.esp", "Armor": "Gu" }';
 
@@ -200,21 +199,6 @@ describe('the FormKey or EditorID Rename Symbol changes (symbols.md, The symbols
 });
 
 describe('where a copy\'s document names a symbol, asked of its text alone', () => {
-  it.each([
-    ['at each FormKey of it that names the plugin', [OWN, named('Plugin', 48, 55, 'base.ESM'), named('Plugin', 70, 77, 'Base.esm', { record: GUN })], [{ start: 48, end: 55 }]],
-    ['at its own FormKey where none does', [OWN], [{ start: 13, end: 29 }]],
-    ['at the start of the text where the record is absent', [], [{ start: 0, end: 0 }]],
-  ])('a record names a plugin %s', async (_case, answer, expected) => {
-    expect(await names(answer).owner.pluginNamesIn(TEXT, NPC, 'Base.esm')).toEqual(expected);
-  });
-
-  it('names a script or a file at each of the member paths mEdit gives', async () => {
-    const answer = [named('Script', 40, 45, 'Ns:Q', { fieldPath: 'Scripts[0].Name' }), named('File', 50, 55, 'a.dds', { fieldPath: 'Diffuse' }),
-      named('Script', 60, 65, 'Ns:Q', { fieldPath: 'Scripts[0].Name', record: GUN })];
-
-    expect(await names(answer).owner.membersIn(TEXT, NPC, ['Scripts[0].Name', 'Diffuse'])).toEqual([{ start: 40, end: 45 }, { start: 50, end: 55 }]);
-  });
-
   it('answers a record\'s own FormKey member and its own FormKey', async () => {
     const { owner } = names([named('Declaration', 2, 29, NPC, { fieldPath: 'FormKey' }), OWN]);
 

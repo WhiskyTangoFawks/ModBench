@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -74,5 +75,28 @@ public sealed class ScriptReferencesTests
         fixture.Index.Delete(fixture.Entry, npc);
 
         Assert.Empty(fixture.Index.Queries.GetScriptReferences("Ns:Lost").Value().Copies);
+    }
+
+    [Fact]
+    public void ACopyThatAttachesAScript_IsPlacedAtThatScriptsName_NotAtAnotherScriptItAttaches()
+    {
+        string attaching = "";
+        using var plugins = new PluginFixtureBuilder("placed-script-references")
+            .WithPlugin(Holding.Name, mod =>
+            {
+                var npc = Attaching(mod, "Holder", new ScriptEntry { Name = "Ns:Other" });
+                npc.VirtualMachineAdapter.Require().Scripts.Add(new ScriptEntry { Name = "Ns:Attached" });
+                attaching = npc.FormKey.ToString();
+            }, origin: Holding.Origin)
+            .BuildScattered();
+        using var index = Indexes.Reconciled(plugins);
+
+        var placed = index.Queries.GetPlacedScriptReferences("ns:ATTACHED").Value();
+
+        var copy = Assert.Single(placed.Copies);
+        Assert.Equal((attaching, Holding, CopyDocumentKind.Rendered), (copy.FormKey, copy.Plugin, copy.Document.Kind));
+        var text = index.Queries.GetRenderedDocument(Holding, attaching).Value().Require().Text;
+        Assert.Equal(["Ns:Attached"], copy.Ranges.Select(range => PlacedText.TextAt(text, range)));
+        Assert.Empty(placed.LeftOut);
     }
 }

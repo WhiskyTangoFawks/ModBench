@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -59,16 +58,8 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     private static PlacedCopy CopyOf(PlacedReferences placed, string formKey) =>
         Assert.Single(placed.Copies, copy => copy.FormKey == formKey);
 
-    private static readonly Regex VSCodeLineEnd = new("\r\n|\r|\n");
-
-    private static string TextAt(string text, SourceRange range)
-    {
-        Assert.Equal(range.Start.Line, range.End.Line);
-        return VSCodeLineEnd.Split(text)[range.Start.Line][range.Start.Character..range.End.Character];
-    }
-
     private void AssertEachRangeIsTheTarget(string text, PlacedCopy copy) =>
-        Assert.All(copy.Ranges, range => Assert.Equal($"\"{_target}\"", TextAt(text, range)));
+        Assert.All(copy.Ranges, range => Assert.Equal($"\"{_target}\"", PlacedText.TextAt(text, range)));
 
     [Fact]
     public void ACopyInPluginSource_IsPlacedAtEachPlaceItsFileNamesTheRecord()
@@ -89,7 +80,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
 
         var placed = CopyOf(index.Queries.GetPlacedReferences(_selfReferrer).Value(), _selfReferrer);
 
-        var line = VSCodeLineEnd.Split(File.ReadAllText(placed.Document.Location))[Assert.Single(placed.Ranges).Start.Line];
+        var line = PlacedText.LineEnd.Split(File.ReadAllText(placed.Document.Location))[Assert.Single(placed.Ranges).Start.Line];
         Assert.Contains($"\"{_selfReferrer}\"", line, StringComparison.Ordinal);
         Assert.DoesNotContain("\"FormKey\"", line, StringComparison.Ordinal);
     }
@@ -155,7 +146,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var file = index.Queries.GetCopyDocument(Compiled, _npc).Value().Require().Location;
-        var text = VSCodeLineEnd.Replace(File.ReadAllText(file), lineEnd);
+        var text = PlacedText.LineEnd.Replace(File.ReadAllText(file), lineEnd);
         index.TypeUnsaved(new DocumentChange(file, text));
 
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc);
@@ -200,7 +191,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _renderedNpc);
 
         var text = index.Queries.GetRenderedDocument(Rendered, _renderedNpc).Value().Require().Text;
-        Assert.Equal($"\"{_renderedNpc}\"", TextAt(text, Assert.Single(placed.Ranges)));
+        Assert.Equal($"\"{_renderedNpc}\"", PlacedText.TextAt(text, Assert.Single(placed.Ranges)));
     }
 
     [Fact]

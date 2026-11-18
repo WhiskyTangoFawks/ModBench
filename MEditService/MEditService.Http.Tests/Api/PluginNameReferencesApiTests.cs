@@ -29,4 +29,23 @@ public sealed class PluginNameReferencesApiTests : HostedTests
         Assert.Contains(answer, copy => copy.GetProperty("formKey").GetString() == "000000:Child.esp"
             && copy.GetProperty("plugin").GetProperty("origin").GetString() == "ChildMod");
     }
+
+    [Fact]
+    public async Task ThePlacedReferencesToAPluginName_AreEachCopyThatNamesItAtItsRanges()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-placed-plugin-name-references")
+            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("Base"), origin: "BaseMod")
+            .WithPlugin("Child.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
+                mod.Npcs.GetOrAddAsOverride(built.Single(m => m.ModKey.FileName == "Base.esm").Npcs.First());
+            }, origin: "ChildMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        var answer = await Client.GetFromJsonAsync<JsonElement>("/plugin-names/Base.esm/placed-references");
+
+        Assert.Contains(answer.GetProperty("copies").EnumerateArray(), copy => copy.GetProperty("formKey").GetString() == "000000:Child.esp"
+            && copy.GetProperty("plugin").GetProperty("origin").GetString() == "ChildMod");
+    }
 }

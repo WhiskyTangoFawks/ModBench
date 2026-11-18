@@ -51,8 +51,14 @@ internal static class QueriesOfACallerWhoStays
     internal static Answer<MemberReferences, IndexRefused> GetScriptReferences(this IQueries queries, string name) =>
         queries.GetScriptReferences(name, CancellationToken.None);
 
-    internal static Answer<MemberReferences, IndexRefused> GetFileReferences(this IQueries queries, string dataPath) =>
-        queries.GetFileReferences(dataPath, CancellationToken.None);
+    internal static Answer<PlacedReferences, IndexRefused> GetPlacedPluginNameReferences(this IQueries queries, string name) =>
+        queries.GetPlacedPluginNameReferences(name, CancellationToken.None);
+
+    internal static Answer<PlacedReferences, IndexRefused> GetPlacedScriptReferences(this IQueries queries, string name) =>
+        queries.GetPlacedScriptReferences(name, CancellationToken.None);
+
+    internal static Answer<PlacedReferences, IndexRefused> GetPlacedFileReferences(this IQueries queries, string dataPath) =>
+        queries.GetPlacedFileReferences(dataPath, CancellationToken.None);
 
     internal static Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(this IQueries queries, PluginAddress plugin, string formKey) =>
         queries.GetRenderedDocument(plugin, formKey, CancellationToken.None);

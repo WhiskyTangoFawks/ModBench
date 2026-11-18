@@ -28,4 +28,24 @@ public sealed class ScriptReferencesApiTests : HostedTests
         Assert.Equal("HoldingMod", copy.GetProperty("plugin").GetProperty("origin").GetString());
         Assert.Equal(["VirtualMachineAdapter.Scripts[0].Name"], copy.GetProperty("fieldPaths").EnumerateArray().Select(path => path.GetString()));
     }
+
+    [Fact]
+    public async Task ThePlacedReferencesToAScript_AreEachCopyThatAttachesItAtItsRanges()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-placed-script-references")
+            .WithPlugin("Holding.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("Holder");
+                npc.VirtualMachineAdapter = new VirtualMachineAdapter();
+                npc.VirtualMachineAdapter.Scripts.Add(new ScriptEntry { Name = "Attached" });
+            }, origin: "HoldingMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        var answer = await Client.GetFromJsonAsync<JsonElement>("/script-names/Attached/placed-references");
+
+        var copy = Assert.Single(answer.GetProperty("copies").EnumerateArray());
+        Assert.Equal("HoldingMod", copy.GetProperty("plugin").GetProperty("origin").GetString());
+        Assert.Single(copy.GetProperty("ranges").EnumerateArray());
+    }
 }

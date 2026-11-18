@@ -53,7 +53,9 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         throw Failed();
     public Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey, CancellationToken cancel) => throw Failed();
     public Answer<MemberReferences, IndexRefused> GetScriptReferences(string name, CancellationToken cancel) => throw Failed();
-    public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath, CancellationToken cancel) => throw Failed();
+    public Answer<PlacedReferences, IndexRefused> GetPlacedPluginNameReferences(string name, CancellationToken cancel) => throw Failed();
+    public Answer<PlacedReferences, IndexRefused> GetPlacedScriptReferences(string name, CancellationToken cancel) => throw Failed();
+    public Answer<PlacedReferences, IndexRefused> GetPlacedFileReferences(string dataPath, CancellationToken cancel) => throw Failed();
 
     public Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(
         PluginAddress plugin, string formKey, CancellationToken cancel) => throw Failed();

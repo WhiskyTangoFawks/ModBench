@@ -14,6 +14,12 @@ namespace MEditService.Http.Endpoints;
 
 internal static class RecordEndpoints
 {
+    internal const string PlacedReading =
+        "A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document. A copy " +
+        "whose rendered document names the symbol nowhere sits at its own FormKey, and at the start of the text where the document " +
+        "holds no FormKey, such as a plugin header, for a script, a file or a plugin; one whose file names it nowhere is left out. Each range is by line and character as VS Code " +
+        "counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready.";
+
     public static IEndpointRouteBuilder MapRecordEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(RecordEndpoints));
@@ -220,6 +226,17 @@ internal static class RecordEndpoints
         .Produces<MemberReferences>()
         .ProducesProblem(503);
 
+        app.MapGet("/script-names/{name}/placed-references", (string name, IQueries svc, CancellationToken cancel) =>
+            EndpointMapping.Ok(svc.GetPlacedScriptReferences(name, cancel)))
+        .WithName("GetPlacedScriptReferences")
+        .WithTags("Records")
+        .WithDescription(
+            "Each copy, in an active or compiled plugin, that attaches the Papyrus script of that name in any case, at its " +
+            "document, by each range that names it. " + PlacedReading + " Each copy that may attach it and went unread is left out.")
+        .Produces<PlacedReferences>()
+        .ProducesProblem(503)
+        .ProducesProblem(500);
+
         app.MapPost("/script-names/rename-source-changes", ScriptRenameSourceChanges)
         .WithName("ScriptRenameSourceChanges")
         .WithTags("Records")
@@ -232,16 +249,16 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/file-paths/references", (string path, IQueries svc, CancellationToken cancel) =>
-            EndpointMapping.Ok(svc.GetFileReferences(path, cancel)))
-        .WithName("GetFileReferences")
+        app.MapGet("/file-paths/placed-references", (string path, IQueries svc, CancellationToken cancel) =>
+            EndpointMapping.Ok(svc.GetPlacedFileReferences(path, cancel)))
+        .WithName("GetPlacedFileReferences")
         .WithTags("Records")
         .WithDescription(
-            "Each copy, in an active plugin or one with plugin source, that names the file at that path in the Data folder, " +
-            "in any case, with the member paths that name it. Answers only once the record index is ready. Each says whether " +
-            "its plugin has plugin source, and why each copy that may name it went unread.")
-        .Produces<MemberReferences>()
-        .ProducesProblem(503);
+            "Each copy, in an active or compiled plugin, that names the file at that path in the Data folder, in any case, at its " +
+            "document, by each range that names it. " + PlacedReading + " Each copy that may name it and went unread is left out.")
+        .Produces<PlacedReferences>()
+        .ProducesProblem(503)
+        .ProducesProblem(500);
 
         // ADR-0001: the document is the caller's to change and save.
         app.MapPost("/records/{formKey}/edit-changes", (

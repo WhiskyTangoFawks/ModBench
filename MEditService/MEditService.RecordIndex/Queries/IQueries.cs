@@ -40,14 +40,16 @@ public interface IQueries
     Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrCompiledPlugins(
         string targetFormKey, CancellationToken cancel);
     Answer<PlacedReferences, IndexRefused> GetPlacedReferences(string targetFormKey, CancellationToken cancel);
+    Answer<PlacedReferences, IndexRefused> GetPlacedPluginNameReferences(string name, CancellationToken cancel);
+    Answer<PlacedReferences, IndexRefused> GetPlacedScriptReferences(string name, CancellationToken cancel);
+    /// <summary>Each copy, in an active or compiled plugin, that names the file at <paramref name="dataPath"/> in the Data
+    /// folder, as Mutagen places the path each asset link holds, placed at its document.</summary>
+    Answer<PlacedReferences, IndexRefused> GetPlacedFileReferences(string dataPath, CancellationToken cancel);
     Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name, CancellationToken cancel);
     /// <summary>Each copy, in an active plugin with no plugin source, that copies or links the record <paramref name="plugin"/> holds.
     /// No source write of mEdit's changes such a copy.</summary>
     Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey, CancellationToken cancel);
     Answer<MemberReferences, IndexRefused> GetScriptReferences(string name, CancellationToken cancel);
-    /// <summary>Each copy, in an active or compiled plugin, that names the file at <paramref name="dataPath"/> in the Data
-    /// folder, as Mutagen places the path each asset link holds.</summary>
-    Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath, CancellationToken cancel);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey, CancellationToken cancel);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.

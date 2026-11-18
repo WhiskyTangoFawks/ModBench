@@ -1,8 +1,8 @@
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { ReadCancellation } from '../client/MEditClient';
-import { copyDocumentUri } from '../textDocuments/recordDocument';
 import { answerOf } from '../wire/readFailed';
+import { placedLocations } from './placedReferences';
 
 /** Each place a copy that references `formKey` names it, at the copy's document, and why each copy went unread; a read
  *  mEdit fails throws. */
@@ -11,10 +11,6 @@ export function referencesToFormKey(
 ): (formKey: string, token?: ReadCancellation) => Promise<{ locations: vscode.Location[]; leftOut: string[] }> {
   return async (formKey, token) => {
     const { copies, leftOut } = answerOf(await client.getPlacedReferences(formKey, token));
-    const locations = copies.flatMap(({ formKey: referrer, plugin, document, ranges }) => {
-      const uri = copyDocumentUri({ formKey: referrer, plugin }, document);
-      return ranges.map(({ start, end }) => new vscode.Location(uri, new vscode.Range(start.line, start.character, end.line, end.character)));
-    });
-    return { locations, leftOut };
+    return { locations: placedLocations(copies), leftOut };
   };
 }
