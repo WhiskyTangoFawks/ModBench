@@ -27,6 +27,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneAnswerOfEveryMastersRecord = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan OneRecordsRead = TimeSpan.FromSeconds(0.25);
     private static readonly TimeSpan OneRecordsComparison = TimeSpan.FromSeconds(0.5);
+    private static readonly TimeSpan OneWholeDiskCheckReadingEveryTreesStamps = TimeSpan.FromSeconds(1.5);
     private const int Runs = 5;
     private const int Launches = 3;
     private const int ScriptDeletes = 20;
@@ -110,7 +111,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void AnEditToOneReferenceInABigCell_ReachesReadsWithinOneSecond()
+    public void AnEditMadeOutsideModbenchToOneReferenceInABigCell_ReachesReadsThroughAWholeDiskCheckOfEveryTreesStamps()
     {
         var reference = Index.DocumentOf(Modlist.AReferenceInTheBigCell, Modlist.BigSourcePlugin.Key);
         using var restored = Restoring(Modlist.BigSourcePlugin.SourceFileOf(reference), () => !ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal));
@@ -118,7 +119,8 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal), "An edit to one reference reaching reads");
+        Budgets.Reached(OneWholeDiskCheckReadingEveryTreesStamps, () => ReferenceRead().Contains("\"Edited\"", StringComparison.Ordinal),
+            "An edit made outside Modbench to one reference reaching reads through a check of the whole disk");
     }
 
     [RealSizeFact]

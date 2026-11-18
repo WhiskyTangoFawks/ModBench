@@ -135,10 +135,9 @@ internal sealed class Projector(
             .Where(formKey => !EqualityComparer<T>.Default.Equals(
                 before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
-    /// <summary>Re-derives <paramref name="formKeys"/>' rows from the Source repository,
-    /// idempotent by content, the whole plugin for a key the record index does not hold, and takes out the rows of
-    /// <paramref name="documentsGone"/>, the records whose documents the tree no longer lists. Answers what stopped
-    /// the tree.</summary>
+    /// <summary>Re-derives <paramref name="formKeys"/>' rows from the Source repository, the whole plugin for a key the
+    /// record index does not hold, and takes out <paramref name="documentsGone"/>' rows without looking them up. Answers
+    /// what stopped the tree.</summary>
     internal SourceFailure? RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys, IReadOnlyList<string> documentsGone) => index.Commit(projection =>
     {
         var key = plugin.Key;
