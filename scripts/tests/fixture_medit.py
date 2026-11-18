@@ -13,7 +13,7 @@ import urllib.request
 from collections.abc import Generator
 from typing import Any, NamedTuple
 from unittest import mock
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from medit import JsonRecord, Plugin
 
@@ -184,11 +184,11 @@ def watcher_sees_a_change(fixture: Fixture, *created: Plugin) -> None:
 
 @contextlib.contextmanager
 def holding_unsaved(fixture: Fixture, path: pathlib.Path) -> Generator[None]:
-    call('PUT', fixture.url + '/unsaved-documents', {'documents': [{'path': str(path), 'text': path.read_text() + ' '}]})
+    call('PUT', fixture.url + '/unsaved-document', {'path': str(path), 'text': path.read_text() + ' ', 'version': 1, 'opened': True})
     try:
         yield
     finally:
-        call('PUT', fixture.url + '/unsaved-documents', {'documents': []})
+        call('DELETE', fixture.url + f'/unsaved-document?path={quote(str(path), safe="")}')
 
 
 def hand_load_order(url: str, body: JsonRecord) -> None:
