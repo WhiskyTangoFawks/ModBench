@@ -40,7 +40,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // `registrations` and `winners`.
     private static readonly PublicView[] PublicViews =
     [
-        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true, Columns: "t.* EXCLUDE (masters)"),
+        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true, Columns: "t.* EXCLUDE (masters, copy_id)"),
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("holdings", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),

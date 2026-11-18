@@ -186,7 +186,10 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     public void ACopyWhoseRenderedDocumentNamesTheRecordNowhere_IsPlacedAtItsOwnFormKey()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        IndexFiles.Execute(_fixture.InstanceRoot, $"UPDATE mirror.records SET body = replace(body, '{_target}', '{_npc}') WHERE form_key = '{_renderedNpc}'");
+        IndexFiles.Execute(_fixture.InstanceRoot, $"""
+            UPDATE mirror.records SET body = replace(body, '{_target}', '{_npc}'), document_length = strlen(replace(body, '{_target}', '{_npc}'))
+            WHERE form_key = '{_renderedNpc}'
+            """);
 
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _renderedNpc);
 
@@ -198,7 +201,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     public void ACopyWhoseRenderedDocumentStatesNoCopy_IsLeftOutNamed()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        IndexFiles.Execute(_fixture.InstanceRoot, $"UPDATE mirror.records SET body = '{{}}' WHERE form_key = '{_renderedNpc}'");
+        IndexFiles.Execute(_fixture.InstanceRoot, $"UPDATE mirror.records SET body = '{{}}', document_length = 2 WHERE form_key = '{_renderedNpc}'");
 
         var placed = index.Queries.GetPlacedReferences(_target).Value();
 

@@ -53,9 +53,16 @@ internal sealed class RelationReads(
             """, reader => reader.GetPluginAddress(), formKey);
     }
 
-    private static List<CopySize> Located(ReadContext context, string view, string where, params object?[] values) =>
-        context.Rows($"SELECT form_key, plugin, origin, document_length, copy_id FROM {view} WHERE {where} ORDER BY load_order_idx",
-            CopySizeOf, values);
+    private static readonly string Active = TableDdlBuilder.ActiveJoin("r", "plugin", "origin");
+    private static readonly string Registered = TableDdlBuilder.RegisteredJoin("r", "plugin", "origin");
+
+    private static List<CopySize> Located(ReadContext context, string scope, string where, params object?[] values) =>
+        context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, r.document_length, r.copy_id
+            FROM (SELECT form_key, plugin, origin, document_length, copy_id FROM {TableDdlBuilder.MirrorSchema}.records WHERE {where}) r
+            {scope}
+            ORDER BY p.load_order_idx
+            """, CopySizeOf, values);
 
     private static CopySize CopySizeOf(DbDataReader reader) =>
         new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3), reader.GetInt64(4));
@@ -84,7 +91,7 @@ internal sealed class RelationReads(
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
         using var context = OpenRead();
-        var located = Located(context, TableDdlBuilder.PluginRecordsView, "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin);
+        var located = Located(context, Registered, "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin);
         if (located.Count == 0) return null;
         var copy = Stored(context, [located]).Single().Single();
         return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
@@ -119,7 +126,7 @@ internal sealed class RelationReads(
     {
         var named = copies.Select((_, i) => $"(form_key = ${3 * i + 1} AND plugin = ${3 * i + 2} AND origin = ${3 * i + 3})");
         using var context = OpenRead();
-        var located = Located(context, "records", string.Join(" OR ", named),
+        var located = Located(context, Active, string.Join(" OR ", named),
             [.. copies.SelectMany(copy => new[] { copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin })]);
         var stored = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
             .SelectMany(record => record).ToList();
@@ -210,7 +217,7 @@ internal sealed class RelationReads(
     public OverrideStack? GetOverrideStack(string formKey, LinkResolver resolver)
     {
         using var context = OpenRead();
-        var located = Located(context, "records", "form_key = $1", formKey);
+        var located = Located(context, Active, "form_key = $1", formKey);
         if (located.Count == 0) return null;
         var stored = Stored(context, [located]).Single();
         var recordType = stored[0].RecordType;
