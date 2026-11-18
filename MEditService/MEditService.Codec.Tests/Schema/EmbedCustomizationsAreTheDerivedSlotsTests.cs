@@ -78,6 +78,9 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
             throw new NotSupportedException("Omit drops real data (ADR-0006).");
 
+        public IListSortBuilder<TObject, TItem> SortList<TItem>(Expression<Func<TObject, IEnumerable<TItem>?>> listField) =>
+            throw new NotSupportedException("SortList reorders real data (ADR-0006).");
+
         private static bool EveryDerivedTypeRedeclares(string member)
         {
             var derived = typeof(TObject).Assembly.GetTypes()

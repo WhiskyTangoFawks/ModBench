@@ -5,15 +5,16 @@
 ## Prerequisites
 
 - What the README's [Get started](README.md#get-started) names.
-- .NET SDK 10.x and Node.js 20 or later.
+- .NET SDK 10.0.400 or later (`global.json` pins it; the Roslyn the source generator needs ships from that band) and Node.js 20 or later.
 - `python3` (`python` on Windows) on `PATH`. The two-windows backend tests need it, and skip without it.
 
 On Ubuntu or Debian:
 
 ```bash
-sudo apt-get install -y curl git dotnet-sdk-10.0 p7zip-full python3
+sudo apt-get install -y curl git p7zip-full python3
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -   # Ubuntu's own nodejs can be older than 20
 sudo apt-get install -y nodejs
+curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --jsonfile global.json   # the distro's dotnet-sdk-10.0 is an older band than global.json pins
 ```
 
 On Windows, turn on Developer Mode, because the tests create symlinks. Then:
