@@ -22,7 +22,6 @@ import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { publisherKeyContext, registerPublisherTagCommands } from './publisherTagCommands';
 import { onModCheckboxChanged } from './modCheckboxHandler';
-import type { MEditClient } from '../client';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { registerModDecorations } from './modDecorations';

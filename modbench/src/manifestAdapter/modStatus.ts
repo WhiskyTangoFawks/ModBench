@@ -169,11 +169,11 @@ export function packageHolds(packageFiles: readonly HashedPath[]): { readonly na
   return { name: (path) => names.has(fileNameOf(path)), bytes: (hash) => hashes.has(hash) };
 }
 
-/** The paths the folder in `values` holds that a package of `manifest`, or `installationFile`, holds, by bytes or by file name
- *  in any case; none while `values` are not read. */
-export function filesAPackageHolds(manifest: Manifest, values: StatusValues, installationFile?: { readonly name: string; readonly entries: readonly HashedPath[] }): ReadonlySet<string> {
+/** The paths the folder in `values` holds that one of `packageFiles` holds, by bytes or by file name in any case; none while
+ *  `values` are not read. */
+export function filesAPackageHolds(packageFiles: readonly HashedPath[], values: StatusValues): ReadonlySet<string> {
   if (values.kind !== 'read') return new Set();
-  const holds = packageHolds(packageFilesOf(manifest, values, installationFile));
+  const holds = packageHolds(packageFiles);
   return new Set([...values.folder.files].flatMap(([pathInFolder, { path, read }]) =>
     (!isManifestPath(pathInFolder) && (holds.name(path) || (read.kind === 'read' && holds.bytes(read.answer.hash))) ? [pathInFolder] : [])));
 }

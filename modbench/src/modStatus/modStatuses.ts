@@ -211,8 +211,8 @@ export class ModStatuses {
     const installed = await installation;
     const installationFile = installed.kind === 'read' && installed.answer !== undefined ? { name: basename(installed.answer.path), entries: installed.answer.entries } : undefined;
     const packaging = named.read !== undefined && 'manifest' in named.read ? named.read.manifest : undefined;
-    const packaged = packaging === undefined ? new Set<string>() : filesAPackageHolds(packaging, values, installationFile);
     const packageFiles = packaging === undefined ? [] : packageFilesOf(packaging, values, installationFile);
+    const packaged = filesAPackageHolds(packageFiles, values);
     const unpackagedPaths = [...new Set([...unpackaged, ...heldByGit])].sort();
     const archives = unpackagedPaths.filter((path) => !packaged.has(path)).flatMap((path) => {
       const sourcePath = mod.sourcePaths.get(path) ?? '';
