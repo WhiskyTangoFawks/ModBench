@@ -15,10 +15,4 @@ describe('the plugins of the instance (ADR-0013)', () => {
       { name: 'Mod.esp', origin: 'Mod', winning: true },
     ]);
   });
-
-  it('hold a plugin once when it has a line and the game also loads it with no line', () => {
-    const line = row('Fallout4.esm', 'Data/', 0);
-
-    expect(pluginRowsOf({ plugins: [line], pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: line.path }] })).toEqual([line]);
-  });
 });

@@ -22,7 +22,7 @@ const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const PLUGINS_TXT = '/profiles/Default/plugins.txt';
 const UNREAD = '/userlist.yaml: it does not read';
 
-const namedAt = (line: number, name = 'Base.esm') => ({ place: { file: PLUGINS_TXT, start: { line, character: 1 }, end: { line, character: 9 } }, names: { name } });
+const namedAt = (line: number) => ({ place: { file: PLUGINS_TXT, start: { line, character: 1 }, end: { line, character: 9 } }, names: { name: 'Base.esm' } });
 const plugin = (named: PluginName) => ({ kind: 'plugin' as const, ...named });
 
 const ownerThatCannotReadAFile: SymbolOwner = {
