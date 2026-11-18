@@ -7,16 +7,17 @@ import type { RecordMember } from '../sourceNames';
 import { sourceNames } from './fakeSourceNames';
 
 const SOURCE = '/instance/source/Patch Mod/plugin-source/Patch.esp/Npcs/PatchNpc - 000800_Patch.esp.json';
-const TEXT = '{ "FormKey": "000800:Patch.esp", "EditorID": "PatchNpc", "Race": "000801:Base.esm", "Ref": "000802:Gone.esp", "Name": "Npc" }';
+const TEXT = '{ "FormKey": "000800:Patch.esp", "EditorID": "PatchNpc", "Race": "000801:Base.esm", "Ref": "000802:Gone.esp", "Game": "000803:Fallout4.esm", "Name": "Npc" }';
 const at = (snippet: string) => TEXT.indexOf(snippet) + 2;
 const between = (snippet: string) => ({ start: TEXT.indexOf(snippet), end: TEXT.indexOf(snippet) + snippet.length });
 const PATCH = { name: 'Patch.esp', origin: 'Patch Mod' };
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
-const PLUGINS = [{ ...BASE, winning: true }, { name: 'Base.esm', origin: 'Losing Mod', winning: false }];
+const PLUGINS = [{ ...BASE, winning: true }, { name: 'Fallout4.esm', origin: 'Data/', winning: true }, { name: 'Base.esm', origin: 'Losing Mod', winning: false }];
 const sourceDocument = { uri: { fsPath: SOURCE }, getText: () => TEXT };
 
 const MEMBERS: Record<number, RecordMember> = {
   [at('000801')]: { ...between('000801:Base.esm'), formKey: '000801:Base.esm', member: 'FormKey', plugin: { name: 'Base.esm' } },
+  [at('000803')]: { ...between('000803:Fallout4.esm'), formKey: '000803:Fallout4.esm', member: 'FormKey', plugin: { name: 'Fallout4.esm' } },
   [at('PatchNpc')]: { ...between('PatchNpc'), formKey: '000800:Patch.esp', member: 'EditorID' },
   [at('000802')]: { ...between('000802:Gone.esp'), formKey: '000802:Gone.esp', member: 'FormKey', plugin: { name: 'Gone.esp' } },
 };
@@ -81,6 +82,7 @@ describe('Rename Symbol (symbols.md, The features, story 6)', () => {
 
   it.each([
     ['a FormKey whose plugin mod order resolves to no copy', '000802', 'Mod order resolves Gone.esp to no plugin.', undefined],
+    ['a FormKey whose plugin mod order resolves to the game folder\'s copy', '000803', 'Fallout4.esm is a plugin in the game folder, not in a mod: only a plugin in a mod renames.', undefined],
     ['an EditorID in a file that holds no record', 'PatchNpc', 'mEdit says this file holds no record.', null],
     ['an EditorID in a file mEdit cannot read', 'PatchNpc', 'mEdit could not be reached.', { failed: 'unreachable' } as const],
   ])('refuses %s, and edits nothing', async (_case, snippet, refusal, file) => {

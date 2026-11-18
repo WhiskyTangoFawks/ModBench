@@ -327,6 +327,16 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify([[], ['Small']]));
       return;
     }
+    const placedAgainst = /^\/plugin-names\/([^/?]+)\/placed-references/.exec(url)?.[1];
+    if (placedAgainst !== undefined) {
+      const naming = decodeURIComponent(placedAgainst) === 'Fallout4.esm';
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ leftOut: [], copies: naming ? [
+        { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN }, document: { kind: 'OwnFile', location: COMPILED_PLUGIN_FILE },
+          ranges: [{ start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }] },
+      ] : [] }));
+      return;
+    }
     if (url.startsWith('/plugin-names/')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('[]');
@@ -2084,7 +2094,7 @@ describe('Referenced By on a plugin, as VS Code\'s References view takes it', ()
 
   before(async () => {
     original = readFileSync(pluginsTxtPath, 'utf8');
-    gameFolder = gameFolderHolding('medit-plugin-references-', ['TestMod.esp']);
+    gameFolder = gameFolderHolding('medit-plugin-references-', ['TestMod.esp', 'Fallout4.esm']);
     await setGameFolder(gameFolder);
   });
 
@@ -2106,6 +2116,18 @@ describe('Referenced By on a plugin, as VS Code\'s References view takes it', ()
       referencesView.getInput()?.title === 'Referenced By: TestMod.esp (Data/)' && referencesView.getInput());
     const files = await input.resolve().then(({ provider }) => provider.getChildren());
     assert.ok(Array.isArray(files) && files.some((row) => row instanceof vscode.TreeItem && row.resourceUri?.fsPath === pluginsTxtPath));
+  });
+
+  it('lists the plugin the game loads with no line, which plugins.txt does not name', async () => {
+    await holdPluginsTxt('*TestMod.esp\r\n');
+    const referencesView = await present(
+      vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
+    ).activate();
+
+    await waitFor('the References view showing Fallout4.esm', async () => {
+      await vscode.commands.executeCommand('modbench.symbol.referencedBy', { argument: { kind: 'plugin', plugin: { name: 'Fallout4.esm', origin: 'Data/' } } });
+      return referencesView.getInput()?.title === 'Referenced By: Fallout4.esm (Data/)';
+    });
   });
 
   it('answers Find All References on the plugin\'s name in plugins.txt, a file an owner reports', async () => {

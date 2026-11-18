@@ -6,6 +6,7 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import type { entryLanguage } from './entryLanguage';
 import type { pluginLanguage } from './pluginLanguage';
+import { refuseGameFolderPlugin } from './gameFolderPlugin';
 import type { AskedIn } from './symbolPlaces';
 
 interface RenameSymbolDeps {
@@ -28,6 +29,7 @@ export function renameSymbol({ plugin, entry, names, plugins, client, executeCom
     if (record.member === 'FormKey') {
       const resolved = pluginNamed(record.plugin, plugins());
       if (resolved === undefined) throw new Error(`Mod order resolves ${record.plugin.name} to no plugin.`);
+      refuseGameFolderPlugin(resolved);
       return resolved;
     }
     const held = await client.getRecordOfFile(path);
