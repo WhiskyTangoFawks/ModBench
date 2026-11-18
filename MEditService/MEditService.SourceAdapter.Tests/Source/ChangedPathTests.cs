@@ -59,6 +59,7 @@ public sealed class ChangedPathTests : IDisposable
     [InlineData(".git/modules/Pinned/refs/heads/main", "unnamed")]
     [InlineData(".git/modules/Other/HEAD", "untouched")]
     [InlineData("mods/Mod/Mod.esp", "untouched")]
+    [InlineData("source/Mod/plugin-source/Mod.esp/Npcs/.medit_tmp_1_written.tmp", "untouched")]
     public void APath_TouchesThePluginsWhosePluginSourceItIsOrHolds_OrPluginsItCannotNameForWhatASourceModBuildsFrom(string path, string answer)
     {
         Assert.Equal(answer, PathAnswers.Spelled(TestAdapters.Source().Touching(LoadOrder, Path.Combine(_instance, path))));
