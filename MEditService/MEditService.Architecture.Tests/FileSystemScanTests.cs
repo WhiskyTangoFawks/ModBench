@@ -25,6 +25,7 @@ public sealed class FileSystemScanTests
         "MEditService.RecordIndex/Indexer.cs",
         "MEditService.RecordIndex/HeldPlugins.cs",
         "MEditService.RecordIndex/IndexScope.cs",
+        "MEditService.RecordIndex/Store/SpoolFile.cs",
     ];
 
     private static readonly string[] CommandsNeedles =
