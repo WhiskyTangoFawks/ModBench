@@ -506,8 +506,9 @@ internal sealed class RelationReads(
 
     private static readonly string InPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
 
-    private static CopyNaming CopyNamingOf(System.Data.Common.DbDataReader reader) =>
-        new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3));
+    private static NamingCopy CopyNamingOf(System.Data.Common.DbDataReader reader) =>
+        new(new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)),
+            new RecordIdentity(reader.GetString(0), reader.GetString(4), reader.GetStringOrNull(5)));
 
     /// <summary>Each copy that references the record, in an active plugin or a compiled one (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
@@ -530,17 +531,17 @@ internal sealed class RelationReads(
 
     /// <summary>Each copy naming the plugin file <paramref name="name"/> in an active or compiled plugin, by its own
     /// FormKey or a link, and the Plugin Header of each such plugin read from its binary that lists it.</summary>
-    public IReadOnlyList<CopyNaming> GetCopiesNaming(string name)
+    public IReadOnlyList<NamingCopy> GetCopiesNaming(string name)
     {
         using var context = OpenRead();
         // A record's masters leave out its own plugin, so an override that links its plugin's records is found by its links.
         var copies = context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, {InPluginSource}
+            SELECT r.form_key, r.plugin, r.origin, {InPluginSource}, r.record_type, r.editor_id
             FROM {Copies}
             WHERE (r.form_key_plugin = $1 OR list_contains(list_transform(r.masters, m -> lower(m)), lower($1)))
               AND {ActiveOrCompiled}
             UNION ALL
-            SELECT DISTINCT fr.source_form_key, fr.source_plugin, fr.source_origin, {InPluginSource}
+            SELECT DISTINCT fr.source_form_key, fr.source_plugin, fr.source_origin, {InPluginSource}, fr.record_type, fr.editor_id
             FROM {ActiveOrCompiledPluginReferrers}
             WHERE fr.source_plugin = $1 AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1)
               AND lower(substr(fr.source_form_key, {FormKeyPluginStart})) <> lower($1) AND {ActiveOrCompiled}
@@ -555,8 +556,14 @@ internal sealed class RelationReads(
             ORDER BY d.plugin, d.origin
             """, reader => (Plugin: reader.GetPluginAddress(), InPluginSource: reader.GetBoolean(2)))
             .Where(header => OpenedPlugins.GetValueOrDefault(header.Plugin)?.Masters.Contains(name, StringComparer.OrdinalIgnoreCase) == true)
-            .Select(header => new CopyNaming(PluginHeader.FormKeyFor(ModKey.FromFileName(header.Plugin.Name)), header.Plugin, header.InPluginSource));
-        return [.. headers.Concat(copies).DistinctBy(copy => (copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin))];
+            .Select(header => HeaderNaming(header.Plugin, header.InPluginSource));
+        return [.. headers.Concat(copies).DistinctBy(found => (found.Copy.FormKey, found.Copy.Plugin.Name, found.Copy.Plugin.Origin))];
+    }
+
+    private static NamingCopy HeaderNaming(PluginAddress plugin, bool inPluginSource)
+    {
+        var formKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        return new(new CopyNaming(formKey, plugin, inPluginSource), new RecordIdentity(formKey, PluginHeader.RecordType, null));
     }
 
     /// <summary>Each copy of the record <paramref name="formKey"/> names in an active plugin with no plugin source, and

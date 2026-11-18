@@ -14,7 +14,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
 import { answerOf } from '../wire/readFailed';
 
-export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions' | 'getPluginNameReferences' | 'getPluginSourceNames'>;
+export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions' | 'getPluginNameReferences' | 'getPlacedPluginNameReferences' | 'getPluginSourceNames'>;
 
 interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;

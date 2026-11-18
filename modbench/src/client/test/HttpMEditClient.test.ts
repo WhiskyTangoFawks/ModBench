@@ -1181,6 +1181,9 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 
   const readsOverUnsaved: [string, (client: MEditClient) => Promise<unknown>, route: string][] = [
     ['where a record\'s references are placed', (client) => client.getPlacedReferences(record.formKey), '/placed-references'],
+    ['where a script\'s references are placed', (client) => client.getPlacedScriptReferences('Quest'), '/script-names/Quest/placed-references'],
+    ['where a file\'s references are placed', (client) => client.getPlacedFileReferences('Textures/a.dds'), '/file-paths/placed-references'],
+    ['where a plugin\'s references are placed', (client) => client.getPlacedPluginNameReferences('Base.esm'), '/plugin-names/Base.esm/placed-references'],
     ['the records side by side', (client) => client.getRecordsComparison([{ formKey: record.formKey, plugin }]), '/records/compare'],
     ['what renaming a script changes', (client) => client.getScriptRenameSourceChanges('Old', 'New'), '/script-names/rename-source-changes'],
   ];

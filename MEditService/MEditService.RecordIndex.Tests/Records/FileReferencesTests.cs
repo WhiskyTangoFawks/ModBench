@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -10,8 +11,14 @@ public class FileReferencesTests
 {
     private static readonly PluginAddress Holding = new("Holding.esp", "ModA");
 
+    private static string TextAt(string text, SourceRange range)
+    {
+        Assert.Equal(range.Start.Line, range.End.Line);
+        return text.Split('\n')[range.Start.Line][range.Start.Character..range.End.Character];
+    }
+
     [Fact]
-    public void ACopyThatNamesAFile_IsAReferenceToItsPathInTheDataFolder_InAnyCaseAndSeparator_AtTheMemberThatNamesIt()
+    public void ACopyThatNamesAFile_IsPlacedAtTheMemberThatNamesItsPathInTheDataFolder_InAnyCaseAndSeparator()
     {
         string naming = "";
         using var plugins = new PluginFixtureBuilder("file-references")
@@ -28,11 +35,12 @@ public class FileReferencesTests
         using var index = Indexes.Open(holder, opens);
         index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
 
-        var copies = index.Queries.GetFileReferences("textures/DECALS/stain_d.dds").Value().Copies;
+        var placed = index.Queries.GetPlacedFileReferences("textures/DECALS/stain_d.dds").Value();
 
-        var copy = Assert.Single(copies);
-        Assert.Equal((naming, Holding, false), (copy.FormKey, copy.Plugin, copy.InPluginSource));
-        Assert.Equal(["Diffuse"], copy.FieldPaths);
+        var copy = Assert.Single(placed.Copies);
+        Assert.Equal((naming, Holding, CopyDocumentKind.Rendered), (copy.FormKey, copy.Plugin, copy.Document.Kind));
+        Assert.Equal(@"Decals\\Stain_d.dds", TextAt(index.Queries.GetRenderedDocument(Holding, naming).Value().Require().Text, Assert.Single(copy.Ranges)));
+        Assert.Empty(placed.LeftOut);
     }
 
     [Fact]
@@ -55,10 +63,12 @@ public class FileReferencesTests
             entry.HandEdit(live.DocumentOf(unreadable.ToString(), entry.Key), @"Other\\Stain_d.dds", "Data/Stain_d.dds");
         using var index = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
 
-        var answer = index.Queries.GetFileReferences("Textures/Decals/Stain_d.dds").Value();
+        var placed = index.Queries.GetPlacedFileReferences("Textures/Decals/Stain_d.dds").Value();
 
-        Assert.Equal([naming.ToString()], answer.Copies.Select(copy => copy.FormKey));
-        Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(answer.Unread));
+        var copy = Assert.Single(placed.Copies);
+        Assert.Equal(naming.ToString(), copy.FormKey);
+        Assert.Equal(@"Decals\\Stain_d.dds", TextAt(File.ReadAllText(copy.Document.Location), Assert.Single(copy.Ranges)));
+        Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(placed.LeftOut));
     }
 
     [Fact]
@@ -80,9 +90,9 @@ public class FileReferencesTests
             entry.HandEdit(live.DocumentOf(unreadable.ToString(), entry.Key), @"Decals\\Stain_d.dds", rooted);
         using var index = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
 
-        var answer = index.Queries.GetFileReferences("Textures/Decals/Stain_d.dds").Value();
+        var placed = index.Queries.GetPlacedFileReferences("Textures/Decals/Stain_d.dds").Value();
 
-        Assert.Empty(answer.Copies);
-        Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(answer.Unread));
+        Assert.Empty(placed.Copies);
+        Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(placed.LeftOut));
     }
 }

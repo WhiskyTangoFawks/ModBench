@@ -945,9 +945,19 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/script-names/{name}/references', { params: { path: { name } }, signal }), noBodyFails, { token });
   }
 
-  getFileReferences(path: string, token?: ReadCancellation): Promise<components['schemas']['MemberReferences'] | ReadFailed> {
-    return this.read(`getFileReferences(${path})`,
-      (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails, { token });
+  getPlacedScriptReferences(name: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed> {
+    return this.read(`getPlacedScriptReferences(${name})`,
+      (api, signal) => api.GET('/script-names/{name}/placed-references', { params: { path: { name } }, signal }), noBodyFails, { token });
+  }
+
+  getPlacedFileReferences(path: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed> {
+    return this.read(`getPlacedFileReferences(${path})`,
+      (api, signal) => api.GET('/file-paths/placed-references', { params: { query: { path } }, signal }), noBodyFails, { token });
+  }
+
+  getPlacedPluginNameReferences(name: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed> {
+    return this.read(`getPlacedPluginNameReferences(${name})`,
+      (api, signal) => api.GET('/plugin-names/{name}/placed-references', { params: { path: { name } }, signal }), noBodyFails, { token });
   }
 
   getScriptRenameSourceChanges(name: string, newName: string, token?: ReadCancellation): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {

@@ -11,6 +11,9 @@ internal sealed record ReferenceRow(string FormKey, string Plugin, string FieldP
 /// <summary>A copy's document as the record index stores it, and whether its plugin has plugin source.</summary>
 internal sealed record CopyHoldingText(string FormKey, PluginAddress Plugin, string RecordType, string? EditorId, string Body, bool InPluginSource);
 
+/// <summary>A copy that names a plugin, with what finds its document.</summary>
+internal sealed record NamingCopy(CopyNaming Copy, RecordIdentity Identity);
+
 /// <summary>A name a copy's document holds, and whether its plugin has plugin source.</summary>
 internal sealed record NamedAt(PluginAddress Plugin, bool InPluginSource, DocumentNameRow Row);
 

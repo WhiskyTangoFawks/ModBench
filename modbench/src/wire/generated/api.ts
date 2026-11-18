@@ -490,6 +490,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugin-names/{name}/placed-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin Header record of each plugin with no plugin source that lists it as a master, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. */
+        get: operations["GetPlacedPluginNameReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/indexed-as-on-disk": {
         parameters: {
             query?: never;
@@ -988,6 +1005,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/script-names/{name}/placed-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each copy, in an active or compiled plugin, that attaches the Papyrus script of that name in any case, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. Each copy that may attach it and went unread is left out. */
+        get: operations["GetPlacedScriptReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/script-names/rename-source-changes": {
         parameters: {
             query?: never;
@@ -1005,15 +1039,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/file-paths/references": {
+    "/file-paths/placed-references": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active plugin or one with plugin source, that names the file at that path in the Data folder, in any case, with the member paths that name it. Answers only once the record index is ready. Each says whether its plugin has plugin source, and why each copy that may name it went unread. */
-        get: operations["GetFileReferences"];
+        /** @description Each copy, in an active or compiled plugin, that names the file at that path in the Data folder, in any case, at its document, by each range that names it. A copy sits at its file in plugin source, with VS Code's unsaved text in its place, else at its rendered document; where a rendered document names it nowhere, the range is the copy's own FormKey. Each range is by line and character as VS Code counts them. Why each copy that could not be placed was left out. Answers only once the record index is ready. Each copy that may name it and went unread is left out. */
+        get: operations["GetPlacedFileReferences"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3441,6 +3475,46 @@ export interface operations {
             };
         };
     };
+    GetPlacedPluginNameReferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacedReferences"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     GetPluginIndexedAsOnDisk: {
         parameters: {
             query?: {
@@ -4912,6 +4986,46 @@ export interface operations {
             };
         };
     };
+    GetPlacedScriptReferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacedReferences"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     ScriptRenameSourceChanges: {
         parameters: {
             query?: never;
@@ -4954,7 +5068,7 @@ export interface operations {
             };
         };
     };
-    GetFileReferences: {
+    GetPlacedFileReferences: {
         parameters: {
             query: {
                 path: string;
@@ -4971,7 +5085,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemberReferences"];
+                    "application/json": components["schemas"]["PlacedReferences"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

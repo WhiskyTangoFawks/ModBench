@@ -2,7 +2,7 @@ import type { DocumentName, MEditClient } from '../client';
 import type { ReadCancellation } from '../client/MEditClient';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Reporter } from '../ports/reporter';
-import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
+import type { PluginName, TextSpan } from '../symbolNames/symbolNames';
 import { answerOf, failureReason, isReadFailed } from '../wire/readFailed';
 import { scriptsNamed, type FilePathsAsked } from './scriptsNamed';
 
@@ -25,7 +25,6 @@ export type RecordMember = TextSpan & { readonly formKey: string } & (
 /** The file a path names, by its path in the Data folder, or why it names none. */
 export type NamedFile = TextSpan & { readonly given: string } & ({ readonly path: string } | { readonly refused: string });
 
-const NOWHERE: TextSpan = { start: 0, end: 0 };
 const OWN = 'FormKey';
 
 const spanOf = ({ start, end }: TextSpan): TextSpan => ({ start, end });
@@ -129,24 +128,6 @@ function copyDocumentNames(namesIn: (text: string) => Promise<DocumentName[]>) {
     async formKeyIn(text: string, formKey: string): Promise<TextSpan | undefined> {
       const found = ownFormKey(await namesIn(text), formKey);
       return found && spanOf(found);
-    },
-
-    /** Where the record `formKey` names the plugin `name` in a copy's document: each FormKey of it that names the plugin,
-     *  else its own FormKey; the start of the text when the record is absent. */
-    async pluginNamesIn(text: string, formKey: string, name: string): Promise<TextSpan[]> {
-      const names = await namesIn(text);
-      const naming = names.filter((found) => found.kind === 'Plugin' && found.record === formKey && sameName(found.value, name));
-      const own = ownFormKey(names, formKey);
-      return naming.length > 0 ? naming.map(spanOf) : [own ? spanOf(own) : NOWHERE];
-    },
-
-    /** Where the record `formKey` names a script or a file at one of `fieldPaths`, mEdit's member paths, in a copy's
-     *  document. */
-    async membersIn(text: string, formKey: string, fieldPaths: readonly string[]): Promise<TextSpan[]> {
-      const names = await namesIn(text);
-      return names
-        .filter(({ kind, record, fieldPath }) => (kind === 'Script' || kind === 'File') && record === formKey && fieldPaths.includes(fieldPath ?? ''))
-        .map(spanOf);
     },
   };
 }

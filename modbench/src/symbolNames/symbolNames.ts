@@ -81,7 +81,13 @@ export interface CopyNaming {
   readonly plugin: PluginSymbol;
 }
 
-type SymbolReference = ({ readonly place: PlaceInFile } | { readonly copy: CopyNaming }) & { readonly names: PluginName };
+/** A copy, placed at each range of its document that names the symbol. */
+export interface PlacedCopy extends CopyNaming {
+  readonly document: { readonly kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; readonly location: string };
+  readonly ranges: readonly { readonly start: TextPosition; readonly end: TextPosition }[];
+}
+
+type SymbolReference = ({ readonly place: PlaceInFile } | { readonly copy: PlacedCopy }) & { readonly names: PluginName };
 
 /** The references an owner found, and why it left out each file it could not read. */
 export interface SymbolReading {

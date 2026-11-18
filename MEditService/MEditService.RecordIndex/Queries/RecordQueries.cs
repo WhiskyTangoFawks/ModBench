@@ -357,12 +357,62 @@ internal sealed class RecordQueries(
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
-            return ReferencePlacement.Of(reads, targetFormKey, TreeOf, (plugin, identity) => RenderedFileName(plugin, identity, identity), source.TextAt, cancel);
+            var referrers = reads.GetReferencedByInActiveOrCompiledPlugins(targetFormKey)
+                .Select(row => new Referrer(new RecordAt(new PluginAddress(row.Plugin, row.Origin), row.FormKey), new RecordIdentity(row.FormKey, row.RecordType, row.EditorId)));
+            return Placed(reads, targetFormKey, referrers, [],
+                (copy, names) => names.Where(name => name.Kind == DocumentNameKind.Record && name.FieldPath != RecordMembers.FormKey && string.Equals(name.Value, targetFormKey, StringComparison.OrdinalIgnoreCase)),
+                false, _ => null, cancel);
         });
+
+    public Answer<PlacedReferences, IndexRefused> GetPlacedPluginNameReferences(string name, CancellationToken cancel) =>
+        _answer.Of(() =>
+        {
+            using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
+            var referrers = reads.GetCopiesNaming(name).Select(found => new Referrer(new RecordAt(found.Copy.Plugin, found.Copy.FormKey), found.Identity));
+            return Placed(reads, name, referrers, [],
+                (copy, names) => names.Where(found => found.Kind == DocumentNameKind.Plugin && string.Equals(found.Value, name, StringComparison.OrdinalIgnoreCase)),
+                true, _ => null, cancel);
+        });
+
+    public Answer<PlacedReferences, IndexRefused> GetPlacedScriptReferences(string name, CancellationToken cancel) =>
+        _answer.Of(() =>
+        {
+            using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
+            return PlacedMembers(reads, name, reads.GetScriptAttachments(name), cancel);
+        });
+
+    // Every path that names the file holds its name.
+    public Answer<PlacedReferences, IndexRefused> GetPlacedFileReferences(string dataPath, CancellationToken cancel) =>
+        _answer.Of(() =>
+        {
+            using var reads = _index.RequireWholeSetReads(cancel, inOneSnapshot: true);
+            var file = new DataRelativePath(dataPath).Path.Replace('\\', '/');
+            var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
+            return PlacedMembers(reads, dataPath, reads.GetFileNamings(file, name), cancel);
+        });
+
+    private PlacedReferences PlacedMembers(RelationReads reads, string symbol, IReadOnlyList<NamedAt> named, CancellationToken cancel)
+    {
+        var members = MemberReferencesOf(named);
+        var fieldPaths = members.Copies.ToDictionary(copy => new RecordAt(copy.Plugin, copy.FormKey), copy => copy.FieldPaths, RecordAt.Comparer);
+        var types = members.Copies.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).ToDictionary(copies => copies.Key, copies => copies.First().RecordType, StringComparer.OrdinalIgnoreCase);
+        var schemas = RequireSchemas();
+        var referrers = members.Copies.Select(copy => new Referrer(new RecordAt(copy.Plugin, copy.FormKey), new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId)));
+        return Placed(reads, symbol, referrers, members.Unread,
+            (copy, names) => names.Where(found => found.Kind is DocumentNameKind.Script or DocumentNameKind.File
+                && fieldPaths[copy].Contains(found.FieldPath ?? "")),
+            true, formKey => types.TryGetValue(formKey, out var type) && schemas.TryGetValue(type, out var schema) ? schema.RecordColumns : null, cancel);
+    }
+
+    private PlacedReferences Placed(
+        RelationReads reads, string symbol, IEnumerable<Referrer> referrers, IEnumerable<string> unread, NamesOf namesOf, bool atStartWhereRenderedNamesNothing,
+        Func<string, IReadOnlyList<ColumnSpec>?> columnsOf, CancellationToken cancel) =>
+        ReferencePlacement.Of(
+            reads, symbol, referrers, unread, namesOf, atStartWhereRenderedNamesNothing, TreeOf, (plugin, identity) => RenderedFileName(plugin, identity, identity), source.TextAt, columnsOf, cancel);
 
     // A plugin the record index has not reached would read as naming nothing.
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name, CancellationToken cancel) =>
-        _answer.Of(() => ReadingWholeSet(reads => reads.GetCopiesNaming(name), cancel));
+        _answer.Of(() => (IReadOnlyList<CopyNaming>)[.. ReadingWholeSet(reads => reads.GetCopiesNaming(name), cancel).Select(found => found.Copy)]);
 
     public Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey, CancellationToken cancel) => _answer.Of(() =>
     {
@@ -375,15 +425,6 @@ internal sealed class RecordQueries(
         _answer.Of(() => MemberReferencesOf(ReadingWholeSet(reads => reads.GetScriptAttachments(name), cancel)));
 
     private static readonly char[] PathSeparators = ['/', '\\'];
-
-    // Every path that names the file holds its name.
-    public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath, CancellationToken cancel) =>
-        _answer.Of(() =>
-        {
-            var file = new DataRelativePath(dataPath).Path.Replace('\\', '/');
-            var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
-            return MemberReferencesOf(ReadingWholeSet(reads => reads.GetFileNamings(file, name), cancel));
-        });
 
     private static MemberReferences MemberReferencesOf(IReadOnlyList<NamedAt> named) =>
         new(

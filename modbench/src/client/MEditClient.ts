@@ -389,8 +389,13 @@ export interface MEditClient {
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */
   getPluginNameReferences(name: string, token?: ReadCancellation): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
   getScriptReferences(name: string, token?: ReadCancellation): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
-  /** Each copy that names the file at `path` in the Data folder. */
-  getFileReferences(path: string, token?: ReadCancellation): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
+  /** Each copy that attaches the Papyrus script `name`, placed as `getPlacedReferences` places a record's. */
+  getPlacedScriptReferences(name: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed>;
+  /** Each copy that names the file at `path` in the Data folder, placed as `getPlacedReferences` places a record's. */
+  getPlacedFileReferences(path: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed>;
+  /** Each copy that names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master,
+   *  placed as `getPlacedReferences` places a record's. */
+  getPlacedPluginNameReferences(name: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed>;
   /** The names a document's `text` holds, and where each sits; with `at`, those at that offset. With the `path` of its
    *  file, none when no plugin's source holds the file. */
   getPluginSourceNames(text: string, path?: string, at?: number, token?: ReadCancellation): Promise<DocumentName[] | ReadFailed>;

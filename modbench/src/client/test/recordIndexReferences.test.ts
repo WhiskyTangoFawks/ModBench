@@ -6,11 +6,9 @@ import { recordIndexReferences, type SourceFilesOf } from '../recordIndexReferen
 const symbol = { name: 'Base.esm', origin: 'BaseMod' };
 const child = { name: 'Child.esp', origin: 'ChildMod' };
 
-type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>;
+type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getPlacedPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>;
 
 const NAMES_UNASKED = { getPluginSourceNames: (): never => { throw new Error('not asked'); } };
-
-const unasked = (): never => { throw new Error('not asked'); };
 
 const SOURCE_FILES = [{ from: 'Base - Main.ba2', to: 'New - Main.ba2' }];
 const sourceFiles: SourceFilesOf = () => Promise.resolve(SOURCE_FILES);
@@ -30,6 +28,7 @@ function planClient(answers: Partial<PlanClient> = {}): PlanClient & { moved: un
     moved,
     asked,
     getPluginNameReferences: () => Promise.resolve([]),
+    getPlacedPluginNameReferences: () => Promise.resolve({ copies: [], leftOut: [] }),
     getRenameSourceChanges: (...args) => { asked.push(args); return Promise.resolve(SOURCE_CHANGES); },
     moveLastWritten: (...args) => { moved.push(args); return Promise.resolve({ moved: true }); },
     ...answers,
@@ -66,19 +65,19 @@ describe('the plugin a place in plugin source names, as the record index answers
 });
 
 describe('the record index says where plugins name a plugin (ADR-0028)', () => {
-  it('answers each copy that names the plugin, named by its file name alone', async () => {
-    const owner = recordIndexReferences({
-      getPluginNameReferences: () => Promise.resolve([{ formKey: '000800:Base.esm', plugin: child, inPluginSource: false }]),
-      getRenameSourceChanges: unasked, moveLastWritten: unasked,
-    }, sourceFiles, NAMES_UNASKED);
+  it('answers each placed copy that names the plugin, named by its file name alone, and why mEdit left each other out', async () => {
+    const copy = { formKey: '000800:Base.esm', plugin: child, document: { kind: 'Rendered' as const, location: 'Npc.json' }, ranges: [{ start: { line: 1, character: 2 }, end: { line: 1, character: 9 } }] };
+    const owner = recordIndexReferences(planClient({
+      getPlacedPluginNameReferences: () => Promise.resolve({ copies: [copy], leftOut: ['000801:Base.esm in Child.esp (ChildMod): its file is gone.'] }),
+    }), sourceFiles, NAMES_UNASKED);
 
     expect(await owner.read(symbol, heldTexts([]))).toEqual({
-      references: [{ copy: { formKey: '000800:Base.esm', plugin: child }, names: { name: 'Base.esm' } }], leftOut: [],
+      references: [{ copy, names: { name: 'Base.esm' } }], leftOut: ['000801:Base.esm in Child.esp (ChildMod): its file is gone.'],
     });
   });
 
   it('leaves out every plugin, saying why, when mEdit cannot answer', async () => {
-    const owner = recordIndexReferences(planClient({ getPluginNameReferences: () => Promise.resolve({ failed: 'refused', refusal: 'mEdit is still indexing plugins.' }) }), sourceFiles, NAMES_UNASKED);
+    const owner = recordIndexReferences(planClient({ getPlacedPluginNameReferences: () => Promise.resolve({ failed: 'refused', refusal: 'mEdit is still indexing plugins.' }) }), sourceFiles, NAMES_UNASKED);
 
     expect(await owner.read(symbol, heldTexts([]))).toEqual({ references: [], leftOut: ['the plugins mEdit reads: mEdit is still indexing plugins.'] });
   });

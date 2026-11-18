@@ -9,8 +9,8 @@ import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import { pluginRowName } from '../wire/pluginAddress';
-import { atFile, nameHolds, placeLocation, showReferencedBy, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
-import { pluginReferencesOf, type PluginReference } from './pluginReferences';
+import { atFile, nameHolds, showReferencedBy, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { pluginReferencesOf } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { selectingItsRow } from './definitionShown';
 import type { SourceNames } from './sourceNames';
@@ -21,7 +21,7 @@ interface PluginLanguageDeps {
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: RecordDocumentClient;
   owners: readonly SymbolOwner[];
-  names: Pick<SourceNames, 'formKeyIn' | 'pluginNamesIn'>;
+  names: Pick<SourceNames, 'formKeyIn'>;
   /** The plugin's `rename`, with the new name an entry point supplies. */
   renamePlugin: (plugin: PluginSymbol, newName: string) => Promise<void>;
   /** What Plugins shows of its rows; absent with no instance. */
@@ -30,13 +30,10 @@ interface PluginLanguageDeps {
   tooltip: (plugin: PluginSymbol) => readonly string[];
 }
 
-const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscode.Location =>
-  ('file' in found ? placeLocation(found) : locationOf(found));
-
 /** A plugin as a symbol, wherever an owner's file names it (symbols.md, The symbols, Plugin). */
 export function pluginLanguage({ instance, reporter, client, owners, names, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
   const read = pluginReferencesOf({
-    owners, client, open: openPluginSourceDocument, spansIn: names.pluginNamesIn,
+    owners,
     plugins: () => instance?.value.plugins ?? [],
     held: () => heldTexts(unsavedTexts()),
   });
@@ -69,7 +66,7 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
     const plugin = rowNamed(named);
     if ('refused' in plugin) return plugin;
     const { found, unread } = await read(plugin);
-    return { locations: found.map(locationOfReference), unread };
+    return { locations: [...found], unread };
   };
 
   // Referenced By anchors at the plugin's header, as a record's anchors at its FormKey; else at a place that names it.
@@ -131,8 +128,8 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
           symbol: { kind: 'plugin', ...plugin }, name, detail: origin, icon: vscode.SymbolKind.File, location, resolve: selectingItsRow(() => kind.definitionOf({ kind: 'plugin', ...plugin })),
         });
         if (path !== undefined) return listedAt(atFile(path));
-        const named = (await read(plugin)).found.find((reference) => 'file' in reference);
-        return named && 'file' in named ? listedAt(placeLocation(named)) : undefined;
+        const named = (await read(plugin)).found.find(({ uri }) => uri.scheme === 'file');
+        return named && listedAt(named);
       }));
       return placed.filter((symbol) => symbol !== undefined);
     },

@@ -1,7 +1,5 @@
 import type { SourceNames } from '../sourceNames';
 
-const NOWHERE = { start: 0, end: 0 };
-
 /** Plugin source's names as mEdit answers them, answering only what a test gives it. */
 export const sourceNames = (answers: Partial<SourceNames> = {}): SourceNames => ({
   recordAt: () => Promise.resolve(undefined),
@@ -14,8 +12,6 @@ export const sourceNames = (answers: Partial<SourceNames> = {}): SourceNames => 
   recordMemberAt: () => Promise.resolve(undefined),
   declarationIn: () => Promise.resolve(undefined),
   formKeyIn: () => Promise.resolve(undefined),
-  pluginNamesIn: () => Promise.resolve([NOWHERE]),
-  membersIn: () => Promise.resolve([]),
   ...answers,
 });
 

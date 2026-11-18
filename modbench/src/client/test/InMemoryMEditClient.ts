@@ -10,7 +10,7 @@ import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwners' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlacedReferences' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
+  | 'getRecordOwners' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlacedReferences' | 'getPluginNameReferences' | 'getScriptReferences' | 'getPlacedScriptReferences' | 'getPlacedFileReferences' | 'getPlacedPluginNameReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -454,8 +454,14 @@ export class InMemoryMEditClient implements MEditClient {
   getScriptReferences(...args: Parameters<MEditClient['getScriptReferences']>): ReturnType<MEditClient['getScriptReferences']> {
     return this.query('getScriptReferences', args);
   }
-  getFileReferences(...args: Parameters<MEditClient['getFileReferences']>): ReturnType<MEditClient['getFileReferences']> {
-    return this.query('getFileReferences', args);
+  getPlacedScriptReferences(...args: Parameters<MEditClient['getPlacedScriptReferences']>): ReturnType<MEditClient['getPlacedScriptReferences']> {
+    return this.query('getPlacedScriptReferences', args);
+  }
+  getPlacedFileReferences(...args: Parameters<MEditClient['getPlacedFileReferences']>): ReturnType<MEditClient['getPlacedFileReferences']> {
+    return this.query('getPlacedFileReferences', args);
+  }
+  getPlacedPluginNameReferences(...args: Parameters<MEditClient['getPlacedPluginNameReferences']>): ReturnType<MEditClient['getPlacedPluginNameReferences']> {
+    return this.query('getPlacedPluginNameReferences', args);
   }
   getPluginSourceNames(...args: Parameters<MEditClient['getPluginSourceNames']>): ReturnType<MEditClient['getPluginSourceNames']> {
     return this.query('getPluginSourceNames', args);

@@ -612,11 +612,11 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void TheReferencesToAFilePath_ListWithinAQuarterOfAGesture()
+    public void TheReferencesToAFilePath_ArePlacedWithinOneGesture()
     {
-        MemberReferences? listed = null;
+        PlacedReferences? listed = null;
 
-        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetFileReferences(RealSizeModlist.AFileTheBigSourcePluginNames).Value(), "Listing the references to a file path", Runs);
+        Budgets.Ran(OneGesture, () => listed = Index.Queries.GetPlacedFileReferences(RealSizeModlist.AFileTheBigSourcePluginNames).Value(), "Placing the references to a file path", Runs);
         Assert.NotEmpty(listed?.Copies ?? []);
     }
 
@@ -776,6 +776,24 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Ran(OneAnswerOfEveryMastersRecord, () => listed = Index.Queries.GetPluginNameReferences(Modlist.Master.Name).Value(), "Listing the references to the master's name", Runs);
         Assert.NotEmpty(listed ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToAScript_ArePlacedWithinOneGesture()
+    {
+        PlacedReferences? placed = null;
+
+        Budgets.Ran(OneGesture, () => placed = Index.Queries.GetPlacedScriptReferences(RealSizeModlist.AttachedScript).Value(), "Placing the references to a script", Runs);
+        Assert.NotEmpty(placed?.Copies ?? []);
+    }
+
+    [RealSizeFact]
+    public void TheReferencesToAPluginsName_ArePlacedWithinOneGesture()
+    {
+        PlacedReferences? placed = null;
+
+        Budgets.Ran(OneGesture, () => placed = Index.Queries.GetPlacedPluginNameReferences(Modlist.Master.Name).Value(), "Placing the references to the master's name", Runs);
+        Assert.NotEmpty(placed?.Copies ?? []);
     }
 
     [RealSizeFact]

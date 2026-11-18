@@ -104,6 +104,18 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<CopyNaming>>()
             .ProducesProblem(503);
 
+        app.MapGet("/plugin-names/{name}/placed-references", (string name, IQueries svc, CancellationToken cancel) =>
+            EndpointMapping.Ok(svc.GetPlacedPluginNameReferences(name, cancel)))
+            .WithName("GetPlacedPluginNameReferences")
+            .WithTags(Tag)
+            .WithDescription(
+                "Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin " +
+                "Header record of each plugin with no plugin source that lists it as a master, at its document, by each range " +
+                "that names it. " + RecordEndpoints.PlacedReading)
+            .Produces<PlacedReferences>()
+            .ProducesProblem(503)
+            .ProducesProblem(500);
+
         app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
