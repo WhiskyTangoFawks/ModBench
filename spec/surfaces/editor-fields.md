@@ -65,12 +65,13 @@ Every array takes add and remove, and an array without a key takes move (xedit.m
 
 As a user, I want:
 
-1. Every array written back in the order I leave it: nothing re-sorts one. Cites: xedit.md, divergence 14
+1. Every array written back in the order I leave it, except one the format sorts. Cites: xedit.md, divergence 14; ADR-0030
 2. An array whose elements have a key to align across the columns by that key. Any other array to align by its values in sequence, as a diff does. A plugin with fewer elements than its master then reads as an absence where they are missing. Two elements that share a key each on a row of their own. Cites: xEdit; xedit.md, divergence 14
 3. Add on an array's row to append a new element as xEdit adds one: the first kind the field lists, with the members a plugin needs to keep the element, at their defaults. Cites: xEdit
 4. A key another element holds to be accepted, on add and on edit: the game uses a repeated key, as a leveled list weights an entry by repeating it. Story 2 shows each on a row of its own. Cites: xEdit
 5. Move up absent on the first element, and move down on the last. Cites: No dead entries
 6. One element pasted on an array's row to be added to that array, where the array can hold it (Every field, story 5). Cites: xEdit's drop; editor.md, Drag and drop, story 1
+7. Move absent on an array the format sorts. Cites: No dead entries; ADR-0030
 
 ## A field of several kinds
 

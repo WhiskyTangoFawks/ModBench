@@ -6,7 +6,7 @@ Plugin edits are git working-tree changes. A built mod's source ([ADR-0006](0006
 
 - The instance repository tracks files in `mods/` in place, which a nested repository would forbid.
 - Editing requires a source; viewing never does. A plugin with no source is read-only. The friction is deliberate: someone else's plugin is edited in a mod source the user owns, in a vendored workflow, whose built mod's plugin overrides it, and the author's mod stays as installed.
-- A record's working-tree state is the record index's to know. Git answers for a file, and a child record shares its container's file ([ADR-0020](0020-a-child-record-lives-in-its-containers-document.md)). So git supplies the text at the last commit, and nothing more.
+- A record's working-tree state is the record index's to know. Git answers for a file, not a record. So git supplies the text at the last commit, and nothing more.
 
 ## Alternatives rejected
 

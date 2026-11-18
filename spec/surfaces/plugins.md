@@ -261,8 +261,8 @@ As a user, I want:
 As a user, I want:
 
 1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type first. The pick lists the types the game can create. The new record is selected and opens in the record panel. Cites: catalog `create` under Record, record type Option; xEdit selects what it adds
-2. The new record to take the first FormKey at or above the plugin header's Next Object ID that no record uses, and the counter to move past it, so a FormKey a deleted record held is never given again. No EditorID, as xEdit adds one. Cites: xEdit; Mutagen's data
-3. When no FormKey at or above the Next Object ID is free, a refusal saying so, naming clearing the flag as the remedy on a plugin whose header flag limits its FormIDs. Cites: Mutagen's data; Never silently wrong
+2. The new record to take the FormKey after the highest of the plugin's own records. No EditorID, as xEdit adds one. Cites: xedit.md, divergence 47
+3. When no FormKey is left after the highest of the plugin's own records, a refusal saying so, naming clearing the flag as the remedy on a plugin whose header flag limits its FormIDs. Cites: Mutagen's data; Never silently wrong
 4. No create record on a group of a type the game cannot create. Cites: No dead entries
 5. On a container record, a pick of the types it can hold. The pick is skipped when it can hold one type. The new record lands inside the container. Cites: xEdit; Mutagen's data
 6. A placed reference created on a cell to land in its temporary child records, or in its persistent ones when the cell is persistent. In an exterior cell's temporary child records, it starts at the centre of the cell. Cites: xEdit
