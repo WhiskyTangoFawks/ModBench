@@ -425,18 +425,17 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         string? stringsFolder = null,
         bool noModKeySync = false)
     {
-        var toPath = plugin.BeginWrite.ToPath(destinationPath);
-        var masters = masterOrder?.Select(name => ModKey.FromFileName(name)).ToList();
-        // Mutagen's default resets the Next Object ID to one past the highest FormID, which would
-        // hand a deleted record's FormKey out again (plugins.md, Create record, story 2).
-        var writeBuilder = (masters is null
-                ? toPath.WithLoadOrderFromHeaderMasters()
-                : toPath.WithLoadOrder(masters))
-            .WithNoDataFolder()
-            .NoNextFormIDProcessing();
-        if (masterStyles is not null) writeBuilder = writeBuilder.WithKnownMasters([.. masterStyles.Items]);
-        // A destination named other than plugin's ModKey needs this lifted.
-        if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
+        var masters = masterOrder is null
+            ? plugin.MasterReferences.Select(reference => reference.Master).ToList()
+            : masterOrder.Select(name => ModKey.FromFileName(name)).ToList();
+        var parameters = new BinaryWriteParameters
+        {
+            MastersListOrdering = new MastersListOrderingByLoadOrder(masters),
+            LowerRangeDisallowedHandler = ALowerRangeDisallowedHandlerOption.AddPlaceholder(masters),
+            MasterFlagsLookup = masterStyles,
+            ModKey = noModKeySync ? ModKeyOption.NoCheck : ModKeyOption.ThrowIfMisaligned,
+            OverriddenFormsOption = OverriddenFormsOption.Iterate,
+        };
 
         // A caller writing to a temp file needs its own strings folder. Mutagen's write path
         // disposes whichever StringsWriter it holds, so this one is ours only on failure.
@@ -449,7 +448,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     plugin.GameRelease, plugin.ModKey,
                     writeDirectory: stringsFolder,
                     encodingProvider: MutagenEncoding.Default);
-                writeBuilder = writeBuilder.WithStringsWriter(stringsWriter);
+                parameters = parameters with { StringsWriter = stringsWriter };
                 stringsWriter = null;
             }
         }
@@ -458,7 +457,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             stringsWriter?.Dispose();
         }
 
-        await writeBuilder.WriteAsync();
+        await Task.Run(() => plugin.WriteToBinary(destinationPath, parameters));
     }
 
     private sealed class LoadedMod(IModDisposeGetter inner, StringsRead? strings) : ILoadedMod
