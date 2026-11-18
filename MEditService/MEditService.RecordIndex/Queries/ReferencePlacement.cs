@@ -11,8 +11,7 @@ namespace MEditService.RecordIndex.Queries;
 internal delegate IEnumerable<DocumentName> NamesOf(RecordAt copy, IEnumerable<DocumentName> recordNames);
 
 /// <summary>What names the symbol in a document. <paramref name="UnnamedRenderedAtStart"/> places a rendered document that
-/// names it nowhere, such as a plugin header, at the start of its text, where otherwise its own FormKey, else the copy is
-/// left out.</summary>
+/// holds no FormKey, such as a plugin header, at the start of its text; else the copy is left out.</summary>
 internal sealed record Naming(string Symbol, NamesOf Of, Func<string, IReadOnlyList<ColumnSpec>?> ColumnsOf, bool UnnamedRenderedAtStart);
 
 /// <summary>Each copy that names a symbol, at its document: its file in plugin source, else its rendered document.

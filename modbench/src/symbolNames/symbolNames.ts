@@ -87,7 +87,6 @@ export interface PlacedCopy extends CopyNaming {
   readonly ranges: readonly { readonly start: TextPosition; readonly end: TextPosition }[];
 }
 
-/** A reference found, or why a copy that may name the symbol went unread; either holds only where `names` resolves to the symbol. */
 type SymbolReference = ({ readonly place: PlaceInFile } | { readonly copy: PlacedCopy } | { readonly unread: string }) & { readonly names: PluginName };
 
 /** The references an owner found, and why it left out each file it could not read. */
