@@ -12,7 +12,6 @@ public static class TempName
 
     public static string FileIn(string folder) => Combine(folder) + FileSuffix;
 
-    /// <summary>Whether <paramref name="name"/> is one <see cref="FileIn"/> makes, so a file whether or not it is there now.</summary>
     public static bool IsTempFile(string name) => IsTemp(name) && name.EndsWith(FileSuffix, StringComparison.Ordinal);
 
     public static string FolderIn(string folder) => Combine(folder);

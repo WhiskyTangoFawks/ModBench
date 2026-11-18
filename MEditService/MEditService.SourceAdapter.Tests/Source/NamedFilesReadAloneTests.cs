@@ -97,7 +97,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     }
 
     [Fact]
-    public void APathGoneAndNeverListedThatCarriesNoRecord_ReadsNothing_AndTheFileNamedBesideItReadsAlone()
+    public void AWritersGoneTempFile_ReadsNothing_AndTheFileNamedBesideItReadsAlone()
     {
         var files = Listed([Path.Combine(Path.GetDirectoryName(NpcFile).Require(), ".medit_tmp_1_written.tmp"), NpcFile]);
 
