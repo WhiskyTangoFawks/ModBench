@@ -219,7 +219,7 @@ export class ModStatuses {
       const contents = value.archiveContents.get(sourcePath);
       return contents === undefined ? [] : [{ path, sourcePath, contents }];
     });
-    const unanswered = archives.find(({ contents }) => contents.kind === 'unanswered');
+    const unanswered = packageFiles.length === 0 ? undefined : archives.find(({ contents }) => contents.kind === 'unanswered');
     if (unanswered !== undefined) return { status: unreadableStatus(mod.name, `mEdit has not said what '${unanswered.path}' holds`), packaged: new Set(), entries: new Map() };
     const answered = archives.flatMap(({ path, sourcePath, contents }) => (contents.kind === 'unanswered' ? [] : [{ path, sourcePath, contents }]));
     const entries = new Map(await Promise.all(answered.map(async ({ path, sourcePath, contents }) =>

@@ -140,6 +140,7 @@ interface InstanceSide {
   statuses?: ModStatuses;
   deployment?: DeploymentRead;
   copyReads?: CopyReads;
+  archivedCopies?: ArchivedCopies;
   pluginsShown?: PluginsShown;
   symbolRows?: SymbolRows;
   toolbox: ToolboxView;
@@ -315,7 +316,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, reporterFor,
   }));
   return {
-    instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
+    instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter, archivedCopies,
     modsLines: () => mods.standingLines(),
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
@@ -456,7 +457,7 @@ function start(context: vscode.ExtensionContext): void {
     pathStanding: views.pathStanding,
   });
   const symbols = symbolsOver({ meditClient, asker, outputChannel, reporterFor, opened, views, focusedRecord: editor.focusedRecord });
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: symbols.symbols, problemsCaughtUp: () => sourceLanguage.problemsCaughtUp(), statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages(), unsavedSource: () => sourceLanguage.unsavedSourceMessages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, archivedCopies: views.archivedCopies, symbols: symbols.symbols, problemsCaughtUp: () => sourceLanguage.problemsCaughtUp(), statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages(), unsavedSource: () => sourceLanguage.unsavedSourceMessages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     asker,
     views,

@@ -8,7 +8,7 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
 import { isInitializeRequest, type ServerNotification, type ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { CopyReads } from '../mods/sameCopies';
-import { ArchivedCopies } from '../mods/archivedCopies';
+import type { ArchivedCopies } from '../mods/archivedCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
@@ -44,7 +44,8 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordOwners' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  archivedCopies: ArchivedCopies | undefined;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordOwners' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument'>;
   symbols: SymbolIndex;
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
@@ -62,7 +63,7 @@ export interface AgentServer {
 }
 
 type Instance = NonNullable<AgentServerOptions['instance']>;
-type OpenOptions = AgentServerOptions & { instance: Instance; copyReads: CopyReads; statuses: Pick<ModStatuses, 'current'>; deployment: DeploymentRead; pluginsShown: PluginsShown };
+type OpenOptions = AgentServerOptions & { instance: Instance; copyReads: CopyReads; archivedCopies: ArchivedCopies; statuses: Pick<ModStatuses, 'current'>; deployment: DeploymentRead; pluginsShown: PluginsShown };
 
 function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal(instance.readFailure === undefined ? 'The instance has not been read yet.' : `Failed to load: ${instance.readFailure}`);
@@ -130,7 +131,7 @@ const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'unsave
 
 const SYMBOL_READS: readonly Source[] = [...RECORD_READS, 'modList'];
 
-function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
+function mcpServerOf({ instance, copyReads, archivedCopies, mEdit, symbols, problemsCaughtUp, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
@@ -140,7 +141,6 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, te
   register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), LIST_PLUGINS, async (args) => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown, args));
   register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), LIST_SORTING_RULES, (args) => LIST_SORTING_RULES.of(pluginsShown, args));
   register(server, log, reading('instance', 'modList'), LIST_MOD_STATUSES, (args) => LIST_MOD_STATUSES.of(currentValue(instance), statuses, args));
-  const archivedCopies = new ArchivedCopies(mEdit, (path) => copyReads.fileStamp(path));
   register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, archivedCopies, args));
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, reading(...RECORD_READS), RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
@@ -230,9 +230,9 @@ async function handle(options: OpenOptions, sessions: Sessions, request: Incomin
 const NOT_SERVING: AgentServer = { listening: Promise.resolve(undefined), dispose: () => undefined };
 
 export function serveAgent(options: AgentServerOptions): AgentServer {
-  const { instance, copyReads, statuses, deployment, pluginsShown, port, reporter, log } = options;
-  if (instance === undefined || copyReads === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
-  const open = { ...options, instance, copyReads, statuses, deployment, pluginsShown };
+  const { instance, copyReads, archivedCopies, statuses, deployment, pluginsShown, port, reporter, log } = options;
+  if (instance === undefined || copyReads === undefined || archivedCopies === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
+  const open = { ...options, instance, copyReads, archivedCopies, statuses, deployment, pluginsShown };
   const sessions: Sessions = new Map();
   const http = createServer((request, response) => {
     handle(open, sessions, request, response).catch((error: unknown) => {

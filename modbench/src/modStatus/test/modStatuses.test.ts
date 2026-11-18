@@ -317,6 +317,12 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
           .toEqual([0, `mEdit has not said what '${ARCHIVE}' holds`]);
       });
 
+      it('keeps its status while mEdit has not said what an archive holds, when no package holds a file to judge its entries by', async () => {
+        const statuses = await statusesOf({ kind: 'unanswered' }, []);
+
+        expect((await statuses.current()).get('ModA')?.unreadable).toBeUndefined();
+      });
+
       it('hashes nothing while no package holds a file, since none can hold an entry', async () => {
         expect(await entriesOf({ kind: 'read', answer: ['textures/a.dds'] }, [])).toEqual({ kind: 'read', answer: ['textures/a.dds'] });
         expect(hashedEntries).toEqual([]);

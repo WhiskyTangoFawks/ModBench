@@ -3,6 +3,7 @@ export * from './buildFile';
 export {
   filesAPackageHolds, filesNoPackageHolds, packageFilesOf, packageHolds, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FlaggedHashes, type FolderAgainst, type ModAt, type ModStatus,
 } from './modStatus';
+export type { HashedPath } from '../repositoriesLib/statusValues';
 export { flaggedFilesIn, flaggedHashesFrom, flaggedHashesIn, type FlaggedRead, type PossibleHashes } from './flaggedHashes';
 export { manifestText, ordinal } from './manifestText';
 export { buildFileAgainst, buildFileIn, isBuildFileOf, manifestAt, manifestFileFor, manifestIn, manifestNameOf, manifestsIn, packagesAskedAt, writeManifestIn } from './manifestFiles';
