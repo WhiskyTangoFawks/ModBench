@@ -47,6 +47,7 @@ import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { showProgressWhileLate } from './drivingLib/lateProgress';
 import { reportUnwatchedFolders } from './drivingLib/unwatchedFolders';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
+import { ArchivedCopies, hashesOfEntries } from './mods/archivedCopies';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import { copyTheGameGets, revealCopy } from './mods/fileCopy';
@@ -236,7 +237,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
   const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
-  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
+  const archivedEntries = new ArchivedCopies(client, (path) => adapter.fileStamp(path));
+  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line), hashesOfEntries(archivedEntries)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
     await modStatuses.current();

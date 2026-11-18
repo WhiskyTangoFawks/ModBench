@@ -1,6 +1,7 @@
 // mods-conflicts.md, Cells: a copy in an archive, read as a loose copy is: its size, its date modified (its archive's), and
 // its hash when another copy shares its size.
 
+import { gameReleaseForGame } from '../tables/gamePaths';
 import { foldPath, type ArchivedFileAddress } from '../instanceLoader/fileConflictIndex';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import type { ArchivedCopy } from '../wire/messages';
@@ -111,3 +112,11 @@ export class ArchivedCopies {
     return undefined;
   }
 }
+
+/** The hash of each of `entries` in `archive`, read as the game named `gameName` reads it. */
+export const hashesOfEntries = (archived: Pick<ArchivedCopies, 'hashes'>) => (gameName: string, archive: string, entries: readonly string[]): Promise<FileRead<string>[]> => {
+  const gameRelease = gameReleaseForGame(gameName);
+  return gameRelease === undefined
+    ? Promise.resolve(entries.map(() => ({ kind: 'unreadable', reason: `${gameName} is not a game mEdit reads archives of` })))
+    : archived.hashes(entries.map((file) => ({ gameRelease, archive, file })));
+};

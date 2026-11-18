@@ -3,7 +3,7 @@ import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } 
 
 vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
-import type { PublisherConfiguration } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, PublisherConfiguration } from '../../instanceAdapter/instanceAdapter';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -16,15 +16,19 @@ const REASON = 'nothing ships it';
 
 const configuration = (shippable: (path: string) => boolean = () => false): PublisherConfiguration => ({
   kind: 'read', covering: () => [], listed: () => [], pathProblems: [],
-  unshippable: { file: SETTINGS, reason: (folder, path, mod, heldByPackage) => (heldByPackage || shippable(`${folder}/${path}`) ? undefined : `${mod} ${REASON}`) },
+  unshippable: { file: SETTINGS, reason: (folder, path, mod, heldByPackage, entries) => (heldByPackage || shippable(`${folder}/${path}`) ? undefined : `${mod} ${REASON}${entries?.kind === 'read' ? ` ${entries.answer.join(',')}` : ''}`) },
 });
 
-function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration, packaged: Record<string, readonly string[]> = {}) {
+type Entries = ReadonlyMap<string, FileRead<readonly string[]>>;
+
+function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration, packaged: Record<string, readonly string[]> = {}, entriesOf: Record<string, Entries> = {}) {
   let held = new Map(initial.map((one) => [one.mod, one]));
   let changed = (): void => undefined;
   let heldByPackage = packaged;
+  let entries = entriesOf;
   const statuses = {
-    current: () => Promise.resolve(held), heldByPackage: (mod: string): ReadonlySet<string> => new Set(heldByPackage[mod] ?? []), onDidChange: (listener: () => void) => { changed = listener; return { dispose: () => undefined }; },
+    current: () => Promise.resolve(held), heldByPackage: (mod: string): ReadonlySet<string> => new Set(heldByPackage[mod] ?? []),
+    entriesNoPackageHolds: (mod: string): Entries => entries[mod] ?? new Map(), onDidChange: (listener: () => void) => { changed = listener; return { dispose: () => undefined }; },
   };
   const instance = new FakeInstance(instanceValueFixture({
     publisherConfiguration, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: '/instance/mods/ModB' }],
@@ -33,7 +37,8 @@ function over(initial: readonly ModStatus[], publisherConfiguration: PublisherCo
   new UnshippableProblems(collection, instance, statuses);
   return {
     collection, instance,
-    becomes: (next: readonly ModStatus[], nextPackaged: Record<string, readonly string[]> = heldByPackage) => {
+    becomes: (next: readonly ModStatus[], nextPackaged: Record<string, readonly string[]> = heldByPackage, nextEntries: Record<string, Entries> = entries) => {
+      entries = nextEntries;
       held = new Map(next.map((one) => [one.mod, one]));
       heldByPackage = nextPackaged;
       changed();
@@ -51,6 +56,15 @@ describe('a mod the published modlist has no way to ship (publishing.md, What sh
     await vi.waitFor(() => {
       expect(problemsOn(collection)).toEqual([[firstLine, `3 files of "ModA" have no way to ship, such as 'a.esp': ModA ${REASON}.`, DiagnosticSeverity.Warning]]);
     });
+  });
+
+  it('judges an archive by the entries no package holds, and judges it again when they change', async () => {
+    const { collection, becomes } = over([status('ModA', { unpackaged: ['a.ba2'] })], configuration(), {}, { ModA: new Map([['a.ba2', { kind: 'read', answer: ['x.dds'] }]]) });
+    await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toEqual([`1 file of "ModA" has no way to ship: 'a.ba2': ModA ${REASON} x.dds.`]); });
+
+    becomes([status('ModA', { unpackaged: ['a.ba2'] })], {}, { ModA: new Map([['a.ba2', { kind: 'read', answer: ['y.dds'] }]]) });
+
+    await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toEqual([`1 file of "ModA" has no way to ship: 'a.ba2': ModA ${REASON} y.dds.`]); });
   });
 
   it('says a single file without "such as"', async () => {
