@@ -96,22 +96,21 @@ internal sealed class RelationReads(
     public RecordIdentity? GetCarryingRecord(string formKey, PluginAddress plugin)
     {
         using var context = OpenRead();
-        return context.Rows($"""
-                WITH RECURSIVE carried(form_key, depth) AS (
-                    SELECT $1, 0
-                    UNION ALL
-                    SELECT h.parent, c.depth + 1 FROM holdings h
-                    JOIN carried c ON h.child = c.form_key
-                    WHERE h.plugin = $2 AND h.origin = $3 AND {HoldingSlots.CarriedInTheParentsDocument("h.slot")}
-                )
-                SELECT r.form_key, r.record_type, r.editor_id
-                FROM carried c
-                JOIN {TableDdlBuilder.PluginRecordsView} r ON r.form_key = c.form_key AND r.plugin = $2 AND r.origin = $3
-                ORDER BY c.depth DESC
-                LIMIT 1
-                """,
-                reader => new RecordIdentity(reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2)),
-                formKey, plugin.Name, plugin.Origin)
+        var carrying = context.ScalarString($"""
+            WITH RECURSIVE carried(form_key, depth) AS (
+                SELECT $1, 0
+                UNION ALL
+                SELECT h.parent, c.depth + 1 FROM holdings h
+                JOIN carried c ON h.child = c.form_key
+                WHERE h.plugin = $2 AND h.origin = $3 AND {HoldingSlots.CarriedInTheParentsDocument("h.slot")}
+            )
+            SELECT form_key FROM carried ORDER BY depth DESC LIMIT 1
+            """, formKey, plugin.Name, plugin.Origin);
+        // Found by its key alone: a join of the records to the walk reads every record's columns.
+        return context.Rows(
+                $"SELECT record_type, editor_id FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+                reader => new RecordIdentity(carrying ?? formKey, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)),
+                carrying ?? formKey, plugin.Name, plugin.Origin)
             .FirstOrDefault();
     }
 

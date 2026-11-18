@@ -41,18 +41,18 @@ public sealed class LoadOrderAtScaleTests
     }
 
     [Fact]
-    public void AnEditToOneReferenceInABigCell_ReachesReadsWithinOneSecond()
+    public void AnEditMadeOutsideModbenchToOneReferenceInABigCell_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
         EditTheReference(scale);
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => EditReachedReads(scale), "An edit to one reference reaching reads");
+        Budgets.Reached(OneGesture, () => EditReachedReads(scale), "An edit made outside Modbench to one reference reaching reads through a check of the whole disk");
     }
 
     [Fact]
-    public void ACheckAfterAThousandSeparateDocumentsChange_ReachesReadsWithinOneSecond()
+    public void AThousandSeparateDocumentsChangedOutsideModbench_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         const int documents = 1_000;
         using var scale = new LoadOrderAtScale(documentsInASourcePlugin: documents);
@@ -64,7 +64,7 @@ public sealed class LoadOrderAtScaleTests
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => AllEdited(scale), "A check after 1,000 documents changed reaching reads");
+        Budgets.Reached(OneGesture, () => AllEdited(scale), "1,000 documents changed outside Modbench reaching reads through a check of the whole disk");
     }
 
     private static bool AllEdited(LoadOrderAtScale scale) =>
@@ -82,7 +82,7 @@ public sealed class LoadOrderAtScaleTests
             ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
 
     [Fact]
-    public void AThousandReferencesTakenOutOfABigCellsDocument_ReachReadsWithinOneSecond()
+    public void AThousandReferencesTakenOutsideModbenchOutOfABigCellsDocument_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
         var path = scale.BigCellPlugin.SourceFileOf(scale.Index.DocumentOf(scale.BigCell, scale.BigCellPlugin.Key));
@@ -93,18 +93,18 @@ public sealed class LoadOrderAtScaleTests
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 3_000, "Taking 1,000 references out of a big cell reaching reads");
+        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 3_000, "1,000 references taken outside Modbench out of a big cell reaching reads through a check of the whole disk");
     }
 
     [Fact]
-    public void ABigCellsDocumentDeleted_ReachesReadsWithinOneSecond()
+    public void ABigCellsDocumentDeletedOutsideModbench_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
         File.Delete(scale.BigCellPlugin.SourceFileOf(scale.Index.DocumentOf(scale.BigCell, scale.BigCellPlugin.Key)));
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 0, "Deleting a big cell's document reaching reads");
+        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 0, "A big cell's document deleted outside Modbench reaching reads through a check of the whole disk");
         Assert.Null(scale.Index.CopyIn(scale.BigCell, scale.BigCellPlugin.Key));
     }
 
