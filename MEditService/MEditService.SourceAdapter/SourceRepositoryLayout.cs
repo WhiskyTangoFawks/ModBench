@@ -185,7 +185,6 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
         return sources.Select(source => (source, DoorName(source)));
     }
 
-    /// <summary>The file a container's directory is written with.</summary>
     internal static string ContainerDocumentIn(string directory) =>
         Path.Combine(directory, DocumentFileNames.Root);
 
@@ -242,11 +241,17 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     internal static string HeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), DocumentFileNames.Root);
 
-    /// <summary>The name of the file the layout writes <paramref name="identity"/>'s own document in.</summary>
     internal static string DocumentFileNameFor(RecordIdentity identity, GameRelease gameRelease) =>
-        identity.RecordType == PluginHeader.RecordType || GroupFolders.For(gameRelease).HasDirectory(identity.RecordType)
-            ? DocumentFileNames.Root
-            : FileNameFor(FormKey.Factory(identity.FormKey), identity.EditorId);
+        identity.RecordType == PluginHeader.RecordType ? DocumentFileNames.Root : Path.GetFileName(DocumentInItsFolder(identity, gameRelease));
+
+    // A record's own file, or its directory and the document in it, under the folder holding it.
+    private static string DocumentInItsFolder(RecordIdentity identity, GameRelease gameRelease)
+    {
+        var formKey = FormKey.Factory(identity.FormKey);
+        return GroupFolders.For(gameRelease).HasDirectory(identity.RecordType)
+            ? ContainerDocumentIn(LeafNameFor(formKey, identity.EditorId, isDirectory: true))
+            : FileNameFor(formKey, identity.EditorId);
+    }
 
     // The flat record's own file. The origin ModKey, never the plugin written into, keeps two
     // masters' records from colliding on one path; a directory-per-record type refuses.
@@ -310,13 +315,8 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
 
     /// <summary>Where a new child of <paramref name="slot"/> lands, in the slot's folder inside its container's
     /// <paramref name="containerDirectory"/>: its file, or its own directory's document.</summary>
-    internal static string ChildDocumentIn(string containerDirectory, string slot, RecordIdentity child, GameRelease gameRelease)
-    {
-        var formKey = FormKey.Factory(child.FormKey);
-        return GroupFolders.For(gameRelease).HasDirectory(child.RecordType)
-            ? ContainerDocumentIn(Path.Combine(containerDirectory, slot, LeafNameFor(formKey, child.EditorId, isDirectory: true)))
-            : Path.Combine(containerDirectory, slot, FileNameFor(formKey, child.EditorId));
-    }
+    internal static string ChildDocumentIn(string containerDirectory, string slot, RecordIdentity child, GameRelease gameRelease) =>
+        Path.Combine(containerDirectory, slot, DocumentInItsFolder(child, gameRelease));
 
     // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
     // Coordinates reads the numbers back out of. A missing number is the zero the door writes.

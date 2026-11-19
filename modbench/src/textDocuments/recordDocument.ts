@@ -33,8 +33,7 @@ export function copyOf(uri: vscode.Uri): RecordCopy {
   return { formKey: stated('formKey'), plugin: { name: stated('name'), origin: stated('origin') } };
 }
 
-// The path is what VS Code shows: its last segment titles the tab, and the plugin's segments
-// before it tell apart two copies of one name.
+// VS Code shows the path beside the tab's title; the query tells apart two copies of one path.
 function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
   return vscode.Uri.from({
     scheme: RENDERED_DOCUMENT_SCHEME, path: `/${encodeURIComponent(copy.plugin.origin)}/${copy.plugin.name}/${fileName}`, query: copyQuery(copy),

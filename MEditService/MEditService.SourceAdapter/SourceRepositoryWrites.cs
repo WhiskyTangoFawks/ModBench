@@ -68,7 +68,7 @@ internal sealed class SourceRepositoryWrites(
         if (RecordTypes.For(_release).FileSlotRecordType(container.RecordType, slot) is not null)
         {
             var placed = SourceRepositoryLayout.ChildDocumentIn(PathShape.DirectoryOf(unit.FullPath), slot, child.Identity, _release);
-            return new SourceChanges([], [], [Document(placed, child.Body)]);
+            return Nameable(child.Identity, new SourceChanges([], [], [Document(placed, child.Body)]));
         }
 
         var containerText = DocumentText.RecordBodyFromOwnerBytes(FileBytes(unit), unit, container.FormKey, _release)
@@ -100,12 +100,12 @@ internal sealed class SourceRepositoryWrites(
     {
         var (levels, placed) = layout.PlaceNewDocument(plugin, document.Identity, placement)
             ?? throw NoPlaceInTheTree(plugin, document.Identity);
-        return new SourceChanges([], [], [.. levels, Document(placed.FullPath, document.Body)]);
+        return Nameable(document.Identity, new SourceChanges([], [], [.. levels, Document(placed.FullPath, document.Body)]));
     }
 
     private SourceChanges ChangesToHeld(SourceUnit unit, SourceDocument document)
     {
-        if (!unit.IsEmbedded) return Planned(LeafPlan(unit, document), document.Body);
+        if (!unit.IsEmbedded) return Nameable(document.Identity, Planned(LeafPlan(unit, document), document.Body));
 
         var ownerBytes = FileBytes(unit);
         if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
@@ -174,6 +174,22 @@ internal sealed class SourceRepositoryWrites(
         {
             throw SourceStopException.Unreadable(ex.Message);
         }
+    }
+
+    // Linux holds a file name of at most 255 bytes and Windows 255 UTF-16 units, which no name of 255 UTF-8 bytes
+    // exceeds. A longer name fails mid-write, naming a temp file instead of the record.
+    private const int MostFileNameBytes = 255;
+
+    private static SourceChanges Nameable(RecordIdentity identity, SourceChanges changes)
+    {
+        var longest = changes.Moves.Select(move => move.To).Concat(changes.Documents.Select(document => document.Path))
+            .SelectMany(path => path.Split(Path.DirectorySeparatorChar))
+            .Max(name => Encoding.UTF8.GetByteCount(name));
+        return longest <= MostFileNameBytes
+            ? changes
+            : throw SourceStopException.Inaccessible(
+                $"{identity.FormKey} cannot be written: its EditorID {identity.EditorId} makes a file name of {longest} bytes, " +
+                $"and a file name holds at most {MostFileNameBytes}.");
     }
 
     private SourceChanges Planned(LeafMoves plan, string text) =>
@@ -419,7 +435,8 @@ internal sealed class SourceRepositoryWrites(
         return new LeafMoves(Differing([(unit.FullPath, to)]), to);
     }
 
-    // The directory moves to where its leaf name puts it, then the document in it takes the container document's name.
+    // The directory moves to where its leaf name puts it, then a document held there under another name moves to the
+    // container's own.
     private static LeafMoves ContainerPlan(SourceUnit unit, string toDirectory)
     {
         var written = SourceRepositoryLayout.ContainerDocumentIn(toDirectory);

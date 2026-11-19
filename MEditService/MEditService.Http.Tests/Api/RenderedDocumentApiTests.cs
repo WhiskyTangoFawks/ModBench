@@ -38,26 +38,24 @@ public sealed class RenderedDocumentApiTests : HostedTests
         return (document.GetProperty("fileName").GetString().Require(), document.GetProperty("text").GetString().Require());
     }
 
-    private async Task<(string FileName, string Text)> WrittenByInit(ScatteredFixtureData fx, Func<string, string> written)
+    private async Task<(string FileName, string Text)> WrittenByInit(ScatteredFixtureData fx, string underPluginSource)
     {
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        var file = written(ModFolderOf(fx));
+        var file = Path.Combine(PluginSourceRoot.In(ModFolderOf(fx), Plugin), underPluginSource);
         return (Path.GetFileName(file), File.ReadAllText(file));
     }
 
     [Theory]
-    [InlineData("npc_", "RenderedNpc")]
-    [InlineData("qust", "RenderedQuest")]
-    public async Task ANonCompiledPluginCopy_IsTheFileInitWrites_ByNameAndText(string recordType, string editorId)
+    [InlineData("npc_", "RenderedNpc", "Npcs/RenderedNpc - 000800_Rendered.esp.json")]
+    [InlineData("qust", "RenderedQuest", "Quests/RenderedQuest - 000801_Rendered.esp/RecordData.json")]
+    public async Task ANonCompiledPluginCopy_IsTheFileInitWrites_ByNameAndText(string recordType, string editorId, string written)
     {
         var fx = await NonCompiledPlugin();
 
         var rendered = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, recordType, editorId));
 
-        Assert.Equal(await WrittenByInit(fx, folder => DocumentOf(Directory.EnumerateFileSystemEntries(folder, $"{editorId} - *", SearchOption.AllDirectories).Single())), rendered);
+        Assert.Equal(await WrittenByInit(fx, written), rendered);
     }
-
-    private static string DocumentOf(string entry) => Directory.Exists(entry) ? PluginSourceRoot.ContainerDocument(entry) : entry;
 
     [Fact]
     public async Task ANonCompiledPluginsHeader_IsTheFileInitWrites_ByNameAndText()
@@ -66,7 +64,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
 
         var rendered = await RenderedOk($"000000:{Plugin}");
 
-        Assert.Equal(await WrittenByInit(fx, folder => Path.Combine(folder, PluginSourceRoot.HeaderDocument(Plugin))), rendered);
+        Assert.Equal(await WrittenByInit(fx, "RecordData.json"), rendered);
     }
 
     [Fact]

@@ -163,20 +163,18 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const copy = copyOf(document.uri);
       const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
-      this.show(panel, tab, copy, { columns, place }, { titleFromRead: () => undefined, plugin: copy.plugin, documentText });
+      this.show(panel, tab, copy, { columns, place }, { titleFromRead: titledWith(panel, copy), plugin: copy.plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
-      // The file is the container's, so its name is not the child's.
       const copy = copyOf(document.uri);
-      panel.title = recordTitle(copy.formKey, undefined);
-      this.showFile(panel, tab, document, copy, { columns, place }, (read, titled) => { panel.title = recordTitle(read, titled, copy.plugin); });
+      this.showFile(panel, tab, document, copy, { columns, place }, titledWith(panel, copy));
       return;
     }
     const moved = this.moved.get(key);
     if (moved) {
       this.moved.delete(key);
-      this.showFile(panel, tab, document, moved, moved, () => undefined);
+      this.showFile(panel, tab, document, moved, moved, titledWith(panel, moved));
       if (moved.from) tab.moved(moved.plugin, moved.from, moved.formKey);
       return;
     }
@@ -207,7 +205,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
           await this.reopenAsText(tab);
           return;
         }
-        this.showFile(panel, tab, document, record, { columns, place }, () => undefined);
+        this.showFile(panel, tab, document, record, { columns, place }, titledWith(panel, record));
       } catch (err) {
         fail(localFailure(errorMessage(err)));
       }
@@ -264,6 +262,12 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
       script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: { mEditFormKey: formKey, mEditColumns: [...columns], ...(place && { mEditViewState: place }) } satisfies RecordPageGlobals,
     });
   }
+}
+
+// A document's name need not carry its record's: a container's and the header's are RecordData.json.
+function titledWith(panel: vscode.WebviewPanel, { formKey, plugin }: RecordCopy): TabDocument['titleFromRead'] {
+  panel.title = recordTitle(formKey, undefined);
+  return (read, columns) => { panel.title = recordTitle(read, columns, plugin); };
 }
 
 function isRecordLoadRequest(message: unknown): boolean {

@@ -60,7 +60,8 @@ internal static class ProblemsPanel
         var unread = new List<string>();
         SourceRange RangeOf(SourceProblem problem)
         {
-            if (folder is null || (problem.TargetFormKey ?? problem.FormKey) is null) return SourceRange.FirstLine;
+            var namesNoRecordToFind = (problem.TargetFormKey ?? problem.FormKey) is null;
+            if (folder is null || namesNoRecordToFind) return SourceRange.FirstLine;
             var path = problem.SourceRelativePath;
             if (!placements.TryGetValue(path, out var file))
             {

@@ -202,7 +202,22 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void ALongEditorId_NamesTheFileWhole_AsSpriggitDoes()
+    public void AnEditorIdTooLongForAFileName_IsRefusedBeforeAnyWrite_NamingTheRecordAndWhy()
+    {
+        var repository = Opened();
+        string[] before = [.. NpcFileNames()];
+        var longId = new string('A', 300);
+
+        var refused = repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", longId, WithEditorId(longId))).Failed();
+
+        Assert.Equal(
+            $"{NpcFormKey} cannot be written: its EditorID {longId} makes a file name of 326 bytes, and a file name holds at most 255.",
+            refused.Reason);
+        Assert.Equal(before, NpcFileNames());
+    }
+
+    [Fact]
+    public void ALongEditorId_IsWholeInItsFileName()
     {
         var repository = Opened();
         var longId = new string('A', 80);

@@ -165,6 +165,25 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         Assert.Contains($"belongs at {Path.GetRelativePath(_modFolder, original)}", problem.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("SomeCell - 000A00_Fixture.esp/Hand.json")]
+    [InlineData("Hand - 000A00_Fixture.esp/RecordData.json")]
+    public void AContainersDocumentUnderAnotherName_IsAProblemNamingWhereItBelongs(string heldInItsBlock)
+    {
+        const string cellFormKey = "000A00:Fixture.esp";
+        _repository.Put(Plugin, new SourceDocument(cellFormKey, "cell", "SomeCell", RecordTextCodec.SerializeToText(
+            new Cell(FormKey.Factory(cellFormKey), Fallout4Release.Fallout4) { EditorID = "SomeCell" }, GameRelease.Fallout4))).Wrote();
+        var original = PluginSourceRoot.ContainerDocument(Directory.GetDirectories(_modFolder, "SomeCell - *", SearchOption.AllDirectories).Single());
+        var misplaced = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(original)).Require(), heldInItsBlock);
+        Directory.CreateDirectory(Path.GetDirectoryName(misplaced).Require());
+        File.Move(original, misplaced);
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, misplaced), problem.SourceRelativePath);
+        Assert.Contains($"belongs at {Path.GetRelativePath(_modFolder, original)}", problem.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ARecordOutsideTheLightRangeOfALightHeader_IsAProblemOnItsFile()
     {
