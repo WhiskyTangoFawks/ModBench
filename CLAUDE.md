@@ -31,6 +31,7 @@ An agent runs each build and test through `.claude/skills/validate/slot-run.sh <
 - `spec/architecture/target-architecture.md` says how to read the diagrams. A view's specification is its surface in `spec/surfaces/`. A trace in `docs/traces/` is a diagram of how data flows, and holds no contract.
 - `spec/adr/` holds the decisions the code only cites. `ls spec/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, specification or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.
 - `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`, and `wabbajack/` (prior art for archives and hashing). Gitignored, so absent from every `git worktree`: read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
+- `MEditService/vendor/Spriggit` = a git submodule at a pinned Spriggit commit, never modified. A Spriggit package is a tool, not a library. Each game codec compiles that game's Spriggit.Json customization classes, and Mutagen's serialization generator then writes Spriggit's format against Modbench's Mutagen. To change the format, move the submodule's commit.
 
 ## The chain of authority
 
