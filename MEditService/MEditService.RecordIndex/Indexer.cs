@@ -764,18 +764,22 @@ internal sealed class Indexer : IDisposable
         if (cause is not IndexFaultException { Fault: IndexFault.Invalidated }) return cause.Message;
         try
         {
-            return ReopenStore() is { } notReopened ? $"{cause.Message} {notReopened}" : cause.Message;
+            return ReopenStore() is { } notReopened ? NotReopenedAfter(cause, notReopened) : cause.Message;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Reopening the record index failed");
-            return NotReopenedAfter(cause, ex);
+            return NotReopenedAfter(cause, NotReopenedBecause(ex));
         }
     }
 
     private const string NotReopened = "mEdit's record index was not reopened";
 
-    private static string NotReopenedAfter(Exception cause, Exception reason) => $"{cause.Message} {NotReopened}: {reason.Message}";
+    private static readonly string NotReopenedUndrained = IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
+
+    private static string NotReopenedBecause(Exception reason) => $"{NotReopened}: {reason.Message}";
+
+    private static string NotReopenedAfter(Exception cause, string notReopened) => $"{cause.Message} {notReopened}";
 
     private OpenScope ScopeOn(HeldPlugins held, Store.Store store, LoadOrderSnapshot snapshot) =>
         new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
@@ -792,8 +796,7 @@ internal sealed class Indexer : IDisposable
             }
         }
         if (current is null) return null;
-        if (!_storeFactory.Close(current.Store))
-            return IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
+        if (!_storeFactory.Close(current.Store)) return NotReopenedUndrained;
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
@@ -869,7 +872,7 @@ internal sealed class Indexer : IDisposable
         }
         if (!_storeFactory.Close(leaving?.Store, snapshot.InstanceRoot))
         {
-            failure = IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
+            failure = invalidation is null ? NotReopenedUndrained : NotReopenedAfter(invalidation, NotReopenedUndrained);
             return null;
         }
 
@@ -902,7 +905,7 @@ internal sealed class Indexer : IDisposable
         catch (Exception ex) when (invalidation is not null && ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Reopening the record index failed");
-            failure = NotReopenedAfter(invalidation, ex);
+            failure = NotReopenedAfter(invalidation, NotReopenedBecause(ex));
             return null;
         }
         finally
