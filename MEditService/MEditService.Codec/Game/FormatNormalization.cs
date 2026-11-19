@@ -12,11 +12,13 @@ namespace MEditService.Codec.Game;
 /// member they omit, as a fresh object holds it. Read by running the customizations this project compiles.</summary>
 internal static class FormatNormalization
 {
-    private sealed record Rule(Func<Type, bool> Applies, Action<object> Apply);
+    private sealed record Rule(Func<Type, bool> Applies, Action<object> Apply, (Type Declarer, string Member)? Sorted = null);
 
     private static readonly IReadOnlyList<Rule> Rules = Recorded(typeof(FormatNormalization).Assembly);
 
     private static readonly RecordGraph Normalized = new(type => Rules.Any(rule => rule.Applies(type)));
+
+    public static IReadOnlyList<(Type Declarer, string Member)> SortedLists { get; } = [.. Rules.Select(rule => rule.Sorted).OfType<(Type, string)>()];
 
     public static IMajorRecordGetter Of(IMajorRecordGetter record)
     {
@@ -106,7 +108,7 @@ internal static class FormatNormalization
                 var sorted = sort.Order(list.Cast<TItem>()).ToList();
                 list.Clear();
                 foreach (var item in sorted) list.Add(item);
-            }));
+            }, (typeof(TObject), name)));
             return sort;
         }
 

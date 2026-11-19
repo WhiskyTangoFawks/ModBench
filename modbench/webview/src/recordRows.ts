@@ -180,7 +180,7 @@ function fieldRow(
     const element = editPath && !template && isArrayElementHop(last)
       ? arrayElementContext(
         o.formKey, o.plugin, o.origin, editPath, arrayLength(getAtPath(rootFieldOf(o, at.rootField)?.value, editPath.slice(1, -1))),
-        last?.kind === 'element' && last.keyed)
+        last?.kind === 'element' && last.noMove)
       : undefined;
     const context = cellContext(
       template?.copyText ?? copiedText(shown, cellMeta, resolution),
@@ -238,7 +238,7 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
       if (meta.type === 'array' && meta.elementType) {
         rows.push(...rowsOf(child, meta.elementType, {
           ...at,
-          path: [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
+          path: [...path, { kind: 'element', indexes: child.indexes, noMove: !!meta.keyMembers || meta.sortedByFormat }],
           key: childKey, parent: key, present: column => child.values[column] != null, depth: depth + 1,
           isLastElement: column => elementsIn(diff, column).at(-1) === child,
           keyMembers: meta.keyMembers,

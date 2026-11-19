@@ -52,13 +52,12 @@ import type {
   StringValueContext,
 } from '../../src/wire/messages';
 
-// `siblings` is the length of the array in this column's own document. xedit.md, divergence 14: a
-// keyed array takes no move.
+// `siblings` is the length of the array in this column's own document; `noMove` is xedit.md, divergence 14.
 export function arrayElementContext(
-  formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number, keyed: boolean,
+  formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number, noMove: boolean,
 ): ArrayElementContext {
   const lastSeg = path.at(-1);
-  const index = lastSeg?.kind === 'index' && !keyed ? lastSeg.index : -1;
+  const index = lastSeg?.kind === 'index' && !noMove ? lastSeg.index : -1;
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, path,
     canMoveUp: index > 0,
