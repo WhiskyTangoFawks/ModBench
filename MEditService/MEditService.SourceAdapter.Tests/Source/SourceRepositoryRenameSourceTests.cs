@@ -45,6 +45,14 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
               "FormKey": "000803:BEEF01_Old.esp"
             }
             """),
+        ("spriggit-meta.json", """
+            {
+              "PackageName": "Spriggit.Json.Fallout4",
+              "Version": "1.0.0",
+              "Release": "Fallout4",
+              "ModKey": "Old.esp"
+            }
+            """),
         ("Cells/0/0/GroupRecordData.json", "{}"),
         ("Cells/0/0/EmbedCell - 000804_Old.esp/EmbedCell - 000804_Old.esp.json", """
             {
@@ -123,6 +131,14 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                       "Race": "000802:New.esm"
                     }
                     """),
+                ("spriggit-meta.json", """
+                    {
+                      "PackageName": "Spriggit.Json.Fallout4",
+                      "Version": "1.0.0",
+                      "Release": "Fallout4",
+                      "ModKey": "New.esm"
+                    }
+                    """),
             ],
             TreeOf("New.esm"));
     }
@@ -147,7 +163,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var changes = Session().Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
 
         Assert.Equal(
-            ["000000_New.esp.json", "Cells/0/0/EmbedCell - 000804_New.esp/EmbedCell - 000804_New.esp.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json"],
+            ["000000_New.esp.json", "Cells/0/0/EmbedCell - 000804_New.esp/EmbedCell - 000804_New.esp.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json", "spriggit-meta.json"],
             changes.Documents.Select(document => Path.GetRelativePath(PluginSourceRoot.In(_modFolder, "New.esp"), Path.Combine(_modFolder, document.Path)).Replace('\\', '/')).Order(StringComparer.Ordinal));
     }
 

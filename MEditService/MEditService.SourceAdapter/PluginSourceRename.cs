@@ -19,6 +19,7 @@ internal static class PluginSourceRename
             SourceRepositoryLayout.RootFor(toPlugin),
             .. underRoot.Split(Path.DirectorySeparatorChar).Select(leaf => SourceRepositoryLayout.LeafWithOrigin(leaf, from, to)),
         ]);
+        if (SourceRepositoryLayout.IsStamp(relativePath)) return new TreeFile(renamedPath, SpriggitStamp.Renamed(bytes, to));
         return relativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)
             ? new TreeFile(renamedPath, RenamedDocument(relativePath, bytes, from, to, new LayoutPath(relativePath).IsHeaderDocument))
             : new TreeFile(renamedPath, bytes);

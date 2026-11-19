@@ -89,6 +89,7 @@ internal static class PluginTrees
                     Path.GetRelativePath(scratchDir, file),
                     TranslatedStringValues.InLanguageOrder(StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel)))));
             }
+            treeFiles.Add(SpriggitStamp.Of(GameCodecs.For(mod.GameRelease), mod.ModKey, mod.GameRelease));
             return treeFiles;
         }
         finally

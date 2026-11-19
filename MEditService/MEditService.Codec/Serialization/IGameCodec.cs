@@ -37,6 +37,12 @@ public interface IGameCodec
     /// game, so the caller names the release.</summary>
     Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release);
 
+    /// <summary>The Spriggit translation package whose format the game's source is written in.</summary>
+    string SpriggitPackage { get; }
+
+    /// <summary>The version of <see cref="SpriggitPackage"/> the source is stamped with and read at.</summary>
+    string SpriggitVersion { get; }
+
     /// <summary>The plugin header bit the game names Blueprint, 0 for a game with none.</summary>
     int BlueprintFlag { get; }
 

@@ -437,7 +437,10 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     /// <summary>True for a file under the source root that holds no record — group and block metadata,
     /// and anything that is not a document at all. No row is derived from one.</summary>
     internal static bool CarriesNoRecord(string filePath) =>
-        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) || IsGroupDocument(filePath);
+        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) || IsGroupDocument(filePath) || IsStamp(filePath);
+
+    internal static bool IsStamp(string filePath) =>
+        Path.GetFileName(filePath).Equals(SpriggitStamp.FileName, StringComparison.Ordinal);
 
     internal static bool IsGroupDocument(string filePath) =>
         Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);

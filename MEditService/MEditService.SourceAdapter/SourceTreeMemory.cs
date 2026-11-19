@@ -111,7 +111,7 @@ internal sealed class SourceTreeMemory(TimeProvider time)
             // EditorID that may contain the separator, so a path is not a decidable identity.
             foreach (var file in Directory.EnumerateFiles(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
             {
-                if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || SourceRepositoryLayout.IsStamp(file)) continue;
                 listed.Add(file);
 
                 var relativePath = Path.GetRelativePath(sourceFolder, file);

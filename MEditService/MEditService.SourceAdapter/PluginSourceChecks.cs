@@ -60,16 +60,25 @@ internal static class PluginSourceChecks
         return colliding;
     }
 
-    internal static IReadOnlyList<RefusedFile> RefusedFilesOf(PluginSourceFiles source, GameRelease gameRelease)
+    internal static IReadOnlyList<RefusedFile> RefusedFilesOf(string pluginFileName, PluginSourceFiles source, GameRelease gameRelease)
     {
         var refused = new List<RefusedFile>();
-        foreach (var file in source.Files.Where(file => file.RelativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)))
+        if (source.Files.Count > 0 && StampWhyRefused(pluginFileName, source, gameRelease) is { } stamp) refused.Add(stamp);
+        foreach (var file in source.Files.Where(file => !SourceRepositoryLayout.IsStamp(file.RelativePath)
+                     && file.RelativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)))
         {
             var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Content));
             var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, text, gameRelease);
             if (WhyRefused(file.RelativePath, text, recordType, gameRelease) is { } reason) refused.Add(new RefusedFile(file.RelativePath, reason));
         }
         return refused;
+    }
+
+    private static RefusedFile? StampWhyRefused(string pluginFileName, PluginSourceFiles source, GameRelease gameRelease)
+    {
+        var path = Path.Combine(SourceRepositoryLayout.RootFor(pluginFileName), SpriggitStamp.FileName);
+        var held = source.Files.FirstOrDefault(file => file.RelativePath == path)?.Content;
+        return SpriggitStamp.WhyRefused(GameCodecs.For(gameRelease), held) is { } reason ? new RefusedFile(path, reason) : null;
     }
 
     /// <summary>The Codec's reason for refusing the document at <paramref name="relativePath"/>, null when it

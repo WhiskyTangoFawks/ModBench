@@ -316,7 +316,11 @@ internal sealed class SourceRepository : ISourceRepository
         });
 
     public Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin) =>
-        SourceFailure.Answer(() => PluginSourceChecks.RefusedFilesOf(Locator.FilesOf(Spelled(plugin)), _release));
+        SourceFailure.Answer(() =>
+        {
+            var spelled = Spelled(plugin);
+            return PluginSourceChecks.RefusedFilesOf(spelled.Name, Locator.FilesOf(spelled), _release);
+        });
 
     public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         SourceFailure.Answer(() =>

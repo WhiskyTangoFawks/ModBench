@@ -207,6 +207,10 @@ public sealed class ProofDivergenceTests
             IFileSystem? fileSystem = null, ICreateStream? streamCreator = null) =>
             game.DeserializeWholeMod(folder, workDropoff, cancel, fileSystem, streamCreator);
 
+        public string SpriggitPackage => game.SpriggitPackage;
+
+        public string SpriggitVersion => game.SpriggitVersion;
+
         public int BlueprintFlag => game.BlueprintFlag;
 
         public IReadOnlyDictionary<string, int> LoadFlags => game.LoadFlags;
