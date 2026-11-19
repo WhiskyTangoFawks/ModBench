@@ -39,6 +39,19 @@ public sealed class PluginSourceReadTests
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains("The Big Door", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task APluginsSource_HoldsTheMetaOfTheVersionTheCodecReads_NamingThePlugin()
+    {
+        using var folder = new ScratchDirectory("medit-source-meta-");
+        var pluginPath = PluginWithAnNpcOfFormId(folder, 0x00000800);
+
+        var source = (await ReadSourceAsync(pluginPath, GameRelease.Fallout4)).Answered();
+
+        var meta = Assert.Single(source.Files, file => file.RelativePath == SpriggitMeta.FileName);
+        Assert.Null(SpriggitMeta.WhyRefused(GameCodecs.For(GameRelease.Fallout4), meta.Content));
+        Assert.Contains("\"ModKey\": \"Fixture.esp\"", Encoding.UTF8.GetString(meta.Content), StringComparison.Ordinal);
+    }
+
     public static TheoryData<string, uint, Type, string> RecordsOfAFormIdNoSourceCanHold => new()
     {
         {

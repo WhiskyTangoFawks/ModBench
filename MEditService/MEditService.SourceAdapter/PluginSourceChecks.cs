@@ -60,10 +60,16 @@ internal static class PluginSourceChecks
         return colliding;
     }
 
-    internal static IReadOnlyList<RefusedFile> RefusedFilesOf(PluginSourceFiles source, GameRelease gameRelease)
+    /// <summary>Every file the Codec refuses. A source of another version holds the version's refusal alone: its
+    /// documents are another format's, so their own refusals would say nothing true.</summary>
+    internal static IReadOnlyList<RefusedFile> RefusedFilesOf(string pluginFileName, PluginSourceFiles source, GameRelease gameRelease)
     {
+        var path = SpriggitMetaPath(pluginFileName);
+        if (MetaRefusal(path, source.Files.FirstOrDefault(file => file.RelativePath == path)?.Content, gameRelease) is { } meta) return [meta];
+
         var refused = new List<RefusedFile>();
-        foreach (var file in source.Files.Where(file => file.RelativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)))
+        foreach (var file in source.Files.Where(file => !SourceRepositoryLayout.IsSpriggitMeta(file.RelativePath)
+                     && file.RelativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)))
         {
             var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Content));
             var recordType = SourceRepositoryLayout.RecordTypeOf(file.RelativePath, text, gameRelease);
@@ -71,6 +77,14 @@ internal static class PluginSourceChecks
         }
         return refused;
     }
+
+    internal static string SpriggitMetaPath(string pluginFileName) =>
+        Path.Combine(SourceRepositoryLayout.RootFor(pluginFileName), SpriggitMeta.FileName);
+
+    /// <summary>The refusal of the plugin source's Spriggit meta at <paramref name="path"/>, held as <paramref name="held"/>
+    /// (null when the file is missing); null when the source is of the version the Codec reads.</summary>
+    internal static RefusedFile? MetaRefusal(string path, byte[]? held, GameRelease gameRelease) =>
+        SpriggitMeta.WhyRefused(GameCodecs.For(gameRelease), held) is { } reason ? new RefusedFile(path, reason) : null;
 
     /// <summary>The Codec's reason for refusing the document at <paramref name="relativePath"/>, null when it
     /// takes it.</summary>

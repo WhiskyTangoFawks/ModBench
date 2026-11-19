@@ -33,6 +33,14 @@ internal sealed class GameCodec : IGameCodec
 
     public Assembly GeneratedSerializers => typeof(GameCodec).Assembly;
 
+    public string SpriggitPackage => BuildMetadata(nameof(SpriggitPackage));
+
+    public string SpriggitVersion => BuildMetadata(nameof(SpriggitVersion));
+
+    private static string BuildMetadata(string key) =>
+        typeof(GameCodec).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Single(attribute => attribute.Key == key).Value
+        ?? throw new InvalidOperationException($"The build holds no {key}.");
+
     public SchemaAnnotations Annotations => GameAnnotations.Table;
 
     public int BlueprintFlag => GameSpecifics.BlueprintFlag;
