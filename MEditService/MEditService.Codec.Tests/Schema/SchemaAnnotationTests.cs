@@ -92,6 +92,17 @@ public sealed class SchemaAnnotationTests
         Assert.Equal(sorted, SchemaFields.At(release, table, path).SortedByFormat);
     }
 
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    [InlineData(GameRelease.Starfield)]
+    public void EveryListTheFormatSorts_ThatTheSchemaWalks_IsMarkedSorted(GameRelease release)
+    {
+        var schemas = new SchemaReflector().GetSchemas(release);
+
+        Assert.NotEmpty(schemas);
+    }
+
     private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>
         path.Split('.').Aggregate(
             SharedSchemaReflector.Instance.GetSchemas(release)["qust"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field,

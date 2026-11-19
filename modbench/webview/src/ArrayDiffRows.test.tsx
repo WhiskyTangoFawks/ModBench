@@ -458,11 +458,11 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
 
   const guard = { name: 'Guard', flags: 'g' };
   const ambush = { name: 'Ambush', flags: 'a' };
-  async function renderGuardAfterAmbush() {
+  async function renderGuardAfterAmbush(meta = scriptMeta) {
     renderScripts([{ name: 'Guard', flags: 'm' }], [guard, ambush], [
       scriptRow('Ambush', { 'MyMod.esp': ambush }, { 'MyMod.esp': 1 }),
       scriptRow('Guard', { 'Fallout4.esm': { name: 'Guard', flags: 'm' }, 'MyMod.esp': guard }, { 'Fallout4.esm': 0, 'MyMod.esp': 0 }),
-    ]);
+    ], meta);
     await waitFor(() => screen.getAllByText('flags'));
   }
 
@@ -508,19 +508,12 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Scripts'), at(1)] }));
   });
 
-  it.each(['Ambush', 'Guard'])('the keyed element %s\'s context offers neither move', async label => {
-    await renderGuardAfterAmbush();
-
-    expect(JSON.parse(required(myCell(rowLabelled(label)).getAttribute('data-vscode-context'), `${label}'s context`)))
-      .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
-  });
-
-  it.each(['Ambush', 'Guard'])('the element %s of an array the format sorts offers neither move', async label => {
-    renderScripts([{ name: 'Guard', flags: 'm' }], [guard, ambush], [
-      scriptRow('Ambush', { 'MyMod.esp': ambush }, { 'MyMod.esp': 1 }),
-      scriptRow('Guard', { 'Fallout4.esm': { name: 'Guard', flags: 'm' }, 'MyMod.esp': guard }, { 'Fallout4.esm': 0, 'MyMod.esp': 0 }),
-    ], { ...scriptMeta, keyMembers: null, sortedByFormat: true });
-    await waitFor(() => screen.getAllByText('flags'));
+  it.each([
+    ['keyed', scriptMeta, 'Ambush'], ['keyed', scriptMeta, 'Guard'],
+    ['sorted', { ...scriptMeta, keyMembers: null, sortedByFormat: true }, 'Ambush'],
+    ['sorted', { ...scriptMeta, keyMembers: null, sortedByFormat: true }, 'Guard'],
+  ])('the element of a %s array offers neither move', async (_kind, meta, label) => {
+    await renderGuardAfterAmbush(meta);
 
     expect(JSON.parse(required(myCell(rowLabelled(label)).getAttribute('data-vscode-context'), `${label}'s context`)))
       .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });

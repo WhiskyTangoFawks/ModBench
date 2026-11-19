@@ -52,8 +52,7 @@ import type {
   StringValueContext,
 } from '../../src/wire/messages';
 
-// `siblings` is the length of the array in this column's own document. xedit.md, divergence 14: a
-// keyed array and an array the format sorts take no move.
+// `siblings` is the length of the array in this column's own document; `noMove` is xedit.md, divergence 14.
 export function arrayElementContext(
   formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number, noMove: boolean,
 ): ArrayElementContext {

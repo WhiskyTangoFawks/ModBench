@@ -44,7 +44,7 @@ internal static class GameAnnotations
             },
             KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
-            FormatSortsList: FormatNormalization.Sorts,
+            FormatSortedLists: FormatNormalization.SortedLists,
             ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],

@@ -166,15 +166,11 @@ public sealed class RecordDocumentEditTests : IDisposable
     public void MovingAnElementOfAnArrayTheFormatSorts_IsRefusedAsMalformed_NamingTheArray()
     {
         _npc.ActorEffect = [_mod.Spells.AddNew("SpellA").ToLink<ISpellRecordGetter>(), _mod.Spells.AddNew("SpellB").ToLink<ISpellRecordGetter>()];
-        var formKey = SeedNpc();
-        var before = _fixture.Document(formKey);
 
-        var (result, after) = _fixture.Apply(formKey, MoveTo(1, Member("ActorEffect"), At(0)));
+        var result = _fixture.Refused(SeedNpc(), MoveTo(1, Member("ActorEffect"), At(0)));
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
         Assert.Contains("'ActorEffect' is an array the format sorts", result.Message, StringComparison.Ordinal);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Theory]

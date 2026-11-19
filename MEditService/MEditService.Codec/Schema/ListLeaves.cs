@@ -39,6 +39,7 @@ internal static class ListLeaves
         if (BuildElementSpec(elementType, game, path, logger) is not { } elementSpec)
             return SchemaRefusals.ReportUnclassified<FieldMetadata>(game, logger, prop, elementType, "list element");
 
+        game.Observed.ListWalked(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
         return new(prop.Name, "array", true, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             ElementType: elementSpec,
             KeyMembers: game.Annotations.KeyMembersFor(prop),

@@ -72,8 +72,7 @@ public sealed record SchemaAnnotations(
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
-    // Whether the source's format sorts the list a getter interface declares, by the interface and the member.
-    Func<Type, string, bool> FormatSortsList,
+    IReadOnlyList<(Type Declarer, string Member)> FormatSortedLists,
     // See FieldMetadata.ExtendedKeyMembers; every row extends a KeyedArrays row.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> ExtendedKeys,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
@@ -304,7 +303,7 @@ public sealed record SchemaAnnotations(
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     internal IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
-    internal bool IsSortedByFormat(PropertyInfo prop) => FormatSortsList(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
+    internal bool IsSortedByFormat(PropertyInfo prop) => FormatSortedLists.Contains((ReflectedTypes.DeclaringTypeOf(prop), prop.Name));
     internal IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
@@ -690,6 +689,11 @@ public sealed record SchemaAnnotations(
                 .Select(t => $"{nameof(CycleTruncations)}: {t} never stops the walk or lets a loop through"),
             .. EmptySubSchemaTypes.Where(t => !observed.EmptySubSchemas.Contains(t)).Order(StringComparer.Ordinal)
                 .Select(t => $"{nameof(EmptySubSchemaTypes)}: {t} never comes out empty in the walk"),
+            .. FormatSortedLists.SelectMany(sorted => observed.ListsWalked
+                    .Where(walked => walked.Member == sorted.Member && walked.Declarer != sorted.Declarer
+                        && (sorted.Declarer.IsAssignableFrom(walked.Declarer) || walked.Declarer.IsAssignableFrom(sorted.Declarer)))
+                    .Select(walked => $"{nameof(FormatSortedLists)}: the format sorts {sorted.Declarer.Name}.{sorted.Member}, " +
+                        $"which the schema walks as {walked.Declarer.Name}.{walked.Member}, so an array of it offers a move")),
             .. RecordFlagNames.Where(r => !observed.NamedFlags.Contains((r.TypeName, r.Bit)))
                 .Select(r => $"{nameof(RecordFlagNames)}: {r.TypeName} 0x{r.Bit:X} names no record table's unnamed bit"),
         ];
@@ -712,14 +716,17 @@ internal sealed class WalkObservations
     private readonly HashSet<string> _appliedTruncations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _emptySubSchemas = new(StringComparer.Ordinal);
     private readonly HashSet<(string TypeName, long Bit)> _namedFlags = [];
+    private readonly HashSet<(Type Declarer, string Member)> _listsWalked = [];
 
     internal IReadOnlySet<string> AppliedTruncations => _appliedTruncations;
     internal IReadOnlySet<string> EmptySubSchemas => _emptySubSchemas;
     internal IReadOnlySet<(string TypeName, long Bit)> NamedFlags => _namedFlags;
+    internal IReadOnlySet<(Type Declarer, string Member)> ListsWalked => _listsWalked;
 
     /// <summary>The walk stopped at this truncation, or let a loop through because of it.</summary>
     internal void AppliedTruncation(string getterInterfaceName) => Record(_appliedTruncations, getterInterfaceName);
     internal void CameOutEmpty(string getterInterfaceName) => Record(_emptySubSchemas, getterInterfaceName);
+    internal void ListWalked(Type declarer, string member) => Record(_listsWalked, (declarer, member));
     internal void NamedFlag(string getterInterfaceName, long bit) => Record(_namedFlags, (getterInterfaceName, bit));
 
     private void Record<T>(HashSet<T> observed, T observation)
