@@ -40,8 +40,10 @@ public static class RecordTextCodec
     /// <see cref="PluginHeader.RecordType"/>.</summary>
     public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType) =>
         recordType == PluginHeader.RecordType
-            ? WhyNotProduced(text, gameRelease, source => HeaderRoundTrip(source, gameRelease), HeaderIdentityOf(text))
+            ? WhyNotProduced(text, gameRelease, source => new Produced(HeaderRoundTrip(source, gameRelease)), HeaderIdentityOf(text))
             : WhyNotAProducedRecord(text, gameRelease, recordType);
+
+    private sealed record Produced(string Text, IMajorRecordGetter? ReadAs = null);
 
     // The reader takes the raw flags value alone and the codec writes every view beside it, so a document
     // that omits a view is the record.
@@ -55,7 +57,7 @@ public static class RecordTextCodec
                 var produced = Document.Parse(SerializeToText(record, gameRelease));
                 var written = Document.Parse(source);
                 var omitted = RecordHeaderFlags.ViewsOf(record.Registration.GetterType, gameRelease).Where(view => written.At(view) is null);
-                return omitted.Aggregate(produced, (document, view) => document.Without(view)).Text;
+                return new Produced(omitted.Aggregate(produced, (document, view) => document.Without(view)).Text, record);
             },
             NoIdentityMembers);
 
@@ -85,23 +87,24 @@ public static class RecordTextCodec
     /// <summary>The same answer for a block level's document, named by its level in
     /// <see cref="RecordTypes.InteriorCellBlockLevels"/> or the worldspace's.</summary>
     public static string? WhyNotABlockLevel(string text, GameRelease gameRelease, string level) =>
-        WhyNotProduced(text, gameRelease, source => BlankDocument(level, gameRelease, Document.Parse(source)), NoIdentityMembers);
+        WhyNotProduced(text, gameRelease, source => new Produced(BlankDocument(level, gameRelease, Document.Parse(source))), NoIdentityMembers);
 
     private static string? WhyNotProduced(
-        string text, GameRelease gameRelease, Func<string, string> produce, IReadOnlySet<string> identity)
+        string text, GameRelease gameRelease, Func<string, Produced> produce, IReadOnlySet<string> identity)
     {
         if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
+        string ProducedText(string source) => produce(source).Text;
         try
         {
-            var produced = Document.Parse(produce(text));
-            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, produced.Element) is { } at
+            var (producedText, readAs) = produce(text);
+            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, Document.Parse(producedText).Element, readAs, gameRelease) is { } at
                 ? $"{at} does not match what the current codec would produce from it."
                 : null;
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ReadFault.Describe(text, source => ThrownBy(produce, source), identity)
-                ?? ReadFault.MisreadMember(text, produce, identity)
+            return ReadFault.Describe(text, source => ThrownBy(ProducedText, source), identity)
+                ?? ReadFault.MisreadMember(text, ProducedText, identity)
                 ?? ReadFault.Unlocated(ex);
         }
     }

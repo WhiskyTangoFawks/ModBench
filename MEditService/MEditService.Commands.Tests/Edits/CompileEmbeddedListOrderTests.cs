@@ -38,13 +38,17 @@ public sealed class CompileEmbeddedListOrderTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_KeepsTheChildrenInTheFormatsOrder()
+    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_Lands_AndTheNextDecompileWritesThemInTheFormatsOrder()
     {
-        var original = ReferencesIn(this.Binary(_plugin));
+        var file = Path.Combine(ModFolderOf(_plugin), SourceModTree.DocumentFile(ModFolderOf(_plugin), _plugin, _cell.ToString()).Require());
+        var decompiled = File.ReadAllText(file);
+        File.WriteAllText(file, JsonReversal.WithReversed(decompiled, root => root["Temporary"].Require().AsArray()));
 
-        var compiled = await ReferencesAfter(cell => (cell.Temporary[0], cell.Temporary[2]) = (cell.Temporary[2], cell.Temporary[0]));
+        await CompileHandler.CompileLandedAsync(_plugin);
+        var decompile = await TestEditService.DecompileHandler(Holder).DecompileAsync([_plugin], force: true);
 
-        Assert.Equal(original, compiled);
+        Assert.Empty(decompile.Value().Refused);
+        Assert.Equal(decompiled, File.ReadAllText(file));
     }
 
     private static IReadOnlyList<FormKey> ReferencesIn(IFallout4ModDisposableGetter binary)

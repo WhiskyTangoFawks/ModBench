@@ -256,6 +256,67 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         Assert.Null(RecordTextCodec.WhyNotARecord(Edited(cell, root => root["Persistent"] = new JsonArray()), Release, "cell"));
     }
 
+    private static string NpcWithTheListsTheFormatSorts()
+    {
+        static FormKey Of(uint id) => new(ModKey.FromFileName("Fallout4.esm"), id);
+        var npc = new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4)
+        {
+            EditorID = "Guy",
+            ActorEffect = [new FormLink<ISpellRecordGetter>(Of(0x11)), new FormLink<ISpellRecordGetter>(Of(0x12))],
+            Factions =
+            [
+                new RankPlacement { Faction = new FormLink<IFactionGetter>(Of(0x13)), Rank = 0 },
+                new RankPlacement { Faction = new FormLink<IFactionGetter>(Of(0x14)), Rank = 1 },
+            ],
+            VirtualMachineAdapter = new VirtualMachineAdapter
+            {
+                Scripts =
+                [
+                    new ScriptEntry { Name = "Only", Properties = [new ScriptIntProperty { Name = "A", Data = 1 }, new ScriptIntProperty { Name = "B", Data = 2 }] },
+                ],
+            },
+        };
+        return RecordTextCodec.SerializeToText(npc, Release);
+    }
+
+    private static readonly Dictionary<string, Func<JsonObject, JsonArray>> SortedLists = new(StringComparer.Ordinal)
+    {
+        ["ActorEffect"] = root => root["ActorEffect"].Require().AsArray(),
+        ["Factions"] = root => root["Factions"].Require().AsArray(),
+        ["a script's Properties"] = root => root["VirtualMachineAdapter"].Require()["Scripts"].Require()[0].Require()["Properties"].Require().AsArray(),
+    };
+
+    [Theory]
+    [InlineData("ActorEffect")]
+    [InlineData("Factions")]
+    [InlineData("a script's Properties")]
+    public void AListTheFormatSorts_LeftOutOfItsOrder_IsStillTheRecord(string list)
+    {
+        var text = NpcWithTheListsTheFormatSorts();
+
+        Assert.Null(RecordTextCodec.WhyNotARecord(JsonReversal.WithReversed(text, SortedLists[list]), Release, "npc_"));
+    }
+
+    [Fact]
+    public void AFlagsListInAnotherOrder_IsStillTheRecord()
+    {
+        var cell = RecordTextCodec.SerializeToText(
+            new Cell(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { Flags = Cell.Flag.IsInteriorCell | Cell.Flag.HasWater },
+            Release);
+
+        Assert.Null(RecordTextCodec.WhyNotARecord(JsonReversal.WithReversed(cell, root => root["Flags"].Require().AsArray()), Release, "cell"));
+    }
+
+    [Fact]
+    public void AnElementOfAListTheFormatSorts_HoldingAMemberTheCodecDrops_IsRefused_NamingTheElementsMember()
+    {
+        var reversed = JsonReversal.WithReversed(NpcWithTheListsTheFormatSorts(), SortedLists["Factions"]);
+
+        var why = RecordTextCodec.WhyNotARecord(Edited(reversed, root => SortedLists["Factions"](root)[0].Require()["Bogus"] = 1), Release, "npc_");
+
+        Assert.Equal("Factions[0].Bogus does not match what the current codec would produce from it.", why);
+    }
+
     [Fact]
     public void ABlockLevelDocumentTheCodecWrote_IsTheLevel()
     {

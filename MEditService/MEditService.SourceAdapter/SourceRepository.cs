@@ -326,7 +326,7 @@ internal sealed class SourceRepository : ISourceRepository
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
-            return PluginSourceChecks.Compare(spelled.Name, Locator.FilesOf(spelled), serialized);
+            return PluginSourceChecks.Compare(spelled.Name, Locator.FilesOf(spelled), serialized, _release);
         });
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
