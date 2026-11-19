@@ -1,6 +1,4 @@
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -52,12 +50,8 @@ public sealed class DocumentMeaningTests
         return RecordTextCodec.SerializeToText(npc, GameRelease.Fallout4);
     }
 
-    private static string WithReversed(string text, string member)
-    {
-        var root = JsonNode.Parse(text).Require().AsObject();
-        root[member] = new JsonArray([.. root[member].Require().AsArray().Reverse().Select(item => item?.DeepClone())]);
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-    }
+    private static string WithReversed(string text, string member) =>
+        JsonReversal.WithReversed(text, root => root[member].Require().AsArray());
 
     private static string? NpcDifference(string held, string produced) =>
         DocumentMeaning.FirstDifference(Encoding.UTF8.GetBytes(held), Encoding.UTF8.GetBytes(produced), GameRelease.Fallout4, "npc_");

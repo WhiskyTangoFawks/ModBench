@@ -59,7 +59,6 @@ public sealed class CreateRecordChangesHandler
     private static RecordEditResult MalformedPosition(string why) =>
         RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
 
-
     private Answer<RecordEditChanges, SourceFailure> MintRecord(
         PluginAddress plugin, string recordType, string? container, GridPosition? position, WriteSessions sessions)
     {

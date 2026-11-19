@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -44,12 +42,7 @@ public sealed class CompileEmbeddedListOrderTests : TestInstance
     {
         var file = Path.Combine(ModFolderOf(_plugin), SourceModTree.DocumentFile(ModFolderOf(_plugin), _plugin, _cell.ToString()).Require());
         var decompiled = File.ReadAllText(file);
-        var root = JsonNode.Parse(decompiled).Require().AsObject();
-        var temporary = root["Temporary"].Require().AsArray();
-        var swapped = temporary.Select(placed => placed?.DeepClone()).ToList();
-        (swapped[0], swapped[2]) = (swapped[2], swapped[0]);
-        root["Temporary"] = new JsonArray([.. swapped]);
-        File.WriteAllText(file, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(file, JsonReversal.WithReversed(decompiled, root => root["Temporary"].Require().AsArray()));
 
         await CompileHandler.CompileLandedAsync(_plugin);
         var decompile = await TestEditService.DecompileHandler(Holder).DecompileAsync([_plugin], force: true);

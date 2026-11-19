@@ -286,13 +286,6 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         ["a script's Properties"] = root => root["VirtualMachineAdapter"].Require()["Scripts"].Require()[0].Require()["Properties"].Require().AsArray(),
     };
 
-    private static void Reversed(JsonArray list)
-    {
-        var items = list.Select(item => item?.DeepClone()).Reverse().ToList();
-        list.Clear();
-        foreach (var item in items) list.Add(item);
-    }
-
     [Theory]
     [InlineData("ActorEffect")]
     [InlineData("Factions")]
@@ -301,7 +294,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     {
         var text = NpcWithTheListsTheFormatSorts();
 
-        Assert.Null(RecordTextCodec.WhyNotARecord(Edited(text, root => Reversed(SortedLists[list](root))), Release, "npc_"));
+        Assert.Null(RecordTextCodec.WhyNotARecord(JsonReversal.WithReversed(text, SortedLists[list]), Release, "npc_"));
     }
 
     [Fact]
@@ -311,22 +304,17 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
             new Cell(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { Flags = Cell.Flag.IsInteriorCell | Cell.Flag.HasWater },
             Release);
 
-        Assert.Null(RecordTextCodec.WhyNotARecord(Edited(cell, root => Reversed(root["Flags"].Require().AsArray())), Release, "cell"));
+        Assert.Null(RecordTextCodec.WhyNotARecord(JsonReversal.WithReversed(cell, root => root["Flags"].Require().AsArray()), Release, "cell"));
     }
 
     [Fact]
-    public void AnElementOfAListTheFormatSorts_HoldingAMemberTheCodecDrops_IsRefused_NamingTheElement()
+    public void AnElementOfAListTheFormatSorts_HoldingAMemberTheCodecDrops_IsRefused_NamingTheElementsMember()
     {
-        var text = NpcWithTheListsTheFormatSorts();
+        var reversed = JsonReversal.WithReversed(NpcWithTheListsTheFormatSorts(), SortedLists["Factions"]);
 
-        var why = RecordTextCodec.WhyNotARecord(Edited(text, root =>
-        {
-            var factions = SortedLists["Factions"](root);
-            Reversed(factions);
-            factions[0].Require()["Bogus"] = 1;
-        }), Release, "npc_");
+        var why = RecordTextCodec.WhyNotARecord(Edited(reversed, root => SortedLists["Factions"](root)[0].Require()["Bogus"] = 1), Release, "npc_");
 
-        Assert.StartsWith("Factions[0]", why, StringComparison.Ordinal);
+        Assert.Equal("Factions[0].Bogus does not match what the current codec would produce from it.", why);
     }
 
     [Fact]

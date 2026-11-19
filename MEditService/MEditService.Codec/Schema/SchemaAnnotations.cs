@@ -303,7 +303,9 @@ public sealed record SchemaAnnotations(
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     internal IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
-    internal bool IsSortedByFormat(PropertyInfo prop) => FormatSortedLists.Contains((ReflectedTypes.DeclaringTypeOf(prop), prop.Name));
+    internal bool IsSortedByFormat(PropertyInfo prop) => IsSortedByFormat(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
+    internal bool IsSortedByFormat(Type owner, string member) =>
+        FormatSortedLists.Any(list => list.Member == member && list.Declarer.IsAssignableFrom(owner));
     internal IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>

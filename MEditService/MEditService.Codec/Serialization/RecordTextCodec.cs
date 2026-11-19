@@ -43,8 +43,7 @@ public static class RecordTextCodec
             ? WhyNotProduced(text, gameRelease, source => new Produced(HeaderRoundTrip(source, gameRelease)), HeaderIdentityOf(text))
             : WhyNotAProducedRecord(text, gameRelease, recordType);
 
-    // What the codec writes from a document, and what it read the document as where that tells the format's sorted lists.
-    private sealed record Produced(string Text, IMajorRecordGetter? Read = null);
+    private sealed record Produced(string Text, IMajorRecordGetter? ReadAs = null);
 
     // The reader takes the raw flags value alone and the codec writes every view beside it, so a document
     // that omits a view is the record.
@@ -97,9 +96,8 @@ public static class RecordTextCodec
         string ProducedText(string source) => produce(source).Text;
         try
         {
-            var (producedText, read) = produce(text);
-            var sorted = GameCodecs.For(gameRelease).Annotations.FormatSortedLists;
-            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, Document.Parse(producedText).Element, read, sorted) is { } at
+            var (producedText, readAs) = produce(text);
+            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, Document.Parse(producedText).Element, readAs, gameRelease) is { } at
                 ? $"{at} does not match what the current codec would produce from it."
                 : null;
         }

@@ -42,7 +42,7 @@ public static class DocumentMeaning
         if (ReadOrNull(held, gameRelease, recordType) is not { } read) return inOrder;
         using var written = JsonDocument.Parse(held);
         using var regenerated = JsonDocument.Parse(produced);
-        return FirstDifference(written.RootElement, regenerated.RootElement, read, GameCodecs.For(gameRelease).Annotations.FormatSortedLists);
+        return FirstDifference(written.RootElement, regenerated.RootElement, read, gameRelease);
     }
 
     // A document the codec cannot read has no lists to tell apart, so its answer is the one in order.
@@ -61,43 +61,42 @@ public static class DocumentMeaning
     /// <summary>The path of the first member where <paramref name="written"/> and <paramref name="produced"/>
     /// differ, or null when they mean the same.</summary>
     internal static string? FirstDifference(JsonElement written, JsonElement produced) =>
-        new Comparison([]).Difference(written, produced, Root, null);
+        new Comparison(null).Difference(written, produced, Root, null);
 
-    /// <summary>The same answer, where <paramref name="written"/> reads as <paramref name="read"/>: a set of flags, and a
-    /// list <paramref name="sorted"/> names, the format writes in its own order (ADR-0030), so any order means the same.</summary>
-    internal static string? FirstDifference(
-        JsonElement written, JsonElement produced, object? read, IReadOnlyList<(Type Declarer, string Member)> sorted) =>
-        new Comparison(sorted).Difference(written, produced, Root, read);
+    /// <summary>The same answer, where <paramref name="written"/> reads as <paramref name="writtenReadAs"/>: a set of
+    /// flags, and a list the format sorts, the format writes in its own order (ADR-0030), so any order means the same.</summary>
+    internal static string? FirstDifference(JsonElement written, JsonElement produced, object? writtenReadAs, GameRelease gameRelease) =>
+        new Comparison(GameCodecs.For(gameRelease).Annotations).Difference(written, produced, Root, writtenReadAs);
 
-    private sealed class Comparison(IReadOnlyList<(Type Declarer, string Member)> sorted)
+    private sealed class Comparison(SchemaAnnotations? annotations)
     {
-        // read: what the written element reads as, null where that is not known.
-        public string? Difference(JsonElement written, JsonElement produced, string path, object? read)
+        public string? Difference(JsonElement written, JsonElement produced, string path, object? writtenReadAs)
         {
             if (written.ValueKind != produced.ValueKind) return path;
             return written.ValueKind switch
             {
-                JsonValueKind.Object => ObjectDifference(written, produced, path, read),
-                JsonValueKind.Array => ArrayDifference(written, produced, path, read),
+                JsonValueKind.Object => ObjectDifference(written, produced, path, writtenReadAs),
+                JsonValueKind.Array => ArrayDifference(written, produced, path, writtenReadAs),
                 JsonValueKind.String => written.GetString() == produced.GetString() ? null : path,
                 JsonValueKind.Number => NumbersAgree(written, produced) ? null : path,
                 _ => null,
             };
         }
 
-        private string? ObjectDifference(JsonElement written, JsonElement produced, string path, object? read)
+        private string? ObjectDifference(JsonElement written, JsonElement produced, string path, object? writtenReadAs)
         {
             foreach (var member in written.EnumerateObject())
             {
                 var memberPath = Member(path, member.Name);
                 if (!produced.TryGetProperty(member.Name, out var counterpart)) return memberPath;
-                var memberRead = read is null || member.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)
+                var memberReadAs = writtenReadAs is null || member.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)
                     ? null
-                    : ValueOf(read, member.Name);
-                var orderedByFormat = memberRead is Enum || (read is not null && SortedByFormat(read, member.Name));
+                    : ValueOf(writtenReadAs, member.Name);
+                var orderedByFormat = writtenReadAs is not null
+                    && (memberReadAs is Enum || annotations?.IsSortedByFormat(writtenReadAs.GetType(), member.Name) == true);
                 var found = member.Value.ValueKind == JsonValueKind.Array && orderedByFormat
-                    ? UnorderedDifference(member.Value, counterpart, memberPath, memberRead)
-                    : Difference(member.Value, counterpart, memberPath, memberRead);
+                    ? UnorderedDifference(member.Value, counterpart, memberPath, memberReadAs)
+                    : Difference(member.Value, counterpart, memberPath, memberReadAs);
                 if (found is not null) return found;
             }
             return produced.EnumerateObject().Select(member => member.Name).FirstOrDefault(name => !written.TryGetProperty(name, out _)) is { } extra
@@ -105,11 +104,11 @@ public static class DocumentMeaning
                 : null;
         }
 
-        private string? ArrayDifference(JsonElement written, JsonElement produced, string path, object? read)
+        private string? ArrayDifference(JsonElement written, JsonElement produced, string path, object? writtenReadAs)
         {
             var writtenItems = written.EnumerateArray().ToArray();
             var producedItems = produced.EnumerateArray().ToArray();
-            var readItems = ItemsOf(read, writtenItems.Length);
+            var readItems = ItemsOf(writtenReadAs, writtenItems.Length);
             for (var index = 0; index < Math.Min(writtenItems.Length, producedItems.Length); index++)
             {
                 if (Difference(writtenItems[index], producedItems[index], $"{path}[{index}]", readItems[index]) is { } found) return found;
@@ -119,47 +118,48 @@ public static class DocumentMeaning
 
         // Each written element pairs with a produced element of its meaning, wherever the format put it. The one at
         // its own index is tried first, so a list already in the format's order costs one pass.
-        private string? UnorderedDifference(JsonElement written, JsonElement produced, string path, object? read)
+        private string? UnorderedDifference(JsonElement written, JsonElement produced, string path, object? writtenReadAs)
         {
             var writtenItems = written.EnumerateArray().ToArray();
             var producedItems = produced.EnumerateArray().ToArray();
             if (writtenItems.Length != producedItems.Length) return path;
-            var readItems = ItemsOf(read, writtenItems.Length);
+            var readItems = ItemsOf(writtenReadAs, writtenItems.Length);
             var unpaired = Enumerable.Range(0, producedItems.Length).ToList();
             for (var index = 0; index < writtenItems.Length; index++)
             {
                 var itemPath = $"{path}[{index}]";
-                var candidates = unpaired.Contains(index) ? unpaired.Where(at => at != index).Prepend(index) : unpaired;
+                var candidates = (unpaired.Contains(index) ? unpaired.Where(at => at != index).Prepend(index) : unpaired).ToList();
                 var paired = candidates.Where(at => Difference(writtenItems[index], producedItems[at], itemPath, readItems[index]) is null).Take(1).ToList();
-                if (paired.Count == 0) return itemPath;
+                if (paired.Count == 0)
+                {
+                    var nearest = candidates.MaxBy(at => MembersAgreeing(writtenItems[index], producedItems[at]));
+                    return Difference(writtenItems[index], producedItems[nearest], itemPath, readItems[index]) ?? itemPath;
+                }
                 unpaired.Remove(paired[0]);
             }
             return null;
         }
 
-        private bool SortedByFormat(object read, string member) =>
-            sorted.Any(list => list.Member == member && list.Declarer.IsInstanceOfType(read));
+        private int MembersAgreeing(JsonElement written, JsonElement produced) =>
+            written.ValueKind == JsonValueKind.Object && produced.ValueKind == JsonValueKind.Object
+                ? written.EnumerateObject().Count(member =>
+                    produced.TryGetProperty(member.Name, out var counterpart) && Difference(member.Value, counterpart, Root, null) is null)
+                : 0;
 
         private static readonly ConcurrentDictionary<(Type Owner, string Member), PropertyInfo?> Members = new();
 
-        // The most derived declaration: a class can redeclare a member its base declares.
-        private static object? ValueOf(object read, string member) =>
-            Members.GetOrAdd((read.GetType(), member), static key =>
-            {
-                for (var declaring = key.Owner; declaring is not null; declaring = declaring.BaseType)
-                {
-                    if (declaring.GetProperty(key.Member, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) is { } property
-                        && property.GetIndexParameters().Length == 0)
-                    {
-                        return property;
-                    }
-                }
-                return null;
-            })?.GetValue(read);
+        private static object? ValueOf(object readAs, string member) =>
+            Members.GetOrAdd((readAs.GetType(), member), static key =>
+                key.Owner.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(property => property.Name == key.Member && property.GetIndexParameters().Length == 0)
+                    .ToList() is { Count: > 0 } declarations
+                    ? ReflectedTypes.MostDerived(declarations)
+                    : null) is { } held
+                ? ReflectedTypes.ReadOrNull(readAs, held)
+                : null;
 
-        // An element pairs with what it reads as by index only when the read holds as many as were written.
-        private static object?[] ItemsOf(object? read, int count) =>
-            read is IEnumerable items and not string && items.Cast<object?>().ToArray() is { } held && held.Length == count ? held : new object?[count];
+        private static object?[] ItemsOf(object? readAs, int count) =>
+            readAs is IEnumerable items and not string && items.Cast<object?>().ToArray() is { } held && held.Length == count ? held : new object?[count];
 
         // Integers by their digits, so none is rounded to a double. Any other number is the float the codec reads it as.
         private static bool NumbersAgree(JsonElement written, JsonElement produced) =>

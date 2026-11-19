@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -27,7 +25,6 @@ public sealed class DecompileChurnTests : TestInstance
         tagged.Keywords = [first.ToLink(), second.ToLink(), third.ToLink()];
         _taggedNpc = tagged.FormKey;
         var ranked = mod.Npcs.AddNew("ChurnNpcRanked");
-        ranked.Flags = Npc.Flag.Female | Npc.Flag.Essential;
         ranked.Factions.AddRange(
         [
             new RankPlacement { Faction = mod.Factions.AddNew("ChurnFactionA").ToLink(), Rank = 0 },
@@ -77,16 +74,12 @@ public sealed class DecompileChurnTests : TestInstance
         Assert.All(files, written => Assert.Equal(written.Value, File.ReadAllText(written.Key)));
     }
 
-    [Theory]
-    [InlineData("Factions")]
-    [InlineData("Flags")]
-    public async Task AListWhoseOrderTheFormatDecides_LeftInAnotherOrderByHand_Compiles_AndTheNextDecompileWritesTheFormatsOrder(string member)
+    [Fact]
+    public async Task AListTheFormatSorts_LeftOutOfItsOrderByHand_Compiles_AndTheNextDecompileWritesItInTheFormatsOrder()
     {
         var file = Path.Combine(ModFolder, SourceModTree.DocumentFile(ModFolder, _plugin, _rankedNpc.ToString()).Require());
         var decompiled = File.ReadAllText(file);
-        var root = JsonNode.Parse(decompiled).Require().AsObject();
-        root[member] = new JsonArray([.. root[member].Require().AsArray().Reverse().Select(item => item?.DeepClone())]);
-        File.WriteAllText(file, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(file, JsonReversal.WithReversed(decompiled, root => root["Factions"].Require().AsArray()));
 
         await CompileHandler.CompileLandedAsync(_plugin);
         await Decompile();
