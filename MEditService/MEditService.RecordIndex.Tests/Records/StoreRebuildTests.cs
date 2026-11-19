@@ -6,6 +6,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using static MEditService.RecordIndex.Tests.TestSupport.Announcements;
 
 namespace MEditService.RecordIndex.Tests.Records;
 
@@ -246,9 +247,7 @@ public sealed class StoreRebuildTests : IDisposable
         var before = notifications.Notifications.Count;
 
         index.SignalChange();
-        var longestRead = Waits.LongestReadUntil(
-            () => index.Status.State,
-            _ => notifications.Since(before).Any(n => n is LoadOrderStatusNotification { Status.State: LoadOrderState.Failed }));
+        var longestRead = Waits.LongestReadUntil(() => index.Status.State, () => notifications.Since(before).Any(n => StatusFailed(n)));
 
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
     }

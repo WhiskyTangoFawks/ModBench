@@ -13,6 +13,9 @@ internal static class Announcements
     internal static Predicate<INotification> RowsChanged(string formKey) =>
         n => n is RowsChangedNotification rows && rows.Keys.Contains(formKey);
 
+    internal static readonly Predicate<INotification> StatusFailed =
+        n => n is LoadOrderStatusNotification { Status.State: LoadOrderState.Failed };
+
     internal static Predicate<INotification> FailureNamed(string plugin) =>
         n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 

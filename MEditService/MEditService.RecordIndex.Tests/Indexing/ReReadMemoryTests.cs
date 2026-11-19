@@ -31,7 +31,7 @@ public sealed class ReReadMemoryTests : IDisposable
         var before = notifications.Notifications.Count;
         var readAgain = Touched(_fixture.Plugins.Single());
         index.NextCheckUntil(
-            () => notifications.Since(before).Any(n => readAgain(n) || FailureNamed(Plugin)(n) || n is LoadOrderStatusNotification { Status.State: LoadOrderState.Failed }),
+            () => notifications.Since(before).Any(n => readAgain(n) || FailureNamed(Plugin)(n) || StatusFailed(n)),
             "the plugin read again");
 
         Assert.Equal((LoadOrderState.Ready, null, ""), Answer(index));

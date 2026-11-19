@@ -28,6 +28,8 @@ internal static class Waits
         return true;
     }
 
+    internal static TimeSpan LongestReadUntil<T>(Func<T> read, Func<bool> reached) => LongestReadUntil(read, _ => reached());
+
     internal static TimeSpan LongestReadUntil<T>(Func<T> read, Func<T, bool> condition)
     {
         var longest = TimeSpan.Zero;
