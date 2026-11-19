@@ -12,11 +12,15 @@ namespace MEditService.Codec.Game;
 /// member they omit, as a fresh object holds it. Read by running the customizations this project compiles.</summary>
 internal static class FormatNormalization
 {
-    private sealed record Rule(Func<Type, bool> Applies, Action<object> Apply);
+    private sealed record Rule(Func<Type, bool> Applies, Action<object> Apply, (Type Declarer, string Member)? Sorted = null);
 
     private static readonly IReadOnlyList<Rule> Rules = Recorded(typeof(FormatNormalization).Assembly);
 
     private static readonly RecordGraph Normalized = new(type => Rules.Any(rule => rule.Applies(type)));
+
+    /// <summary>Whether the format sorts the list <paramref name="member"/> that <paramref name="declarer"/> declares.</summary>
+    public static bool Sorts(Type declarer, string member) =>
+        Rules.Any(rule => rule.Sorted is { } sorted && sorted.Declarer == declarer && sorted.Member == member);
 
     public static IMajorRecordGetter Of(IMajorRecordGetter record)
     {
@@ -106,9 +110,15 @@ internal static class FormatNormalization
                 var sorted = sort.Order(list.Cast<TItem>()).ToList();
                 list.Clear();
                 foreach (var item in sorted) list.Add(item);
-            }));
+            }, (Declarer(name), name)));
             return sort;
         }
+
+        // The interface along TObject's chain that declares the member, as the schema walk names it.
+        private static Type Declarer(string name) =>
+            new[] { typeof(TObject) }.Concat(typeof(TObject).GetInterfaces())
+                .Where(type => type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) is not null)
+                .Aggregate((best, candidate) => best.IsAssignableFrom(candidate) ? candidate : best);
 
         // The most derived declaration: a class can redeclare a member its base declares.
         private static PropertyInfo Member(Type type, string name)

@@ -43,6 +43,10 @@ public record FieldMetadata(
     // reach one struct member down.
     IReadOnlyList<string>? KeyMembers = null,
 
+    // An array the source's format writes sorted, so no order the user leaves it in survives
+    // (xedit.md, divergence 14): it takes no move.
+    bool SortedByFormat = false,
+
     // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
     // from a discriminator's value, which says which class an object turned out to be. Serialized
     // nulls stay on all four nullables here.

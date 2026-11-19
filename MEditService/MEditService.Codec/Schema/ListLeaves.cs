@@ -42,6 +42,7 @@ internal static class ListLeaves
         return new(prop.Name, "array", true, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             ElementType: elementSpec,
             KeyMembers: game.Annotations.KeyMembersFor(prop),
+            SortedByFormat: game.Annotations.IsSortedByFormat(prop),
             ExtendedKeyMembers: game.Annotations.ExtendedKeyMembersFor(prop));
     }
 }

@@ -28,6 +28,9 @@ public sealed class DocumentEdit
     /// <summary>Whether the path lands on an element of an array whose elements are keyed.</summary>
     public bool InKeyedArray => _cursor.OwnerArray != null && _cursor.OwnerMeta?.KeyMembers != null;
 
+    /// <summary>Whether the path lands on an element of an array the source's format sorts.</summary>
+    public bool InSortedArray => _cursor.OwnerArray != null && _cursor.OwnerMeta?.SortedByFormat == true;
+
     /// <summary>The element's position, where the path lands on an element.</summary>
     public int Position => _cursor.Index;
 

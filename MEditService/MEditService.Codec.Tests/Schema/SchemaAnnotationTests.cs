@@ -79,6 +79,19 @@ public sealed class SchemaAnnotationTests
         Assert.Equal(extendedKeys?.Split(','), array.ExtendedKeyMembers);
     }
 
+    [Theory]
+    [InlineData(GameRelease.Fallout4, "npc_", "ActorEffect", true)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Factions", true)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Keywords", false)]
+    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesAdded", true)]
+    [InlineData(GameRelease.Fallout4, "term", "Properties", false)]
+    [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", true)]
+    [InlineData(GameRelease.Starfield, "npc_", "Factions", true)]
+    public void AnArrayTheFormatSorts_SaysSo(GameRelease release, string table, string path, bool sorted)
+    {
+        Assert.Equal(sorted, SchemaFields.At(release, table, path).SortedByFormat);
+    }
+
     private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>
         path.Split('.').Aggregate(
             SharedSchemaReflector.Instance.GetSchemas(release)["qust"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field,

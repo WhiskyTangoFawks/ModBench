@@ -44,7 +44,7 @@ describe('the columns, one per copy in the wire\'s own load order (master leftmo
 describe('a hop is an array element\'s, one rule, since the panel\'s handler wiring, the cell menu and the native menu all ask it', () => {
   it.each<[string, PathSegment | undefined, boolean]>([
     ['an element at a position is', { kind: 'index', index: 0 }, true],
-    ['an element at its index in each column is', { kind: 'element', indexes: { 'A.esp': 0 }, keyed: false }, true],
+    ['an element at its index in each column is', { kind: 'element', indexes: { 'A.esp': 0 }, noMove: false }, true],
     ['a struct member is not', { kind: 'member', name: 'X' }, false],
     ['no hop is not', undefined, false],
   ])('%s', (_case, hop, element) => {
@@ -131,10 +131,10 @@ describe('a row\'s wire path in one column', () => {
     ]],
     ['is the one member hop for a top-level row', 'Level', [], 'A.esp', [{ kind: 'member', name: 'Level' }]],
     ['turns an element into its position in the given column', 'Data',
-      [{ kind: 'member', name: 'Packages' }, { kind: 'element', indexes: { 'A.esp': 0, 'B.esp': 2 }, keyed: false }], 'B.esp',
+      [{ kind: 'member', name: 'Packages' }, { kind: 'element', indexes: { 'A.esp': 0, 'B.esp': 2 }, noMove: false }], 'B.esp',
       [{ kind: 'member', name: 'Data' }, { kind: 'member', name: 'Packages' }, { kind: 'index', index: 2 }]],
     ['is no path for a column that does not hold the element', 'Packages',
-      [{ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false }], 'B.esp', undefined],
+      [{ kind: 'element', indexes: { 'A.esp': 0 }, noMove: false }], 'B.esp', undefined],
   ])('%s', (_case, root, path, column, hops) => {
     expect(wirePath(root, path, inColumn(column))).toEqual(hops);
   });

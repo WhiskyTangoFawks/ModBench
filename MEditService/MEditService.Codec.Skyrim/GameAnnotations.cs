@@ -48,6 +48,7 @@ internal static class GameAnnotations
             },
             KeyedArrays: SkyrimVmadAnnotations.KeyedArrays.Concat(SkyrimKeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            FormatSortsList: FormatNormalization.Sorts,
             ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],

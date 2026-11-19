@@ -515,6 +515,17 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
       .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
   });
 
+  it.each(['Ambush', 'Guard'])('the element %s of an array the format sorts offers neither move', async label => {
+    renderScripts([{ name: 'Guard', flags: 'm' }], [guard, ambush], [
+      scriptRow('Ambush', { 'MyMod.esp': ambush }, { 'MyMod.esp': 1 }),
+      scriptRow('Guard', { 'Fallout4.esm': { name: 'Guard', flags: 'm' }, 'MyMod.esp': guard }, { 'Fallout4.esm': 0, 'MyMod.esp': 0 }),
+    ], { ...scriptMeta, keyMembers: null, sortedByFormat: true });
+    await waitFor(() => screen.getAllByText('flags'));
+
+    expect(JSON.parse(required(myCell(rowLabelled(label)).getAttribute('data-vscode-context'), `${label}'s context`)))
+      .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
+  });
+
   it('a collapsed keyed element reads as its key', async () => {
     await renderGuardAfterAmbush();
     fireEvent.click(required(rowLabelled('Ambush').querySelector('button'), "Ambush's toggle"));

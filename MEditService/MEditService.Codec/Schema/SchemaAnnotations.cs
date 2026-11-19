@@ -72,6 +72,8 @@ public sealed record SchemaAnnotations(
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
+    // Whether the source's format sorts the list a getter interface declares, by the interface and the member.
+    Func<Type, string, bool> FormatSortsList,
     // See FieldMetadata.ExtendedKeyMembers; every row extends a KeyedArrays row.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> ExtendedKeys,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
@@ -302,6 +304,7 @@ public sealed record SchemaAnnotations(
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     internal IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
+    internal bool IsSortedByFormat(PropertyInfo prop) => FormatSortsList(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
     internal IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
