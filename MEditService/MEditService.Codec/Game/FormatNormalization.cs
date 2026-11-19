@@ -72,7 +72,7 @@ internal static class FormatNormalization
 
         private Recorder Omitting(Func<Type, bool> owner, Func<string, bool> member)
         {
-            rules.Add(Omission(type => owner(type) ? Settable(type).Where(p => member(p.Name)) : [], when: null));
+            rules.Add(Omission(type => owner(type) ? Settable(type).Where(p => member(p.Name)) : []));
             return this;
         }
 
@@ -82,16 +82,15 @@ internal static class FormatNormalization
 
     private sealed class Recorder<TObject>(List<Rule> rules) : ICustomizationBuilder<TObject>
     {
-        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) => Omit(field, null);
-
-        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool>? predicate)
+        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field)
         {
             var name = MemberName(field);
-            rules.Add(Omission(
-                type => typeof(TObject).IsAssignableFrom(type) ? [Member(type, name)] : [],
-                predicate is null ? null : (node, value) => value is TField held && predicate((TObject)node, held)));
+            rules.Add(Omission(type => typeof(TObject).IsAssignableFrom(type) ? [Member(type, name)] : []));
             return this;
         }
+
+        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
+            throw new NotSupportedException($"The format omits '{field}' only where a condition holds, which no recompile tolerance reads yet.");
 
         public ICustomizationBuilder<TObject> EmbedRecordsInSameFile(Expression<Func<TObject, IMajorRecordGetter?>> field) => this;
 
@@ -168,7 +167,7 @@ internal static class FormatNormalization
 
     private static readonly ConcurrentDictionary<Type, object> Fresh = new();
 
-    private static Rule Omission(Func<Type, IEnumerable<PropertyInfo>> members, Func<object, object?, bool>? when)
+    private static Rule Omission(Func<Type, IEnumerable<PropertyInfo>> members)
     {
         var byType = new ConcurrentDictionary<Type, PropertyInfo[]>();
         PropertyInfo[] Of(Type type) => byType.GetOrAdd(type, owner => [.. members(owner)]);
@@ -176,8 +175,7 @@ internal static class FormatNormalization
         {
             var fresh = Fresh.GetOrAdd(node.GetType(), type => System.Activator.CreateInstance(type, nonPublic: true)
                 ?? throw new InvalidOperationException($"Expected {type.Name} to construct."));
-            foreach (var member in Of(node.GetType()).Where(member => when?.Invoke(node, member.GetValue(node)) ?? true))
-                member.SetValue(node, member.GetValue(fresh));
+            foreach (var member in Of(node.GetType())) member.SetValue(node, member.GetValue(fresh));
         });
     }
 }

@@ -143,4 +143,13 @@ public sealed class VmadCompareTests : IDisposable
         Assert.Null(extraBindDataVersion.Values["Top.esp"]);
         Assert.Equal(ConflictThis.Override, extraBindDataVersion.CellStates["Top.esp"]);
     }
+
+    [Fact]
+    public void AMemberAnOverridesBreakLeavesUnheld_ReadsAsNothingThere_ThoughItsDocumentSpellsIt()
+    {
+        var top = new LoadOrder.PluginAddress("Top.esp", LoadOrder.PluginOrigin.DataDirectory);
+        Assert.Contains("\"Script\"", _index.Queries.GetRenderedDocument(top, _breakQuest).Value().Require().Text, StringComparison.Ordinal);
+
+        Assert.All(Children(Adapter(_breakQuest)).Where(c => c.FieldName == "Script"), script => Assert.Null(script.Values["Top.esp"]));
+    }
 }

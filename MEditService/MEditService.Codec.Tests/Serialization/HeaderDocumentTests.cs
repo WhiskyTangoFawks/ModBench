@@ -30,7 +30,6 @@ public sealed class HeaderDocumentTests
         topic.Responses.Add(new DialogResponses(mod) { EditorID = "SomeResponse" });
         quest.DialogTopics.Add(topic);
         mod.Quests.Add(quest);
-        mod.ModHeader.Stats.NextFormID = 0x900;
         return mod;
     }
 

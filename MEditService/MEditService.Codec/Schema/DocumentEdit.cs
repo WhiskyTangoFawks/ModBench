@@ -543,14 +543,12 @@ public sealed class DocumentEdit
         private static FieldMetadata? FieldOf(FieldMetadata? owner, string name, JsonNode? held) =>
             owner?.Fields?.FirstOrDefault(field => field.Name == name) is { } member ? DocumentNodes.VariantFor(member, held) : null;
 
-        // An array the format sorts is written back in its order, not the patch's (ADR-0030), so the element the
-        // codec kept is the one that holds what the patch asked, wherever it sits.
         private static JsonNode? Corresponding(JsonArray? written, int index, JsonNode? asked, FieldMetadata? meta)
         {
             if (written is null) return null;
-            var atIndex = index < written.Count ? written[index] : null;
-            if (SilentSkipGuard.Keeps(atIndex, asked, meta, "", out _)) return atIndex;
-            return written.FirstOrDefault(element => SilentSkipGuard.Keeps(element, asked, meta, "", out _)) ?? atIndex;
+            var kept = SilentSkipGuard.KeptAt(written, index, asked, meta, new HashSet<int>());
+            if (kept >= 0) return written[kept];
+            return index < written.Count ? written[index] : null;
         }
 
         /// <summary>The outermost member on the way to the one the patch spelled that its owner's set break

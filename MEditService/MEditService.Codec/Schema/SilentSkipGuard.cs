@@ -57,24 +57,30 @@ internal static class SilentSkipGuard
         }
     }
 
-    // An array the format sorts is written back in its order, not the patch's (ADR-0030), so each element the patch
-    // asked is kept by one written element, its own position's first.
     private static bool KeepsEachElement(JsonArray written, JsonArray patched, FieldMetadata? meta, string path, out string dropped)
     {
         dropped = "";
-        var unmatched = Enumerable.Range(0, written.Count).ToList();
+        var taken = new HashSet<int>();
         for (var i = 0; i < patched.Count; i++)
         {
-            var at = $"{path}[{i}]";
-            var keptInPlace = Keeps(written[i], patched[i], meta, at, out dropped);
-            var match = keptInPlace && unmatched.Contains(i)
-                ? i
-                : unmatched.FirstOrDefault(j => Keeps(written[j], patched[i], meta, at, out _), -1);
-            if (match < 0) return false;
-            unmatched.Remove(match);
+            var match = KeptAt(written, i, patched[i], meta, taken);
+            if (match < 0)
+            {
+                _ = Keeps(written[i], patched[i], meta, $"{path}[{i}]", out dropped);
+                return false;
+            }
+            taken.Add(match);
         }
         return true;
     }
+
+    /// <summary>Where an element of <paramref name="written"/> keeps <paramref name="patched"/>: at <paramref name="index"/>
+    /// first, then anywhere not <paramref name="taken"/>; -1 where none does. The format reorders some arrays (ADR-0030).</summary>
+    internal static int KeptAt(JsonArray written, int index, JsonNode? patched, FieldMetadata? meta, IReadOnlySet<int> taken) =>
+        Enumerable.Range(0, written.Count)
+            .Where(position => !taken.Contains(position))
+            .OrderBy(position => position != index)
+            .FirstOrDefault(position => Keeps(written[position], patched, meta, "", out _), -1);
 
     private static bool IsDefaultLike(JsonNode? node, FieldMetadata? meta)
     {

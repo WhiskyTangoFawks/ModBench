@@ -31,6 +31,8 @@ Install the extension's dependencies once with `npm ci` in `modbench/`. [CLAUDE.
 
 MEditService restores Mutagen from a `mutagen-feed` folder beside the repository. A worktree under `.claude/worktrees/` also needs a `.claude/worktrees/mutagen-feed` symlink to it.
 
+Each game's codec compiles Spriggit's customizations from the `MEditService/vendor/Spriggit` submodule. The build fetches it with `git submodule update --init` when the folder is empty, so the first build of a clone or a worktree needs network access to GitHub.
+
 ## Launch the extension
 
 ```bash
