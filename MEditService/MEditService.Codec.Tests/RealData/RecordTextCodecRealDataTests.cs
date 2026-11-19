@@ -97,24 +97,6 @@ public class RecordTextCodecRealDataTests
     }
 
     [Fact]
-    public void ARealCellsDocument_HoldsItsNonZeroGroupTimestamps()
-    {
-        var cell = DeepParsed().EnumerateMajorRecords().Single(r => r.FormKey == FormKey.Factory("03C0F0:Fallout4.esm"));
-
-        var document = DocumentOf(cell);
-
-        Assert.Equal((138972, 138972), (document.GetProperty("PersistentTimestamp").GetInt32(), document.GetProperty("TemporaryTimestamp").GetInt32()));
-    }
-
-    [Fact]
-    public void ARealResponsesDocument_HoldsItsConditionsNonDefaultUnknown1Pad()
-    {
-        var response = DeepParsed().EnumerateMajorRecords().Single(r => r.FormKey == FormKey.Factory("01AACD:Fallout4.esm"));
-
-        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", RecordTextCodec.SerializeToText(response, GameRelease.Fallout4), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ARealRecordsScripts_AreWrittenInItsAdapter()
     {
         var record = DeepParsed().EnumerateMajorRecords().Single(r => r.FormKey == FormKey.Factory("2499C4:Fallout4.esm"));

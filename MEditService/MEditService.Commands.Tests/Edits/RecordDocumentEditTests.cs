@@ -7,6 +7,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using Noggog;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -99,11 +100,11 @@ public sealed class RecordDocumentEditTests : IDisposable
     [Fact]
     public void HexOfAnotherLength_IsRefusedNamingBothLengths()
     {
-        var formKey = SeedCobj();
+        var material = new MaterialObject(_mod) { EditorID = "Mato", DNAMs = [new MemorySlice<byte>([0x01, 0x02, 0x03])] };
+        var formKey = _fixture.Seed(material, "mato");
         var before = _fixture.Document(formKey);
-        Assert.Equal("0x000000", Node(before, "Conditions")[0].Require()["Unknown1"].Require().GetValue<string>());
 
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"0x0102\""), Member("Conditions"), At(0), Member("Unknown1")));
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"0x0102\""), Member("DNAMs"), At(0)));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.HexLengthMismatch, result.Refusal);

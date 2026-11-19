@@ -26,16 +26,17 @@ internal static class ModelIdentity
                 : $"{RecordType} {FormKey} (EditorID '{EditorId}') {Description}";
     }
 
-    /// <summary>A round trip the verdict judges, and whether it keeps the order of the children a record files in
-    /// its directory, which the source's format does not (ADR-0030).</summary>
-    public sealed record Trip(string Description, bool KeepsFiledOrder);
+    /// <summary>A round trip the verdict judges, and whether it passes through the source's format, whose normalization
+    /// it then tolerates (ADR-0030): the order of the children a record files in its directory, and what
+    /// <see cref="IGameCodec.NormalizeFormat"/> changes.</summary>
+    public sealed record Trip(string Description, bool ThroughTheFormat);
 
     /// <summary>The round trip a recompile takes.</summary>
-    public static readonly Trip Recompiled = new("being recompiled from its own plugin source", KeepsFiledOrder: false);
+    public static readonly Trip Recompiled = new("being recompiled from its own plugin source", ThroughTheFormat: true);
 
     /// <summary>The round trip the proof's text takes, apart from the format's normalization (ADR-0006).</summary>
     public static readonly Trip ThroughMutagensText = new(
-        "a round trip through Mutagen's JSON serialization with no customization", KeepsFiledOrder: true);
+        "a round trip through Mutagen's JSON serialization with no customization", ThroughTheFormat: false);
 
     /// <summary>The whole verdict: the first record that does not survive <paramref name="trip"/>, else the mod
     /// header field that does not. Null when <paramref name="recompiled"/> is model-identical.</summary>
@@ -62,7 +63,7 @@ internal static class ModelIdentity
     // first the recompile produced that the original never had; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled, Trip trip)
     {
-        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled, filedInAnyOrder: !trip.KeepsFiledOrder).FirstOrDefault() is ({ } record, var field))
+        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled, trip.ThroughTheFormat).FirstOrDefault() is ({ } record, var field))
         {
             return new Divergence(record.GetType().Name, record.FormKey, record.EditorID, field is null
                 ? $"is missing after {trip.Description}."
@@ -77,16 +78,16 @@ internal static class ModelIdentity
     }
 
     /// <summary>Each <paramref name="original"/> record that does not survive, with the field that differs; a null
-    /// field is a record lacking. The format keeps no order for filed children (ADR-0030).</summary>
+    /// field is a record lacking.</summary>
     public static IEnumerable<(IMajorRecordGetter Record, string? Field)> RecordDivergences(
-        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled, bool filedInAnyOrder = false)
+        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled, bool throughTheFormat = false)
     {
         var game = GameCodecs.For(recompiled.GameRelease);
         var types = RecordTypes.For(recompiled.GameRelease);
         IMajorRecordGetter Normalized(IMajorRecordGetter record)
         {
             var encoded = game.NormalizeEncoding(record, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease));
-            return filedInAnyOrder ? FiledInFormKeyOrder(encoded, types) : encoded;
+            return throughTheFormat ? FiledInFormKeyOrder(game.NormalizeFormat(encoded), types) : encoded;
         }
 
         foreach (var (originalRecord, recompiledRecord) in Paired(original, recompiled))

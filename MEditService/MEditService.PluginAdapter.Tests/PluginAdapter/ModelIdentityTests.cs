@@ -5,6 +5,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -377,6 +378,41 @@ public sealed class ModelIdentityTests
         recompiled.Npcs.Add(recompiledNpc);
 
         Assert.NotNull(await DivergenceAsync(mod, recompiled));
+    }
+
+    private static Fallout4Mod NpcInFactions(params uint[] factions) => NpcWith(npc => npc.Factions.AddRange(
+        factions.Select(id => new RankPlacement { Faction = new FormLink<IFactionGetter>(new FormKey(npc.FormKey.ModKey, id)) })));
+
+    [Fact]
+    public async Task DivergenceFrom_WhenAListTheFormatSortsIsInItsOrder_ReturnsNull()
+    {
+        Assert.Null(await DivergenceAsync(NpcInFactions(0x802, 0x801), NpcInFactions(0x801, 0x802)));
+    }
+
+    [Fact]
+    public async Task DivergenceFrom_WhenAListTheFormatDoesNotSortIsInAnotherOrder_NamesIt()
+    {
+        static Fallout4Mod Tagged(params uint[] keywords) => NpcWith(npc => npc.Keywords =
+            [.. keywords.Select(id => new FormLink<IKeywordGetter>(new FormKey(npc.FormKey.ModKey, id)))]);
+
+        Assert.Contains("field 'Keywords' changed", await DivergenceAsync(Tagged(0x802, 0x801), Tagged(0x801, 0x802)), StringComparison.Ordinal);
+    }
+
+    private static Fallout4Mod RecipeOfAConditionPad(byte pad)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.ConstructibleObjects.AddNew("Recipe").Conditions.Add(new ConditionFloat
+        {
+            Data = new FunctionConditionData { Function = Condition.Function.GetIsSex },
+            Unknown1 = new MemorySlice<byte>([pad, pad, pad]),
+        });
+        return mod;
+    }
+
+    [Fact]
+    public async Task DivergenceFrom_WhenOnlyAMemberTheFormatOmitsDiffers_ReturnsNull()
+    {
+        Assert.Null(await DivergenceAsync(RecipeOfAConditionPad(0x1D), RecipeOfAConditionPad(0)));
     }
 
     public static TheoryData<string, Condition.Function, int, FormKey> ParametersAPrunedMasterRenumbers => new()

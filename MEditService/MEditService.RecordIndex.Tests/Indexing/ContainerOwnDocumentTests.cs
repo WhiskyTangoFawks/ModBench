@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -22,7 +23,7 @@ public sealed class ContainerOwnDocumentTests
         public Fixture(bool compiledPlugin)
         {
             ContainerModPlugin.Keys keys = default;
-            FormKey quest = default, topic = default, response = default, exteriorCell = default, exteriorRef = default;
+            FormKey quest = default, topic = default, response = default, exteriorWorld = default, exteriorCell = default, exteriorRef = default;
             _data = new PluginFixtureBuilder("container-own-document")
                 .WithPlugin(PluginName, mod =>
                 {
@@ -34,12 +35,12 @@ public sealed class ContainerOwnDocumentTests
                     q.DialogTopics.Add(t);
                     (quest, topic, response) = (q.FormKey, t.FormKey, r.FormKey);
                     var spatial = SpatialPlugin.AddTo(mod);
-                    (exteriorCell, exteriorRef) = (spatial.ExteriorCell.FormKey, spatial.ExteriorRef.FormKey);
+                    (exteriorWorld, exteriorCell, exteriorRef) = (spatial.Worldspace.FormKey, spatial.ExteriorCell.FormKey, spatial.ExteriorRef.FormKey);
                 }, origin: Origin)
                 .BuildScattered();
             if (compiledPlugin) _data.CompiledPlugin();
             (Keys, Quest, Topic, Response) = (keys, quest.ToString(), topic.ToString(), response.ToString());
-            (ExteriorCell, ExteriorRef) = (exteriorCell.ToString(), exteriorRef.ToString());
+            (ExteriorWorld, ExteriorCell, ExteriorRef) = (exteriorWorld.ToString(), exteriorCell.ToString(), exteriorRef.ToString());
             Index = Indexes.Reconciled(_data);
         }
 
@@ -47,6 +48,7 @@ public sealed class ContainerOwnDocumentTests
         public string Quest { get; }
         public string Topic { get; }
         public string Response { get; }
+        public string ExteriorWorld { get; }
         public string ExteriorCell { get; }
         public string ExteriorRef { get; }
         public OpenedIndex Index { get; }
@@ -145,6 +147,19 @@ public sealed class ContainerOwnDocumentTests
         Assert.Equal(["FormKey", "EditorID", "WaterHeight"], MembersOf(stored));
         Assert.Equal("EditedCell", stored.GetProperty("EditorID").GetString());
         Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, fixture.Stored(fixture.Keys.TemporaryRef.ToString()).GetProperty("EditorID").GetString());
+    }
+
+    [Fact]
+    public void AWorldspaceRereadFromItsTree_StillHoldsTheExteriorCellsItsDocumentDoesNot()
+    {
+        using var fixture = new Fixture(compiledPlugin: true);
+        var file = fixture.Entry.SourceFileOf(fixture.Index.DocumentOf(fixture.ExteriorWorld, Plugin));
+        var reread = File.ReadAllText(file).Replace($"\"{SpatialPlugin.WorldspaceEditorId}\"", $"\"{SpatialPlugin.WorldspaceEditorId}\",\n  \"NoSuchMember\": 1", StringComparison.Ordinal);
+
+        fixture.Index.TypeUnsaved(new DocumentChange(file, reread));
+
+        var block = Assert.Single(fixture.Index.Queries.GetWorldspaceBlocks(Plugin, fixture.ExteriorWorld).Value().Blocks);
+        Assert.Equal([fixture.ExteriorCell], block.SubBlocks.SelectMany(subBlock => subBlock.Cells).Select(cell => cell.FormKey));
     }
 
     [Theory]

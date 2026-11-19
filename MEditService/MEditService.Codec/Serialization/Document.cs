@@ -97,7 +97,7 @@ public sealed class Document
         if (from.At(path) is not { ValueKind: not JsonValueKind.Null } copied) return Without(path);
         var member = path[^1];
         var owner = path[..^1].ToArray();
-        return Edited(root => OwnerOf(root, owner)[member] = JsonNode.Parse(copied.GetRawText()));
+        return Edited(root => OwnerOf(root, owner)[member] = NodeOf(copied));
     }
 
     public Document Without(params ReadOnlySpan<string> path)
@@ -127,8 +127,29 @@ public sealed class Document
     }
 
     internal JsonObject Tree() =>
-        JsonNode.Parse(_root.GetRawText()) as JsonObject
-            ?? throw new InvalidOperationException("Expected a document's root to stay a JSON object.");
+        NodeOf(_root) as JsonObject ?? throw new InvalidOperationException("Expected a document's root to stay a JSON object.");
+
+    /// <summary><paramref name="element"/> as a mutable tree. The format spells each region data entry's redeclared
+    /// members twice, with one value, so a member spelled twice is one member; spelled with two values, it throws.</summary>
+    internal static JsonNode? NodeOf(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => new JsonObject(element.EnumerateObject()
+            .GroupBy(member => member.Name, StringComparer.Ordinal)
+            .Select(spellings => KeyValuePair.Create(spellings.Key, NodeOf(OneValueOf(spellings))))),
+        JsonValueKind.Array => new JsonArray([.. element.EnumerateArray().Select(NodeOf)]),
+        JsonValueKind.Null => null,
+        _ => JsonValue.Create(element),
+    };
+
+    internal static JsonNode? NodeOf(string json) => NodeOf(JsonElement.Parse(json));
+
+    private static JsonElement OneValueOf(IGrouping<string, JsonProperty> spellings)
+    {
+        var value = spellings.First().Value;
+        return spellings.All(spelling => JsonElement.DeepEquals(spelling.Value, value))
+            ? value
+            : throw new InvalidDataException($"'{spellings.Key}' is spelled more than once, with values that differ.");
+    }
 
     internal static Document Of(JsonObject root) => new(JsonElement.Parse(root.ToJsonString()));
 
@@ -164,7 +185,7 @@ public sealed class Document
     private static JsonNode? ReadingOf(Document document, string member, Document held)
     {
         var hops = member.Split('.');
-        if (document.At(hops) is { } value) return JsonNode.Parse(value.GetRawText());
+        if (document.At(hops) is { } value) return NodeOf(value);
         if (document.At(hops.AsSpan(..^1)) is not { ValueKind: JsonValueKind.Array } flags) return null;
         var names = flags.EnumerateArray().Select(name => name.GetString()).ToList();
         var heldNames = held.At(hops.AsSpan(..^1)) is { ValueKind: JsonValueKind.Array } heldFlags

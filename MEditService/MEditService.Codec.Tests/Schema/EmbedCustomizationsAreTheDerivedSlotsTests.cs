@@ -21,6 +21,20 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
         Assert.Equal(DerivedEmbeddedSlots(release).Order().ToList(), customized);
     }
 
+    [Theory]
+    [InlineData(GameRelease.Fallout4, "Spriggit.Json.Fallout4")]
+    [InlineData(GameRelease.SkyrimSE, "Spriggit.Json.Skyrim")]
+    [InlineData(GameRelease.Starfield, "Spriggit.Json.Starfield")]
+    public void EveryCustomizationTheCodecCompiles_IsItsGamesSpriggitJsonPackages(GameRelease release, string package)
+    {
+        var customizations = GameCodecs.For(release).GeneratedSerializers.GetTypes()
+            .Where(type => type.GetInterfaces().Any(i => i == typeof(ICustomize) || (i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICustomize<>))))
+            .ToList();
+
+        Assert.NotEmpty(customizations);
+        Assert.All(customizations, type => Assert.StartsWith(package + ".", type.FullName, StringComparison.Ordinal));
+    }
+
     private static IEnumerable<(string ParentType, string Slot)> DerivedEmbeddedSlots(GameRelease release)
     {
         var types = RecordTypes.For(release);
@@ -70,25 +84,12 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 
         public ICustomizationBuilder<TObject> EmbedRecordsInSameFile(Expression<Func<TObject, IReadOnlyList<IMajorRecordGetter>?>> field) => Record(field);
 
-        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) =>
-            EveryDerivedTypeRedeclares(((MemberExpression)field.Body).Member.Name)
-                ? this
-                : throw new NotSupportedException("Omit drops real data (ADR-0006).");
+        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) => this;
 
-        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
-            throw new NotSupportedException("Omit drops real data (ADR-0006).");
+        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) => this;
 
         public IListSortBuilder<TObject, TItem> SortList<TItem>(Expression<Func<TObject, IEnumerable<TItem>?>> listField) =>
-            throw new NotSupportedException("SortList reorders real data (ADR-0006).");
-
-        private static bool EveryDerivedTypeRedeclares(string member)
-        {
-            var derived = typeof(TObject).Assembly.GetTypes()
-                .Where(t => t.IsInterface && t != typeof(TObject) && typeof(TObject).IsAssignableFrom(t))
-                .ToList();
-            return derived.Count > 0 && derived.All(t =>
-                t.GetProperty(member, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) != null);
-        }
+            new IgnoredSort<TObject, TItem>(this);
 
         private ICustomizationBuilder<TObject> Record(LambdaExpression field)
         {
@@ -96,5 +97,27 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
             Embedded.Add(((MemberExpression)body).Member.Name);
             return this;
         }
+    }
+
+    private sealed class IgnoredSort<TObject, TItem>(ICustomizationBuilder<TObject> owner)
+        : IListSortBuilder<TObject, TItem>, IListSortFieldChainBuilder<TObject, TItem>
+    {
+        public IListSortFieldChainBuilder<TObject, TItem> ByField<TField>(Expression<Func<TItem, TField>> itemField) => this;
+
+        public IListSortFieldChainBuilder<TObject, TItem> ThenByField<TField>(Expression<Func<TItem, TField>> itemField) => this;
+
+        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) => owner.Omit(field);
+
+        public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
+            owner.Omit(field, predicate);
+
+        public ICustomizationBuilder<TObject> EmbedRecordsInSameFile(Expression<Func<TObject, IMajorRecordGetter?>> field) =>
+            owner.EmbedRecordsInSameFile(field);
+
+        public ICustomizationBuilder<TObject> EmbedRecordsInSameFile(Expression<Func<TObject, IReadOnlyList<IMajorRecordGetter>?>> field) =>
+            owner.EmbedRecordsInSameFile(field);
+
+        public IListSortBuilder<TObject, TOther> SortList<TOther>(Expression<Func<TObject, IEnumerable<TOther>?>> listField) =>
+            owner.SortList(listField);
     }
 }

@@ -1,6 +1,4 @@
 using System.IO.Abstractions;
-using System.Text.Json.Nodes;
-using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
@@ -41,20 +39,11 @@ public static class HeaderDocument
         var folder = ScratchFolder();
         var rootPath = Path.Combine(folder, DocumentFileNames.Root);
 
-        var mod = InlineSerialization.Finished(
+        return InlineSerialization.Finished(
             () => GameCodecs.For(release).DeserializeWholeMod(
                 folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: new OnlyTheRootDocumentExists(rootPath),
                 streamCreator: new SupplyRootDocument(rootPath, body)));
-        return RestoreOmittedNextObjectId(mod, body);
-    }
-
-    /// <summary>Mutagen's serializer omits a Next Object ID equal to its default, which a new mod does not start at.</summary>
-    public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
-    {
-        if (JsonNode.Parse(rootDocument)?[PluginHeader.ModHeaderMember]?["Stats"]?["NextFormID"] is null)
-            mod.NextFormID = GameCodecs.For(mod.GameRelease).NextObjectIdDefault;
-        return mod;
     }
 
     public static bool IsLocalized(byte[] body, GameRelease release) => Read(body, release).UsingLocalization;

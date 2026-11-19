@@ -76,14 +76,18 @@ internal static class RecordTextEdit
                 RecordEditRefusal.CodecRejected, spelled, $"'{spelled}': the codec rejected the document — {ex.Message}");
         }
 
+        if (patch.OutermostUnheld(patched) is { } unheld)
+        {
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.CodecDroppedValue, unheld.Member,
+                $"'{unheld.Member}' lies past its owner's {unheld.Break}, which is set, so the record does not hold it and nothing was written.");
+        }
         var after = Document.Parse(written);
         if (patch.FirstDropped(patched, after) is { } dropped)
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecDroppedValue, dropped,
-                patch.OutermostUnheld(patched) is { } unheld
-                    ? $"'{unheld.Member}' lies past its owner's {unheld.Break}, which is set, so the record does not hold it and nothing was written."
-                    : $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
+                $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
         foreach (var other in request.Schema.RecordColumns)

@@ -16,7 +16,7 @@ internal static class ReadFault
     /// can be found. <paramref name="identity"/> names the root members every stripped document keeps.</summary>
     internal static string? Describe(string text, Func<string, Exception?> thrownBy, IReadOnlySet<string> identity)
     {
-        if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [], identity)) is not null) return null;
+        if (Document.NodeOf(text) is not JsonObject root || thrownBy(Only(root, [], identity)) is not null) return null;
 
         var faults = FaultsIn(root, [], thrownBy, identity).ToList();
         return faults.Count > 0 ? string.Join("; ", faults.Select(fault => Say(fault.Path, fault.Thrown))) : null;
@@ -26,7 +26,7 @@ internal static class ReadFault
     /// breaks the members after it: each member alone, against what the codec writes back of it.</summary>
     internal static string? MisreadMember(string text, Func<string, string> produce, IReadOnlySet<string> identity)
     {
-        if (JsonNode.Parse(text) is not JsonObject root) return null;
+        if (Document.NodeOf(text) is not JsonObject root) return null;
 
         var misread = new List<string>();
         foreach (var key in root.Select(member => member.Key).Where(key => !IsIdentity(key, identity)))

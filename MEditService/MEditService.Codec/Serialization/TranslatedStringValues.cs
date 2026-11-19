@@ -39,7 +39,7 @@ public static class TranslatedStringValues
     /// plugin that is not localized. A string holding no text is the empty text, which is what Mutagen writes for it.</summary>
     public static InLanguageResult InLanguage(string text, Language language, GameRelease release, string recordType)
     {
-        var root = JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a record document.");
+        var root = Document.NodeOf(text) ?? throw new InvalidOperationException("Expected a record document.");
         var changed = false;
         var unresolved = new List<string>();
         foreach (var (path, translated) in TranslatedStrings(root, "").ToList())

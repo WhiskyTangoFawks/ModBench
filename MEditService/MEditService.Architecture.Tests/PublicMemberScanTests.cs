@@ -95,12 +95,13 @@ public sealed class PublicMemberScanTests
     }
 
     [Fact]
-    public void TheOnlyForeignPublicTypes_AreTheGeneratedWholeModMixIns_InTheCodecsGameProjects()
+    public void TheOnlyForeignPublicTypes_BesideSpriggitsCustomizations_AreTheGeneratedWholeModMixIns_InTheCodecsGameProjects()
     {
         var foreign = ServiceProjects.Production(ServiceProjects.SolutionDirectory())
             .Select(System.Reflection.Assembly.Load)
             .SelectMany(assembly => assembly.GetExportedTypes())
-            .Where(type => type.Namespace?.StartsWith("MEditService", StringComparison.Ordinal) == false)
+            .Where(type => type.Namespace?.StartsWith("MEditService", StringComparison.Ordinal) == false
+                && type.Namespace?.StartsWith(Assembly.SpriggitNamespace, StringComparison.Ordinal) == false)
             .Select(type => $"{type.Assembly.GetName().Name}: {type.FullName}")
             .Order(StringComparer.Ordinal);
 
@@ -150,6 +151,7 @@ public sealed class PublicMemberScanTests
     private sealed class Assembly(string name, MetadataReader reader)
     {
         private const string ComposedByWebApplicationFactory = "Program";
+        public const string SpriggitNamespace = "Spriggit.";
         private const string MutagenNamespace = "Mutagen.";
         private const string MixInsTheSerializationGeneratorEmitsPublic = "MixIns";
         private const string DependencyInjection = "Microsoft.Extensions.DependencyInjection";
@@ -211,7 +213,7 @@ public sealed class PublicMemberScanTests
             {
                 var type = reader.GetTypeDefinition(handle);
                 var owner = Key.OfType(name, names.Of(handle));
-                if (!IsVisible(type) || IsSerializationGeneratorMixIns(type))
+                if (!IsVisible(type) || IsSerializationGeneratorMixIns(type) || IsSpriggits(type))
                     continue;
                 var heldPublic = owner.Type == ComposedByWebApplicationFactory || HoldsConstantsItsReadersCopy(type);
                 yield return new VisibleMember(owner.Type, owner, true, [owner], TypeExposes(type), _ => heldPublic);
@@ -219,6 +221,10 @@ public sealed class PublicMemberScanTests
                     yield return member;
             }
         }
+
+        // Spriggit's customizations compile into each game's codec as Spriggit's source declares them (ADR-0030).
+        private bool IsSpriggits(TypeDefinition type) =>
+            reader.GetString(type.Namespace).StartsWith(SpriggitNamespace, StringComparison.Ordinal);
 
         private bool IsSerializationGeneratorMixIns(TypeDefinition type) =>
             type.GetDeclaringType().IsNil

@@ -12,7 +12,7 @@ public sealed class LightRangeProblemTests : IDisposable
 {
     private const string Light = "Light.esp";
     private const uint OutsideTheRange = 0x1000;
-    private const string ModHeaderOpening = "\"ModHeader\": {";
+    private const string GameReleaseMember = "\"GameRelease\": \"Fallout4\"";
 
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _light;
@@ -39,7 +39,9 @@ public sealed class LightRangeProblemTests : IDisposable
 
     private string HeaderFile => Directory.EnumerateFiles(Path.Combine(_light.ModFolderOf(), PluginSourceRoot.For(Light)), "*.json").Single();
 
-    private string HeaderFlaggedLight => File.ReadAllText(HeaderFile).Replace(ModHeaderOpening, ModHeaderOpening + "\n    \"Flags\": [\"Small\"],", StringComparison.Ordinal);
+    // A header at its defaults writes no ModHeader member at all.
+    private string HeaderFlaggedLight => File.ReadAllText(HeaderFile)
+        .Replace(GameReleaseMember, GameReleaseMember + ",\n  \"ModHeader\": {\n    \"Flags\": [\"Small\"]\n  }", StringComparison.Ordinal);
 
     private static IReadOnlyList<RecordIndex.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
 

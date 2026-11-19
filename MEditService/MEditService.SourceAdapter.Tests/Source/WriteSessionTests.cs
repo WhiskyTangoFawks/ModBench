@@ -443,8 +443,8 @@ public sealed class WriteSessionTests : IDisposable
         var session = Session();
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
         var header = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
-        var headerMod = (IMod)HeaderDocument.Read(Encoding.UTF8.GetBytes(header.Body), Release);
-        headerMod.NextFormID = 0x900;
+        var headerMod = (IFallout4Mod)HeaderDocument.Read(Encoding.UTF8.GetBytes(header.Body), Release);
+        headerMod.ModHeader.Author = "Rewritten";
         var movedPast = header with { Body = Encoding.UTF8.GetString(HeaderDocument.Write(headerMod)) };
 
         Assert.Null(session.Atomically(() =>
@@ -454,7 +454,7 @@ public sealed class WriteSessionTests : IDisposable
         }));
 
         var headerRead = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
-        Assert.Equal(0x900u, HeaderDocument.Read(Encoding.UTF8.GetBytes(headerRead.Body), Release).NextFormID);
+        Assert.Equal("Rewritten", ((IFallout4ModGetter)HeaderDocument.Read(Encoding.UTF8.GetBytes(headerRead.Body), Release)).ModHeader.Author);
         Assert.Contains(created.FormKey, session.Repository.FormKeysUsed(Plugin).Value());
     }
 

@@ -107,7 +107,7 @@ public sealed class FormIdEditTests
         using var mod = SourceEditFixture.CompiledPluginLight();
         var headerFile = Path.Combine(mod.ModFolder, PluginSourceRoot.HeaderDocument(mod.Plugin.Name));
         var header = JsonNode.Parse(File.ReadAllText(headerFile)).Require();
-        header["ModHeader"].Require()["Stats"].Require()["Version"] = 0.95f;
+        (header["ModHeader"].Require()["Stats"] ??= new JsonObject())["Version"] = 0.95f;
         File.WriteAllText(headerFile, header.ToJsonString());
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "000700:Fixture.esp");

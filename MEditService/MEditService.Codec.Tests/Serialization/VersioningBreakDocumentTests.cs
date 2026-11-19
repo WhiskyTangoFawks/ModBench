@@ -27,7 +27,7 @@ public sealed class VersioningBreakDocumentTests
     }
 
     [Fact]
-    public void AQuestAdapterReadFromBytesThatEndAtItsBreak_HoldsNoFragmentBlockInItsDocument()
+    public void AQuestAdapterReadFromBytesThatEndAtItsBreak_ReadsBackAsTheDocumentItsCodecWrote()
     {
         var mod = NewMod();
         QuestWithAdapter(mod, QuestAdapter.VersioningBreaks.Break0);
@@ -38,7 +38,6 @@ public sealed class VersioningBreakDocumentTests
 
         var text = RecordTextCodec.SerializeToText(overlay.Quests.Single(), GameRelease.Fallout4);
 
-        Assert.Equal(["Scripts", "Versioning"], AdapterMembers(text));
         Assert.Equal(text, RecordTextCodec.RoundTrip(text, GameRelease.Fallout4, "qust"));
     }
 

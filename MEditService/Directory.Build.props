@@ -54,6 +54,23 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- A game's codec compiles its Spriggit.Json package's customizations, so the plugin source is Spriggit's
+       format (ADR-0030). A git worktree starts with the submodule empty, and a glob over an empty folder would
+       compile the codec with no customization at all, so the folder is filled first and Customization.cs is
+       named, failing the build if it is missing. -->
+  <PropertyGroup>
+    <SpriggitPackages>$(MSBuildThisFileDirectory)vendor/Spriggit/Translation Packages/</SpriggitPackages>
+  </PropertyGroup>
+
+  <Target Name="SpriggitCustomizations" BeforeTargets="BeforeCompile" Condition="'$(SpriggitPackage)' != ''">
+    <Exec Condition="!Exists('$(SpriggitPackages)$(SpriggitPackage)/Customization.cs')"
+          Command="git submodule update --init --depth 1 -- vendor/Spriggit" WorkingDirectory="$(MSBuildThisFileDirectory)" />
+    <ItemGroup>
+      <Compile Include="$(SpriggitPackages)$(SpriggitPackage)/Customization.cs" />
+      <Compile Include="$(SpriggitPackages)$(SpriggitPackage)/Customizations/**/*.cs" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup Condition="'$(MutagenBanIncluded)' == 'true'">
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Mutagen.txt" />
   </ItemGroup>

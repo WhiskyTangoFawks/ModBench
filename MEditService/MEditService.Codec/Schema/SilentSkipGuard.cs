@@ -46,11 +46,7 @@ internal static class SilentSkipGuard
                     dropped = path;
                     return false;
                 }
-                for (var i = 0; i < pa.Count; i++)
-                {
-                    if (!Keeps(wa[i], pa[i], meta?.ElementType, $"{path}[{i}]", out dropped)) return false;
-                }
-                return true;
+                return KeepsEachElement(wa, pa, meta?.ElementType, path, out dropped);
             case JsonValue patchedLeaf:
                 if (written is JsonValue writtenLeaf && LeafSpelling.Same(writtenLeaf, patchedLeaf, meta)) return true;
                 dropped = path;
@@ -59,6 +55,25 @@ internal static class SilentSkipGuard
                 dropped = path;
                 return false;
         }
+    }
+
+    // An array the format sorts is written back in its order, not the patch's (ADR-0030), so each element the patch
+    // asked is kept by one written element, its own position's first.
+    private static bool KeepsEachElement(JsonArray written, JsonArray patched, FieldMetadata? meta, string path, out string dropped)
+    {
+        dropped = "";
+        var unmatched = Enumerable.Range(0, written.Count).ToList();
+        for (var i = 0; i < patched.Count; i++)
+        {
+            var at = $"{path}[{i}]";
+            var keptInPlace = Keeps(written[i], patched[i], meta, at, out dropped);
+            var match = keptInPlace && unmatched.Contains(i)
+                ? i
+                : unmatched.FirstOrDefault(j => Keeps(written[j], patched[i], meta, at, out _), -1);
+            if (match < 0) return false;
+            unmatched.Remove(match);
+        }
+        return true;
     }
 
     private static bool IsDefaultLike(JsonNode? node, FieldMetadata? meta)

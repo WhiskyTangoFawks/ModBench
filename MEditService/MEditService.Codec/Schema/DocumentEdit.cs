@@ -519,8 +519,39 @@ public sealed class DocumentEdit
         /// <summary>The first member the patch spelled that <paramref name="written"/>, the codec's text of
         /// <paramref name="patched"/>, did not keep, unless a default the codec omits; null when it kept
         /// them all.</summary>
-        public string? FirstDropped(Document patched, Document written) =>
-            SilentSkipGuard.Keeps(At(written.Tree(), _chain), At(patched.Tree(), _chain), _meta, _spelled, out var dropped) ? null : dropped;
+        public string? FirstDropped(Document patched, Document written)
+        {
+            JsonNode? kept = written.Tree(), asked = patched.Tree();
+            FieldMetadata? meta = null;
+            for (var hop = 0; hop < _chain.Count; hop++)
+            {
+                if (_chain[hop] is int index)
+                {
+                    meta = meta?.ElementType;
+                    asked = (asked as JsonArray)?[index];
+                    kept = Corresponding(kept as JsonArray, index, asked, meta);
+                    continue;
+                }
+                var name = (string)_chain[hop];
+                meta = hop == 0 ? _column : FieldOf(meta, name, asked);
+                asked = (asked as JsonObject)?[name];
+                kept = (kept as JsonObject)?[name];
+            }
+            return SilentSkipGuard.Keeps(kept, asked, _meta, _spelled, out var dropped) ? null : dropped;
+        }
+
+        private static FieldMetadata? FieldOf(FieldMetadata? owner, string name, JsonNode? held) =>
+            owner?.Fields?.FirstOrDefault(field => field.Name == name) is { } member ? DocumentNodes.VariantFor(member, held) : null;
+
+        // An array the format sorts is written back in its order, not the patch's (ADR-0030), so the element the
+        // codec kept is the one that holds what the patch asked, wherever it sits.
+        private static JsonNode? Corresponding(JsonArray? written, int index, JsonNode? asked, FieldMetadata? meta)
+        {
+            if (written is null) return null;
+            var atIndex = index < written.Count ? written[index] : null;
+            if (SilentSkipGuard.Keeps(atIndex, asked, meta, "", out _)) return atIndex;
+            return written.FirstOrDefault(element => SilentSkipGuard.Keeps(element, asked, meta, "", out _)) ?? atIndex;
+        }
 
         /// <summary>The outermost member on the way to the one the patch spelled that its owner's set break
         /// leaves unheld in <paramref name="patched"/>; null when none is.</summary>
@@ -550,18 +581,6 @@ public sealed class DocumentEdit
                 (owner, ownerMeta) = ((owner as JsonObject)?[name], member);
             }
             return null;
-        }
-
-        private static JsonNode? At(JsonNode root, List<object> chain)
-        {
-            JsonNode? node = root;
-            foreach (var step in chain)
-            {
-                if (step is int index) node = node is JsonArray array && index < array.Count ? array[index] : null;
-                else node = (node as JsonObject)?[(string)step];
-                if (node == null) return null;
-            }
-            return node;
         }
     }
 }

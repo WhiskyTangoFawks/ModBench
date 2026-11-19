@@ -138,6 +138,14 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     }
 
     [Fact]
+    public void AWorldspace_ListsTheTopCellItsDocumentEmbeds_AsItsContents()
+    {
+        Assert.Equal(
+            [new ChildRecord(_topCell.FormKey.ToString(), "TopCell", 0)],
+            Documents()[_worldspace.FormKey.ToString()].Contents);
+    }
+
+    [Fact]
     public void AChildInASingleValueSlot_IsTheSameBytesTheRepositorysGetAnswers()
     {
         var landscape = _landscape.FormKey.ToString();

@@ -266,7 +266,7 @@
       "CheckErrors": {
         "Keywords": "[0]: [24A350:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CD02B:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "PreviewTransform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[1].Properties[1].Object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[2].Object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[3].Object: [0F8617:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[1].Object: [0F8617:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
       "Fields": {
@@ -310,21 +310,8 @@
         "VirtualMachineAdapter": {
           "Scripts": [
             {
-              "Name": "DefaultBlockActivationOnLoad"
-            },
-            {
               "Name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
               "Properties": [
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
-                  "Object": "24A341:Fallout4.esm"
-                },
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "VRWorkshop_TutorialMessage_AttackMarker",
-                  "Object": "24A375:Fallout4.esm"
-                },
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "VRWorkshopShared_NPCHologramFXAbility",
@@ -334,8 +321,21 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "VRWorkshop_EnemyType",
                   "Object": "0F8617:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "VRWorkshop_TutorialMessage_AttackMarker",
+                  "Object": "24A375:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
+                  "Object": "24A341:Fallout4.esm"
                 }
               ]
+            },
+            {
+              "Name": "DefaultBlockActivationOnLoad"
             }
           ]
         },
@@ -352,7 +352,7 @@
       "CheckErrors": {
         "Keywords": "[0]: [24A350:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CD02B:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "PreviewTransform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[1].Properties[1].Object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[2].Object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[3].Object: [0342C9:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[1].Object: [0342C9:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
       "Fields": {
@@ -396,21 +396,8 @@
         "VirtualMachineAdapter": {
           "Scripts": [
             {
-              "Name": "DefaultBlockActivationOnLoad"
-            },
-            {
               "Name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
               "Properties": [
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
-                  "Object": "24A341:Fallout4.esm"
-                },
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "VRWorkshop_TutorialMessage_AttackMarker",
-                  "Object": "24A375:Fallout4.esm"
-                },
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "VRWorkshopShared_NPCHologramFXAbility",
@@ -420,8 +407,21 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "VRWorkshop_EnemyType",
                   "Object": "0342C9:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "VRWorkshop_TutorialMessage_AttackMarker",
+                  "Object": "24A375:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
+                  "Object": "24A341:Fallout4.esm"
                 }
               ]
+            },
+            {
+              "Name": "DefaultBlockActivationOnLoad"
             }
           ]
         },
@@ -438,7 +438,7 @@
       "CheckErrors": {
         "Keywords": "[0]: [24A350:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CD02B:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "PreviewTransform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[1].Properties[1].Object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[2].Object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[3].Object: [075337:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[1].Object: [075337:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
       "Fields": {
@@ -482,21 +482,8 @@
         "VirtualMachineAdapter": {
           "Scripts": [
             {
-              "Name": "DefaultBlockActivationOnLoad"
-            },
-            {
               "Name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
               "Properties": [
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
-                  "Object": "24A341:Fallout4.esm"
-                },
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "VRWorkshop_TutorialMessage_AttackMarker",
-                  "Object": "24A375:Fallout4.esm"
-                },
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "VRWorkshopShared_NPCHologramFXAbility",
@@ -506,8 +493,21 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "VRWorkshop_EnemyType",
                   "Object": "075337:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "VRWorkshop_TutorialMessage_AttackMarker",
+                  "Object": "24A375:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
+                  "Object": "24A341:Fallout4.esm"
                 }
               ]
+            },
+            {
+              "Name": "DefaultBlockActivationOnLoad"
             }
           ]
         },
@@ -2903,7 +2903,7 @@
         ],
         "SkyAndWeatherFromRegion": null,
         "TVDT": null,
-        "TemporaryUnknownGroupData": 1,
+        "TemporaryUnknownGroupData": null,
         "UnknownGroupData": null,
         "Version2": 11,
         "VersionControl": 2760484,
@@ -4704,7 +4704,7 @@
         ],
         "SkyAndWeatherFromRegion": null,
         "TVDT": null,
-        "TemporaryUnknownGroupData": 1,
+        "TemporaryUnknownGroupData": null,
         "UnknownGroupData": null,
         "Version2": 11,
         "VersionControl": 2760484,
@@ -7095,7 +7095,7 @@
       "CheckErrors": {
         "Components": "[0].Component: [01FAC2:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "PreviewTransform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [0731A3:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [0731A3:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[3].Object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "shipment_Wood_250",
       "Fields": {
@@ -7143,6 +7143,11 @@
                   "Object": "0731A3:Fallout4.esm"
                 },
                 {
+                  "Data": 100,
+                  "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "nAmount"
+                },
+                {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "pShipment",
                   "Object": "24A068:Fallout4.esm"
@@ -7151,11 +7156,6 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "pWorkbench_General",
                   "Object": "091FD4:Fallout4.esm"
-                },
-                {
-                  "Data": 100,
-                  "MutagenObjectType": "ScriptIntProperty",
-                  "Name": "nAmount"
                 }
               ]
             }
@@ -7174,7 +7174,7 @@
       "CheckErrors": {
         "Components": "[0].Component: [01FAB9:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "PreviewTransform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [106D98:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [106D98:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[3].Object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "shipment_Rubber_large",
       "Fields": {
@@ -7222,6 +7222,11 @@
                   "Object": "106D98:Fallout4.esm"
                 },
                 {
+                  "Data": 25,
+                  "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "nAmount"
+                },
+                {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "pShipment",
                   "Object": "24A069:Fallout4.esm"
@@ -7230,11 +7235,6 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "pWorkbench_General",
                   "Object": "091FD4:Fallout4.esm"
-                },
-                {
-                  "Data": 25,
-                  "MutagenObjectType": "ScriptIntProperty",
-                  "Name": "nAmount"
                 }
               ]
             }
@@ -7253,7 +7253,7 @@
       "CheckErrors": {
         "Components": "[0].Component: [01FA9A:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "PreviewTransform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [0AEC5E:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [0AEC5E:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[3].Object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "shipment_Ceramic_large",
       "Fields": {
@@ -7301,6 +7301,11 @@
                   "Object": "0AEC5E:Fallout4.esm"
                 },
                 {
+                  "Data": 25,
+                  "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "nAmount"
+                },
+                {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "pShipment",
                   "Object": "24A06B:Fallout4.esm"
@@ -7309,11 +7314,6 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "pWorkbench_General",
                   "Object": "091FD4:Fallout4.esm"
-                },
-                {
-                  "Data": 25,
-                  "MutagenObjectType": "ScriptIntProperty",
-                  "Name": "nAmount"
                 }
               ]
             }
@@ -7338,14 +7338,14 @@
         "CombatStyle": "[04A094:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "DeathItem": "[04D8F9:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "DefaultPackageList": "[022B33:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "Factions": "[0].Faction: [028670:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].Faction: [022B31:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].Faction: [0EDCE1:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "Factions": "[0].Faction: [022B31:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].Faction: [028670:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].Faction: [0EDCE1:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "HairColor": "[0A042E:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Keywords": "[0]: [013795:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CF26C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "ObjectTemplates": "[0].Properties[0].Record: [047E00:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].Properties[0].Record: [047DFF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Perks": "[0].Perk: [02A6FC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].Perk: [0A2775:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Race": "[04716C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Skin": "[0475DD:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[1].Object: [087BA5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [0475DF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "VirtualMachineAdapter": "Scripts[1].Properties[0].Object: [087BA5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[1].Properties[1].Object: [0475DF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Voice": "[0480FC:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "EncRadRoachAmbushLegendary",
@@ -7390,10 +7390,10 @@
         "FacialMorphIntensity": null,
         "Factions": [
           {
-            "Faction": "028670:Fallout4.esm"
+            "Faction": "022B31:Fallout4.esm"
           },
           {
-            "Faction": "022B31:Fallout4.esm"
+            "Faction": "028670:Fallout4.esm"
           },
           {
             "Faction": "0EDCE1:Fallout4.esm"
@@ -7545,13 +7545,28 @@
         "VirtualMachineAdapter": {
           "Scripts": [
             {
-              "Name": "RadroachLegendaryScript",
+              "Name": "MasterAmbushActorScript",
               "Properties": [
                 {
-                  "Data": 0.5,
-                  "MutagenObjectType": "ScriptFloatProperty",
-                  "Name": "SpawnDelay"
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "Aggression",
+                  "Object": "0002BC:Fallout4.esm"
                 },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "Suspicious",
+                  "Object": "0002EC:Fallout4.esm"
+                },
+                {
+                  "Data": true,
+                  "MutagenObjectType": "ScriptBoolProperty",
+                  "Name": "ambushOnTrigger"
+                }
+              ]
+            },
+            {
+              "Name": "RadroachLegendaryScript",
+              "Properties": [
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "DeathExplosion",
@@ -7561,26 +7576,11 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "EncRadRoach",
                   "Object": "0475DF:Fallout4.esm"
-                }
-              ]
-            },
-            {
-              "Name": "MasterAmbushActorScript",
-              "Properties": [
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "Aggression",
-                  "Object": "0002BC:Fallout4.esm"
                 },
                 {
-                  "Data": true,
-                  "MutagenObjectType": "ScriptBoolProperty",
-                  "Name": "ambushOnTrigger"
-                },
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "Suspicious",
-                  "Object": "0002EC:Fallout4.esm"
+                  "Data": 0.5,
+                  "MutagenObjectType": "ScriptFloatProperty",
+                  "Name": "SpawnDelay"
                 }
               ]
             }
@@ -7829,7 +7829,7 @@
         "Items": "[0].Item.Item: [023736:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].Item.Item: [04F4A6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].Item.Item: [24A364:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Perks": "[0].Perk: [0A2775:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].Perk: [0A2776:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].Perk: [1FE6B8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].Perk: [20AEE4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].Perk: [20AEE9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].Perk: [20AEEA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].Perk: [20AEEB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].Perk: [20AEEC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].Perk: [20AEED:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].Perk: [20AEEE:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].Perk: [20AEEF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].Perk: [20AEF0:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].Perk: [20AEF1:Fallout4.esm] \u003CError: Could not be resolved\u003E; [13].Perk: [20AEF2:Fallout4.esm] \u003CError: Could not be resolved\u003E; [14].Perk: [24A389:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "TemplateActors": "TraitTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; StatsTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; FactionsTemplate: [0E6B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; AiDataTemplate: [0E6B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; AiPackagesTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; BaseDataTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; DefPackListTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; AttackDataTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; KeywordsTemplate: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [050DC9:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [18B1CA:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [18B1CA:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[1].Object: [050DC9:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_LvlSynthCourser",
       "Fields": {
@@ -8055,6 +8055,11 @@
               "Properties": [
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "LL_ChanceNone_SynthCourserTeleport",
+                  "Object": "18B1CA:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "LvlSynthTeleport",
                   "Object": "050DC9:Fallout4.esm"
                 },
@@ -8062,11 +8067,6 @@
                   "Data": 1.0,
                   "MutagenObjectType": "ScriptFloatProperty",
                   "Name": "chanceToTeleport"
-                },
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "LL_ChanceNone_SynthCourserTeleport",
-                  "Object": "18B1CA:Fallout4.esm"
                 }
               ]
             }
@@ -8094,7 +8094,7 @@
         "Aliases": "[1].UniqueActor: [002CB7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].UniqueActor: [002CBF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].UniqueActor: [002F20:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].UniqueActor: [002EFA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].UniqueActor: [002F28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].UniqueActor: [002CDA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].UniqueActor: [002CCB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].UniqueActor: [002CB2:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].UniqueActor: [002CD6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].UniqueActor: [002CBB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].UniqueActor: [002CC1:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].UniqueActor: [002CC6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [13].UniqueActor: [0222A2:Fallout4.esm] \u003CError: Could not be resolved\u003E; [14].UniqueActor: [002F1C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [15].UniqueActor: [004DEC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [16].UniqueActor: [002CCF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [17].UniqueActor: [002F0E:Fallout4.esm] \u003CError: Could not be resolved\u003E; [18].UniqueActor: [002EF8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [19].UniqueActor: [002F02:Fallout4.esm] \u003CError: Could not be resolved\u003E; [20].UniqueActor: [002F10:Fallout4.esm] \u003CError: Could not be resolved\u003E; [21].UniqueActor: [0399DD:Fallout4.esm] \u003CError: Could not be resolved\u003E; [22].UniqueActor: [002F1E:Fallout4.esm] \u003CError: Could not be resolved\u003E; [23].UniqueActor: [002CD4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [24].UniqueActor: [002F22:Fallout4.esm] \u003CError: Could not be resolved\u003E; [25].UniqueActor: [002EFE:Fallout4.esm] \u003CError: Could not be resolved\u003E; [26].UniqueActor: [002EFC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [27].UniqueActor: [020B8E:Fallout4.esm] \u003CError: Could not be resolved\u003E; [28].UniqueActor: [04B240:Fallout4.esm] \u003CError: Could not be resolved\u003E; [29].External.Quest: [0289E4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [30].UniqueActor: [002F0A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [31].UniqueActor: [0B2FC7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [32].UniqueActor: [002F14:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Location": "[002CEF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "TextDisplayGlobals": "[0]: [043C28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [026A98:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2]: [043C79:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3]: [0D35FA:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [022B41:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[1].Object: [022B3E:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [022B3F:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[3].Object: [022B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[4].Object: [022B40:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[0].Object: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[1].Object: [0AE51C:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[3].Object: [12CF27:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[5].Object: [01F25E:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[6].Object: [0D35FA:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[7].Object: [14191C:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[8].Object: [0E9A43:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[9].Object: [01F961:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[10].Object: [0AEC4F:Fallout4.esm] \u003CError: Could not be resolved\u003E; Aliases[0].Scripts[0].Properties[0].Object: [0785F2:Fallout4.esm] \u003CError: Could not be resolved\u003E; Aliases[0].Scripts[0].Properties[1].Objects[0].Object: [06A698:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [022B3F:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[1].Object: [022B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[2].Object: [022B40:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[3].Object: [022B3E:Fallout4.esm] \u003CError: Could not be resolved\u003E; Scripts[0].Properties[4].Object: [022B41:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[0].Object: [0AE51C:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[2].Object: [0AEC4F:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[3].Object: [0E9A43:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[4].Object: [14191C:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[5].Object: [12CF27:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[6].Object: [0D35FA:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[8].Object: [01F961:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[9].Object: [01F25E:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[10].Object: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; Aliases[0].Scripts[0].Properties[0].Object: [0785F2:Fallout4.esm] \u003CError: Could not be resolved\u003E; Aliases[0].Scripts[0].Properties[1].Objects[0].Object: [06A698:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "DialogueDiamondCity",
       "Fields": {
@@ -9059,15 +9059,9 @@
           ],
           "Fragments": [
             {
-              "FragmentName": "Fragment_Stage_0070_Item_00",
+              "FragmentName": "Fragment_Stage_0005_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 70,
-              "Unknown2": 1
-            },
-            {
-              "FragmentName": "Fragment_Stage_0045_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 45,
+              "Stage": 5,
               "Unknown2": 1
             },
             {
@@ -9077,15 +9071,9 @@
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0500_Item_00",
+              "FragmentName": "Fragment_Stage_0017_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 500,
-              "Unknown2": 1
-            },
-            {
-              "FragmentName": "Fragment_Stage_0190_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 190,
+              "Stage": 17,
               "Unknown2": 1
             },
             {
@@ -9095,27 +9083,9 @@
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0005_Item_00",
+              "FragmentName": "Fragment_Stage_0045_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 5,
-              "Unknown2": 1
-            },
-            {
-              "FragmentName": "Fragment_Stage_0111_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 111,
-              "Unknown2": 1
-            },
-            {
-              "FragmentName": "Fragment_Stage_0600_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 600,
-              "Unknown2": 1
-            },
-            {
-              "FragmentName": "Fragment_Stage_0065_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 65,
+              "Stage": 45,
               "Unknown2": 1
             },
             {
@@ -9125,15 +9095,27 @@
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0017_Item_00",
+              "FragmentName": "Fragment_Stage_0064_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 17,
+              "Stage": 64,
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0170_Item_00",
+              "FragmentName": "Fragment_Stage_0065_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 170,
+              "Stage": 65,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0070_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "Stage": 70,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0111_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "Stage": 111,
               "Unknown2": 1
             },
             {
@@ -9143,9 +9125,21 @@
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0064_Item_00",
+              "FragmentName": "Fragment_Stage_0113_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 64,
+              "Stage": 113,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0170_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "Stage": 170,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0190_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "Stage": 190,
               "Unknown2": 1
             },
             {
@@ -9155,20 +9149,21 @@
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0113_Item_00",
+              "FragmentName": "Fragment_Stage_0500_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
-              "Stage": 113,
+              "Stage": 500,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0600_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "Stage": 600,
               "Unknown2": 1
             }
           ],
           "Script": {
             "Name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
             "Properties": [
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "pMQ103",
-                "Object": "0229E5:Fallout4.esm"
-              },
               {
                 "MutagenObjectType": "ScriptObjectProperty",
                 "Name": "BoS301",
@@ -9180,29 +9175,10 @@
                 "Object": "00000F:Fallout4.esm"
               },
               {
+                "Alias": 71,
                 "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "PublickOccurencesArticle01",
-                "Object": "12CF27:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "pCaps001",
-                "Object": "00000F:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "pMQ04",
-                "Object": "01F25E:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "ServiceCostBuyHouse",
-                "Object": "0D35FA:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "FFDiamondCity02",
-                "Object": "14191C:Fallout4.esm"
+                "Name": "CustomItem_WorldSeriesBat",
+                "Object": "0AEC4F:Fallout4.esm"
               },
               {
                 "MutagenObjectType": "ScriptObjectProperty",
@@ -9211,14 +9187,38 @@
               },
               {
                 "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "FFDiamondCity02",
+                "Object": "14191C:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "PublickOccurencesArticle01",
+                "Object": "12CF27:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "ServiceCostBuyHouse",
+                "Object": "0D35FA:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "pCaps001",
+                "Object": "00000F:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
                 "Name": "pFFDiamondCity02",
                 "Object": "01F961:Fallout4.esm"
               },
               {
-                "Alias": 71,
                 "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "CustomItem_WorldSeriesBat",
-                "Object": "0AEC4F:Fallout4.esm"
+                "Name": "pMQ04",
+                "Object": "01F25E:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "pMQ103",
+                "Object": "0229E5:Fallout4.esm"
               }
             ]
           },
@@ -9226,16 +9226,6 @@
             {
               "Name": "DialogueDiamondCityScript",
               "Properties": [
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "ThirdBase",
-                  "Object": "022B41:Fallout4.esm"
-                },
-                {
-                  "MutagenObjectType": "ScriptObjectProperty",
-                  "Name": "StartBase",
-                  "Object": "022B3E:Fallout4.esm"
-                },
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "FirstBase",
@@ -9250,6 +9240,16 @@
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "SecondBase",
                   "Object": "022B40:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "StartBase",
+                  "Object": "022B3E:Fallout4.esm"
+                },
+                {
+                  "MutagenObjectType": "ScriptObjectProperty",
+                  "Name": "ThirdBase",
+                  "Object": "022B41:Fallout4.esm"
                 }
               ]
             }
@@ -9307,8 +9307,7 @@
               "ParameterOneNumber": 7,
               "ParameterOneRecord": "000007:Fallout4.esm"
             },
-            "MutagenObjectType": "ConditionFloat",
-            "Unknown1": "0x6B0641"
+            "MutagenObjectType": "ConditionFloat"
           }
         ],
         "EditorID": "DialogueGenericPlayer",
@@ -9371,7 +9370,7 @@
       "CheckErrors": {
         "Aliases": "[0].SpecificLocation: [01D807:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].UniqueActor: [0179FF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].UniqueActor: [019FD8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].PackageData[0]: [01F5BD:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].PackageData[1]: [23C9E8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].PackageData[2]: [01E66D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].UniqueActor: [019FDA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].PackageData[0]: [115BD7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].PackageData[1]: [072757:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].UniqueActor: [019FD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].CombatOverridePackageList: [01D417:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[0]: [05DF28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[1]: [05E5C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[2]: [01D414:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[3]: [01F5B8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[4]: [0A878D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[5]: [022B3C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[6]: [03FE3C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].PackageData[7]: [022AA4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].UniqueActor: [019FDC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].PackageData[0]: [115BD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].PackageData[1]: [071437:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].UniqueActor: [019FDB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].PackageData[0]: [115BD8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].UniqueActor: [01D15C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].ForcedReference: [01E2EA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].VoiceTypes: [019FD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].Location.RefType: [07828C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].ForcedReference: [01D318:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].External.Quest: [0289E4:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Stages": "[2].LogEntries[0].Conditions[1].Data.ParameterOneRecord: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].LogEntries[1].Conditions[0].Data.ParameterOneRecord: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].LogEntries[1].Conditions[1].Data.ParameterOneRecord: [0B1752:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "VirtualMachineAdapter": "Scripts[0].Properties[1].Object: [067FF9:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[1].Object: [05DEE4:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[2].Object: [1A001C:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[7].Object: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[8].Object: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[12].Object: [0C1897:Fallout4.esm] \u003CError: Could not be resolved\u003E; Aliases[0].Scripts[0].Properties[1].Objects[0].Object: [01D807:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "VirtualMachineAdapter": "Scripts[0].Properties[2].Object: [067FF9:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[6].Object: [0C1897:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[8].Object: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[9].Object: [1A001C:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[10].Object: [05DEE4:Fallout4.esm] \u003CError: Could not be resolved\u003E; Script.Properties[12].Object: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; Aliases[0].Scripts[0].Properties[0].Objects[0].Object: [01D807:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "DialogueConcordArea",
       "Fields": {
@@ -9580,8 +9579,7 @@
                       "ParameterTwoNumber": 10,
                       "ParameterTwoRecord": "00000A:Fallout4.esm"
                     },
-                    "MutagenObjectType": "ConditionFloat",
-                    "Unknown1": "0xEFA241"
+                    "MutagenObjectType": "ConditionFloat"
                   },
                   {
                     "CompareOperator": "LessThan",
@@ -9592,8 +9590,7 @@
                       "ParameterOneNumber": 117802,
                       "ParameterOneRecord": "01CC2A:Fallout4.esm"
                     },
-                    "MutagenObjectType": "ConditionFloat",
-                    "Unknown1": "0xEFA241"
+                    "MutagenObjectType": "ConditionFloat"
                   }
                 ],
                 "Flags": [],
@@ -9653,8 +9650,7 @@
                     "Flags": [
                       "OR"
                     ],
-                    "MutagenObjectType": "ConditionFloat",
-                    "Unknown1": "0xEFA241"
+                    "MutagenObjectType": "ConditionFloat"
                   },
                   {
                     "ComparisonValue": 1.0,
@@ -9669,8 +9665,7 @@
                     "Flags": [
                       "OR"
                     ],
-                    "MutagenObjectType": "ConditionFloat",
-                    "Unknown1": "0xEFA241"
+                    "MutagenObjectType": "ConditionFloat"
                   }
                 ],
                 "Flags": [],
@@ -9718,11 +9713,6 @@
                   "Name": "DefaultAliasPlayerChangeLocation",
                   "Properties": [
                     {
-                      "Data": 200,
-                      "MutagenObjectType": "ScriptIntProperty",
-                      "Name": "StageToSet"
-                    },
-                    {
                       "MutagenObjectType": "ScriptObjectListProperty",
                       "Name": "LeavingOneOfTheseLocations",
                       "Objects": [
@@ -9731,6 +9721,11 @@
                           "Object": "01D807:Fallout4.esm"
                         }
                       ]
+                    },
+                    {
+                      "Data": 200,
+                      "MutagenObjectType": "ScriptIntProperty",
+                      "Name": "StageToSet"
                     },
                     {
                       "Data": 100,
@@ -9744,12 +9739,6 @@
           ],
           "Fragments": [
             {
-              "FragmentName": "Fragment_Stage_0040_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
-              "Stage": 40,
-              "Unknown2": 1
-            },
-            {
               "FragmentName": "Fragment_Stage_0005_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
               "Stage": 5,
@@ -9759,6 +9748,18 @@
               "FragmentName": "Fragment_Stage_0010_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
               "Stage": 10,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0015_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "Stage": 15,
+              "Unknown2": 1
+            },
+            {
+              "FragmentName": "Fragment_Stage_0040_Item_00",
+              "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "Stage": 40,
               "Unknown2": 1
             },
             {
@@ -9775,12 +9776,6 @@
               "Unknown2": 1
             },
             {
-              "FragmentName": "Fragment_Stage_0015_Item_00",
-              "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
-              "Stage": 15,
-              "Unknown2": 1
-            },
-            {
               "FragmentName": "Fragment_Stage_0200_Item_00",
               "ScriptName": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
               "Stage": 200,
@@ -9791,25 +9786,21 @@
             "Name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
             "Properties": [
               {
+                "Alias": 2,
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "Alias_GrandmaMonkAlias",
+                "Object": "0179F3:Fallout4.esm"
+              },
+              {
                 "Alias": 15,
                 "MutagenObjectType": "ScriptObjectProperty",
                 "Name": "Alias_JunLongAlias",
                 "Object": "0179F3:Fallout4.esm"
               },
               {
+                "Alias": 6,
                 "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "Min01",
-                "Object": "05DEE4:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "Min00",
-                "Object": "1A001C:Fallout4.esm"
-              },
-              {
-                "Alias": 4,
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "Alias_PrestonGarveyAlias",
+                "Name": "Alias_MarcyLongAlias",
                 "Object": "0179F3:Fallout4.esm"
               },
               {
@@ -9819,35 +9810,9 @@
                 "Object": "0179F3:Fallout4.esm"
               },
               {
+                "Alias": 4,
                 "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "PrestonStartScene",
-                "Object": "01A4D6:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "GrandmaMonkWarning",
-                "Object": "03E088:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "pMQ03",
-                "Object": "01CC2A:Fallout4.esm"
-              },
-              {
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "MQ102",
-                "Object": "01CC2A:Fallout4.esm"
-              },
-              {
-                "Alias": 2,
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "Alias_GrandmaMonkAlias",
-                "Object": "0179F3:Fallout4.esm"
-              },
-              {
-                "Alias": 6,
-                "MutagenObjectType": "ScriptObjectProperty",
-                "Name": "Alias_MarcyLongAlias",
+                "Name": "Alias_PrestonGarveyAlias",
                 "Object": "0179F3:Fallout4.esm"
               },
               {
@@ -9860,6 +9825,36 @@
                 "MutagenObjectType": "ScriptObjectProperty",
                 "Name": "AmmoFusionCell",
                 "Object": "0C1897:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "GrandmaMonkWarning",
+                "Object": "03E088:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "MQ102",
+                "Object": "01CC2A:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "Min00",
+                "Object": "1A001C:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "Min01",
+                "Object": "05DEE4:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "PrestonStartScene",
+                "Object": "01A4D6:Fallout4.esm"
+              },
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "pMQ03",
+                "Object": "01CC2A:Fallout4.esm"
               }
             ]
           },
@@ -9869,16 +9864,16 @@
               "Properties": [
                 {
                   "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "IntroPlayerOpinion"
+                },
+                {
+                  "MutagenObjectType": "ScriptIntProperty",
                   "Name": "IntroState"
                 },
                 {
                   "MutagenObjectType": "ScriptObjectProperty",
                   "Name": "MinutemenCentralQuest",
                   "Object": "067FF9:Fallout4.esm"
-                },
-                {
-                  "MutagenObjectType": "ScriptIntProperty",
-                  "Name": "IntroPlayerOpinion"
                 }
               ]
             }
@@ -9897,7 +9892,7 @@
     {
       "CheckErrors": {
         "ActorEffect": "[0]: [0B73A6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CCDA3:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "Attacks": "[2].RequiredSlot: [013F43:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].RequiredSlot: [013F45:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].RequiredSlot: [013F42:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].RequiredSlot: [0A2710:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].RequiredSlot: [049BE6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].RequiredSlot: [013F42:Fallout4.esm] \u003CError: Could not be resolved\u003E; [14].RequiredSlot: [049BE6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [15].RequiredSlot: [013F43:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "Attacks": "[0].RequiredSlot: [013F42:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].RequiredSlot: [013F43:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].RequiredSlot: [013F45:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].RequiredSlot: [049BE6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].RequiredSlot: [0A2710:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].RequiredSlot: [013F42:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].RequiredSlot: [013F43:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].RequiredSlot: [049BE6:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "BaseMovementDefault": "[06FAD3:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "BodyPartData": "[14A295:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "CollarTextureSet": "[0A96C0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
@@ -9932,19 +9927,20 @@
           {
             "AttackData": {
               "ActionPointsMult": 1.0,
+              "Chance": 1.0,
               "DamageMult": 1.0,
               "StrikeAngle": 35.0
             },
-            "AttackEvent": "meleeStart_3_Mirrored"
+            "AttackEvent": "meleeStart_1",
+            "RequiredSlot": "013F42:Fallout4.esm"
           },
           {
             "AttackData": {
               "ActionPointsMult": 1.0,
-              "Chance": 0.1,
               "DamageMult": 1.0,
               "StrikeAngle": 35.0
             },
-            "AttackEvent": "meleeStart_8"
+            "AttackEvent": "meleeStart_1_Mirrored"
           },
           {
             "AttackData": {
@@ -9977,100 +9973,10 @@
           {
             "AttackData": {
               "ActionPointsMult": 1.0,
-              "Chance": 1.0,
               "DamageMult": 1.0,
               "StrikeAngle": 35.0
             },
-            "AttackEvent": "meleeStart_1",
-            "RequiredSlot": "013F42:Fallout4.esm"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "Chance": 1.0,
-              "DamageMult": 1.0,
-              "Flags": [
-                "PowerAttack"
-              ],
-              "StaggerOffset": 1,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_4_Mirrored",
-            "RequiredSlot": "0A2710:Fallout4.esm"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "Chance": 1.0,
-              "DamageMult": 1.0,
-              "Flags": [
-                "PowerAttack"
-              ],
-              "StaggerOffset": 1,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_7",
-            "RequiredSlot": "049BE6:Fallout4.esm"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "AttackAngle": 90.0,
-              "Chance": 1.0,
-              "DamageMult": 1.0,
-              "Flags": [
-                "RotatingAttack"
-              ],
-              "StrikeAngle": 45.0
-            },
-            "AttackEvent": "meleeStart_5",
-            "RequiredSlot": "013F42:Fallout4.esm"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "DamageMult": 1.0,
-              "Flags": [
-                "PowerAttack"
-              ],
-              "StaggerOffset": 1,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_7_Mirrored"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "DamageMult": 1.0,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_6_Mirrored"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "AttackAngle": -90.0,
-              "DamageMult": 1.0,
-              "StrikeAngle": 45.0
-            },
-            "AttackEvent": "meleeStart_5_Mirrored"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "DamageMult": 1.0,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_1_Mirrored"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "Chance": 0.1,
-              "DamageMult": 1.0,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_8_Mirrored"
+            "AttackEvent": "meleeStart_3_Mirrored"
           },
           {
             "AttackData": {
@@ -10089,6 +9995,43 @@
           {
             "AttackData": {
               "ActionPointsMult": 1.0,
+              "Chance": 1.0,
+              "DamageMult": 1.0,
+              "Flags": [
+                "PowerAttack"
+              ],
+              "StaggerOffset": 1,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_4_Mirrored",
+            "RequiredSlot": "0A2710:Fallout4.esm"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "AttackAngle": 90.0,
+              "Chance": 1.0,
+              "DamageMult": 1.0,
+              "Flags": [
+                "RotatingAttack"
+              ],
+              "StrikeAngle": 45.0
+            },
+            "AttackEvent": "meleeStart_5",
+            "RequiredSlot": "013F42:Fallout4.esm"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "AttackAngle": -90.0,
+              "DamageMult": 1.0,
+              "StrikeAngle": 45.0
+            },
+            "AttackEvent": "meleeStart_5_Mirrored"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
               "AttackAngle": -90.0,
               "Chance": 1.0,
               "DamageMult": 1.0,
@@ -10099,6 +10042,58 @@
             },
             "AttackEvent": "meleeStart_6",
             "RequiredSlot": "013F43:Fallout4.esm"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "DamageMult": 1.0,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_6_Mirrored"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "Chance": 1.0,
+              "DamageMult": 1.0,
+              "Flags": [
+                "PowerAttack"
+              ],
+              "StaggerOffset": 1,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_7",
+            "RequiredSlot": "049BE6:Fallout4.esm"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "DamageMult": 1.0,
+              "Flags": [
+                "PowerAttack"
+              ],
+              "StaggerOffset": 1,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_7_Mirrored"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "Chance": 0.1,
+              "DamageMult": 1.0,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_8"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "Chance": 0.1,
+              "DamageMult": 1.0,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_8_Mirrored"
           }
         ],
         "BaseMovementDefault": "06FAD3:Fallout4.esm",
@@ -10246,11 +10241,11 @@
         "MorphValuesLastIndex": 17,
         "MovementDataOverrides": null,
         "MovementTypeNames": [
-          "WALK",
+          "BLDO",
           "RUN1",
           "SNEK",
-          "BLDO",
-          "SWIM"
+          "SWIM",
+          "WALK"
         ],
         "Name": {
           "TargetLanguage": "English",
@@ -10357,6 +10352,26 @@
             "AttackData": {
               "ActionPointsMult": 1.0,
               "Chance": 1.0,
+              "DamageMult": 1.0,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_Bite1",
+            "Description": "Bite "
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "Chance": 1.0,
+              "DamageMult": 1.0,
+              "StrikeAngle": 35.0
+            },
+            "AttackEvent": "meleeStart_Bite2",
+            "Description": "bite"
+          },
+          {
+            "AttackData": {
+              "ActionPointsMult": 1.0,
+              "Chance": 1.0,
               "DamageMult": 2.0,
               "Flags": [
                 "PowerAttack"
@@ -10371,16 +10386,6 @@
             "AttackData": {
               "ActionPointsMult": 1.0,
               "Chance": 1.0,
-              "DamageMult": 1.0,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_Bite1",
-            "Description": "Bite "
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "Chance": 1.0,
               "DamageMult": 1.5,
               "Flags": [
                 "PowerAttack"
@@ -10390,16 +10395,6 @@
             },
             "AttackEvent": "meleeStart_PowerStanding1",
             "Description": "jumping bite"
-          },
-          {
-            "AttackData": {
-              "ActionPointsMult": 1.0,
-              "Chance": 1.0,
-              "DamageMult": 1.0,
-              "StrikeAngle": 35.0
-            },
-            "AttackEvent": "meleeStart_Bite2",
-            "Description": "bite"
           }
         ],
         "BaseMovementDefault": null,
@@ -10602,11 +10597,11 @@
         "MorphValuesLastIndex": 16384,
         "MovementDataOverrides": null,
         "MovementTypeNames": [
-          "WALK",
+          "BLDO",
           "RUN1",
           "SNEK",
-          "BLDO",
-          "SWIM"
+          "SWIM",
+          "WALK"
         ],
         "Name": null,
         "NumberOfTintsInList": 1139,
@@ -10858,11 +10853,11 @@
         "MorphValuesLastIndex": 18270,
         "MovementDataOverrides": null,
         "MovementTypeNames": [
-          "WALK",
+          "BLDO",
           "RUN1",
           "SNEK",
-          "BLDO",
-          "SWIM"
+          "SWIM",
+          "WALK"
         ],
         "Name": {
           "TargetLanguage": "English",
@@ -11621,8 +11616,7 @@
                       "ParameterTwoRecord": "00001E:Fallout4.esm",
                       "Unknown2": 3559
                     },
-                    "MutagenObjectType": "ConditionFloat",
-                    "Unknown1": "0x8CFA0D"
+                    "MutagenObjectType": "ConditionFloat"
                   }
                 ],
                 "PhaseIndex": 0,

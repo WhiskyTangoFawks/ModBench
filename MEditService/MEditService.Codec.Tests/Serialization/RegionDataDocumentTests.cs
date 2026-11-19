@@ -1,5 +1,3 @@
-using System.Text.Json;
-using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -20,25 +18,6 @@ public sealed class RegionDataDocumentTests
             Grasses = new RegionGrasses { LodDisplayDistanceMultiplier = 5, OcclusionAccuracyDist = 15 },
             Sounds = new RegionSounds { LodDisplayDistanceMultiplier = 6, OcclusionAccuracyDist = 16 },
         };
-
-    private static IEnumerable<string> MembersSpelledTwice(JsonElement element, string path) => element.ValueKind switch
-    {
-        JsonValueKind.Object => element.EnumerateObject()
-            .GroupBy(p => p.Name, StringComparer.Ordinal)
-            .Where(g => g.Count() > 1)
-            .Select(g => $"{path}.{g.Key}")
-            .Concat(element.EnumerateObject().SelectMany(p => MembersSpelledTwice(p.Value, $"{path}.{p.Name}"))),
-        JsonValueKind.Array => element.EnumerateArray().SelectMany((e, i) => MembersSpelledTwice(e, $"{path}[{i}]")),
-        _ => [],
-    };
-
-    [Fact]
-    public void ARegionsDataEntries_SpellEachMemberOnce()
-    {
-        using var document = JsonDocument.Parse(RecordTextCodec.SerializeToText(RegionWithEveryDataEntry(), GameRelease.Fallout4));
-
-        Assert.Empty(MembersSpelledTwice(document.RootElement, "$"));
-    }
 
     [Fact]
     public void ARegionsDataEntries_ReadBackWithTheirLodAndOcclusionValues()

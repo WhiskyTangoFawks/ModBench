@@ -180,10 +180,8 @@ internal static class PluginTrees
         }
     }
 
-    private static async Task<IMod> DeserializeTree(IGameCodec game, string treeRoot, CancellationToken cancel) =>
-        HeaderDocument.RestoreOmittedNextObjectId(
-            await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel, NameOrderedFileSystem.Instance),
-            await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
+    private static Task<IMod> DeserializeTree(IGameCodec game, string treeRoot, CancellationToken cancel) =>
+        game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel, NameOrderedFileSystem.Instance);
 
     /// <summary>The codec's verdict on the proof's text (ADR-0006), then on the plugin at <paramref name="recompiledPath"/>,
     /// against the one at <paramref name="modPath"/>; null when both are model-identical. Both plugins are reparsed.</summary>
@@ -197,10 +195,25 @@ internal static class PluginTrees
             (() => MutagenPluginAdapter.OpenForWrite(new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder),
                 ModelIdentity.Recompiled),
         ];
-        return trips.AsParallel().AsOrdered()
-            .Select(trip => ModelIdentity.FindFirstDivergence(original, trip.ReadBack(), trip.Trip))
-            .ToList()
-            .FirstOrDefault(divergence => divergence is not null);
+        // Each trip runs to its own end, so a failure of one never hides the other's, whatever the scheduling.
+        var verdicts = trips.AsParallel().AsOrdered()
+            .Select(trip => VerdictOf(() => ModelIdentity.FindFirstDivergence(original, trip.ReadBack(), trip.Trip)))
+            .ToList();
+        if (verdicts.Select(verdict => verdict.Failure).OfType<Exception>().ToList() is { Count: > 0 } failures)
+            throw new AggregateException(failures);
+        return verdicts.Select(verdict => verdict.Divergence).FirstOrDefault(divergence => divergence is not null);
+    }
+
+    private static (ModelIdentity.Divergence? Divergence, Exception? Failure) VerdictOf(Func<ModelIdentity.Divergence?> trip)
+    {
+        try
+        {
+            return (trip(), null);
+        }
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+        {
+            return (null, ex);
+        }
     }
 
     private const string ReadScratchPrefix = "medit-readtree-";

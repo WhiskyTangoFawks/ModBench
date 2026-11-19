@@ -67,41 +67,6 @@ public sealed class DocumentShapeParityTests
         return quest;
     }
 
-    [Fact]
-    public async Task TheWholeModDoor_WritesASyntheticModsNonDefaultGroupAndHeaderFieldsUnomitted()
-    {
-        var mod = NewMod();
-        var overriddenForm = new FormKey(ModKey.FromFileName("Test.esm"), 0x001);
-        mod.ModHeader.SetOverriddenForms([overriddenForm]);
-
-        var cell = new Cell(mod) { EditorID = "TimestampCell" };
-        var subBlock = new CellSubBlock { BlockNumber = 0, LastModified = 424242 };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, LastModified = 424242 };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-        mod.Cells.LastModified = 424242;
-
-        var worldspace = mod.Worldspaces.AddNew();
-        worldspace.EditorID = "TimestampWorldspace";
-        worldspace.SubCellsTimestamp = 424242;
-
-        using var dir = new ScratchDirectory("medit-parity-synthetic-");
-        await Fallout4WholeMod.Serialize(mod, dir.Path);
-
-        var rootText = await File.ReadAllTextAsync(Path.Combine(dir.Path, "RecordData.json"));
-        Assert.Contains($"\"OverriddenForms\"", rootText, StringComparison.Ordinal);
-        Assert.Contains(overriddenForm.ToString(), rootText, StringComparison.Ordinal);
-
-        var cellGroupFile = Path.Combine(dir.Path, "Cells", "0", "GroupRecordData.json");
-        Assert.True(File.Exists(cellGroupFile), $"Expected {cellGroupFile} to exist.");
-        Assert.Contains("\"LastModified\": 424242", await File.ReadAllTextAsync(cellGroupFile), StringComparison.Ordinal);
-
-        var worldspaceFile = Directory.EnumerateFiles(dir.Path, "RecordData.json", SearchOption.AllDirectories)
-            .Single(f => f.Contains("TimestampWorldspace", StringComparison.Ordinal));
-        Assert.Contains("\"SubCellsTimestamp\": 424242", await File.ReadAllTextAsync(worldspaceFile), StringComparison.Ordinal);
-    }
-
     private static async Task AssertTheCodecAndTheWholeModDoorWriteOneText(
         Fallout4Mod mod, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter record, string editorId)
     {

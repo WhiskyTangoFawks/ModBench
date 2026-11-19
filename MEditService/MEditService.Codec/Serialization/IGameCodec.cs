@@ -47,9 +47,6 @@ public interface IGameCodec
     /// <summary>The header flag combinations xEdit offers a new file of the extension, in <paramref name="release"/>.</summary>
     IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type);
 
-    /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
-    uint NextObjectIdDefault { get; }
-
     /// <summary>The facts overlaid on the reflected schema of the game's types.</summary>
     SchemaAnnotations Annotations { get; }
 
@@ -61,6 +58,10 @@ public interface IGameCodec
     /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite may change (ADR-0006). A deleted
     /// reference's base record is the member <paramref name="baseMemberOf"/> names for its type.</summary>
     IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf);
+
+    /// <summary><paramref name="record"/> as the source's format normalizes it (ADR-0030): each list the format sorts
+    /// in its order, and each member it omits as its read leaves it.</summary>
+    IMajorRecordGetter NormalizeFormat(IMajorRecordGetter record);
 
     /// <summary>A mod holding <paramref name="plugin"/>'s header and no record, which the whole-mod
     /// door writes as the header document alone.</summary>

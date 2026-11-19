@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -110,7 +111,12 @@ public sealed class DocumentEditTests
 
     private string CobjText() => TextOf(_cobj);
 
-    private string HeaderText() => Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+    // A header at its defaults writes no ModHeader member at all.
+    private string HeaderText()
+    {
+        _mod.ModHeader.Author = "Author";
+        return Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+    }
 
     private Npc NpcInAFaction()
     {
@@ -285,7 +291,6 @@ public sealed class DocumentEditTests
     [InlineData(
         "the recipe", EditOp.Set, "Conditions[1].Data.RunOnType", "\"Subject\"",
         new[] { """Conditions[1].Data.RunOnType: "Reference" -> <absent>""", """Conditions[1].Data.Reference: "000804:DocEdit.esp" -> <absent>""" })]
-    [InlineData("the recipe", EditOp.Set, "Conditions[0].Unknown1", "\"0x0a0b0c\"", new[] { """Conditions[0].Unknown1: "0x000000" -> "0x0A0B0C" """ })]
     [InlineData("the keyword", EditOp.Set, "Color", "\"#FF102030\"", new[] { """Color: <absent> -> "#102030" """ })]
     [InlineData("a weather", EditOp.Set, "LightningColor", "\"#102030\"", new[] { """LightningColor: <absent> -> "#00102030" """ })]
     [InlineData("a weather", EditOp.Set, "LightningColor", "\"#00102030\"", new[] { """LightningColor: <absent> -> "#00102030" """ })]
@@ -392,11 +397,11 @@ public sealed class DocumentEditTests
             """Models[1].TextureFileHashes: "0xAABBCCDD" -> "0x1122" """,
         })]
     [InlineData(
-        "an npc of scripts out of key order", EditOp.Move, "VirtualMachineAdapter.Scripts[1].Properties[0].Data[1]", "0",
+        "an npc of scripts out of key order", EditOp.Move, "VirtualMachineAdapter.Scripts[0].Properties[2].Data[1]", "0",
         new[]
         {
-            """VirtualMachineAdapter.Scripts[1].Properties[0].Data[0]: "a" -> "b" """,
-            """VirtualMachineAdapter.Scripts[1].Properties[0].Data[1]: "b" -> "a" """,
+            """VirtualMachineAdapter.Scripts[0].Properties[2].Data[0]: "a" -> "b" """,
+            """VirtualMachineAdapter.Scripts[0].Properties[2].Data[1]: "b" -> "a" """,
         })]
     public void AnEdit_ChangesExactlyWhatItNames(string record, EditOp op, string path, string? value, string[] changes)
     {
@@ -441,11 +446,11 @@ public sealed class DocumentEditTests
     }
 
     [Theory]
-    [InlineData("an npc of scripts out of key order", "Scripts.1.Name", "\"Zulu\"", """VirtualMachineAdapter.Scripts[1].Name: "Alpha" -> "Zulu" """)]
-    [InlineData("an npc of scripts out of key order", "Scripts.1.Properties.1.Data", "42", "VirtualMachineAdapter.Scripts[1].Properties[1].Data: 1 -> 42")]
-    [InlineData("an npc of scripts out of key order", "Scripts.1.Properties.2.Members.0.Properties.0.Data", "9", "VirtualMachineAdapter.Scripts[1].Properties[2].Members[0].Properties[0].Data: 3 -> 9")]
+    [InlineData("an npc of scripts out of key order", "Scripts.1.Name", "\"Zulu\"", """VirtualMachineAdapter.Scripts[1].Name: "Beta" -> "Zulu" """)]
+    [InlineData("an npc of scripts out of key order", "Scripts.0.Properties.1.Data", "42", "VirtualMachineAdapter.Scripts[0].Properties[1].Data: 1 -> 42")]
+    [InlineData("an npc of scripts out of key order", "Scripts.0.Properties.0.Members.0.Properties.0.Data", "9", "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Data: 3 -> 9")]
     [InlineData("a quest of fragments and an alias script", "Aliases.0.Scripts.0.Properties.0.Data", "7", "VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Data: 1 -> 7")]
-    [InlineData("a quest of fragments and an alias script", "Fragments.0.ScriptName", "\"Renamed\"", """VirtualMachineAdapter.Fragments[0].ScriptName: "Ten" -> "Renamed" """)]
+    [InlineData("a quest of fragments and an alias script", "Fragments.0.ScriptName", "\"Renamed\"", """VirtualMachineAdapter.Fragments[0].ScriptName: "Five" -> "Renamed" """)]
     [InlineData("a perk of fragments out of key order", "ScriptFragments.Fragments.0.ScriptName", "\"Renamed\"", """VirtualMachineAdapter.ScriptFragments.Fragments[0].ScriptName: "Two" -> "Renamed" """)]
     [InlineData("a scene of phase fragments out of key order", "ScriptFragments.PhaseFragments.0.FragmentName", "\"Renamed\"", """VirtualMachineAdapter.ScriptFragments.PhaseFragments[0].FragmentName: "F1S" -> "Renamed" """)]
     public void ResendingAnAdapterWithOneMemberChanged_ChangesThatMemberAndNothingElse(string record, string at, string replacement, string change)
@@ -478,7 +483,7 @@ public sealed class DocumentEditTests
     [Fact]
     public void RenamingAScriptToTheNameAnotherHolds_IsWritten()
     {
-        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Set, "VirtualMachineAdapter.Scripts[0].Name", "\"Holder\"");
+        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Set, "VirtualMachineAdapter.Scripts[1].Name", "\"Holder\"");
 
         Assert.Equal(["Holder", "Holder", "Tail"], ScriptNames(after));
     }
@@ -488,7 +493,7 @@ public sealed class DocumentEditTests
     [InlineData(1, new[] { 1, 5 })]
     public void AnEditToOneOfAPairAnotherToolWrote_ChangesThatOneAlone(int property, int[] written)
     {
-        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Set, $"VirtualMachineAdapter.Scripts[1].Properties[{property}].Data", "5");
+        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Set, $"VirtualMachineAdapter.Scripts[0].Properties[{property}].Data", "5");
 
         Assert.Equal(written, HolderCounts(after));
     }
@@ -498,15 +503,15 @@ public sealed class DocumentEditTests
     [InlineData(1, 1)]
     public void RemovingOneOfAPairAnotherToolWrote_RemovesThatOne(int property, int kept)
     {
-        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Remove, $"VirtualMachineAdapter.Scripts[1].Properties[{property}]", null);
+        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Remove, $"VirtualMachineAdapter.Scripts[0].Properties[{property}]", null);
 
         Assert.Equal([kept], HolderCounts(after));
     }
 
     [Fact]
-    public void RemovingTheScriptAheadOfAPairAnotherToolWrote_RemovesItAlone()
+    public void RemovingTheScriptBesideAPairAnotherToolWrote_RemovesItAlone()
     {
-        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Remove, "VirtualMachineAdapter.Scripts[0]", null);
+        var after = EditedRecord("an npc of scripts another tool wrote", EditOp.Remove, "VirtualMachineAdapter.Scripts[1]", null);
 
         Assert.Equal(["Holder", "Tail"], ScriptNames(after));
     }
@@ -557,22 +562,19 @@ public sealed class DocumentEditTests
     }
 
     [Fact]
-    public void AnElementAddedToAKeyedArray_IsAppended()
+    public void AnElementAddedToAnArrayTheFormatSorts_IsWrittenInItsOrder()
     {
-        var before = NpcText();
+        var added = Edited(NpcText(), "npc_", EditOp.Add, """{"Name": "Aardvark", "Flags": "Local"}""", Member("VirtualMachineAdapter"), Member("Scripts"));
 
-        var added = Edited(before, "npc_", EditOp.Add, """{"Name": "Aardvark", "Flags": "Local"}""", Member("VirtualMachineAdapter"), Member("Scripts"));
-
-        Assert.Equal(["Alpha", "Beta", "Aardvark"], ScriptNames(added));
-        AssertOnlyChanged(before, added, "VirtualMachineAdapter.Scripts[2]");
+        Assert.Equal(["Aardvark", "Alpha", "Beta"], ScriptNames(added));
     }
 
     [Fact]
-    public void ASetOfAKeyMember_LeavesTheElementWhereItIs()
+    public void ASetOfAKeyMember_InAnArrayTheFormatSorts_MovesTheElementToItsPlace()
     {
         var after = Edited(NpcText(), "npc_", EditOp.Set, "\"Zulu\"", Member("VirtualMachineAdapter"), Member("Scripts"), At(0), Member("Name"));
 
-        Assert.Equal(["Zulu", "Beta"], ScriptNames(after));
+        Assert.Equal(["Beta", "Zulu"], ScriptNames(after));
     }
 
     [Theory]
@@ -668,7 +670,7 @@ public sealed class DocumentEditTests
     {
         var after = Edited(NpcText(), "npc_", EditOp.Add, """{"Name": "Alpha"}""", Member("VirtualMachineAdapter"), Member("Scripts"));
 
-        Assert.Equal(["Alpha", "Beta", "Alpha"], ScriptNames(after));
+        Assert.Equal(["Alpha", "Alpha", "Beta"], ScriptNames(after));
     }
 
     [Theory]
@@ -827,9 +829,9 @@ public sealed class DocumentEditTests
             Weather = new RegionWeather { LodDisplayDistanceMultiplier = 2, OcclusionAccuracyDist = 12 },
         };
 
-        var after = Edited(TextOf(region), "regn", EditOp.Set, "13", Member("Weather"), Member("OcclusionAccuracyDist"));
+        using var after = JsonDocument.Parse(Edited(TextOf(region), "regn", EditOp.Set, "13", Member("Weather"), Member("OcclusionAccuracyDist")));
 
-        Assert.Equal(13, Node(after, "Weather.OcclusionAccuracyDist").GetValue<float>());
+        Assert.Equal(13, after.RootElement.GetProperty("Weather").GetProperty("OcclusionAccuracyDist").GetSingle());
     }
 
     [Fact]

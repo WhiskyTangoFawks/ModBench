@@ -97,24 +97,6 @@
               },
               {
                 "CellStates": {
-                  "Top.esp": "IdenticalToMaster"
-                },
-                "CellStatesByFocus": null,
-                "CheckErrors": null,
-                "Children": null,
-                "ConflictAll": "NoConflict",
-                "FieldName": "Unknown1",
-                "Indexes": null,
-                "NoWinner": false,
-                "Resolutions": null,
-                "Values": {
-                  "Base.esm": "0x000000",
-                  "Top.esp": null
-                },
-                "WinnerColumn": "Top.esp"
-              },
-              {
-                "CellStates": {
                   "Top.esp": "Override"
                 },
                 "CellStatesByFocus": null,
@@ -167,8 +149,7 @@
                 "Flags": [
                   "OR"
                 ],
-                "MutagenObjectType": "ConditionFloat",
-                "Unknown1": "0x000000"
+                "MutagenObjectType": "ConditionFloat"
               },
               "Top.esp": null
             },
@@ -280,24 +261,6 @@
               },
               {
                 "CellStates": {
-                  "Top.esp": "IdenticalToMaster"
-                },
-                "CellStatesByFocus": null,
-                "CheckErrors": null,
-                "Children": null,
-                "ConflictAll": "NoConflict",
-                "FieldName": "Unknown1",
-                "Indexes": null,
-                "NoWinner": false,
-                "Resolutions": null,
-                "Values": {
-                  "Base.esm": null,
-                  "Top.esp": "0x000000"
-                },
-                "WinnerColumn": "Top.esp"
-              },
-              {
-                "CellStates": {
                   "Top.esp": "Override"
                 },
                 "CellStatesByFocus": null,
@@ -352,8 +315,7 @@
                 "Flags": [
                   "OR"
                 ],
-                "MutagenObjectType": "ConditionFloat",
-                "Unknown1": "0x000000"
+                "MutagenObjectType": "ConditionFloat"
               }
             },
             "WinnerColumn": "Top.esp"
@@ -375,8 +337,7 @@
               "Flags": [
                 "OR"
               ],
-              "MutagenObjectType": "ConditionFloat",
-              "Unknown1": "0x000000"
+              "MutagenObjectType": "ConditionFloat"
             }
           ],
           "Top.esp": [
@@ -390,8 +351,7 @@
               "Flags": [
                 "OR"
               ],
-              "MutagenObjectType": "ConditionFloat",
-              "Unknown1": "0x000000"
+              "MutagenObjectType": "ConditionFloat"
             }
           ]
         },
@@ -415,8 +375,7 @@
               "Flags": [
                 "OR"
               ],
-              "MutagenObjectType": "ConditionFloat",
-              "Unknown1": "0x000000"
+              "MutagenObjectType": "ConditionFloat"
             }
           ],
           "CreatedObject": null,
@@ -461,8 +420,7 @@
               "Flags": [
                 "OR"
               ],
-              "MutagenObjectType": "ConditionFloat",
-              "Unknown1": "0x000000"
+              "MutagenObjectType": "ConditionFloat"
             }
           ],
           "CreatedObject": null,
