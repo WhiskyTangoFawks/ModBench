@@ -190,11 +190,10 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     private static readonly Dictionary<string, Func<string>> DocumentsOf = new(StringComparer.Ordinal)
     {
         ["weap"] = WeaponText,
-        [PluginHeader.RecordType] = HeaderText,
+        [PluginHeader.RecordType] = HeaderTextHoldingAModHeader,
     };
 
-    // A header at its defaults writes no ModHeader member at all.
-    private static string HeaderText() => Encoding.UTF8.GetString(HeaderDocument.Write(
+    private static string HeaderTextHoldingAModHeader() => Encoding.UTF8.GetString(HeaderDocument.Write(
         new Fallout4Mod(ModKey.FromFileName("Fresh.esp"), Fallout4Release.Fallout4) { ModHeader = { Author = new string('a', 200), Stats = { Version = 0.95f } } }));
 
     [Theory]
@@ -307,7 +306,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [Fact]
     public void AHeaderWithAValueOfTheWrongType_IsRefused_NamingTheMember()
     {
-        Assert.Equal("ModHeader.Stats.Version: The input string 'x' was not in a correct format.", RecordTextCodec.WhyNotARecord(Edited(HeaderText(), root => root["ModHeader"].Require()["Stats"].Require()["Version"] = "x"), Release, PluginHeader.RecordType));
+        Assert.Equal("ModHeader.Stats.Version: The input string 'x' was not in a correct format.", RecordTextCodec.WhyNotARecord(Edited(HeaderTextHoldingAModHeader(), root => root["ModHeader"].Require()["Stats"].Require()["Version"] = "x"), Release, PluginHeader.RecordType));
     }
 
     [Theory]

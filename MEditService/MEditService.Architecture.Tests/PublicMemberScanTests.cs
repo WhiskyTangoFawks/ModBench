@@ -213,7 +213,7 @@ public sealed class PublicMemberScanTests
             {
                 var type = reader.GetTypeDefinition(handle);
                 var owner = Key.OfType(name, names.Of(handle));
-                if (!IsVisible(type) || IsSerializationGeneratorMixIns(type) || IsSpriggits(type))
+                if (!IsVisible(type) || IsSerializationGeneratorMixIns(type) || IsSpriggitsOwnSource(type))
                     continue;
                 var heldPublic = owner.Type == ComposedByWebApplicationFactory || HoldsConstantsItsReadersCopy(type);
                 yield return new VisibleMember(owner.Type, owner, true, [owner], TypeExposes(type), _ => heldPublic);
@@ -222,8 +222,7 @@ public sealed class PublicMemberScanTests
             }
         }
 
-        // Spriggit's customizations compile into each game's codec as Spriggit's source declares them (ADR-0030).
-        private bool IsSpriggits(TypeDefinition type) =>
+        private bool IsSpriggitsOwnSource(TypeDefinition type) =>
             reader.GetString(type.Namespace).StartsWith(SpriggitNamespace, StringComparison.Ordinal);
 
         private bool IsSerializationGeneratorMixIns(TypeDefinition type) =>

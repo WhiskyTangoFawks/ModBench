@@ -175,7 +175,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield return $"{gesture}: {stray}";
     }
 
-    // An array the format sorts takes its order back on every write, so no move changes it.
     private static bool TheFormatKeepsTheOrderOf(RecordTableSchema schema, JsonElement root, string dottedPath)
     {
         var swapped = JsonNode.Parse(root.GetRawText()).Require();

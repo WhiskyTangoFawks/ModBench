@@ -111,8 +111,7 @@ public sealed class DocumentEditTests
 
     private string CobjText() => TextOf(_cobj);
 
-    // A header at its defaults writes no ModHeader member at all.
-    private string HeaderText()
+    private string HeaderTextHoldingAModHeader()
     {
         _mod.ModHeader.Author = "Author";
         return Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
@@ -657,7 +656,7 @@ public sealed class DocumentEditTests
     [InlineData("Version", "7", "ModHeader.Version")]
     public void AHeaderMember_IsWrittenAsAnyFieldIs(string member, string value, string written)
     {
-        var before = HeaderText();
+        var before = HeaderTextHoldingAModHeader();
 
         var after = Edited(before, PluginHeader.RecordType, EditOp.Set, value, Member(member));
 
@@ -798,7 +797,7 @@ public sealed class DocumentEditTests
     [Fact]
     public void Header_IsSmallMaster_WritesTheFlagsMemberAndNothingElse()
     {
-        var before = HeaderText();
+        var before = HeaderTextHoldingAModHeader();
 
         var set = Edited(before, PluginHeader.RecordType, EditOp.Set, "true", Member("IsSmallMaster"));
         Assert.True(HeaderDocument.Read(Encoding.UTF8.GetBytes(set), GameRelease.Fallout4).IsSmallMaster);

@@ -39,8 +39,7 @@ public sealed class LightRangeProblemTests : IDisposable
 
     private string HeaderFile => Directory.EnumerateFiles(Path.Combine(_light.ModFolderOf(), PluginSourceRoot.For(Light)), "*.json").Single();
 
-    // A header at its defaults writes no ModHeader member at all.
-    private string HeaderFlaggedLight => File.ReadAllText(HeaderFile)
+    private string HeaderFlaggedLightByTheModHeaderItsDefaultsLeaveOut => File.ReadAllText(HeaderFile)
         .Replace(GameReleaseMember, GameReleaseMember + ",\n  \"ModHeader\": {\n    \"Flags\": [\"Small\"]\n  }", StringComparison.Ordinal);
 
     private static IReadOnlyList<RecordIndex.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
@@ -55,7 +54,7 @@ public sealed class LightRangeProblemTests : IDisposable
         Assert.Empty(Problems(index));
 
         var before = _notifications.Notifications.Count;
-        index.TypeUnsaved(new DocumentChange(HeaderFile, HeaderFlaggedLight));
+        index.TypeUnsaved(new DocumentChange(HeaderFile, HeaderFlaggedLightByTheModHeaderItsDefaultsLeaveOut));
         Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_light)(n)), "the problem announced");
 
         Assert.Equal(OutsideFile(index), Assert.Single(Problems(index)).SourceRelativePath);
