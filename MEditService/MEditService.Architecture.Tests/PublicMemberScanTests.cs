@@ -106,8 +106,11 @@ public sealed class PublicMemberScanTests
 
         Assert.Equal(
             [
+                "MEditService.Codec.Fallout4.Proof: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns",
                 "MEditService.Codec.Fallout4: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns",
+                "MEditService.Codec.Skyrim.Proof: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterSkyrimModMixIns",
                 "MEditService.Codec.Skyrim: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterSkyrimModMixIns",
+                "MEditService.Codec.Starfield.Proof: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterStarfieldModMixIns",
                 "MEditService.Codec.Starfield: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterStarfieldModMixIns",
             ],
             foreign);

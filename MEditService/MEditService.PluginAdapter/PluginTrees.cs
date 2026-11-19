@@ -185,16 +185,17 @@ internal static class PluginTrees
             await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel, NameOrderedFileSystem.Instance),
             await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 
-    /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
-    /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
-    /// reparsed, since only written bytes show what the writer does.</summary>
+    /// <summary>The codec's verdict on the proof's text, then on the plugin at <paramref name="recompiledPath"/>,
+    /// against the one at <paramref name="modPath"/>; null when both are model-identical. Both plugins are
+    /// reparsed: bytes show the writer.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
         ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language)
     {
         var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder, language);
+        if (ModelIdentity.FindFirstDivergence(original, ProofText.ReadBack(original)) is { } lost) return lost;
+
         var recompiled = MutagenPluginAdapter.OpenForWrite(
             new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder);
-
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }
 

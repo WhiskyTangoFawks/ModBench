@@ -7,8 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Each game's project compiles these against its own types (MEditService.Codec.<Game>). -->
+    <!-- Each game's projects compile these against its own types (MEditService.Codec.<Game>, and .Proof). -->
     <Compile Remove="Game/**" />
+    <Compile Remove="Proof/**" />
   </ItemGroup>
 
   <ItemGroup>

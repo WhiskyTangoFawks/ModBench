@@ -30,6 +30,12 @@ public interface IGameCodec
         string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null);
 
+    /// <summary>The plugin as the text of the game's serializer generated with no customization (ADR-0006).</summary>
+    Task WriteProofText(IModGetter plugin, Stream text);
+
+    /// <summary>The plugin <see cref="WriteProofText"/> wrote, read back with Mutagen's own read alone.</summary>
+    Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release);
+
     /// <summary>The plugin header bit the game names Blueprint, 0 for a game with none.</summary>
     int BlueprintFlag { get; }
 
