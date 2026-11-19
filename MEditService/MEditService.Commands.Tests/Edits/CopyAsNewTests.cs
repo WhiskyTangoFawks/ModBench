@@ -96,14 +96,13 @@ public sealed class CopyAsNewTests
     public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = CopyFixture.Create();
-        SourceModTree.SetNextObjectId(mod.ModFolderOf(mod.DestinationPlugin), mod.DestinationPlugin, 0xFFFFFF);
         SourceModTree.Seed(mod.ModFolderOf(mod.DestinationPlugin), mod.DestinationPlugin, "FFFFFF:Destination.esp");
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
         var refused = result.OnlyRefused();
 
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, refused.Refusal);
-        Assert.Equal("Destination.esp has no FormKey free at or above its Next Object ID, up to 0xFFFFFF.", refused.Message);
+        Assert.Equal("Destination.esp has no FormKey free after the highest of its own records, up to 0xFFFFFF.", refused.Message);
     }
 
     public static TheoryData<string, Func<ContainerCopyFixture, FormKey>> CellsAndWorldspaces => new()
@@ -133,16 +132,5 @@ public sealed class CopyAsNewTests
 
         var newFormKey = result.OnlyLanded().Require();
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, newFormKey));
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_MovesTheDestinationsNextObjectIdPastTheCopysFormKey()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
-
-        Assert.Equal("000801:Destination.esp", result.OnlyLanded());
-        Assert.Equal(0x802u, mod.NextObjectId(mod.DestinationPlugin));
     }
 }

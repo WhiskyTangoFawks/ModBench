@@ -184,22 +184,20 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     [Theory]
     [MemberData(nameof(ChildrenWhoseContainersTheDestinationLacks))]
-    public void CopyAsNewRecord_OfAChildWhoseContainersItCopiesIn_MovesTheDestinationsNextObjectIdPastIt(string _, Func<ContainerCopyFixture, FormKey> child)
+    public void CopyAsNewRecord_OfAChildWhoseContainersItCopiesIn_TakesTheKeyAfterTheHighestOfTheDestinationsRecords(string _, Func<ContainerCopyFixture, FormKey> child)
     {
         var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, child(_fixture).ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
 
         Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
-        Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
     }
 
     [Fact]
-    public void CopyAsNewRecord_OfAResponseIntoATopicTheDestinationHolds_MovesTheDestinationsNextObjectIdPastIt()
+    public void CopyAsNewRecord_OfAResponseIntoATopicTheDestinationHolds_TakesTheKeyAfterTheHighestOfTheDestinationsRecords()
     {
         _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
 
         var second = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
 
         Assert.Equal("000802:ContainerDestination.esp", second.OnlyLanded());
-        Assert.Equal(0x803u, _fixture.NextObjectId(_fixture.DestinationPlugin));
     }
 }

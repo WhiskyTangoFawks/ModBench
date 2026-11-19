@@ -12,45 +12,39 @@ using Mutagen.Bethesda.Plugins.Meta;
 namespace MEditService.Commands.Edits;
 
 /// <summary>The one place a new FormKey is drawn (plugins.md, Create record, stories 2 and 3). One gesture
-/// draws all its keys from one allocator and writes <see cref="HeaderChanges"/> with them.</summary>
+/// draws all its keys from one allocator.</summary>
 internal sealed class FormKeyAllocator
 {
-    private readonly ISourceRepository _repository;
     private readonly PluginAddress _plugin;
-    private readonly GameRelease _release;
-    private readonly SourceDocument? _header;
+    private readonly bool _headed;
     private readonly FormIdLimit? _limit;
     private readonly IReadOnlySet<string> _used;
-    private readonly uint _nextObjectIdHeld;
-    private uint _nextObjectId;
+    private uint _next;
 
     private FormKeyAllocator(
-        ISourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header, IReadOnlySet<string> used)
+        PluginAddress plugin, GameRelease release, SourceDocument? header, IReadOnlySet<string> used)
     {
-        (_repository, _plugin, _release, _header) = (repository, plugin, release, header);
-        var headerBody = header is null ? null : Encoding.UTF8.GetBytes(header.Body);
-        _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody, release);
+        (_plugin, _used, _headed) = (plugin, used, header is not null);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
-        _limit = headerBody is null ? null : PluginFlags.LimitOf(HeaderDocument.Read(headerBody, release), plugin.Name);
-        _used = used;
+        _limit = header is null ? null : PluginFlags.LimitOf(HeaderDocument.Read(Encoding.UTF8.GetBytes(header.Body), release), plugin.Name);
+        var highest = used.Where(IsNative).Select(LocalId).DefaultIfEmpty(0u).Max();
+        _next = Math.Max(highest + 1, GameConstants.Get(release).DefaultHighRangeFormID);
     }
 
     internal static Answer<FormKeyAllocator, SourceFailure> Over(ISourceRepository repository, PluginAddress plugin, GameRelease release) =>
         repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
-            repository.FormKeysUsed(plugin).Then(used => SourceAnswer.Of(new FormKeyAllocator(repository, plugin, release, header, used))));
+            repository.FormKeysUsed(plugin).Then(used => SourceAnswer.Of(new FormKeyAllocator(plugin, release, header, used))));
 
-    /// <summary>The first FormKey at or above the Next Object ID that no record uses. Non-null is the
-    /// refusal, and <paramref name="formKey"/> is "" then.</summary>
+    /// <summary>The FormKey after the highest of the plugin's own records, and after every one drawn before it.
+    /// Non-null is the refusal, and <paramref name="formKey"/> is "" then.</summary>
     internal RecordEditResult? Next(out string formKey)
     {
         formKey = "";
         if (RefuseWithoutHeader() is { } headerless) return headerless;
-        var free = FirstFreeId();
-        if (free > Cap) return RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, ExhaustedMessage());
+        if (_next > Cap) return RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, ExhaustedMessage());
 
-        formKey = KeyOf(free);
-        _nextObjectId = free + 1;
+        formKey = KeyOf(_next++);
         return null;
     }
 
@@ -69,35 +63,16 @@ internal sealed class FormKeyAllocator
         }
 
         formKey = requestedFormKey;
-        _nextObjectId = Math.Max(_nextObjectId, FormKey.Factory(requestedFormKey).ID + 1);
         return null;
     }
 
-    /// <summary>The header document's rewrite that moves its Next Object ID past every FormKey drawn or
-    /// claimed, written nowhere. None when nothing passed it.</summary>
-    internal Answer<SourceChanges, SourceFailure> HeaderChanges() =>
-        _header is { } header && _nextObjectId > _nextObjectIdHeld
-            ? _repository.ChangesToRewrite(_plugin, header with
-            {
-                Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), _release, _nextObjectId)),
-            })
-            : SourceChanges.None;
-
     private RecordEditResult? RefuseWithoutHeader() =>
-        _header is null
-            ? RecordEditResult.Refused(
+        _headed
+            ? null
+            : RecordEditResult.Refused(
                 RecordEditRefusal.PluginSourceUnreadable,
-                $"{_plugin.Name} ({_plugin.Origin}) has no header document, so its Next Object ID is unknown. " +
-                "Check the Source Control panel.")
-            : null;
-
-    private uint FirstFreeId()
-    {
-        var id = Math.Max(_nextObjectId, GameConstants.Get(_release).DefaultHighRangeFormID);
-        var taken = _used.Where(IsNative).Select(LocalId).Where(used => used >= id).ToHashSet();
-        while (taken.Contains(id)) id++;
-        return id;
-    }
+                $"{_plugin.Name} ({_plugin.Origin}) has no header document, so its FormID limit is unknown. " +
+                "Check the Source Control panel.");
 
     private uint Cap => _limit?.Max ?? FormID.FullIdMask;
 
@@ -148,7 +123,7 @@ internal sealed class FormKeyAllocator
 
     private string ExhaustedMessage()
     {
-        var noneFree = $"{_plugin.Name} has no FormKey free at or above its Next Object ID";
+        var noneFree = $"{_plugin.Name} has no FormKey free after the highest of its own records";
         if (_limit is not { } limit) return $"{noneFree}, up to 0x{FormID.FullIdMask:X}.";
         var lift = Lift(limit);
         return $"{noneFree}, up to 0x{limit.Max:X}, the last a {limit.Flag} plugin can address. {char.ToUpperInvariant(lift[0])}{lift[1..]} to draw above it.";

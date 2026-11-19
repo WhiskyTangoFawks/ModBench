@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -91,22 +90,8 @@ internal static class SourceModTree
         Repository(modFolder, plugin).Put(plugin, new SourceDocument(formKey, "npc_", null, body)).Wrote();
     }
 
-    internal static uint NextObjectId(string modFolder, PluginAddress plugin) =>
-        HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(
-            Document(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require().Body), GameRelease.Fallout4);
-
     internal static string HeaderDocumentFile(string modFolder, PluginAddress plugin) =>
         DocumentFile(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require();
-
-    /// <summary>The header's Next Object ID set to <paramref name="nextObjectId"/>, as an edit of the header would.</summary>
-    internal static void SetNextObjectId(string modFolder, PluginAddress plugin, uint nextObjectId)
-    {
-        var repository = Repository(modFolder, plugin);
-        var header = repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Value()
-            ?? throw new InvalidOperationException($"Expected {plugin.Name}'s tree to hold its header document.");
-        var moved = HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), GameRelease.Fallout4, nextObjectId);
-        repository.Put(plugin, header with { Body = Encoding.UTF8.GetString(moved) }).Wrote();
-    }
 
     internal static void Remove(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Repository(modFolder, plugin).Remove(plugin, identity).Wrote();
@@ -149,8 +134,6 @@ public static class CompiledPluginTree
     public static string? DocumentFile(this ICompiledPlugin compiledPlugin, string formKey) =>
         SourceModTree.DocumentFile(compiledPlugin.ModFolder, compiledPlugin.Plugin, formKey);
 
-    public static uint NextObjectId(this ICompiledPlugin compiledPlugin) => SourceModTree.NextObjectId(compiledPlugin.ModFolder, compiledPlugin.Plugin);
-
     public static string HeaderDocumentFile(this ICompiledPlugin compiledPlugin) =>
         SourceModTree.HeaderDocumentFile(compiledPlugin.ModFolder, compiledPlugin.Plugin);
 
@@ -180,9 +163,6 @@ public static class CompiledPluginsTree
 
     public static SourceDocument DocumentCarrying(this ICompiledPlugins compiledPlugin, PluginAddress plugin, string editorId) =>
         SourceModTree.DocumentCarrying(compiledPlugin.ModFolderOf(plugin), plugin, editorId);
-
-    public static uint NextObjectId(this ICompiledPlugins compiledPlugin, PluginAddress plugin) =>
-        SourceModTree.NextObjectId(compiledPlugin.ModFolderOf(plugin), plugin);
 
     public static IReadOnlyList<string> ChangedFormKeys(this ICompiledPlugins compiledPlugin, PluginAddress plugin) =>
         SourceModTree.ChangedFormKeys(compiledPlugin.ModFolderOf(plugin), plugin);

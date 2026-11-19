@@ -68,15 +68,7 @@ internal sealed class NewRecordCopy
         var named = RecordDocumentEdits.DuplicatedWithoutChildren(
             body, release, identity.RecordType, targetFormKey, EditorIdDeriver(editorIdsHeld));
         var duplicate = new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text);
-        if (!destination.Session.Atomically(() =>
-                land(duplicate).Then(landing =>
-                {
-                    if (landing.Applied) destination.Session.Apply(allocator.HeaderChanges());
-                    return SourceAnswer.Of(landing);
-                })).Holds(out var landed, out unread))
-        {
-            return unread;
-        }
+        if (!destination.Session.Atomically(() => land(duplicate)).Holds(out var landed, out unread)) return unread;
         if (!landed.Applied) return landed;
 
         if (_logger.IsEnabled(LogLevel.Information))

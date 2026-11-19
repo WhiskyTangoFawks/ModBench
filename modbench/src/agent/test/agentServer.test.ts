@@ -25,6 +25,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { TerminalEnvironment } from '../scriptEnvironment';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import { ArchivedCopies } from '../../mods/archivedCopies';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
 import type { SymbolIndex } from '../../symbols/symbolIndex';
@@ -131,8 +132,9 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
+  const copyReads = fakeInstanceAdapter(readingFixture(), copyAnswers).adapter;
   const server = serveAgent({
-    port, instance, copyReads: fakeInstanceAdapter(readingFixture(), copyAnswers).adapter, mEdit, symbols, problemsCaughtUp: () => feeds.caughtUp(), terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
+    port, instance, copyReads, archivedCopies: new ArchivedCopies(mEdit, (path) => copyReads.fileStamp(path)), mEdit, symbols, problemsCaughtUp: () => feeds.caughtUp(), terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);

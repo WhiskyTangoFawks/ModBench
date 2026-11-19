@@ -2,12 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
+import type { EntryRef, FileRead, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
-import type { FlaggedRead, Manifest, ModStatus } from '../../manifestAdapter/manifestAdapter';
+import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
-import { ModStatuses, type StatusSource } from '../modStatuses';
+import type { ArchiveEntries } from '../archiveEntries';
+import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
 
 let root: string;
 let logged: string[];
@@ -26,6 +27,8 @@ beforeEach(async () => {
   whileListing = () => undefined;
   failingInstallationReads = 0;
   hashingContents = false;
+  entryHashes = new Map();
+  hashedEntries = [];
   downloads = new Map();
 });
 afterEach(async () => {
@@ -64,7 +67,7 @@ const file = (name: string) => ({ kind: 'installationFile' as const, name, size:
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, flaggedHashes: new Map(), mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
+  ({ holdsRepository: true, flaggedHashes: new Map(), mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), archiveContents: new Map(), gameName: 'Fallout4', ...over });
 
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
@@ -72,6 +75,8 @@ let listings: number;
 let whileListing: () => void;
 let failingInstallationReads: number;
 let hashingContents: boolean;
+let entryHashes: ReadonlyMap<string, FileRead<string>>;
+let hashedEntries: string[];
 let downloads: ReadonlyMap<string, { hash: string; entries: { path: string; hash: string }[] }>;
 let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
 
@@ -91,7 +96,12 @@ const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'folders
   },
 };
 
-const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); });
+const hashEntries: HashEntries = (_gameName, archive, entries) => {
+  hashedEntries.push(...entries);
+  return Promise.resolve(entries.map((entry) => entryHashes.get(`${basename(archive)}/${entry}`) ?? { kind: 'unreadable', reason: `${entry} is not in ${basename(archive)}` }));
+};
+
+const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); }, hashEntries);
 
 describe('Mod status, derived from each instance value (mod-status trace)', () => {
   it('derives each listed mod\'s status by its folder\'s mod name, and none for a separator, which has no manifest, or an entry with no folder', async () => {
@@ -255,6 +265,74 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       expect([...statuses.heldByPackage('ModA')]).toEqual(['copied.json']);
     });
 
+    describe('the entries of an archive no package holds, by bytes or by name', () => {
+      const ARCHIVE = 'Packed - Main.ba2';
+
+      const statusesOf = async (entries: ArchiveEntries, packages: readonly ManifestPackage[] = [PACKAGE]) => {
+        const mod = await folderOf('ModA', { [ARCHIVE]: 'built' });
+        await writeManifestIn(mod, EMPTY);
+        const source = join(root, 'source', 'ModA');
+        await mkdir(source, { recursive: true });
+        await writeManifestIn(source, { ...EMPTY, packages: [...packages] });
+        const sourcePath = join(mod, ARCHIVE);
+        const statuses = statusesLogging();
+        statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], {
+          paths: { sourceDirs: new Map([['ModA', source]]) },
+          filesByMod: new Map([['ModA', [{ relativePath: ARCHIVE, sourcePath }]]]),
+          archiveContents: new Map([[sourcePath, entries]]),
+        }));
+        await statuses.current();
+        return statuses;
+      };
+
+      const entriesOf = async (entries: ArchiveEntries, packages?: readonly ManifestPackage[]) =>
+        (await statusesOf(entries, packages)).entriesNoPackageHolds('ModA').get(ARCHIVE);
+
+      it('holds no entry of an archive whose every entry a package holds by file name, and hashes none', async () => {
+        expect(await entriesOf({ kind: 'read', answer: ['textures/COPIED.json', 'meshes/plugin.esp'] })).toEqual({ kind: 'read', answer: [] });
+        expect(hashedEntries).toEqual([]);
+      });
+
+      it('hashes only the entries no package holds by name, and holds one a package holds by bytes under another name', async () => {
+        entryHashes = new Map([['Packed - Main.ba2/textures/renamed.json', { kind: 'read', answer: 'same' }]]);
+
+        expect(await entriesOf({ kind: 'read', answer: ['textures/copied.json', 'textures/renamed.json'] })).toEqual({ kind: 'read', answer: [] });
+        expect(hashedEntries).toEqual(['textures/renamed.json']);
+      });
+
+      it('names each entry no package holds', async () => {
+        entryHashes = new Map([['Packed - Main.ba2/textures/made.dds', { kind: 'read', answer: 'built' }]]);
+
+        expect(await entriesOf({ kind: 'read', answer: ['textures/copied.json', 'textures/made.dds'] })).toEqual({ kind: 'read', answer: ['textures/made.dds'] });
+      });
+
+      it('says why when the archive cannot be read', async () => {
+        expect(await entriesOf({ kind: 'unreadable', reason: 'not a BA2' })).toEqual({ kind: 'unreadable', reason: 'not a BA2' });
+      });
+
+      it('holds the last good status, and names no entry, while mEdit has not said what an archive holds', async () => {
+        const statuses = await statusesOf({ kind: 'unanswered' });
+
+        expect([statuses.entriesNoPackageHolds('ModA').size, (await statuses.current()).get('ModA')?.unreadable])
+          .toEqual([0, `mEdit has not said what '${ARCHIVE}' holds`]);
+      });
+
+      it('keeps its status while mEdit has not said what an archive holds, when no package holds a file to judge its entries by', async () => {
+        const statuses = await statusesOf({ kind: 'unanswered' }, []);
+
+        expect((await statuses.current()).get('ModA')?.unreadable).toBeUndefined();
+      });
+
+      it('hashes nothing while no package holds a file, since none can hold an entry', async () => {
+        expect(await entriesOf({ kind: 'read', answer: ['textures/a.dds'] }, [])).toEqual({ kind: 'read', answer: ['textures/a.dds'] });
+        expect(hashedEntries).toEqual([]);
+      });
+
+      it('says why when an entry cannot be hashed', async () => {
+        expect(await entriesOf({ kind: 'read', answer: ['textures/made.dds'] })).toEqual({ kind: 'unreadable', reason: 'textures/made.dds is not in Packed - Main.ba2' });
+      });
+    });
+
     describe('the installation file the mod manager names', () => {
       const installedWith = (entries: { path: string; hash: string }[]): Awaited<ReturnType<InstanceAdapter['installationFile']>> =>
         ({ kind: 'read', answer: { path: join('downloads', 'D.7z'), size: 1, hash: PACKAGE.hash, entries } });
@@ -373,7 +451,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     let gitFails = false;
     const statuses = new ModStatuses({
       ...instance, foldersHeldWhole: (folders) => (gitFails ? Promise.reject(new Error('git is gone')) : instance.foldersHeldWhole(folders)),
-    }, (line) => { logged.push(line); });
+    }, (line) => { logged.push(line); }, hashEntries);
     const value = valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', first), folder('mod', 'ModB', second)]);
     statuses.derive(value);
     await statuses.current();
@@ -394,7 +472,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     let gitFails = true;
     const statuses = new ModStatuses({
       ...instance, foldersHeldWhole: (folders) => (gitFails ? Promise.reject(new Error('git is gone')) : instance.foldersHeldWhole(folders)),
-    }, (line) => { logged.push(line); });
+    }, (line) => { logged.push(line); }, hashEntries);
     const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]);
 
     statuses.derive(value);
@@ -413,7 +491,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     ['which files it holds', { filesHeldByGit: () => Promise.reject(new Error('git is gone')) }],
   ])('says the statuses could not be read, not a last good read, when git fails at the first derive to say %s', async (_what, failing) => {
     const mod = await folderOf('ModA', { 'mine.txt': '' });
-    const statuses = new ModStatuses({ ...instance, ...failing }, (line) => { logged.push(line); });
+    const statuses = new ModStatuses({ ...instance, ...failing }, (line) => { logged.push(line); }, hashEntries);
 
     statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
     await statuses.current();

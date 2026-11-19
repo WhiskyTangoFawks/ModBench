@@ -73,20 +73,6 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
-    public void ACopyReachingAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
-    {
-        using var mod = CopyFixture.Create();
-        var header = Path.Combine(mod.DestinationModFolder, SourceModTree.HeaderDocumentFile(mod.DestinationModFolder, mod.DestinationPlugin));
-        mod.Unsaved.Typed(new DocumentChange(header, File.ReadAllText(header) + " "));
-        var before = SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
-
-        var outcome = Copy(mod, CopyMode.New, mod.DestinationPlugin);
-
-        Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
-        Assert.Equal(before, SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
-    }
-
-    [Fact]
     public void ACreate_IsWrittenToTheTree_AndAnswersTheNewFormKey()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
@@ -105,20 +91,6 @@ public sealed class ScriptRecordWriteTests
         var outcome = Create(mod);
 
         AssertHanded(mod, mod.Plugin, Path.Combine(mod.ModFolder, mod.DocumentFile(outcome.NewFormKey.Require()).Require()));
-    }
-
-    [Fact]
-    public void ACreateReachingAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var header = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
-        mod.Unsaved.Typed(new DocumentChange(header, File.ReadAllText(header) + " "));
-        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
-
-        var outcome = Create(mod);
-
-        Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
-        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
