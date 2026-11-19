@@ -438,7 +438,7 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
-    public void ASecondAllocatorInTheSession_ReadsTheHeaderAndTheFormKeysTheFirstLeft()
+    public void AReadLaterInTheSession_SeesTheHeaderAndTheFormKeysItsEarlierWritesLeft()
     {
         var session = Session();
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
