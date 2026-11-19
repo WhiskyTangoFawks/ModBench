@@ -102,7 +102,7 @@ internal static class PluginSourceChecks
     }
 
     internal static SourceComparison Compare(
-        string pluginFileName, PluginSourceFiles source, IReadOnlyList<TreeFile> serialized)
+        string pluginFileName, PluginSourceFiles source, IReadOnlyList<TreeFile> serialized, GameRelease gameRelease)
     {
         if (source.Unreadable is { } unreadable)
             return new SourceComparison([new SourceDivergence(SourceDivergenceKind.Unreadable, unreadable)], []);
@@ -120,8 +120,11 @@ internal static class PluginSourceChecks
         {
             var kind = file.RelativePath == header ? SourceDivergenceKind.HeaderChanged : SourceDivergenceKind.DocumentChanged;
             if (!held.TryGetValue(file.RelativePath, out var content)) divergences.Add(new SourceDivergence(kind, file.RelativePath));
-            else if (DocumentMeaning.FirstDifference(DocumentText.StripUtf8Bom(content), file.Content) is { } field)
+            else if (DocumentMeaning.FirstDifference(
+                         DocumentText.StripUtf8Bom(content), file.Content, gameRelease, RecordTypeHeldAt(file.RelativePath, content, gameRelease)) is { } field)
+            {
                 divergences.Add(new SourceDivergence(kind, file.RelativePath, field));
+            }
         }
 
         var written = regenerated.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
@@ -131,6 +134,11 @@ internal static class PluginSourceChecks
             .Select(relativePath => new SourceDivergence(SourceDivergenceKind.Unproduced, relativePath)));
         return new SourceComparison(divergences, misplaced);
     }
+
+    private static string? RecordTypeHeldAt(string relativePath, byte[] content, GameRelease gameRelease) =>
+        SourceRepositoryLayout.IsGroupDocument(relativePath)
+            ? null
+            : SourceRepositoryLayout.RecordTypeOf(relativePath, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(content)), gameRelease);
 
     // A record's file or directory is named by its FormKey and EditorID alone, so one document says where it belongs.
     // A container's directory stays in the folder holding it.

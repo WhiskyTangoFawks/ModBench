@@ -12,6 +12,7 @@ public sealed class DecompileChurnTests : TestInstance
 {
     private readonly PluginAddress _plugin;
     private readonly FormKey _taggedNpc;
+    private readonly FormKey _rankedNpc;
 
     public DecompileChurnTests()
     {
@@ -23,6 +24,13 @@ public sealed class DecompileChurnTests : TestInstance
         var tagged = mod.Npcs.AddNew("ChurnNpcTagged");
         tagged.Keywords = [first.ToLink(), second.ToLink(), third.ToLink()];
         _taggedNpc = tagged.FormKey;
+        var ranked = mod.Npcs.AddNew("ChurnNpcRanked");
+        ranked.Factions.AddRange(
+        [
+            new RankPlacement { Faction = mod.Factions.AddNew("ChurnFactionA").ToLink(), Rank = 0 },
+            new RankPlacement { Faction = mod.Factions.AddNew("ChurnFactionB").ToLink(), Rank = 1 },
+        ]);
+        _rankedNpc = ranked.FormKey;
         _plugin = Add(mod, "FixtureMod");
     }
 
@@ -47,6 +55,43 @@ public sealed class DecompileChurnTests : TestInstance
         await Decompile();
 
         Assert.Equal([$"?? {ToGitPath(newFile)}"], SourceStatus());
+    }
+
+    [Fact]
+    public async Task ChildrenCreatedInContainersCreated_Compile_Decompile_LeavesEveryCreatedFileAsCreateWroteIt()
+    {
+        var cell = Created("cell");
+        var quest = Created("qust");
+        Created("refr", cell);
+        var topic = Created("dial", quest);
+        var files = new[] { cell, quest, topic }
+            .Select(formKey => Path.Combine(ModFolder, SourceModTree.DocumentFile(ModFolder, _plugin, formKey).Require()))
+            .ToDictionary(file => file, File.ReadAllText);
+
+        await CompileHandler.CompileLandedAsync(_plugin);
+        await Decompile();
+
+        Assert.All(files, written => Assert.Equal(written.Value, File.ReadAllText(written.Key)));
+    }
+
+    [Fact]
+    public async Task AListTheFormatSorts_LeftOutOfItsOrderByHand_Compiles_AndTheNextDecompileWritesItInTheFormatsOrder()
+    {
+        var file = Path.Combine(ModFolder, SourceModTree.DocumentFile(ModFolder, _plugin, _rankedNpc.ToString()).Require());
+        var decompiled = File.ReadAllText(file);
+        File.WriteAllText(file, JsonReversal.WithReversed(decompiled, root => root["Factions"].Require().AsArray()));
+
+        await CompileHandler.CompileLandedAsync(_plugin);
+        await Decompile();
+
+        Assert.Equal(decompiled, File.ReadAllText(file));
+    }
+
+    private string Created(string recordType, string? container = null)
+    {
+        var created = CreateHandler.CreateRecordSync(_plugin, recordType, container);
+        Assert.True(created.Applied, created.Message);
+        return created.NewFormKey.Require();
     }
 
     [Fact]
