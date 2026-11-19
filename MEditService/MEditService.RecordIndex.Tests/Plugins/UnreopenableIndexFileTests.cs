@@ -24,6 +24,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
     private readonly OpenedIndex _index;
     private bool _otherWindowTakesTheFile;
     private ForeignIndexHolder? _otherWindow;
+    private bool _indexFolderLocked;
 
     public UnreopenableIndexFileTests()
     {
@@ -40,7 +41,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
     public void Dispose()
     {
         _otherWindow?.Dispose();
-        FileModes.Set(_indexFolder, "700");
+        if (_indexFolderLocked) FileModes.Set(_indexFolder, "700");
         _index.Dispose();
         _fixture.Dispose();
         _loggers.Dispose();
@@ -49,7 +50,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
     [PosixFact]
     public void AFatalError_WhoseReopenFails_PublishesAFailedStatusThatSaysSo_NamingTheFatalErrorAndTheIndexFile()
     {
-        FileModes.Set(_indexFolder, "500");
+        LockIndexFolder();
         var before = _notifications.Notifications.Count;
 
         RewriteAborted();
@@ -61,7 +62,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
     public void AStoreInvalidatedBeforeTheCheck_WhoseReopenFails_PublishesAFailedStatusThatSaysSo_NamingTheFatalErrorAndTheIndexFile()
     {
         IndexFiles.Invalidate(_fixture.InstanceRoot);
-        FileModes.Set(_indexFolder, "500");
+        LockIndexFolder();
         var before = _notifications.Notifications.Count;
 
         NextCheckSaysTheReopenFailed(before);
@@ -86,6 +87,12 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         var before = _notifications.Notifications.Count;
 
         NextCheckIsHeldElsewhere(before);
+    }
+
+    private void LockIndexFolder()
+    {
+        FileModes.Set(_indexFolder, "500");
+        _indexFolderLocked = true;
     }
 
     private void RewriteAborted()
