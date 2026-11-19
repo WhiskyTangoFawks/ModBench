@@ -22,7 +22,7 @@ As a user, I want:
 2. Open, from a row's menu, to open the record pinned in the editor group I am in, so later clicks leave it alone. An extension's tree receives no double click, which pins in VS Code's Explorer. Cites: catalog `open`; VS Code's interaction
 3. A record whose file is already open in a tab to be shown there, not opened twice. Cites: VS Code; common, A view, story 9
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Cites: catalog `open`; xEdit Compare Selected
-5. The tab titled with the record it shows. A file is named by its record's EditorID, so the file's name carries it. An embedded child record has no file of its own, so the title is the child's EditorID, or its FormKey when it has none. Cites: ADR-0001; source.md, The tree, stories 1 and 3
+5. The tab titled with the record it shows: its EditorID, or its FormKey when it has none, whatever its file is named. Cites: ADR-0001; source.md, The tree, stories 1 and 3
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Cites: catalog `open`
 7. A tab I leave and come back to to be as I left it. Cites: VS Code keeps a tab's place
 8. A record given without a plugin, by any caller, to open the winning copy's file. Cites: xEdit lands on the winning copy
