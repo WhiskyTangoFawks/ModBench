@@ -769,12 +769,17 @@ internal sealed class Indexer : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Reopening the record index failed");
-            return $"{cause.Message} {NotReopened}: {ex.Message}";
+            return $"{cause.Message} {NotReopenedBecause(ex)}";
         }
     }
 
     private const string NotReopened = "mEdit's record index was not reopened";
+
+    private string NotReopenedBecause(Exception ex)
+    {
+        _logger.LogError(ex, "Reopening the record index failed");
+        return $"{NotReopened}: {ex.Message}";
+    }
 
     private OpenScope ScopeOn(HeldPlugins held, Store.Store store, LoadOrderSnapshot snapshot) =>
         new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
@@ -839,11 +844,16 @@ internal sealed class Indexer : IDisposable
     private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere, out string? failure)
     {
         (heldElsewhere, failure) = (null, null);
-        if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.IsInvalidated())
+        var reopening = false;
+        if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot))
         {
-            var kept = current with { LoadOrder = snapshot };
-            lock (_lock) _scope = kept;
-            return kept;
+            reopening = current.Store.IsInvalidated();
+            if (!reopening)
+            {
+                var kept = current with { LoadOrder = snapshot };
+                lock (_lock) _scope = kept;
+                return kept;
+            }
         }
         OpenScope? leaving;
         using (_gate.Enter())
@@ -885,6 +895,11 @@ internal sealed class Indexer : IDisposable
                 _openedUnchecked = true;
             }
             fresh = null;
+        }
+        catch (Exception ex) when (reopening && ex is not OperationCanceledException)
+        {
+            failure = NotReopenedBecause(ex);
+            return null;
         }
         finally
         {

@@ -45,10 +45,23 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         rewritten.WriteToBinary(_fixture.Plugins.Single().Path);
         var before = _notifications.Notifications.Count;
 
+        NextCheckSaysTheReopenFailed(before);
+    }
+
+    [PosixFact]
+    public void AFatalErrorBeforeTheCheck_WhoseReopenFails_PublishesAFailedStatusThatSaysSo_NamingTheIndexFile()
+    {
+        IndexFiles.Invalidate(_fixture.InstanceRoot);
+        FileModes.Set(_indexFolder, "500");
+        var before = _notifications.Notifications.Count;
+
+        NextCheckSaysTheReopenFailed(before);
+    }
+
+    private void NextCheckSaysTheReopenFailed(int before) =>
         _index.NextCheckUnsettledUntil(
             () => _notifications.Since(before).Any(n => n is LoadOrderStatusNotification { Status: { State: LoadOrderState.Failed, Message: { } message } }
                 && message.Contains("mEdit's record index was not reopened: ", StringComparison.Ordinal)
                 && message.Contains("index.duckdb", StringComparison.Ordinal)),
             "a Failed status saying the reopen failed, naming the index file");
-    }
 }
