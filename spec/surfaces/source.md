@@ -12,7 +12,7 @@ The plugin source is a compiled plugin's text, and compile makes the plugin from
 
 As a user, I want:
 
-1. To find a record by its file: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey, except an embedded child record (story 3).
+1. To find a record by its path: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey. A record that holds files of its own is a folder so named, with its own document in `RecordData.json`, as the plugin header is at the plugin's folder. An embedded child record is in its owner's file (story 3).
 2. A diff to hold only what changed in the plugin. An insert or a delete touches one record's file, and decompiling an unchanged plugin changes nothing. Cites: ADR-0006; ADR-0030
 3. A cell and the records it holds in one file, so a change to a cell is one file to review. Cites: ADR-0030
 4. Never to manage a value the plugin derives, in the header or in a record: the build manages it. Cites: ADR-0008
