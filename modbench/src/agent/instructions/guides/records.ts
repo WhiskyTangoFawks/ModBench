@@ -10,7 +10,7 @@ export const RECORDS_GUIDE = `Records work like source code compiled into binari
 - Some records, such as NPCs, take fields from a template record. Their template flags choose which fields. An edit to a field that the template supplies changes nothing in the game.
 - Edit records in plugin source: JSON files under plugin-source/ in the source mod's source folder. Each record is one file, named by its EditorID when it has one, then its FormKey. A record's child records are in its file, except a worldspace's grid cells, which are each a file of their own.
 - Modbench's reads show an edit to plugin source as soon as the file is saved, before a build. The game sees the edit only after mod_build.
-- To start a patch plugin, call mod_create_empty, then mod_version_in_git to make the mod a source mod, then plugin_create in it. Copy each record that the patch overrides into it with medit.copy(plugin, form_key, destination, mode='override'), then edit the copy.
+- To start a patch plugin, call mod_create_empty, then plugin_create in it, then mod_version_in_git to make the mod a source mod, so its first build file compiles the plugin. Copy each record that the patch overrides into it with medit.copy(plugin, form_key, destination, mode='override'), then edit the copy.
 - A compiled plugin is a build artifact. Change it by changing its plugin source: a change to the compiled plugin is lost at the next build. Never edit a plugin that has no plugin source.
 - plugin_decompile gives a plugin in a source mod its plugin source. mod_version_in_git makes a mod a source mod.
 - A compile derives the masters and the record count. A reference to another plugin's record makes that plugin a master, and a master that nothing references drops off.

@@ -42,12 +42,14 @@ interface Span {
   tick: (heard: Heard) => void;
 }
 
-// plugins.md, States 2: the record index status says what the Plugins view shows, whoever started the
+// plugins.md, States, story 6: the record index status says what the Plugins view shows, whoever started the
 // reconcile — a put, a rebuild's refill or the watcher.
 export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileNarrator {
   let last: Heard | undefined;
   let span: Span | undefined;
   let settledVersion = -1;
+  // A check reports its failure under the version it checked.
+  let loggedFailure: { version: number; message: string } | undefined;
   // The highest version whose hand-off is queued, so a Ready heard again meanwhile queues none.
   let queuedVersion = -1;
   let handingOver = Promise.resolve();
@@ -71,7 +73,8 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
   const settle = (heard: Heard, reconcileSeen: boolean): void => {
     const { refusal, version } = heard.progress;
     if (refusal !== undefined) {
-      if (refusal.kind === 'failed' && version > settledVersion) {
+      if (refusal.kind === 'failed' && (version > (loggedFailure?.version ?? -1) || refusal.message !== loggedFailure?.message)) {
+        loggedFailure = { version, message: refusal.message };
         deps.log(`Indexing failed: ${refusal.message}`);
       }
       deps.applyRefused(refusal);
@@ -90,6 +93,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
   return {
     hear(heard) {
       last = heard;
+      if (heard.progress.refusal?.kind !== 'failed') loggedFailure = undefined;
       if (heard.progress.settled || heard.progress.refusal !== undefined) {
         const reconcileSeen = closeSpan();
         refillWaits.end(false);
@@ -110,6 +114,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
       settledVersion = -1;
       queuedVersion = -1;
       last = undefined;
+      loggedFailure = undefined;
     },
   };
 }
