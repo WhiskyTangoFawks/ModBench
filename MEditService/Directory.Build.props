@@ -54,10 +54,8 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- A game's codec compiles its Spriggit.Json package's customizations, so the plugin source is Spriggit's
-       format (ADR-0030). A git worktree starts with the submodule empty, and a glob over an empty folder would
-       compile the codec with no customization at all, so the folder is filled first and Customization.cs is
-       named, failing the build if it is missing. -->
+  <!-- A git worktree starts with the submodule empty, and a glob over an empty folder would compile a codec with
+       no customization (ADR-0030), so the folder is filled first and a missing Customization.cs fails the build. -->
   <PropertyGroup>
     <SpriggitPackages>$(MSBuildThisFileDirectory)vendor/Spriggit/Translation Packages/</SpriggitPackages>
   </PropertyGroup>

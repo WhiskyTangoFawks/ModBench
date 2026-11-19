@@ -27,8 +27,7 @@ internal static class ModelIdentity
     }
 
     /// <summary>A round trip the verdict judges, and whether it passes through the source's format, whose normalization
-    /// it then tolerates (ADR-0030): the order of the children a record files in its directory, and what
-    /// <see cref="IGameCodec.NormalizeFormat"/> changes.</summary>
+    /// it tolerates (ADR-0030): filed children's order and <see cref="IGameCodec.NormalizeFormat"/>.</summary>
     public sealed record Trip(string Description, bool ThroughTheFormat);
 
     /// <summary>The round trip a recompile takes.</summary>
