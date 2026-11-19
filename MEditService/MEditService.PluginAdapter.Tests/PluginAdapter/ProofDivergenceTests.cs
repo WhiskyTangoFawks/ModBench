@@ -9,6 +9,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Exceptions;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -35,6 +36,24 @@ public sealed class ProofDivergenceTests
         var answer = DivergenceOfAPluginFromItself(game => new ProofTextUnwritable(game));
 
         Assert.Contains(ProofTextUnwritable.Reason, answer.Failure().Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMasterTheProofsReadCannotFind_IsNamedAsAMasterTheLoadOrderLacks_NotAsAnUnparsedPlugin()
+    {
+        var answer = DivergenceOfAPluginFromItself(game => new ProofReadMissingMaster(game));
+
+        Assert.IsType<PluginFailure.MasterNotInLoadOrder>(answer.Failure());
+    }
+
+    [Fact]
+    public async Task AProofReadThatFails_StopsTheWriterOfItsText()
+    {
+        var codec = default(ProofReadFailingBeforeTheTextEnds);
+
+        _ = DivergenceOfAPluginFromItself(game => codec = new ProofReadFailingBeforeTheTextEnds(game));
+
+        await codec.Require().WriterStopped.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     private static Answer<PluginDivergence?, PluginFailure> DivergenceOfAPluginFromItself(Func<IGameCodec, IGameCodec> fallout4)
@@ -80,6 +99,34 @@ public sealed class ProofDivergenceTests
         public const string Reason = "The proof text could not be written.";
 
         public override Task WriteProofText(IModGetter plugin, Stream text) => throw new IOException(Reason);
+    }
+
+    private sealed class ProofReadMissingMaster(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public override Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release) =>
+            throw new MissingModException(ModKey.FromFileName("Absent.esm"));
+    }
+
+    private sealed class ProofReadFailingBeforeTheTextEnds(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public Task WriterStopped => _writerStopped.Task;
+
+        private readonly TaskCompletionSource _writerStopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async Task WriteProofText(IModGetter plugin, Stream text)
+        {
+            try
+            {
+                while (true) await text.WriteAsync(new byte[4096]);
+            }
+            finally
+            {
+                _writerStopped.SetResult();
+            }
+        }
+
+        public override Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release) =>
+            throw new InvalidDataException("The proof text could not be read.");
     }
 
     private abstract class DelegatingGameCodec(IGameCodec game) : IGameCodec
