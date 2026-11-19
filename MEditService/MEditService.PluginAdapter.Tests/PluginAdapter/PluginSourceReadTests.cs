@@ -73,6 +73,23 @@ public sealed class PluginSourceReadTests
     }
 
     [Fact]
+    public async Task ARecordWhoseEditorIdIsTooLongForAFileName_FailsNamingItAndWhy()
+    {
+        using var folder = new ScratchDirectory("medit-source-long-editorid-");
+        var pluginPath = Path.Combine(folder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var longId = new string('A', 300);
+        var npc = mod.Npcs.AddNew(longId);
+        mod.WriteToBinary(pluginPath);
+
+        Assert.False((await ReadSourceAsync(pluginPath, GameRelease.Fallout4)).Holds(out var _, out var failure));
+        Assert.IsType<PluginFailure.Inaccessible>(failure);
+        Assert.Equal(
+            $"{npc.FormKey} cannot be written: its EditorID {longId} makes a file name of 326 bytes, and a file name holds at most 255.",
+            failure.Reason);
+    }
+
+    [Fact]
     public async Task TheSourceTree_HoldsNoCarriageReturn_WhateverNewlineTheOperatingSystemWrites()
     {
         using var folder = new ScratchDirectory("medit-source-newlines-");

@@ -176,21 +176,13 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
-    // Linux holds a file name of at most 255 bytes and Windows 255 UTF-16 units, which no name of 255 UTF-8 bytes
-    // exceeds. A longer name fails mid-write, naming a temp file instead of the record.
-    private const int MostFileNameBytes = 255;
-
-    private static SourceChanges Nameable(RecordIdentity identity, SourceChanges changes)
-    {
-        var longest = changes.Moves.Select(move => move.To).Concat(changes.Documents.Select(document => document.Path))
+    private static SourceChanges Nameable(RecordIdentity identity, SourceChanges changes) =>
+        changes.Moves.Select(move => move.To).Concat(changes.Documents.Select(document => document.Path))
             .SelectMany(path => path.Split(Path.DirectorySeparatorChar))
-            .Max(name => Encoding.UTF8.GetByteCount(name));
-        return longest <= MostFileNameBytes
-            ? changes
-            : throw SourceStopException.Inaccessible(
-                $"{identity.FormKey} cannot be written: its EditorID {identity.EditorId} makes a file name of {longest} bytes, " +
-                $"and a file name holds at most {MostFileNameBytes}.");
-    }
+            .Select(name => DocumentFileNames.WhyTooLong(identity.FormKey, identity.EditorId, name))
+            .FirstOrDefault(why => why is not null) is { } tooLong
+            ? throw SourceStopException.Inaccessible(tooLong)
+            : changes;
 
     private SourceChanges Planned(LeafMoves plan, string text) =>
         new([.. plan.Moves.Select(move => Moved(move.From, move.To))], [], [Document(plan.Written, text)]);

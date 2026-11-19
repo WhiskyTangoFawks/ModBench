@@ -78,7 +78,14 @@ internal static class PluginTrees
         {
             // Always the inline dropoff, explicitly: MajorRecordListParallelHelper has a real upstream race
             // under a genuinely parallel dropoff (nested-list containers writing into each other's folders).
-            await game.SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
+            try
+            {
+                await game.SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
+            }
+            catch (Exception ex) when (PluginFailure.Of(ex) is PluginFailure.Inaccessible && DocumentFileNames.WhyTooLongIn(mod) is { } tooLong)
+            {
+                throw new IOException(tooLong, ex);
+            }
 
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.

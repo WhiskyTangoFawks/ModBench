@@ -248,7 +248,7 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     private static string DocumentInItsFolder(RecordIdentity identity, GameRelease gameRelease)
     {
         var formKey = FormKey.Factory(identity.FormKey);
-        return GroupFolders.For(gameRelease).HasDirectory(identity.RecordType)
+        return RecordTypes.For(gameRelease).HasDirectory(identity.RecordType)
             ? ContainerDocumentIn(LeafNameFor(formKey, identity.EditorId, isDirectory: true))
             : FileNameFor(formKey, identity.EditorId);
     }

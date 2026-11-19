@@ -192,6 +192,10 @@ public sealed class RecordTypes
     /// <summary>Whether a record of <paramref name="recordType"/> holds children in files of their own.</summary>
     public bool HoldsChildFiles(string? recordType) => FileSlotsOf(recordType).Count > 0;
 
+    /// <summary>Whether a record of <paramref name="recordType"/> has a directory rather than a file: a cell and a
+    /// worldspace for their blocks, any other for the children it files.</summary>
+    public bool HasDirectory(string recordType) => IsCell(recordType) || IsWorldspace(recordType) || HoldsChildFiles(recordType);
+
     /// <summary>The record type <paramref name="slot"/> of <paramref name="recordType"/> holds in files
     /// of their own; null for a slot that is no such member.</summary>
     public string? FileSlotRecordType(string recordType, string slot) =>

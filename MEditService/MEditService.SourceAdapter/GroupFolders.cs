@@ -19,7 +19,7 @@ internal sealed class GroupFolders
     private GroupFolders(RecordTypes types)
     {
         _types = types;
-        _directoryPerRecord = new HashSet<string>(types.Creatable.Where(HasDirectory).Select(type => GroupOf(types, type)), StringComparer.Ordinal);
+        _directoryPerRecord = new HashSet<string>(types.Creatable.Where(types.HasDirectory).Select(type => GroupOf(types, type)), StringComparer.Ordinal);
     }
 
     internal static GroupFolders For(GameRelease release) =>
@@ -53,11 +53,6 @@ internal sealed class GroupFolders
     internal string? RecordTypeIn(string folder) =>
         _directoryPerRecord.Contains(folder) ? null : _types.OnlyRecordTypeIn(folder);
 
-    /// <summary>Whether a record of <paramref name="recordType"/> has a directory rather than a file: a cell and a
-    /// worldspace for their blocks, any other for the children it files.</summary>
-    internal bool HasDirectory(string recordType) =>
-        _types.IsCell(recordType) || _types.IsWorldspace(recordType) || _types.HoldsChildFiles(recordType);
-
     /// <summary>Whether the records in <paramref name="folder"/> hold children in files of their own.</summary>
     internal bool HoldsChildFiles(string folder) =>
         _types.HoldsChildFiles(_types.OnlyRecordTypeIn(folder));
@@ -74,7 +69,7 @@ internal sealed class GroupFolders
             if (_types.FileSlotRecordType(type, directories[slot]) is not { } held) return null;
             type = held;
             if (slot + 1 == directories.Count) return (type, InItsDirectory: false);
-            if (!HasDirectory(type)) return null;
+            if (!_types.HasDirectory(type)) return null;
         }
         return (type, InItsDirectory: true);
     }
