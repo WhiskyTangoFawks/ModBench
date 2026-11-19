@@ -744,7 +744,6 @@ internal sealed class Indexer : IDisposable
                         var swapped = Swap(standing => standing with
                         {
                             Version = Math.Max(standing.Version, version),
-                            HeldElsewhere = heldElsewhere ?? standing.HeldElsewhere,
                             Failure = failure ?? standing.Failure,
                         });
                         if (swapped || progressed || Untold()) PublishStatus();
@@ -765,16 +764,22 @@ internal sealed class Indexer : IDisposable
         if (cause is not IndexFaultException { Fault: IndexFault.Invalidated }) return cause.Message;
         try
         {
-            return ReopenStore() is { } notReopened ? $"{cause.Message} {notReopened}" : cause.Message;
+            return ReopenStore() is { } notReopened ? NotReopenedAfter(cause, notReopened) : cause.Message;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Reopening the record index failed");
-            return $"{cause.Message} {NotReopened}: {ex.Message}";
+            return NotReopenedAfter(cause, NotReopenedBecause(ex));
         }
     }
 
     private const string NotReopened = "mEdit's record index was not reopened";
+
+    private static readonly string NotReopenedUndrained = IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
+
+    private static string NotReopenedBecause(Exception reason) => $"{NotReopened}: {reason.Message}";
+
+    private static string NotReopenedAfter(Exception cause, string notReopened) => $"{cause.Message} {notReopened}";
 
     private OpenScope ScopeOn(HeldPlugins held, Store.Store store, LoadOrderSnapshot snapshot) =>
         new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
@@ -791,22 +796,31 @@ internal sealed class Indexer : IDisposable
             }
         }
         if (current is null) return null;
-        if (!_storeFactory.Close(current.Store))
-            return IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
+        if (!_storeFactory.Close(current.Store)) return NotReopenedUndrained;
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
         // Held to the swap, as EnsureScope holds it.
         using (_gate.Enter())
         {
-            var fresh = _storeFactory.Create(
-                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
-                () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
-            if (fresh is null) return $"{NotReopened}: {heldElsewhere ?? "another process holds it"}";
+            var fresh = CreateStore(snapshot, held, out var heldElsewhere);
+            if (fresh is null) return $"{NotReopened}: {heldElsewhere}";
             lock (_lock) (_scope, _openedUnchecked, _conflictsComputed) = (ScopeOn(held, fresh, snapshot), true, false);
         }
         PublishStatus();
         return null;
+    }
+
+    // plugins.md, States, story 4.
+    private Store.Store? CreateStore(LoadOrderSnapshot snapshot, HeldPlugins held, out string? heldElsewhere)
+    {
+        _logger.LogDebug("Initializing record index");
+        var fresh = _storeFactory.Create(
+            snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
+            () => Status.State == LoadOrderState.Ready, out heldElsewhere);
+        var refusal = heldElsewhere;
+        if (fresh is null) Swap(standing => standing with { HeldElsewhere = refusal });
+        return fresh;
     }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
@@ -839,11 +853,16 @@ internal sealed class Indexer : IDisposable
     private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere, out string? failure)
     {
         (heldElsewhere, failure) = (null, null);
-        if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.IsInvalidated())
+        IndexFaultException? invalidation = null;
+        if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot))
         {
-            var kept = current with { LoadOrder = snapshot };
-            lock (_lock) _scope = kept;
-            return kept;
+            invalidation = current.Store.Invalidation();
+            if (invalidation is null)
+            {
+                var kept = current with { LoadOrder = snapshot };
+                lock (_lock) _scope = kept;
+                return kept;
+            }
         }
         OpenScope? leaving;
         using (_gate.Enter())
@@ -853,11 +872,10 @@ internal sealed class Indexer : IDisposable
         }
         if (!_storeFactory.Close(leaving?.Store, snapshot.InstanceRoot))
         {
-            failure = IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
+            failure = invalidation is null ? NotReopenedUndrained : NotReopenedAfter(invalidation, NotReopenedUndrained);
             return null;
         }
 
-        _logger.LogDebug("Initializing record index");
         var createTimer = Stopwatch.StartNew();
         var held = new HeldPlugins(
             _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
@@ -868,9 +886,7 @@ internal sealed class Indexer : IDisposable
             // Held from the open, whose commit materializes the filter in force, to the swap: a filter set or
             // cleared meanwhile waits and lands on this store, and the filter's SQL never runs under _lock.
             using var writes = _gate.Enter();
-            fresh = _storeFactory.Create(
-                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
-                () => Status.State == LoadOrderState.Ready, out heldElsewhere);
+            fresh = CreateStore(snapshot, held, out heldElsewhere);
             if (fresh is null) return null;
             scope = ScopeOn(held, fresh, snapshot);
             lock (_lock)
@@ -885,6 +901,12 @@ internal sealed class Indexer : IDisposable
                 _openedUnchecked = true;
             }
             fresh = null;
+        }
+        catch (Exception ex) when (invalidation is not null && ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Reopening the record index failed");
+            failure = NotReopenedAfter(invalidation, NotReopenedBecause(ex));
+            return null;
         }
         finally
         {

@@ -232,17 +232,17 @@ internal sealed class Store : IDisposable
 
     private StoreTransaction BeginTransaction() => new(StoreFaults.Translating(Connection.BeginTransaction));
 
-    internal bool IsInvalidated()
+    internal IndexFaultException? Invalidation()
     {
         try
         {
             using var connection = OpenRead();
             connection.Scalar<int>("SELECT 1");
-            return false;
+            return null;
         }
         catch (IndexFaultException ex) when (ex.Fault == IndexFault.Invalidated)
         {
-            return true;
+            return ex;
         }
     }
 

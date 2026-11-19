@@ -118,6 +118,19 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
     }
 
     [Fact]
+    public async Task AStoreInvalidatedBeforeTheCheck_WhileAReadOutlivesTheDrain_SaysItWasNotReopened_NamingTheFatalError()
+    {
+        var read = await AReadOutlivingEveryDrain(_index, _fixture.InstanceRoot);
+        IndexFiles.Invalidate(_fixture.InstanceRoot);
+
+        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the check's failed status");
+
+        Assert.StartsWith("FATAL Error", _index.Status.Message, StringComparison.Ordinal);
+        Assert.EndsWith($" {NotReopened}", _index.Status.Message, StringComparison.Ordinal);
+        await ReadEnds(read);
+    }
+
+    [Fact]
     public async Task AReopenAfterTheFileIsInvalidated_WhileAReadOutlivesTheDrain_SaysOnceThatItWasNotReopened()
     {
         using var compiled = new PluginFixtureBuilder("read-outlives-drain-reopen")
