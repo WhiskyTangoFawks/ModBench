@@ -48,17 +48,14 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         {
             var mod = (IFallout4ModGetter)original;
             var npc = mod.Npcs.First(n => !n.UseTemplateActors.HasFlag(Mutagen.Bethesda.Fallout4.Npc.TemplateActorType.Traits));
-            // The middle response: renaming an edge one would mask a renumbering bug that shifts
-            // the responses after it.
-            var (quest, topic) = mod.Quests
-                .SelectMany(q => q.DialogTopics.Select(t => (Quest: q, Topic: t)))
-                .First(qt => qt.Topic.Responses.Count >= 3 && !string.IsNullOrEmpty(qt.Topic.Responses[1].EditorID));
+            var topic = mod.Quests.SelectMany(q => q.DialogTopics)
+                .First(t => t.Responses.Count >= 3 && !string.IsNullOrEmpty(t.Responses[1].EditorID));
             var response = topic.Responses[1];
 
             (Npc, Topic, RenamedResponse) = (npc.FormKey, topic.FormKey, response.FormKey);
             TopicResponses = [.. topic.Responses.Select(r => r.FormKey)];
             RenamedResponseEditorId = response.EditorID + "Renamed";
-            EditedDocuments = [.. new[] { Npc.ToString(), quest.FormKey.ToString() }.Order(StringComparer.Ordinal)];
+            EditedDocuments = [.. new[] { Npc.ToString(), RenamedResponse.ToString() }.Order(StringComparer.Ordinal)];
         }
 
         var edit = TestEditService.EditHandler(Holder);

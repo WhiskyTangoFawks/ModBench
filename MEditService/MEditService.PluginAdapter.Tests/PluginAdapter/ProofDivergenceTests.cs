@@ -9,6 +9,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Exceptions;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -37,11 +38,51 @@ public sealed class ProofDivergenceTests
         Assert.Contains(ProofTextUnwritable.Reason, answer.Failure().Reason, StringComparison.Ordinal);
     }
 
-    private static Answer<PluginDivergence?, PluginFailure> DivergenceOfAPluginFromItself(Func<IGameCodec, IGameCodec> fallout4)
+    [Fact]
+    public void AMasterTheProofsReadCannotFind_IsNamedAsAMasterTheLoadOrderLacks_NotAsAnUnparsedPlugin()
+    {
+        var answer = DivergenceOfAPluginFromItself(game => new ProofReadMissingMaster(game));
+
+        Assert.IsType<PluginFailure.MasterNotInLoadOrder>(answer.Failure());
+    }
+
+    [Fact]
+    public async Task AProofReadThatFails_StopsTheWriterOfItsText()
+    {
+        var codec = default(ProofReadFailingBeforeTheTextEnds);
+
+        _ = DivergenceOfAPluginFromItself(game => codec = new ProofReadFailingBeforeTheTextEnds(game));
+
+        await codec.Require().WriterStopped.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void AQuestsTopicsTheProofTextReordered_AreNamedAsLostInMutagensSerialization_ThoughTheSourcesFormatKeepsNoOrderForThem()
+    {
+        var divergence = DivergenceOfAPluginFromItself(game => new ProofReversingTopics(game), plugin =>
+        {
+            var quest = plugin.Quests.AddNew("Asked");
+            quest.DialogTopics.Add(new DialogTopic(plugin) { EditorID = "First" });
+            quest.DialogTopics.Add(new DialogTopic(plugin) { EditorID = "Second" });
+        }).Answered();
+
+        Assert.StartsWith("Quest 000800:Fixture.esp (EditorID 'Asked') differs after a round trip through Mutagen's JSON serialization", divergence?.Description);
+    }
+
+    [Fact]
+    public void BothTripsFailing_AnswersTheFailureThatNamesItsCause_OverOneThatOnlyFailedToParse()
+    {
+        var answer = DivergenceOfAPluginFromItself(game => new ProofReadFailingBeforeTheTextEnds(game), recompiled: "Absent.esp");
+
+        Assert.IsType<PluginFailure.Inaccessible>(answer.Failure());
+    }
+
+    private static Answer<PluginDivergence?, PluginFailure> DivergenceOfAPluginFromItself(
+        Func<IGameCodec, IGameCodec> fallout4, Action<Fallout4Mod>? build = null, string recompiled = "Fixture.esp")
     {
         using var scratch = new ScratchDirectory("medit-proof-divergence-");
         var plugin = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        plugin.Keywords.AddNew("Kept");
+        (build ?? (mod => mod.Keywords.AddNew("Kept")))(plugin);
         var path = Path.Combine(scratch, "Fixture.esp");
         ((IModGetter)plugin).WriteToBinary(path);
 
@@ -57,7 +98,8 @@ public sealed class ProofDivergenceTests
         });
         try
         {
-            return TestAdapters.Mutagen().DivergenceFrom("Fixture.esp", path, path, EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None);
+            return TestAdapters.Mutagen().DivergenceFrom(
+                "Fixture.esp", path, Path.Combine(scratch, recompiled), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None);
         }
         finally
         {
@@ -75,11 +117,49 @@ public sealed class ProofDivergenceTests
         }
     }
 
+    private sealed class ProofReversingTopics(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public override async Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release)
+        {
+            var read = await base.ReadProofText(text, modKey, release);
+            foreach (var quest in ((IFallout4Mod)read).Quests) quest.DialogTopics.Reverse();
+            return read;
+        }
+    }
+
     private sealed class ProofTextUnwritable(IGameCodec game) : DelegatingGameCodec(game)
     {
         public const string Reason = "The proof text could not be written.";
 
         public override Task WriteProofText(IModGetter plugin, Stream text) => throw new IOException(Reason);
+    }
+
+    private sealed class ProofReadMissingMaster(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public override Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release) =>
+            throw new MissingModException(ModKey.FromFileName("Absent.esm"));
+    }
+
+    private sealed class ProofReadFailingBeforeTheTextEnds(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public Task WriterStopped => _writerStopped.Task;
+
+        private readonly TaskCompletionSource _writerStopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async Task WriteProofText(IModGetter plugin, Stream text)
+        {
+            try
+            {
+                while (true) await text.WriteAsync(new byte[4096]);
+            }
+            finally
+            {
+                _writerStopped.SetResult();
+            }
+        }
+
+        public override Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release) =>
+            throw new InvalidDataException("The proof text could not be read.");
     }
 
     private abstract class DelegatingGameCodec(IGameCodec game) : IGameCodec

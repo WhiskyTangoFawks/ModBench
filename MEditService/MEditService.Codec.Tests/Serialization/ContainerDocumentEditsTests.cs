@@ -53,21 +53,22 @@ public sealed class ContainerDocumentEditsTests
         const string handFormatted = """
             {
                 "FormKey": "000800:Append.esp",
-                "Responses": [
+                "Persistent": [
                     {
+                        "MutagenObjectType": "PlacedObject",
                         "FormKey": "000801:Append.esp",
                         "EditorID":   "R1"
                     }
                 ],
-                "EditorID":"Topic"
+                "EditorID":"Room"
             }
             """;
-        var added = new DialogResponses(Key("000802"), Fallout4Release.Fallout4) { EditorID = "R2" };
-        var expected = new DialogTopic(Key("000800"), Fallout4Release.Fallout4) { EditorID = "Topic" };
-        expected.Responses.Add(new DialogResponses(Key("000801"), Fallout4Release.Fallout4) { EditorID = "R1" });
-        expected.Responses.Add(added);
+        var added = new PlacedObject(Key("000802"), Fallout4Release.Fallout4) { EditorID = "R2" };
+        var expected = new Cell(Key("000800"), Fallout4Release.Fallout4) { EditorID = "Room" };
+        expected.Persistent.Add(new PlacedObject(Key("000801"), Fallout4Release.Fallout4) { EditorID = "R1" });
+        expected.Persistent.Add(added);
 
-        var edited = Assert.IsType<ChildAppend.Appended>(Appended(handFormatted, RecordTypeOf(expected), "Responses", added)).Text;
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(handFormatted, RecordTypeOf(expected), "Persistent", added)).Text;
 
         OneInsertion.AssertKeepsEveryOtherByte(handFormatted, edited);
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
@@ -79,19 +80,19 @@ public sealed class ContainerDocumentEditsTests
         const string handFormatted = """
             {
                 "FormKey": "000820:Append.esp",
-                "EditorID": "Topic",
-                "Responses": []
+                "EditorID": "Room",
+                "Persistent": []
             }
             """;
-        var added = new DialogResponses(Key("000821"), Fallout4Release.Fallout4) { EditorID = "R1" };
-        var expected = new DialogTopic(Key("000820"), Fallout4Release.Fallout4) { EditorID = "Topic" };
-        expected.Responses.Add(added);
+        var added = new PlacedObject(Key("000821"), Fallout4Release.Fallout4) { EditorID = "R1" };
+        var expected = new Cell(Key("000820"), Fallout4Release.Fallout4) { EditorID = "Room" };
+        expected.Persistent.Add(added);
 
-        var edited = Assert.IsType<ChildAppend.Appended>(Appended(handFormatted, RecordTypeOf(expected), "Responses", added)).Text;
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(handFormatted, RecordTypeOf(expected), "Persistent", added)).Text;
 
         OneInsertion.AssertKeepsEveryOtherByte(handFormatted, edited);
         using var document = JsonDocument.Parse(edited);
-        Assert.Single(document.RootElement.EnumerateObject(), member => member.Name == "Responses");
+        Assert.Single(document.RootElement.EnumerateObject(), member => member.Name == "Persistent");
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
     }
 
@@ -121,21 +122,22 @@ public sealed class ContainerDocumentEditsTests
         var crlf = """
             {
               "FormKey": "000840:Append.esp",
-              "EditorID": "Topic",
-              "Responses": [
+              "EditorID": "Room",
+              "Persistent": [
                 {
+                  "MutagenObjectType": "PlacedObject",
                   "FormKey": "000841:Append.esp",
                   "EditorID": "R1"
                 }
               ]
             }
             """.ReplaceLineEndings("\r\n");
-        var added = new DialogResponses(Key("000842"), Fallout4Release.Fallout4) { EditorID = "R2" };
-        var expected = new DialogTopic(Key("000840"), Fallout4Release.Fallout4) { EditorID = "Topic" };
-        expected.Responses.Add(new DialogResponses(Key("000841"), Fallout4Release.Fallout4) { EditorID = "R1" });
-        expected.Responses.Add(added);
+        var added = new PlacedObject(Key("000842"), Fallout4Release.Fallout4) { EditorID = "R2" };
+        var expected = new Cell(Key("000840"), Fallout4Release.Fallout4) { EditorID = "Room" };
+        expected.Persistent.Add(new PlacedObject(Key("000841"), Fallout4Release.Fallout4) { EditorID = "R1" });
+        expected.Persistent.Add(added);
 
-        var edited = Assert.IsType<ChildAppend.Appended>(Appended(crlf, RecordTypeOf(expected), "Responses", added)).Text;
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(crlf, RecordTypeOf(expected), "Persistent", added)).Text;
 
         OneInsertion.AssertKeepsEveryOtherByte(crlf, edited);
         Assert.Equal(edited.Split("\r\n").Length, edited.Split('\n').Length);
@@ -148,21 +150,22 @@ public sealed class ContainerDocumentEditsTests
         const string trailingComma = """
             {
               "FormKey": "000850:Append.esp",
-              "EditorID": "Topic",
-              "Responses": [
+              "EditorID": "Room",
+              "Persistent": [
                 {
+                  "MutagenObjectType": "PlacedObject",
                   "FormKey": "000851:Append.esp",
                   "EditorID": "R1"
                 },
               ]
             }
             """;
-        var added = new DialogResponses(Key("000852"), Fallout4Release.Fallout4) { EditorID = "R2" };
-        var expected = new DialogTopic(Key("000850"), Fallout4Release.Fallout4) { EditorID = "Topic" };
-        expected.Responses.Add(new DialogResponses(Key("000851"), Fallout4Release.Fallout4) { EditorID = "R1" });
-        expected.Responses.Add(added);
+        var added = new PlacedObject(Key("000852"), Fallout4Release.Fallout4) { EditorID = "R2" };
+        var expected = new Cell(Key("000850"), Fallout4Release.Fallout4) { EditorID = "Room" };
+        expected.Persistent.Add(new PlacedObject(Key("000851"), Fallout4Release.Fallout4) { EditorID = "R1" });
+        expected.Persistent.Add(added);
 
-        var edited = Assert.IsType<ChildAppend.Appended>(Appended(trailingComma, RecordTypeOf(expected), "Responses", added)).Text;
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(trailingComma, RecordTypeOf(expected), "Persistent", added)).Text;
 
         OneInsertion.AssertKeepsEveryOtherByte(trailingComma, edited);
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
@@ -238,14 +241,6 @@ public sealed class ContainerDocumentEditsTests
 
     private static readonly Dictionary<string, Func<IMajorRecordGetter>> Containers = new(StringComparer.Ordinal)
     {
-        ["a quest holding a topic, a branch and a scene"] = () =>
-        {
-            var quest = new Quest(Holder) { EditorID = "Own" };
-            quest.DialogTopics.Add(new DialogTopic(Holder));
-            quest.DialogBranches.Add(new DialogBranch(Holder));
-            quest.Scenes.Add(new Scene(Holder));
-            return quest;
-        },
         ["an interior cell holding a child in every slot"] = () =>
         {
             var cell = new Cell(Holder) { EditorID = "Own", Flags = Cell.Flag.IsInteriorCell };
@@ -264,7 +259,6 @@ public sealed class ContainerDocumentEditsTests
     };
 
     [Theory]
-    [InlineData("a quest holding a topic, a branch and a scene", new[] { "DialogTopics", "DialogBranches", "Scenes" })]
     [InlineData("an interior cell holding a child in every slot", new[] { "Persistent", "Temporary", "NavigationMeshes", "Landscape" })]
     [InlineData("a worldspace holding a persistent cell and a block", new[] { "TopCell", "SubCells" })]
     public void AContainerWithoutItsChildren_KeepsItsOwnFields_AndHoldsNoChildSlot(string container, string[] slots)

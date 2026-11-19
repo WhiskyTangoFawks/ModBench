@@ -191,7 +191,7 @@ internal static class PluginTrees
         ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language)
     {
         var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder, language);
-        (Func<IModGetter> ReadBack, string Trip)[] trips =
+        (Func<IModGetter> ReadBack, ModelIdentity.Trip Trip)[] trips =
         [
             (() => ProofText.ReadBack(original), ModelIdentity.ThroughMutagensText),
             (() => MutagenPluginAdapter.OpenForWrite(new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder),

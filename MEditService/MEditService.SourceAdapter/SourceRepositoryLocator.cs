@@ -58,14 +58,10 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
                 identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
-        // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
-        // with no group of its own is always embedded, so nothing is scanned for it.
+        // A container's document, or a child's in its container's directory.
         var sourceRoot = Path.Combine(_sourceFolder, SourceRepositoryLayout.RootFor(plugin.Name));
-        if (GroupFolders.For(_release).FolderOf(identity.RecordType) is not null
-            && FindOwnUnit(sourceRoot, plugin, identity.FormKey, byText) is { } own)
-        {
+        if (FindOwnUnit(sourceRoot, plugin, identity.FormKey, byText) is { } own)
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
-        }
 
         // Nothing of its own, so it is inlined in another record's document, which the owner map names.
         if (DocumentHolding(sourceRoot, identity.FormKey) is not { } owner) return null;
@@ -497,13 +493,27 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     internal DocumentContainment? ContainerOf(
         PluginAddress plugin, RecordIdentity identity)
     {
-        if (Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
+        if (Locate(plugin, identity) is not { } unit) return null;
+        if (!unit.IsEmbedded) return FiledContainerOf(unit, plugin);
         var owner = ContainerDocument(plugin, identity)
             ?? throw SourceStopException.Unreadable($"{unit.RelativePath} could not be read.");
 
         if (!Document.TryRead(owner.Body, out var document, out var why))
             throw SourceStopException.UnreadableIn(_sourceFolder, unit.FullPath, $"it is no JSON document: {why}");
         return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, document, identity.FormKey);
+    }
+
+    // The container whose directory holds the slot folder a record's own file sits in.
+    private DocumentContainment? FiledContainerOf(SourceUnit unit, PluginAddress plugin)
+    {
+        if (SourceRepositoryLayout.FiledIn(unit.RelativePath, _release) is not var (directory, slot)) return null;
+        var document = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, Path.Combine(_sourceFolder, directory));
+        var text = DocumentText.TextIfPresent(_files, document)
+            ?? throw SourceStopException.UnreadableIn(_sourceFolder, document, $"it is missing, so the record {unit.RelativePath} holds has no container");
+        var relativePath = Path.GetRelativePath(_sourceFolder, document);
+        var container = DocumentAt(relativePath, text, plugin.Name)
+            ?? throw SourceStopException.UnreadableIn(_sourceFolder, document, $"it {DocumentText.WhyNoFormKey(text)}, so the record {unit.RelativePath} holds has no container");
+        return new DocumentContainment(container.FormKey, container.RecordType, slot);
     }
 
     /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An

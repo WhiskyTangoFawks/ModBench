@@ -26,15 +26,20 @@ internal static class ModelIdentity
                 : $"{RecordType} {FormKey} (EditorID '{EditorId}') {Description}";
     }
 
-    /// <summary>The round trip a recompile takes.</summary>
-    public const string Recompiled = "being recompiled from its own plugin source";
+    /// <summary>A round trip the verdict judges, and whether it keeps the order of the children a record files in
+    /// its directory, which the source's format does not (ADR-0030).</summary>
+    public sealed record Trip(string Description, bool KeepsFiledOrder);
 
-    /// <summary>The round trip the proof's text takes (ADR-0006).</summary>
-    public const string ThroughMutagensText = "a round trip through Mutagen's JSON serialization with no customization";
+    /// <summary>The round trip a recompile takes.</summary>
+    public static readonly Trip Recompiled = new("being recompiled from its own plugin source", KeepsFiledOrder: false);
+
+    /// <summary>The round trip the proof's text takes, apart from the format's normalization (ADR-0006).</summary>
+    public static readonly Trip ThroughMutagensText = new(
+        "a round trip through Mutagen's JSON serialization with no customization", KeepsFiledOrder: true);
 
     /// <summary>The whole verdict: the first record that does not survive <paramref name="trip"/>, else the mod
     /// header field that does not. Null when <paramref name="recompiled"/> is model-identical.</summary>
-    public static Divergence? FindFirstDivergence(IModGetter original, IModGetter recompiled, string trip)
+    public static Divergence? FindFirstDivergence(IModGetter original, IModGetter recompiled, Trip trip)
     {
         if (FindFirst(original, recompiled, trip) is { } record) return record;
 
@@ -44,7 +49,7 @@ internal static class ModelIdentity
                && FindFirstHeaderFieldDivergence(original, originalHeader, recompiled, recompiledHeader) is { } field
             ? new Divergence(
                 PluginHeader.RecordType, FormKey.Null, null,
-                $"TES4 header field '{field}' changed after {trip}.")
+                $"TES4 header field '{field}' changed after {trip.Description}.")
             : null;
     }
 
@@ -55,29 +60,35 @@ internal static class ModelIdentity
 
     // The first record, in the original's GRUP order, that does not survive a round trip, else the
     // first the recompile produced that the original never had; null when none differs.
-    private static Divergence? FindFirst(IModGetter original, IModGetter recompiled, string trip)
+    private static Divergence? FindFirst(IModGetter original, IModGetter recompiled, Trip trip)
     {
-        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled).FirstOrDefault() is ({ } record, var field))
+        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled, filedInAnyOrder: !trip.KeepsFiledOrder).FirstOrDefault() is ({ } record, var field))
         {
             return new Divergence(record.GetType().Name, record.FormKey, record.EditorID, field is null
-                ? $"is missing after {trip}."
-                : $"differs after {trip} — field '{field}' changed.");
+                ? $"is missing after {trip.Description}."
+                : $"differs after {trip.Description} — field '{field}' changed.");
         }
 
         var originalFormKeys = original.EnumerateMajorRecords().Select(r => r.FormKey).ToHashSet();
         return recompiled.EnumerateMajorRecords().FirstOrDefault(r => !originalFormKeys.Contains(r.FormKey)) is { } added
             ? new Divergence(added.GetType().Name, added.FormKey, added.EditorID,
-                $"is present after {trip} but not present in the original.")
+                $"is present after {trip.Description} but not present in the original.")
             : null;
     }
 
-    /// <summary>Each <paramref name="original"/> record that does not survive into <paramref name="recompiled"/>,
-    /// with the field the mask disagrees on, else the codec document path that differs; a null field
-    /// is a record <paramref name="recompiled"/> lacks.</summary>
+    /// <summary>Each <paramref name="original"/> record that does not survive, with the field that differs; a null
+    /// field is a record lacking. The format keeps no order for filed children (ADR-0030).</summary>
     public static IEnumerable<(IMajorRecordGetter Record, string? Field)> RecordDivergences(
-        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled)
+        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled, bool filedInAnyOrder = false)
     {
         var game = GameCodecs.For(recompiled.GameRelease);
+        var types = RecordTypes.For(recompiled.GameRelease);
+        IMajorRecordGetter Normalized(IMajorRecordGetter record)
+        {
+            var encoded = game.NormalizeEncoding(record, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease));
+            return filedInAnyOrder ? FiledInFormKeyOrder(encoded, types) : encoded;
+        }
+
         foreach (var (originalRecord, recompiledRecord) in Paired(original, recompiled))
         {
             if (recompiledRecord is null)
@@ -88,10 +99,32 @@ internal static class ModelIdentity
 
             var changed = FirstDifference(originalRecord, recompiledRecord, recompiled.GameRelease) is null
                 ? null
-                : FirstDifference(
-                    game.NormalizeEncoding(originalRecord, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease)),
-                    game.NormalizeEncoding(recompiledRecord, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease)), recompiled.GameRelease);
+                : FirstDifference(Normalized(originalRecord), Normalized(recompiledRecord), recompiled.GameRelease);
             if (changed != null) yield return (originalRecord, changed);
+        }
+    }
+
+    private static IMajorRecordGetter FiledInFormKeyOrder(IMajorRecordGetter record, RecordTypes types)
+    {
+        if (!types.HoldsChildFiles(types.RecordTypeOf(record))) return record;
+        var copy = record.DeepCopy();
+        InFormKeyOrder(copy, types);
+        return copy;
+    }
+
+    private static void InFormKeyOrder(IMajorRecordGetter record, RecordTypes types)
+    {
+        foreach (var slot in types.FileSlotsOf(types.RecordTypeOf(record)))
+        {
+            if (record.GetType().GetProperty(slot)?.GetValue(record) is not System.Collections.IList children)
+                throw new InvalidOperationException($"{record.GetType().Name} has no list '{slot}' of the children it files, so they cannot be compared.");
+            var ordered = children.Cast<IMajorRecordGetter>().OrderBy(child => child.FormKey.ToString(), StringComparer.Ordinal).ToList();
+            children.Clear();
+            foreach (var child in ordered)
+            {
+                InFormKeyOrder(child, types);
+                children.Add(child);
+            }
         }
     }
 

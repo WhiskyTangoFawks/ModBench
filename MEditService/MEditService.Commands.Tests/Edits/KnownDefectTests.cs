@@ -18,9 +18,8 @@ public sealed class KnownDefectTests : IDisposable
         var quest = mod.Quests.AddNew("DefectQuest");
         var scene = new Scene(mod) { EditorID = "DefectScene" };
         scene.Actions.Add(new SceneAction { Name = "First" });
-        quest.Scenes.Add(scene);
         _fixture.Seed(quest, "qust");
-        return scene.FormKey.ToString();
+        return _fixture.SeedChild(quest, "qust", "Scenes", scene, "scen");
     }
 
     [Fact]

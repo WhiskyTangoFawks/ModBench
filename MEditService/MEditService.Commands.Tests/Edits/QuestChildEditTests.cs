@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -14,142 +13,120 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class QuestChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
-    private readonly List<IDisposable> _compiled = [];
 
-    public void Dispose()
-    {
-        _compiled.ForEach(compiled => compiled.Dispose());
-        _fixture.Dispose();
-    }
-
-    private TestEditor EditService() => _fixture.EditHandler;
+    public void Dispose() => _fixture.Dispose();
 
     private string QuestText => _fixture.Document(_fixture.Quest.ToString()).Require().Body;
 
-    private async Task<IQuestGetter> CompiledQuest()
+    private async Task<IReadOnlyList<IMajorRecordGetter>> CompiledSlot(Func<IQuestGetter, IEnumerable<IMajorRecordGetter>> slot)
     {
-        var compiled = await _fixture.CompiledAsync(_fixture.Plugin);
-        _compiled.Add(compiled);
-        return compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
+        using var compiled = await _fixture.CompiledAsync(_fixture.Plugin);
+        return [.. slot(compiled.Quests.Single(q => q.FormKey == _fixture.Quest))];
     }
 
-    private void AssertOnlyTheQuestDocumentChanged() =>
-        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
-
-    private IReadOnlyList<string> QuestSlot(string slotName)
+    private static readonly Dictionary<string, (Func<ContainerModFixture, FormKey> Child, Func<ContainerModFixture, Func<IQuestGetter, IEnumerable<IMajorRecordGetter>>> Slot)> Kinds = new()
     {
-        using var document = JsonDocument.Parse(_fixture.Document(_fixture.Quest.ToString()).Require().Body);
-        return [.. document.RootElement.GetProperty(slotName).EnumerateArray()
-            .Select(child => child.GetProperty("FormKey").GetString().Require())];
-    }
-
-    public static TheoryData<string, Func<ContainerModFixture, FormKey>, string, Func<IQuestGetter, IEnumerable<string>>, string[]> QuestChildKinds => new()
-    {
-        {
-            "topic", f => f.DialogTopic2, ContainerModFixture.DialogTopic2EditorId, q => q.DialogTopics.Select(t => t.EditorID.Require()),
-            [ContainerModFixture.DialogTopicEditorId, "Renamed", ContainerModFixture.DialogTopic3EditorId]
-        },
-        { "branch", f => f.DialogBranch, ContainerModFixture.DialogBranchEditorId, q => q.DialogBranches.Select(b => b.EditorID.Require()), ["Renamed"] },
-        { "scene", f => f.Scene, ContainerModFixture.SceneEditorId, q => q.Scenes.Select(s => s.EditorID.Require()), ["Renamed"] },
+        ["topic"] = (f => f.DialogTopic2, _ => q => q.DialogTopics),
+        ["branch"] = (f => f.DialogBranch, _ => q => q.DialogBranches),
+        ["scene"] = (f => f.Scene, _ => q => q.Scenes),
+        ["response"] = (f => f.Response, f => q => q.DialogTopics.Single(t => t.FormKey == f.DialogTopic).Responses),
     };
 
-    [Theory]
-    [MemberData(nameof(QuestChildKinds))]
-    public async Task SettingAQuestChildsField_ChangesTheQuestDocumentAtThatPathAndNowhereElse_AndCompilesInOrder(
-        string _, Func<ContainerModFixture, FormKey> child, string editorId, Func<IQuestGetter, IEnumerable<string>> siblings, string[] compiled)
-    {
-        var before = QuestText;
-        Assert.Empty(_fixture.ChangedFormKeys());
+    public static TheoryData<string> KindNames { get; } = ["topic", "branch", "scene", "response"];
 
-        var result = EditService().Set(_fixture.Plugin, child(_fixture).ToString(), "EditorID", Json("\"Renamed\""));
+    [Theory]
+    [MemberData(nameof(KindNames))]
+    public async Task EditingAQuestChildsEditorId_RenamesItsOwnFile_ChangesNoOther_AndCompilesIntoItsContainer(string kind)
+    {
+        var (child, slot) = Kinds[kind];
+        var quest = QuestText;
+
+        var result = _fixture.EditHandler.Set(_fixture.Plugin, child(_fixture).ToString(), "EditorID", Json("\"Renamed\""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(
-            before.Replace($"\"EditorID\": \"{editorId}\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
-            QuestText);
-        AssertOnlyTheQuestDocumentChanged();
+        Assert.Equal([_fixture.DocumentFile(child(_fixture).ToString()).Require()], _fixture.ChangedDocumentFiles());
+        Assert.Contains("Renamed - ", _fixture.DocumentFile(child(_fixture).ToString()), StringComparison.Ordinal);
+        Assert.Equal(quest, QuestText);
+        Assert.Contains("Renamed", (await CompiledSlot(slot(_fixture))).Select(record => record.EditorID));
+    }
 
-        Assert.Equal("Renamed", _fixture.Document(child(_fixture).ToString()).Require().EditorId);
-        Assert.Equal(compiled, siblings(await CompiledQuest()));
+    [Theory]
+    [MemberData(nameof(KindNames))]
+    public async Task DeletingAQuestChild_DeletesItsOwnFile_LeavesItsContainersUntouched_AndCompilesWithoutIt(string kind)
+    {
+        var (child, slot) = Kinds[kind];
+        var quest = QuestText;
+
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, child(_fixture).ToString())]);
+
+        Assert.Empty(result.Refused);
+        Assert.Null(_fixture.Document(child(_fixture).ToString()));
+        Assert.Equal(quest, QuestText);
+        Assert.DoesNotContain(child(_fixture), (await CompiledSlot(slot(_fixture))).Select(record => record.FormKey));
     }
 
     [Fact]
-    public async Task AddingMovingAndRemoving_OnANestedResponsesOwnArray_PatchTheQuestDocumentAtThatArray_AndCompileInOrder()
+    public async Task DeletingATopic_DeletesItsResponsesWithIt()
     {
-        var service = EditService();
+        _ = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.DialogTopic.ToString())]);
+
+        Assert.All([_fixture.Response, _fixture.Response2], gone => Assert.Null(_fixture.Document(gone.ToString())));
+        Assert.Equal(
+            [_fixture.DialogTopic2, _fixture.DialogTopic3],
+            (await CompiledSlot(q => q.DialogTopics)).Select(record => record.FormKey).Order());
+    }
+
+    [Theory]
+    [MemberData(nameof(KindNames))]
+    public async Task EditingTheFormIdOfAQuestChild_MovesItsOwnFileToTheNewKey_LeavesItsContainersUntouched_AndCompiles(string kind)
+    {
+        var (child, slot) = Kinds[kind];
+        var quest = QuestText;
+
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, child(_fixture).ToString(), $"000F00:{_fixture.Plugin.Name}");
+
+        Assert.True(result.Applied, result.Message);
+        var rekeyed = result.NewFormKey.Require();
+        Assert.Null(_fixture.Document(child(_fixture).ToString()));
+        Assert.Contains("000F00_", _fixture.DocumentFile(rekeyed), StringComparison.Ordinal);
+        Assert.Equal(quest, QuestText);
+        Assert.Contains(FormKey.Factory(rekeyed), (await CompiledSlot(slot(_fixture))).Select(record => record.FormKey));
+    }
+
+    [Fact]
+    public async Task AddingMovingAndRemoving_OnAResponsesOwnArray_PatchOnlyItsFile_AndCompileInOrder()
+    {
         var response = _fixture.Response.ToString();
         Assert.Equal(ContainerModFixture.ResponseLineNumbers.Select(l => (int)l), LineNumbersInDocument());
 
-        var added = service.Edit(_fixture.Plugin, response, AddAt(Json("""{"ResponseNumber": 3}"""), Member("Responses")));
+        var added = _fixture.EditHandler.Edit(_fixture.Plugin, response, AddAt(Json("""{"ResponseNumber": 3}"""), Member("Responses")));
         Assert.True(added.Applied, added.Message);
-        Assert.Equal([1, 2, 3], LineNumbersInDocument());
-
-        var moved = service.Edit(_fixture.Plugin, response, MoveTo(0, Member("Responses"), At(2)));
+        var moved = _fixture.EditHandler.Edit(_fixture.Plugin, response, MoveTo(0, Member("Responses"), At(2)));
         Assert.True(moved.Applied, moved.Message);
-        Assert.Equal([3, 1, 2], LineNumbersInDocument());
-
-        var removed = service.Edit(_fixture.Plugin, response, RemoveAt(Member("Responses"), At(1)));
+        var removed = _fixture.EditHandler.Edit(_fixture.Plugin, response, RemoveAt(Member("Responses"), At(1)));
         Assert.True(removed.Applied, removed.Message);
-        Assert.Equal([3, 2], LineNumbersInDocument());
 
-        AssertOnlyTheQuestDocumentChanged();
-        Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", QuestText, StringComparison.Ordinal);
+        Assert.Equal([3, 2], LineNumbersInDocument());
+        Assert.Equal([_fixture.DocumentFile(response).Require()], _fixture.ChangedDocumentFiles());
         Assert.Equal(
             [3, 2],
-            (await CompiledQuest()).DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic)
-                .Responses.Single(r => r.FormKey == _fixture.Response).Responses.Select(l => (int)l.ResponseNumber));
-    }
-
-    private int[] LineNumbersInDocument()
-    {
-        var root = JsonNode.Parse(QuestText).Require().AsObject();
-        var response = root[nameof(Quest.DialogTopics)].Require().AsArray()
-            .SelectMany(t => t.Require()[nameof(DialogTopic.Responses)] as JsonArray ?? [])
-            .Single(r => r.Require()[nameof(IMajorRecordGetter.FormKey)].Require().GetValue<string>() == _fixture.Response.ToString()).Require();
-        return [.. response[nameof(DialogResponses.Responses)].Require().AsArray().Select(l => l.Require()[nameof(DialogResponse.ResponseNumber)].Require().GetValue<int>())];
+            ((IDialogResponsesGetter)(await CompiledSlot(q => q.DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses))
+                .Single(r => r.FormKey == _fixture.Response)).Responses.Select(l => (int)l.ResponseNumber));
     }
 
     [Fact]
-    public async Task DeletingATopic_RemovesItAndItsResponsesFromTheQuestDocument_LeavingItsSiblingsInPlace_AndCompiles()
+    public void ARefusedResponseEdit_AnswersNoChanges()
     {
-        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.DialogTopic.ToString())]);
+        var responseBefore = _fixture.Document(_fixture.Response.ToString()).Require().Body;
 
-        Assert.Empty(result.Refused);
-        var after = QuestText;
-        Assert.All(
-            new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.Response2EditorId },
-            gone => Assert.DoesNotContain($"\"{gone}\"", after, StringComparison.Ordinal));
-        Assert.All(
-            new[] { ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId },
-            kept => Assert.Contains($"\"{kept}\"", after, StringComparison.Ordinal));
-        AssertOnlyTheQuestDocumentChanged();
+        var result = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Response.ToString(), "NoSuchField", Json("1"));
 
-        Assert.DoesNotContain(new[] { _fixture.DialogTopic, _fixture.Response, _fixture.Response2 }, gone => _fixture.Document(gone.ToString()) is not null);
-        Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
-
-        var compiled = await CompiledQuest();
-        Assert.Equal([ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId], compiled.DialogTopics.Select(t => t.EditorID.Require()));
-        Assert.Equal([ContainerModFixture.SceneEditorId], compiled.Scenes.Select(s => s.EditorID.Require()));
+        Assert.False(result.Applied);
+        Assert.Empty(_fixture.ChangedFormKeys());
+        Assert.Equal(responseBefore, _fixture.Document(_fixture.Response.ToString()).Require().Body);
     }
 
-    [Fact]
-    public async Task EditingTheFormIdOfAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
-    {
-        var result = _fixture.EditHandler.SetFormId(
-            _fixture.Plugin, _fixture.DialogTopic2.ToString(), $"000F00:{_fixture.Plugin.Name}");
-
-        Assert.True(result.Applied, result.Message);
-        var after = QuestText;
-        Assert.Contains(result.NewFormKey.Require(), after, StringComparison.Ordinal);
-        Assert.DoesNotContain(_fixture.DialogTopic2.ToString(), after, StringComparison.Ordinal);
-        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
-
-        Assert.Equal(
-            [_fixture.DialogTopic.ToString(), result.NewFormKey.Require(), _fixture.DialogTopic3.ToString()],
-            QuestSlot(nameof(Quest.DialogTopics)));
-
-        Assert.Equal(
-            [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId],
-            (await CompiledQuest()).DialogTopics.Select(t => t.EditorID.Require()));
-    }
+    private int[] LineNumbersInDocument() =>
+        [.. JsonNode.Parse(_fixture.Document(_fixture.Response.ToString()).Require().Body).Require()[nameof(DialogResponses.Responses)].Require().AsArray()
+            .Select(l => l.Require()[nameof(DialogResponse.ResponseNumber)].Require().GetValue<int>())];
 }

@@ -13,9 +13,9 @@ public sealed class DerivedContainerMembersTests
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
     [InlineData(GameRelease.Starfield)]
-    public void TheEmbeddedSlots_AreExactlyTheMembersTypedAsAMajorRecordOrAListOfThem_SweptThroughTheGetterInterfaceARouteTheDerivationNeverTakes(GameRelease release)
+    public void TheEmbeddedSlots_AreExactlyACellsOrAWorldspacesMembersTypedAsAMajorRecordOrAListOfThem_SweptThroughTheGetterInterfaceARouteTheDerivationNeverTakes(GameRelease release)
     {
-        var expected = Sweep(release, (_, p) => TypedAsChildMajor(p)).ToList();
+        var expected = Sweep(release, (t, p) => t.Name is "Cell" or "Worldspace" && TypedAsChildMajor(p)).ToList();
 
         Assert.True(expected.Count > 0, "Expected the sweep to find slots; a sweep that found nothing would agree with an empty derivation.");
         Assert.Equal(expected, DerivedEmbeddedSlots(release).ToList());
@@ -57,7 +57,7 @@ public sealed class DerivedContainerMembersTests
     public void EveryEmbeddedSlotsElement_IsAMajorRecordByMutagensOwnReckoning(GameRelease release)
     {
         var mod = ModFactory.Activator(ModKey.FromFileName("Sweep.esp"), release);
-        var nestedGroupsWhichMutagenRefusesToEnumerateAsRecords = DerivedChildFields(release).Except(DerivedEmbeddedSlots(release)).ToList();
+        var nestedGroupsWhichMutagenRefusesToEnumerateAsRecords = DerivedChildFields(release).Except(Sweep(release, (_, p) => TypedAsChildMajor(p))).ToList();
 
         Assert.NotEmpty(nestedGroupsWhichMutagenRefusesToEnumerateAsRecords);
         Assert.Empty(DerivedEmbeddedSlots(release).Where(slot => !EnumeratesAsMajorRecordsByMutagensOwnRegistration(mod, ElementOf(release, slot.Parent, slot.Member))).Select(slot => slot.Parent + "." + slot.Member));
@@ -65,12 +65,25 @@ public sealed class DerivedContainerMembersTests
     }
 
     [Fact]
-    public void AQuest_EmbedsItsScenes_ByItsClassNameAndByItsTable()
+    public void ACell_EmbedsItsPersistentReferences_ByItsClassNameAndByItsTable()
     {
         var fallout4 = RecordTypes.For(GameRelease.Fallout4);
 
-        Assert.True(fallout4.IsEmbeddedSlot("Quest", "Scenes"));
-        Assert.True(fallout4.IsEmbeddedSlot("qust", "Scenes"));
+        Assert.True(fallout4.IsEmbeddedSlot("Cell", "Persistent"));
+        Assert.True(fallout4.IsEmbeddedSlot("cell", "Persistent"));
+    }
+
+    [Theory]
+    [InlineData("Quest", "DialogTopics")]
+    [InlineData("Quest", "DialogBranches")]
+    [InlineData("Quest", "Scenes")]
+    [InlineData("DialogTopic", "Responses")]
+    public void AQuestsAndATopicsChildren_AreNotEmbedded_SinceTheFormatGivesEachAFileOfItsOwn(string container, string slot)
+    {
+        var fallout4 = RecordTypes.For(GameRelease.Fallout4);
+
+        Assert.Contains(slot, fallout4.ChildSlotsOf(container));
+        Assert.False(fallout4.IsEmbeddedSlot(container, slot));
     }
 
     private static bool EnumeratesAsMajorRecordsByMutagensOwnRegistration(IMod mod, Type element)

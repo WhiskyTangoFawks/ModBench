@@ -60,6 +60,9 @@ internal sealed class LayoutPath(string relativePath)
     // plugin-source / <plugin> / <group folder> / <directories> / <leaf>
     internal int DirectoriesBelowGroupFolder => _segments.Length - GroupFolderSegment - 2;
 
+    internal IReadOnlyList<string> DirectoryNamesBelowGroupFolder =>
+        _segments.Length > GroupFolderSegment + 1 ? _segments[(GroupFolderSegment + 1)..^1] : [];
+
     internal string BlockFolderName => _segments[^4];
 
     internal string SubBlockFolderName => _segments[^3];

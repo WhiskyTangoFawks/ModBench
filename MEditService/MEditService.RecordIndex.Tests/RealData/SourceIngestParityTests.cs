@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -135,5 +136,13 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Regex.Replace(body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");
 
     private static List<string> RowsOf(string instanceRoot, string relation) =>
-        [.. IndexFiles.Rows(instanceRoot, $"SELECT * FROM {relation}").Select(row => string.Join(" | ", row))];
+        [.. IndexFiles.Rows(instanceRoot, relation == "holdings" ? HoldingsWithNoOrderForChildrenFiledByName : $"SELECT * FROM {relation}").Select(row => string.Join(" | ", row))];
+
+    private static readonly string HoldingsWithNoOrderForChildrenFiledByName = $"""
+        SELECT plugin, origin, parent, child, slot, CASE WHEN slot IN ({FiledSlots}) THEN NULL ELSE slot_index END
+        FROM holdings ORDER BY ALL
+        """;
+
+    private static string FiledSlots =>
+        string.Join(", ", new[] { "qust", "dial" }.SelectMany(RecordTypes.For(GameRelease.Fallout4).FileSlotsOf).Select(slot => $"'{slot}'"));
 }

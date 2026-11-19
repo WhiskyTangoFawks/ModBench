@@ -216,8 +216,11 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     internal static bool InAContainerGroup(string relativePath, GameRelease gameRelease)
     {
         var path = new LayoutPath(relativePath);
-        return path.IsContainerDocument
-            && GroupFolders.For(gameRelease).DirectoryPerRecordFolders.Contains(path.GroupFolderName);
+        if (!path.IsContainerDocument) return false;
+        var folders = GroupFolders.For(gameRelease);
+        return folders.HoldsChildFiles(path.GroupFolderName)
+            ? folders.HeldTypeAt(path.GroupFolderName, path.DirectoryNamesBelowGroupFolder) is { InItsDirectory: true }
+            : folders.DirectoryPerRecordFolders.Contains(path.GroupFolderName);
     }
 
     /// <summary>Each container directory's document among <paramref name="relativePaths"/>, by the one rule of
@@ -273,7 +276,7 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
         var folder = GroupFolders.For(gameRelease).FlatFolderOf(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the source layout — it is a " +
-                "directory-per-record container type (Cell/Worldspace), or has no top-level " +
+                "directory-per-record container type, or has no top-level " +
                 "group at all, and the repository's own locator owns it, not this helper.");
 
         return Path.Combine(
@@ -282,8 +285,8 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     }
 
     // The three shapes with a group folder: flat file, container directory, and an interior Cell
-    // nested under block/sub-block, the only reason blockPath exists. An embedded child lands
-    // inside its container's document instead.
+    // nested under block/sub-block, the only reason blockPath exists. A child lands inside its
+    // container's document or directory instead.
     internal static SourcePlacement PlacementFor(
         string pluginFileName,
         string recordType,
@@ -300,13 +303,39 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
 
         var groupFolder = folders.FolderOf(recordType)
             ?? throw new NotSupportedException(
-                $"'{recordType}' has no group folder at all — it is an embedded child, which lands inside " +
-                "its container's document rather than at a path of its own.");
+                $"'{recordType}' has no group folder at all — it is a child, which lands inside " +
+                "its container's document or directory rather than in a group folder.");
 
         var leaf = LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: true);
 
         return new SourcePlacement(ContainerDocumentIn(Path.Combine(
             [RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf])));
+    }
+
+    /// <summary>The directory of the container whose slot's folder holds the record filed at
+    /// <paramref name="relativePath"/>; null for a record no other record's directory holds.</summary>
+    internal static (string Directory, string Slot)? FiledIn(string relativePath, GameRelease gameRelease)
+    {
+        var path = new LayoutPath(relativePath);
+        if (!path.IsContainerDocument) return null;
+        var directories = path.DirectoryNamesBelowGroupFolder;
+        if (GroupFolders.For(gameRelease).HeldTypeAt(path.GroupFolderName, directories) is not { } held) return null;
+
+        var slot = directories.Count - (held.InItsDirectory ? 2 : 1);
+        if (slot < 1) return null;
+        var underGroup = PathShape.DirectoryOf(relativePath);
+        for (var up = directories.Count - slot; up > 0; up--) underGroup = PathShape.DirectoryOf(underGroup);
+        return (underGroup, directories[slot]);
+    }
+
+    /// <summary>Where a new child of <paramref name="slot"/> lands, in the slot's folder inside its container's
+    /// <paramref name="containerDirectory"/>: its file, or its own directory's document.</summary>
+    internal static string ChildDocumentIn(string containerDirectory, string slot, RecordIdentity child, GameRelease gameRelease)
+    {
+        var formKey = FormKey.Factory(child.FormKey);
+        return GroupFolders.For(gameRelease).HasDirectory(child.RecordType)
+            ? ContainerDocumentIn(Path.Combine(containerDirectory, slot, LeafNameFor(formKey, child.EditorId, isDirectory: true)))
+            : Path.Combine(containerDirectory, slot, FileNameFor(formKey, child.EditorId));
     }
 
     // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
@@ -365,10 +394,11 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
         if (ParseDocumentPath(relativePath, gameRelease) is { } identity) return identity.RecordType;
 
         var path = new LayoutPath(relativePath);
-        return path.IsContainerDocument
-            ? GroupFolders.For(gameRelease)
-                .DirectoryPerRecordTypeIn(path.GroupFolderName, nested: path.ContainerIsNested)
-            : null;
+        if (!path.IsContainerDocument) return null;
+        var folders = GroupFolders.For(gameRelease);
+        return folders.HoldsChildFiles(path.GroupFolderName)
+            ? folders.HeldTypeAt(path.GroupFolderName, path.DirectoryNamesBelowGroupFolder)?.RecordType
+            : folders.DirectoryPerRecordTypeIn(path.GroupFolderName, nested: path.ContainerIsNested);
     }
 
     /// <summary>The record type of a document: its path's, else the one its text names.</summary>

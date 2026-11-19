@@ -20,10 +20,9 @@ public sealed class WriteSessionTests : IDisposable
 
     private readonly ScratchDirectory _modFolder = new("medit-session-");
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-    private readonly Quest _quest;
-    private readonly DialogTopic _topic;
-    private readonly DialogResponses _response;
-    private readonly DialogResponses _response2;
+    private readonly Cell _room;
+    private readonly PlacedObject _ref1;
+    private readonly PlacedObject _ref2;
     private readonly Cell _cell;
     private readonly Worldspace _worldspace;
     private readonly Cell _exteriorCell;
@@ -31,13 +30,11 @@ public sealed class WriteSessionTests : IDisposable
 
     public WriteSessionTests()
     {
-        _response = new DialogResponses(_mod) { EditorID = "Response" };
-        _response2 = new DialogResponses(_mod) { EditorID = "Response2" };
-        _topic = new DialogTopic(_mod) { EditorID = "Topic" };
-        _topic.Responses.Add(_response);
-        _topic.Responses.Add(_response2);
-        _quest = new Quest(_mod) { EditorID = "Quest" };
-        _quest.DialogTopics.Add(_topic);
+        _ref1 = new PlacedObject(_mod) { EditorID = "Ref1" };
+        _ref2 = new PlacedObject(_mod) { EditorID = "Ref2" };
+        _room = new Cell(_mod) { EditorID = "Room" };
+        _room.Temporary.Add(_ref1);
+        _room.Temporary.Add(_ref2);
         _cell = new Cell(_mod) { EditorID = "Cell" };
         _cell.Temporary.Add(new PlacedObject(_mod) { EditorID = "Ref" });
         _worldspace = new Worldspace(_mod) { EditorID = "World" };
@@ -49,7 +46,7 @@ public sealed class WriteSessionTests : IDisposable
 
     private TreeFile[] TheTree() =>
     [
-        new(QuestPath, Serialize(_quest)),
+        new(RoomPath, Serialize(_room)),
         new(CellPath, Serialize(_cell)),
         new(WorldspacePath, Serialize(_worldspace)),
         new(ExteriorCellPath, Serialize(_exteriorCell)),
@@ -71,8 +68,10 @@ public sealed class WriteSessionTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private string QuestPath =>
-        Path.Combine(PluginSourceRoot.For(PluginName), "Quests", $"Quest - {_quest.FormKey.ID:X6}_{PluginName}.json");
+    private string RoomPath => PluginSourceRoot.ContainerDocument(RoomDirectory(_room));
+
+    private static string RoomDirectory(Cell room) =>
+        Path.Combine(PluginSourceRoot.For(PluginName), "Cells", "0", "0", $"Room - {room.FormKey.ID:X6}_{PluginName}");
 
     private string FullPath(string relativePath) => Path.Combine(_modFolder, relativePath);
 
@@ -86,17 +85,17 @@ public sealed class WriteSessionTests : IDisposable
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
 
-    private string UnsavedQuest() =>
-        File.ReadAllText(FullPath(QuestPath)).Replace("\"Response2\"", "\"UnsavedName\"", StringComparison.Ordinal);
+    private string UnsavedRoom() =>
+        File.ReadAllText(FullPath(RoomPath)).Replace("\"Ref2\"", "\"UnsavedName\"", StringComparison.Ordinal);
 
     [Fact]
     public void ARead_TakesTheUnsavedTextOfADocument_InPlaceOfItsFile()
     {
-        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        var session = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
 
-        var response = session.Repository.RecordOf(Plugin, Identity(_response2, "info")).Value().Require();
+        var reference = session.Repository.RecordOf(Plugin, Identity(_ref2, "refr")).Value().Require();
 
-        Assert.Contains("\"UnsavedName\"", response.Body, StringComparison.Ordinal);
+        Assert.Contains("\"UnsavedName\"", reference.Body, StringComparison.Ordinal);
     }
 
     private static SourceFailure? Write(IWriteSession session, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
@@ -108,14 +107,14 @@ public sealed class WriteSessionTests : IDisposable
         var before = TreeSnapshot.Of(_modFolder);
         var session = Session();
 
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response2, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref2, "refr"))));
 
         var document = Assert.Single(session.Changes.Documents);
-        Assert.Equal(FullPath(QuestPath), document.Path);
-        Assert.DoesNotContain("\"Response\"", document.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Response2\"", document.Text, StringComparison.Ordinal);
-        Assert.Contains("\"Topic\"", document.Text, StringComparison.Ordinal);
+        Assert.Equal(FullPath(RoomPath), document.Path);
+        Assert.DoesNotContain("\"Ref1\"", document.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Ref2\"", document.Text, StringComparison.Ordinal);
+        Assert.Contains("\"Room\"", document.Text, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
@@ -124,13 +123,13 @@ public sealed class WriteSessionTests : IDisposable
     {
         var session = Session();
 
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell"))));
 
-        Assert.Equal([FullPath(QuestPath)], session.Changes.Deletions);
+        Assert.Equal([FullPath(RoomDirectory(_room))], session.Changes.Deletions);
         Assert.Empty(session.Changes.Documents);
-        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
-        Assert.True(File.Exists(FullPath(QuestPath)));
+        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_room, "cell")).Value());
+        Assert.True(File.Exists(FullPath(RoomPath)));
     }
 
     private IWriteSession SessionAfter(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
@@ -179,7 +178,7 @@ public sealed class WriteSessionTests : IDisposable
 
     private Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] WritesOf(Sequence sequence)
     {
-        var renamedQuest = Renamed(_quest, "qust", QuestPath, "Renamed");
+        var renamedRoom = Renamed(_room, "cell", RoomPath, "Renamed");
         var renamedCell = Renamed(_cell, "cell", CellPath, "RenamedCell");
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
         var newCell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
@@ -190,13 +189,13 @@ public sealed class WriteSessionTests : IDisposable
         {
             Sequence.RenameThenRemoveAChildOfTheRenamed =>
             [
-                repository => repository.ChangesToPut(Plugin, renamedQuest),
-                repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
+                repository => repository.ChangesToPut(Plugin, renamedRoom),
+                repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")),
             ],
             Sequence.RenameThenRemoveTheRenamed =>
             [
-                repository => repository.ChangesToPut(Plugin, renamedQuest),
-                repository => repository.ChangesToRemove(Plugin, renamedQuest.Identity),
+                repository => repository.ChangesToPut(Plugin, renamedRoom),
+                repository => repository.ChangesToRemove(Plugin, renamedRoom.Identity),
             ],
             Sequence.RenameAContainerThenPutAChildInIt =>
             [
@@ -249,7 +248,7 @@ public sealed class WriteSessionTests : IDisposable
     [Fact]
     public void AnUnsavedTextNoWriteChanged_IsNoChange()
     {
-        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        var session = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
 
         Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
 
@@ -259,32 +258,32 @@ public sealed class WriteSessionTests : IDisposable
     [Fact]
     public void AWriteOverAnUnsavedText_AnswersItWithTheWritesChange()
     {
-        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        var session = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
 
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
 
         var document = Assert.Single(session.Changes.Documents);
         Assert.Contains("\"UnsavedName\"", document.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Response\"", document.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Ref1\"", document.Text, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AWriteThatFails_LeavesTheSessionAsItWas()
     {
         var session = Session();
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
         var before = session.Changes;
 
         var failed = session.Atomically(() =>
         {
-            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_quest, "qust")));
-            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_room, "cell")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")));
         });
 
         Assert.IsType<SourceFailure.NotCarried>(failed);
         Assert.Equal(before.Deletions, session.Changes.Deletions);
         Assert.Equal(before.Documents, session.Changes.Documents);
-        Assert.NotNull(session.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+        Assert.NotNull(session.Repository.RecordOf(Plugin, Identity(_room, "cell")).Value());
     }
 
     [Fact]
@@ -294,7 +293,7 @@ public sealed class WriteSessionTests : IDisposable
 
         var answered = session.Atomically(() =>
         {
-            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")));
             return session.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent"));
         });
 
@@ -310,7 +309,7 @@ public sealed class WriteSessionTests : IDisposable
 
         var thrown = Assert.Throws<InvalidCastException>(() => session.Atomically(() =>
         {
-            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")));
             throw cause;
         }));
 
@@ -338,7 +337,7 @@ public sealed class WriteSessionTests : IDisposable
         var session = Session();
 
         Assert.Throws<InvalidOperationException>(() =>
-            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
 
         Assert.Equal(SourceChanges.None, session.Changes);
     }
@@ -350,8 +349,8 @@ public sealed class WriteSessionTests : IDisposable
 
         Assert.Throws<InvalidOperationException>(() => session.Atomically(() =>
         {
-            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
-            session.Atomically(() => session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response2, "info"))));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")));
+            session.Atomically(() => session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_ref2, "refr"))));
         }));
 
         Assert.Equal(SourceChanges.None, session.Changes);
@@ -362,7 +361,7 @@ public sealed class WriteSessionTests : IDisposable
     {
         var session = Session();
 
-        Assert.Null(Write(session, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))));
+        Assert.Null(Write(session, repository => repository.ChangesToPut(Plugin, Renamed(_room, "cell", RoomPath, "Renamed"))));
         Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_cell, "cell"))));
 
         var (moves, deletions, documents) = session.Changes;
@@ -377,15 +376,16 @@ public sealed class WriteSessionTests : IDisposable
     [Fact]
     public void AMoveOntoAPathARemovalInTheSessionFrees_IsADefect_AndLeavesTheSessionAsItWas()
     {
-        var namesake = new Quest(_mod) { EditorID = "Quest" };
-        var namesakePath = Path.Combine(PluginSourceRoot.For(PluginName), "Quests", $"Quest - {namesake.FormKey.ID:X6}_{PluginName}.json");
+        var namesake = new Cell(_mod) { EditorID = "Room" };
+        var namesakePath = PluginSourceRoot.ContainerDocument(RoomDirectory(namesake));
+        Directory.CreateDirectory(FullPath(RoomDirectory(namesake)));
         File.WriteAllBytes(FullPath(namesakePath), Serialize(namesake));
         var session = Session();
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell"))));
         var before = session.Changes;
 
         var defect = Assert.Throws<InvalidOperationException>(() => Write(session, repository =>
-            repository.ChangesToRekey(Plugin, Identity(namesake, "qust"), _quest.FormKey.ToString())));
+            repository.ChangesToRekey(Plugin, Identity(namesake, "cell"), _room.FormKey.ToString())));
 
         Assert.Contains("a removal in it frees that path", defect.Message, StringComparison.Ordinal);
         Assert.Equal(before.Moves, session.Changes.Moves);
@@ -395,23 +395,23 @@ public sealed class WriteSessionTests : IDisposable
     [Fact]
     public void AnUnsavedTextOfAFileTheDiskNoLongerHolds_StandsForNoDocument()
     {
-        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        var session = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
 
-        File.Delete(FullPath(QuestPath));
+        File.Delete(FullPath(RoomPath));
 
-        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_room, "cell")).Value());
     }
 
     [Fact]
     public void AMoveIntoAFolderOnlyTheSessionsDocumentsMake_IsADefect_AndLeavesTheSessionAsItWas()
     {
-        var folder = Path.Combine(PluginSourceRoot.For(PluginName), "Quests", "New");
+        var folder = Path.Combine(PluginSourceRoot.For(PluginName), "Cells", "New");
         var session = Session();
         Assert.Null(Write(session, _ => SourceAnswer.Of(new SourceChanges([], [], [new DocumentChange(Path.Combine(folder, "Other.json"), "{}")]))));
         var before = session.Changes;
 
         var defect = Assert.Throws<InvalidOperationException>(() => Write(session, _ =>
-            SourceAnswer.Of(new SourceChanges([new SourceMove(QuestPath, Path.Combine(folder, "Quest.json"))], [], []))));
+            SourceAnswer.Of(new SourceChanges([new SourceMove(RoomPath, Path.Combine(folder, "Room.json"))], [], []))));
 
         Assert.Contains("only a document of the session makes that folder", defect.Message, StringComparison.Ordinal);
         Assert.Equal(before.Moves, session.Changes.Moves);
@@ -461,12 +461,12 @@ public sealed class WriteSessionTests : IDisposable
     [Fact]
     public void TheChangesWritten_LeaveTheTreeTheWritesLeaveOneAfterAnother()
     {
-        var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
+        var renamed = Renamed(_room, "cell", RoomPath, "Renamed");
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
         Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
+            repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")),
             repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
             repository => repository.ChangesToPut(Plugin, created),
         ];
@@ -484,8 +484,8 @@ public sealed class WriteSessionTests : IDisposable
 
     private Dictionary<string, (string Held, string Text, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> Write)> WritesReachingAHeldFile => new()
     {
-        ["rewriting a file"] = (QuestPath, EditedUnsaved(QuestPath), repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))),
-        ["moving a file"] = (QuestPath, EditedUnsaved(QuestPath), repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
+        ["rewriting a file"] = (RoomPath, EditedUnsaved(RoomPath), repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))),
+        ["moving a file"] = (RoomPath, EditedUnsaved(RoomPath), repository => repository.ChangesToPut(Plugin, Renamed(_room, "cell", RoomPath, "Renamed"))),
         ["deleting a folder holding a file"] = (
             ExteriorCellPath, EditedUnsaved(ExteriorCellPath), repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
         ["moving onto a folder holding a file"] = (
@@ -516,8 +516,8 @@ public sealed class WriteSessionTests : IDisposable
     {
         var session = Session();
         Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
-        var later = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
-        Assert.Null(Write(later, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        var later = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
+        Assert.Null(Write(later, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
         var before = TreeSnapshot.Of(_modFolder);
 
         Assert.IsType<SourceFailure.Unsaved>(session.WriteThen(later.Write));
@@ -539,7 +539,7 @@ public sealed class WriteSessionTests : IDisposable
     [Fact]
     public void AFileHeldUnsavedThatTheWriteDoesNotReach_IsNoRefusal()
     {
-        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        var session = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
         Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
 
         session.Write().Wrote();
@@ -553,9 +553,9 @@ public sealed class WriteSessionTests : IDisposable
         var session = Session();
         Assert.Null(Write(session, repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))));
         Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-        File.Delete(FullPath(QuestPath));
-        Directory.CreateDirectory(FullPath(QuestPath));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
+        File.Delete(FullPath(RoomPath));
+        Directory.CreateDirectory(FullPath(RoomPath));
         var before = TreeSnapshot.Of(_modFolder);
 
         var failed = session.Write().Failed();

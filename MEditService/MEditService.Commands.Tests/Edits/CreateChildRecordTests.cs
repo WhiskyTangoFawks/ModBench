@@ -18,57 +18,60 @@ public sealed class CreateChildRecordTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    [Fact]
-    public void ATopicCreatedOnAQuest_LandsLastInItsTopics_AndItsSiblingsKeepTheirOrder()
+    public static TheoryData<string, string, string> OneChildOfEachSlotFiledInItsContainersDirectory => new()
     {
-        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "dial", _fixture.Quest.ToString());
+        { "dial", nameof(ContainerModFixture.Quest), "DialogTopics" },
+        { "dlbr", nameof(ContainerModFixture.Quest), "DialogBranches" },
+        { "scen", nameof(ContainerModFixture.Quest), "Scenes" },
+        { "info", nameof(ContainerModFixture.DialogTopic), "Responses" },
+    };
+
+    [Theory]
+    [MemberData(nameof(OneChildOfEachSlotFiledInItsContainersDirectory))]
+    public void AChildCreatedOnItsContainer_LandsInAFileOfItsOwnInTheSlotsFolder_AndLeavesTheContainersFileAsItWas(
+        string recordType, string container, string slot)
+    {
+        var containerKey = KeyOf(container).ToString();
+        var containerFile = SourceModTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, containerKey).Require();
+        var before = File.ReadAllText(Path.Combine(_fixture.ModFolder, containerFile));
+
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, recordType, containerKey);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(
-            [_fixture.DialogTopic.ToString(), _fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString(), result.NewFormKey.Require()],
-            SlotOf(_fixture.Quest, "DialogTopics"));
+        var created = SourceModTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, result.NewFormKey.Require()).Require();
+        Assert.StartsWith(Path.Combine(Path.GetDirectoryName(containerFile).Require(), slot) + Path.DirectorySeparatorChar, created, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(_fixture.ModFolder, containerFile)));
     }
 
     [Fact]
     public void AChildCreatedOnAnUnsavedContainer_LandsInTheTextItHolds_AndWritesNothing()
     {
-        var file = Path.Combine(_fixture.ModFolder, SourceModTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, _fixture.Quest.ToString()).Require());
+        var file = Path.Combine(_fixture.ModFolder, SourceModTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, _fixture.EmbedCell.ToString()).Require());
         var onDisk = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
-        onDisk["DialogTopics"].Require().AsArray().RemoveAt(0);
+        onDisk["Temporary"].Require().AsArray().RemoveAt(0);
         var held = onDisk.ToJsonString();
         var before = File.ReadAllText(file);
 
         _fixture.Unsaved.Typed(new DocumentChange(file, held));
 
-        var (outcome, changes) = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "dial", _fixture.Quest.ToString());
+        var (outcome, changes) = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "navm", _fixture.EmbedCell.ToString());
 
         Assert.True(outcome.Applied, outcome.Message);
         Assert.Equal(before, File.ReadAllText(file));
-        var quest = JsonNode.Parse(Assert.Single(changes.Require().Documents, document => document.Path == file).Text).Require();
-        Assert.Equal(
-            [_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString(), outcome.NewFormKey.Require()],
-            quest["DialogTopics"].Require().AsArray().Select(child => child.Require()["FormKey"].Require().GetValue<string>()));
+        var cell = JsonNode.Parse(Assert.Single(changes.Require().Documents, document => document.Path == file).Text).Require();
+        Assert.Empty(cell["Temporary"].Require().AsArray());
+        Assert.Equal(outcome.NewFormKey, cell["NavigationMeshes"].Require().AsArray()[^1].Require()["FormKey"].Require().GetValue<string>());
     }
 
-    public static TheoryData<string, string, string> OneChildOfEachOtherSlot => new()
+    [Fact]
+    public void ANavmeshCreatedOnItsCell_LandsLastInItsNavmeshes()
     {
-        { "dlbr", nameof(ContainerModFixture.Quest), "DialogBranches" },
-        { "scen", nameof(ContainerModFixture.Quest), "Scenes" },
-        { "info", nameof(ContainerModFixture.DialogTopic), "Responses" },
-        { "navm", nameof(ContainerModFixture.EmbedCell), "NavigationMeshes" },
-    };
+        var siblings = SlotOf(_fixture.EmbedCell, "NavigationMeshes");
 
-    [Theory]
-    [MemberData(nameof(OneChildOfEachOtherSlot))]
-    public void AChildCreatedOnItsContainer_LandsLastInItsSlot(string recordType, string container, string slot)
-    {
-        var containerKey = KeyOf(container);
-        var siblings = SlotOf(containerKey, slot);
-
-        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, recordType, containerKey.ToString());
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "navm", _fixture.EmbedCell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal([.. siblings, result.NewFormKey.Require()], SlotOf(containerKey, slot));
+        Assert.Equal([.. siblings, result.NewFormKey.Require()], SlotOf(_fixture.EmbedCell, "NavigationMeshes"));
     }
 
     public static TheoryData<string, string> ChildrenTheContainerCannotHold => new()

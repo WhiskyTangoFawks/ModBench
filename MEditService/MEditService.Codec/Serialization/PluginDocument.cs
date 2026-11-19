@@ -23,8 +23,8 @@ public readonly record struct CellStructure(
 /// index there (ADR-0005): the parentage that outlives a document the codec refused.</summary>
 public readonly record struct ChildRecord(string FormKey, string SlotName, int SlotIndex);
 
-/// <summary>Which container's document carries a record inline, and the slot it sits in: a placed
-/// reference in its cell, a response in its topic, a topic in its quest.</summary>
+/// <summary>Which container holds a record, and the slot it sits in: a placed reference inline in its
+/// cell's document, a response in its topic's directory, a topic in its quest's.</summary>
 public readonly record struct DocumentContainment(string ParentFormKey, string ParentRecordType, string SlotName);
 
 /// <summary>One record as the text its source file holds (ADR-0005), under the schema table name

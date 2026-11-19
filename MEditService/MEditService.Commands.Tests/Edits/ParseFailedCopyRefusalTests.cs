@@ -77,33 +77,3 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.Equal([newFormKey], _mod.ChangedFormKeys(_destinationPlugin));
     }
 }
-
-public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
-{
-    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithCompiledPluginSource();
-
-    public void Dispose() => _mod.Dispose();
-
-    [Fact]
-    public void CopyRecordAsNewRecord_OfADialogTopicWithAnUnreadableResponse_IsRefused_AndWritesNothing()
-    {
-        var quest = _mod.DocumentCarrying(_mod.SourcePlugin, ContainerCopyFixture.Response2EditorId);
-        _mod.Overwrite(
-            _mod.SourcePlugin,
-            quest with
-            {
-                Body = quest.Body.Replace(
-                    $"\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
-                    $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
-                    StringComparison.Ordinal),
-            });
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.DialogTopic.ToString())], CopyMode.New, [_mod.DestinationPlugin], replace: false);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
-        Assert.Contains("Unable to cast", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
-        Assert.Null(_mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()));
-    }
-}

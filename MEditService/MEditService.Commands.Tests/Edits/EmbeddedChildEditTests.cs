@@ -133,16 +133,15 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingAQuestsEditorId_RenamesItsDocument_AndItsChildrenStayInsideIt()
+    public void EditingAQuestsEditorId_RenamesItsDirectory_AndItsChildrensFilesMoveWithIt()
     {
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "EditorID", Json("\"RenamedQuest\"")).Applied);
 
-        var renamed = _fixture.DocumentCarrying("RenamedQuest");
-        Assert.Equal(_fixture.Quest.ToString(), renamed.FormKey);
-        Assert.Equal(
-            [renamed.FormKey, renamed.FormKey, renamed.FormKey, renamed.FormKey],
-            new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId }
-                .Select(child => _fixture.DocumentCarrying(child).FormKey));
+        var directory = Path.GetDirectoryName(_fixture.DocumentFile(_fixture.Quest.ToString())).Require();
+        Assert.StartsWith("RenamedQuest - ", Path.GetFileName(directory), StringComparison.Ordinal);
+        Assert.All(
+            new[] { _fixture.DialogTopic, _fixture.Response, _fixture.DialogBranch, _fixture.Scene },
+            child => Assert.StartsWith(directory + Path.DirectorySeparatorChar, _fixture.DocumentFile(child.ToString()), StringComparison.Ordinal));
     }
 
     [Fact]

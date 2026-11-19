@@ -60,11 +60,17 @@ internal sealed class SourceRepositoryWrites(
             : ChangesToPlace(plugin, cell, PlacementIn(worldspace, cell));
     }
 
-    /// <summary>What putting a new child at the end of <paramref name="slot"/> of <paramref name="container"/>
-    /// changes: the child spliced into the container's own text, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
+    /// <summary>What putting a new child in <paramref name="slot"/> of <paramref name="container"/> changes: its
+    /// own file in the slot's folder, or the child appended to the container's text.</summary>
     internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
     {
         var unit = HeldUnit(plugin, container, "there is no slot to put a child in");
+        if (RecordTypes.For(_release).FileSlotRecordType(container.RecordType, slot) is not null)
+        {
+            var placed = SourceRepositoryLayout.ChildDocumentIn(PathShape.DirectoryOf(unit.FullPath), slot, child.Identity, _release);
+            return new SourceChanges([], [], [Document(placed, child.Body)]);
+        }
+
         var containerText = DocumentText.RecordBodyFromOwnerBytes(FileBytes(unit), unit, container.FormKey, _release)
             ?? throw NoLongerCarried(unit, container.FormKey);
         return Read(() => ContainerDocumentEdits.WithChildAppended(
@@ -149,9 +155,11 @@ internal sealed class SourceRepositoryWrites(
             return Planned(ContainerPlan(unit, to), text);
         }
 
-        var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)?.Unit
-            ?? throw NoPlaceInTheTree(plugin, identity);
-        return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [], [Document(placed.FullPath, text)]);
+        var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)?.Unit.FullPath
+            ?? (SourceRepositoryLayout.FiledIn(unit.RelativePath, _release) is not null
+                ? Path.Combine(PathShape.DirectoryOf(unit.FullPath), SourceRepositoryLayout.FileNameFor(FormKey.Factory(newFormKey), identity.EditorId))
+                : throw NoPlaceInTheTree(plugin, identity));
+        return new SourceChanges([Moved(unit.FullPath, placed)], [], [Document(placed, text)]);
     }
 
     // The codec is the one reader that sees why a text it is given is no record, and it says so by throwing

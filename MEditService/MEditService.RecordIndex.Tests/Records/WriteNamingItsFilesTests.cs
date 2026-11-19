@@ -26,6 +26,8 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly ContainerModPlugin.Keys _keys;
     private readonly FormKey _npc;
+    private readonly FormKey _quest;
+    private readonly FormKey _topic;
     private readonly ScratchDirectory _instances = new("medit-write-naming-its-files-");
     private readonly CountingTreeSource _source = new(TestAdapters.Source());
     private readonly LoadOrderHolder _holder = new();
@@ -33,17 +35,21 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     public WriteNamingItsFilesTests()
     {
-        var (keys, npc) = (default(ContainerModPlugin.Keys), default(FormKey));
+        var (keys, npc, quest, topic) = (default(ContainerModPlugin.Keys), default(FormKey), default(FormKey), default(FormKey));
         _fixture = new PluginFixtureBuilder("write-naming-its-files")
             .WithPlugin(ContainerMod.PluginName, mod =>
             {
                 keys = ContainerModPlugin.AddTo(mod);
                 npc = mod.Npcs.AddNew(ContainerMod.NpcEditorId).FormKey;
+                var owner = mod.Quests.AddNew("FixtureQuest");
+                var held = new DialogTopic(mod) { EditorID = "FixtureTopic" };
+                owner.DialogTopics.Add(held);
+                (quest, topic) = (owner.FormKey, held.FormKey);
             }, origin: ContainerMod.Origin)
             .WithPlugin(Overrides, (mod, _) => mod.Npcs.Add(new Npc(npc, Fallout4Release.Fallout4) { EditorID = "OverriddenNpc" }), origin: "OverridesMod")
             .BuildScattered()
             .CompiledPlugin();
-        (_keys, _npc) = (keys, npc);
+        (_keys, _npc, _quest, _topic) = (keys, npc, quest, topic);
         _index = Indexes.Open(_holder, source: _source);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, Instance("written"));
     }
@@ -148,6 +154,9 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             RepositoryOf(test.Container).ChangesToRemove(test.Container.Key, test.Identity(test._keys.TemporaryRef)).Value()
                 .Then(RepositoryOf(test.Container).ChangesToPutChild(
                     test.Container.Key, test.Identity(test._keys.Cell), "Temporary", test.Copied(test._keys.TemporaryRef, test._keys.TemporaryRef.ToString())).Value()))),
+        ["a topic put in a quest"] = test => Saved(test.Container, RepositoryOf(test.Container).ChangesToPutChild(
+            test.Container.Key, test.Identity(test._quest), "DialogTopics", test.Copied(test._topic, NewFormKey, "PutTopic"))),
+        ["a topic deleted"] = test => Saved(test.Container, RepositoryOf(test.Container).ChangesToRemove(test.Container.Key, test.Identity(test._topic))),
         ["an exterior cell created"] = test => Saved(test.Container, RepositoryOf(test.Container).ChangesToPutInWorldspace(
             test.Container.Key, test.Copied(test._keys.Cell, NewFormKey, "ExteriorCell", cell => cell["Grid"] = new JsonObject { ["Point"] = "3, 4" }),
             test._keys.Worldspace.ToString())),

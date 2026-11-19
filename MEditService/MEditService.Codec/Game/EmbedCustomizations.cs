@@ -10,12 +10,3 @@ internal sealed class WorldspaceEmbedCustomization : ICustomize<IWorldspaceGette
         builder.EmbedRecordsInSameFile(x => x.TopCell);
     }
 }
-
-/// <inheritdoc cref="CellEmbedCustomization"/>
-internal sealed class DialogTopicEmbedCustomization : ICustomize<IDialogTopicGetter>
-{
-    public void CustomizeFor(ICustomizationBuilder<IDialogTopicGetter> builder)
-    {
-        builder.EmbedRecordsInSameFile(x => x.Responses);
-    }
-}

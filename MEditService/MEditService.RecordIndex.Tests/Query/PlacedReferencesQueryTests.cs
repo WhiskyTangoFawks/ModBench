@@ -18,13 +18,13 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly string _target;
     private readonly string _npc;
-    private readonly string _topic;
+    private readonly string _placed;
     private readonly string _renderedNpc;
     private readonly string _selfReferrer;
 
     public PlacedReferencesQueryTests()
     {
-        FormKey target = default, npc = default, topic = default, renderedNpc = default, selfReferrer = default;
+        FormKey target = default, npc = default, placed = default, renderedNpc = default, selfReferrer = default;
         _fixture = new PluginFixtureBuilder("placed-references")
             .WithPlugin(Compiled.Name, mod =>
             {
@@ -32,11 +32,12 @@ public sealed class PlacedReferencesQueryTests : IDisposable
                 var referrer = mod.Npcs.AddNew("Referrer");
                 referrer.Keywords = [new FormLink<IKeywordGetter>(target), new FormLink<IKeywordGetter>(target)];
                 npc = referrer.FormKey;
-                var quest = mod.Quests.AddNew("Owner");
-                var inside = new DialogTopic(mod) { EditorID = "Inside" };
-                inside.Keyword.SetTo(target);
-                quest.DialogTopics.Add(inside);
-                topic = inside.FormKey;
+                var inside = new PlacedObject(mod) { EditorID = "Inside" };
+                inside.Base.SetTo(target);
+                var cell = new Cell(mod) { EditorID = "Owner", Flags = Cell.Flag.IsInteriorCell };
+                cell.Temporary.Add(inside);
+                mod.Cells.Records.Add(new CellBlock { BlockNumber = 0, SubBlocks = [new CellSubBlock { BlockNumber = 0, Cells = [cell] }] });
+                placed = inside.FormKey;
                 var itself = mod.Npcs.AddNew("Itself");
                 itself.DefaultTemplate.SetTo(itself.FormKey);
                 selfReferrer = itself.FormKey;
@@ -50,7 +51,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
             }, origin: Rendered.Origin)
             .BuildScattered();
         SourceMods.Init(_fixture.Plugins.Single(plugin => plugin.Name == Compiled.Name));
-        (_target, _npc, _topic, _renderedNpc, _selfReferrer) = (target.ToString(), npc.ToString(), topic.ToString(), renderedNpc.ToString(), selfReferrer.ToString());
+        (_target, _npc, _placed, _renderedNpc, _selfReferrer) = (target.ToString(), npc.ToString(), placed.ToString(), renderedNpc.ToString(), selfReferrer.ToString());
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -90,9 +91,9 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
 
-        var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _topic);
+        var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _placed);
 
-        Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, index.Queries.GetCopyDocument(Compiled, _topic).Value().Require().Location), placed.Document);
+        Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, index.Queries.GetCopyDocument(Compiled, _placed).Value().Require().Location), placed.Document);
         Assert.Single(placed.Ranges);
         AssertEachRangeIsTheTarget(File.ReadAllText(placed.Document.Location), placed);
     }
@@ -160,7 +161,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var file = index.Queries.GetCopyDocument(Compiled, _npc).Value().Require().Location;
-        File.WriteAllText(file, File.ReadAllText(file).Replace(_target, _topic, StringComparison.Ordinal));
+        File.WriteAllText(file, File.ReadAllText(file).Replace(_target, _placed, StringComparison.Ordinal));
 
         var placed = index.Queries.GetPlacedReferences(_target).Value();
 

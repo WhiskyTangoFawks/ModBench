@@ -15,8 +15,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// it. A document named for the key whose text is no document is unreadable.</summary>
     Answer<SourceDocument?, SourceFailure> RecordByFormKey(PluginAddress plugin, string formKey);
 
-    /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
-    /// for a record with a document of its own.</summary>
+    /// <summary>The record that holds <paramref name="identity"/>, inline or in its directory, and the slot it
+    /// sits in; null for a record no other record holds.</summary>
     Answer<DocumentContainment?, SourceFailure> ContainerOf(PluginAddress plugin, RecordIdentity identity);
 
     /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior cell or one

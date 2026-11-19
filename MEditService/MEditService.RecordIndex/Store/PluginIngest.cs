@@ -263,10 +263,12 @@ internal sealed class PluginIngest
             : Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
 
         if (!refused) childDocuments?.AddRange(_containers.ChildrenOf(document.RecordType, root));
-        var children = refused
-            ? (document.Contents ?? []).Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)null))
-            : (childDocuments ?? [.. _containers.ChildrenOf(document.RecordType, root)])
-                .Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)c.Document));
+        var filed = (document.Contents ?? []).Where(c => refused || !_types.IsEmbeddedSlot(document.RecordType, c.SlotName));
+        var children = filed.Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)null))
+            .Concat(refused
+                ? []
+                : (childDocuments ?? [.. _containers.ChildrenOf(document.RecordType, root)])
+                    .Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)c.Document)));
         var holdings = new List<HoldingRow>();
         var cellLocations = new List<CellLocationRow>();
         foreach (var (formKey, slot, index, childDocument) in children)
