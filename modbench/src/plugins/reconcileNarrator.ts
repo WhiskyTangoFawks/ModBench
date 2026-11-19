@@ -48,6 +48,8 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
   let last: Heard | undefined;
   let span: Span | undefined;
   let settledVersion = -1;
+  // A check leaves the version where it was, so the failure itself, not the version, says it was already written.
+  let loggedFailure: string | undefined;
   // The highest version whose hand-off is queued, so a Ready heard again meanwhile queues none.
   let queuedVersion = -1;
   let handingOver = Promise.resolve();
@@ -70,8 +72,10 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
 
   const settle = (heard: Heard, reconcileSeen: boolean): void => {
     const { refusal, version } = heard.progress;
+    if (refusal?.kind !== 'failed') loggedFailure = undefined;
     if (refusal !== undefined) {
-      if (refusal.kind === 'failed' && version > settledVersion) {
+      if (refusal.kind === 'failed' && refusal.message !== loggedFailure) {
+        loggedFailure = refusal.message;
         deps.log(`Indexing failed: ${refusal.message}`);
       }
       deps.applyRefused(refusal);
@@ -96,6 +100,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
         settle(heard, reconcileSeen);
         return;
       }
+      loggedFailure = undefined;
       refillWaits.started();
       span ??= openSpan(deps);
       span.tick(heard);
@@ -110,6 +115,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
       settledVersion = -1;
       queuedVersion = -1;
       last = undefined;
+      loggedFailure = undefined;
     },
   };
 }

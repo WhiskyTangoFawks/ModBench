@@ -144,6 +144,28 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     expect(deps.log.mock.calls).toEqual([['Indexing failed: the reconcile threw something unexpected']]);
   });
 
+  it('writes a failure met during a check to the Output, though a check leaves the version where it was', async () => {
+    const { deps, narrator } = narrated();
+    narrator.hear(ready(3));
+    await narrator.settled(3);
+
+    narrator.hear(tick({ version: 3, refusal: { kind: 'failed', message: 'DuckDB hit a fatal error' } }));
+
+    expect(deps.log.mock.calls).toEqual([['Indexing failed: DuckDB hit a fatal error']]);
+  });
+
+  it('writes a failure again when it recurs after the index recovered', async () => {
+    const { deps, narrator } = narrated();
+    const failed = tick({ version: 3, refusal: { kind: 'failed', message: 'DuckDB hit a fatal error' } });
+
+    narrator.hear(failed);
+    narrator.hear(ready(3));
+    await narrator.settled(3);
+    narrator.hear(failed);
+
+    expect(deps.log).toHaveBeenCalledTimes(2);
+  });
+
   it('answers settled(version) once that version is handed to the views, not when its Ready is heard', async () => {
     let handedOver!: () => void;
     const handOff = new Promise<void>((resolve) => { handedOver = resolve; });
