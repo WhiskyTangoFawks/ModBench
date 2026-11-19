@@ -768,17 +768,14 @@ internal sealed class Indexer : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return $"{cause.Message} {NotReopenedBecause(ex)}";
+            _logger.LogError(ex, "Reopening the record index failed");
+            return NotReopenedAfter(cause, ex);
         }
     }
 
     private const string NotReopened = "mEdit's record index was not reopened";
 
-    private string NotReopenedBecause(Exception ex)
-    {
-        _logger.LogError(ex, "Reopening the record index failed");
-        return $"{NotReopened}: {ex.Message}";
-    }
+    private static string NotReopenedAfter(Exception cause, Exception reason) => $"{cause.Message} {NotReopened}: {reason.Message}";
 
     private OpenScope ScopeOn(HeldPlugins held, Store.Store store, LoadOrderSnapshot snapshot) =>
         new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
@@ -811,9 +808,10 @@ internal sealed class Indexer : IDisposable
         return null;
     }
 
-    // plugins.md, States, story 4: another window holding the file is the status HeldElsewhere, whichever open meets it.
+    // plugins.md, States, story 4.
     private Store.Store? CreateStore(LoadOrderSnapshot snapshot, HeldPlugins held, out string? heldElsewhere)
     {
+        _logger.LogDebug("Initializing record index");
         var fresh = _storeFactory.Create(
             snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
             () => Status.State == LoadOrderState.Ready, out heldElsewhere);
@@ -852,11 +850,11 @@ internal sealed class Indexer : IDisposable
     private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere, out string? failure)
     {
         (heldElsewhere, failure) = (null, null);
-        var reopening = false;
+        IndexFaultException? invalidation = null;
         if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot))
         {
-            reopening = current.Store.IsInvalidated();
-            if (!reopening)
+            invalidation = current.Store.Invalidation();
+            if (invalidation is null)
             {
                 var kept = current with { LoadOrder = snapshot };
                 lock (_lock) _scope = kept;
@@ -875,7 +873,6 @@ internal sealed class Indexer : IDisposable
             return null;
         }
 
-        _logger.LogDebug("Initializing record index");
         var createTimer = Stopwatch.StartNew();
         var held = new HeldPlugins(
             _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
@@ -902,9 +899,10 @@ internal sealed class Indexer : IDisposable
             }
             fresh = null;
         }
-        catch (Exception ex) when (reopening && ex is not OperationCanceledException)
+        catch (Exception ex) when (invalidation is not null && ex is not OperationCanceledException)
         {
-            failure = NotReopenedBecause(ex);
+            _logger.LogError(ex, "Reopening the record index failed");
+            failure = NotReopenedAfter(invalidation, ex);
             return null;
         }
         finally

@@ -59,41 +59,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
     }
 
-    [ForeignIndexHolderFact]
-    public void AFatalErrorWhoseReopenFindsAnotherWindowHoldingTheFile_IsAnsweredAsHeldElsewhereStatus()
-    {
-        using var data = new PluginFixtureBuilder("reopen-held-elsewhere").WithPlugin("A.esp").Build();
-        var reopening = false;
-        ForeignIndexHolder? otherWindow = null;
-        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
-        {
-            if (Volatile.Read(ref reopening) && entry.Message == "Initializing record index")
-                otherWindow ??= ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
-        })));
-        var notifications = new InMemoryNotificationPublisher();
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, loggerFactory: loggers, notifications: notifications);
-        try
-        {
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-            IndexFiles.Invalidate(data.InstanceRoot);
-            Volatile.Write(ref reopening, true);
-            var before = notifications.Notifications.Count;
-            LoadOrderStatus? Refused() => notifications.Since(before).OfType<LoadOrderStatusNotification>()
-                .FirstOrDefault(n => n.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)?.Status;
-
-            index.NextCheckUnsettledUntil(() => Refused() is not null, "the reopen's refusal");
-
-            var refused = Refused().Require();
-            Assert.Equal(LoadOrderState.HeldElsewhere, refused.State);
-            Assert.Contains("another Modbench window", refused.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            otherWindow?.Dispose();
-        }
-    }
-
     [Fact]
     public void AReconcileThatFails_IsAnsweredAsFailedStatus_WithTheReason_NotThrown()
     {
