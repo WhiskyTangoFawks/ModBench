@@ -50,8 +50,11 @@ public sealed class BannedApiScopeTests
     [
         "MEditService.Codec",
         "MEditService.Codec.Fallout4",
+        "MEditService.Codec.Fallout4.Proof",
         "MEditService.Codec.Skyrim",
+        "MEditService.Codec.Skyrim.Proof",
         "MEditService.Codec.Starfield",
+        "MEditService.Codec.Starfield.Proof",
         "MEditService.PluginAdapter",
     ];
 
@@ -117,7 +120,12 @@ public sealed class BannedApiScopeTests
 
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
-        Assert.Equal(["MEditService.Codec.Fallout4", "MEditService.Codec.Skyrim", "MEditService.Codec.Starfield"], holders);
+        Assert.Equal(
+            [
+                "MEditService.Codec.Fallout4", "MEditService.Codec.Fallout4.Proof", "MEditService.Codec.Skyrim",
+                "MEditService.Codec.Skyrim.Proof", "MEditService.Codec.Starfield", "MEditService.Codec.Starfield.Proof",
+            ],
+            holders);
     }
 
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set)

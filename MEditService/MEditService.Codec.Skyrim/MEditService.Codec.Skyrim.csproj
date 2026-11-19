@@ -34,6 +34,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
+    <!-- Aliased: its generated whole-mod mixin has the same name as this project's. -->
+    <ProjectReference Include="..\MEditService.Codec.Skyrim.Proof\MEditService.Codec.Skyrim.Proof.csproj" Aliases="Proof" />
   </ItemGroup>
 
 </Project>

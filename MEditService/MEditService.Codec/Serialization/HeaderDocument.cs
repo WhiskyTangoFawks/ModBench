@@ -57,17 +57,7 @@ public static class HeaderDocument
         return mod;
     }
 
-    public static uint NextObjectId(byte[] body, GameRelease release) => Read(body, release).NextFormID;
-
     public static bool IsLocalized(byte[] body, GameRelease release) => Read(body, release).UsingLocalization;
-
-    /// <summary>The document with its header's Next Object ID set to <paramref name="nextObjectId"/>.</summary>
-    public static byte[] WithNextObjectId(byte[] body, GameRelease release, uint nextObjectId)
-    {
-        var mod = (IMod)Read(body, release);
-        mod.NextFormID = nextObjectId;
-        return Write(mod);
-    }
 
     // The GUID segment: the door resolves group folders against the real filesystem, so the folder
     // must not exist; and ExtractMetaInternal prefers a ModKey parsed from the last segment, so it

@@ -34,6 +34,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
+    <!-- Aliased: its generated whole-mod mixin has the same name as this project's. -->
+    <ProjectReference Include="..\MEditService.Codec.Starfield.Proof\MEditService.Codec.Starfield.Proof.csproj" Aliases="Proof" />
   </ItemGroup>
 
 </Project>

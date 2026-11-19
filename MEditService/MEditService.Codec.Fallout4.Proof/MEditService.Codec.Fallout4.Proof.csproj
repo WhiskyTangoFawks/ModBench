@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Mutagen.Bethesda.Fallout4.IFallout4ModGetter" Alias="IGameModGetter" />
+    <Using Include="Mutagen.Bethesda.Fallout4.Fallout4Release" Alias="GameModRelease" />
+    <Compile Include="../MEditService.Codec/Proof/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="$(MutagenVersion)" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization" Version="$(SerializationVersion)" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="$(SerializationVersion)" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="$(SerializationVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.11.0.117924">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

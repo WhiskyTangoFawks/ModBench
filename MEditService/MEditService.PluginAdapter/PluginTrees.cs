@@ -185,17 +185,22 @@ internal static class PluginTrees
             await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel, NameOrderedFileSystem.Instance),
             await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 
-    /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
-    /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
-    /// reparsed, since only written bytes show what the writer does.</summary>
+    /// <summary>The codec's verdict on the proof's text (ADR-0006), then on the plugin at <paramref name="recompiledPath"/>,
+    /// against the one at <paramref name="modPath"/>; null when both are model-identical. Both plugins are reparsed.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
         ModPath modPath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings, Language language)
     {
         var original = MutagenPluginAdapter.OpenForWrite(modPath, loadOrder.GameRelease, strings, loadOrder, language);
-        var recompiled = MutagenPluginAdapter.OpenForWrite(
-            new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder);
-
-        return ModelIdentity.FindFirstDivergence(original, recompiled);
+        (Func<IModGetter> ReadBack, string Trip)[] trips =
+        [
+            (() => ProofText.ReadBack(original), ModelIdentity.ThroughMutagensText),
+            (() => MutagenPluginAdapter.OpenForWrite(new ModPath(modPath.ModKey, recompiledPath), loadOrder.GameRelease, loadOrder: loadOrder),
+                ModelIdentity.Recompiled),
+        ];
+        return trips.AsParallel().AsOrdered()
+            .Select(trip => ModelIdentity.FindFirstDivergence(original, trip.ReadBack(), trip.Trip))
+            .ToList()
+            .FirstOrDefault(divergence => divergence is not null);
     }
 
     private const string ReadScratchPrefix = "medit-readtree-";

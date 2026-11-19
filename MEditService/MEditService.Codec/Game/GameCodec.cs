@@ -1,3 +1,5 @@
+extern alias Proof;
+
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
@@ -62,6 +64,11 @@ internal sealed class GameCodec : IGameCodec
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
         => AbsentIndexes.Fill<IMod>(await MutagenJsonConverter.Instance.Deserialize(
             folder, workDropoff: workDropoff, fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel));
+
+    public Task WriteProofText(IModGetter plugin, Stream text) => Proof::MEditService.Codec.Proof.ProofSerializer.Serialize(plugin, text);
+
+    public Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release) =>
+        Proof::MEditService.Codec.Proof.ProofSerializer.Deserialize(text, modKey, release);
 
     // Serialized from a header-only clone: a full-mod walk costs ~1.5 s per plugin, the clone 1 ms,
     // byte-identical.

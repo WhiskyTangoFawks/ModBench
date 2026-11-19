@@ -14,7 +14,8 @@ On Ubuntu or Debian:
 sudo apt-get install -y curl git p7zip-full python3
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -   # Ubuntu's own nodejs can be older than 20
 sudo apt-get install -y nodejs
-curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --jsonfile global.json   # the distro's dotnet-sdk-10.0 is an older band than global.json pins
+curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0   # the distro's dotnet-sdk-10.0 is an older band than global.json pins
+echo 'export DOTNET_ROOT="$HOME/.dotnet"; export PATH="$DOTNET_ROOT:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ```
 
 On Windows, turn on Developer Mode, because the tests create symlinks. Then:

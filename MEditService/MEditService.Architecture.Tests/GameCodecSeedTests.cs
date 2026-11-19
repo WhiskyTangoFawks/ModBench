@@ -5,6 +5,7 @@ namespace MEditService.Architecture.Tests;
 public class GameCodecSeedTests
 {
     private const string CompileTimeSeedDoor = "GameCodec.cs";
+    private const string ProofSeedDoor = "ProofSerializer.cs";
     private const string GameInterface = "IGameCodec.cs";
     private const string PluginBinaryAndTreeDoor = "PluginTrees.cs";
     private const string HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter = "HeaderDocument.cs";
@@ -29,7 +30,7 @@ public class GameCodecSeedTests
     {
         { "SerializeWholeMod", [CompileTimeSeedDoor, GameInterface, PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter] },
         { "DeserializeWholeMod", [CompileTimeSeedDoor, GameInterface, PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter] },
-        { "MutagenJsonConverter.Instance", [CompileTimeSeedDoor] },
+        { "MutagenJsonConverter.Instance", [CompileTimeSeedDoor, ProofSeedDoor] },
     };
 
     [Theory]
