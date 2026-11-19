@@ -63,13 +63,13 @@ public sealed class SpatialWorkingTreeStateTests : IDisposable
         { SpatialPlugin.WorldspaceEditorId, [Modified, None, None, None, None] },
         { SpatialPlugin.ExteriorCellEditorId, [None, Modified, None, None, None] },
         { SpatialPlugin.InteriorCellEditorId, [None, None, Modified, None, None] },
-        { SpatialPlugin.ExteriorRefEditorId, [None, Modified, None, Modified, None] },
-        { SpatialPlugin.InteriorRefEditorId, [None, None, Modified, None, Modified] },
+        { SpatialPlugin.ExteriorRefEditorId, [None, None, None, Modified, None] },
+        { SpatialPlugin.InteriorRefEditorId, [None, None, None, None, Modified] },
     };
 
     [Theory]
     [MemberData(nameof(EditedAndModified))]
-    public void AnEditedSpatialRecord_IsListedAsModified_WithTheDocumentHoldingIt(string editedEditorId, WorkingTreeState[] expected)
+    public void AnEditedSpatialRecord_IsListedAsModified_NeverTheCellOrWorldspaceHoldingIt(string editedEditorId, WorkingTreeState[] expected)
     {
         var edited = new IMajorRecordGetter[] { _records.Worldspace, _records.ExteriorCell, _records.InteriorCell, _records.ExteriorRef, _records.InteriorRef }
             .Single(record => record.EditorID == editedEditorId);

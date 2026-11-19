@@ -12,7 +12,6 @@ namespace MEditService.RecordIndex.Tests.Query;
 
 public sealed class WorkingTreeStatesBeneathTests : IDisposable
 {
-    private static readonly WorkingTreeState[] ModifiedAndAdded = [WorkingTreeState.Modified, WorkingTreeState.Added];
 
     private readonly IndexedContainerMod _fixture = new();
 
@@ -42,18 +41,18 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
             Index.BodyOf(_fixture.Npc, _fixture.Plugin).Replace(ContainerMod.NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
 
     [Fact]
-    public void ARefAddedToAModifiedCell_IsBeneathTheCellAsAdded_AndBeneathEachRowAboveAsBoth()
+    public void ARefAddedToACell_IsBeneathTheCellAndEachRowAboveAsAdded_LeavingThemUnmodified()
     {
         AddARefToTheTopCellItsWorldspacesDocumentEmbeds();
 
         var beneath = Beneath();
 
-        Assert.Equal(ModifiedAndAdded, beneath.Plugin);
-        Assert.Equal(ModifiedAndAdded, Assert.Single(beneath.RecordTypes, group => group.Key == "wrld").Value);
+        Assert.Equal([WorkingTreeState.Added], beneath.Plugin);
+        Assert.Equal([WorkingTreeState.Added], Assert.Single(beneath.RecordTypes, group => group.Key == "wrld").Value);
         Assert.Equal(
             new Dictionary<string, WorkingTreeState[]>
             {
-                [_fixture.Worldspace] = ModifiedAndAdded,
+                [_fixture.Worldspace] = [WorkingTreeState.Added],
                 [_fixture.TopCell] = [WorkingTreeState.Added],
             },
             beneath.Records.ToDictionary(row => row.Key, row => row.Value.ToArray()));
