@@ -72,20 +72,14 @@ internal static class PluginTrees
     internal static async Task<IReadOnlyList<TreeFile>> SerializeTree(
         IModGetter mod, CancellationToken cancel = default)
     {
+        if (DocumentFileNames.WhyTooLongIn(mod) is { } tooLong) throw new IOException(tooLong);
         var game = GameCodecs.For(mod.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
         try
         {
             // Always the inline dropoff, explicitly: MajorRecordListParallelHelper has a real upstream race
             // under a genuinely parallel dropoff (nested-list containers writing into each other's folders).
-            try
-            {
-                await game.SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
-            }
-            catch (Exception ex) when (PluginFailure.Of(ex) is PluginFailure.Inaccessible && DocumentFileNames.WhyTooLongIn(mod) is { } tooLong)
-            {
-                throw new IOException(tooLong, ex);
-            }
+            await game.SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
 
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.

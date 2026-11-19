@@ -72,21 +72,41 @@ public sealed class PluginSourceReadTests
         Assert.Equal(reason, failure.Reason);
     }
 
-    [Fact]
-    public async Task ARecordWhoseEditorIdIsTooLongForAFileName_FailsNamingItAndWhy()
+    [Theory]
+    [InlineData('A', 300, 326)]
+    [InlineData('é', 120, 266)]
+    public async Task ARecordWhoseEditorIdIsTooLongForAFileName_FailsNamingItAndWhy(char letter, int letters, int bytes)
     {
         using var folder = new ScratchDirectory("medit-source-long-editorid-");
         var pluginPath = Path.Combine(folder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        var longId = new string('A', 300);
+        var longId = new string(letter, letters);
         var npc = mod.Npcs.AddNew(longId);
         mod.WriteToBinary(pluginPath);
 
         Assert.False((await ReadSourceAsync(pluginPath, GameRelease.Fallout4)).Holds(out var _, out var failure));
         Assert.IsType<PluginFailure.Inaccessible>(failure);
         Assert.Equal(
-            $"{npc.FormKey} cannot be written: its EditorID {longId} makes a file name of 326 bytes, and a file name holds at most 255.",
+            $"{npc.FormKey} cannot be written: its EditorID {longId} makes a file name of {bytes} bytes, and a file name holds at most 255.",
             failure.Reason);
+    }
+
+    [Fact]
+    public async Task AnEmbeddedRecordWithALongEditorId_HasNoFileOfItsOwn_SoItsPluginReads()
+    {
+        using var folder = new ScratchDirectory("medit-source-long-embedded-");
+        var pluginPath = Path.Combine(folder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod) { EditorID = "ACell" };
+        cell.Temporary.Add(new PlacedObject(mod) { EditorID = new string('A', 300) });
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+        mod.WriteToBinary(pluginPath);
+
+        Assert.NotEmpty((await ReadSourceAsync(pluginPath, GameRelease.Fallout4)).Answered().Files);
     }
 
     [Fact]
