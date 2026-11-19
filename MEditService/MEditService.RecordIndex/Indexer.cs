@@ -744,7 +744,6 @@ internal sealed class Indexer : IDisposable
                         var swapped = Swap(standing => standing with
                         {
                             Version = Math.Max(standing.Version, version),
-                            HeldElsewhere = heldElsewhere ?? standing.HeldElsewhere,
                             Failure = failure ?? standing.Failure,
                         });
                         if (swapped || progressed || Untold()) PublishStatus();
@@ -804,14 +803,23 @@ internal sealed class Indexer : IDisposable
         // Held to the swap, as EnsureScope holds it.
         using (_gate.Enter())
         {
-            var fresh = _storeFactory.Create(
-                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
-                () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
-            if (fresh is null) return $"{NotReopened}: {heldElsewhere ?? "another process holds it"}";
+            var fresh = CreateStore(snapshot, held, out var heldElsewhere);
+            if (fresh is null) return $"{NotReopened}: {heldElsewhere}";
             lock (_lock) (_scope, _openedUnchecked, _conflictsComputed) = (ScopeOn(held, fresh, snapshot), true, false);
         }
         PublishStatus();
         return null;
+    }
+
+    // plugins.md, States, story 4: another window holding the file is the status HeldElsewhere, whichever open meets it.
+    private Store.Store? CreateStore(LoadOrderSnapshot snapshot, HeldPlugins held, out string? heldElsewhere)
+    {
+        var fresh = _storeFactory.Create(
+            snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
+            () => Status.State == LoadOrderState.Ready, out heldElsewhere);
+        var refusal = heldElsewhere;
+        if (fresh is null) Swap(standing => standing with { HeldElsewhere = refusal });
+        return fresh;
     }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
@@ -878,9 +886,7 @@ internal sealed class Indexer : IDisposable
             // Held from the open, whose commit materializes the filter in force, to the swap: a filter set or
             // cleared meanwhile waits and lands on this store, and the filter's SQL never runs under _lock.
             using var writes = _gate.Enter();
-            fresh = _storeFactory.Create(
-                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
-                () => Status.State == LoadOrderState.Ready, out heldElsewhere);
+            fresh = CreateStore(snapshot, held, out heldElsewhere);
             if (fresh is null) return null;
             scope = ScopeOn(held, fresh, snapshot);
             lock (_lock)
