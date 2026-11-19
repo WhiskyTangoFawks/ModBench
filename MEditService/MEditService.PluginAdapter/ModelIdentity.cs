@@ -71,10 +71,8 @@ internal static class ModelIdentity
             : null;
     }
 
-    /// <summary>Each <paramref name="original"/> record that does not survive into <paramref name="recompiled"/>,
-    /// with the field the mask disagrees on, else the codec document path that differs; a null field
-    /// is a record <paramref name="recompiled"/> lacks. <paramref name="filedInAnyOrder"/> compares the children a
-    /// record holds in files of their own as a set, as the source's format keeps them (ADR-0030).</summary>
+    /// <summary>Each <paramref name="original"/> record that does not survive, with the field that differs; a null
+    /// field is a record lacking. The format keeps no order for filed children (ADR-0030).</summary>
     public static IEnumerable<(IMajorRecordGetter Record, string? Field)> RecordDivergences(
         IEnumerable<IMajorRecordGetter> original, IModGetter recompiled, bool filedInAnyOrder = false)
     {

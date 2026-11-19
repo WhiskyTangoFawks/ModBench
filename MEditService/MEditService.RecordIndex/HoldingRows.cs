@@ -11,8 +11,8 @@ internal readonly record struct CellLocationRow(
     string CellFormKey,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY);
 
-/// <summary>The slots that tell what a holding is. An exterior cell sits in a block directory of its
-/// own, and a quest's or a topic's child in a file of its own, so no container's document carries either.</summary>
+/// <summary>The slots that tell what a holding is. An exterior cell and a quest's or a topic's child each
+/// have a file of their own, which no container's document carries.</summary>
 internal static class HoldingSlots
 {
     internal const string ExteriorCell = "SubCells";

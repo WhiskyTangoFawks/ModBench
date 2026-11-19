@@ -136,10 +136,9 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Regex.Replace(body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");
 
     private static List<string> RowsOf(string instanceRoot, string relation) =>
-        [.. IndexFiles.Rows(instanceRoot, relation == "holdings" ? HoldingsInTheOrderTheFormatKeeps : $"SELECT * FROM {relation}").Select(row => string.Join(" | ", row))];
+        [.. IndexFiles.Rows(instanceRoot, relation == "holdings" ? HoldingsWithNoOrderForChildrenFiledByName : $"SELECT * FROM {relation}").Select(row => string.Join(" | ", row))];
 
-    // The format files a quest's and a topic's children by name, so the source holds no order for them to keep.
-    private static readonly string HoldingsInTheOrderTheFormatKeeps = $"""
+    private static readonly string HoldingsWithNoOrderForChildrenFiledByName = $"""
         SELECT plugin, origin, parent, child, slot, CASE WHEN slot IN ({FiledSlots}) THEN NULL ELSE slot_index END
         FROM holdings ORDER BY ALL
         """;

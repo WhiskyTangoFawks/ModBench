@@ -60,9 +60,8 @@ internal sealed class SourceRepositoryWrites(
             : ChangesToPlace(plugin, cell, PlacementIn(worldspace, cell));
     }
 
-    /// <summary>What putting a new child at the end of <paramref name="slot"/> of <paramref name="container"/>
-    /// changes: the child's own file in the slot's folder, or the child spliced into the container's own text,
-    /// rewritten as <see cref="ChangesToRewrite"/> says.</summary>
+    /// <summary>What putting a new child in <paramref name="slot"/> of <paramref name="container"/> changes: its
+    /// own file in the slot's folder, or the child appended to the container's text.</summary>
     internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
     {
         var unit = HeldUnit(plugin, container, "there is no slot to put a child in");

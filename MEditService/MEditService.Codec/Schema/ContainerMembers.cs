@@ -4,10 +4,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>The members holding child major records, read from each game module's own types.
-/// The source's format writes an EmbeddedSlots child inside its container's document, and a
-/// FileSlots child in a file of its own. Every dictionary is keyed by game too: two games' classes
-/// can share a bare name.</summary>
+/// <summary>The members holding child major records, read from each game module's own types. Keyed by
+/// game too: two games' classes can share a bare name.</summary>
 internal sealed record ContainerMembers(
     IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,
     IReadOnlySet<(GameCategory Game, string ParentType, string Slot)> EmbeddedSlots,

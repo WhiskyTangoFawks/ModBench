@@ -192,9 +192,8 @@ internal sealed class WorkingTreeOverlay
             PluginIngest.AppendDocumentName(names, name, key.Name, key.Origin);
     }
 
-    // A container's embedded children live in its document, and the children filed in its directory in the
-    // listing read with it, so delete-then-insert per parent is correct. A worldspace's exterior cells are
-    // placed by their own records, and a container read with no listing keeps what it files.
+    // A container's holdings are its document's and its directory's listing, so each is replaced only when read.
+    // A worldspace's exterior cells are placed by their own records.
     private void ReplaceContainment(PluginAddress key, List<Derived> containers)
     {
         var prepared = containers.Select(d => d.Prepared).OfType<PluginIngest.PreparedRecord>().ToList();

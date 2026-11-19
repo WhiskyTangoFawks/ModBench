@@ -17,7 +17,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     private IReadOnlyList<JsonElement> Responses(string topicFormKey) => Held(topicFormKey, nameof(DialogTopic.Responses));
 
-    // A quest's and a topic's children are files of their own in a folder of their container's directory.
     private IReadOnlyList<JsonElement> Held(string containerFormKey, string slot)
     {
         var container = SourceModTree.DocumentFile(_fixture.DestinationModFolder, _fixture.DestinationPlugin, containerFormKey).Require();

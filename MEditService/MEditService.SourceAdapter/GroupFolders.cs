@@ -66,10 +66,9 @@ internal sealed class GroupFolders
     internal bool HoldsChildFiles(string folder) =>
         _types.OnlyRecordTypeIn(folder) is { } type && _types.FileSlotsOf(type).Count > 0;
 
-    /// <summary>The record type of a document <paramref name="directories"/> below a folder
-    /// <see cref="HoldsChildFiles"/> answers for, walked from the record directory there down through each
-    /// slot's folder and each child's directory, and whether it sits in its record's directory. Null for
-    /// any other folder, and for a path the walk leaves.</summary>
+    /// <summary>The record type of a document <paramref name="directories"/> below a folder whose records
+    /// hold child files, walked down through slot folders, and whether it sits in its record's directory.
+    /// Null for any other folder or path.</summary>
     internal (string RecordType, bool InItsDirectory)? HeldTypeAt(string folder, IReadOnlyList<string> directories)
     {
         if (!HoldsChildFiles(folder) || _types.OnlyRecordTypeIn(folder) is not { } type || directories.Count == 0) return null;
