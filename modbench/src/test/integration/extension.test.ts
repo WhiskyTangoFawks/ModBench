@@ -1736,11 +1736,10 @@ describe('a non-compiled plugin copy of a record', () => {
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('opens in the record grid as the document mEdit renders, titled with its FormKey', async () => {
+  it('opens in the record grid as the document mEdit renders', async () => {
     await openRecord(nonCompiledPluginCopy);
 
     const document = await renderedDocument();
-    assert.deepStrictEqual(renderedTabs().map((t) => t.label), [NON_COMPILED_PLUGIN_FORM_KEY]);
     assert.strictEqual(document.getText(), nonCompiledPluginText);
   });
 

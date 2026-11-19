@@ -335,7 +335,7 @@ describe('a record file\'s tab', () => {
   const holding = (formKey: string) => ({ formKey, plugin: { name: 'A.esp', origin: 'ModA' } });
   function fileClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: COPY_PLUGIN.origin, isWinner: true, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', []);
     return client;
   }
@@ -716,7 +716,7 @@ describe('a record tab closed', () => {
 
 describe('what a record tab\'s webview posts', () => {
   const GUN = '000801:A.esp';
-  const compare = comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]);
+  const compare = comparisonOf(GUN, [{ plugin: 'A.esp', origin: COPY_PLUGIN.origin, isWinner: true, editorId: 'Gun' }]);
   const loadRequest = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: GUN, columns: [] };
   const answered = (tab: FakePanel) => tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0]);
   const loadAnswered = (tab: FakePanel) => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'recordLoadAnswered');
@@ -927,7 +927,7 @@ describe('what a record tab\'s webview posts', () => {
       expect(loadAnswered(tab)).toEqual([{
         type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, comparisonComplete: true,
         loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null,
-        columnStatuses: { 'A.esp': { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
+        columnStatuses: { 'A.esp|ModA': { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
       }]);
       expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
     });
@@ -935,7 +935,7 @@ describe('what a record tab\'s webview posts', () => {
     it('states the first column\'s cell where mEdit stated none, so the page derives no state', async () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getComparison', {
-        ...compare, diffs: [{ fieldName: 'Name', values: { 'A.esp': 'x' }, cellStates: {}, winnerColumn: 'A.esp', noWinner: false, conflictAll: 'OnlyOne' }],
+        ...compare, diffs: [{ fieldName: 'Name', values: { 'A.esp|ModA': 'x' }, cellStates: {}, winnerColumn: 'A.esp|ModA', noWinner: false, conflictAll: 'OnlyOne' }],
       });
       const { open } = makeEditor(mEdit);
       const tab = open(GUN);
@@ -943,7 +943,7 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive(loadRequest);
       await readAnswered(tab);
 
-      expect(loadAnswered(tab)).toMatchObject([{ compare: { diffs: [{ cellStates: { 'A.esp': 'OnlyOne' } }] } }]);
+      expect(loadAnswered(tab)).toMatchObject([{ compare: { diffs: [{ cellStates: { 'A.esp|ModA': 'OnlyOne' } }] } }]);
     });
 
     it('is answered comparisonComplete false while a change signal is unanswered, though the status holds conflicts computed', async () => {
@@ -1134,7 +1134,7 @@ describe('a non-compiled plugin copy\'s tab', () => {
 
   it('shows the copy\'s record, in focus, with no file for mEdit to name it by', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: COPY_PLUGIN.origin, isWinner: true, editorId: 'Gun' }]));
     const { openDocument, askedFromThePalette } = makeEditor(client);
 
     const tab = await openDocument(RENDERED);
