@@ -126,11 +126,16 @@ internal static class Indexes
     /// <summary>Checks the disk until the index is Ready and <paramref name="recovered"/> holds: after a fatal error the
     /// next check reopens the store (ADR-0003).</summary>
     internal static void Recovered(this OpenedIndex index, Func<bool> recovered, string what) =>
+        index.CheckedUntil(status => status.State == LoadOrderState.Ready && recovered(), what);
+
+    /// <summary>Checks the disk until a check's status satisfies <paramref name="settled"/>. A fatal error's status
+    /// lasts only until the next check, which whatever met the invalidated store may already have asked.</summary>
+    internal static void CheckedUntil(this OpenedIndex index, Func<LoadOrderStatus, bool> settled, string what) =>
         Waits.Reached(() =>
         {
             var status = index.Status;
             if (status.Validating || status.State == LoadOrderState.Reconciling) return false;
-            if (status.State == LoadOrderState.Ready && recovered()) return true;
+            if (settled(status)) return true;
             index.SignalChange();
             return false;
         }, what);

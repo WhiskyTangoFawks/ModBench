@@ -43,9 +43,8 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         rewritten.Npcs.AddNew("RewrittenNpc");
         rewritten.WriteToBinary(_fixture.Plugins.Single().Path);
 
-        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the reopen failing");
-
-        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
-        Assert.Contains("index.duckdb", _index.Status.Message, StringComparison.Ordinal);
+        _index.CheckedUntil(
+            status => status is { State: LoadOrderState.Failed, Message: { } message } && message.Contains("index.duckdb", StringComparison.Ordinal),
+            "a Failed status naming the index file");
     }
 }
