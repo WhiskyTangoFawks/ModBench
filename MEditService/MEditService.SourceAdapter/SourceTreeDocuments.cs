@@ -226,8 +226,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             .Select((formKey, index) => new ChildRecord(formKey, slot, index));
     }
 
-    /// <summary>The own text, children cut, of one document in hand and of every child it embeds, by FormKey.
-    /// An untyped child is carried too: history may hold a state that does not build (ADR-0007).</summary>
+    /// <summary>The own text, children cut, of one document in hand and of every typed child it embeds, by FormKey.
+    /// An untyped child is carried too, uncut: history may hold a state that does not build (ADR-0007).</summary>
     internal IEnumerable<(string FormKey, string Text)> Expand(string recordType, string formKey, string text)
     {
         var table = _types.RecordTypeNamed(recordType) ?? recordType;

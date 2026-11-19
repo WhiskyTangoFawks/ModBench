@@ -12,7 +12,6 @@ namespace MEditService.RecordIndex.Tests.Query;
 
 public sealed class WorkingTreeStatesBeneathTests : IDisposable
 {
-
     private readonly IndexedContainerMod _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
