@@ -163,6 +163,36 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     await narrator.settled(3);
     narrator.hear(failed);
 
+    expect(deps.log.mock.calls).toEqual([['Indexing failed: DuckDB hit a fatal error'], ['Indexing failed: DuckDB hit a fatal error']]);
+  });
+
+  it('writes the same failure again when a later reconcile fails with it, nothing heard between', () => {
+    const { deps, narrator } = narrated();
+    const failedAt = (version: number) => tick({ version, refusal: { kind: 'failed', message: 'DuckDB hit a fatal error' } });
+
+    narrator.hear(failedAt(3));
+    narrator.hear(failedAt(4));
+
+    expect(deps.log.mock.calls).toEqual([['Indexing failed: DuckDB hit a fatal error'], ['Indexing failed: DuckDB hit a fatal error']]);
+  });
+
+  it('writes a different failure at the same version', () => {
+    const { deps, narrator } = narrated();
+
+    narrator.hear(tick({ refusal: { kind: 'failed', message: 'first' } }));
+    narrator.hear(tick({ refusal: { kind: 'failed', message: 'second' } }));
+
+    expect(deps.log.mock.calls).toEqual([['Indexing failed: first'], ['Indexing failed: second']]);
+  });
+
+  it('writes a failure again when a reconcile in progress was heard between', () => {
+    const { deps, narrator } = narrated();
+    const failed = tick({ refusal: { kind: 'failed', message: 'DuckDB hit a fatal error' } });
+
+    narrator.hear(failed);
+    narrator.hear(tick());
+    narrator.hear(failed);
+
     expect(deps.log).toHaveBeenCalledTimes(2);
   });
 
