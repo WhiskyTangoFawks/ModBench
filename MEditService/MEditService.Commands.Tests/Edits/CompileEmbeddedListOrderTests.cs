@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -38,13 +40,22 @@ public sealed class CompileEmbeddedListOrderTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_KeepsTheChildrenInTheFormatsOrder()
+    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_Lands_AndTheNextDecompileWritesThemInTheFormatsOrder()
     {
-        var original = ReferencesIn(this.Binary(_plugin));
+        var file = Path.Combine(ModFolderOf(_plugin), SourceModTree.DocumentFile(ModFolderOf(_plugin), _plugin, _cell.ToString()).Require());
+        var decompiled = File.ReadAllText(file);
+        var root = JsonNode.Parse(decompiled).Require().AsObject();
+        var temporary = root["Temporary"].Require().AsArray();
+        var swapped = temporary.Select(placed => placed?.DeepClone()).ToList();
+        (swapped[0], swapped[2]) = (swapped[2], swapped[0]);
+        root["Temporary"] = new JsonArray([.. swapped]);
+        File.WriteAllText(file, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
-        var compiled = await ReferencesAfter(cell => (cell.Temporary[0], cell.Temporary[2]) = (cell.Temporary[2], cell.Temporary[0]));
+        await CompileHandler.CompileLandedAsync(_plugin);
+        var decompile = await TestEditService.DecompileHandler(Holder).DecompileAsync([_plugin], force: true);
 
-        Assert.Equal(original, compiled);
+        Assert.Empty(decompile.Value().Refused);
+        Assert.Equal(decompiled, File.ReadAllText(file));
     }
 
     private static IReadOnlyList<FormKey> ReferencesIn(IFallout4ModDisposableGetter binary)

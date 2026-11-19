@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -12,6 +14,7 @@ public sealed class DecompileChurnTests : TestInstance
 {
     private readonly PluginAddress _plugin;
     private readonly FormKey _taggedNpc;
+    private readonly FormKey _rankedNpc;
 
     public DecompileChurnTests()
     {
@@ -23,6 +26,14 @@ public sealed class DecompileChurnTests : TestInstance
         var tagged = mod.Npcs.AddNew("ChurnNpcTagged");
         tagged.Keywords = [first.ToLink(), second.ToLink(), third.ToLink()];
         _taggedNpc = tagged.FormKey;
+        var ranked = mod.Npcs.AddNew("ChurnNpcRanked");
+        ranked.Flags = Npc.Flag.Female | Npc.Flag.Essential;
+        ranked.Factions.AddRange(
+        [
+            new RankPlacement { Faction = mod.Factions.AddNew("ChurnFactionA").ToLink(), Rank = 0 },
+            new RankPlacement { Faction = mod.Factions.AddNew("ChurnFactionB").ToLink(), Rank = 1 },
+        ]);
+        _rankedNpc = ranked.FormKey;
         _plugin = Add(mod, "FixtureMod");
     }
 
@@ -47,6 +58,47 @@ public sealed class DecompileChurnTests : TestInstance
         await Decompile();
 
         Assert.Equal([$"?? {ToGitPath(newFile)}"], SourceStatus());
+    }
+
+    [Fact]
+    public async Task ChildrenCreatedInContainersCreated_Compile_Decompile_LeavesEveryCreatedFileAsCreateWroteIt()
+    {
+        var cell = Created("cell");
+        var quest = Created("qust");
+        Created("refr", cell);
+        var topic = Created("dial", quest);
+        var files = new[] { cell, quest, topic }
+            .Select(formKey => Path.Combine(ModFolder, SourceModTree.DocumentFile(ModFolder, _plugin, formKey).Require()))
+            .ToDictionary(file => file, File.ReadAllText);
+
+        await CompileHandler.CompileLandedAsync(_plugin);
+        await Decompile();
+
+        Assert.All(files, written => Assert.Equal(written.Value, File.ReadAllText(written.Key)));
+    }
+
+    [Theory]
+    [InlineData("Factions")]
+    [InlineData("Flags")]
+    public async Task AListWhoseOrderTheFormatDecides_LeftInAnotherOrderByHand_Compiles_AndTheNextDecompileWritesTheFormatsOrder(string member)
+    {
+        var file = Path.Combine(ModFolder, SourceModTree.DocumentFile(ModFolder, _plugin, _rankedNpc.ToString()).Require());
+        var decompiled = File.ReadAllText(file);
+        var root = JsonNode.Parse(decompiled).Require().AsObject();
+        root[member] = new JsonArray([.. root[member].Require().AsArray().Reverse().Select(item => item?.DeepClone())]);
+        File.WriteAllText(file, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        await CompileHandler.CompileLandedAsync(_plugin);
+        await Decompile();
+
+        Assert.Equal(decompiled, File.ReadAllText(file));
+    }
+
+    private string Created(string recordType, string? container = null)
+    {
+        var created = CreateHandler.CreateRecordSync(_plugin, recordType, container);
+        Assert.True(created.Applied, created.Message);
+        return created.NewFormKey.Require();
     }
 
     [Fact]

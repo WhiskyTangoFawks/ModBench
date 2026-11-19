@@ -1,5 +1,11 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Tests.Serialization;
 
@@ -27,5 +33,50 @@ public sealed class DocumentMeaningTests
     public void TwoDocumentsOfAnotherMeaning_NameTheFirstMemberThatDiffers(string held, string produced, string path)
     {
         Assert.Equal(path, Difference(held, produced));
+    }
+
+    private static string NpcText()
+    {
+        static FormKey Of(uint id) => new(ModKey.FromFileName("Fallout4.esm"), id);
+        var npc = new Npc(new FormKey(ModKey.FromFileName("Meaning.esp"), 0x800), Fallout4Release.Fallout4)
+        {
+            EditorID = "Guy",
+            Flags = Npc.Flag.Female | Npc.Flag.Essential,
+            Keywords = [new FormLink<IKeywordGetter>(Of(0x11)), new FormLink<IKeywordGetter>(Of(0x12))],
+            Factions =
+            [
+                new RankPlacement { Faction = new FormLink<IFactionGetter>(Of(0x13)), Rank = 0 },
+                new RankPlacement { Faction = new FormLink<IFactionGetter>(Of(0x14)), Rank = 1 },
+            ],
+        };
+        return RecordTextCodec.SerializeToText(npc, GameRelease.Fallout4);
+    }
+
+    private static string WithReversed(string text, string member)
+    {
+        var root = JsonNode.Parse(text).Require().AsObject();
+        root[member] = new JsonArray([.. root[member].Require().AsArray().Reverse().Select(item => item?.DeepClone())]);
+        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string? NpcDifference(string held, string produced) =>
+        DocumentMeaning.FirstDifference(Encoding.UTF8.GetBytes(held), Encoding.UTF8.GetBytes(produced), GameRelease.Fallout4, "npc_");
+
+    [Theory]
+    [InlineData("Factions")]
+    [InlineData("Flags")]
+    public void ARecordsDocumentHoldingAListWhoseOrderTheFormatDecides_InAnotherOrder_HasNoDifference(string member)
+    {
+        var produced = NpcText();
+
+        Assert.Null(NpcDifference(WithReversed(produced, member), produced));
+    }
+
+    [Fact]
+    public void ARecordsDocumentHoldingAListTheFormatKeepsInItsOrder_InAnotherOrder_DiffersAtThatList()
+    {
+        var produced = NpcText();
+
+        Assert.Equal("Keywords[0]", NpcDifference(WithReversed(produced, "Keywords"), produced));
     }
 }

@@ -59,7 +59,6 @@ public sealed class CreateRecordChangesHandler
     private static RecordEditResult MalformedPosition(string why) =>
         RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
 
-    private static string AsInteriorCell(string bareCell) => PlacedCell.MarkedInterior(Document.Parse(bareCell)).Text;
 
     private Answer<RecordEditChanges, SourceFailure> MintRecord(
         PluginAddress plugin, string recordType, string? container, GridPosition? position, WriteSessions sessions)
@@ -89,7 +88,8 @@ public sealed class CreateRecordChangesHandler
         if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         var body = RecordMint.BareDocument(schema, release, targetFormKey, editorId: null);
-        if (RecordTypes.For(release).IsCell(recordType)) body = AsInteriorCell(body);
+        if (RecordTypes.For(release).IsCell(recordType))
+            body = RecordTextCodec.RoundTrip(PlacedCell.MarkedInterior(Document.Parse(body)).Text, release, recordType);
 
         if (session.Atomically(() =>
                 session.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)))) is { } unwritten)
@@ -211,7 +211,7 @@ public sealed class CreateRecordChangesHandler
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
         var bare = Document.Parse(RecordMint.BareDocument(schema, release, formKey, editorId: null));
         var child = PlacedCell.AsCreatedIn(bare, slot, root, release);
-        var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.Text);
+        var childDocument = new SourceDocument(formKey.ToString(), recordType, null, RecordTextCodec.RoundTrip(child.Text, release, recordType));
 
         if (session.Atomically(() =>
                 session.Apply(repository.ChangesToPutChild(plugin, container, slot, childDocument))) is { } unwritten)
