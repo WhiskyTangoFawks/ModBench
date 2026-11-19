@@ -71,9 +71,12 @@
 
   <!-- Spriggit pins its Mutagen exactly, so a source written on an unpublished Mutagen is no published Spriggit's
        format. The version carries the Mutagen's, which no Spriggit release can resolve, so Spriggit fails loudly
-       on it (ADR-0030). Once Mutagen publishes, the version is the Spriggit release built on it. -->
+       on it (ADR-0030). Once Mutagen publishes, the version is the Spriggit release built on it. The release is the
+       newest tag at the submodule's pinned commit, which a test holds to the commit checked out. -->
   <PropertyGroup>
-    <SpriggitVersion>0.40.1-mutagen-$(MutagenVersion)</SpriggitVersion>
+    <SpriggitPinnedCommit>3a5adb8d56ce27b9c582b88efa4e240f62e07902</SpriggitPinnedCommit>
+    <SpriggitRelease>0.40.1</SpriggitRelease>
+    <SpriggitVersion>$(SpriggitRelease)-mutagen-$(MutagenVersion)</SpriggitVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(SpriggitPackage)' != ''">

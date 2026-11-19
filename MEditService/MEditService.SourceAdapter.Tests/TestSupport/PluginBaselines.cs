@@ -1,6 +1,8 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.TestSupport;
 
@@ -18,6 +20,10 @@ internal static class PluginBaselines
     /// <summary>A repository holding one plugin with no record, for a test that brings its own.</summary>
     internal static void InitWithNoRecords(string sourceFolder) =>
         Init(sourceFolder, [new TreeFile("plugin-source/Seed.esp/seed.txt", [])]);
+
+    /// <summary>The Spriggit meta of <paramref name="plugin"/>'s source, as a fixture's placed file.</summary>
+    internal static TreeFile MetaFor(string plugin) =>
+        SpriggitMeta.Of(GameCodecs.For(GameRelease.Fallout4), ModKey.FromFileName(plugin), GameRelease.Fallout4) with { RelativePath = Path.Combine(PluginSourceRoot.For(plugin), SpriggitMeta.FileName) };
 
     internal static IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Of(IEnumerable<TreeFile> files) =>
     [

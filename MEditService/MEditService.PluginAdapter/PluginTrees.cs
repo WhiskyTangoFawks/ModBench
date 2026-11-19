@@ -72,12 +72,13 @@ internal static class PluginTrees
     internal static async Task<IReadOnlyList<TreeFile>> SerializeTree(
         IModGetter mod, CancellationToken cancel = default)
     {
+        var game = GameCodecs.For(mod.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
         try
         {
             // Always the inline dropoff, explicitly: MajorRecordListParallelHelper has a real upstream race
             // under a genuinely parallel dropoff (nested-list containers writing into each other's folders).
-            await GameCodecs.For(mod.GameRelease).SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
+            await game.SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
 
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.
@@ -89,7 +90,7 @@ internal static class PluginTrees
                     Path.GetRelativePath(scratchDir, file),
                     TranslatedStringValues.InLanguageOrder(StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel)))));
             }
-            treeFiles.Add(SpriggitStamp.Of(GameCodecs.For(mod.GameRelease), mod.ModKey, mod.GameRelease));
+            treeFiles.Add(SpriggitMeta.Of(game, mod.ModKey, mod.GameRelease));
             return treeFiles;
         }
         finally

@@ -437,10 +437,13 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     /// <summary>True for a file under the source root that holds no record — group and block metadata,
     /// and anything that is not a document at all. No row is derived from one.</summary>
     internal static bool CarriesNoRecord(string filePath) =>
-        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) || IsGroupDocument(filePath) || IsStamp(filePath);
+        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) || IsGroupDocument(filePath) || IsSpriggitMeta(filePath);
 
-    internal static bool IsStamp(string filePath) =>
-        Path.GetFileName(filePath).Equals(SpriggitStamp.FileName, StringComparison.Ordinal);
+    /// <summary>Whether <paramref name="filePath"/>, absolute or relative to the source folder, is the Spriggit meta at
+    /// the root of a plugin's tree.</summary>
+    internal static bool IsSpriggitMeta(string filePath) =>
+        Path.GetFileName(filePath).Equals(SpriggitMeta.FileName, StringComparison.Ordinal)
+        && Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(filePath))) == RootFolderName;
 
     internal static bool IsGroupDocument(string filePath) =>
         Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);

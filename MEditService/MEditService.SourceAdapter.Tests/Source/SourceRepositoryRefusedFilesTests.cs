@@ -13,7 +13,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     private const string PluginName = "Refused.esp";
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly string HeaderPath = PluginSourceRoot.HeaderDocument(PluginName);
-    private static readonly string StampPath = Path.Combine(PluginSourceRoot.For(PluginName), SpriggitStamp.FileName);
+    private static readonly string MetaPath = Path.Combine(PluginSourceRoot.For(PluginName), SpriggitMeta.FileName);
     private static readonly string BlockPath = Path.Combine(PluginSourceRoot.For(PluginName), "Cells", "8", "GroupRecordData.json");
 
     private readonly ScratchDirectory _modFolder = new("medit-refused-files-");
@@ -24,7 +24,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
             _modFolder,
             [
                 new TreeFile(HeaderPath, HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4))),
-                SpriggitStamp.Of(GameCodecs.For(GameRelease.Fallout4), ModKey.FromFileName(PluginName), GameRelease.Fallout4) with { RelativePath = StampPath },
+                PluginBaselines.MetaFor(PluginName),
             ]);
         Repository.Put(Plugin, new SourceDocument("000800:Refused.esp", "cell", "Room", "{\n  \"FormKey\": \"000800:Refused.esp\",\n  \"EditorID\": \"Room\"\n}")).Wrote();
     }
@@ -86,25 +86,23 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     }
 
     [Fact]
-    public void AStampOfAnotherVersion_IsRefusedByItsFile_NamingBothVersions()
+    public void AMetaOfAnotherVersion_IsRefusedByItsFile_AndHoldsTheOnlyRefusal()
     {
-        var codec = GameCodecs.For(GameRelease.Fallout4);
-        Rewrite(StampPath, codec.SpriggitVersion, "0.1.0");
+        Rewrite(BlockPath, "BlockNumber", "BlockNumbr");
+        Rewrite(MetaPath, GameCodecs.For(GameRelease.Fallout4).SpriggitVersion, "0.1.0");
 
         var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
 
-        Assert.Equal(StampPath, refused.Path);
-        Assert.Contains("0.1.0", refused.Reason, StringComparison.Ordinal);
-        Assert.Contains(codec.SpriggitVersion, refused.Reason, StringComparison.Ordinal);
+        Assert.Equal(MetaPath, refused.Path);
     }
 
     [Fact]
-    public void ASourceWithNoStamp_IsRefusedByTheFileItLacks()
+    public void ASourceWithNoMeta_IsRefusedByTheFileItLacks()
     {
-        File.Delete(Path.Combine(_modFolder, StampPath));
+        File.Delete(Path.Combine(_modFolder, MetaPath));
 
         var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
 
-        Assert.Equal(StampPath, refused.Path);
+        Assert.Equal(MetaPath, refused.Path);
     }
 }

@@ -313,6 +313,19 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
     }
 
+    [Theory]
+    [InlineData("{")]
+    [InlineData("[]")]
+    public void ARenameOfATreeWhoseSpriggitMetaIsNoJsonObject_IsRefusedNamingIt(string text)
+    {
+        var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "spriggit-meta.json");
+        File.WriteAllText(broken, text);
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.ChangesToRenameSource(Old, "New.esp").Stopped());
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
+    }
+
     [Fact]
     public void WhatModbenchLastWrote_WhenGitRefusesToMoveIt_StaysUnderTheOldName()
     {

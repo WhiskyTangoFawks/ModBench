@@ -107,11 +107,13 @@ internal sealed class SourceTreeMemory(TimeProvider time)
         FormIdLimit? limit = null;
         if (Directory.Exists(root))
         {
+            if (SpriggitMetaProblem(sourceFolder, plugin, release, files, unreadable) is { } versionProblem) problems.Add(versionProblem);
+
             // Keyed by the FormKey the document declares, never by its path: a file name carries an
             // EditorID that may contain the separator, so a path is not a decidable identity.
             foreach (var file in Directory.EnumerateFiles(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
             {
-                if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || SourceRepositoryLayout.IsStamp(file)) continue;
+                if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || SourceRepositoryLayout.IsSpriggitMeta(file)) continue;
                 listed.Add(file);
 
                 var relativePath = Path.GetRelativePath(sourceFolder, file);
@@ -143,6 +145,23 @@ internal sealed class SourceTreeMemory(TimeProvider time)
         problems.AddRange(misplaced.Where(file => !claimedDocuments.Contains(file.SourceRelativePath)));
         if (limit is not null) problems.AddRange(OutsideTheLimit(limit, plugin, keysByFile));
         return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved, problems);
+    }
+
+    private static FileProblem? SpriggitMetaProblem(
+        string sourceFolder, PluginAddress plugin, GameRelease release, ISourceFiles files, List<UnreadableFile> unreadable)
+    {
+        var relativePath = PluginSourceChecks.SpriggitMetaPath(plugin.Name);
+        var path = Path.Combine(sourceFolder, relativePath);
+        try
+        {
+            var held = files.FileExists(path) ? files.ReadAllBytes(path) : null;
+            return PluginSourceChecks.MetaRefusal(relativePath, held, release) is { } refusal ? new FileProblem(relativePath, refusal.Reason) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            unreadable.Add(new UnreadableFile(relativePath, $"Could not read '{relativePath}': {ex.Message}"));
+            return null;
+        }
     }
 
     private static IEnumerable<FileProblem> OutsideTheLimit(

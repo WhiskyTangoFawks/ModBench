@@ -24,7 +24,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
     public SourceRepositoryStampsTests()
     {
-        PluginBaselines.InitWithNoRecords(_modFolder);
+        PluginBaselines.Init(_modFolder, [PluginBaselines.MetaFor(PluginName)]);
         _repository = TestAdapters.Source(_clock).Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
         _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }
@@ -128,6 +128,28 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
         Assert.Contains(NpcFormKey, stamps.ByFormKey.Keys);
         Assert.Empty(stamps.Unreadable);
+    }
+
+    [Fact]
+    public void AMetaOfAnotherVersion_IsAProblemOnItsFile_AsCompileRefusesIt()
+    {
+        var meta = Path.Combine(PluginSourceRoot.For(PluginName), SpriggitMeta.FileName);
+        var path = Path.Combine(_modFolder, meta);
+        File.WriteAllText(path, File.ReadAllText(path).Replace(GameCodecs.For(GameRelease.Fallout4).SpriggitVersion, "0.1.0", StringComparison.Ordinal));
+
+        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
+
+        Assert.Equal(meta, problem.SourceRelativePath);
+        Assert.Equal(Assert.Single(_repository.RefusedFilesOf(Plugin).Value()).Reason, problem.Message);
+    }
+
+    [Fact]
+    public void ASourceWithNoMeta_IsAProblemOnTheFileItLacks()
+    {
+        var meta = Path.Combine(PluginSourceRoot.For(PluginName), SpriggitMeta.FileName);
+        File.Delete(Path.Combine(_modFolder, meta));
+
+        Assert.Equal(meta, Assert.Single(_repository.StampsOf(Plugin).Problems).SourceRelativePath);
     }
 
     [Fact]
