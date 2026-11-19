@@ -42,7 +42,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Contains(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
+        Assert.Equal([_fixture.TemporaryRef.ToString()], _fixture.ChangedFormKeys());
         Assert.Equal(["Temporary[0].Scale: 1.0 -> 2.5"], DocumentDiffs.Of(cellBefore, WorkingTreeCell()));
         Assert.Equal(["Scale: 1.0 -> 2.5"], DocumentDiffs.Of(childBefore, ChildBody()));
     }
@@ -70,7 +70,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(["""Temporary[0].Position: "100, 100, 0" -> "90000, -90000, 0" """.TrimEnd()], DocumentDiffs.Of(before, _fixture.DocumentCarrying("ExteriorCell").Body));
-        Assert.Contains(_fixture.ExteriorCell.ToString(), _fixture.ChangedFormKeys());
+        Assert.Equal([_fixture.ExteriorRef.ToString()], _fixture.ChangedFormKeys());
     }
 
     [Fact]

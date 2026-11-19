@@ -239,7 +239,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
-    public void AnEditToOneEmbeddedChild_NamesThatChildAndItsOwners_NeverItsSibling()
+    public void AnEditToOneEmbeddedChild_NamesThatChildAlone_NeverItsSiblingOrItsOwners()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var edited = new PlacedObject(mod) { EditorID = "EditedRef" };
@@ -257,10 +257,9 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         File.WriteAllText(file, File.ReadAllText(file).Replace("EditedRef", "Renamed", StringComparison.Ordinal));
 
         var changes = ChangesIn(repository);
-        Assert.Equal(RecordChange.Modified, changes[edited.FormKey.ToString()]);
-        Assert.Equal(RecordChange.Modified, changes[topCell.FormKey.ToString()]);
-        Assert.Equal(RecordChange.Modified, changes[worldspace.FormKey.ToString()]);
-        Assert.DoesNotContain(sibling.FormKey.ToString(), changes.Keys);
+        var only = Assert.Single(changes);
+        Assert.Equal(edited.FormKey.ToString(), only.Key);
+        Assert.Equal(RecordChange.Modified, only.Value);
     }
 
     private static TreeFile ContainerFile(string relativeDirectory, IMajorRecordGetter record) =>
@@ -272,13 +271,13 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         { SpatialPlugin.WorldspaceEditorId, "worldspace", [SpatialPlugin.WorldspaceEditorId] },
         { SpatialPlugin.ExteriorCellEditorId, "exterior", [SpatialPlugin.ExteriorCellEditorId] },
         { SpatialPlugin.InteriorCellEditorId, "interior", [SpatialPlugin.InteriorCellEditorId] },
-        { SpatialPlugin.ExteriorRefEditorId, "exterior", [SpatialPlugin.ExteriorRefEditorId, SpatialPlugin.ExteriorCellEditorId] },
-        { SpatialPlugin.InteriorRefEditorId, "interior", [SpatialPlugin.InteriorRefEditorId, SpatialPlugin.InteriorCellEditorId] },
+        { SpatialPlugin.ExteriorRefEditorId, "exterior", [SpatialPlugin.ExteriorRefEditorId] },
+        { SpatialPlugin.InteriorRefEditorId, "interior", [SpatialPlugin.InteriorRefEditorId] },
     };
 
     [Theory]
     [MemberData(nameof(EditedHeldInAndChanged))]
-    public void AnEditToASpatialRecord_NamesThatRecordAndTheCellHoldingIt_NeverTheWorldspaceAroundAnExteriorCell(
+    public void AnEditToASpatialRecord_NamesThatRecordAlone_NeverTheCellOrWorldspaceHoldingIt(
         string edited, string heldIn, string[] changed)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);

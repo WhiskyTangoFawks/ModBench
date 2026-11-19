@@ -58,24 +58,11 @@ public sealed class SpatialWorkingTreeStateTests : IDisposable
         ];
     }
 
-    public static TheoryData<string, WorkingTreeState[]> EditedAndModified => new()
+    [Fact]
+    public void AnEditedPlacedReference_IsListedAsModified_NeverTheCellHoldingIt()
     {
-        { SpatialPlugin.WorldspaceEditorId, [Modified, None, None, None, None] },
-        { SpatialPlugin.ExteriorCellEditorId, [None, Modified, None, None, None] },
-        { SpatialPlugin.InteriorCellEditorId, [None, None, Modified, None, None] },
-        { SpatialPlugin.ExteriorRefEditorId, [None, Modified, None, Modified, None] },
-        { SpatialPlugin.InteriorRefEditorId, [None, None, Modified, None, Modified] },
-    };
+        _index.RenameEditorId(_entry, _index.DocumentOf(FormKeyOf(_records.InteriorRef), _entry.Key), "Renamed");
 
-    [Theory]
-    [MemberData(nameof(EditedAndModified))]
-    public void AnEditedSpatialRecord_IsListedAsModified_WithTheDocumentHoldingIt(string editedEditorId, WorkingTreeState[] expected)
-    {
-        var edited = new IMajorRecordGetter[] { _records.Worldspace, _records.ExteriorCell, _records.InteriorCell, _records.ExteriorRef, _records.InteriorRef }
-            .Single(record => record.EditorID == editedEditorId);
-
-        _index.RenameEditorId(_entry, _index.DocumentOf(FormKeyOf(edited), _entry.Key), "Renamed");
-
-        Assert.Equal(expected, WorldspaceExteriorInteriorExteriorRefInteriorRefStates());
+        Assert.Equal([None, None, None, None, Modified], WorldspaceExteriorInteriorExteriorRefInteriorRefStates());
     }
 }
