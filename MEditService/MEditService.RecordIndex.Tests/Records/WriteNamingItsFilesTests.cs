@@ -408,7 +408,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     [Fact]
     public async Task AWriteNamingTheHeader_ReadsThePluginWhole()
     {
-        var header = Directory.GetFiles(Path.Combine(Container.ModFolderOf(), PluginSourceRoot.For(ContainerMod.PluginName)), "*.json", SearchOption.TopDirectoryOnly).Single();
+        var header = Path.Combine(Container.ModFolderOf(), PluginSourceRoot.HeaderDocument(ContainerMod.PluginName));
         var wholeReads = _source.WholeTreeReads;
 
         Assert.Null(await Hold(new HandedPlugin(Container.Key, [header], [])));

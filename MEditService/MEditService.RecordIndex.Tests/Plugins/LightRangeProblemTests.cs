@@ -37,7 +37,7 @@ public sealed class LightRangeProblemTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private string HeaderFile => Directory.EnumerateFiles(Path.Combine(_light.ModFolderOf(), PluginSourceRoot.For(Light)), "*.json").Single();
+    private string HeaderFile => Path.Combine(_light.ModFolderOf(), PluginSourceRoot.HeaderDocument(Light));
 
     private string HeaderFlaggedLightByTheModHeaderItsDefaultsLeaveOut => File.ReadAllText(HeaderFile)
         .Replace(GameReleaseMember, GameReleaseMember + ",\n  \"ModHeader\": {\n    \"Flags\": [\"Small\"]\n  }", StringComparison.Ordinal);

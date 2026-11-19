@@ -6,6 +6,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using static MEditService.RecordIndex.Tests.TestSupport.Announcements;
 
 namespace MEditService.RecordIndex.Tests.Records;
 
@@ -235,16 +236,18 @@ public sealed class StoreRebuildTests : IDisposable
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-reopen-filter-status");
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new AbortingDuckDbsCheckpoint(data.InstanceRoot, "B.esp", nthRead: 2));
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Open(holder, new AbortingDuckDbsCheckpoint(data.InstanceRoot, "B.esp", nthRead: 2), notifications: notifications);
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         var filtering = Stopwatch.StartNew();
         index.SetFilter(SlowlyMatchesNpcA, "slow.sql");
         var filterTakes = filtering.Elapsed;
         PluginBinaries.Touch(data.Plugins.Single(plugin => plugin.Name == "B.esp").Path);
+        var before = notifications.Notifications.Count;
 
         index.SignalChange();
-        var longestRead = Waits.LongestReadUntil(() => index.Status.State, state => state == LoadOrderState.Failed);
+        var longestRead = Waits.LongestReadUntil(() => index.Status.State, () => notifications.Since(before).Any(n => StatusFailed(n)));
 
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
     }

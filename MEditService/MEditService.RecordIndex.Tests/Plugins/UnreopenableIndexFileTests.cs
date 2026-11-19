@@ -17,12 +17,13 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         .Build();
 
     private readonly LoadOrderHolder _holder = new();
+    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly string _indexFolder;
     private readonly OpenedIndex _index;
 
     public UnreopenableIndexFileTests()
     {
-        _index = Indexes.Open(_holder, new AbortingDuckDbsCheckpoint(_fixture.InstanceRoot, Aborted, nthRead: 2));
+        _index = Indexes.Open(_holder, new AbortingDuckDbsCheckpoint(_fixture.InstanceRoot, Aborted, nthRead: 2), notifications: _notifications);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _indexFolder = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot)) ?? throw new InvalidOperationException("The index file has a folder.");
     }
@@ -35,17 +36,19 @@ public sealed class UnreopenableIndexFileTests : IDisposable
     }
 
     [PosixFact]
-    public void AFatalError_WhoseReopenFails_EndsInAFailedStatusThatSaysSo()
+    public void AFatalError_WhoseReopenFails_PublishesAFailedStatusThatSaysSo_NamingTheIndexFile()
     {
         FileModes.Set(_indexFolder, "500");
 
         var rewritten = new Fallout4Mod(ModKey.FromFileName(Aborted), Fallout4Release.Fallout4);
         rewritten.Npcs.AddNew("RewrittenNpc");
         rewritten.WriteToBinary(_fixture.Plugins.Single().Path);
+        var before = _notifications.Notifications.Count;
 
-        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the reopen failing");
-
-        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
-        Assert.Contains("index.duckdb", _index.Status.Message, StringComparison.Ordinal);
+        _index.NextCheckUnsettledUntil(
+            () => _notifications.Since(before).Any(n => n is LoadOrderStatusNotification { Status: { State: LoadOrderState.Failed, Message: { } message } }
+                && message.Contains("mEdit's record index was not reopened: ", StringComparison.Ordinal)
+                && message.Contains("index.duckdb", StringComparison.Ordinal)),
+            "a Failed status saying the reopen failed, naming the index file");
     }
 }
