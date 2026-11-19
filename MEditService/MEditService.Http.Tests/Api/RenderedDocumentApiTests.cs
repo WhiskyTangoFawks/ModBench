@@ -38,11 +38,11 @@ public sealed class RenderedDocumentApiTests : HostedTests
         return (document.GetProperty("fileName").GetString().Require(), document.GetProperty("text").GetString().Require());
     }
 
-    private async Task<(string FileName, string Text)> WrittenByInit(ScatteredFixtureData fx, string pattern)
+    private async Task<(string FileName, string Text)> WrittenByInit(ScatteredFixtureData fx, Func<string, string> written)
     {
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        var written = Directory.EnumerateFiles(ModFolderOf(fx), pattern, SearchOption.AllDirectories).Single();
-        return (Path.GetFileName(written), File.ReadAllText(written));
+        var file = written(ModFolderOf(fx));
+        return (Path.GetFileName(file), File.ReadAllText(file));
     }
 
     [Theory]
@@ -54,8 +54,10 @@ public sealed class RenderedDocumentApiTests : HostedTests
 
         var rendered = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, recordType, editorId));
 
-        Assert.Equal(await WrittenByInit(fx, $"{editorId} - *.json"), rendered);
+        Assert.Equal(await WrittenByInit(fx, folder => DocumentOf(Directory.EnumerateFileSystemEntries(folder, $"{editorId} - *", SearchOption.AllDirectories).Single())), rendered);
     }
+
+    private static string DocumentOf(string entry) => Directory.Exists(entry) ? PluginSourceRoot.ContainerDocument(entry) : entry;
 
     [Fact]
     public async Task ANonCompiledPluginsHeader_IsTheFileInitWrites_ByNameAndText()
@@ -64,7 +66,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
 
         var rendered = await RenderedOk($"000000:{Plugin}");
 
-        Assert.Equal(await WrittenByInit(fx, "000000_*.json"), rendered);
+        Assert.Equal(await WrittenByInit(fx, folder => Path.Combine(folder, PluginSourceRoot.HeaderDocument(Plugin))), rendered);
     }
 
     [Fact]

@@ -19,7 +19,7 @@ internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
-internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
+internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
 {
     private readonly string _sourceFolder = sourceFolder;
     private readonly GameRelease _release = release;
@@ -145,19 +145,7 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
 
     /// <summary>One file of the door's tree where the source folder holds it.</summary>
     internal static TreeFile PlacedFileOf(string pluginFileName, TreeFile doorFile) =>
-        new(doorFile.RelativePath == DocumentFileNames.Root
-                ? HeaderDocumentFor(pluginFileName)
-                : Path.Combine(RootFor(pluginFileName), SourceNameOf(CutToLeafRule(doorFile.RelativePath))),
-            doorFile.Content);
-
-    [GeneratedRegex(@"^(?<editorId>.+) - (?<formKey>[0-9A-F]{6}_.*)$")]
-    private static partial Regex DoorLeaf();
-
-    private static string CutToLeafRule(string doorPath) =>
-        Path.Combine(doorPath.Split(Path.DirectorySeparatorChar).Select(segment =>
-            DoorLeaf().Match(segment) is { Success: true } leaf
-                ? LeafWithEditorId(leaf.Groups["editorId"].Value, leaf.Groups["formKey"].Value)
-                : segment).ToArray());
+        doorFile with { RelativePath = Path.Combine(RootFor(pluginFileName), doorFile.RelativePath) };
 
     /// <summary>Placed files of <paramref name="pluginFileName"/>'s tree as the whole-mod door names them,
     /// relative to the tree's root.</summary>
@@ -191,25 +179,15 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
         var root = RootFor(pluginFileName);
         var sources = files.Select(file => file.RelativePath).ToList();
         var documents = ContainerDocumentsAmong(sources, gameRelease);
-        string DoorName(string source)
-        {
-            if (IsHeaderDocumentPath(source, pluginFileName)) return DocumentFileNames.Root;
-            return Path.GetRelativePath(root, documents.Contains(source)
-                ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root)
-                : source);
-        }
+        string DoorName(string source) =>
+            Path.GetRelativePath(root, documents.Contains(source) ? ContainerDocumentIn(PathShape.DirectoryOf(source)) : source);
 
         return sources.Select(source => (source, DoorName(source)));
     }
 
-    private static string SourceNameOf(string doorPath) =>
-        Path.GetFileName(doorPath).Equals(DocumentFileNames.Root, StringComparison.Ordinal)
-            ? ContainerDocumentIn(PathShape.DirectoryOf(doorPath))
-            : doorPath;
-
-    /// <summary>The file a container's directory is written with: the one its leaf names.</summary>
+    /// <summary>The file a container's directory is written with.</summary>
     internal static string ContainerDocumentIn(string directory) =>
-        Path.Combine(directory, Path.GetFileName(directory) + JsonSuffix);
+        Path.Combine(directory, DocumentFileNames.Root);
 
     /// <summary>Whether <paramref name="relativePath"/> sits where a container's document does: in a record
     /// directory of a directory-per-record group.</summary>
@@ -232,8 +210,8 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
             .Select(directory => ContainerDocumentAmong(directory.Key, directory))
             .ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The document a container's directory holds: the one its leaf names, else the only one. Several,
-    /// none so named, throw: no one record's document can be told.</summary>
+    /// <summary>The document a container's directory holds: the one <see cref="ContainerDocumentIn"/> names, else the
+    /// only one. Several, none so named, throw: no one record's document can be told.</summary>
     internal static string ContainerDocumentAmong(string directory, IEnumerable<string> documents)
     {
         var named = ContainerDocumentIn(directory);
@@ -246,7 +224,7 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
             1 => held[0],
             _ => throw SourceStopException.Ambiguous(
                 $"{directory} holds more than one document ({string.Join(", ", held.Select(Path.GetFileName))}) and none is named " +
-                "for the directory, so no one record's document can be told. Remove the extra ones by hand."),
+                $"{DocumentFileNames.Root}, so no one record's document can be told. Remove the extra ones by hand."),
         };
     }
 
@@ -257,16 +235,18 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
                 ? files.FilesIn(directory, "*", SearchOption.TopDirectoryOnly).Where(file => !CarriesNoRecord(file))
                 : []);
 
-    /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string sourceFolder, string pluginFileName) =>
         Path.Combine(sourceFolder, HeaderDocumentFor(pluginFileName));
 
     /// <summary>The plugin header's own document, relative to the source folder.</summary>
     internal static string HeaderDocumentFor(string pluginFileName) =>
-        Path.Combine(RootFor(pluginFileName), HeaderDocumentLeaf(pluginFileName));
+        Path.Combine(RootFor(pluginFileName), DocumentFileNames.Root);
 
-    internal static string HeaderDocumentLeaf(string pluginFileName) =>
-        FileNameFor(FormKey.Factory(HeaderFormKeyOf(pluginFileName)), editorId: null);
+    /// <summary>The name of the file the layout writes <paramref name="identity"/>'s own document in.</summary>
+    internal static string DocumentFileNameFor(RecordIdentity identity, GameRelease gameRelease) =>
+        identity.RecordType == PluginHeader.RecordType || GroupFolders.For(gameRelease).HasDirectory(identity.RecordType)
+            ? DocumentFileNames.Root
+            : FileNameFor(FormKey.Factory(identity.FormKey), identity.EditorId);
 
     // The flat record's own file. The origin ModKey, never the plugin written into, keeps two
     // masters' records from colliding on one path; a directory-per-record type refuses.
@@ -343,22 +323,13 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     internal static string BlockLevelName(int? x, int? y) =>
         string.Create(CultureInfo.InvariantCulture, $"{x ?? 0}, {y ?? 0}");
 
-    // "[<EditorID> - ]<hex6>_<originModKey>", ".json" on a flat file only. The EditorID is cut so a
-    // deep path stays under Windows' 260 characters; the FormKey part keeps the name unique.
-    private const int MaxEditorIdInLeaf = 64;
-
+    // "[<EditorID> - ]<hex6>_<originModKey>", ".json" on a flat file only.
     internal static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
     {
         var extension = isDirectory ? string.Empty : JsonSuffix;
         var filesafe = FilesafeFormKey(formKey);
-
-        if (string.IsNullOrEmpty(editorId)) return $"{filesafe}{extension}";
-
-        return LeafWithEditorId(editorId, $"{filesafe}{extension}");
+        return string.IsNullOrEmpty(editorId) ? $"{filesafe}{extension}" : $"{editorId} - {filesafe}{extension}";
     }
-
-    private static string LeafWithEditorId(string editorId, string formKeyPart) =>
-        $"{(editorId.Length > MaxEditorIdInLeaf ? editorId[..MaxEditorIdInLeaf] : editorId)} - {formKeyPart}";
 
     internal static string FileNameFor(FormKey formKey, string? editorId) => LeafNameFor(formKey, editorId, isDirectory: false);
 

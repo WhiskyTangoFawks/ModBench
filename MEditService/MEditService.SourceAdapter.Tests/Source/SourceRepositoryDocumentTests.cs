@@ -202,14 +202,14 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void AnEditorIdTooLongForAPath_NamesTheFileByACappedEditorId()
+    public void ALongEditorId_NamesTheFileWhole_AsSpriggitDoes()
     {
         var repository = Opened();
-        var longId = new string('A', 300);
+        var longId = new string('A', 80);
 
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", longId, WithEditorId(longId))).Wrote();
 
-        Assert.Equal([$"{new string('A', 64)} - 000800_{PluginName}.json"], NpcFileNames());
+        Assert.Equal([$"{longId} - 000800_{PluginName}.json"], NpcFileNames());
         Assert.Equal(WithEditorId(longId), repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", longId)).Value()?.Body);
     }
 

@@ -419,7 +419,7 @@ internal sealed class SourceRepositoryWrites(
         return new LeafMoves(Differing([(unit.FullPath, to)]), to);
     }
 
-    // The directory moves to where its leaf name puts it, then the document in it takes the leaf's name.
+    // The directory moves to where its leaf name puts it, then the document in it takes the container document's name.
     private static LeafMoves ContainerPlan(SourceUnit unit, string toDirectory)
     {
         var written = SourceRepositoryLayout.ContainerDocumentIn(toDirectory);

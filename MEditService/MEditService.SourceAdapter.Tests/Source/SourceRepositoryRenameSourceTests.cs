@@ -17,7 +17,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
     private static readonly (string Path, string Text)[] OldTree =
     [
-        ("000000_Old.esp.json", """
+        ("RecordData.json", """
             {
               "ModKey": "Old.esp",
               "ModHeader": {
@@ -54,7 +54,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             }
             """),
         ("Cells/0/0/GroupRecordData.json", "{}"),
-        ("Cells/0/0/EmbedCell - 000804_Old.esp/EmbedCell - 000804_Old.esp.json", """
+        ("Cells/0/0/EmbedCell - 000804_Old.esp/RecordData.json", """
             {
               "FormKey": "000804:Old.esp",
               "Temporary": [
@@ -66,7 +66,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
     private static readonly (string Path, string Text)[] OtherTree =
     [
-        ("000000_Other.esp.json", """{ "ModKey": "Other.esp" }"""),
+        ("RecordData.json", """{ "ModKey": "Other.esp" }"""),
         ("Npcs/OtherNpc - 000801_Other.esp.json", """
             {
               "FormKey": "000801:Other.esp",
@@ -94,15 +94,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Old.Name)));
         Assert.Equal(
             [
-                ("000000_New.esm.json", """
-                    {
-                      "ModKey": "New.esm",
-                      "ModHeader": {
-                        "MasterReferences": [ { "Master": "DLC.esm" } ]
-                      }
-                    }
-                    """),
-                ("Cells/0/0/EmbedCell - 000804_New.esm/EmbedCell - 000804_New.esm.json", """
+                ("Cells/0/0/EmbedCell - 000804_New.esm/RecordData.json", """
                     {
                       "FormKey": "000804:New.esm",
                       "Temporary": [
@@ -129,6 +121,14 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                       "Name": "Old.esp",
                       "ShortName": "see 000802:Old.esp",
                       "Race": "000802:New.esm"
+                    }
+                    """),
+                ("RecordData.json", """
+                    {
+                      "ModKey": "New.esm",
+                      "ModHeader": {
+                        "MasterReferences": [ { "Master": "DLC.esm" } ]
+                      }
                     }
                     """),
                 ("spriggit-meta.json", """
@@ -163,7 +163,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var changes = Session().Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
 
         Assert.Equal(
-            ["000000_New.esp.json", "Cells/0/0/EmbedCell - 000804_New.esp/EmbedCell - 000804_New.esp.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json", "spriggit-meta.json"],
+            ["Cells/0/0/EmbedCell - 000804_New.esp/RecordData.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json", "RecordData.json", "spriggit-meta.json"],
             changes.Documents.Select(document => Path.GetRelativePath(PluginSourceRoot.In(_modFolder, "New.esp"), Path.Combine(_modFolder, document.Path)).Replace('\\', '/')).Order(StringComparer.Ordinal));
     }
 

@@ -41,7 +41,7 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => inner.RecordOfFile(loadOrder, path);
 
-    public virtual string FileNameOf(RecordIdentity identity) => inner.FileNameOf(identity);
+    public virtual string FileNameOf(RecordIdentity identity, GameRelease release) => inner.FileNameOf(identity, release);
 
     public virtual bool HoldsAnotherRepository(string sourceFolder) => inner.HoldsAnotherRepository(sourceFolder);
 

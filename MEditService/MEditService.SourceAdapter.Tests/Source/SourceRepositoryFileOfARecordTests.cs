@@ -48,7 +48,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     }
 
     private static readonly string RoomRelativePath = Path.Combine(
-        "plugin-source", "Filed.esp", "Cells", "0", "0", "FiledRoom - 000801_Filed.esp", "FiledRoom - 000801_Filed.esp.json");
+        "plugin-source", "Filed.esp", "Cells", "0", "0", "FiledRoom - 000801_Filed.esp", "RecordData.json");
 
     private string NpcFile => Path.Combine(_modFolder, NpcDocument);
 
@@ -91,7 +91,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         filed switch
         {
             Filed.Npc => (Npc, NpcFile, Path.Combine("plugin-source", "Filed.esp", "Npcs", "FiledNpc - 000800_Filed.esp.json"), false),
-            Filed.Header => (Header, HeaderFile, Path.Combine("plugin-source", "Filed.esp", "000000_Filed.esp.json"), false),
+            Filed.Header => (Header, HeaderFile, Path.Combine("plugin-source", "Filed.esp", "RecordData.json"), false),
             Filed.Room => (Room, RoomFile, RoomRelativePath, false),
             Filed.Placed => (Placed, RoomFile, RoomRelativePath, true),
             _ => throw new ArgumentOutOfRangeException(nameof(filed), filed, null),

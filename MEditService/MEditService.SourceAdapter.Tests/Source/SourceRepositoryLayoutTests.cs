@@ -53,57 +53,8 @@ public sealed class SourceRepositoryLayoutTests
             new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2]));
 
         Assert.Equal(
-            [Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json"),
+            [Path.Combine("plugin-source", "Mixed.ESP", "RecordData.json"),
              Path.Combine("plugin-source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
-            SourceFilesIn(modFolder));
-        Assert.Equal([1], File.ReadAllBytes(Path.Combine(modFolder, "plugin-source", "Mixed.ESP", "000000_Mixed.esp.json")));
-    }
-
-    [Fact]
-    public void AContainersDocument_IsNamedForTheContainersOwnLeaf()
-    {
-        using var modFolder = new ScratchDirectory("medit-layout-init-");
-        var directory = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
-
-        InitMixed(modFolder,
-            new TreeFile(Path.Combine(directory, "RecordData.json"), [1]),
-            new TreeFile(Path.Combine(directory, "0, 0", "GroupRecordData.json"), [2]));
-
-        Assert.Equal(
-            [Path.Combine("plugin-source", "Mixed.ESP", directory, "0, 0", "GroupRecordData.json"),
-             Path.Combine("plugin-source", "Mixed.ESP", directory, "W - 000800_Mixed.ESP.json")],
-            SourceFilesIn(modFolder));
-    }
-
-    [Fact]
-    public void AFlatRecordWithALongEditorId_IsPlacedAtTheLayoutsCutName()
-    {
-        using var modFolder = new ScratchDirectory("medit-layout-init-");
-        var editorId = new string('E', 70);
-
-        InitMixed(modFolder,
-            new TreeFile("RecordData.json", [0]),
-            new TreeFile(Path.Combine("npc_", $"{editorId} - 000800_Mixed.ESP.json"), [1]));
-
-        Assert.Equal(
-            Path.Combine("plugin-source", "Mixed.ESP", "npc_", $"{new string('E', 64)} - 000800_Mixed.ESP.json"),
-            SourceFilesIn(modFolder).Single(file => file.Contains("npc_", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void AContainerWithALongEditorId_HasItsDirectoryAndDocumentAtTheLayoutsCutName()
-    {
-        using var modFolder = new ScratchDirectory("medit-layout-init-");
-        var cut = $"{new string('W', 64)} - 000800_Mixed.ESP";
-        var door = Path.Combine("Worldspaces", $"{new string('W', 70)} - 000800_Mixed.ESP");
-
-        InitMixed(modFolder,
-            new TreeFile(Path.Combine(door, "RecordData.json"), [1]),
-            new TreeFile(Path.Combine(door, "0, 0", "GroupRecordData.json"), [2]));
-
-        Assert.Equal(
-            [Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", cut, "0, 0", "GroupRecordData.json"),
-             Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", cut, cut + ".json")],
             SourceFilesIn(modFolder));
     }
 
@@ -190,8 +141,8 @@ public sealed class SourceRepositoryLayoutTests
         string[] paths =
         [
             Path.Combine(container, "RecordData.json"),
-            Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json"),
-            Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json"),
+            Path.Combine("plugin-source", "Mixed.ESP", container, "RecordData.json"),
+            Path.Combine("plugin-source", "Mixed.ESP", "RecordData.json"),
         ];
         var read = new PluginDiagnosis(null, PluginDiagnosis.UnknownClass, null, string.Format(CultureInfo.InvariantCulture, message, paths));
 
