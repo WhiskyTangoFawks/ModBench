@@ -24,8 +24,6 @@ public sealed class FunctionLeafConditionDocumentTests
             Data = new SkyrimRecords.GetActorValueConditionData
             {
                 ActorValue = SkyrimRecords.ActorValue.Health,
-                FirstUnusedStringParameter = "stale",
-                SecondUnusedIntParameter = 7,
             },
         });
         var toLink = new SkyrimRecords.GetDistanceConditionData();
@@ -42,7 +40,7 @@ public sealed class FunctionLeafConditionDocumentTests
         var screen = new StarfieldRecords.LoadScreen(new FormKey(ModKey.FromFileName("StarfieldEdit.esp"), 0x800), StarfieldRecords.StarfieldRelease.Starfield) { EditorID = "Screen" };
         screen.Conditions.Add(new StarfieldRecords.ConditionFloat
         {
-            Data = new StarfieldRecords.GetVATSValueConditionData { FirstParameter = 3, SecondParameter = 5, FirstUnusedStringParameter = "stale" },
+            Data = new StarfieldRecords.GetVATSValueConditionData { FirstParameter = 3, SecondParameter = 5 },
         });
         return RecordTextCodec.SerializeToText(screen, GameRelease.Starfield);
     }
@@ -69,8 +67,6 @@ public sealed class FunctionLeafConditionDocumentTests
         {
             "Conditions[0].Data.MutagenObjectType: \"GetActorValueConditionData\" -> \"GetCurrentTimeConditionData\"",
             "Conditions[0].Data.ActorValue: \"Health\" -> <absent>",
-            "Conditions[0].Data.FirstUnusedStringParameter: \"stale\" -> <absent>",
-            "Conditions[0].Data.SecondUnusedIntParameter: 7 -> <absent>",
         })]
     [InlineData(
         "Starfield's GetVATSValue to GetWantBlocking",
@@ -78,7 +74,6 @@ public sealed class FunctionLeafConditionDocumentTests
         {
             "Conditions[0].Data.MutagenObjectType: \"GetVATSValueConditionData\" -> \"GetWantBlockingConditionData\"",
             "Conditions[0].Data.FirstParameter: 3 -> <absent>",
-            "Conditions[0].Data.FirstUnusedStringParameter: \"stale\" -> <absent>",
             "Conditions[0].Data.SecondParameter: 5 -> <absent>",
         })]
     public void AChangeOfFunction_EmptiesTheParametersTheNewFunctionLeavesUnused(string change, string[] diffs)

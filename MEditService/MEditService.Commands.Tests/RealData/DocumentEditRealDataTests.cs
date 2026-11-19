@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -136,7 +137,8 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield return (RemoveAt(Member(column.Name), At(0)), column.Name);
             yield return (AddAt(Member(column.Name)), column.Name);
             var takesMove = meta.KeyMembers == null;
-            var aMoveChangesSomething = array.GetArrayLength() > 1 && first.GetRawText() != array[1].GetRawText();
+            var aMoveChangesSomething = array.GetArrayLength() > 1 && first.GetRawText() != array[1].GetRawText()
+                && TheFormatKeepsTheOrderOf(schema, root, column.PropertyName);
             if (takesMove && aMoveChangesSomething)
                 yield return (MoveTo(1, Member(column.Name), At(0)), column.Name);
 
@@ -171,6 +173,18 @@ public sealed class DocumentEditRealDataTests : IDisposable
         if (diffs.Count == 0) yield return $"{gesture}: nothing changed";
         foreach (var stray in diffs.Where(d => !d.StartsWith(path, StringComparison.Ordinal)))
             yield return $"{gesture}: {stray}";
+    }
+
+    private static bool TheFormatKeepsTheOrderOf(RecordTableSchema schema, JsonElement root, string dottedPath)
+    {
+        var swapped = JsonNode.Parse(root.GetRawText()).Require();
+        var hops = dottedPath.Split('.');
+        var array = hops.Aggregate(swapped, (node, hop) => node[hop].Require()).AsArray();
+        var (first, second) = (array[0].Require().DeepClone(), array[1].Require().DeepClone());
+        (array[0], array[1]) = (second, first);
+
+        using var written = JsonDocument.Parse(RecordTextCodec.RoundTrip(swapped.ToJsonString(), GameRelease.Fallout4, schema.TableName));
+        return MemberAt(written.RootElement, dottedPath) is { } kept && JsonNode.DeepEquals(JsonNode.Parse(kept[0].GetRawText()), second);
     }
 
     private static JsonElement? MemberAt(JsonElement root, string dottedPath)

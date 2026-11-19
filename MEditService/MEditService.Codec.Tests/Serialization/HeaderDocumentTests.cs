@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -31,7 +30,6 @@ public sealed class HeaderDocumentTests
         topic.Responses.Add(new DialogResponses(mod) { EditorID = "SomeResponse" });
         quest.DialogTopics.Add(topic);
         mod.Quests.Add(quest);
-        mod.ModHeader.Stats.NextFormID = 0x900;
         return mod;
     }
 
@@ -55,18 +53,6 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void ANextObjectIdOfZero_SurvivesTheRoundTripThroughItsDocument()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("ZeroNext.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.Stats.NextFormID = 0;
-
-        var body = HeaderDocument.Write(mod);
-
-        Assert.Equal(0u, HeaderDocument.Read(body, GameRelease.Fallout4).NextFormID);
-        Assert.Equal(body, HeaderDocument.Write(HeaderDocument.Read(body, GameRelease.Fallout4)));
-    }
-
-    [Fact]
     public void AHeadersDocument_IsCanonicalBytes_NoCarriageReturnNoTrailingNewlineNoBom()
     {
         var produced = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
@@ -75,25 +61,6 @@ public sealed class HeaderDocumentTests
         Assert.Equal((byte)'}', produced[^1]);
         Assert.False(produced.Length >= 3 && produced[0] == 0xEF && produced[1] == 0xBB && produced[2] == 0xBF,
             "the document must carry no UTF-8 BOM.");
-    }
-
-    [Fact]
-    public void AHeadersDocument_HoldsNoMastersOrRecordCount_BecauseEveryWriteDerivesThemFromContent()
-    {
-        var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
-
-        using var document = JsonDocument.Parse(body);
-        var header = document.RootElement.GetProperty("ModHeader");
-        Assert.False(header.TryGetProperty("MasterReferences", out _));
-        Assert.False(header.GetProperty("Stats").TryGetProperty("NumRecords", out _));
-    }
-
-    [Fact]
-    public void AHeadersNextObjectId_IsTheOneTheModHeld()
-    {
-        var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
-
-        Assert.Equal(0x900u, HeaderDocument.Read(body, GameRelease.Fallout4).NextFormID);
     }
 
     [Fact]

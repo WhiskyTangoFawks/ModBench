@@ -241,7 +241,7 @@
         },
         {
           "EditorId": "DialogueConcordArea",
-          "FieldPath": "VirtualMachineAdapter.Script.Properties[10].Object",
+          "FieldPath": "VirtualMachineAdapter.Script.Properties[1].Object",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
@@ -421,7 +421,7 @@
       "Sample": [
         {
           "EditorId": "shipment_Wood_250",
-          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[1].Object",
+          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[2].Object",
           "FormKey": "24A068:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
@@ -435,7 +435,7 @@
       "Sample": [
         {
           "EditorId": "shipment_Rubber_large",
-          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[1].Object",
+          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[2].Object",
           "FormKey": "24A069:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
@@ -449,7 +449,7 @@
       "Sample": [
         {
           "EditorId": "shipment_Ceramic_large",
-          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[1].Object",
+          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[2].Object",
           "FormKey": "24A06B:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
@@ -463,7 +463,7 @@
       "Sample": [
         {
           "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
-          "FieldPath": "VirtualMachineAdapter.Scripts[1].Properties[0].Object",
+          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[3].Object",
           "FormKey": "24A313:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
@@ -472,7 +472,7 @@
         },
         {
           "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
-          "FieldPath": "VirtualMachineAdapter.Scripts[1].Properties[0].Object",
+          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[3].Object",
           "FormKey": "24A314:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
@@ -481,7 +481,7 @@
         },
         {
           "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
-          "FieldPath": "VirtualMachineAdapter.Scripts[1].Properties[0].Object",
+          "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[3].Object",
           "FormKey": "24A315:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",

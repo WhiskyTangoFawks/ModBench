@@ -58,7 +58,7 @@ public sealed class PersistentFlagPartialFormCellTests : TestInstance
         var result = SetFlags(_temporary, Persistent);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["PartialPersist", "PartialTemp"], Group("Persistent"));
+        Assert.Equal(["PartialTemp", "PartialPersist"], Group("Persistent"));
     }
 
     [Fact]

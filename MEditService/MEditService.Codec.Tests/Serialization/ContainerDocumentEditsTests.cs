@@ -74,6 +74,45 @@ public sealed class ContainerDocumentEditsTests
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
     }
 
+    [Theory]
+    [InlineData("000801")]
+    [InlineData("000803")]
+    public void AppendingToAListTheFormatSorts_InsertsTheChildWhereItsOrderPutsIt_AndChangesNoOtherByte(string id)
+    {
+        const string handFormatted = """
+            {
+                "FormKey": "000800:Append.esp",
+                "Persistent": [
+                    {
+                        "MutagenObjectType": "PlacedObject",
+                        "FormKey": "000802:Append.esp",
+                        "EditorID":   "R2"
+                    },
+                    {
+                        "MutagenObjectType": "PlacedObject",
+                        "FormKey": "000804:Append.esp",
+                        "EditorID":   "R4"
+                    }
+                ],
+                "EditorID":"Room"
+            }
+            """;
+        var added = new PlacedObject(Key(id), Fallout4Release.Fallout4) { EditorID = "Added" };
+        var expected = new Cell(Key("000800"), Fallout4Release.Fallout4) { EditorID = "Room" };
+        expected.Persistent.Add(new PlacedObject(Key("000802"), Fallout4Release.Fallout4) { EditorID = "R2" });
+        expected.Persistent.Add(new PlacedObject(Key("000804"), Fallout4Release.Fallout4) { EditorID = "R4" });
+        expected.Persistent.Add(added);
+
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(handFormatted, RecordTypeOf(expected), "Persistent", added)).Text;
+
+        OneInsertion.AssertKeepsEveryOtherByte(handFormatted, edited);
+        using var document = JsonDocument.Parse(edited);
+        Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
+        Assert.Equal(
+            [.. new[] { "000802", "000804", id }.Order(StringComparer.Ordinal).Select(key => $"{key}:Append.esp")],
+            document.RootElement.GetProperty("Persistent").EnumerateArray().Select(placed => placed.GetProperty("FormKey").GetString()));
+    }
+
     [Fact]
     public void AppendingToAListTheTextSpellsEmpty_FillsIt_AndChangesNoOtherByte()
     {

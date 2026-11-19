@@ -31,7 +31,8 @@ public static class ContainerDocumentEdits
         var container = RecordTextCodec.Deserialize(containerText, release, containerRecordType);
         var child = RecordTextCodec.Deserialize(childText, release, childRecordType);
         return ContainerChildFields.TryAddChildToSlot(container, slotName, child, out var held)
-            ? new ChildAppend.Appended(ChildTextInsertion.Inserted(containerText, RecordTextCodec.SerializeToBytes(container, release), slotName))
+            ? new ChildAppend.Appended(ChildTextInsertion.Inserted(
+                containerText, RecordTextCodec.SerializeToBytes(container, release), slotName, child.FormKey.ToString()))
             : new ChildAppend.SlotHeld(held.FormKey.ToString());
     }
 

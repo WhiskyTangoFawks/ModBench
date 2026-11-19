@@ -46,11 +46,7 @@ internal static class SilentSkipGuard
                     dropped = path;
                     return false;
                 }
-                for (var i = 0; i < pa.Count; i++)
-                {
-                    if (!Keeps(wa[i], pa[i], meta?.ElementType, $"{path}[{i}]", out dropped)) return false;
-                }
-                return true;
+                return KeepsEachElement(wa, pa, meta?.ElementType, path, out dropped);
             case JsonValue patchedLeaf:
                 if (written is JsonValue writtenLeaf && LeafSpelling.Same(writtenLeaf, patchedLeaf, meta)) return true;
                 dropped = path;
@@ -60,6 +56,31 @@ internal static class SilentSkipGuard
                 return false;
         }
     }
+
+    private static bool KeepsEachElement(JsonArray written, JsonArray patched, FieldMetadata? meta, string path, out string dropped)
+    {
+        dropped = "";
+        var taken = new HashSet<int>();
+        for (var i = 0; i < patched.Count; i++)
+        {
+            var match = KeptAt(written, i, patched[i], meta, taken);
+            if (match < 0)
+            {
+                _ = Keeps(written[i], patched[i], meta, $"{path}[{i}]", out dropped);
+                return false;
+            }
+            taken.Add(match);
+        }
+        return true;
+    }
+
+    /// <summary>Where an element of <paramref name="written"/> keeps <paramref name="patched"/>: at <paramref name="index"/>
+    /// first, then anywhere not <paramref name="taken"/>; -1 where none does. The format reorders some arrays (ADR-0030).</summary>
+    internal static int KeptAt(JsonArray written, int index, JsonNode? patched, FieldMetadata? meta, IReadOnlySet<int> taken) =>
+        Enumerable.Range(0, written.Count)
+            .Where(position => !taken.Contains(position))
+            .OrderBy(position => position != index)
+            .FirstOrDefault(position => Keeps(written[position], patched, meta, "", out _), -1);
 
     private static bool IsDefaultLike(JsonNode? node, FieldMetadata? meta)
     {

@@ -11,13 +11,14 @@ internal static class ChildTextInsertion
 
     private readonly record struct Span(int Start, int End);
 
-    private readonly record struct Member(string Name, Span Whole, Span Value, Span? LastElement);
+    private readonly record struct Member(string Name, Span Whole, Span Value, IReadOnlyList<Span> Elements);
 
     private readonly record struct Insertion(int At, int Replacing, string Text);
 
-    /// <summary><paramref name="text"/> with what <paramref name="canonical"/>, the codec's spelling of the
-    /// container after the append, holds at the end of <paramref name="slot"/>.</summary>
-    internal static string Inserted(string text, byte[] canonical, string slot)
+    /// <summary><paramref name="text"/> with the child <paramref name="canonical"/>, the codec's spelling of the
+    /// container after the append, holds in <paramref name="slot"/> under <paramref name="formKey"/>, where the
+    /// format's order puts it.</summary>
+    internal static string Inserted(string text, byte[] canonical, string slot, string formKey)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         var canonicalMembers = RootMembers(canonical);
@@ -27,7 +28,7 @@ internal static class ChildTextInsertion
         var insertion = members.Where(member => member.Name == slot).ToList() switch
         {
             [] => AfterTheLastMemberWrittenAhead(bytes, members, canonical, canonicalMembers, canonicalSlot),
-            [{ LastElement: { } last }] when canonicalSlot.LastElement is { } appended => AfterTheLastElement(bytes, last, canonical, appended),
+            [{ Elements.Count: > 0 } held] => AmongTheElements(bytes, held.Elements, canonical, canonicalSlot.Elements, formKey),
             [var empty] => AsTheWholeValue(bytes, empty, canonical, canonicalSlot),
             _ => throw new InvalidOperationException(
                 $"The container's text names {slot} more than once, so which of them the record holds is not certain."),
@@ -37,10 +38,22 @@ internal static class ChildTextInsertion
             [.. bytes[..insertion.At], .. Encoding.UTF8.GetBytes(insertion.Text.ReplaceLineEndings(lineEnding)), .. bytes[(insertion.At + insertion.Replacing)..]]);
     }
 
-    private static Insertion AfterTheLastElement(byte[] bytes, Span last, byte[] canonical, Span appended)
+    // The format sorts some slots (ADR-0030), so the child sits after the elements the codec writes ahead of it.
+    private static Insertion AmongTheElements(
+        byte[] bytes, IReadOnlyList<Span> elements, byte[] canonical, IReadOnlyList<Span> canonicalElements, string formKey)
     {
-        var column = TextIndentation.ColumnAt(bytes, last.Start);
-        return new(last.End, 0, $",\n{new string(' ', column)}{AtColumn(canonical, appended, column)}");
+        var at = canonicalElements.ToList().FindIndex(element => FormKeyIn(canonical, element) == formKey);
+        var column = TextIndentation.ColumnAt(bytes, elements[0].Start);
+        var child = AtColumn(canonical, canonicalElements[at], column);
+        return at == 0
+            ? new(elements[0].Start, 0, $"{child},\n{new string(' ', column)}")
+            : new(elements[Math.Min(at, elements.Count) - 1].End, 0, $",\n{new string(' ', column)}{child}");
+    }
+
+    private static string? FormKeyIn(byte[] bytes, Span element)
+    {
+        using var document = JsonDocument.Parse(bytes.AsMemory(element.Start, element.End - element.Start));
+        return document.RootElement.TryGetProperty(RecordMembers.FormKey, out var formKey) ? formKey.GetString() : null;
     }
 
     private static Insertion AsTheWholeValue(byte[] bytes, Member empty, byte[] canonical, Member canonicalSlot) =>
@@ -75,14 +88,14 @@ internal static class ChildTextInsertion
             var nameStart = (int)reader.TokenStartIndex;
             reader.Read();
             var valueStart = (int)reader.TokenStartIndex;
-            Span? last = null;
+            var elements = new List<Span>();
             if (reader.TokenType == JsonTokenType.StartArray)
             {
                 while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
                 {
                     var start = (int)reader.TokenStartIndex;
                     reader.Skip();
-                    last = new Span(start, (int)reader.BytesConsumed);
+                    elements.Add(new Span(start, (int)reader.BytesConsumed));
                 }
             }
             else
@@ -90,7 +103,7 @@ internal static class ChildTextInsertion
                 reader.Skip();
             }
             var end = (int)reader.BytesConsumed;
-            members.Add(new Member(name, new Span(nameStart, end), new Span(valueStart, end), last));
+            members.Add(new Member(name, new Span(nameStart, end), new Span(valueStart, end), elements));
         }
         return members;
     }

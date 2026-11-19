@@ -58,7 +58,7 @@ public sealed class PluginDocumentReadTests
 
         Assert.Equal(PluginHeader.RecordType, documents.Header.RecordType);
         Assert.Equal($"000000:{PluginName}", documents.Header.FormKey);
-        Assert.Contains("ModHeader", documents.Header.Text, StringComparison.Ordinal);
+        Assert.Contains($"\"ModKey\": \"{PluginName}\"", documents.Header.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(documents.Records, d => d.RecordType == PluginHeader.RecordType);
     }
 

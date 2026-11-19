@@ -70,6 +70,18 @@ public sealed class ProofDivergenceTests
     }
 
     [Fact]
+    public void AListTheProofTextPutInTheFormatsOrder_IsNamedAsLostInMutagensSerialization()
+    {
+        var divergence = DivergenceOfAPluginFromItself(game => new ProofInTheFormatsOrder(game), plugin =>
+        {
+            var npc = plugin.Npcs.AddNew("Ranked");
+            npc.Factions.AddRange(new[] { 0x802u, 0x801u }.Select(id => new RankPlacement { Faction = new FormLink<IFactionGetter>(new FormKey(plugin.ModKey, id)) }));
+        }).Answered();
+
+        Assert.StartsWith("Npc 000800:Fixture.esp (EditorID 'Ranked') differs after a round trip through Mutagen's JSON serialization", divergence?.Description);
+    }
+
+    [Fact]
     public void BothTripsFailing_AnswersTheFailureThatNamesItsCause_OverOneThatOnlyFailedToParse()
     {
         var answer = DivergenceOfAPluginFromItself(game => new ProofReadFailingBeforeTheTextEnds(game), recompiled: "Absent.esp");
@@ -123,6 +135,21 @@ public sealed class ProofDivergenceTests
         {
             var read = await base.ReadProofText(text, modKey, release);
             foreach (var quest in ((IFallout4Mod)read).Quests) quest.DialogTopics.Reverse();
+            return read;
+        }
+    }
+
+    private sealed class ProofInTheFormatsOrder(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public override async Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release)
+        {
+            var read = await base.ReadProofText(text, modKey, release);
+            foreach (var npc in ((IFallout4Mod)read).Npcs)
+            {
+                var ordered = npc.Factions.OrderBy(faction => faction.Faction.FormKey).ToList();
+                npc.Factions.Clear();
+                npc.Factions.AddRange(ordered);
+            }
             return read;
         }
     }
@@ -186,8 +213,6 @@ public sealed class ProofDivergenceTests
 
         public IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type) => game.NewPluginFlags(release, type);
 
-        public uint NextObjectIdDefault => game.NextObjectIdDefault;
-
         public SchemaAnnotations Annotations => game.Annotations;
 
         public CreationKitShapes CreationKitShapes => game.CreationKitShapes;
@@ -196,6 +221,8 @@ public sealed class ProofDivergenceTests
 
         public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf) =>
             game.NormalizeEncoding(record, localized, baseMemberOf);
+
+        public IMajorRecordGetter NormalizeFormat(IMajorRecordGetter record) => game.NormalizeFormat(record);
 
         public IModGetter HeaderOnly(IModGetter plugin) => game.HeaderOnly(plugin);
     }

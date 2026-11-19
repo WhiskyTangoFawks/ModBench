@@ -54,6 +54,21 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- A git worktree starts with the submodule empty, and a glob over an empty folder would compile a codec with
+       no customization (ADR-0030), so the folder is filled first and a missing Customization.cs fails the build. -->
+  <PropertyGroup>
+    <SpriggitPackages>$(MSBuildThisFileDirectory)vendor/Spriggit/Translation Packages/</SpriggitPackages>
+  </PropertyGroup>
+
+  <Target Name="SpriggitCustomizations" BeforeTargets="BeforeCompile" Condition="'$(SpriggitPackage)' != ''">
+    <Exec Condition="!Exists('$(SpriggitPackages)$(SpriggitPackage)/Customization.cs')"
+          Command="git submodule update --init --depth 1 -- vendor/Spriggit" WorkingDirectory="$(MSBuildThisFileDirectory)" />
+    <ItemGroup>
+      <Compile Include="$(SpriggitPackages)$(SpriggitPackage)/Customization.cs" />
+      <Compile Include="$(SpriggitPackages)$(SpriggitPackage)/Customizations/**/*.cs" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup Condition="'$(MutagenBanIncluded)' == 'true'">
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Mutagen.txt" />
   </ItemGroup>

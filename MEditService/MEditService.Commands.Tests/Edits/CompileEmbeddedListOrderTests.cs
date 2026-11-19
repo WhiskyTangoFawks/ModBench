@@ -38,13 +38,13 @@ public sealed class CompileEmbeddedListOrderTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_SwapsTheChildren()
+    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_KeepsTheChildrenInTheFormatsOrder()
     {
         var original = ReferencesIn(this.Binary(_plugin));
 
         var compiled = await ReferencesAfter(cell => (cell.Temporary[0], cell.Temporary[2]) = (cell.Temporary[2], cell.Temporary[0]));
 
-        Assert.Equal([original[2], original[1], original[0]], compiled);
+        Assert.Equal(original, compiled);
     }
 
     private static IReadOnlyList<FormKey> ReferencesIn(IFallout4ModDisposableGetter binary)

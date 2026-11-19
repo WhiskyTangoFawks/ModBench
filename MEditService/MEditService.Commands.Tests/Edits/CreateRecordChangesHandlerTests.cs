@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -8,7 +7,6 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -195,16 +193,6 @@ public sealed class CreateRecordChangesHandlerTests
                 Commit(mod);
             },
             "000806:Fixture.esp"
-        },
-        {
-            mod =>
-            {
-                var headerFile = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
-                var header = (IMod)HeaderDocument.Read(File.ReadAllBytes(headerFile), GameRelease.Fallout4);
-                header.NextFormID = 0x900;
-                mod.Unsaved.Typed(new DocumentChange(headerFile, Encoding.UTF8.GetString(HeaderDocument.Write(header))));
-            },
-            FirstFreeFormKey
         },
     };
 

@@ -110,7 +110,7 @@ public sealed class PersistentFlagEditTests : IDisposable
         var result = SetFlags("InsideTemp", Persistent);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["InsidePersist", "InsideTemp"], Group("Inside", "Persistent"));
+        Assert.Equal(["InsideTemp", "InsidePersist"], Group("Inside", "Persistent"));
         Assert.Empty(Group("Inside", "Temporary"));
         AssertOnlyFlagsChanged(before, "InsideTemp", Persistent);
     }
@@ -136,7 +136,7 @@ public sealed class PersistentFlagEditTests : IDisposable
         var result = SetFlags("TopTemp", Persistent);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["TopPersist", "TopTemp"], Group("WorldPersistentCell", "Persistent"));
+        Assert.Equal(["TopTemp", "TopPersist"], Group("WorldPersistentCell", "Persistent"));
         Assert.Empty(Group("WorldPersistentCell", "Temporary"));
         AssertOnlyFlagsChanged(before, "TopTemp", Persistent);
     }
@@ -149,7 +149,7 @@ public sealed class PersistentFlagEditTests : IDisposable
         var result = SetFlags("TopPersist", 0);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["OutsideTemp", "OutsideStale", "TopPersist"], Group("Outside", "Temporary"));
+        Assert.Equal(["TopPersist", "OutsideTemp", "OutsideStale"], Group("Outside", "Temporary"));
         Assert.Empty(Group("WorldPersistentCell", "Persistent"));
         AssertOnlyFlagsChanged(before, "TopPersist", 0);
     }

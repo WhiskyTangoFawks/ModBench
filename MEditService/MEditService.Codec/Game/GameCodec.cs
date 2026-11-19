@@ -9,7 +9,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
-using Mutagen.Bethesda.Serialization.Utility;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 using Noggog.IO;
@@ -46,17 +45,12 @@ internal sealed class GameCodec : IGameCodec
 
     public IReadOnlyList<string> TransientTypes(IModGetter plugin) => GameSpecifics.TransientTypes((IGameModGetter)plugin);
 
-    public uint NextObjectIdDefault => ModStats.NextFormIDDefault;
-
-    public async Task SerializeWholeMod(
+    public Task SerializeWholeMod(
         IModGetter plugin, string folder, IWorkDropoff workDropoff, CancellationToken cancel,
-        IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
-    {
-        using var cleanup = SerializationHelper.GetStreamCreator(streamCreator, fileSystem.GetOrDefault(), folder, out var creator);
-        await MutagenJsonConverter.Instance.Serialize(
+        IFileSystem? fileSystem = null, ICreateStream? streamCreator = null) =>
+        MutagenJsonConverter.Instance.Serialize(
             (IGameModGetter)plugin, folder, extraMeta: null, workDropoff: workDropoff,
-            fileSystem: fileSystem, streamCreator: UnheldMembers.LeavingOut(plugin, creator), cancel: cancel);
-    }
+            fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
 
     // Argument 0 is the folder, not a mod, so this call site emits no mixin and cannot collide (CS8785).
     public async Task<IMod> DeserializeWholeMod(
@@ -121,6 +115,8 @@ internal sealed class GameCodec : IGameCodec
         GameSpecifics.Normalize(copy);
         return copy;
     }
+
+    public IMajorRecordGetter NormalizeFormat(IMajorRecordGetter record) => FormatNormalization.Of(record);
 
     // Mutagen reads the NAME of a deleted reference into one member and writes a deleted record as its
     // header alone, so its reread holds no base record. Any other field of a deleted record is a divergence.

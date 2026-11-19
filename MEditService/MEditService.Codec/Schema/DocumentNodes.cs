@@ -36,7 +36,7 @@ public static class DocumentNodes
     /// <summary>The codec's text with keyed arrays in extended-key order, colours as they read and
     /// translated strings as their text in the strings language, as xEdit compares them.</summary>
     public static string ComparedText(JsonElement value, FieldMetadata meta, Language stringsLanguage) =>
-        Rewrite(JsonNode.Parse(value.GetRawText()), meta, (node, shape) => AsCompared(node, shape, stringsLanguage))?.ToJsonString() ?? "null";
+        Rewrite(Document.NodeOf(value), meta, (node, shape) => AsCompared(node, shape, stringsLanguage))?.ToJsonString() ?? "null";
 
     private static JsonNode? AsCompared(JsonNode node, FieldMetadata meta, Language stringsLanguage)
     {

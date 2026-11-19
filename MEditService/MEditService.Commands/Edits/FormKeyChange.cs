@@ -8,8 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>An edit of a record's FormID changes its FormKey, and moves the Next Object ID past it. Every plugin source
-/// naming it follows (ADR-0028).</summary>
+/// <summary>An edit of a record's FormID changes its FormKey. Every plugin source naming it follows (ADR-0028).</summary>
 internal sealed class FormKeyChange(ILogger logger)
 {
     /// <summary>Each plugin source naming <paramref name="plugin"/>'s record <paramref name="formKey"/> names

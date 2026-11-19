@@ -73,7 +73,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     [Fact]
     public void AMalformedHeader_IsRefusedByItsFileAsTheLayoutSpellsIt()
     {
-        Rewrite(HeaderPath, "\"Stats\": {", "\"Stats\": {\n      \"Version\": \"x\",");
+        Rewrite(HeaderPath, "\"GameRelease\": \"Fallout4\"", "\"GameRelease\": \"Fallout4\",\n  \"ModHeader\": { \"Stats\": { \"Version\": \"x\" } }");
 
         var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
 
