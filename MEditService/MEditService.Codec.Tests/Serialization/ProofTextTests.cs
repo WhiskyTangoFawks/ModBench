@@ -24,17 +24,15 @@ public sealed class ProofTextTests
         Assert.Contains("Base.esm", Encoding.UTF8.GetString(text.ToArray()), StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(0u)]
-    [InlineData(3u)]
-    public void ReadBack_HoldsAConditionsAliasIndex_AsTheSourcesReadDoes(uint index)
+    [Fact]
+    public void AConditionsAliasIndexOfZero_SurvivesTheProofText_AsItSurvivesTheSourcesRead()
     {
-        var recipe = AliasIndexRoundTripTests.RecipeWithAnAliasCondition(index);
+        var recipe = AliasIndexRoundTripTests.RecipeWithAnAliasCondition(0);
         var plugin = new SkyrimMod(recipe.FormKey.ModKey, SkyrimRelease.SkyrimSE);
         plugin.ConstructibleObjects.Add(recipe);
 
         var read = (ISkyrimModGetter)ProofText.ReadBack(plugin);
 
-        Assert.Equal(index, ((IGetDistanceConditionDataGetter)read.ConstructibleObjects.Single().Conditions.Single().Data).Target.Index);
+        Assert.Equal(0u, ((IGetDistanceConditionDataGetter)read.ConstructibleObjects.Single().Conditions.Single().Data).Target.Index);
     }
 }

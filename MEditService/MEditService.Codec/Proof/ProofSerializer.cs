@@ -6,9 +6,8 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Codec.Proof;
 
-/// <summary>The game's serializer as Mutagen generates it with no customization: ADR-0006's proof runs
-/// apart from the format's normalization. Its own compilation, since the generator reads every
-/// customization a compilation holds.</summary>
+/// <summary>The game's serializer with no customization, for ADR-0006's proof. A compilation of its own,
+/// since the generator reads every customization a compilation holds.</summary>
 public static class ProofSerializer
 {
     // extraMeta is named: the generator otherwise takes a positional argument as the meta type.

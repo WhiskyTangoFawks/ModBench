@@ -26,11 +26,17 @@ internal static class ModelIdentity
                 : $"{RecordType} {FormKey} (EditorID '{EditorId}') {Description}";
     }
 
-    /// <summary>The whole verdict: the first record that does not survive a round trip, else the mod
-    /// header field that does not. Null when the recompiled plugin is model-identical.</summary>
-    public static Divergence? FindFirstDivergence(IModGetter original, IModGetter recompiled)
+    /// <summary>The round trip a recompile takes.</summary>
+    public const string Recompiled = "being recompiled from its own plugin source";
+
+    /// <summary>The round trip the proof's text takes (ADR-0006).</summary>
+    public const string ThroughMutagensText = "a round trip through Mutagen's JSON serialization with no customization";
+
+    /// <summary>The whole verdict: the first record that does not survive <paramref name="trip"/>, else the mod
+    /// header field that does not. Null when <paramref name="recompiled"/> is model-identical.</summary>
+    public static Divergence? FindFirstDivergence(IModGetter original, IModGetter recompiled, string trip)
     {
-        if (FindFirst(original, recompiled) is { } record) return record;
+        if (FindFirst(original, recompiled, trip) is { } record) return record;
 
         // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
         // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
@@ -38,7 +44,7 @@ internal static class ModelIdentity
                && FindFirstHeaderFieldDivergence(original, originalHeader, recompiled, recompiledHeader) is { } field
             ? new Divergence(
                 PluginHeader.RecordType, FormKey.Null, null,
-                $"TES4 header field '{field}' changed after being recompiled from its own plugin source.")
+                $"TES4 header field '{field}' changed after {trip}.")
             : null;
     }
 
@@ -49,19 +55,19 @@ internal static class ModelIdentity
 
     // The first record, in the original's GRUP order, that does not survive a round trip, else the
     // first the recompile produced that the original never had; null when none differs.
-    private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
+    private static Divergence? FindFirst(IModGetter original, IModGetter recompiled, string trip)
     {
         if (RecordDivergences(original.EnumerateMajorRecords(), recompiled).FirstOrDefault() is ({ } record, var field))
         {
             return new Divergence(record.GetType().Name, record.FormKey, record.EditorID, field is null
-                ? "is missing from the recompiled plugin."
-                : $"differs after being recompiled from its own plugin source — field '{field}' changed.");
+                ? $"is missing after {trip}."
+                : $"differs after {trip} — field '{field}' changed.");
         }
 
         var originalFormKeys = original.EnumerateMajorRecords().Select(r => r.FormKey).ToHashSet();
         return recompiled.EnumerateMajorRecords().FirstOrDefault(r => !originalFormKeys.Contains(r.FormKey)) is { } added
             ? new Divergence(added.GetType().Name, added.FormKey, added.EditorID,
-                "is present in the recompiled plugin but not present in the original.")
+                $"is present after {trip} but not present in the original.")
             : null;
     }
 

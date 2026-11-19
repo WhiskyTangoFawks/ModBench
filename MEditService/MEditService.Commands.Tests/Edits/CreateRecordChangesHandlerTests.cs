@@ -8,6 +8,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Records;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -199,9 +200,9 @@ public sealed class CreateRecordChangesHandlerTests
             mod =>
             {
                 var headerFile = Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
-                mod.Unsaved.Typed(new DocumentChange(
-                    headerFile,
-                    Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900))));
+                var header = (IMod)HeaderDocument.Read(File.ReadAllBytes(headerFile), GameRelease.Fallout4);
+                header.NextFormID = 0x900;
+                mod.Unsaved.Typed(new DocumentChange(headerFile, Encoding.UTF8.GetString(HeaderDocument.Write(header))));
             },
             FirstFreeFormKey
         },

@@ -7,7 +7,7 @@ namespace MEditService.PluginAdapter.Tests.RealData;
 public sealed class ProofRealDataTests
 {
     [Fact]
-    public void DivergenceFrom_OfTheCutDownPluginAgainstItself_ReturnsNull_SoTheProofsTextLosesNoneOfItsRecords()
+    public void TheCutDownPlugin_LosesNothingInTheProofText()
     {
         var divergence = TestAdapters.Mutagen().DivergenceFrom(
             RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, RealDataPlugin.PluginPath,

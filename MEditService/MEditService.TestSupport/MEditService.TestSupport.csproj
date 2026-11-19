@@ -35,10 +35,9 @@
     <ProjectReference Include="..\MEditService.Codec.Fallout4\MEditService.Codec.Fallout4.csproj" />
     <ProjectReference Include="..\MEditService.Codec.Skyrim\MEditService.Codec.Skyrim.csproj" />
     <ProjectReference Include="..\MEditService.Codec.Starfield\MEditService.Codec.Starfield.csproj" />
-    <!-- Aliased: each generated whole-mod mixin has the same name as its game project's. -->
-    <ProjectReference Include="..\MEditService.Codec.Fallout4.Proof\MEditService.Codec.Fallout4.Proof.csproj" Aliases="Proof" />
-    <ProjectReference Include="..\MEditService.Codec.Skyrim.Proof\MEditService.Codec.Skyrim.Proof.csproj" Aliases="Proof" />
-    <ProjectReference Include="..\MEditService.Codec.Starfield.Proof\MEditService.Codec.Starfield.Proof.csproj" Aliases="Proof" />
+    <ProjectReference Include="..\MEditService.Codec.Fallout4.Proof\MEditService.Codec.Fallout4.Proof.csproj" />
+    <ProjectReference Include="..\MEditService.Codec.Skyrim.Proof\MEditService.Codec.Skyrim.Proof.csproj" />
+    <ProjectReference Include="..\MEditService.Codec.Starfield.Proof\MEditService.Codec.Starfield.Proof.csproj" />
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />

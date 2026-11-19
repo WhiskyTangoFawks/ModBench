@@ -62,7 +62,7 @@ public sealed class HeaderDocumentTests
 
         var body = HeaderDocument.Write(mod);
 
-        Assert.Equal(0u, HeaderDocument.NextObjectId(body, GameRelease.Fallout4));
+        Assert.Equal(0u, HeaderDocument.Read(body, GameRelease.Fallout4).NextFormID);
         Assert.Equal(body, HeaderDocument.Write(HeaderDocument.Read(body, GameRelease.Fallout4)));
     }
 
@@ -93,20 +93,7 @@ public sealed class HeaderDocumentTests
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
-        Assert.Equal(0x900u, HeaderDocument.NextObjectId(body, GameRelease.Fallout4));
-    }
-
-    [Fact]
-    public void SettingTheNextObjectId_ChangesTheCounterAndNothingElse()
-    {
-        var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
-
-        var moved = HeaderDocument.WithNextObjectId(body, GameRelease.Fallout4, 0xA42);
-
-        Assert.Equal(0xA42u, HeaderDocument.NextObjectId(moved, GameRelease.Fallout4));
-        Assert.Equal(
-            Encoding.UTF8.GetString(body).Replace("2304", "2626", StringComparison.Ordinal),
-            Encoding.UTF8.GetString(moved));
+        Assert.Equal(0x900u, HeaderDocument.Read(body, GameRelease.Fallout4).NextFormID);
     }
 
     [Fact]

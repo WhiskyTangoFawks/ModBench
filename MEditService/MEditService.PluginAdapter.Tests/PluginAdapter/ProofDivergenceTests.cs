@@ -1,0 +1,122 @@
+using System.IO.Abstractions;
+using System.Reflection;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter.Tests.TestSupport;
+using MEditService.RepositoriesLib;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+using Noggog.IO;
+using Noggog.WorkEngine;
+
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
+
+[Collection(ProcessEnvironmentCollection.Name)]
+public sealed class ProofDivergenceTests
+{
+    [Fact]
+    public void AValueTheProofTextLoses_IsNamedAsLostInMutagensSerialization_EvenWhenTheRecompiledPluginMatches()
+    {
+        var divergence = DivergenceOfAPluginFromItself(game => new ProofLosingEditorIds(game)).Answered();
+
+        Assert.Equal(
+            "Keyword 000800:Fixture.esp (EditorID 'Kept') differs after a round trip through Mutagen's JSON serialization "
+            + "with no customization — field 'EditorID' changed.",
+            divergence?.Description);
+    }
+
+    [Fact]
+    public void AProofTextThatCannotBeWritten_IsTheVerdictsFailure_NotAWaitForTextThatNeverComes()
+    {
+        var answer = DivergenceOfAPluginFromItself(game => new ProofTextUnwritable(game));
+
+        Assert.Contains(ProofTextUnwritable.Reason, answer.Failure().Reason, StringComparison.Ordinal);
+    }
+
+    private static Answer<PluginDivergence?, PluginFailure> DivergenceOfAPluginFromItself(Func<IGameCodec, IGameCodec> fallout4)
+    {
+        using var scratch = new ScratchDirectory("medit-proof-divergence-");
+        var plugin = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        plugin.Keywords.AddNew("Kept");
+        var path = Path.Combine(scratch, "Fixture.esp");
+        ((IModGetter)plugin).WriteToBinary(path);
+
+        var registered = new Dictionary<GameCategory, IGameCodec>
+        {
+            [GameCategory.Fallout4] = GameCodecs.For(GameRelease.Fallout4),
+            [GameCategory.Skyrim] = GameCodecs.For(GameRelease.SkyrimSE),
+            [GameCategory.Starfield] = GameCodecs.For(GameRelease.Starfield),
+        };
+        GameCodecs.Register(new Dictionary<GameCategory, IGameCodec>(registered)
+        {
+            [GameCategory.Fallout4] = fallout4(registered[GameCategory.Fallout4]),
+        });
+        try
+        {
+            return TestAdapters.Mutagen().DivergenceFrom("Fixture.esp", path, path, EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None);
+        }
+        finally
+        {
+            GameCodecs.Register(registered);
+        }
+    }
+
+    private sealed class ProofLosingEditorIds(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public override async Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release)
+        {
+            var read = await base.ReadProofText(text, modKey, release);
+            read.EnumerateMajorRecords().Single().EditorID = null;
+            return read;
+        }
+    }
+
+    private sealed class ProofTextUnwritable(IGameCodec game) : DelegatingGameCodec(game)
+    {
+        public const string Reason = "The proof text could not be written.";
+
+        public override Task WriteProofText(IModGetter plugin, Stream text) => throw new IOException(Reason);
+    }
+
+    private abstract class DelegatingGameCodec(IGameCodec game) : IGameCodec
+    {
+        public virtual Task WriteProofText(IModGetter plugin, Stream text) => game.WriteProofText(plugin, text);
+
+        public virtual Task<IMod> ReadProofText(Stream text, ModKey modKey, GameRelease release) => game.ReadProofText(text, modKey, release);
+
+        public Assembly GeneratedSerializers => game.GeneratedSerializers;
+
+        public Task SerializeWholeMod(
+            IModGetter plugin, string folder, IWorkDropoff workDropoff, CancellationToken cancel,
+            IFileSystem? fileSystem = null, ICreateStream? streamCreator = null) =>
+            game.SerializeWholeMod(plugin, folder, workDropoff, cancel, fileSystem, streamCreator);
+
+        public Task<IMod> DeserializeWholeMod(
+            string folder, IWorkDropoff workDropoff, CancellationToken cancel,
+            IFileSystem? fileSystem = null, ICreateStream? streamCreator = null) =>
+            game.DeserializeWholeMod(folder, workDropoff, cancel, fileSystem, streamCreator);
+
+        public int BlueprintFlag => game.BlueprintFlag;
+
+        public IReadOnlyDictionary<string, int> LoadFlags => game.LoadFlags;
+
+        public IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type) => game.NewPluginFlags(release, type);
+
+        public uint NextObjectIdDefault => game.NextObjectIdDefault;
+
+        public SchemaAnnotations Annotations => game.Annotations;
+
+        public CreationKitShapes CreationKitShapes => game.CreationKitShapes;
+
+        public IReadOnlyList<string> TransientTypes(IModGetter plugin) => game.TransientTypes(plugin);
+
+        public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf) =>
+            game.NormalizeEncoding(record, localized, baseMemberOf);
+
+        public IModGetter HeaderOnly(IModGetter plugin) => game.HeaderOnly(plugin);
+    }
+}

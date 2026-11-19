@@ -111,9 +111,8 @@ public interface IPluginAdapter
     Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
-    /// <summary>How the proof's text, else the plugin at <paramref name="recompiledPath"/>, differs from the
-    /// named one as the codec models them (ADR-0006); null when both are model-identical. Both plugins are
-    /// reparsed: bytes show the writer.</summary>
+    /// <summary>How the proof's text (ADR-0006), else the plugin at <paramref name="recompiledPath"/>, differs from the
+    /// named one as the codec models them; null when both are model-identical. Both plugins are reparsed.</summary>
     Answer<PluginDivergence?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
 

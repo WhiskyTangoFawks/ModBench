@@ -443,10 +443,9 @@ public sealed class WriteSessionTests : IDisposable
         var session = Session();
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
         var header = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
-        var movedPast = header with
-        {
-            Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), GameRelease.Fallout4, 0x900)),
-        };
+        var headerMod = (IMod)HeaderDocument.Read(Encoding.UTF8.GetBytes(header.Body), Release);
+        headerMod.NextFormID = 0x900;
+        var movedPast = header with { Body = Encoding.UTF8.GetString(HeaderDocument.Write(headerMod)) };
 
         Assert.Null(session.Atomically(() =>
         {
@@ -455,7 +454,7 @@ public sealed class WriteSessionTests : IDisposable
         }));
 
         var headerRead = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
-        Assert.Equal(0x900u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(headerRead.Body), GameRelease.Fallout4));
+        Assert.Equal(0x900u, HeaderDocument.Read(Encoding.UTF8.GetBytes(headerRead.Body), Release).NextFormID);
         Assert.Contains(created.FormKey, session.Repository.FormKeysUsed(Plugin).Value());
     }
 
