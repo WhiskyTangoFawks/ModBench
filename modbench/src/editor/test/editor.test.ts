@@ -354,18 +354,16 @@ describe('a record file\'s tab', () => {
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
 
-  it('keeps the file\'s name as its title once its read is answered', async () => {
+  it('is titled with the record the file holds once its read is answered, not with the file\'s name', async () => {
     const client = fileClient();
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true, editorId: 'Gun' }]));
     client.setQueryAnswer('getRecordOfFile', holding(GUN));
     const { openFile } = makeEditor(client);
-    const tab = await openFile(FILE);
-    tab.title = 'Gun.json';
+    const tab = await openFile('/source/ModA/plugin-source/A.esp/Quests/Gun - 000801_A.esp/RecordData.json');
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-    await readAnswered(tab);
 
-    expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: true }));
-    expect(tab.title).toBe('Gun.json');
+    await vi.waitFor(() => expect(tab.title).toBe('Gun'));
   });
 
   it('shows "Failed to load:" and mEdit\'s reason when mEdit refuses the file, and adds no Output line of its own', async () => {
@@ -1144,6 +1142,19 @@ describe('a non-compiled plugin copy\'s tab', () => {
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
     expect(askedFromThePalette()).toBe('000801:A.esp');
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
+  });
+
+  it('is titled with the copy\'s record once its read is answered, not with its document\'s name', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getPlugins', activeA);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(renderedUri(GUN, 'RecordData.json'));
+    expect(tab.title).toBe(GUN);
+
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
+
+    await vi.waitFor(() => expect(tab.title).toBe('Gun'));
   });
 
   async function readOf(plugins: typeof activeA): Promise<unknown[][]> {

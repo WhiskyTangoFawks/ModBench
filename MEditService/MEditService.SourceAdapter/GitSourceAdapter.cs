@@ -41,7 +41,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
         SourceRepository.RecordOfFile(loadOrder, path, Files(), _memory);
 
-    public string FileNameOf(RecordIdentity identity) => SourceRepository.FileNameOf(identity);
+    public string FileNameOf(RecordIdentity identity, GameRelease release) => SourceRepositoryLayout.DocumentFileNameFor(identity, release);
 
     public bool HoldsAnotherRepository(string sourceFolder) => SourceRepository.HoldsAnotherRepository(sourceFolder);
 

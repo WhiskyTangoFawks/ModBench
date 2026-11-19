@@ -502,9 +502,9 @@ internal sealed class RecordQueries(
         if (snapshot.Plugin(plugin) is not { } registered || !source.IsSourceMod(registered)
             || source.Over(registered, snapshot.GameRelease) is not { } compiledPlugin)
         {
-            return source.FileNameOf(identity);
+            return source.FileNameOf(identity, snapshot.GameRelease);
         }
-        return compiledPlugin.FileNameOf(plugin, carrying).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
+        return compiledPlugin.FileNameOf(plugin, carrying).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity, snapshot.GameRelease)));
     }
 
     private ISourceRepositoryReads? TreeOf(PluginAddress plugin)

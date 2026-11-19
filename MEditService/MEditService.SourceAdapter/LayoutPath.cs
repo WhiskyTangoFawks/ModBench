@@ -3,7 +3,7 @@ using MEditService.Codec.Serialization;
 namespace MEditService.SourceAdapter;
 
 // A relative path read as the layout's own segments: the one place a segment index means anything.
-// plugin-source / <plugin> / <group folder> / [block levels] / <record directory> / <record directory>.json.
+// plugin-source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json.
 internal sealed class LayoutPath(string relativePath)
 {
     private const int RootSegment = 0;
@@ -29,16 +29,15 @@ internal sealed class LayoutPath(string relativePath)
 
     internal bool IsHeaderDocument =>
         _segments.Length == HeaderDocumentDepth && UnderTheSourceRoot && NamesAPlugin
-        && Leaf.Equals(SourceRepositoryLayout.HeaderDocumentLeaf(PluginFileName), StringComparison.Ordinal);
+        && Leaf.Equals(DocumentFileNames.Root, StringComparison.Ordinal);
 
     internal bool IsFlatDocument =>
         _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
         && Leaf.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.Ordinal)
-        && !Leaf.Equals(DocumentFileNames.Root, StringComparison.Ordinal)
         && !Leaf.Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal);
 
-    // A container's own document, at its group's own level or deeper. Any name: a directory renamed by
-    // hand keeps the document it held.
+    // A container's own document, at its group's own level or deeper. Any name: a document renamed by hand
+    // is still its container's.
     internal bool IsContainerDocument =>
         _segments.Length >= ShallowestContainerDocument
         && !SourceRepositoryLayout.CarriesNoRecord(Leaf);

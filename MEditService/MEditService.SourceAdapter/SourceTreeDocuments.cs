@@ -216,7 +216,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var folder = Path.Combine(containerDirectory, slot);
         if (!_files.DirectoryExists(folder)) return [];
 
-        var documents = GroupFolders.For(_release).HasDirectory(_types.FileSlotRecordType(recordType, slot) ?? recordType)
+        var documents = _types.HasDirectory(_types.FileSlotRecordType(recordType, slot) ?? recordType)
             ? _files.DirectoriesIn(folder).Select(directory => SourceRepositoryLayout.ContainerDocumentHeldBy(_files, directory))
             : _files.FilesIn(folder, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.TopDirectoryOnly);
         return documents

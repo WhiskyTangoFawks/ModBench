@@ -140,16 +140,27 @@ internal static class PluginSourceChecks
             ? null
             : SourceRepositoryLayout.RecordTypeOf(relativePath, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(content)), gameRelease);
 
-    // A flat record's file is named by its FormKey and EditorID alone, so one document says where it belongs.
-    // Compare places the containers' files too, by regenerating the whole tree.
+    // A record's file or directory is named by its FormKey and EditorID alone, so one document says where it belongs.
+    // A container's directory stays in the folder holding it.
     internal static string? LayoutPathOf(
         string relativePath, string text, string pluginName, string formKey, string recordType, GameRelease release)
     {
-        if (recordType == PluginHeader.RecordType || GroupFolders.For(release).FlatFolderOf(recordType) is null) return null;
+        if (recordType == PluginHeader.RecordType) return null;
         if (DocumentTokens.EditorIdIn(text) is not { WhyUnreadable: null } editorId) return null;
 
-        var belongsAt = SourceRepositoryLayout.FlatPathFor(pluginName, recordType, formKey, editorId.EditorId, release);
-        return belongsAt.Equals(relativePath, StringComparison.Ordinal) ? null : belongsAt;
+        var belongsAt = BelongsAt(relativePath, pluginName, formKey, recordType, editorId.EditorId, release);
+        return belongsAt is null || belongsAt.Equals(relativePath, StringComparison.Ordinal) ? null : belongsAt;
+    }
+
+    private static string? BelongsAt(
+        string relativePath, string pluginName, string formKey, string recordType, string? editorId, GameRelease release)
+    {
+        if (GroupFolders.For(release).FlatFolderOf(recordType) is not null)
+            return SourceRepositoryLayout.FlatPathFor(pluginName, recordType, formKey, editorId, release);
+        if (!SourceRepositoryLayout.InAContainerGroup(relativePath, release)) return null;
+        return SourceRepositoryLayout.ContainerDocumentIn(Path.Combine(
+            PathShape.DirectoryOf(PathShape.DirectoryOf(relativePath)),
+            SourceRepositoryLayout.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true)));
     }
 
     // A held file the codec writes nowhere and a file it writes where nothing is held, with the same

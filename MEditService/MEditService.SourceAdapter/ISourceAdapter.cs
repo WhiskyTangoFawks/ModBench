@@ -54,7 +54,7 @@ public interface ISourceAdapter
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 
     /// <summary>The name of the file of a record's own document where no tree has renamed it.</summary>
-    string FileNameOf(RecordIdentity identity);
+    string FileNameOf(RecordIdentity identity, GameRelease release);
 
     /// <summary>A <c>.git</c> with no <c>main</c> that init did not mark as its own: someone else's, which init never
     /// writes to (ADR-0003).</summary>

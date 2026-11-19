@@ -225,7 +225,7 @@ public sealed class ProblemsPanelTests : IDisposable
         var plugin = new Plugin("Strayed.esp", RefersTo: null);
         Build(plugin);
         var stray = Path.Combine(Path.GetDirectoryName(SourceFileHolding(plugin, "Other")) ?? "", "Stray.json");
-        File.WriteAllText(stray, "{}");
+        File.WriteAllText(stray, "{\"FormKey\": \"000900:Strayed.esp\", \"NoSuchMember\": 1}");
         using var index = Indexes.Reconciled(Fixture);
         File.Delete(stray);
 
@@ -234,6 +234,21 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Equal(Ranges.FirstLine, Assert.Single(answer.Problems).Range);
         Assert.Contains("Stray.json could not be read to place its problems", answer.Failure, StringComparison.Ordinal);
         Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
+    }
+
+    [Fact]
+    public void AProblemOnAMissingFileNamingNoRecord_StaysOnTheFirstLine_WithNoPlacementFailure()
+    {
+        var plugin = new Plugin("Unmetered.esp", RefersTo: null);
+        Build(plugin);
+        File.Delete(Path.Combine(PluginSourceRoot.In(Entry(plugin).ModFolderOf(), plugin.Name), "spriggit-meta.json"));
+        using var index = Indexes.Reconciled(Fixture);
+
+        var answer = Assert.Single(Ready(index));
+
+        var problem = Assert.Single(answer.Problems);
+        Assert.Equal((Path.Combine(PluginSourceRoot.For(plugin.Name), "spriggit-meta.json"), Ranges.FirstLine), (problem.SourceRelativePath, problem.Range));
+        Assert.Null(answer.Failure);
     }
 
     [Theory]
@@ -469,7 +484,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
     public sealed record ExpectedProblem(string? FieldPath, string File, string MessageStart);
 
-    private const string HeaderFile = "000000_Refers.esp.json";
+    private const string HeaderFile = "RecordData.json";
     private const string ReferrerFile = "Referrer - 000800_Refers.esp.json";
 
     public static TheoryData<string?, ExpectedProblem[]> ByWhatTheLinksNamed => new()

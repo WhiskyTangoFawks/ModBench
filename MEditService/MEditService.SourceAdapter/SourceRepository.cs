@@ -205,10 +205,6 @@ internal sealed class SourceRepository : ISourceRepository
             ? tree
             : null;
 
-    /// <summary>The name the layout gives the file of the record's own document.</summary>
-    internal static string FileNameOf(RecordIdentity identity) =>
-        SourceRepositoryLayout.FileNameFor(FormKey.Factory(identity.FormKey), identity.EditorId);
-
     /// <summary>The name of the file in this tree holding <paramref name="identity"/>, whatever it was renamed to; null
     /// when nothing here holds it.</summary>
     public Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity) =>

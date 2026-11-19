@@ -63,7 +63,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 
-    public string FileNameOf(RecordIdentity identity) => throw Unreached();
+    public string FileNameOf(RecordIdentity identity, GameRelease release) => throw Unreached();
 
     public bool HoldsAnotherRepository(string modFolder) => _foreignRepositories.Contains(modFolder);
 

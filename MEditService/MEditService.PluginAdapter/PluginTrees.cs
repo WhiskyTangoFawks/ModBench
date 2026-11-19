@@ -72,6 +72,7 @@ internal static class PluginTrees
     internal static async Task<IReadOnlyList<TreeFile>> SerializeTree(
         IModGetter mod, CancellationToken cancel = default)
     {
+        if (DocumentFileNames.WhyTooLongIn(mod) is { } tooLong) throw new IOException(tooLong);
         var game = GameCodecs.For(mod.GameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
         try

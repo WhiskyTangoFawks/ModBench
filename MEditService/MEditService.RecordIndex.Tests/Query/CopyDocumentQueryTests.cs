@@ -35,8 +35,8 @@ public sealed class CopyDocumentQueryTests : IDisposable
     private string NpcFile =>
         Path.Combine(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), "Npcs", "FiledNpc - 000800_Filed.esp.json");
 
-    private string CellFile => Directory.EnumerateFiles(
-        PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), "FiledCell - *.json", SearchOption.AllDirectories).Single();
+    private string CellFile => PluginSourceRoot.ContainerDocument(Directory.EnumerateDirectories(
+        PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), "FiledCell - *", SearchOption.AllDirectories).Single());
 
     private OpenedIndex Reconciled() => Indexes.Reconciled(_fixture);
 

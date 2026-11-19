@@ -40,7 +40,7 @@ public interface ISourceRepository : ISourceRepositoryReads
     Answer<IReadOnlySet<string>, SourceFailure> FormKeysUsed(PluginAddress plugin);
 
     /// <summary>The plugin's source in the working tree as the whole-mod door reads it, empty when there is
-    /// none. A directory holding several documents, none named for it, is ambiguous.</summary>
+    /// none. A container's directory holding several documents, none named RecordData.json, is ambiguous.</summary>
     Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin);
 
     /// <summary><paramref name="diagnosis"/> of a read of <see cref="TreeOf"/>'s tree, each file it names

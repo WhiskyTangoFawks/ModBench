@@ -4,6 +4,8 @@ using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -90,11 +92,39 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void AReplacedSource_IsTheDoorsTree_SoItsRootDocumentLandsAsTheHeader()
+    public async Task ADecompiledSource_HoldsEachFileWhereSpriggitWritesIt()
     {
-        Repository.ReplaceSourceFrom(Address, [new TreeFile("RecordData.json", "{}"u8.ToArray())], Sha).Wrote();
+        using var spriggit = new ScratchDirectory("medit-spriggit-tree-");
+        await Fallout4WholeMod.Serialize(OfEachShape(), spriggit);
+        string[] written =
+        [
+            .. Directory.EnumerateFiles(spriggit, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(spriggit, path).Replace('\\', '/'))
+                .Order(StringComparer.Ordinal),
+        ];
 
-        Assert.Equal(["000000_A.esp.json"], FilesUnderRoot());
+        Repository.ReplaceSourceFrom(Address, [.. written.Select(path => File(path, System.IO.File.ReadAllText(Path.Combine(spriggit, path))))], Sha).Wrote();
+
+        Assert.Equal(written, FilesUnderRoot());
+    }
+
+    private static Fallout4Mod OfEachShape()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        mod.Keywords.Add(new Keyword(mod) { EditorID = new string('K', 80) });
+
+        var cell = new Cell(mod) { EditorID = "ACell" };
+        cell.Temporary.Add(new PlacedObject(mod) { EditorID = "ARef" });
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+
+        var quest = new Quest(mod) { EditorID = "AQuest" };
+        quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = "ATopic" });
+        mod.Quests.Add(quest);
+        return mod;
     }
 
     [Fact]
