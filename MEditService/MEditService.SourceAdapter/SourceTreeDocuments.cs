@@ -203,19 +203,13 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
     }
 
-    // What a cell holds, read off its own document, and what a container holds in files of their own, in
-    // the order its slots' folders list them, which is the order compile reads them in.
-    private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text, string file)
-    {
-        if (_types.IsCell(recordType))
-        {
-            return [.. _containers.ChildrenOf(recordType, Document.Parse(text))
-                .Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex))];
-        }
-
-        var slots = _types.FileSlotsOf(recordType);
-        return slots.Count == 0 ? null : [.. slots.SelectMany(slot => ChildrenFiledIn(PathShape.DirectoryOf(file), recordType, slot))];
-    }
+    // What a container holds in its own document, then in files of their own in the order its slots' folders
+    // list them, which is the order compile reads them in.
+    private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text, string file) =>
+        _types.HasChildSlots(recordType)
+            ? [.. _containers.ChildrenOf(recordType, Document.Parse(text)).Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex)),
+               .. _types.FileSlotsOf(recordType).SelectMany(slot => ChildrenFiledIn(PathShape.DirectoryOf(file), recordType, slot))]
+            : null;
 
     private IEnumerable<ChildRecord> ChildrenFiledIn(string containerDirectory, string recordType, string slot)
     {

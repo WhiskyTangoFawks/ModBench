@@ -180,12 +180,12 @@ public abstract record PluginFailure
     }
 
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
-    /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. A reflected or
-    /// parallel read's wrapper says nothing of the read.</summary>
+    /// <see cref="Inaccessible"/>, else an unread plugin. Of a parallel read's failed branches, one
+    /// naming its cause outranks one that only did not parse.</summary>
     internal static PluginFailure Of(Exception ex) => ex switch
     {
         TargetInvocationException { InnerException: { } invoked } => Of(invoked),
-        AggregateException aggregate => Of(aggregate.Flatten().InnerExceptions[0]),
+        AggregateException aggregate => aggregate.Flatten().InnerExceptions.Select(Of).OrderBy(failure => failure is Unparsed).First(),
         MissingModException missing => new MasterNotInLoadOrder(missing),
         PluginFailureException { Failure: { } failure } => failure,
         _ when Refusal(ex) is { } refusal => new Inaccessible(refusal),

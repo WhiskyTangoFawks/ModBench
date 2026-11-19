@@ -156,7 +156,9 @@ internal sealed class SourceRepositoryWrites(
         }
 
         var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)?.Unit.FullPath
-            ?? Path.Combine(PathShape.DirectoryOf(unit.FullPath), SourceRepositoryLayout.FileNameFor(FormKey.Factory(newFormKey), identity.EditorId));
+            ?? (SourceRepositoryLayout.FiledIn(unit.RelativePath, _release) is not null
+                ? Path.Combine(PathShape.DirectoryOf(unit.FullPath), SourceRepositoryLayout.FileNameFor(FormKey.Factory(newFormKey), identity.EditorId))
+                : throw NoPlaceInTheTree(plugin, identity));
         return new SourceChanges([Moved(unit.FullPath, placed)], [], [Document(placed, text)]);
     }
 

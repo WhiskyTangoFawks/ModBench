@@ -595,6 +595,17 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void RekeyingARecordWithNoGroupFolder_FiledByHandWhereNoContainerHoldsIt_HasNoPlaceInTheTree()
+    {
+        var stray = new PlacedObject(_mod) { EditorID = "Stray" };
+        File.WriteAllBytes(FullPath(Path.Combine(Root, "Worldspaces", PluginSourceRoot.Leaf(stray) + ".json")), Serialize(stray));
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => Repository.ChangesToRekey(Plugin, Identity(stray, "refr"), FreeFormKey));
+
+        Assert.Contains("nowhere to write it", thrown.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChangingTheFormKeyOfARecordNoDocumentCarries_IsRefusedNamingIt()
     {
         var absent = new SourceDocument("00FFFF:Embedded.esp", "refr", "Absent", "{}");

@@ -13,18 +13,13 @@ internal sealed class GroupFolders
     private readonly RecordTypes _types;
 
     // Not inferred from the door, which would cover another type the day Mutagen's generator picks a
-    // directory for one: a cell and a worldspace by their blocks, any other by its children's files.
+    // directory for one.
     private readonly HashSet<string> _directoryPerRecord;
 
     private GroupFolders(RecordTypes types)
     {
         _types = types;
-        _directoryPerRecord = new HashSet<string>(StringComparer.Ordinal)
-        {
-            GroupOf(types, types.Cell),
-            GroupOf(types, types.Worldspace),
-        };
-        _directoryPerRecord.UnionWith(types.Creatable.Where(type => types.FileSlotsOf(type).Count > 0).Select(type => GroupOf(types, type)));
+        _directoryPerRecord = new HashSet<string>(types.Creatable.Where(HasDirectory).Select(type => GroupOf(types, type)), StringComparer.Ordinal);
     }
 
     internal static GroupFolders For(GameRelease release) =>
@@ -58,13 +53,14 @@ internal sealed class GroupFolders
     internal string? RecordTypeIn(string folder) =>
         _directoryPerRecord.Contains(folder) ? null : _types.OnlyRecordTypeIn(folder);
 
-    /// <summary>Whether a record of <paramref name="recordType"/> has a directory rather than a file.</summary>
+    /// <summary>Whether a record of <paramref name="recordType"/> has a directory rather than a file: a cell and a
+    /// worldspace for their blocks, any other for the children it files.</summary>
     internal bool HasDirectory(string recordType) =>
-        _types.IsCell(recordType) || _types.IsWorldspace(recordType) || _types.FileSlotsOf(recordType).Count > 0;
+        _types.IsCell(recordType) || _types.IsWorldspace(recordType) || _types.HoldsChildFiles(recordType);
 
     /// <summary>Whether the records in <paramref name="folder"/> hold children in files of their own.</summary>
     internal bool HoldsChildFiles(string folder) =>
-        _types.OnlyRecordTypeIn(folder) is { } type && _types.FileSlotsOf(type).Count > 0;
+        _types.HoldsChildFiles(_types.OnlyRecordTypeIn(folder));
 
     /// <summary>The record type of a document <paramref name="directories"/> below a folder whose records
     /// hold child files, walked down through slot folders, and whether it sits in its record's directory.

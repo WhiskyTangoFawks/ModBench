@@ -189,6 +189,9 @@ public sealed class RecordTypes
             ? [.. ChildSlotsOf(recordType).Where(slot => _members.FileSlots.Contains((_category, container, slot)))]
             : [];
 
+    /// <summary>Whether a record of <paramref name="recordType"/> holds children in files of their own.</summary>
+    public bool HoldsChildFiles(string? recordType) => FileSlotsOf(recordType).Count > 0;
+
     /// <summary>The record type <paramref name="slot"/> of <paramref name="recordType"/> holds in files
     /// of their own; null for a slot that is no such member.</summary>
     public string? FileSlotRecordType(string recordType, string slot) =>
@@ -232,12 +235,12 @@ public sealed class RecordTypes
 
     private const string PlacedInterfaceName = "IPlacedGetter";
 
-    private const string CellTypeName = "Cell";
+    internal const string CellTypeName = "Cell";
 
     // Spelled, not reflected: the mod holds its cells in a list of blocks, not in a group of cells.
     private const string CellsGroup = "Cells";
 
-    private const string WorldspaceTypeName = "Worldspace";
+    internal const string WorldspaceTypeName = "Worldspace";
 
     // The member names below are static because every Bethesda game spells them the same. This one is
     // the one placement key not simply the folder it sits in: a block level's directory is named after

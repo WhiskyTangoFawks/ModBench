@@ -87,7 +87,7 @@ internal sealed record ContainerMembers(
             && typeof(IMajorRecord).IsAssignableFrom(type));
 
     // Spriggit's format embeds the children of these alone (ADR-0030).
-    private static readonly string[] EmbeddingContainers = ["Cell", "Worldspace"];
+    private static readonly string[] EmbeddingContainers = [Serialization.RecordTypes.CellTypeName, Serialization.RecordTypes.WorldspaceTypeName];
 
     // What ICustomizationBuilder.EmbedRecordsInSameFile takes: a major record, or a list of them.
     private static bool TypedAsChildMajor(Type type) =>
