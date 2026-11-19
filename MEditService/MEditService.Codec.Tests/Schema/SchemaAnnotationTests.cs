@@ -1,6 +1,9 @@
+using Loqui;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -92,15 +95,16 @@ public sealed class SchemaAnnotationTests
         Assert.Equal(sorted, SchemaFields.At(release, table, path).SortedByFormat);
     }
 
-    [Theory]
-    [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    [InlineData(GameRelease.Starfield)]
-    public void EveryListTheFormatSorts_ThatTheSchemaWalks_IsMarkedSorted(GameRelease release)
+    [Fact]
+    public void ASortedListTheSchemaWalksUnderAnotherDeclarer_FailsTheSchemaNamingBoth()
     {
-        var schemas = new SchemaReflector().GetSchemas(release);
+        var annotations = GameCodecs.For(GameRelease.Fallout4).Annotations with { FormatSortedLists = [(typeof(ILoquiObject), "Impacts")] };
+        var observed = new WalkObservations();
+        observed.ListWalked(typeof(IImpactDataSetGetter), "Impacts");
 
-        Assert.NotEmpty(schemas);
+        var failure = Assert.Throws<InvalidOperationException>(() => annotations.ValidateObserved("Mutagen.Bethesda.Fallout4", observed));
+
+        Assert.Contains("the format sorts ILoquiObject.Impacts, which the schema walks as IImpactDataSetGetter.Impacts", failure.Message, StringComparison.Ordinal);
     }
 
     private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>

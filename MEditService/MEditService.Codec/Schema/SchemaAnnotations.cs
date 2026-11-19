@@ -681,7 +681,7 @@ public sealed record SchemaAnnotations(
 
     /// <summary>Throws naming each row that claims something about the walk the walk never did.
     /// Neither fact exists before the whole schema is built.</summary>
-    internal void ValidateObserved(string gameAssemblyName, WalkObservations observed)
+    public void ValidateObserved(string gameAssemblyName, WalkObservations observed)
     {
         string[] idle =
         [
@@ -710,7 +710,7 @@ public sealed record SchemaAnnotations(
 /// <summary>What the walk did with the rows that claim something about the walk itself. Every
 /// table's walk records here at once; <see cref="SchemaAnnotations.ValidateObserved"/> reads, once
 /// the schema is built.</summary>
-internal sealed class WalkObservations
+public sealed class WalkObservations
 {
     private readonly Lock _recording = new();
     private readonly HashSet<string> _appliedTruncations = new(StringComparer.Ordinal);
@@ -726,7 +726,7 @@ internal sealed class WalkObservations
     /// <summary>The walk stopped at this truncation, or let a loop through because of it.</summary>
     internal void AppliedTruncation(string getterInterfaceName) => Record(_appliedTruncations, getterInterfaceName);
     internal void CameOutEmpty(string getterInterfaceName) => Record(_emptySubSchemas, getterInterfaceName);
-    internal void ListWalked(Type declarer, string member) => Record(_listsWalked, (declarer, member));
+    public void ListWalked(Type declarer, string member) => Record(_listsWalked, (declarer, member));
     internal void NamedFlag(string getterInterfaceName, long bit) => Record(_namedFlags, (getterInterfaceName, bit));
 
     private void Record<T>(HashSet<T> observed, T observation)
