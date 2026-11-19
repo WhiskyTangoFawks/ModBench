@@ -5,10 +5,11 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, type Copy } from '../../test/comparison';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { cancellableToken } from '../../client/test/fixtures';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const FORM_KEY = '000801:Mod.esp';
 
-const comparison = (copies: Copy[] = [{ plugin: 'Mod.esp', isWinner: true, editorId: 'Gun' }]): CompareResult =>
+const comparison = (copies: Copy[] = [{ plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]): CompareResult =>
   comparisonOf(FORM_KEY, copies);
 
 const askingFor = (answer: CompareResult | null) => {
@@ -26,14 +27,14 @@ describe('a record\'s hover (symbols.md, The symbols)', () => {
 
   it('names the winner among several copies, and takes its EditorID', async () => {
     const answer = comparison([
-      { plugin: 'Mod.esp', isWinner: false, editorId: 'Old' },
-      { plugin: 'Patch.esp', isWinner: true, editorId: 'New' },
+      { plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: false, editorId: 'Old' },
+      { plugin: 'Patch.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'New' },
     ]);
     expect(await hoverOf({ client: askingFor(answer), reporter }, FORM_KEY)).toEqual([`\`New [${FORM_KEY}]\``, 'Weapon', 'Winner: Patch.esp']);
   });
 
   it('shows the FormKey alone when the winner has no EditorID', async () => {
-    const answer = comparison([{ plugin: 'Mod.esp', isWinner: true, editorId: null }]);
+    const answer = comparison([{ plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: null }]);
     expect(await hoverOf({ client: askingFor(answer), reporter }, FORM_KEY)).toEqual([`\`${FORM_KEY}\``, 'Weapon', 'Winner: Mod.esp']);
   });
 

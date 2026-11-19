@@ -1,11 +1,10 @@
 import type { CompareResult } from '../client';
-import { DATA_DIRECTORY_ORIGIN } from '../wire/pluginAddress';
 
 type Override = CompareResult['overrides'][number];
 export type Field = Override['fields'][number];
 type FieldMetadata = Field['metadata'];
 
-export interface Copy { plugin: string; origin?: string; recordType?: string; isWinner: boolean; editorId?: string | null; fields?: Field[] }
+export interface Copy { plugin: string; origin: string; recordType?: string; isWinner: boolean; editorId?: string | null; fields?: Field[] }
 
 /** A field of the given shape; `value` is what the record holds there. */
 export const fieldOf = (shape: Partial<FieldMetadata> & Pick<FieldMetadata, 'name' | 'type'>, value?: unknown): Field => ({
@@ -17,7 +16,7 @@ export const fieldOf = (shape: Partial<FieldMetadata> & Pick<FieldMetadata, 'nam
 });
 
 const override = (formKey: string, copy: Copy): Override => ({
-  formKey, origin: DATA_DIRECTORY_ORIGIN, recordType: 'weap', isPartialForm: false, loadIndex: '00', isInOverwrite: false, fields: [], ...copy,
+  formKey, recordType: 'weap', isPartialForm: false, loadIndex: '00', isInOverwrite: false, fields: [], ...copy,
 });
 
 /** What mEdit answers for a record held in `copies`. */

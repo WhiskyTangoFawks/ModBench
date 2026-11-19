@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Range, TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const { setInput } = vi.hoisted(() => ({
   setInput: vi.fn<(input: ReferencesViewInput<ReferencedByList>) => void>(),
@@ -29,7 +30,7 @@ beforeEach(() => { setInput.mockClear(); });
 
 function asking() {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+  client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]));
   client.setQueryAnswer('getPlugins', []);
   client.setQueryAnswer(IN_ACTIVE_OR_COMPILED, [{
     formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',

@@ -3,12 +3,13 @@ import { enumCompletionsAt } from '../enumCompletion';
 import type { CompareResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, fieldOf, type Field } from '../../test/comparison';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const OWNER = '000801:Mod.esp';
 
 const asking = (fields: Field[]) => ({
   getComparison: vi.fn((formKey: string): Promise<CompareResult | null> =>
-    Promise.resolve(formKey === OWNER ? comparisonOf(formKey, [{ plugin: 'Mod.esp', isWinner: true, fields }]) : null)),
+    Promise.resolve(formKey === OWNER ? comparisonOf(formKey, [{ plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, fields }]) : null)),
 });
 
 const completingAtBar = (client: Parameters<typeof enumCompletionsAt>[0]['client'], marked: string, reporter = recordingReporter()) =>

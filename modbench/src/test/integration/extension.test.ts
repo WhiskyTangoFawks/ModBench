@@ -466,7 +466,7 @@ function createMockBackend(): http.Server {
         const copies = typeof parsed === 'object' && parsed !== null && 'copies' in parsed && Array.isArray(parsed.copies) ? parsed.copies : [];
         comparedSideBySide.push(copies);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ compare: comparisonOf('Fallout4.esm:000001', [{ plugin: 'Fallout4.esm', isWinner: true }]), missing: [] }));
+        res.end(JSON.stringify({ compare: comparisonOf('Fallout4.esm:000001', [{ plugin: 'Fallout4.esm', origin: 'Data/', isWinner: true }]), missing: [] }));
       });
       return;
     }
@@ -592,16 +592,18 @@ const renderedUri = (formKey: string) =>
 
 
 const NON_COMPILED_PLUGIN_FORM_KEY = '000801:NonCompiledPlugin.esp';
+const NON_COMPILED_PLUGIN = 'NonCompiledPlugin.esp';
+const NON_COMPILED_PLUGIN_ORIGIN = 'NonSourceMod';
 const NON_COMPILED_PLUGIN_FILE_NAME = 'NonCompiledPluginGun - 000801_NonCompiledPlugin.esp.json';
 let nonCompiledPluginText = '{ "EditorID": "NonCompiledPluginGun" }';
 
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[COMPILED_PLUGIN_FORM_KEY, comparisonOf(COMPILED_PLUGIN_FORM_KEY, [
-  { plugin: COMPILED_PLUGIN, isWinner: true, editorId: 'CompiledPluginGun' },
+  { plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN, isWinner: true, editorId: 'CompiledPluginGun' },
 ])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
   { plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN, isWinner: true, editorId: 'CompiledPluginRef' },
 ])], [HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
-  { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
-  { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
+  { plugin: 'Held.esp', origin: 'Data/', isWinner: false, editorId: 'OldGun' },
+  { plugin: 'Patch.esp', origin: 'Data/', isWinner: true, editorId: 'NewGun', fields: [
     fieldOf({ name: 'Armor', type: 'formKey', validFormKeyTypes: ['WEAP'] }),
     fieldOf({ name: 'Name', type: 'string' }),
     fieldOf({ name: 'Mode', type: 'enum', enumMembers: [{ value: 'Auto' }, { value: 'Single' }] }),
@@ -1027,14 +1029,14 @@ function renderedText(formKey: string): string {
 }
 
 describe('modbench.record.open', () => {
-  const hasRenderedTab = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
+  const hasTabTitledWith = (title: string) => openTabs().some(t => t.label === title);
 
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('opens the winning copy\'s document, titled with its file\'s name, which asks for its record', async () => {
+  it('opens the winning copy\'s document, which asks for its record', async () => {
     await openRecord({ formKey: 'Fallout4.esm:000001' });
 
-    await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
+    await waitFor('the winning copy\'s tab', () => hasTabTitledWith('Fallout4.esm:000001') || undefined);
     await waitFor('the record\'s read', () => askedToRead('Fallout4.esm:000001'));
   });
 });
@@ -1051,16 +1053,16 @@ describe('a compiled plugin copy of a record', () => {
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('opens as its file in the record grid, titled with the file\'s name after its read lands', async () => {
+  it('opens as its file in the record grid, titled with its EditorID after its read lands', async () => {
     const asked = requestLog.length;
 
     await openRecord(compiledPluginCopy);
-    const [tab] = await waitFor('the file\'s tab', () => fileTabs().length > 0 && fileTabs());
+    await waitFor('the file\'s tab', () => fileTabs().length > 0 && fileTabs());
     await waitFor('the record\'s read', () => askedToRead(COMPILED_PLUGIN_FORM_KEY, asked));
+    await waitFor('the file\'s tab titled with its EditorID', () => fileTabs()[0]?.label === 'CompiledPluginGun');
     await sleep(500);
 
-    assert.strictEqual(tab?.label, 'CompiledPluginGun.json');
-    assert.deepStrictEqual(fileTabs().map((t) => t.label), ['CompiledPluginGun.json']);
+    assert.deepStrictEqual(fileTabs().map((t) => t.label), ['CompiledPluginGun']);
   });
 
   it('reads its own column from the file on disk while it is saved and its plugin is not active, so it shows', async () => {
@@ -1261,7 +1263,7 @@ describe('a child record of a compiled plugin', () => {
     await openPinnedRecord({ ...childCopy });
 
     await waitFor('the child\'s tab titled with its EditorID', () => childTab()?.label === 'CompiledPluginRef');
-    assert.deepStrictEqual(recordTabs().map((t) => t.label).sort(), ['CompiledPluginGun.json', 'CompiledPluginRef']);
+    assert.deepStrictEqual(recordTabs().map((t) => t.label).sort(), ['CompiledPluginGun', 'CompiledPluginRef']);
     assert.strictEqual((await childDocument()).getText(), containerText);
   });
 
@@ -1680,7 +1682,7 @@ describe('a record opened from a column\'s header', () => {
   const shown = () => vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => `${t.label}${t.isPreview ? ' (preview)' : ''}`));
   const openTab = async (formKey: string) => {
     await openRecord(copyOf(formKey));
-    await waitFor(`${formKey}'s tab active`, () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName(formKey));
+    await waitFor(`${formKey}'s tab active`, () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === formKey);
   };
   const openPinned = async (formKey: string) => {
     await openTab(formKey);
@@ -1697,17 +1699,17 @@ describe('a record opened from a column\'s header', () => {
 
     await openFromHeader('Fallout4.esm:000083', 'Fallout4.esm:000084');
 
-    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
+    await tabsAre(['Fallout4.esm:000080', 'Fallout4.esm:000083 (preview)']);
   });
 
   it('keeps a record opened with Open pinned when another is clicked open', async () => {
     const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000080' } };
     await vscode.commands.executeCommand('modbench.record.openPinned', row, [row]);
-    await waitFor('the pinned tab active', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName('Fallout4.esm:000080'));
+    await waitFor('the pinned tab active', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Fallout4.esm:000080');
 
     await openTab('Fallout4.esm:000081');
 
-    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000081')} (preview)`]);
+    await tabsAre(['Fallout4.esm:000080', 'Fallout4.esm:000081 (preview)']);
   });
 
   it('shows the tab of a column\'s file already open, and opens no second', async () => {
@@ -1716,13 +1718,13 @@ describe('a record opened from a column\'s header', () => {
 
     await openFromHeader('Fallout4.esm:000080');
 
-    await waitFor('the pinned tab active', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName('Fallout4.esm:000080'));
-    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000081')} (preview)`]);
+    await waitFor('the pinned tab active', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Fallout4.esm:000080');
+    await tabsAre(['Fallout4.esm:000080', 'Fallout4.esm:000081 (preview)']);
   });
 });
 
 describe('a non-compiled plugin copy of a record', () => {
-  const nonCompiledPluginCopy = { formKey: NON_COMPILED_PLUGIN_FORM_KEY, plugin: { name: 'NonCompiledPlugin.esp', origin: 'NonSourceMod' } };
+  const nonCompiledPluginCopy = { formKey: NON_COMPILED_PLUGIN_FORM_KEY, plugin: { name: NON_COMPILED_PLUGIN, origin: NON_COMPILED_PLUGIN_ORIGIN } };
   const renderedTabs = () => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'modbench-rendered' && t.input.viewType === 'modbench.record');
   const renderedDocument = async () => {
@@ -1734,11 +1736,10 @@ describe('a non-compiled plugin copy of a record', () => {
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('opens in the record grid as the document mEdit renders, titled with the name its file would have', async () => {
+  it('opens in the record grid as the document mEdit renders', async () => {
     await openRecord(nonCompiledPluginCopy);
 
     const document = await renderedDocument();
-    assert.deepStrictEqual(renderedTabs().map((t) => t.label), [NON_COMPILED_PLUGIN_FILE_NAME]);
     assert.strictEqual(document.getText(), nonCompiledPluginText);
   });
 
