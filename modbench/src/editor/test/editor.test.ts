@@ -335,7 +335,7 @@ describe('a record file\'s tab', () => {
   const holding = (formKey: string) => ({ formKey, plugin: { name: 'A.esp', origin: 'ModA' } });
   function fileClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', []);
     return client;
   }
@@ -716,7 +716,7 @@ describe('a record tab closed', () => {
 
 describe('what a record tab\'s webview posts', () => {
   const GUN = '000801:A.esp';
-  const compare = comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]);
+  const compare = comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]);
   const loadRequest = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: GUN, columns: [] };
   const answered = (tab: FakePanel) => tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0]);
   const loadAnswered = (tab: FakePanel) => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'recordLoadAnswered');
@@ -1134,7 +1134,7 @@ describe('a non-compiled plugin copy\'s tab', () => {
 
   it('shows the copy\'s record, in focus, with no file for mEdit to name it by', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]));
     const { openDocument, askedFromThePalette } = makeEditor(client);
 
     const tab = await openDocument(RENDERED);
