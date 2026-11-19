@@ -26,10 +26,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
     private readonly Landscape _landscape;
     private readonly PlacedObject _persistentRef;
     private readonly PlacedObject _temporaryRef;
-    private readonly Quest _quest;
-    private readonly DialogTopic _topic;
-    private readonly DialogResponses _response;
-    private readonly DialogResponses _response2;
 
     public EmbeddedChildEditTests()
     {
@@ -39,14 +35,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         _cell = new Cell(_mod) { EditorID = "InteriorCell", WaterHeight = 100f, Landscape = _landscape };
         _cell.Persistent.Add(_persistentRef);
         _cell.Temporary.Add(_temporaryRef);
-
-        _response = new DialogResponses(_mod) { EditorID = "Response" };
-        _topic = new DialogTopic(_mod) { EditorID = "Topic" };
-        _response2 = new DialogResponses(_mod) { EditorID = "Response2" };
-        _topic.Responses.Add(_response);
-        _topic.Responses.Add(_response2);
-        _quest = new Quest(_mod) { EditorID = "Quest" };
-        _quest.DialogTopics.Add(_topic);
+        _cell.Temporary.Add(new PlacedObject(_mod) { EditorID = "TempRef2", Position = new P3Float(5f, 6f, 7f), Scale = 1f });
 
         PluginBaselines.Init(
             _modFolder, PristineFiles());
@@ -57,14 +46,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
     private TreeFile[] PristineFiles() =>
     [
         new(CellPath, Serialize(_cell)),
-        new(QuestPath, Serialize(_quest)),
     ];
 
     private static string Root => PluginSourceRoot.For(PluginName);
 
     private string CellPath => PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", PluginSourceRoot.Leaf(_cell)));
-
-    private string QuestPath => Path.Combine(Root, "Quests", PluginSourceRoot.Leaf(_quest) + ".json");
 
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
@@ -180,7 +166,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var owner = OwnerAsTheCodecReadsIt();
 
         Assert.Empty(EditorIdsIn(owner, "Persistent"));
-        Assert.Equal(["TempRef"], EditorIdsIn(owner, "Temporary"));
+        Assert.Equal(["TempRef", "TempRef2"], EditorIdsIn(owner, "Temporary"));
         Assert.Equal("CellLandscape", owner.GetProperty("Landscape").GetProperty("EditorID").GetString());
     }
 
@@ -197,9 +183,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void RemovingTheFirstChildOfAListSlot_LeavesTheOwnerSpelledAsTheCodecWould()
     {
-        Repository.Remove(Plugin, Identity(_response, "info")).Wrote();
+        Repository.Remove(Plugin, Identity(_temporaryRef, "refr")).Wrote();
 
-        AssertTheCompileGateWouldNotRespell(QuestPath, "quest");
+        AssertTheCompileGateWouldNotRespell(CellPath, "cell");
     }
 
     [Fact]

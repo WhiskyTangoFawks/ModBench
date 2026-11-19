@@ -5,11 +5,13 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Schema;
 
 /// <summary>The members holding child major records, read from each game module's own types.
-/// EmbeddedSlots is the subset the embed customization accepts. Every dictionary is keyed by game
-/// too: two games' classes can share a bare name.</summary>
+/// The source's format writes an EmbeddedSlots child inside its container's document, and a
+/// FileSlots child in a file of its own. Every dictionary is keyed by game too: two games' classes
+/// can share a bare name.</summary>
 internal sealed record ContainerMembers(
     IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,
     IReadOnlySet<(GameCategory Game, string ParentType, string Slot)> EmbeddedSlots,
+    IReadOnlySet<(GameCategory Game, string ParentType, string Slot)> FileSlots,
     IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), string> ElementTypeBySlot,
     IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), IReadOnlyList<Type>> HeldTypesBySlot)
 {
@@ -30,6 +32,7 @@ internal sealed record ContainerMembers(
     {
         var childFields = new Dictionary<(GameCategory, string), SortedSet<string>>();
         var embedded = new HashSet<(GameCategory Game, string ParentType, string Slot)>();
+        var files = new HashSet<(GameCategory Game, string ParentType, string Slot)>();
         var elementTypes = new Dictionary<(GameCategory Game, string ParentType, string Slot), string>();
         var heldTypes = new Dictionary<(GameCategory Game, string ParentType, string Slot), IReadOnlyList<Type>>();
 
@@ -41,13 +44,15 @@ internal sealed record ContainerMembers(
                 {
                     var held = HeldMajorTypes(property.PropertyType, assembly, []).ToList();
                     if (held.Count == 0) continue;
-                    var embeds = TypedAsChildMajor(property.PropertyType);
+                    var holdsRecords = TypedAsChildMajor(property.PropertyType);
+                    var embeds = holdsRecords && EmbeddingContainers.Contains(recordType.Name);
 
                     var key = (category, recordType.Name);
                     if (!childFields.TryGetValue(key, out var members))
                         childFields[key] = members = new SortedSet<string>(StringComparer.Ordinal);
                     members.Add(property.Name);
                     if (embeds) embedded.Add((category, recordType.Name, property.Name));
+                    else if (holdsRecords) files.Add((category, recordType.Name, property.Name));
                     heldTypes[(category, recordType.Name, property.Name)] = held;
                     if (ElementTypeOf(property.PropertyType) is { } element)
                         elementTypes[(category, recordType.Name, property.Name)] = element.Name;
@@ -58,6 +63,7 @@ internal sealed record ContainerMembers(
         return new ContainerMembers(
             childFields.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray()),
             embedded,
+            files,
             elementTypes,
             heldTypes);
     }
@@ -81,6 +87,9 @@ internal sealed record ContainerMembers(
     private static IEnumerable<Type> RecordTypes(Assembly assembly) =>
         assembly.GetTypes().Where(type => type.IsClass && !type.IsAbstract && type.IsPublic
             && typeof(IMajorRecord).IsAssignableFrom(type));
+
+    // Spriggit's format embeds the children of these alone (ADR-0030).
+    private static readonly string[] EmbeddingContainers = ["Cell", "Worldspace"];
 
     // What ICustomizationBuilder.EmbedRecordsInSameFile takes: a major record, or a list of them.
     private static bool TypedAsChildMajor(Type type) =>

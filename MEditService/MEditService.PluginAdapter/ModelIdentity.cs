@@ -57,7 +57,7 @@ internal static class ModelIdentity
     // first the recompile produced that the original never had; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled, string trip)
     {
-        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled).FirstOrDefault() is ({ } record, var field))
+        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled, filedInAnyOrder: trip == Recompiled).FirstOrDefault() is ({ } record, var field))
         {
             return new Divergence(record.GetType().Name, record.FormKey, record.EditorID, field is null
                 ? $"is missing after {trip}."
@@ -73,11 +73,19 @@ internal static class ModelIdentity
 
     /// <summary>Each <paramref name="original"/> record that does not survive into <paramref name="recompiled"/>,
     /// with the field the mask disagrees on, else the codec document path that differs; a null field
-    /// is a record <paramref name="recompiled"/> lacks.</summary>
+    /// is a record <paramref name="recompiled"/> lacks. <paramref name="filedInAnyOrder"/> compares the children a
+    /// record holds in files of their own as a set, as the source's format keeps them (ADR-0030).</summary>
     public static IEnumerable<(IMajorRecordGetter Record, string? Field)> RecordDivergences(
-        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled)
+        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled, bool filedInAnyOrder = false)
     {
         var game = GameCodecs.For(recompiled.GameRelease);
+        var types = RecordTypes.For(recompiled.GameRelease);
+        IMajorRecordGetter Normalized(IMajorRecordGetter record)
+        {
+            var encoded = game.NormalizeEncoding(record, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease));
+            return filedInAnyOrder ? FiledInFormKeyOrder(encoded, types) : encoded;
+        }
+
         foreach (var (originalRecord, recompiledRecord) in Paired(original, recompiled))
         {
             if (recompiledRecord is null)
@@ -88,10 +96,31 @@ internal static class ModelIdentity
 
             var changed = FirstDifference(originalRecord, recompiledRecord, recompiled.GameRelease) is null
                 ? null
-                : FirstDifference(
-                    game.NormalizeEncoding(originalRecord, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease)),
-                    game.NormalizeEncoding(recompiledRecord, recompiled.UsingLocalization, type => ReferenceBases.NameMemberOf(type, recompiled.GameRelease)), recompiled.GameRelease);
+                : FirstDifference(Normalized(originalRecord), Normalized(recompiledRecord), recompiled.GameRelease);
             if (changed != null) yield return (originalRecord, changed);
+        }
+    }
+
+    private static IMajorRecordGetter FiledInFormKeyOrder(IMajorRecordGetter record, RecordTypes types)
+    {
+        if (types.FileSlotsOf(types.RecordTypeOf(record)).Count == 0) return record;
+        var copy = record.DeepCopy();
+        InFormKeyOrder(copy, types);
+        return copy;
+    }
+
+    private static void InFormKeyOrder(IMajorRecordGetter record, RecordTypes types)
+    {
+        foreach (var slot in types.FileSlotsOf(types.RecordTypeOf(record)))
+        {
+            if (record.GetType().GetProperty(slot)?.GetValue(record) is not System.Collections.IList children) continue;
+            var ordered = children.Cast<IMajorRecordGetter>().OrderBy(child => child.FormKey.ToString(), StringComparer.Ordinal).ToList();
+            children.Clear();
+            foreach (var child in ordered)
+            {
+                InFormKeyOrder(child, types);
+                children.Add(child);
+            }
         }
     }
 

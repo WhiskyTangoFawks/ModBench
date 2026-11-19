@@ -92,6 +92,11 @@ public sealed class RecordTypes
             .ToHashSet(StringComparer.Ordinal);
     }
 
+    /// <summary>The names of the members serializing their children inline in any game: no game names
+    /// another member so.</summary>
+    public static IReadOnlySet<string> EmbeddedSlotNamesOfEveryGame { get; } =
+        ContainerMembers.Derived.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
+
     public static RecordTypes For(GameRelease release) =>
         Models.GetOrAdd(release.ToCategory(), _ => new RecordTypes(release));
 
@@ -176,6 +181,20 @@ public sealed class RecordTypes
     /// <paramref name="slot"/> inline.</summary>
     public bool IsEmbeddedSlot(string recordType, string slot) =>
         ContainerTypeOf(recordType) is { } container && IsEmbeddedSlotOf(container, slot);
+
+    /// <summary>The members of <paramref name="recordType"/> whose children each have a file of their
+    /// own, in a folder the member names inside the container's directory.</summary>
+    public IReadOnlyList<string> FileSlotsOf(string? recordType) =>
+        ContainerTypeOf(recordType) is { } container
+            ? [.. ChildSlotsOf(recordType).Where(slot => _members.FileSlots.Contains((_category, container, slot)))]
+            : [];
+
+    /// <summary>The record type <paramref name="slot"/> of <paramref name="recordType"/> holds in files
+    /// of their own; null for a slot that is no such member.</summary>
+    public string? FileSlotRecordType(string recordType, string slot) =>
+        ContainerTypeOf(recordType) is { } container && _members.FileSlots.Contains((_category, container, slot))
+            ? RecordTypeNamed(ElementTypeOf(container, slot))
+            : null;
 
     /// <summary>The names of the members serializing their children inline, across every container
     /// of the game.</summary>

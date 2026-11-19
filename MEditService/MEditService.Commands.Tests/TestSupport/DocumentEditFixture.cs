@@ -48,6 +48,15 @@ internal sealed class DocumentEditFixture : TestInstance
         return record.FormKey.ToString();
     }
 
+    /// <summary>Seeds a record's own document in <paramref name="slot"/> of its seeded container; returns its FormKey.</summary>
+    internal string SeedChild(IMajorRecordGetter container, string containerType, string slot, IMajorRecordGetter child, string childType)
+    {
+        Repository.SaveChanges(Repository.ChangesToPutChild(
+            Plugin, new RecordIdentity(container.FormKey.ToString(), containerType, container.EditorID), slot,
+            new SourceDocument(child.FormKey.ToString(), childType, child.EditorID, RecordTextCodec.SerializeToText(child, GameRelease.Fallout4)))).Wrote();
+        return child.FormKey.ToString();
+    }
+
     /// <summary>Seeds an exact document body, for a case whose input is a shape the codec itself
     /// would not produce.</summary>
     internal void SeedRaw(string formKey, string recordType, string? editorId, string body) =>

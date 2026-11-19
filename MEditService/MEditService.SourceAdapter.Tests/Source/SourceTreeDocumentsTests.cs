@@ -63,13 +63,19 @@ public sealed class SourceTreeDocumentsTests : IDisposable
             [
                 new TreeFile(_interiorCellPath, Serialize(_interiorCell)),
                 new TreeFile(_worldspacePath, Serialize(_worldspace)),
-                new TreeFile(Path.Combine(Root, "Quests", PluginSourceRoot.Leaf(_quest) + ".json"), Serialize(_quest)),
+                new TreeFile(PluginSourceRoot.ContainerDocument(QuestDirectory), Serialize(_quest)),
+                new TreeFile(PluginSourceRoot.ContainerDocument(TopicDirectory), Serialize(_topic)),
+                new TreeFile(Path.Combine(TopicDirectory, "Responses", PluginSourceRoot.Leaf(_response) + ".json"), Serialize(_response)),
             ]);
     }
 
     public void Dispose() => _modFolder.Dispose();
 
     private static string Root => PluginSourceRoot.For(PluginName);
+
+    private string QuestDirectory => Path.Combine(Root, "Quests", PluginSourceRoot.Leaf(_quest));
+
+    private string TopicDirectory => Path.Combine(QuestDirectory, "DialogTopics", PluginSourceRoot.Leaf(_topic));
 
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
@@ -83,7 +89,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
             .Value();
 
     private List<IMajorRecordGetter> EveryEmbeddedChild() =>
-        [_persistentRef, _temporaryRef, _landscape, _topCell, _topCellRef, _topic, _response];
+        [_persistentRef, _temporaryRef, _landscape, _topCell, _topCellRef];
 
     [Fact]
     public void AHeaderThatIsNoJsonDocument_IsAnUnreadableFile_ThatDecompileRepairs()
@@ -115,6 +121,20 @@ public sealed class SourceTreeDocumentsTests : IDisposable
             EveryEmbeddedChild()
                 .Where(child => documents.ContainsKey(child.FormKey.ToString()))
                 .Select(child => child.EditorID));
+    }
+
+    [Fact]
+    public void AQuestsTopicAndTheTopicsResponse_ReadBackFromTheirOwnFiles_EachHeldByItsContainer()
+    {
+        var documents = Documents();
+
+        Assert.Equal(
+            [new ChildRecord(_topic.FormKey.ToString(), "DialogTopics", 0)],
+            documents[_quest.FormKey.ToString()].Contents);
+        Assert.Equal(
+            [new ChildRecord(_response.FormKey.ToString(), "Responses", 0)],
+            documents[_topic.FormKey.ToString()].Contents);
+        Assert.Equal(("dial", "info"), (documents[_topic.FormKey.ToString()].RecordType, documents[_response.FormKey.ToString()].RecordType));
     }
 
     [Fact]

@@ -34,14 +34,14 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
         return relativePath;
     }
 
-    private (string Path, byte[] Text) QuestWithATopic(out DialogTopic topic)
+    private (string Path, byte[] Text) CellWithAReference(out PlacedObject reference)
     {
-        topic = new DialogTopic(_mod) { EditorID = "Topic" };
-        var quest = new Quest(_mod) { EditorID = "Quest" };
-        quest.DialogTopics.Add(topic);
+        reference = new PlacedObject(_mod) { EditorID = "Ref" };
+        var cell = new Cell(_mod) { EditorID = "Room" };
+        cell.Temporary.Add(reference);
         return (
-            Path.Combine(Root, "Quests", $"Quest - {quest.FormKey.ID:X6}_{PluginName}.json"),
-            Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(quest, Release)));
+            PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", PluginSourceRoot.Leaf(cell))),
+            Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(cell, Release)));
     }
 
     private static byte[] NpcText(string editorId) =>
@@ -64,19 +64,19 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
     [PosixFact]
     public void AnEmbeddedChildByFormKey_WhoseOwnerIsUnreadable_StopsNamingTheOwner()
     {
-        var (questPath, quest) = QuestWithATopic(out var topic);
-        var repository = SourceMod(new TreeFile(questPath, quest));
+        var (cellPath, cell) = CellWithAReference(out var reference);
+        var repository = SourceMod(new TreeFile(cellPath, cell));
 
-        AssertStoppedNaming(Unreadable(questPath), repository.RecordByFormKey(Plugin, topic.FormKey.ToString()).Stopped());
+        AssertStoppedNaming(Unreadable(cellPath), repository.RecordByFormKey(Plugin, reference.FormKey.ToString()).Stopped());
     }
 
     [PosixFact]
     public void AnEmbeddedChildByFormKey_WhoseOwnerTurnsUnreadableAfterTheScan_StopsNamingTheOwner()
     {
-        var (questPath, quest) = QuestWithATopic(out var topic);
-        var repository = SourceMod(new TreeFile(questPath, quest));
-        Assert.NotNull(repository.RecordByFormKey(Plugin, topic.FormKey.ToString()).Value());
+        var (cellPath, cell) = CellWithAReference(out var reference);
+        var repository = SourceMod(new TreeFile(cellPath, cell));
+        Assert.NotNull(repository.RecordByFormKey(Plugin, reference.FormKey.ToString()).Value());
 
-        AssertStoppedNaming(Unreadable(questPath), repository.RecordByFormKey(Plugin, topic.FormKey.ToString()).Stopped());
+        AssertStoppedNaming(Unreadable(cellPath), repository.RecordByFormKey(Plugin, reference.FormKey.ToString()).Stopped());
     }
 }

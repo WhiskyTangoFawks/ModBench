@@ -41,14 +41,14 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     }
 
     [Fact]
-    public void Compile_AfterRenamingTheMiddleResponse_LandsTheRenameAndKeepsTheTopicsResponseOrder()
+    public void Compile_AfterRenamingAResponse_LandsTheRenameAndKeepsTheTopicsResponses()
     {
         using var compiled = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), fixture.CompiledPluginPath), GameRelease.Fallout4);
         var topic = ((IFallout4ModGetter)compiled).Quests.SelectMany(q => q.DialogTopics).Single(t => t.FormKey == fixture.Topic);
 
         Assert.Equal(fixture.RenamedResponseEditorId, topic.Responses.Single(r => r.FormKey == fixture.RenamedResponse).EditorID);
-        Assert.Equal(fixture.TopicResponses, topic.Responses.Select(r => r.FormKey));
+        Assert.Equal(fixture.TopicResponses.Order(), topic.Responses.Select(r => r.FormKey).Order());
     }
 
     [Fact]

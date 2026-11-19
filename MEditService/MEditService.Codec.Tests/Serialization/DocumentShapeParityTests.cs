@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -50,13 +49,13 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
-    public void AQuestsText_CarriesItsTopicAndItsResponseInline()
+    public void AQuestsText_CarriesNeitherItsTopicNorTheTopicsResponse_WhichAreFilesOfTheirOwn()
     {
-        using var doc = JsonDocument.Parse(RecordTextCodec.SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
+        var text = RecordTextCodec.SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4);
 
-        var topic = doc.RootElement.GetProperty("DialogTopics")[0];
-        Assert.Equal("ParityTopic", topic.GetProperty("EditorID").GetString());
-        Assert.Equal("ParityResponse", topic.GetProperty("Responses")[0].GetProperty("EditorID").GetString());
+        Assert.Contains("ParityQuest", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ParityTopic", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ParityResponse", text, StringComparison.Ordinal);
     }
 
     private static Quest MakePopulatedQuest(Fallout4Mod mod)

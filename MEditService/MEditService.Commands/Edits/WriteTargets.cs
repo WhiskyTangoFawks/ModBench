@@ -97,7 +97,7 @@ internal sealed class WriteTargets(
         repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
             SourceAnswer.Of(header is not { } held || HeaderDocument.IsLocalized(Encoding.UTF8.GetBytes(held.Body), release)));
 
-    // A record's own descendants are inside its text, so one unreadable response refuses its topic
+    // A record's embedded descendants are inside its text, so one unreadable reference refuses its cell
     // here too.
     private static RecordEditResult RefuseUnreadableCopySource(string formKey, CopyUnread unread) =>
         unread.Kind == RecordEditRefusal.RecordParseFailed

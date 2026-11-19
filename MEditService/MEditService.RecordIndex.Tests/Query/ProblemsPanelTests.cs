@@ -13,7 +13,7 @@ public sealed class ProblemsPanelTests : IDisposable
 {
     private const string Absent = "000ABC:Absent.esp";
 
-    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false, int ResponsesWithMissingEmotion = 0, int MissingKeywords = 0)
+    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false, int MissingKeywords = 0, int PlacedWithMissingBase = 0)
     {
         public string Referrer => $"000800:{Name}";
     }
@@ -42,7 +42,7 @@ public sealed class ProblemsPanelTests : IDisposable
                 if (plugin.RefersTo is { } target) referrer.Race.SetTo(FormKey.Factory(target));
                 mod.Npcs.AddNew("Other");
                 if (plugin.ResponseWithNoneEmotion) AddResponsesWithEmotion(mod, FormKey.None);
-                if (plugin.ResponsesWithMissingEmotion > 0) AddResponsesWithEmotion(mod, [.. Enumerable.Repeat(FormKey.Factory(Absent), plugin.ResponsesWithMissingEmotion)]);
+                if (plugin.PlacedWithMissingBase > 0) AddPlacedWithBase(mod, [.. Enumerable.Repeat(FormKey.Factory(Absent), plugin.PlacedWithMissingBase)]);
                 if (plugin.MissingKeywords > 0)
                 {
                     referrer.Keywords = [.. Enumerable.Repeat(new FormLink<IKeywordGetter>(FormKey.Factory(Absent)), plugin.MissingKeywords)];
@@ -69,6 +69,18 @@ public sealed class ProblemsPanelTests : IDisposable
         var quest = new Quest(mod.GetNextFormKey(), Fallout4Release.Fallout4);
         quest.DialogTopics.Add(topic);
         mod.Quests.Add(quest);
+    }
+
+    private static void AddPlacedWithBase(Fallout4Mod mod, params FormKey[] bases)
+    {
+        var cell = new Cell(mod.GetNextFormKey(), Fallout4Release.Fallout4) { Flags = Cell.Flag.IsInteriorCell };
+        foreach (var placedBase in bases)
+        {
+            var placed = new PlacedObject(mod.GetNextFormKey(), Fallout4Release.Fallout4);
+            placed.Base.SetTo(placedBase);
+            cell.Temporary.Add(placed);
+        }
+        mod.Cells.Records.Add(new CellBlock { BlockNumber = 0, SubBlocks = [new CellSubBlock { BlockNumber = 0, Cells = [cell] }] });
     }
 
     private ScatteredFixtureData Fixture => _fixture ?? throw new InvalidOperationException("Build the fixture first.");
@@ -356,7 +368,7 @@ public sealed class ProblemsPanelTests : IDisposable
     [Fact]
     public void AMissingReferenceInAnEmbeddedChild_CarriesItsRangeInTheOwnersFile()
     {
-        var plugin = new Plugin("Speaks.esp", RefersTo: null, ResponsesWithMissingEmotion: 1);
+        var plugin = new Plugin("Places.esp", RefersTo: null, PlacedWithMissingBase: 1);
         using var index = Reconciled(plugin);
 
         var problem = Assert.Single(Assert.Single(Ready(index)).Problems);
@@ -371,7 +383,7 @@ public sealed class ProblemsPanelTests : IDisposable
     [Fact]
     public void RecordsOfOneFileCitingTheSameMissingRecord_EachCarryTheRangeOfTheirOwnReference()
     {
-        var plugin = new Plugin("Speaks.esp", RefersTo: null, ResponsesWithMissingEmotion: 2);
+        var plugin = new Plugin("Places.esp", RefersTo: null, PlacedWithMissingBase: 2);
         using var index = Reconciled(plugin);
 
         var problems = Assert.Single(Ready(index)).Problems;

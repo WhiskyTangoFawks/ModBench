@@ -4,10 +4,8 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -17,12 +15,16 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private IReadOnlyList<JsonElement> Responses(string topicFormKey)
+    private IReadOnlyList<JsonElement> Responses(string topicFormKey) => Held(topicFormKey, nameof(DialogTopic.Responses));
+
+    // A quest's and a topic's children are files of their own in a folder of their container's directory.
+    private IReadOnlyList<JsonElement> Held(string containerFormKey, string slot)
     {
-        var topic = _fixture.Document(_fixture.DestinationPlugin, topicFormKey);
-        Assert.NotNull(topic);
-        return JsonDocument.Parse(topic.Body).RootElement.TryGetProperty("Responses", out var responses)
-            ? [.. responses.EnumerateArray()]
+        var container = SourceModTree.DocumentFile(_fixture.DestinationModFolder, _fixture.DestinationPlugin, containerFormKey).Require();
+        var folder = Path.Combine(_fixture.DestinationModFolder, Path.GetDirectoryName(container).Require(), slot);
+        return Directory.Exists(folder)
+            ? [.. Directory.EnumerateFiles(folder, "*.json", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+                .Select(file => JsonDocument.Parse(File.ReadAllText(file)).RootElement)]
             : [];
     }
 
@@ -73,9 +75,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
 
         var newFormKey = result.OnlyLanded().Require();
-        var questAfter = JsonNode.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body).Require().AsObject();
-        Assert.True(questAfter.Remove(nameof(Quest.DialogTopics), out var topics));
-        Assert.Equal(newFormKey, Assert.Single(topics.Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
+        var questAfter = JsonNode.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body).Require();
+        Assert.Equal(newFormKey, Member(Assert.Single(Held(_fixture.Quest.ToString(), nameof(Quest.DialogTopics))), "FormKey"));
         Assert.Equal(questBefore.ToJsonString(), questAfter.ToJsonString());
         Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
 

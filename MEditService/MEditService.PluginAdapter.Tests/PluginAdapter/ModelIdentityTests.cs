@@ -62,6 +62,54 @@ public sealed class ModelIdentityTests
         Assert.Null(await DivergenceAsync(mod, recompiled));
     }
 
+    private static (Fallout4Mod Original, Quest Quest, DialogTopic First, DialogTopic Second) AQuestWithTwoTopicsOfTwoResponses()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var quest = mod.Quests.AddNew("TestQuest");
+        DialogTopic Topic(string editorId)
+        {
+            var topic = new DialogTopic(mod) { EditorID = editorId, Quest = quest.ToLink() };
+            topic.Responses.Add(new DialogResponses(mod) { EditorID = editorId + "First" });
+            topic.Responses.Add(new DialogResponses(mod) { EditorID = editorId + "Second" });
+            quest.DialogTopics.Add(topic);
+            return topic;
+        }
+        return (mod, quest, Topic("TopicA"), Topic("TopicB"));
+    }
+
+    [Fact]
+    public async Task DivergenceFrom_WhenAQuestsTopicsAndATopicsResponsesAreInAnotherOrder_ReturnsNull_BecauseTheFormatFilesThemByName()
+    {
+        var (original, quest, first, second) = AQuestWithTwoTopicsOfTwoResponses();
+
+        var recompiled = new Fallout4Mod(original.ModKey, Fallout4Release.Fallout4);
+        var recompiledQuest = (Quest)quest.DeepCopy();
+        recompiledQuest.DialogTopics.Clear();
+        recompiledQuest.DialogTopics.Add(second.DeepCopy());
+        recompiledQuest.DialogTopics.Add(first.DeepCopy());
+        recompiledQuest.DialogTopics[1].Responses.Reverse();
+        recompiled.Quests.Add(recompiledQuest);
+
+        Assert.Null(await DivergenceAsync(original, recompiled));
+    }
+
+    [Fact]
+    public async Task DivergenceFrom_WhenATopicSitsInAnotherQuest_NamesIt()
+    {
+        var (original, quest, first, _) = AQuestWithTwoTopicsOfTwoResponses();
+        var other = original.Quests.AddNew("OtherQuest");
+
+        var recompiled = new Fallout4Mod(original.ModKey, Fallout4Release.Fallout4);
+        var recompiledQuest = (Quest)quest.DeepCopy();
+        recompiledQuest.DialogTopics.RemoveAt(0);
+        var recompiledOther = (Quest)other.DeepCopy();
+        recompiledOther.DialogTopics.Add(first.DeepCopy());
+        recompiled.Quests.Add(recompiledQuest);
+        recompiled.Quests.Add(recompiledOther);
+
+        Assert.StartsWith("Quest ", await DivergenceAsync(original, recompiled), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DivergenceFrom_WhenACellUnderAWorldspaceBlockGenuinelyDiffers_NamesIt()
     {

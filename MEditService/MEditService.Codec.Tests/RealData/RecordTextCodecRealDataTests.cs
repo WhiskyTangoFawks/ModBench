@@ -96,38 +96,6 @@ public class RecordTextCodecRealDataTests
         Assert.Contains(nameof(QuestLocationAlias), leaves);
     }
 
-    private static IEnumerable<string> HeldByMutagen(IQuestGetter quest) =>
-        new (string Slot, IEnumerable<IMajorRecordGetter> Children)[]
-        {
-            ("DialogTopics", quest.DialogTopics), ("DialogBranches", quest.DialogBranches), ("Scenes", quest.Scenes),
-        }
-        .Select(slot => $"{quest.FormKey} {slot.Slot}: {string.Join(", ", slot.Children.Select(child => child.FormKey.ToString()))}")
-        .Concat(quest.DialogTopics.Select(topic => $"{topic.FormKey} Responses: {string.Join(", ", topic.Responses.Select(response => response.FormKey.ToString()))}"));
-
-    private static IEnumerable<string> HeldByItsDocument(IQuestGetter quest)
-    {
-        var document = DocumentOf(quest);
-        return new[] { "DialogTopics", "DialogBranches", "Scenes" }
-            .Select(slot => $"{quest.FormKey} {slot}: {string.Join(", ", FormKeysIn(document, slot))}")
-            .Concat(ElementsOf(document, "DialogTopics").Select(topic => $"{topic.GetProperty("FormKey").GetString()} Responses: {string.Join(", ", FormKeysIn(topic, "Responses"))}"));
-    }
-
-    private static IEnumerable<JsonElement> ElementsOf(JsonElement owner, string slot) =>
-        owner.TryGetProperty(slot, out var children) ? children.EnumerateArray() : [];
-
-    private static IEnumerable<string?> FormKeysIn(JsonElement owner, string slot) =>
-        ElementsOf(owner, slot).Select(child => child.GetProperty("FormKey").GetString());
-
-    [Fact]
-    public void ARealQuestsDocument_HoldsEveryDescendantInline_InTheOrderThePluginHoldsThem()
-    {
-        var quests = DeepParsed().Quests.Where(q => q.DialogTopics.Count + q.DialogBranches.Count + q.Scenes.Count > 0).ToList();
-        Assert.Contains(quests, q => q.DialogTopics.Count >= 2);
-        Assert.Contains(quests, q => q.Scenes.Count >= 1);
-
-        Assert.Equal(quests.SelectMany(HeldByMutagen), quests.SelectMany(HeldByItsDocument));
-    }
-
     [Fact]
     public void ARealCellsDocument_HoldsItsNonZeroGroupTimestamps()
     {

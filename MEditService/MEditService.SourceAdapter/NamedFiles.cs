@@ -31,6 +31,12 @@ internal static class NamedFiles
         }
 
         files.RemoveWhere(file => written.At(file) is null && !disk.HoldsUnsavedText(file) && listing.HoldsWhatWasRead(file));
+        // A child filed in its container's directory is listed by that container's read.
+        files.UnionWith([.. files
+            .Select(file => SourceRepositoryLayout.FiledIn(Path.GetRelativePath(sourceFolder, file), documents.Release))
+            .OfType<(string Directory, string Slot)>()
+            .Select(filed => SourceRepositoryLayout.ContainerDocumentHeldBy(disk, Path.Combine(sourceFolder, filed.Directory)))
+            .Where(disk.FileExists)]);
         var held = new HashSet<string>(StringComparer.Ordinal);
         var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
         var settled = new Dictionary<string, FileStamp?>(TreeListing.PathComparer);

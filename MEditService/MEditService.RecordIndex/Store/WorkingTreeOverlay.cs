@@ -36,7 +36,8 @@ internal sealed class WorkingTreeOverlay
         _schemas = schemas;
     }
 
-    private sealed record Written(string FormKey, string RecordType, string Body, bool Held, CellStructure? Cell = null);
+    private sealed record Written(
+        string FormKey, string RecordType, string Body, bool Held, CellStructure? Cell = null, IReadOnlyList<ChildRecord>? Contents = null);
 
     // Prepared is null for a type with no schema, and for the header, which carries no reference graph and cannot go
     // through the per-record codec.
@@ -55,8 +56,8 @@ internal sealed class WorkingTreeOverlay
 
         List<string> gained = [];
         var uncarried = Write(key, [.. written.Select(d => held.TryGetValue(d.FormKey, out var recordType)
-            ? new Written(d.FormKey, recordType, d.Text, Held: true)
-            : new Written(d.FormKey, d.RecordType, d.Text, Held: false, d.Cell))], movedKeys, gained);
+            ? new Written(d.FormKey, recordType, d.Text, Held: true, Contents: d.Contents)
+            : new Written(d.FormKey, d.RecordType, d.Text, Held: false, d.Cell, d.Contents))], movedKeys, gained);
         Remove(key, [.. gone.Where(held.ContainsKey)], uncarried, movedKeys);
         List<string> moved = [.. movedKeys.Distinct(StringComparer.Ordinal)];
         return (moved, [.. written.Select(d => d.FormKey).Where(formKey => !held.ContainsKey(formKey)), .. gone.Where(held.ContainsKey), .. gained, .. uncarried]);
@@ -82,7 +83,7 @@ internal sealed class WorkingTreeOverlay
 
             WriteRecords(key, derived);
             ReplaceReferences(key, [.. derived.Where(d => d.HasSchema)]);
-            ReplaceContainment(key, [.. containers.Select(d => d.Prepared).OfType<PluginIngest.PreparedRecord>()]);
+            ReplaceContainment(key, containers);
 
             foreach (var container in containers)
             {
@@ -107,7 +108,8 @@ internal sealed class WorkingTreeOverlay
         }
 
         List<ContainerDocuments.ChildDocument> children = [];
-        var prepared = _ingest.PrepareRecord(new PluginDocument(document.RecordType, document.FormKey, document.Body, Cell: document.Cell), key.Name, schema, children);
+        var prepared = _ingest.PrepareRecord(
+            new PluginDocument(document.RecordType, document.FormKey, document.Body, Cell: document.Cell, Contents: document.Contents), key.Name, schema, children);
         return new Derived(
             document, prepared.Body, prepared.ContentHash, HasSchema: true, prepared,
             [.. children.Where(c => _types.IsEmbeddedSlot(document.RecordType, c.SlotName))]);
@@ -190,13 +192,18 @@ internal sealed class WorkingTreeOverlay
             PluginIngest.AppendDocumentName(names, name, key.Name, key.Origin);
     }
 
-    // A container's child set and slot order live in its document, so delete-then-insert per parent
-    // is correct. A worldspace's exterior cells are not in its document: their own records place them.
-    private void ReplaceContainment(PluginAddress key, List<PluginIngest.PreparedRecord> prepared)
+    // A container's embedded children live in its document, and the children filed in its directory in the
+    // listing read with it, so delete-then-insert per parent is correct. A worldspace's exterior cells are
+    // placed by their own records, and a container read with no listing keeps what it files.
+    private void ReplaceContainment(PluginAddress key, List<Derived> containers)
     {
+        var prepared = containers.Select(d => d.Prepared).OfType<PluginIngest.PreparedRecord>().ToList();
         DuckDbSql.Execute(_connection,
             $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND {HoldingSlots.CarriedInTheParentsDocument("slot")} AND parent {AmongKeys}",
             key.Name, key.Origin, prepared.Select(p => p.FormKey).ToList());
+        DuckDbSql.Execute(_connection,
+            $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND slot <> {HoldingSlots.Exterior} AND parent {AmongKeys}",
+            key.Name, key.Origin, containers.Where(d => d.Document.Contents is not null).Select(d => d.Document.FormKey).ToList());
         using (var appender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings"))
         {
             foreach (var row in prepared.SelectMany(p => p.Holdings))

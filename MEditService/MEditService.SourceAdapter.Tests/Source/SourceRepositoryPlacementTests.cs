@@ -52,7 +52,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         placed switch
         {
             Placed.FlatRecord => ("npc_", "SomeNpc", SpelledOutPathUnder("Npcs", "SomeNpc - 000800_Vendor.esp.json")),
-            Placed.Quest => ("Quest", "SomeQuest", SpelledOutPathUnder("Quests", "SomeQuest - 000800_Vendor.esp.json")),
+            Placed.Quest => ("Quest", "SomeQuest", PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Quests", "SomeQuest - 000800_Vendor.esp"))),
             Placed.DirectoryPerRecordContainer => (
                 "wrld", "SomeWorld", PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp"))),
             Placed.RecordWithNoEditorId => ("npc_", null, SpelledOutPathUnder("Npcs", "000800_Vendor.esp.json")),

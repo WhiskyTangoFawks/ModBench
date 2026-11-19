@@ -309,35 +309,32 @@ public sealed class CopyAsOverrideContainerTests
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
     }
 
+    private static string DestinationFile(ContainerCopyFixture fixture, FormKey record) =>
+        SourceModTree.DocumentFile(fixture.DestinationModFolder, fixture.DestinationPlugin, record.ToString()).Require();
+
+    private static string FolderOf(ContainerCopyFixture fixture, FormKey container, string slot) =>
+        Path.Combine(Path.GetDirectoryName(DestinationFile(fixture, container)).Require(), slot) + Path.DirectorySeparatorChar;
+
     [Fact]
-    public void CopyRecordAsOverride_OnAResponse_WhenDestinationAlreadyHoldsItsTopicEmbeddedInTheQuest_LandsAfterTheExistingResponseWithEveryOtherQuestByteUntouched()
+    public void CopyRecordAsOverride_OnAResponse_WhenDestinationAlreadyHoldsItsTopic_LandsInItsOwnFile_WithTheQuestAndTopicUntouched()
     {
         using var fixture = ContainerCopyFixture.Create();
         var service = fixture.CopyHandler;
         service.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response2.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false).OnlyLanded();
-
-        var before = JsonNode.Parse(fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).Body).Require();
-        var topicBefore = Assert.Single(before["DialogTopics"].Require().AsArray()).Require().AsObject();
-        var existingResponse = topicBefore["Responses"].Require()[0].Require().ToJsonString();
-        topicBefore.Remove("Responses");
+        var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().Body;
+        var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()).Require().Body;
 
         var result = service.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response1.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
         result.OnlyLanded();
-        var after = JsonNode.Parse(fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).Body).Require();
-        var topicAfter = Assert.Single(after["DialogTopics"].Require().AsArray()).Require().AsObject();
-        var responsesAfter = topicAfter["Responses"].Require().AsArray();
-
-        Assert.Equal(2, responsesAfter.Count);
-        Assert.Equal(existingResponse, responsesAfter[0].Require().ToJsonString());
-        Assert.Equal(fixture.Response1.ToString(), responsesAfter[1].Require()["FormKey"].Require().GetValue<string>());
-
-        topicAfter.Remove("Responses");
-        Assert.Equal(before.ToJsonString(), after.ToJsonString());
+        Assert.StartsWith(FolderOf(fixture, fixture.DialogTopic, "Responses"), DestinationFile(fixture, fixture.Response1), StringComparison.Ordinal);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Response2.ToString()));
+        Assert.Equal(quest, fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().Body);
+        Assert.Equal(topic, fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()).Require().Body);
     }
 
     [Fact]
-    public async Task CopyingASceneAsOverride_IntoAPluginLackingItsQuest_CopiesTheQuestInWithItsFieldsAndTheSceneInline()
+    public async Task CopyingASceneAsOverride_IntoAPluginLackingItsQuest_CopiesTheQuestInWithItsFields_AndTheSceneIntoItsScenesFolder()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -348,12 +345,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.NotNull(quest);
         Assert.True(quest.Require().IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
-        Assert.Equal(
-            fixture.Scene.ToString(),
-            Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
-                .GetProperty("FormKey").GetString());
-
-        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.SceneEditorId).FormKey);
+        Assert.StartsWith(FolderOf(fixture, fixture.Quest, "Scenes"), DestinationFile(fixture, fixture.Scene), StringComparison.Ordinal);
 
         using var binary = await fixture.CompiledAsync(fixture.DestinationPlugin);
         var compiled = binary.Quests.Single(q => q.FormKey == fixture.Quest);
@@ -384,10 +376,12 @@ public sealed class CopyAsOverrideContainerTests
         Assert.Empty(compiledTopic.Responses);
     }
 
-    [Fact]
-    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_CopiesBothIn_InOneQuestDocument()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_CopiesBothIn_EachIntoItsContainersFolder(bool fromPluginSource)
     {
-        using var fixture = ContainerCopyFixture.Create();
+        using var fixture = fromPluginSource ? ContainerCopyFixture.CreateWithCompiledPluginSource() : ContainerCopyFixture.Create();
 
         var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response2.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
@@ -400,16 +394,8 @@ public sealed class CopyAsOverrideContainerTests
         Assert.NotNull(topic);
         Assert.True(topic.Require().IsPartialForm());
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.EditorId);
-        Assert.Equal(
-            fixture.DialogTopic.ToString(),
-            Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("DialogTopics").EnumerateArray())
-                .GetProperty("FormKey").GetString());
-        Assert.Equal(
-            fixture.Response2.ToString(),
-            Assert.Single(JsonDocument.Parse(topic.Body).RootElement.GetProperty("Responses").EnumerateArray())
-                .GetProperty("FormKey").GetString());
-
-        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).FormKey);
+        Assert.StartsWith(FolderOf(fixture, fixture.Quest, "DialogTopics"), DestinationFile(fixture, fixture.DialogTopic), StringComparison.Ordinal);
+        Assert.StartsWith(FolderOf(fixture, fixture.DialogTopic, "Responses"), DestinationFile(fixture, fixture.Response2), StringComparison.Ordinal);
 
         using var binary = await fixture.CompiledAsync(fixture.DestinationPlugin);
         var compiledTopic = Assert.Single(binary.Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);

@@ -12,7 +12,7 @@ internal readonly record struct CellLocationRow(
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY);
 
 /// <summary>The slots that tell what a holding is. An exterior cell sits in a block directory of its
-/// own, so no worldspace document carries it.</summary>
+/// own, and a quest's or a topic's child in a file of its own, so no container's document carries either.</summary>
 internal static class HoldingSlots
 {
     internal const string ExteriorCell = "SubCells";
@@ -24,7 +24,9 @@ internal static class HoldingSlots
     internal static readonly string Exterior = $"'{ExteriorCell}'";
 
     /// <summary>Whether the holding in <paramref name="slot"/> is carried in its parent's document.</summary>
-    internal static string CarriedInTheParentsDocument(string slot) => $"{slot} <> {Exterior}";
+    internal static string CarriedInTheParentsDocument(string slot) => $"{slot} IN ({Embedded})";
+
+    private static readonly string Embedded = string.Join(", ", RecordTypes.EmbeddedSlotNamesOfEveryGame.Order(StringComparer.Ordinal).Select(name => $"'{name}'"));
 }
 
 /// <summary>A cell's grid out of its own text, the block coordinates out of the structure handed

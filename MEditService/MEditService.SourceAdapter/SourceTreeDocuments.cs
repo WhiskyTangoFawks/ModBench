@@ -35,6 +35,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         _headerRelativePath = SourceRepositoryLayout.HeaderDocumentFor(pluginFileName);
     }
 
+    internal GameRelease Release => _release;
+
     /// <summary>Throws when the tree holds no readable root document: serving the binary instead of
     /// a tree that describes no plugin would be a silent lie.</summary>
     public PluginDocument Header
@@ -75,16 +77,16 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             var documents = directoryPerRecord switch
             {
-                null => FlatGroup(groupDirectory, holders),
-                var type when _types.IsCell(type) => InteriorCells(groupDirectory, holders),
-                _ => Worldspaces(groupDirectory, holders),
+                { } type when _types.IsCell(type) => InteriorCells(groupDirectory, holders),
+                { } type when _types.IsWorldspace(type) => Worldspaces(groupDirectory, holders),
+                _ => FlatGroup(groupDirectory, holders),
             };
             foreach (var document in documents) yield return document;
         }
     }
 
     // A group with no directory-per-record type files its records flat, and a container that is not a
-    // cell or a worldspace keeps its own directory directly under it.
+    // cell or a worldspace keeps its own directory directly under it, its children's files inside.
     private IEnumerable<PluginDocument> FlatGroup(string groupDirectory, OneDocumentPerFormKey holders) =>
         _files
             .FilesIn(groupDirectory, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories)
@@ -142,7 +144,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var relativePath = Path.GetRelativePath(_sourceFolder, file);
         var path = new LayoutPath(relativePath);
         if (!path.IsFlatDocument || relativePath.Equals(_headerRelativePath, FilePaths.Comparison)) return false;
-        if (DirectoryPerRecordTypeOf(path) is not { } directoryPerRecord) return true;
+        if (DirectoryPerRecordTypeOf(path) is not { } directoryPerRecord || GroupFolders.For(_release).HoldsChildFiles(path.GroupFolderName)) return true;
         var placed = _types.IsCell(directoryPerRecord)
             ? path.UnderGroupBlockLevels
             : path.UnderWorldspaceBlockLevels || (path.IsContainerDocument && !path.ContainerIsNested);
@@ -193,7 +195,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var formKey = declared ?? throw Unreadable(file, $"it {DocumentText.WhyNoFormKey(text)}");
 
         holders.Claim(formKey, file);
-        yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
+        yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text, file));
         foreach (var child in Embedded(recordType, formKey, text, file))
         {
             holders.Claim(child.FormKey, file);
@@ -201,14 +203,33 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
     }
 
-    // What a cell holds, read off its own document: the tree files a child record inside its cell
-    // (ADR-0006).
-    private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text)
+    // What a cell holds, read off its own document, and what a container holds in files of their own, in
+    // the order its slots' folders list them, which is the order compile reads them in.
+    private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text, string file)
     {
-        if (!_types.IsCell(recordType)) return null;
+        if (_types.IsCell(recordType))
+        {
+            return [.. _containers.ChildrenOf(recordType, Document.Parse(text))
+                .Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex))];
+        }
 
-        return [.. _containers.ChildrenOf(recordType, Document.Parse(text))
-            .Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex))];
+        var slots = _types.FileSlotsOf(recordType);
+        return slots.Count == 0 ? null : [.. slots.SelectMany(slot => ChildrenFiledIn(PathShape.DirectoryOf(file), recordType, slot))];
+    }
+
+    private IEnumerable<ChildRecord> ChildrenFiledIn(string containerDirectory, string recordType, string slot)
+    {
+        var folder = Path.Combine(containerDirectory, slot);
+        if (!_files.DirectoryExists(folder)) return [];
+
+        var documents = GroupFolders.For(_release).HasDirectory(_types.FileSlotRecordType(recordType, slot) ?? recordType)
+            ? _files.DirectoriesIn(folder).Select(directory => SourceRepositoryLayout.ContainerDocumentHeldBy(_files, directory))
+            : _files.FilesIn(folder, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.TopDirectoryOnly);
+        return documents
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Select(document => Read(document) is { } childText ? DocumentText.FormKeyDeclaredIn(childText, document, _pluginFileName) : null)
+            .OfType<string>()
+            .Select((formKey, index) => new ChildRecord(formKey, slot, index));
     }
 
     /// <summary>The text of one document in hand and of every child it embeds, by FormKey. An untyped
@@ -269,7 +290,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var cell = _types.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure
                 : (CellStructure?)null;
-            yield return new PluginDocument(childType, child.FormKey, text, null, cell, ContentsOf(childType, text));
+            yield return new PluginDocument(childType, child.FormKey, text, null, cell, ContentsOf(childType, text, ownerFile));
         }
     }
 

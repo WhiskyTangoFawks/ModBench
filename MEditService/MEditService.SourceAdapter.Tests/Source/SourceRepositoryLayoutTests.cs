@@ -241,6 +241,46 @@ public sealed class SourceRepositoryLayoutTests
             readBack.Select(file => (file.RelativePath, file.Content.Single())));
     }
 
+    [Fact]
+    public void TheDoorsTreeReadBack_OfAQuestsTopicsResponsesBranchesAndScenesEachInAFileOfItsOwn_IsThatTree()
+    {
+        var quest = Path.Combine("Quests", "Q - 000800_Mixed.ESP");
+        var topic = Path.Combine(quest, "DialogTopics", "T - 000801_Mixed.ESP");
+        TreeFile[] tree =
+        [
+            new("RecordData.json", [1]),
+            new(Path.Combine(quest, "RecordData.json"), [2]),
+            new(Path.Combine(topic, "RecordData.json"), [3]),
+            new(Path.Combine(topic, "Responses", "000802_Mixed.ESP.json"), [4]),
+            new(Path.Combine(quest, "DialogBranches", "B - 000803_Mixed.ESP.json"), [5]),
+            new(Path.Combine(quest, "Scenes", "S - 000804_Mixed.ESP.json"), [6]),
+        ];
+
+        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, Release);
+
+        Assert.Equal(
+            tree.Select(file => (file.RelativePath, file.Content.Single())).Order(),
+            readBack.Select(file => (file.RelativePath, file.Content.Single())).Order());
+    }
+
+    [Fact]
+    public void TheDoorsTreeReadBack_OfASkyrimTopicsResponsesEachInAFileOfItsOwn_IsThatTree()
+    {
+        var topic = Path.Combine("DialogTopics", "T - 000801_Mixed.ESP");
+        TreeFile[] tree =
+        [
+            new("RecordData.json", [1]),
+            new(Path.Combine(topic, "RecordData.json"), [2]),
+            new(Path.Combine(topic, "Responses", "000802_Mixed.ESP.json"), [3]),
+        ];
+
+        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, GameRelease.SkyrimSE);
+
+        Assert.Equal(
+            tree.Select(file => (file.RelativePath, file.Content.Single())).Order(),
+            readBack.Select(file => (file.RelativePath, file.Content.Single())).Order());
+    }
+
     private static readonly PluginAddress Mixed = new("Mixed.ESP", TestMod.Name);
 
     private static ISourceRepository RepositoryOver(string modFolder) =>
