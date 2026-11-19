@@ -40,7 +40,8 @@ case "${1:-}" in
     (cd "$feed" && tar -cf - ./*-modbench-dev.*.nupkg) \
       | "$HERE/vm.sh" ssh "New-Item -ItemType Directory -Force C:\work\mutagen-feed | Out-Null; tar -xf - -C C:\work\mutagen-feed"
     root="$(git -C "$HERE" rev-parse --show-toplevel)"
-    (cd "$root" && git ls-files -z -co --exclude-standard | while IFS= read -r -d '' f; do if [[ -f $f ]]; then printf '%s\0' "$f"; fi; done | tar --format=pax --null -cf - -T -) \
+    git -C "$root" submodule update --init --depth 1
+    (cd "$root" && { git ls-files -z --recurse-submodules; git ls-files -z -o --exclude-standard; } | while IFS= read -r -d '' f; do if [[ -f $f ]]; then printf '%s\0' "$f"; fi; done | tar --format=pax --null -cf - -T -) \
       | "$HERE/vm.sh" ssh "Remove-Item -Recurse -Force $STAGE -ErrorAction SilentlyContinue; New-Item -ItemType Directory $STAGE | Out-Null; tar -xf - -C $STAGE"
     # Mirroring keeps the excluded folders, so dependencies and build output survive between runs.
     # sync.ps1 stamps each changed file newer than that output, so an incremental build sees an edit dated before the last build.
