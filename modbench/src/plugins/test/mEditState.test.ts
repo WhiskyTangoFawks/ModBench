@@ -8,10 +8,10 @@ describe('what mEdit is doing, as the status bar and the agent say it', () => {
     ['disconnected', 'error', 'Disconnected'],
     ['stopped', 'circle-slash', 'Stopped'],
   ] as const)('says %s until the snapshot is indexed', (status, icon, state) => {
-    expect(mEditState(status, undefined)).toEqual({ icon, state });
+    expect(mEditState(status, undefined, undefined)).toEqual({ icon, state });
   });
 
   it('says Ready once the snapshot is indexed, counting the active plugins', () => {
-    expect(mEditState('running', 2)).toEqual({ icon: 'check', state: 'Ready (2 plugins)' });
+    expect(mEditState('running', undefined, 2)).toEqual({ icon: 'check', state: 'Ready (2 plugins)' });
   });
 });
