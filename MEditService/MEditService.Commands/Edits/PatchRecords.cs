@@ -9,8 +9,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A Modbench script's records laid out where their winning copies sit. A container not given is carried in by its
-/// winning copy's own fields, as Copy as Override carries one in (ADR-0018).</summary>
+/// <summary>A Modbench script's records laid out where their winning copies sit. A container not given is carried in as Copy
+/// as Override carries one in: a Partial Form where the game lets it be one, else its winning copy's own fields (ADR-0018).</summary>
 internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolution, ISourceAdapter source, SchemaReflector schemaReflector)
 {
     internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> Laid(
@@ -79,9 +79,17 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             if (owner is not { } held)
                 return new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, $"{NoneHolds(formKey)}, which holds a record given.");
             var copy = copies.Of(held);
-            var read = HeldIdentity(formKey, held, copy).Then(identity => Read(formKey, held, copy.Document(identity)));
+            var read = HeldIdentity(formKey, held, copy).Then(identity => Read(formKey, held, CarriedCopy(copy, identity)));
             if (!read.Holds(out var document, out var unread)) return unread;
-            return Laid(document.Identity, ContainerDocumentEdits.WithChildSlotsCut(document.Body, document.RecordType, copy.Snapshot.GameRelease));
+            return Laid(document.Identity, document.Body);
+        }
+
+        private CopyRead<SourceDocument> CarriedCopy(CopySource copy, RecordIdentity container)
+        {
+            var release = copy.Snapshot.GameRelease;
+            return RecordCopy.PartialFormCopyOf(copy, container, schemas[container.RecordType], release).Then(partialForm =>
+                partialForm ?? copy.Document(container).Then<SourceDocument>(document =>
+                    document with { Body = ContainerDocumentEdits.WithChildSlotsCut(document.Body, document.RecordType, release) }));
         }
 
         private PatchRefused? Laid(RecordIdentity identity, string text)

@@ -167,14 +167,14 @@ describe('every script the plugin source of the compiled plugins names', () => {
     const kept = [await owner.scriptsNamed(), await owner.scriptsNamed()];
 
     expect(kept).toEqual([[{ file: FILE_OF('Mod.esp/Npc.json'), name: 'First' }], [{ file: FILE_OF('Mod.esp/Npc.json'), name: 'First' }]]);
-    expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: 'The Problems panel does not check every script plugin source names.', detail: 'Mod.esp (ModA): its source is unreadable' }]);
+    expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: 'The Problems panel does not check every script plugin source names.', detail: '"Mod.esp" (ModA): its source is unreadable' }]);
   });
 
   it('says the copies it could not read, and keeps the scripts that read', async () => {
     const { owner, reporter } = owning(() => [holding(plugin, 'Read', { unread: ['000801:Mod.esp: no schema'] })]);
 
     expect(await owner.scriptsNamed()).toEqual([{ file: FILE_OF('Mod.esp/Npc.json'), name: 'Read' }]);
-    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['Mod.esp (ModA): 000801:Mod.esp: no schema']);
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['"Mod.esp" (ModA): 000801:Mod.esp: no schema']);
   });
 });
 

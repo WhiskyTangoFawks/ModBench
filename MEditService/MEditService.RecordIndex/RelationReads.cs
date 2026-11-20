@@ -97,9 +97,9 @@ internal sealed class RelationReads(
         return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
     }
 
-    /// <summary>The carrying record of <paramref name="formKey"/>'s copy in <paramref name="plugin"/>: the record whose own
+    /// <summary>The carrying record of <paramref name="copy"/> in <paramref name="plugin"/>: the record whose own
     /// document carries it, which is the copy itself unless a container's document carries its text.</summary>
-    public RecordIdentity? GetCarryingRecord(string formKey, PluginAddress plugin)
+    public RecordIdentity? GetCarryingRecord(RecordIdentity copy, PluginAddress plugin)
     {
         using var context = OpenRead();
         var carrying = context.Rows($"""
@@ -111,7 +111,8 @@ internal sealed class RelationReads(
                 WHERE h.plugin = $2 AND h.origin = $3 AND {HoldingSlots.CarriedInTheParentsDocument("h.slot")}
             )
             SELECT form_key FROM carried ORDER BY depth DESC LIMIT 1
-            """, reader => reader.GetString(0), formKey, plugin.Name, plugin.Origin).Single();
+            """, reader => reader.GetString(0), copy.FormKey, plugin.Name, plugin.Origin).Single();
+        if (string.Equals(carrying, copy.FormKey, StringComparison.OrdinalIgnoreCase)) return copy;
         // Found by its key alone: a join of the records to the walk reads every record's columns.
         return context.Rows(
                 $"SELECT record_type, editor_id FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3",

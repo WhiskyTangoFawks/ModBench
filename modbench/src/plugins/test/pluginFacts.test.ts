@@ -553,7 +553,7 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     facts.refreshed([failing, held({ name: 'B.esp', laterReadFailure: [{ sourceRelativePath: 'B.esp/X.json', message: 'bad' }] })]);
 
     expect(facts.readFailureMessage()).toBe(
-      'Showing the last good read: "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; "B.esp" (SomeMod): B.esp/X.json: bad',
+      'Showing the last good read: "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12; A.esp/Cell.json: Duplicate FormKey; "B.esp" (SomeMod): B.esp/X.json: bad',
     );
   });
 
@@ -588,6 +588,14 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     });
   });
 
+  it('says the last good read and a read that never answered as two statements', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([held({ name: 'B.esp', laterReadFailure: [{ sourceRelativePath: 'B.esp/X.json', message: 'bad' }] })]);
+    facts.scanFailed('503');
+
+    expect(facts.readFailureMessage()).toBe('Showing the last good read: "B.esp" (SomeMod): B.esp/X.json: bad. Failed to load: the malformed-plugin scan: 503');
+  });
+
   it('puts the instance read failure and every failed read under one prefix', () => {
     const facts = new PluginFacts();
     facts.diagnosed([]);
@@ -595,8 +603,52 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     facts.scanFailed('503');
 
     expect(facts.readFailureMessage('mo2 gone')).toBe(
-      'Showing the last good read: mo2 gone; "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; the malformed-plugin scan: 503',
+      'Showing the last good read: mo2 gone; "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12; A.esp/Cell.json: Duplicate FormKey; the malformed-plugin scan: 503',
     );
+  });
+
+  const truncated = failure('Could not read this plugin (truncated).');
+  it.each([
+    ['names a plugin whose rows stood until a failed read took them', [held({ rowsFrom: 'Binary' })], [held({ rowsFrom: null })], [truncated]],
+    ['names a plugin whose failed read leaves mEdit no answer for it', [held({ rowsFrom: 'Binary' })], [], [truncated]],
+    ['names none while its rows stand', [held({ rowsFrom: 'Binary' })], [held({ rowsFrom: 'Binary' })], []],
+    ['names none whose rows never stood', [held({ rowsFrom: null })], [held({ rowsFrom: null })], []],
+  ] as const)('the reconcile that lands a failed read %s', (_label, before, after, gone) => {
+    const facts = new PluginFacts();
+    facts.reconciled([...before], [], [], []);
+
+    expect(facts.reconciled([...after], [truncated], [], [])).toEqual(gone);
+  });
+
+  it('names a plugin whose rows a failed read took once, however often the next reconciles hear it', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ rowsFrom: 'Binary' })], [], [], []);
+    facts.reconciled([held({ rowsFrom: null })], [truncated], [], []);
+
+    expect(facts.reconciled([held({ rowsFrom: null })], [truncated], [], [])).toEqual([]);
+  });
+
+  const reconciledFailing = (rowsFrom: PluginMetadata['rowsFrom']): Scene => (facts) => facts.reconciled([held({ rowsFrom })], [truncated], [], []);
+  const tickedFailing = (rowsFrom: PluginMetadata['rowsFrom']): Scene => (facts) => {
+    facts.refreshed([held({ rowsFrom })]);
+    facts.indexed([], [truncated]);
+  };
+  it.each([
+    ['while its rows stand, says it shows the last good read and expands into them', reconciledFailing('Binary'),
+      'Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).', RECORDS],
+    ['with no rows left, says no last good read and expands into the error row', reconciledFailing(null),
+      undefined, errorOf('Could not read this plugin (truncated).')],
+    ['while its rows stand through a reconcile\'s tick, says it shows the last good read and expands into them', tickedFailing('Binary'),
+      'Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).', RECORDS],
+    ['with no rows left through a reconcile\'s tick, says no last good read and expands into the error row', tickedFailing(null),
+      undefined, errorOf('Could not read this plugin (truncated).')],
+  ] as const)('a plugin whose read failed, %s', (_label, scene, message, expansion) => {
+    const facts = new PluginFacts();
+
+    scene(facts);
+
+    expect(facts.readFailureMessage()).toBe(message);
+    expect(facts.expansion(A)).toEqual(expansion);
   });
 
   it.each([[null], [undefined]])('says nothing once the next read answers %s', (answer) => {

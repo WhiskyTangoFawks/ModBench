@@ -66,18 +66,7 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         var saved = await compiled.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, compiled, plugin, tree, words, write));
-        if (!saved.Holds(out var landed, out var failure))
-        {
-            return failure switch
-            {
-                PluginFailure.PrunedMaster => PluginCompileOutcome.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be {words.Done}: {failure.Reason}"),
-                PluginFailure.MasterNotInLoadOrder => PluginCompileOutcome.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be {words.Done}: {failure.Reason}"),
-                PluginFailure.MasterUnreadable master => PluginCompileOutcome.Refused(
-                    CompileRefusal.MasterUnreadable,
-                    $"{plugin.Name} could not be {words.Done}: {failure.Reason} Fix or restore {master.Master}, then {words.Again}."),
-                _ => WriteFailed(plugin, failure.Reason, words),
-            };
-        }
+        if (!saved.Holds(out var landed, out var failure)) return RefusedFor(plugin, failure, words);
         if (!landed.Holds(out var recorded, out var refused)) return refused;
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -130,10 +119,30 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
     private static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason, Words words) =>
         PluginCompileOutcome.Refused(CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason}{words.AfterAFailedWrite}");
 
-    private static Answer<bool, PluginCompileOutcome> Land(
+    private Answer<bool, PluginCompileOutcome> Land(
         PreparedPluginSave save, CompiledTree compiled, PluginAddress plugin, PluginTreeFiles tree, Words words,
-        Func<PreparedPluginSave, Answer<bool, PluginCompileOutcome>> write) =>
-        compiled.DropsIn(save) is { Count: > 0 } drops ? Dropped(plugin, tree, words, drops) : write(save);
+        Func<PreparedPluginSave, Answer<bool, PluginCompileOutcome>> write)
+    {
+        if (!compiled.DropsIn(save).Holds(out var drops, out var unread)) return RefusedFor(plugin, unread, words);
+        return drops.Count > 0 ? Dropped(plugin, tree, words, drops) : write(save);
+    }
+
+    private PluginCompileOutcome RefusedFor(PluginAddress plugin, PluginFailure failure, Words words)
+    {
+        if (failure is PluginFailure.Unparsed) logger.LogWarning(failure.Error, "{Plugin} as written does not read back", plugin.Name);
+        return failure switch
+        {
+            PluginFailure.Unparsed => PluginCompileOutcome.Refused(
+                CompileRefusal.SourceValueDropped,
+                $"{plugin.Name} cannot be {words.Done}: the plugin written from {words.From} does not read back, so nothing was written: {failure.Reason}"),
+            PluginFailure.PrunedMaster => PluginCompileOutcome.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be {words.Done}: {failure.Reason}"),
+            PluginFailure.MasterNotInLoadOrder => PluginCompileOutcome.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be {words.Done}: {failure.Reason}"),
+            PluginFailure.MasterUnreadable master => PluginCompileOutcome.Refused(
+                CompileRefusal.MasterUnreadable,
+                $"{plugin.Name} could not be {words.Done}: {failure.Reason} Fix or restore {master.Master}, then {words.Again}."),
+            _ => WriteFailed(plugin, failure.Reason, words),
+        };
+    }
 
     private static PluginCompileOutcome Dropped(PluginAddress plugin, PluginTreeFiles tree, Words words, IReadOnlyList<DroppedValue> drops)
     {

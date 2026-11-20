@@ -1614,6 +1614,8 @@ export interface components {
             applied: components["schemas"]["RecordDeleted"][];
             refused: components["schemas"]["DeleteRecordRefused"][];
         };
+        /** @enum {string} */
+        DerivedFrom: "Binary" | "SourceTree" | "BinaryForUnreadableSource";
         DocumentChange: {
             path: string;
             text: string;
@@ -2021,6 +2023,7 @@ export interface components {
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
             description?: string | null;
+            rowsFrom?: components["schemas"]["DerivedFrom"] | null;
         };
         PluginSourceNamesRequest: {
             text: string;

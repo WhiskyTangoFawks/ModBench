@@ -18,6 +18,7 @@ import { present } from '../../ports/present';
 
 import { file, folder, mod as unversioned } from './indexedValue';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 
 const mod = (name: string) => ({ ...unversioned(name), version: '1.0' });
 
@@ -32,7 +33,7 @@ function providerOver(statuses: readonly ModStatus[], holdsRepository = true, ov
     ...over,
   });
   const instance = new FakeInstance(value);
-  const provider = new ModListProvider({ reporter: recordingReporter(), instance, open: new OpenRows(instance), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
+  const provider = new ModListProvider({ reporter: recordingReporter(), instance, open: new OpenRows(instance), statuses: { ...NO_MOD_STATUSES, of: (name) => byMod.get(name), onDidChange: changed.event } });
   return { provider, byMod, changed };
 }
 

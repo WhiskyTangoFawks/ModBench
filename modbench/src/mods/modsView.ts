@@ -118,7 +118,8 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const own = <T extends vscode.Disposable>(disposable: T): T => { owned.push(disposable); return disposable; };
   const nexusRow = nexusRowInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.downloadsView], 'modbench.mod.nexusRowIn');
   const sourceGestureRows = selectionInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.sourceGestures.pluginsView], 'modbench.mod.sourceGestureRowsIn');
-  const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // instance-repository.md, Status, story 1
+  // instance-repository.md, Status, story 1.
+  const statusMessage = () => (instance.value.holdsRepository ? statuses.unreadMessage() : undefined);
   const open = new OpenRows(instance);
   const provider = new ModListProvider({ instance, statuses, open, reporter: reporterFor('modlist.drop') });
   const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {
@@ -140,7 +141,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     viewMessage,
     standingMessage: () => provider.standingMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
-    onViewMessageChanged: (listener) => joinSyncMessages(modSync, statuses).onMessageChanged(listener),
+    onViewMessageChanged: (listener) => joinSyncMessages(modSync, { message: statusMessage, onMessageChanged: (heard) => statuses.onMessageChanged(heard) }).onMessageChanged(listener),
   });
   const sayPhase = (message: string | undefined) => { phaseMessage = message; nameFilter.refresh(); };
   const showCount = () => nameFilter.setBaseDescription(provider.description());

@@ -227,6 +227,18 @@ describe('what the view says of itself', () => {
   });
 });
 
+describe('the Mods view\'s message line (common.md, States, story 6)', () => {
+  it('says the last good read once, naming the instance\'s failed read and each mod status that could not be read', () => {
+    const instance = new FakeInstance(instanceValueFixture({ mods: [mod('A')], holdsRepository: true }));
+    const statuses = { ...NO_MOD_STATUSES, lastGoodReasons: () => ['the status of "A" could not be read: bad JSON.'] };
+    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
+
+    instance.fail('EACCES modlist.txt');
+
+    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt; the status of "A" could not be read: bad JSON.');
+  });
+});
+
 describe('a row\'s parent, which VS Code\'s reveal walks up through getParent and a filter\'s expansion is', () => {
   it('is the separator that holds a mod, and nothing for a root', async () => {
     const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());

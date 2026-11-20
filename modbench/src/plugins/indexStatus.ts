@@ -2,29 +2,36 @@ import type * as vscode from 'vscode';
 import { isMEditGone, loadFailuresOf, type MEditClient, type PluginLoadFailure } from '../client';
 import { isReadFailed } from '../wire/readFailed';
 import type { Reporter } from '../ports/reporter';
+import { tellingOnSurface } from '../drivingLib/tellingOnSurface';
+import { pluginAddressKey } from '../wire/pluginAddress';
+import { quotedPluginName } from '../wire/reasons';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
-import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, type Heard, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
 interface ReconciledDeps {
-  log: (msg: string) => void;
-  warn: (msg: string) => void;
+  tellLanded: (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]) => void;
+  tellHeard: (failures: readonly PluginLoadFailure[]) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
-   *  it without the rest. Answers how many plugins are active, none when it did not land. */
-  applyReconciled: (failures: readonly PluginLoadFailure[], totalPlugins: number) => Promise<number | undefined>;
+   *  it without the rest. Answers how many plugins are active, and each failure that took away
+   *  rows that stood; none when it did not land. */
+  applyReconciled: (failures: readonly PluginLoadFailure[], totalPlugins: number) => Promise<{ active: number; rowsGone: PluginLoadFailure[] } | undefined>;
 }
 
 // Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
 // so conflicts are computed.
 async function settleReconciled({ progress, failures }: Heard, deps: ReconciledDeps): Promise<void> {
-  reportSkippedPlugins(failures, deps);
   deps.registerRepositories();
-  const active = await deps.applyReconciled(failures, progress.total);
-  if (active !== undefined) deps.statusBar.ready(active);
+  const landed = await deps.applyReconciled(failures, progress.total);
+  // A hand-off a newer step superseded only adds what it heard, as a refusal does.
+  if (landed === undefined) deps.tellHeard(failures);
+  else {
+    deps.tellLanded(failures, landed.rowsGone);
+    deps.statusBar.ready(landed.active);
+  }
 }
 
 // plugins.md, States 3: the tree's own wording for a row not yet held while mEdit is unreachable.
@@ -40,7 +47,7 @@ interface IndexStatusDeps {
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
   registerRepositories: () => void;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
-  reporter: Reporter;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 // plugins.md, States 2–4 and 6: the record index status the stream carries drives the Plugins view,
@@ -50,20 +57,37 @@ export type FollowedNarrator = ReconcileNarrator & { hearNow(): Promise<void> };
 
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNarrator } & vscode.Disposable {
   const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
-  const info = (m: string) => log('info', `[loadOrder] ${m}`);
-  const warn = (m: string) => reporter.report('warning', m);
+  const tellOnce = tellingOnSurface(reporter, 'error');
+  let heardFailures = new Map<string, PluginLoadFailure>();
+  const heardOf = (failures: readonly PluginLoadFailure[]) => failures.map((f) => [pluginAddressKey(f), f] as const);
+  const tellStanding = (rowsGone: readonly PluginLoadFailure[] = []): void => {
+    const gone = new Set(rowsGone.map(pluginAddressKey));
+    tellOnce([...heardFailures].map(([key, f]) => (gone.has(key)
+      ? { key, message: `The records of ${quotedPluginName(f)} no longer show: its read failed.`, why: f.reason, notify: true }
+      : { key, message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
+  };
+  const tellLanded = (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]): void => {
+    heardFailures = new Map(heardOf(failures));
+    tellStanding(rowsGone);
+  };
+  // A refusal hears only the plugins its reconcile reached.
+  const tellHeard = (failures: readonly PluginLoadFailure[]): void => {
+    heardFailures = new Map([...heardFailures, ...heardOf(failures)]);
+    tellStanding();
+  };
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
     applyIndexed: (indexedPlugins, failures) => {
       facts.indexed(indexedPlugins, failures);
       statusBar.showMEditState();
     },
-    applyRefused: (refusal) => {
+    applyRefused: (refusal, failures) => {
+      tellHeard(failures);
       facts.refused(refusal);
       statusBar.showMEditState();
     },
     settle: (heard) => settleReconciled(heard, {
-      log: info, warn, statusBar, registerRepositories,
+      tellLanded, tellHeard, statusBar, registerRepositories,
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),
@@ -118,13 +142,13 @@ async function applyReconciled(
   // plugin count: that omits the implicit masters the backend prepends, so every healthy
   // reconcile would read as short.
   totalPlugins: number,
-): Promise<number | undefined> {
+): Promise<{ active: number; rowsGone: PluginLoadFailure[] } | undefined> {
   const counted = await facts.reconciled(failures);
   // Superseded by a newer step, which shows its own state, or a failed read the feed reported.
   if (counted === undefined) return undefined;
-  const { held, active } = counted;
+  const { held, active, rowsGone } = counted;
   // Do not remove as logging noise: `held + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
   log('info', `[loadOrder] applying reconciled load order to tree: ${held} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`);
-  return active;
+  return { active, rowsGone };
 }

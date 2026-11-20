@@ -876,7 +876,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
 
   it('says it shows the last good read, with the reason, when a plugin the panel shows cannot be read', async () => {
     renderPanel(compareResult, { loadFailures: [{ name: 'MyMod.esp', origin: 'Data/', reason: 'truncated' }] });
-    await waitFor(() => screen.getByText('Showing the last good read: MyMod.esp: truncated'));
+    await waitFor(() => screen.getByText('Showing the last good read: "MyMod.esp" (Data/): truncated'));
   });
 
   it('goes once a read lands with the plugin readable again', async () => {

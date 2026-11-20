@@ -1,3 +1,4 @@
+import { lastGoodReadMessage } from '../wire/reasons';
 import type { Log } from '../ports/log';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type GameFolderArchived, type FileWinners, type StackedCopies } from './fileConflictIndex';
 import {
@@ -237,10 +238,13 @@ export function instanceLastGoodReadFailure({ sequence, readFailure }: Pick<Inst
 }
 
 /** What every view of the instance says on its message line (common.md, States), in order: the mod manager running
- *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then. */
-export function instanceMessages(view: Pick<InstanceOf<keyof typeof MESSAGE_READS>, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
+ *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then, with the view's
+ *  own `lastGood` reasons. */
+export function instanceMessages(
+  view: Pick<InstanceOf<keyof typeof MESSAGE_READS>, 'value' | 'sequence' | 'readFailure'>, lastGood: readonly string[] = [],
+): (string | undefined)[] {
   const reason = instanceLastGoodReadFailure(view);
-  return [managerRunningMessage(view.value), reason === undefined ? undefined : `Showing the last good read: ${reason}`];
+  return [managerRunningMessage(view.value), lastGoodReadMessage([...reason === undefined ? [] : [reason], ...lastGood])];
 }
 
 interface Workspace {

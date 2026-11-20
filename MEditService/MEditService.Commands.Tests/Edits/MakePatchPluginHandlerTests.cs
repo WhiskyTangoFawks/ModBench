@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -16,7 +17,9 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class MakePatchPluginHandlerTests : IDisposable
 {
+    private const string Game = "Fallout4.esm";
     private const string Base = "Base.esm";
+    private const string Coast = "Coast.esm";
     private const string Mod = "PatchMod";
     private const string Patch = "Patch.esp";
 
@@ -27,6 +30,9 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private readonly Cell _exterior;
     private readonly PlacedObject _exteriorRef;
     private readonly PlacedObject _persistentRef;
+    private readonly Cell _gameCell;
+    private readonly PlacedObject _gameCellRef;
+    private readonly PlacedObject _gameGridRef;
     private readonly PluginFixtureData _data;
     private readonly LoadOrderHolder _holder = new();
     private readonly HandedWrites _index = HandedWrites.Create();
@@ -35,7 +41,25 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     public MakePatchPluginHandlerTests()
     {
         (Npc Npc, SpatialPlugin.Records Spatial, Cell TopCell, PlacedObject PersistentRef)? made = null;
+        (Cell Cell, PlacedObject Ref)? inGame = null;
+        (Worldspace World, Cell Cell, PlacedObject Ref)? inGameWorld = null;
         _data = new PluginFixtureBuilder("make-patch-handler")
+            .WithPlugin(Game, mod =>
+            {
+                var cell = new Cell(mod) { EditorID = "GameCell", Flags = Cell.Flag.IsInteriorCell, WaterHeight = 5 };
+                var placed = new PlacedObject(mod) { EditorID = "GameCellRef" };
+                cell.Temporary.Add(placed);
+                mod.AddInteriorCells(cell);
+                inGame = (cell, placed);
+
+                var world = new Worldspace(mod) { EditorID = "GameWorld" };
+                var gridCell = new Cell(mod) { EditorID = "GameGridCell", MajorRecordFlagsRaw = PersistentFlag.Bit, Grid = new CellGrid { Point = new P2Int(2, 3) } };
+                var gridRef = new PlacedObject(mod) { EditorID = "GameGridRef" };
+                gridCell.Persistent.Add(gridRef);
+                world.SubCells.Add(CellBlocks.Exterior(gridCell));
+                mod.Worldspaces.Add(world);
+                inGameWorld = (world, gridCell, gridRef);
+            })
             .WithPlugin(Base, mod =>
             {
                 var spatial = SpatialPlugin.AddTo(mod);
@@ -45,7 +69,24 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 spatial.Worldspace.TopCell = topCell;
                 made = (mod.Npcs.AddNew("BaseNpc"), spatial, topCell, persistentRef);
             })
+            .WithPlugin(Coast, mod =>
+            {
+                var deleted = inGame.Require().Cell.DeepCopy();
+                deleted.Temporary.Clear();
+                deleted.WaterHeight = 7;
+                deleted.IsCompressed = true;
+                mod.AddInteriorCells(deleted);
+            })
             .Build();
+        (_gameCell, _gameCellRef) = inGame.Require();
+        var coastPath = Path.Combine(_data.DataFolder, Coast);
+        File.WriteAllBytes(coastPath, RawPlugin.WithRecordFlags(File.ReadAllBytes(coastPath), _gameCell.FormKey.ID, (uint)DeletedFlag.Bit));
+        _index.Owners[_gameCell.FormKey.ToString()] = new PluginAddress(Coast, PluginOrigin.DataDirectory);
+        _index.Owners[_gameCellRef.FormKey.ToString()] = new PluginAddress(Game, PluginOrigin.DataDirectory);
+        var (gameWorld, gridCell, gridRef) = inGameWorld.Require();
+        _gameGridRef = gridRef;
+        foreach (var record in new IMajorRecordGetter[] { gameWorld, gridCell, gridRef })
+            _index.Owners[record.FormKey.ToString()] = new PluginAddress(Game, PluginOrigin.DataDirectory);
         var (npc, spatial, topCell, persistentRef) = made.Require();
         (_npc, _interior, _interiorRef, _world, _exterior, _exteriorRef, _persistentRef) =
             (npc, spatial.InteriorCell, spatial.InteriorRef, spatial.Worldspace, spatial.ExteriorCell, spatial.ExteriorRef, persistentRef);
@@ -80,6 +121,9 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private static IEnumerable<ICellGetter> InteriorCellsOf(IFallout4ModGetter mod) =>
         mod.Cells.Records.SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells);
 
+    private static IEnumerable<ICellGetter> ExteriorCellsOf(IFallout4ModGetter mod) =>
+        mod.Worldspaces.SelectMany(world => world.SubCells).SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items);
+
     [Fact]
     public async Task RecordsGiven_LandInThePluginWritten_EachInTheContainersItsWinningCopySitsIn_AndTheRecordIndexReadsItBack()
     {
@@ -92,12 +136,38 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         using var written = Written();
         var interior = Assert.Single(InteriorCellsOf(written));
         var world = Assert.Single(written.Worldspaces);
-        var exterior = world.SubCells.SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items).Single();
+        var exterior = ExteriorCellsOf(written).Single();
         Assert.Equal(
             ("PatchedNpc", _interior.FormKey, _interiorRef.FormKey, _world.FormKey, _exterior.FormKey, _exteriorRef.FormKey, Base),
             (written.Npcs.Single().EditorID, interior.FormKey, interior.Persistent.Single().FormKey, world.FormKey, exterior.FormKey,
                 exterior.Persistent.Single().FormKey, string.Join(", ", written.ModHeader.MasterReferences.Select(master => master.Master.FileName))));
         Assert.Equal([HandedPlugin.ReadBack(patch.Plugin)], Assert.Single(_index.Hands).Require());
+    }
+
+    [Fact]
+    public async Task ARefWhoseCellsWinningCopyIsDeletedAndCompressed_LandsInAPartialFormOfTheCell_ThatOverridesNoneOfItsFields()
+    {
+        var made = await Handler.Make(Mod, Patch, [], [Given(_gameCellRef)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        using var written = Written();
+        var cell = Assert.Single(InteriorCellsOf(written));
+        Assert.Equal(
+            (_gameCell.FormKey, PartialFormFlag.Bit, default(Cell.Flag), (float?)null, _gameCellRef.FormKey),
+            (cell.FormKey, cell.MajorRecordFlagsRaw, cell.Flags, cell.WaterHeight, cell.Temporary.Single().FormKey));
+    }
+
+    [Fact]
+    public async Task ARefInAPersistentCellInAGridBlock_LandsInAPartialFormOfTheCell_ThatKeepsItsGrid()
+    {
+        var made = await Handler.Make(Mod, Patch, [], [Given(_gameGridRef)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        using var written = Written();
+        var cell = Assert.Single(ExteriorCellsOf(written));
+        Assert.Equal(
+            (PersistentFlag.Bit | PartialFormFlag.Bit, new P2Int(2, 3), _gameGridRef.FormKey),
+            (cell.MajorRecordFlagsRaw, cell.Grid?.Point, cell.Persistent.Single().FormKey));
     }
 
     [Fact]
@@ -179,6 +249,23 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
         var unread = $"{Patch} could not be read from the records given: ";
         Assert.Equal((CompileRefusal.SourceDoesNotParse, unread), (compiled.Refusal, compiled.Message[..unread.Length]));
+    }
+
+    [Fact]
+    public async Task ACellMutagenWritesAsBytesItCannotReadBack_IsRefused_AndWritesNothing()
+    {
+        var deletedCompressed = _interior.DeepCopy();
+        deletedCompressed.MajorRecordFlagsRaw = (int)DeletedFlag.Bit;
+        deletedCompressed.IsCompressed = true;
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(deletedCompressed)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
+        var unread = $"{Patch} cannot be made: the plugin written from the records given does not read back, so nothing was written: ";
+        Assert.Equal(
+            (CompileRefusal.SourceValueDropped, unread, false),
+            (compiled.Refusal, compiled.Message[..unread.Length], File.Exists(PatchPath)));
     }
 
     [Fact]

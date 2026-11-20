@@ -86,10 +86,11 @@ internal sealed class GameCodec : IGameCodec
     {
         var type = record.GetType();
         if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
-            && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
+            && !Targets.CanReach(type) && !Breaks.CanReach(type) && (localized || !StringHolders.CanReach(type)))
             return record;
         var copy = record.DeepCopy();
         Targets.ForEach(copy, DefaultTargetAsRead);
+        Breaks.ForEach(copy, VersioningBreaks.KeepFirst);
         if (!localized) StringHolders.ForEach(copy, InDefaultLanguage);
         switch (copy)
         {
@@ -150,6 +151,8 @@ internal sealed class GameCodec : IGameCodec
             radius.Target = new LocationTarget();
     }
 
+    private static readonly RecordGraph Breaks = new(type => type.IsClass && VersioningBreaks.VersioningOf(type) is not null);
+
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();
 
     private static PropertyInfo[] StringProperties(Type type) => StringPropertiesByType.GetOrAdd(type, declaring =>
@@ -158,14 +161,14 @@ internal sealed class GameCodec : IGameCodec
 
     private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
 
-    // A plugin that is not localized writes a string's one text and never its language, so its reread
-    // holds that text in the language the read gives.
+    // A plugin that is not localized holds a string's text in its target language, or the empty text, and never its
+    // language, so its reread holds that text in the language the read gives. Text in another language alone is lost.
     private static void InDefaultLanguage(object holder)
     {
         foreach (var property in StringProperties(holder.GetType()))
         {
-            if (property.GetValue(holder) is TranslatedString held && held.ToList() is [var (_, text)])
-                property.SetValue(holder, new TranslatedString(TranslatedString.DefaultLanguage, text));
+            if (property.GetValue(holder) is TranslatedString held && (held.String ?? (held.Any() ? null : "")) is { } written)
+                property.SetValue(holder, new TranslatedString(TranslatedString.DefaultLanguage, written));
         }
     }
 
