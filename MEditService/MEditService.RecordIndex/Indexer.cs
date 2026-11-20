@@ -1127,6 +1127,7 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", failure.Name, failure.Origin, failure.Reason);
     }
 
+    // ADR-0019: the reason says only what failed; the front end says what each surface still shows.
     private static string ReadFailure(string reason) => $"Could not read this plugin ({reason}).";
 
     // Registers first: the record index's reads are scoped by registration, so validate would otherwise
@@ -1163,7 +1164,7 @@ internal sealed class Indexer : IDisposable
     private void FailRead(OpenScope scope, PluginAddress key, string reason, string? diagnosis = null)
     {
         RememberFileFailedAt(scope, key);
-        if (scope.Held.SetFailure(key, reason, scope.Store.DerivationOf(key), diagnosis)) PublishStatus();
+        if (scope.Held.SetFailure(key, reason, diagnosis)) PublishStatus();
     }
 
     private void FailRead(OpenScope scope, PluginAddress key, LoadFailure failure) =>
@@ -1416,9 +1417,7 @@ internal sealed class Indexer : IDisposable
         {
             if (!holdsTree && !_adapter.Exists(plugin.Path))
             {
-                if (indexed.FileOf(key) is null) return false;
-                store.Unindex(key);
-                if (held.RowsTaken(key)) PublishStatus();
+                if (indexed.FileOf(key) is not null) store.Unindex(key);
                 return false;
             }
 
