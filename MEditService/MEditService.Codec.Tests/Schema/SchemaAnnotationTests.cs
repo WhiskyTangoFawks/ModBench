@@ -67,12 +67,19 @@ public sealed class SchemaAnnotationTests
     [InlineData(GameRelease.Fallout4, "navi", "MapInfos.[].LinkedDoors", "Door", null)]
     [InlineData(GameRelease.Fallout4, "navi", "PreferredPathing.NavmeshTree", "NodeIndex", null)]
     [InlineData(GameRelease.Fallout4, "land", "Layers", "Header.Quadrant,Header.LayerNumber", null)]
+    [InlineData(GameRelease.Fallout4, "dobj", "Objects", "Use", null)]
+    [InlineData(GameRelease.Fallout4, "perk", "Effects", "Rank,Priority", null)]
     [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", "Faction", null)]
+    [InlineData(GameRelease.SkyrimSE, "dobj", "Objects", "Use", null)]
+    [InlineData(GameRelease.SkyrimSE, "perk", "Effects", "Rank,Priority", null)]
     [InlineData(GameRelease.SkyrimSE, "lvli", "Entries", "Data.Level,Data.Reference", "Data.Count,ExtraData.ItemCondition,ExtraData.Owner")]
     [InlineData(GameRelease.Starfield, "npc_", "Factions", "Faction", null)]
     [InlineData(GameRelease.Starfield, "lvli", "Entries", "Level,Reference", "Count,Data.ItemCondition,Data.Owner")]
     [InlineData(GameRelease.Starfield, "lvlp", "Entries", "Level,Reference", "Count,Conditions")]
     [InlineData(GameRelease.Starfield, "stag", "Tags", "Tag", null)]
+    [InlineData(GameRelease.Starfield, "dobj", "Objects", "Use", null)]
+    [InlineData(GameRelease.Starfield, "perk", "Ranks.[].Effects", "Rank,Priority", null)]
+    [InlineData(GameRelease.Starfield, "biom", "Terrain", "Main", null)]
     public void AnArrayXEditSorts_AlignsByTheKeyXEditSortsItBy_AndAnyOtherAlignsInSequence(
         GameRelease release, string table, string path, string? keys, string? extendedKeys)
     {
@@ -119,6 +126,19 @@ public sealed class SchemaAnnotationTests
         var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
 
         Assert.Contains("UnkeyedSortedArrays: INpcGetter.Unwalked", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AKeyedArrayRowTheWalkNeverMeets_FailsTheSchemaBuild_NamingTheRow()
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            KeyedArrays = new(annotations.KeyedArrays) { [("IHeadDataGetter", "HeadParts")] = ["Number"] },
+        });
+
+        var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
+
+        Assert.Contains("KeyedArrays: IHeadDataGetter.HeadParts", failure.Message, StringComparison.Ordinal);
     }
 
     [Theory]
