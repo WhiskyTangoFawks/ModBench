@@ -26,6 +26,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private readonly Worldspace _world;
     private readonly Cell _exterior;
     private readonly PlacedObject _exteriorRef;
+    private readonly PlacedObject _persistentRef;
     private readonly PluginFixtureData _data;
     private readonly LoadOrderHolder _holder = new();
     private readonly HandedWrites _index = HandedWrites.Create();
@@ -33,14 +34,22 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
     public MakePatchPluginHandlerTests()
     {
-        (Npc Npc, SpatialPlugin.Records Spatial)? made = null;
+        (Npc Npc, SpatialPlugin.Records Spatial, Cell TopCell, PlacedObject PersistentRef)? made = null;
         _data = new PluginFixtureBuilder("make-patch-handler")
-            .WithPlugin(Base, mod => made = (mod.Npcs.AddNew("BaseNpc"), SpatialPlugin.AddTo(mod)))
+            .WithPlugin(Base, mod =>
+            {
+                var spatial = SpatialPlugin.AddTo(mod);
+                var topCell = new Cell(mod) { EditorID = "BaseTopCell" };
+                var persistentRef = new PlacedObject(mod) { EditorID = "BasePersistentRef" };
+                topCell.Persistent.Add(persistentRef);
+                spatial.Worldspace.TopCell = topCell;
+                made = (mod.Npcs.AddNew("BaseNpc"), spatial, topCell, persistentRef);
+            })
             .Build();
-        var (npc, spatial) = made.Require();
-        (_npc, _interior, _interiorRef, _world, _exterior, _exteriorRef) =
-            (npc, spatial.InteriorCell, spatial.InteriorRef, spatial.Worldspace, spatial.ExteriorCell, spatial.ExteriorRef);
-        foreach (var record in new IMajorRecordGetter[] { npc, _interior, _interiorRef, _world, _exterior, _exteriorRef })
+        var (npc, spatial, topCell, persistentRef) = made.Require();
+        (_npc, _interior, _interiorRef, _world, _exterior, _exteriorRef, _persistentRef) =
+            (npc, spatial.InteriorCell, spatial.InteriorRef, spatial.Worldspace, spatial.ExteriorCell, spatial.ExteriorRef, persistentRef);
+        foreach (var record in new IMajorRecordGetter[] { npc, _interior, _interiorRef, _world, _exterior, _exteriorRef, topCell, persistentRef })
             _index.Owners[record.FormKey.ToString()] = new PluginAddress(Base, PluginOrigin.DataDirectory);
 
         _folder = Directory.CreateDirectory(Path.Combine(_data.InstanceRoot, Mod)).FullName;
@@ -161,12 +170,14 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task MakingInAnOriginThatIsNoEnabledMod_IsRefusedAsCreateRefuses()
+    public async Task ARecordWhoseContainerGivenAlreadyHoldsItsSlot_IsRefused_AsRecordsThatDoNotRead()
     {
-        var made = await Handler.Make("No Such Mod", Patch, [], [Given(_npc)]);
+        var made = await Handler.Make(Mod, Patch, [], [Given(_world), Given(_persistentRef)]);
 
         Assert.False(made.Holds(out _, out var refused));
-        Assert.Equal(new PatchRefused.AsCreate(PluginCreateRefusal.OriginNotAMod, ""), refused with { Message = "" });
+        var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
+        var unread = $"{Patch} could not be read from the records given: ";
+        Assert.Equal((CompileRefusal.SourceDoesNotParse, unread), (compiled.Refusal, compiled.Message[..unread.Length]));
     }
 
     [Fact]
@@ -206,45 +217,48 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         AnExteriorCellWithNoGrid,
         AnExteriorCellNoPluginHolds,
         ANameThatIsNoPluginFile,
+        AnOriginThatIsNoEnabledMod,
         ARecordTheRecordIndexNamesAPluginNotHolding,
         ARecordWhosePluginCannotBeRead,
     }
 
-    private (string Name, IReadOnlyList<string> Flags, IReadOnlyList<GivenRecord> Records) Making(Giving giving)
+    private (string Origin, string Name, IReadOnlyList<string> Flags, IReadOnlyList<GivenRecord> Records) Making(Giving giving)
     {
         switch (giving)
         {
             case Giving.AFileAtItsPath:
                 File.WriteAllText(PatchPath, "held");
-                return (Patch, [], [Given(_npc)]);
+                return (Mod, Patch, [], [Given(_npc)]);
             case Giving.ARecordNamingNoFormKey:
-                return (Patch, [], [new GivenRecord("{\"EditorID\": \"Nameless\"}", "npc_")]);
+                return (Mod, Patch, [], [new GivenRecord("{\"EditorID\": \"Nameless\"}", "npc_")]);
             case Giving.ARecordTwice:
-                return (Patch, [], [Given(_npc), Given(_npc)]);
+                return (Mod, Patch, [], [Given(_npc), Given(_npc)]);
             case Giving.ARecordNoPluginHoldsWithNoType:
-                return (Patch, [], [Given(new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4))]);
+                return (Mod, Patch, [], [Given(new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4))]);
             case Giving.ARecordAsNoRecordType:
-                return (Patch, [], [Given(_npc, "nothing")]);
+                return (Mod, Patch, [], [Given(_npc, "nothing")]);
             case Giving.APlacedRecordWhoseCellNoPluginHolds:
                 _index.Owners.Remove(_interior.FormKey.ToString());
-                return (Patch, [], [Given(_interiorRef)]);
+                return (Mod, Patch, [], [Given(_interiorRef)]);
             case Giving.AnExteriorCellWithNoGrid:
                 var gridless = _exterior.DeepCopy();
                 gridless.Grid = null;
-                return (Patch, [], [Given(gridless)]);
+                return (Mod, Patch, [], [Given(gridless)]);
+            case Giving.AnOriginThatIsNoEnabledMod:
+                return ("No Such Mod", Patch, [], [Given(_npc)]);
             case Giving.ANameThatIsNoPluginFile:
-                return ("Patch.txt", [], [Given(_npc)]);
+                return (Mod, "Patch.txt", [], [Given(_npc)]);
             case Giving.AnExteriorCellNoPluginHolds:
                 var cellType = RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(_exterior);
-                return (Patch, [], [Given(new Cell(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { Grid = new CellGrid() }, cellType)]);
+                return (Mod, Patch, [], [Given(new Cell(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { Grid = new CellGrid() }, cellType)]);
             case Giving.ARecordTheRecordIndexNamesAPluginNotHolding:
                 _index.Owners[_npc.FormKey.ToString()] = new PluginAddress("Gone.esp", PluginOrigin.DataDirectory);
-                return (Patch, [], [Given(_npc)]);
+                return (Mod, Patch, [], [Given(_npc)]);
             case Giving.ARecordWhosePluginCannotBeRead:
                 File.WriteAllText(Path.Combine(_data.DataFolder, Base), "no plugin");
-                return (Patch, [], [Given(_interiorRef)]);
+                return (Mod, Patch, [], [Given(_interiorRef)]);
             case Giving.ANativeFormIdOutsideTheLightRange:
-                return ("Patch.esl", ["Master", "Small"], [Given(new Npc(FormKey.Factory("0FF000:Patch.esl"), Fallout4Release.Fallout4), "npc_")]);
+                return (Mod, "Patch.esl", ["Master", "Small"], [Given(new Npc(FormKey.Factory("0FF000:Patch.esl"), Fallout4Release.Fallout4), "npc_")]);
             default:
                 throw new ArgumentOutOfRangeException(nameof(giving), giving, null);
         }
@@ -262,6 +276,8 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         { Giving.AnExteriorCellWithNoGrid, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.AnExteriorCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.ANameThatIsNoPluginFile, new PatchRefused.AsCreate(PluginCreateRefusal.NotAPluginFile, "") },
+        { Giving.AnOriginThatIsNoEnabledMod, new PatchRefused.AsCreate(PluginCreateRefusal.OriginNotAMod, "") },
+
         { Giving.ARecordTheRecordIndexNamesAPluginNotHolding, new PatchRefused.OfRecord(RecordEditRefusal.RecordNotFound, "") },
         { Giving.ARecordWhosePluginCannotBeRead, new PatchRefused.OfRecord(RecordEditRefusal.RecordParseFailed, "") },
     };
@@ -270,10 +286,10 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     [MemberData(nameof(Refusals))]
     public async Task Making_IsRefused_AndWritesNothing(Giving giving, PatchRefused expected)
     {
-        var (name, flags, records) = Making(giving);
+        var (origin, name, flags, records) = Making(giving);
         var heldBefore = string.Join(", ", Directory.GetFiles(_folder));
 
-        var made = await Handler.Make(Mod, name, flags, records);
+        var made = await Handler.Make(origin, name, flags, records);
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal((expected with { Message = "" }, heldBefore), (refused with { Message = "" }, string.Join(", ", Directory.GetFiles(_folder))));
