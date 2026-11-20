@@ -110,7 +110,6 @@ internal static class Indexes
     {
         index.NextCheckUnsettledUntil(announced, what);
         index.Settled();
-        index.EndedClean();
     }
 
     /// <summary>The check, answered once <paramref name="announced"/> holds and its status is out:
