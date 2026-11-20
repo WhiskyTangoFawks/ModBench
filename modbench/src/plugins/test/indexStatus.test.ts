@@ -71,15 +71,26 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
     expect(deps.reporter.reports).toEqual([]);
   });
 
-  it.each([
-    ['a later reconcile starts', { settled: false, total: 2, version: 2 }],
-    ['the record index is dropped', undefined],
-  ] as const)('gives Ready back to mEdit\'s own state when %s', async (_when, holds) => {
+  it('gives Ready back to mEdit\'s own state when the record index is dropped', async () => {
     const { client, handedOver } = followed();
     await tell(client, { total: 2 });
     await handedOver();
 
-    await tell(client, holds);
+    await tell(client, undefined);
+
+    expect(statusBarText()).toBe('$(plug) mEdit: Running');
+  });
+
+  it('keeps an earlier Ready off the status bar when a later reconcile\'s hand-off does not land', async () => {
+    const { client, deps, followed: following } = followed();
+    deps.facts.reconciled.mockResolvedValue({ held: 2, active: 2 });
+    await tell(client, { total: 2 });
+    await following.narrator.settled(1);
+    deps.facts.reconciled.mockResolvedValue(undefined);
+
+    await tell(client, { settled: false, total: 2, version: 2 });
+    await tell(client, { total: 2, version: 2 });
+    await following.narrator.settled(2);
 
     expect(statusBarText()).toBe('$(plug) mEdit: Running');
   });
