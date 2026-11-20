@@ -366,6 +366,17 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AMake_AsksTheRecordIndexWhoHoldsTheRecordsGiven_ThenTheContainersCarriedIn_ALayerAtATime()
+    {
+        var made = await Handler.Make(Mod, Patch, [], [Given(_npc), Given(_interiorRef), Given(_exteriorRef)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        Assert.Equal(
+            [[_npc.FormKey, _interiorRef.FormKey, _exteriorRef.FormKey], [_interior.FormKey, _exterior.FormKey], [_world.FormKey]],
+            _index.OwnersAsked.Select(asked => asked.Select(formKey => FormKey.Factory(formKey))));
+    }
+
+    [Fact]
     public async Task ARecordTheRecordIndexCannotYetPlace_IsRefusedAsTheRecordIndexRefuses()
     {
         var notReady = new IndexRefused(IndexRefusal.IndexNotReady, "The record index is reading.");

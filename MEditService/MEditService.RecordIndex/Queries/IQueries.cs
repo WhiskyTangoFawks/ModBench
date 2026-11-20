@@ -20,6 +20,9 @@ public interface IQueries
     /// <summary>The plugin of the winning copy of <paramref name="formKey"/>; with no active plugin holding it, each compiled
     /// plugin that does (ADR-0012).</summary>
     Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel);
+    /// <summary>The owners of each of <paramref name="formKeys"/>, as <see cref="GetRecordOwners"/> answers them, in one read.</summary>
+    Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetOwnersOfRecords(
+        IReadOnlyCollection<string> formKeys, CancellationToken cancel);
 
     Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel);
 

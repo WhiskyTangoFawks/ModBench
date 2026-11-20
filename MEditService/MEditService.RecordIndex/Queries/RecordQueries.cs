@@ -110,7 +110,11 @@ internal sealed class RecordQueries(
         search is null ? null : LoadIndex.FormKeyOf(search, _loadOrder.Require(), reads.OpenedPlugins)?.ToString();
 
     public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) =>
-        _answer.Of(() => ReadingWholeSet(reads => reads.GetOwners(formKey), cancel));
+        _answer.Of(() => ReadingWholeSet(reads => reads.GetOwners([formKey])[formKey], cancel));
+
+    public Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetOwnersOfRecords(
+        IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
+        _answer.Of(() => ReadingWholeSet(reads => reads.GetOwners(formKeys), cancel));
 
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         _answer.Of(() => CompareOf(formKey, text, cancel));

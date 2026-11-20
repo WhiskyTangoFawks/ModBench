@@ -18,6 +18,10 @@ internal static class QueriesOfACallerWhoStays
     internal static Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(this IQueries queries, string formKey) =>
         queries.GetRecordOwners(formKey, CancellationToken.None);
 
+    internal static Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetOwnersOfRecords(
+        this IQueries queries, IReadOnlyCollection<string> formKeys) =>
+        queries.GetOwnersOfRecords(formKeys, CancellationToken.None);
+
     internal static Answer<CompareResult?, IndexRefused> GetCompare(this IQueries queries, string formKey, CopyText? text) =>
         queries.GetCompare(formKey, text, CancellationToken.None);
 

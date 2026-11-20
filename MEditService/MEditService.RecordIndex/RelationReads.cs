@@ -40,17 +40,20 @@ internal sealed class RelationReads(
     /// </summary>
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
-    public IReadOnlyList<PluginAddress> GetOwners(string formKey)
+    public IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>> GetOwners(IReadOnlyCollection<string> formKeys)
     {
         using var context = OpenRead();
-        return context.Rows($"""
-            WITH winner AS (SELECT plugin, origin FROM records WHERE form_key = $1 AND is_winner)
-            SELECT plugin, origin FROM winner
+        var owners = context.Rows($"""
+            WITH winner AS (SELECT form_key, plugin, origin FROM records WHERE form_key IN (SELECT unnest($1::VARCHAR[])) AND is_winner)
+            SELECT form_key, plugin, origin FROM winner
             UNION ALL
-            SELECT r.plugin, r.origin FROM {Copies}
-            WHERE r.form_key = $1 AND {InPluginSource} AND NOT EXISTS (SELECT 1 FROM winner)
+            SELECT r.form_key, r.plugin, r.origin FROM {Copies}
+            WHERE r.form_key IN (SELECT unnest($1::VARCHAR[])) AND {InPluginSource} AND r.form_key NOT IN (SELECT form_key FROM winner)
             ORDER BY plugin, origin
-            """, reader => reader.GetPluginAddress(), formKey);
+            """, reader => (FormKey: reader.GetString(0), Owner: new PluginAddress(reader.GetString(1), reader.GetString(2))), formKeys.ToList())
+            .ToLookup(row => row.FormKey, row => row.Owner, StringComparer.OrdinalIgnoreCase);
+        return formKeys.Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(formKey => formKey, formKey => (IReadOnlyList<PluginAddress>)[.. owners[formKey]], StringComparer.OrdinalIgnoreCase);
     }
 
     private static readonly string Active = TableDdlBuilder.ActiveJoin("r", "plugin", "origin");
