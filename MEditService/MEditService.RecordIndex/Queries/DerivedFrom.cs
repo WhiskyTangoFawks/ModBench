@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Queries;
 
 /// <summary>Which truth a plugin's rows were derived from (ADR-0007). A compiled plugin whose plugin
 /// source is missing or cannot be read is derived from its binary (plugins.md, A row, Plugin).</summary>
