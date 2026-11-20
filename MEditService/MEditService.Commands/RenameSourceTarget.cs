@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
@@ -16,8 +16,8 @@ internal sealed record RenameSourceTarget(RegisteredPlugin Plugin, PluginProvide
         (target, refusal) = (null, null);
         if (source.WhyGitCannotRun() is { } gitMissing)
             refusal = (RenameSourceRefusal.GitUnavailable, gitMissing.Reason);
-        else if (!ModKey.TryFromFileName(newName, out _))
-            refusal = (RenameSourceRefusal.NotAPluginFile, NotAPluginFile.Message(newName, loadOrder.GameRelease));
+        else if (PluginFileName.FaultOf(newName, out _) is not PluginFileNameFault.None and var fault)
+            refusal = (RenameSourceRefusal.NotAPluginFile, NotAPluginFile.Message(newName, fault, loadOrder.GameRelease));
         else if (loadOrder.Plugin(plugin) is not { } loaded)
         {
             refusal = (RenameSourceRefusal.PluginNotLoaded,

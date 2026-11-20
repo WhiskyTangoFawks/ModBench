@@ -284,6 +284,18 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Theory]
+    [InlineData("sub/Mod.esp", "sub/Mod.esp is not a plugin file name: it holds a folder, or a character a plugin's name cannot.")]
+    [InlineData(".esp", ".esp is not a plugin file name: it holds no name before its extension.")]
+    public async Task CreatePlugin_ANameThatIsNoPluginFileName_IsRefusedSayingWhy(string name, string why)
+    {
+        var folder = ModFolder("BadMod");
+
+        var result = (await HandlerIn(GameRelease.Fallout4).CreatePlugin(new PluginAddress(name, "BadMod"), folder, folder)).Refused();
+
+        Assert.Equal(new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, why), result);
+    }
+
+    [Theory]
     [InlineData("Mod.txt")]
     [InlineData("Mod")]
     [InlineData("Mod.esp.bak")]

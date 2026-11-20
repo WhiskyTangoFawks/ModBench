@@ -75,8 +75,8 @@ public sealed class CreatePluginHandler
     internal static Answer<(ModKey Key, IReadOnlyCollection<HeaderFlag> Flags), PluginCreateRefused> HeaderOf(
         string name, GameRelease release, IReadOnlyList<string>? flags)
     {
-        if (!ModKey.TryFromFileName(name, out var modKey))
-            return new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, NotAPluginFile.Message(name, release));
+        if (PluginFileName.FaultOf(name, out var modKey) is not PluginFileNameFault.None and var fault)
+            return new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, NotAPluginFile.Message(name, fault, release));
 
         if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
             return new PluginCreateRefused(PluginCreateRefusal.LightPluginUnsupported, $"{release} has no light plugins, so {name} cannot be created.");
