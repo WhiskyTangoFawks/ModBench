@@ -32,6 +32,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private readonly PlacedObject _persistentRef;
     private readonly Cell _gameCell;
     private readonly PlacedObject _gameCellRef;
+    private readonly PlacedObject _gameGridRef;
     private readonly PluginFixtureData _data;
     private readonly LoadOrderHolder _holder = new();
     private readonly HandedWrites _index = HandedWrites.Create();
@@ -41,6 +42,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     {
         (Npc Npc, SpatialPlugin.Records Spatial, Cell TopCell, PlacedObject PersistentRef)? made = null;
         (Cell Cell, PlacedObject Ref)? inGame = null;
+        (Worldspace World, Cell Cell, PlacedObject Ref)? inGameWorld = null;
         _data = new PluginFixtureBuilder("make-patch-handler")
             .WithPlugin(Game, mod =>
             {
@@ -49,6 +51,14 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 cell.Temporary.Add(placed);
                 mod.AddInteriorCells(cell);
                 inGame = (cell, placed);
+
+                var world = new Worldspace(mod) { EditorID = "GameWorld" };
+                var gridCell = new Cell(mod) { EditorID = "GameGridCell", MajorRecordFlagsRaw = PersistentFlag.Bit, Grid = new CellGrid { Point = new P2Int(2, 3) } };
+                var gridRef = new PlacedObject(mod) { EditorID = "GameGridRef" };
+                gridCell.Persistent.Add(gridRef);
+                world.SubCells.Add(CellBlocks.Exterior(gridCell));
+                mod.Worldspaces.Add(world);
+                inGameWorld = (world, gridCell, gridRef);
             })
             .WithPlugin(Base, mod =>
             {
@@ -73,6 +83,10 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         File.WriteAllBytes(coastPath, RawPlugin.WithRecordFlags(File.ReadAllBytes(coastPath), _gameCell.FormKey.ID, (uint)DeletedFlag.Bit));
         _index.Owners[_gameCell.FormKey.ToString()] = new PluginAddress(Coast, PluginOrigin.DataDirectory);
         _index.Owners[_gameCellRef.FormKey.ToString()] = new PluginAddress(Game, PluginOrigin.DataDirectory);
+        var (gameWorld, gridCell, gridRef) = inGameWorld.Require();
+        _gameGridRef = gridRef;
+        foreach (var record in new IMajorRecordGetter[] { gameWorld, gridCell, gridRef })
+            _index.Owners[record.FormKey.ToString()] = new PluginAddress(Game, PluginOrigin.DataDirectory);
         var (npc, spatial, topCell, persistentRef) = made.Require();
         (_npc, _interior, _interiorRef, _world, _exterior, _exteriorRef, _persistentRef) =
             (npc, spatial.InteriorCell, spatial.InteriorRef, spatial.Worldspace, spatial.ExteriorCell, spatial.ExteriorRef, persistentRef);
@@ -107,6 +121,9 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private static IEnumerable<ICellGetter> InteriorCellsOf(IFallout4ModGetter mod) =>
         mod.Cells.Records.SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells);
 
+    private static IEnumerable<ICellGetter> ExteriorCellsOf(IFallout4ModGetter mod) =>
+        mod.Worldspaces.SelectMany(world => world.SubCells).SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items);
+
     [Fact]
     public async Task RecordsGiven_LandInThePluginWritten_EachInTheContainersItsWinningCopySitsIn_AndTheRecordIndexReadsItBack()
     {
@@ -119,7 +136,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         using var written = Written();
         var interior = Assert.Single(InteriorCellsOf(written));
         var world = Assert.Single(written.Worldspaces);
-        var exterior = world.SubCells.SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items).Single();
+        var exterior = ExteriorCellsOf(written).Single();
         Assert.Equal(
             ("PatchedNpc", _interior.FormKey, _interiorRef.FormKey, _world.FormKey, _exterior.FormKey, _exteriorRef.FormKey, Base),
             (written.Npcs.Single().EditorID, interior.FormKey, interior.Persistent.Single().FormKey, world.FormKey, exterior.FormKey,
@@ -138,6 +155,19 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal(
             (_gameCell.FormKey, PartialFormFlag.Bit, default(Cell.Flag), (float?)null, _gameCellRef.FormKey),
             (cell.FormKey, cell.MajorRecordFlagsRaw, cell.Flags, cell.WaterHeight, cell.Temporary.Single().FormKey));
+    }
+
+    [Fact]
+    public async Task ARefInAPersistentCellInAGridBlock_LandsInAPartialFormOfTheCell_ThatKeepsItsGrid()
+    {
+        var made = await Handler.Make(Mod, Patch, [], [Given(_gameGridRef)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        using var written = Written();
+        var cell = Assert.Single(ExteriorCellsOf(written));
+        Assert.Equal(
+            (PersistentFlag.Bit | PartialFormFlag.Bit, new P2Int(2, 3), _gameGridRef.FormKey),
+            (cell.MajorRecordFlagsRaw, cell.Grid?.Point, cell.Persistent.Single().FormKey));
     }
 
     [Fact]
