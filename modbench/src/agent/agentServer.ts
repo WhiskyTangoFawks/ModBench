@@ -15,7 +15,7 @@ import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient, ReadCancellation } from '../client/MEditClient';
-import { reconciling } from '../client';
+import { indexing } from '../client';
 import type { Source } from './source';
 import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
@@ -137,8 +137,8 @@ function mcpServerOf({ instance, copyReads, archivedCopies, mEdit, symbols, prob
   const sources: Record<Source, () => readonly string[]> = {
     ...standingSources,
     instance: () => instanceMessages(instance).filter((line) => line !== undefined),
-    // While the record index reconciles, the mEdit line says Indexing, and so says the record index may be late.
-    recordIndex: () => [...standingSources.mEdit(), ...(mEdit.recordIndexMayBeLate && !reconciling(mEdit.recordIndexProgress) ? ['The record index may be late: this answer may predate a write.'] : [])],
+    // While mEdit indexes, the mEdit line says Indexing, and so says the record index may be late.
+    recordIndex: () => [...standingSources.mEdit(), ...(mEdit.recordIndexMayBeLate && !indexing(mEdit.recordIndexProgress) ? ['The record index may be late: this answer may predate a write.'] : [])],
   };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
   register(server, log, reading('instance'), { ...LIST_PROFILES, input: NO_INPUT }, () => LIST_PROFILES.of(currentValue(instance), deployment));

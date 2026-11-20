@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { reconciling, type MEditClient } from '../client';
+import { indexing, type MEditClient } from '../client';
 import { mEditState } from './mEditState';
 import type { Reporter } from '../ports/reporter';
 
@@ -20,11 +20,11 @@ export function createStatusBar(
 ): StatusBar {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   let indexedActivePlugins: number | undefined;
-  const indexing = () => {
+  const indexingProgress = () => {
     const progress = client.recordIndexProgress;
-    return reconciling(progress) ? progress : undefined;
+    return indexing(progress) ? progress : undefined;
   };
-  const shown = () => mEditState(client.status, indexing(), indexedActivePlugins);
+  const shown = () => mEditState(client.status, indexingProgress(), indexedActivePlugins);
   const show = () => {
     const { icon, state } = shown();
     item.text = `$(${icon}) mEdit: ${state}`;
@@ -49,7 +49,7 @@ export function createStatusBar(
   return {
     ready: (activePlugins) => { indexedActivePlugins = activePlugins; show(); },
     showMEditState: showStatus,
-    standing: () => indexedActivePlugins === undefined || indexing() !== undefined ? `mEdit is ${shown().state}` : undefined,
+    standing: () => indexedActivePlugins === undefined || indexingProgress() !== undefined ? `mEdit is ${shown().state}` : undefined,
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); item.dispose(); },
   };
 }

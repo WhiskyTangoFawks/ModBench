@@ -20,7 +20,7 @@ export const trackLateness = (isLate: () => boolean) => trackValue(isLate, false
 export const trackProgress = (read: () => RecordIndexProgress | undefined) =>
   trackValue(read, undefined, (a, b) => JSON.stringify(a) === JSON.stringify(b));
 
-export const reconciling = (progress: RecordIndexProgress | undefined): progress is RecordIndexProgress =>
+export const indexing = (progress: RecordIndexProgress | undefined): progress is RecordIndexProgress =>
   progress?.settled === false && progress.refusal === undefined;
 
 export const indexingMakesLate = (progress: RecordIndexProgress | undefined): boolean =>

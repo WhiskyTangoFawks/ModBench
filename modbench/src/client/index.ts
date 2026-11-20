@@ -11,7 +11,7 @@ export type {
 export type { RecordEditChangesOutcome, RecordEditEnvelope, SourceChanges, WriteRefused } from './MEditClient';
 export { isMEditGone, isRefused, loadFailuresOf, UNLIMITED_RECORDS } from './MEditClient';
 export { attachPortOf } from './attachPort';
-export { reconciling } from './lateness';
+export { indexing } from './lateness';
 export { createMEditClient, stopMEditClient } from './HttpMEditClient';
 export { recordIndexReferences } from './recordIndexReferences';
 export { scriptSourceRename } from './scriptSourceRename';
