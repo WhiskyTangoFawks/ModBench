@@ -37,7 +37,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
                     return new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"Record {at + 1} of those given names no FormKey, so it cannot be placed.");
                 formKeys.Add(formKey);
             }
-            if (Owned(formKeys) is { } unowned) return unowned;
+            if (AskOwners(formKeys) is { } notAsked) return notAsked;
             for (var at = 0; at < given.Count; at++)
             {
                 if (Given(formKeys[at], given[at]) is { } refused) return refused;
@@ -82,7 +82,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
 
         private PatchRefused? CarriedIn(IReadOnlyList<string> containers)
         {
-            if (Owned(containers) is { } unowned) return unowned;
+            if (AskOwners(containers) is { } notAsked) return notAsked;
             foreach (var formKey in containers)
             {
                 if (CarriedIn(formKey) is { } refused) return refused;
@@ -156,7 +156,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
 
         private static bool HasGrid(string text) => Document.TryRead(text, out var document, out _) && document.Grid is not null;
 
-        private PatchRefused.OfIndex? Owned(IReadOnlyList<string> formKeys)
+        private PatchRefused.OfIndex? AskOwners(IReadOnlyList<string> formKeys)
         {
             if (formKeys.Count == 0) return null;
             if (!index.GetOwnersOfRecords([.. formKeys.Distinct(StringComparer.Ordinal)], cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
