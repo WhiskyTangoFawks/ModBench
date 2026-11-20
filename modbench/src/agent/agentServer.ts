@@ -11,7 +11,6 @@ import type { CopyReads } from '../mods/sameCopies';
 import type { ArchivedCopies } from '../mods/archivedCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
-import { lastGoodReadMessage } from '../wire/reasons';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -145,7 +144,6 @@ function mcpServerOf({ instance, copyReads, archivedCopies, mEdit, symbols, prob
   const statusReasons = () => (instance.value.holdsRepository ? statuses.lastGoodReasons() : []);
   const linesOf = (read: readonly Source[]) => (source: Source): readonly string[] => {
     if (source === 'instance') return instanceMessages(instance, read.includes('modList') ? statusReasons() : []).filter((line) => line !== undefined);
-    if (source === 'modList' && !read.includes('instance')) return [...sources.modList(), ...[lastGoodReadMessage(statusReasons())].filter((line) => line !== undefined)];
     return sources[source]();
   };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap(linesOf(read)))];

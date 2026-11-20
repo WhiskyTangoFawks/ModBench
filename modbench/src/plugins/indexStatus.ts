@@ -11,7 +11,8 @@ import { createReconcileNarrator, type Heard, type ReconcileNarrator } from './r
 import type { StatusBar } from './statusBar';
 
 interface ReconciledDeps {
-  tellSettled: (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]) => void;
+  tellLanded: (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]) => void;
+  tellHeard: (failures: readonly PluginLoadFailure[]) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
@@ -25,8 +26,12 @@ interface ReconciledDeps {
 async function settleReconciled({ progress, failures }: Heard, deps: ReconciledDeps): Promise<void> {
   deps.registerRepositories();
   const landed = await deps.applyReconciled(failures, progress.total);
-  deps.tellSettled(failures, landed?.rowsGone ?? []);
-  if (landed !== undefined) deps.statusBar.ready(landed.active);
+  // A hand-off a newer step superseded only adds what it heard, as a refusal does.
+  if (landed === undefined) deps.tellHeard(failures);
+  else {
+    deps.tellLanded(failures, landed.rowsGone);
+    deps.statusBar.ready(landed.active);
+  }
 }
 
 // plugins.md, States 3: the tree's own wording for a row not yet held while mEdit is unreachable.
@@ -55,20 +60,20 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
   const tellOnce = tellingOnSurface(reporter, 'error');
   let heardFailures = new Map<string, PluginLoadFailure>();
   const heardOf = (failures: readonly PluginLoadFailure[]) => failures.map((f) => [pluginAddressKey(f), f] as const);
-  const tellHeard = (rowsGone: readonly PluginLoadFailure[] = []): void => {
+  const tellStanding = (rowsGone: readonly PluginLoadFailure[] = []): void => {
     const gone = new Set(rowsGone.map(pluginAddressKey));
     tellOnce([...heardFailures].map(([key, f]) => (gone.has(key)
       ? { key, message: `The records of ${quotedPluginName(f)} no longer show: its read failed.`, why: f.reason, notify: true }
       : { key, message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
   };
-  const tellSettled = (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]): void => {
+  const tellLanded = (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]): void => {
     heardFailures = new Map(heardOf(failures));
-    tellHeard(rowsGone);
+    tellStanding(rowsGone);
   };
   // A refusal hears only the plugins its reconcile reached.
-  const tellRefused = (failures: readonly PluginLoadFailure[]): void => {
+  const tellHeard = (failures: readonly PluginLoadFailure[]): void => {
     heardFailures = new Map([...heardFailures, ...heardOf(failures)]);
-    tellHeard();
+    tellStanding();
   };
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
@@ -77,12 +82,12 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
       statusBar.showMEditState();
     },
     applyRefused: (refusal, failures) => {
-      tellRefused(failures);
+      tellHeard(failures);
       facts.refused(refusal);
       statusBar.showMEditState();
     },
     settle: (heard) => settleReconciled(heard, {
-      tellSettled, statusBar, registerRepositories,
+      tellLanded, tellHeard, statusBar, registerRepositories,
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),

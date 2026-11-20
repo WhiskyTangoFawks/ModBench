@@ -112,7 +112,7 @@ const pluginsShown = {
   brokenRules: () => sortingRead.rules,
   suggestedMoves: () => sortingRead.moves,
 };
-afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; sortingRead.notJudged = undefined; });
+afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; sortingRead.notJudged = undefined; statusRead.lastGood = []; });
 
 const copyAnswers: InstanceAnswers = {};
 
@@ -823,7 +823,6 @@ describe('the agent server, given an instance value', () => {
       const { client } = await clientOf(instance);
 
       expect(await blocksOf(client, 'list_mods')).toEqual(['Showing the last good read: the modlist is unreadable; the status of "A" could not be read: bad JSON.']);
-      statusRead.lastGood = [];
     });
 
     it('say a line two sources raise once', async () => {

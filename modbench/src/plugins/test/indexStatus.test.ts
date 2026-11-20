@@ -219,6 +219,22 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.reporter.shownFailures).toHaveLength(1);
   });
 
+  it('tells a refusal\'s failure once, when a hand-off superseded under it answers after it', async () => {
+    const { client, deps } = followed();
+    let superseded!: (landed: undefined) => void;
+    deps.facts.reconciled.mockReturnValue(new Promise((resolve) => { superseded = resolve; }));
+    const other = { name: 'Other.esp', origin: 'SomeMod', reason: 'truncated' };
+    const refused = { kind: 'failed', message: 'the reconcile threw' } as const;
+
+    await tell(client, { total: 2, failures: [badFailure] });
+    await tell(client, { version: 2, total: 2, failures: [other], refusal: refused });
+    superseded(undefined);
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await tell(client, { version: 3, total: 2, failures: [other], refusal: refused });
+
+    expect(deps.reporter.shownFailures.filter(({ message }) => message.includes('Other.esp'))).toHaveLength(1);
+  });
+
   it('hands the tree the record index\'s own failures and counts the snapshot\'s total in the log', async () => {
     const { client, deps, handedOver } = followed();
 
