@@ -11,7 +11,7 @@ import { createReconcileNarrator, type Heard, type ReconcileNarrator } from './r
 import type { StatusBar } from './statusBar';
 
 interface ReconciledDeps {
-  tellReads: (failures: readonly PluginLoadFailure[]) => void;
+  tellFailedReads: (failures: readonly PluginLoadFailure[]) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
@@ -22,7 +22,7 @@ interface ReconciledDeps {
 // Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
 // so conflicts are computed.
 async function settleReconciled({ progress, failures }: Heard, deps: ReconciledDeps): Promise<void> {
-  deps.tellReads(failures);
+  deps.tellFailedReads(failures);
   deps.registerRepositories();
   const active = await deps.applyReconciled(failures, progress.total);
   if (active !== undefined) deps.statusBar.ready(active);
@@ -41,7 +41,7 @@ interface IndexStatusDeps {
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
   registerRepositories: () => void;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 // plugins.md, States 2–4 and 6: the record index status the stream carries drives the Plugins view,
@@ -51,9 +51,9 @@ export type FollowedNarrator = ReconcileNarrator & { hearNow(): Promise<void> };
 
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNarrator } & vscode.Disposable {
   const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
-  const tellFailedReads = tellingOnSurface(reporter, 'error');
-  const tellReads = (failures: readonly PluginLoadFailure[]): void => {
-    tellFailedReads(failures.map((f) => ({ key: pluginAddressKey(f), message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
+  const tellOnce = tellingOnSurface(reporter, 'error');
+  const tellFailedReads = (failures: readonly PluginLoadFailure[]): void => {
+    tellOnce(failures.map((f) => ({ key: pluginAddressKey(f), message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
   };
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
@@ -61,12 +61,13 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
       facts.indexed(indexedPlugins, failures);
       statusBar.showMEditState();
     },
-    applyRefused: (refusal) => {
+    applyRefused: (refusal, failures) => {
+      tellFailedReads(failures);
       facts.refused(refusal);
       statusBar.showMEditState();
     },
     settle: (heard) => settleReconciled(heard, {
-      tellReads, statusBar, registerRepositories,
+      tellFailedReads, statusBar, registerRepositories,
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),
@@ -115,7 +116,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
 }
 
 async function applyReconciled(
-  { facts, log }: IndexStatusDeps,
+  { facts, log, reporter }: IndexStatusDeps,
   failures: readonly PluginLoadFailure[],
   // Carried in only to be logged next to what reached the tree. Deliberately not the snapshot's
   // plugin count: that omits the implicit masters the backend prepends, so every healthy
@@ -125,7 +126,8 @@ async function applyReconciled(
   const counted = await facts.reconciled(failures);
   // Superseded by a newer step, which shows its own state, or a failed read the feed reported.
   if (counted === undefined) return undefined;
-  const { held, active } = counted;
+  const { held, active, rowsGone } = counted;
+  for (const f of rowsGone) reporter.report('error', `The records of ${quotedPluginName(f)} no longer show: its read failed.`, f.reason);
   // Do not remove as logging noise: `held + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
   log('info', `[loadOrder] applying reconciled load order to tree: ${held} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`);

@@ -118,6 +118,8 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
 export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   const { client, reporter, publish, languageStatus, unsavedStatus } = deps;
   const tellUnplaced = tellingOnSurface(reporter, 'warning');
+  const tellHandOver = tellingOnSurface(reporter, 'warning');
+  const tellKept = tellingOnSurface(reporter, 'warning');
   let held = new Map<string, Contribution>();
   let unplacedHeld = new Map<string, Unplaced>();
   let published = false;
@@ -131,16 +133,18 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   };
   const handedOver = (failure: WriteRefused | undefined) => {
     const why = failure?.message;
-    if (why !== undefined && why !== handOverFailed) {
-      reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why);
-    }
+    tellHandOver(why === undefined ? [] : [{ key: 'handOver', message: 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why }]);
     handOverFailed = why;
     unsavedStatus(lastGoodReadMessage(why === undefined ? [] : [why]));
     showStatus();
   };
   const unplacedStatus = () => lastGoodReadMessage([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`));
+  const tellFailures = () => {
+    tellKept([...failures].map(([target, why]) => ({ key: target, message: 'The Problems panel shows mEdit\'s last answer.', why })));
+  };
   const settle = (target: string, { ofPlugin, unplaced }: Placed) => {
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
+    tellFailures();
     const before = held;
     held = new Map([...outsideTarget(held, target), ...nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)))]);
     unplacedHeld = new Map([...outsideTarget(unplacedHeld, target), ...unplaced.map((one) => [one.key, one] as const)]);
@@ -149,9 +153,8 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     tellUnplaced([...unplacedHeld.values()].filter(({ told }) => told));
   };
   const keepLastAnswer = (target: string, error: unknown) => {
-    const why = errorMessage(error);
-    if (why !== failures.get(target)) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
-    failures.set(target, why);
+    failures.set(target, errorMessage(error));
+    tellFailures();
     showStatus();
   };
   const ask = async (plugin?: PluginAddress, first = false, keys?: readonly string[]) => {

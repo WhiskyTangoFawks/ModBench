@@ -118,7 +118,8 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const own = <T extends vscode.Disposable>(disposable: T): T => { owned.push(disposable); return disposable; };
   const nexusRow = nexusRowInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.downloadsView], 'modbench.mod.nexusRowIn');
   const sourceGestureRows = selectionInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.sourceGestures.pluginsView], 'modbench.mod.sourceGestureRowsIn');
-  const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // instance-repository.md, Status, story 1
+  // instance-repository.md, Status, story 1. The last good read's reasons are the provider's, under one prefix with the instance's.
+  const statusMessage = () => (instance.value.holdsRepository ? statuses.unreadMessage() : undefined);
   const open = new OpenRows(instance);
   const provider = new ModListProvider({ instance, statuses, open, reporter: reporterFor('modlist.drop') });
   const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {
@@ -222,7 +223,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       dataPathOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
       fileTooltip: (path) => winningCopyTooltip(instance.value, path),
     },
-    standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
+    standingLines: () => [modSync.message(), instance.value.holdsRepository ? statuses.message() : undefined].filter((line) => line !== undefined),
     tooltipOf: (entry) => { const { tooltip } = provider.entryRow(entry) ?? {}; return typeof tooltip === 'string' ? tooltip : undefined; },
     dispose: () => { disposable.dispose(); },
   };

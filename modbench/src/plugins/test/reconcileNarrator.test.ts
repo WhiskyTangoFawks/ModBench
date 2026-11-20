@@ -124,13 +124,14 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     expect(deps.settle).not.toHaveBeenCalled();
   });
 
-  it('hands the refusal to the views', () => {
+  it('hands the refusal and the failures heard with it to the views', () => {
     const { deps, narrator } = narrated();
-    const refusal = { kind: 'heldElsewhere' as const, message: 'another Modbench window holds this instance' };
+    const refusal = { kind: 'failed' as const, message: 'the reconcile threw something unexpected' };
+    const failures = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
 
-    narrator.hear(tick({ refusal }));
+    narrator.hear({ ...tick({ refusal }), failures });
 
-    expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
+    expect(deps.applyRefused).toHaveBeenCalledWith(refusal, failures);
   });
 
   it('writes a failed index to the Output once, however often its status is heard again', () => {

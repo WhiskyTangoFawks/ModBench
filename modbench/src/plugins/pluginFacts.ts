@@ -123,6 +123,8 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
  *  shows from them (plugins.md, A row). */
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
+  // The plugins whose rows stood when the last reconcile landed.
+  private stood = new ByPluginAddress<true>();
   private answers = new Map<string, PluginMetadata>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
@@ -180,8 +182,9 @@ export class PluginFacts {
   }
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, the active plugins as
-   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
+   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. Names each
+   *  failure that took away rows that stood when the last reconcile landed (common.md, Reporting). */
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): PluginLoadFailure[] {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -190,6 +193,9 @@ export class PluginFacts {
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
     this.judgeSorting(activeOrder, loot);
+    const rowsGone = failures.filter((f) => this.stood.has(f) && !this.rowsStand(f));
+    this.stood = heldSet(plugins.filter((p) => p.rowsFrom != null));
+    return rowsGone;
   }
 
   /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed, and

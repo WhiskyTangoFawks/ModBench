@@ -4,6 +4,7 @@ import type { PluginRecords } from '../drivingLib/namedPlugins';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { joinedReasons, pluginReason } from '../wire/reasons';
+import { tellingOnSurface } from '../drivingLib/tellingOnSurface';
 import { failureReason, isNotYetAnswerable, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
 export interface FilePathsAsked { getPluginFilePaths(plugin?: PluginAddress, keys?: readonly string[]): ReturnType<MEditClient['getPluginFilePaths']> }
@@ -23,12 +24,11 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
   const held = new Map<string, NamedInFile[]>();
   const namedBy = new WeakMap<object, NamedInFile[]>();
   let listed: NamedInFile[] | undefined;
-  let told = '';
+  const tellOnce = tellingOnSurface(reporter, 'warning');
 
   const tellUnread = (answers: Answered) => {
     const why = joinedReasons(answers.flatMap(({ plugin, failure, unread }) => [...failure == null ? [] : [failure], ...unread].map((line) => pluginReason(plugin, line))));
-    if (why !== '' && why !== told) reporter.shownOnSurface('warning', 'The Problems panel does not check every script plugin source names.', why);
-    told = why;
+    tellOnce(why === '' ? [] : [{ key: 'unread', message: 'The Problems panel does not check every script plugin source names.', why }]);
   };
 
   const take = (answers: Answered, only: readonly PluginRecords[] | undefined) => {

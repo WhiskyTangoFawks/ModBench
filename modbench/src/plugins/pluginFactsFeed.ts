@@ -100,7 +100,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
    *  every fact it answers about each plugin. Returns how many plugins it holds; `undefined` when
    *  the read failed or a newer step superseded it. */
-  async reconciled(failures: readonly PluginLoadFailure[]): Promise<{ held: number; active: number } | undefined> {
+  async reconciled(failures: readonly PluginLoadFailure[]): Promise<{ held: number; active: number; rowsGone: PluginLoadFailure[] } | undefined> {
     const generation = ++this.generation;
     const plugins = await this.readPlugins(undefined);
     if (generation !== this.generation) return undefined;
@@ -108,7 +108,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const active = this.deps.activePlugins();
     const loot = await this.lootRules(active);
     if (generation !== this.generation) return undefined;
-    this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
+    const rowsGone = this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
@@ -119,7 +119,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
     // ADR-0019's background tier, and retries at the next reconcile.
     void this.scanDiagnoses(generation);
-    return { held: plugins.length, active: active.length };
+    return { held: plugins.length, active: active.length, rowsGone };
   }
 
   private async readChangedOutside(): Promise<void> {

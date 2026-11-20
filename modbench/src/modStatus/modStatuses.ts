@@ -133,12 +133,22 @@ export class ModStatuses {
   }
 
   message(): string | undefined {
-    if (this.gitFailure !== undefined) {
-      const why = `git could not say which folders it holds: ${this.gitFailure}.`;
-      return this.shown.size === 0 ? `The statuses could not be read: ${why}` : lastGoodReadMessage([why]);
-    }
-    if (this.unreadable.size === 0) return undefined;
-    return lastGoodReadMessage([...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`));
+    return lastGoodReadMessage(this.lastGoodReasons()) ?? this.unreadMessage();
+  }
+
+  /** Why the statuses shown are the last good ones (common.md, States, story 6). */
+  lastGoodReasons(): string[] {
+    if (this.gitFailure !== undefined) return this.shown.size === 0 ? [] : [this.gitWhy(this.gitFailure)];
+    return [...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`);
+  }
+
+  /** Why no status could be read (common.md, States, story 2). */
+  unreadMessage(): string | undefined {
+    return this.gitFailure !== undefined && this.shown.size === 0 ? `The statuses could not be read: ${this.gitWhy(this.gitFailure)}` : undefined;
+  }
+
+  private gitWhy(failure: string): string {
+    return `git could not say which folders it holds: ${failure}.`;
   }
 
   onMessageChanged(listener: () => void): Listening {

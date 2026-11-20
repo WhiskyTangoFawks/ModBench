@@ -36,7 +36,7 @@ function followed() {
     client,
     facts: {
       indexed: vi.fn(), refused: vi.fn(), unreachable: vi.fn(),
-      reconciled: vi.fn().mockResolvedValue({ held: 0, active: 0 }), refresh: vi.fn().mockResolvedValue(undefined),
+      reconciled: vi.fn().mockResolvedValue({ held: 0, active: 0, rowsGone: [] }), refresh: vi.fn().mockResolvedValue(undefined),
     },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
     statusBar: createStatusBar(client, () => recordingReporter()),
@@ -51,7 +51,7 @@ function followed() {
 describe('the Plugins view following the record index status and mEdit\'s own', () => {
   it('says Ready on the status bar counting the active plugins, not every plugin indexed, once the stream\'s Ready is handed to the tree', async () => {
     const { client, deps, handedOver } = followed();
-    deps.facts.reconciled.mockResolvedValue({ held: 5, active: 2 });
+    deps.facts.reconciled.mockResolvedValue({ held: 5, active: 2, rowsGone: [] });
 
     await tell(client, { total: 5 });
     await handedOver();
@@ -83,7 +83,7 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
 
   it('keeps an earlier Ready off the status bar when a later reconcile\'s hand-off does not land', async () => {
     const { client, deps, followed: following } = followed();
-    deps.facts.reconciled.mockResolvedValue({ held: 2, active: 2 });
+    deps.facts.reconciled.mockResolvedValue({ held: 2, active: 2, rowsGone: [] });
     await tell(client, { total: 2 });
     await following.narrator.settled(1);
     deps.facts.reconciled.mockResolvedValue(undefined);
@@ -186,6 +186,24 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
 
     expect(deps.reporter.shownFailures).toEqual([{ severity: 'error', message: 'Failed to read "Bad.esp" (SomeMod).', detail: 'RACE parse' }]);
     expect(deps.reporter.reports).toEqual([]);
+  });
+
+  it('notifies naming each plugin whose rows a failed read took away, and why', async () => {
+    const { client, deps, handedOver } = followed();
+    deps.facts.reconciled.mockResolvedValue({ held: 1, active: 1, rowsGone: [badFailure] });
+
+    await tell(client, { total: 2, failures: [badFailure] });
+    await handedOver();
+
+    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'The records of "Bad.esp" (SomeMod) no longer show: its read failed.', detail: 'RACE parse' }]);
+  });
+
+  it('tells in the Output each plugin\'s failed read a refused reconcile heard', async () => {
+    const { client, deps } = followed();
+
+    await tell(client, { total: 2, failures: [badFailure], refusal: { kind: 'failed', message: 'the reconcile threw' } });
+
+    expect(deps.reporter.shownFailures).toEqual([{ severity: 'error', message: 'Failed to read "Bad.esp" (SomeMod).', detail: 'RACE parse' }]);
   });
 
   it('hands the tree the record index\'s own failures and counts the snapshot\'s total in the log', async () => {

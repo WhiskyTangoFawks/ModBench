@@ -608,6 +608,26 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
   });
 
   const truncated = failure('Could not read this plugin (truncated).');
+  it.each([
+    ['names a plugin whose rows stood until a failed read took them', [held({ rowsFrom: 'Binary' })], [held({ rowsFrom: null })], [truncated]],
+    ['names a plugin whose failed read leaves mEdit no answer for it', [held({ rowsFrom: 'Binary' })], [], [truncated]],
+    ['names none while its rows stand', [held({ rowsFrom: 'Binary' })], [held({ rowsFrom: 'Binary' })], []],
+    ['names none whose rows never stood', [held({ rowsFrom: null })], [held({ rowsFrom: null })], []],
+  ] as const)('the reconcile that lands a failed read %s', (_label, before, after, gone) => {
+    const facts = new PluginFacts();
+    facts.reconciled([...before], [], [], []);
+
+    expect(facts.reconciled([...after], [truncated], [], [])).toEqual(gone);
+  });
+
+  it('names a plugin whose rows a failed read took once, however often the next reconciles hear it', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ rowsFrom: 'Binary' })], [], [], []);
+    facts.reconciled([held({ rowsFrom: null })], [truncated], [], []);
+
+    expect(facts.reconciled([held({ rowsFrom: null })], [truncated], [], [])).toEqual([]);
+  });
+
   const reconciledFailing = (rowsFrom: PluginMetadata['rowsFrom']): Scene => (facts) => facts.reconciled([held({ rowsFrom })], [truncated], [], []);
   const tickedFailing = (rowsFrom: PluginMetadata['rowsFrom']): Scene => (facts) => {
     facts.refreshed([held({ rowsFrom })]);
