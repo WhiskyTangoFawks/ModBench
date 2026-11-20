@@ -20,7 +20,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null,
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, CancellationToken cancel) =>
         throw Failed();
 
-    public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) =>
+    public Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetRecordOwners(
+        IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
         ownersRefused ?? throw Failed();
 
     public Answer<IReadOnlyList<string>, IndexRefused> GetPlacesHoldingPluginSource(string name) => throw Failed();

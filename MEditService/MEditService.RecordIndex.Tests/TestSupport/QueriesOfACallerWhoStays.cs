@@ -15,8 +15,9 @@ internal static class QueriesOfACallerWhoStays
     internal static Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(this IQueries queries, IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) =>
         queries.GetRecords(types, plugin, search, limit, offset, CancellationToken.None);
 
-    internal static Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(this IQueries queries, string formKey) =>
-        queries.GetRecordOwners(formKey, CancellationToken.None);
+    internal static Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetRecordOwners(
+        this IQueries queries, IReadOnlyCollection<string> formKeys) =>
+        queries.GetRecordOwners(formKeys, CancellationToken.None);
 
     internal static Answer<CompareResult?, IndexRefused> GetCompare(this IQueries queries, string formKey, CopyText? text) =>
         queries.GetCompare(formKey, text, CancellationToken.None);

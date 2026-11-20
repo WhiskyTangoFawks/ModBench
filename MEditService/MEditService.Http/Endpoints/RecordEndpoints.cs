@@ -81,7 +81,8 @@ internal static class RecordEndpoints
             {
                 logger.LogInformation("Received GetRecordOwners for {FormKey}", formKey);
             }
-            return EndpointMapping.Ok(svc.GetRecordOwners(Uri.UnescapeDataString(formKey), cancel));
+            var asked = Uri.UnescapeDataString(formKey);
+            return EndpointMapping.Answered(svc.GetRecordOwners([asked], cancel), owners => Results.Ok(owners[asked]));
         })
         .WithName("GetRecordOwners")
         .WithTags("Records")

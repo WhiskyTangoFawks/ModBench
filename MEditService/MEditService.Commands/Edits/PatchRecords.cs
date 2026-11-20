@@ -24,27 +24,35 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         IQueries index, CopySources copies, IReadOnlyDictionary<string, RecordTableSchema> schemas, RecordTypes types, string pluginName,
         CancellationToken cancel)
     {
-        private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.Ordinal);
-        private readonly Queue<string> _containers = new();
+        private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _containers = new(StringComparer.OrdinalIgnoreCase);
 
         internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> All(IReadOnlyList<GivenRecord> given)
         {
+            var formKeys = new List<string>(given.Count);
             for (var at = 0; at < given.Count; at++)
             {
-                if (Given(at, given[at]) is { } refused) return refused;
+                if (CanonicalFormKey.Of(DocumentTokens.RootStringIn(given[at].Text, RecordMembers.FormKey) ?? string.Empty) is not { } formKey)
+                    return new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"Record {at + 1} of those given names no FormKey, so it cannot be placed.");
+                formKeys.Add(formKey);
             }
-            while (_containers.TryDequeue(out var formKey))
+            if (AskOwners(formKeys) is { } notAsked) return notAsked;
+            for (var at = 0; at < given.Count; at++)
             {
-                if (!_laid.ContainsKey(formKey) && CarriedIn(formKey) is { } refused) return refused;
+                if (Given(formKeys[at], given[at]) is { } refused) return refused;
+            }
+            while (_containers.Count > 0)
+            {
+                List<string> carried = [.. _containers.Where(formKey => !_laid.ContainsKey(formKey))];
+                _containers.Clear();
+                if (CarriedInLayer(carried) is { } refused) return refused;
             }
             return _laid.Values.ToList();
         }
 
-        private PatchRefused? Given(int at, GivenRecord record)
+        private PatchRefused? Given(string formKey, GivenRecord record)
         {
-            if (CanonicalFormKey.Of(DocumentTokens.RootStringIn(record.Text, RecordMembers.FormKey) ?? string.Empty) is not { } formKey)
-                return new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"Record {at + 1} of those given names no FormKey, so it cannot be placed.");
             if (_laid.ContainsKey(formKey))
             {
                 return new PatchRefused.AsCompile(
@@ -52,7 +60,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             }
 
             if (!TypeOf(formKey, record.RecordType).Holds(out var type, out var unknown)) return unknown;
-            return Laid(new RecordIdentity(formKey, type, DocumentTokens.EditorIdIn(record.Text).EditorId), record.Text);
+            return Laid(new RecordIdentity(formKey, type, DocumentTokens.EditorIdIn(record.Text).EditorId), record.Text, _owners[formKey]);
         }
 
         // A record's type is the one every copy of its FormKey holds, so a type given that differs is refused.
@@ -60,8 +68,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         {
             if (given is not null && (!schemas.ContainsKey(given) || given == PluginHeader.RecordType))
                 return new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, $"'{given}', given for {formKey}, is no record type.");
-            if (!OwnerOf(formKey).Holds(out var owner, out var refused)) return refused;
-            if (owner is not { } held)
+            if (_owners[formKey] is not { } held)
             {
                 return given ?? (Answer<string, PatchRefused>)new PatchRefused.OfRecord(
                     RecordEditRefusal.RecordTypeNotFound, $"{NoneHolds(formKey)}, so its record type must be given.");
@@ -73,15 +80,24 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
                 : new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"{formKey} is a {type} in {held.Name}, not the {given} given.");
         }
 
+        private PatchRefused? CarriedInLayer(IReadOnlyList<string> containers)
+        {
+            if (AskOwners(containers) is { } notAsked) return notAsked;
+            foreach (var formKey in containers)
+            {
+                if (CarriedIn(formKey) is { } refused) return refused;
+            }
+            return null;
+        }
+
         private PatchRefused? CarriedIn(string formKey)
         {
-            if (!OwnerOf(formKey).Holds(out var owner, out var refused)) return refused;
-            if (owner is not { } held)
+            if (_owners[formKey] is not { } held)
                 return new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, $"{NoneHolds(formKey)}, which holds a record given.");
             var copy = copies.Of(held);
             var read = HeldIdentity(formKey, held, copy).Then(identity => Read(formKey, held, CarriedCopy(copy, identity)));
             if (!read.Holds(out var document, out var unread)) return unread;
-            return Laid(document.Identity, document.Body);
+            return Laid(document.Identity, document.Body, held);
         }
 
         private CopyRead<SourceDocument> CarriedCopy(CopySource copy, RecordIdentity container)
@@ -92,19 +108,18 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
                     document with { Body = ContainerDocumentEdits.WithChildSlotsCut(document.Body, document.RecordType, release) }));
         }
 
-        private PatchRefused? Laid(RecordIdentity identity, string text)
+        private PatchRefused? Laid(RecordIdentity identity, string text, PluginAddress? owner)
         {
-            if (!Placed(identity, text).Holds(out var laid, out var refused)) return refused;
+            if (!Placed(identity, text, owner).Holds(out var laid, out var refused)) return refused;
             _laid[identity.FormKey] = laid;
-            if ((laid.Container?.ParentFormKey ?? laid.Worldspace) is { } container) _containers.Enqueue(container);
+            if ((laid.Container?.ParentFormKey ?? laid.Worldspace) is { } container) _containers.Add(container);
             return null;
         }
 
-        private Answer<MadeRecord, PatchRefused> Placed(RecordIdentity identity, string text)
+        private Answer<MadeRecord, PatchRefused> Placed(RecordIdentity identity, string text, PluginAddress? owner)
         {
             var isCell = types.IsCell(identity.RecordType);
             if (types.IsCreatable(identity.RecordType) && !isCell) return new MadeRecord(identity, text);
-            if (!OwnerOf(identity.FormKey).Holds(out var owner, out var refused)) return refused;
 
             DocumentContainment? container = null;
             string? worldspace = null;
@@ -141,11 +156,12 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
 
         private static bool HasGrid(string text) => Document.TryRead(text, out var document, out _) && document.Grid is not null;
 
-        private Answer<PluginAddress?, PatchRefused> OwnerOf(string formKey)
+        private PatchRefused.OfIndex? AskOwners(IReadOnlyList<string> formKeys)
         {
-            if (_owners.TryGetValue(formKey, out var known)) return known;
-            if (!index.GetRecordOwners(formKey, cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
-            return _owners[formKey] = owners.Count > 0 ? owners[0] : null;
+            if (formKeys.Count == 0) return null;
+            if (!index.GetRecordOwners(formKeys, cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
+            foreach (var (formKey, held) in owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
+            return null;
         }
 
         // The record index can lag a change another program made to the plugin (ADR-0003).

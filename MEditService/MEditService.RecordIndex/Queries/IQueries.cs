@@ -17,9 +17,10 @@ public interface IQueries
     // A null plugin browses every plugin.
     Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, CancellationToken cancel);
-    /// <summary>The plugin of the winning copy of <paramref name="formKey"/>; with no active plugin holding it, each compiled
-    /// plugin that does (ADR-0012).</summary>
-    Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel);
+    /// <summary>Of each of <paramref name="formKeys"/>, the plugin of its winning copy; with no active plugin holding it, each
+    /// compiled plugin that does (ADR-0012). Keyed ignoring case, as the record index matches a FormKey.</summary>
+    Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetRecordOwners(
+        IReadOnlyCollection<string> formKeys, CancellationToken cancel);
 
     Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel);
 
