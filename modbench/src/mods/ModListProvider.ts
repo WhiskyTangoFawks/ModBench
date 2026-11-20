@@ -47,7 +47,7 @@ interface ModListProviderOptions {
    *  overwrite/ file count. */
   instance: TreeInstance;
   /** Each mod's status against its manifest, as Mod status derives it. */
-  statuses: Pick<ModStatuses, 'of' | 'onDidChange'>;
+  statuses: Pick<ModStatuses, 'of' | 'lastGoodReasons' | 'onDidChange'>;
   /** The rows the view shows open. */
   open: OpenRows;
   /** Says why a drop cannot land. */
@@ -314,7 +314,7 @@ export class ModListProvider
   }
 
   standingMessage(): string | undefined {
-    return messageLine(...instanceMessages(this.instance));
+    return messageLine(...instanceMessages(this.instance, this.instanceValue.holdsRepository ? this.statuses.lastGoodReasons() : []));
   }
 
   // No stable API names the focused row. VS Code appends the row a click selects to the selection

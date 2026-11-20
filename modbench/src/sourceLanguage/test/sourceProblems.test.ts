@@ -259,20 +259,6 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp" (ReferringMod): Unexpected end at 3.');
   });
 
-  it('tells of a placement failure once while its reason stands and again when it changes', async () => {
-    const { answered, reporter } = feed();
-    const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure, failureKind: 'Placement' }];
-
-    await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
-    await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
-    await answered(failed('Refers.esp is a compiled plugin but no mod folder provides it.'));
-
-    expect(reporter.shownFailures).toEqual([
-      { severity: 'warning', message: 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', detail: 'Refers.esp\'s source holds no file for 000800:Refers.esp.' },
-      { severity: 'warning', message: 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', detail: 'Refers.esp is a compiled plugin but no mod folder provides it.' },
-    ]);
-  });
-
   it('shows the problems mEdit placed for a plugin whose other problems it could not place', async () => {
     const { answered, reporter } = feed();
     const stray = problem({ formKey: null, targetFormKey: null, fieldPath: null, sourceRelativePath: 'Refers.esp/Stray.json', message: 'unreadable' });

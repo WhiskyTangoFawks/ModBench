@@ -95,8 +95,11 @@ const NO_TOOLBOX = {
 const NO_STANDING = { mEdit: () => [], plugins: () => [], sortingRules: () => [], modList: () => [], sourceLanguage: () => [], unsavedSource: () => [] };
 const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
-const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
-const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
+const statusRead: { asked: number; answer: readonly ModStatus[]; lastGood: string[] } = { asked: 0, answer: [], lastGood: [] };
+const statuses = {
+  current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); },
+  lastGoodReasons: () => statusRead.lastGood,
+};
 
 const NOT_READ: PluginShown = { statuses: [], readOnly: null, compiled: null, masters: null };
 const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Map() };
@@ -109,7 +112,7 @@ const pluginsShown = {
   brokenRules: () => sortingRead.rules,
   suggestedMoves: () => sortingRead.moves,
 };
-afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; sortingRead.notJudged = undefined; });
+afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; sortingRead.notJudged = undefined; statusRead.lastGood = []; });
 
 const copyAnswers: InstanceAnswers = {};
 
@@ -811,6 +814,15 @@ describe('the agent server, given an instance value', () => {
       const { client } = await clientOf(instance, undefined, undefined, undefined, EVERY_SOURCE);
 
       expect(await blocksOf(client, tool)).toEqual([LAST_GOOD_READ, ...own]);
+    });
+
+    it('say the last good read once, naming the instance\'s failed read and each mod status that could not be read', async () => {
+      const instance = new FakeInstance({ ...VALUE, holdsRepository: true });
+      instance.fail('the modlist is unreadable');
+      statusRead.lastGood = ['the status of "A" could not be read: bad JSON.'];
+      const { client } = await clientOf(instance);
+
+      expect(await blocksOf(client, 'list_mods')).toEqual(['Showing the last good read: the modlist is unreadable; the status of "A" could not be read: bad JSON.']);
     });
 
     it('say a line two sources raise once', async () => {

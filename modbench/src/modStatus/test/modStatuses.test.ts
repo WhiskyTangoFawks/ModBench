@@ -462,8 +462,8 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(value);
     await statuses.current();
 
-    expect([statuses.of('ModA')?.noManifest, statuses.message(), logged]).toEqual([
-      true, 'Showing the last good read: git could not say which folders it holds: git is gone.', ['[modList] Git could not say which folders it holds: git is gone'],
+    expect([statuses.of('ModA')?.noManifest, statuses.lastGoodReasons(), logged]).toEqual([
+      true, ['git could not say which folders it holds: git is gone.'], ['[modList] Git could not say which folders it holds: git is gone'],
     ]);
   });
 
@@ -481,8 +481,8 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(value);
     const recovered = (await statuses.current()).get('ModA');
 
-    expect([failing, recovered?.unreadable, recovered?.noManifest, statuses.message()]).toEqual([
-      'git could not say which folders it holds: git is gone', undefined, true, undefined,
+    expect([failing, recovered?.unreadable, recovered?.noManifest, statuses.lastGoodReasons()]).toEqual([
+      'git could not say which folders it holds: git is gone', undefined, true, [],
     ]);
   });
 
@@ -496,7 +496,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
     await statuses.current();
 
-    expect([statuses.message(), statuses.of('ModA')]).toEqual(['The statuses could not be read: git could not say which folders it holds: git is gone.', undefined]);
+    expect([statuses.unreadMessage(), statuses.of('ModA')]).toEqual(['The statuses could not be read: git could not say which folders it holds: git is gone.', undefined]);
   });
 
   it('derives no status while the instance holds no repository', async () => {
@@ -631,7 +631,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await writeFile(join(mod, 'ModA.manifest.json'), '<<<<<<< HEAD\n');
     statuses.derive(value);
     const read = (await statuses.current()).get('ModA');
-    const whileUnreadable = [statuses.of('ModA')?.noManifest, statuses.message()];
+    const whileUnreadable = [statuses.of('ModA')?.noManifest, statuses.lastGoodReasons()];
     await writeFile(join(mod, 'ModA.manifest.json'), '<<<<<<< HEAD\n');
     statuses.derive(value);
     await statuses.current();
@@ -640,9 +640,9 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await statuses.current();
 
     const WHY = 'its manifest is not valid JSON at line 1: Unexpected token \'<\', "<<<<<<< HEAD\n" is not valid JSON';
-    expect([read?.unreadable, ...whileUnreadable, statuses.message(), statuses.of('ModA')?.noManifest, logged]).toEqual([
-      WHY, true, `Showing the last good read: the status of "ModA" could not be read: ${WHY}.`,
-      undefined, false, [`[modList] The status of "ModA" could not be read: ${WHY}`],
+    expect([read?.unreadable, ...whileUnreadable, statuses.lastGoodReasons(), statuses.of('ModA')?.noManifest, logged]).toEqual([
+      WHY, true, [`the status of "ModA" could not be read: ${WHY}.`],
+      [], false, [`[modList] The status of "ModA" could not be read: ${WHY}`],
     ]);
   });
 });

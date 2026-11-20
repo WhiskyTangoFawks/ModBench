@@ -117,7 +117,7 @@ describe('PluginFactsFeed', () => {
     client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), held({ name: 'Unshown.esp' })]);
     client.setQueryAnswer('getDiagnoses', []);
 
-    expect(await feed.reconciled([])).toEqual({ held: 1, active: 0 });
+    expect(await feed.reconciled([])).toEqual({ held: 1, active: 0, rowsGone: [] });
 
     expect(compiledPluginFlag(feed)).toBe(true);
     expect(feed.rows.contextFlags({ name: 'Unshown.esp', origin: 'SomeMod' })).toEqual([]);
@@ -576,7 +576,7 @@ describe('PluginFactsFeed', () => {
     await feed.refresh();
     slow.resolve([held({ isCompiledPlugin: true })]);
 
-    expect(await handOff).toEqual({ held: 1, active: 0 });
+    expect(await handOff).toEqual({ held: 1, active: 0, rowsGone: [] });
     expect(compiledPluginFlag(feed)).toBe(true);
   });
 

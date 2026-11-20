@@ -14,7 +14,7 @@ export interface ReconcileNarratorDeps {
   showProgress: (until: Promise<void>) => void;
   applyIndexed: (indexedPlugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]) => void;
   /** plugins.md, States 4 and 6: the load order's own refusal. */
-  applyRefused: (refusal: LoadOrderRefusal) => void;
+  applyRefused: (refusal: LoadOrderRefusal, failures: readonly PluginLoadFailure[]) => void;
   /** A reconcile reached Ready: its whole hand-off to the views. */
   settle: (heard: Heard) => Promise<void>;
   log: (msg: string) => void;
@@ -77,7 +77,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
         loggedFailure = { version, message: refusal.message };
         deps.log(`Indexing failed: ${refusal.message}`);
       }
-      deps.applyRefused(refusal);
+      deps.applyRefused(refusal, heard.failures);
       markSettled(version);
       return;
     }

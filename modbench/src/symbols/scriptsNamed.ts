@@ -2,7 +2,9 @@ import type { MEditClient, PluginAddress } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { PluginRecords } from '../drivingLib/namedPlugins';
 import type { Reporter } from '../ports/reporter';
-import { pluginAddressKey, pluginRowName } from '../wire/pluginAddress';
+import { pluginAddressKey } from '../wire/pluginAddress';
+import { joinedReasons, pluginReason } from '../wire/reasons';
+import { tellingOnSurface } from '../drivingLib/tellingOnSurface';
 import { failureReason, isNotYetAnswerable, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
 export interface FilePathsAsked { getPluginFilePaths(plugin?: PluginAddress, keys?: readonly string[]): ReturnType<MEditClient['getPluginFilePaths']> }
@@ -10,7 +12,7 @@ export interface FilePathsAsked { getPluginFilePaths(plugin?: PluginAddress, key
 interface ScriptsNamedDeps {
   paths: FilePathsAsked;
   sourceFiles: SourceFilesOf;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 type NamedInFile = { file: string; name: string };
@@ -22,12 +24,11 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
   const held = new Map<string, NamedInFile[]>();
   const namedBy = new WeakMap<object, NamedInFile[]>();
   let listed: NamedInFile[] | undefined;
-  let told = '';
+  const tellOnce = tellingOnSurface(reporter, 'warning');
 
   const tellUnread = (answers: Answered) => {
-    const why = answers.flatMap(({ plugin, failure, unread }) => [...failure == null ? [] : [failure], ...unread].map((line) => `${pluginRowName(plugin)}: ${line}`)).join('; ');
-    if (why !== '' && why !== told) reporter.shownOnSurface('warning', 'The Problems panel does not check every script plugin source names.', why);
-    told = why;
+    const why = joinedReasons(answers.flatMap(({ plugin, failure, unread }) => [...failure == null ? [] : [failure], ...unread].map((line) => pluginReason(plugin, line))));
+    tellOnce(why === '' ? [] : [{ key: 'unread', message: 'The Problems panel does not check every script plugin source names.', why }]);
   };
 
   const take = (answers: Answered, only: readonly PluginRecords[] | undefined) => {

@@ -6,7 +6,9 @@ import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
-import { askedAgain, lastRead, positionAt, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
+import { askedAgain, positionAt, askingWhenNotLate, settling, type Asked, type Feed } from './feedShape';
+import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
+import { joinedReasons, lastGoodReadMessage, pluginReason, quotedPluginName } from '../wire/reasons';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
@@ -24,7 +26,7 @@ export interface PathProblemsDeps {
   ask: Pick<Asked, 'getPluginFilePaths' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   paths: PathStanding;
   /** Replaces every path problem published before. */
   publish: (problems: ProblemsByFile) => void;
@@ -37,7 +39,6 @@ type NamedFilePath = PluginFilePaths['paths'][number];
 interface Held { answer: PluginFilePaths; texts: Map<string, Promise<string>> }
 
 const WHOLE_SET = '';
-const nameOf = ({ name, origin }: PluginAddress) => `"${name}" (${origin})`;
 
 async function problemsOf(held: readonly Held[], { paths, sourceFiles, readText }: PathProblemsDeps): Promise<ProblemsByFile> {
   const byFile = new Map<string, ProblemOnFile[]>();
@@ -70,22 +71,22 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
   const { client, reporter, paths, publish, languageStatus } = deps;
   const held = new Map<string, Held>();
   const failures = new Map<string, string>();
-  const tell = tellingOnSurface(reporter);
+  const tell = tellingOnSurface(reporter, 'warning');
   let shown = 0;
 
   const unchecked = () => [...held.values()].flatMap(({ answer }) => [
-    ...answer.failure == null ? [] : [`${nameOf(answer.plugin)}: ${answer.failure}`],
-    ...answer.unread.map((line) => `${nameOf(answer.plugin)}: ${line}`),
+    ...answer.failure == null ? [] : [pluginReason(answer.plugin, answer.failure)],
+    ...answer.unread.map((line) => pluginReason(answer.plugin, line)),
   ]);
   const showStatus = () => {
     const failed = [...failures.values()][0];
-    if (failed) languageStatus(lastRead(failed));
-    else languageStatus(unchecked().length > 0 ? `Some paths are not checked: ${unchecked().join('; ')}` : undefined);
+    if (failed) languageStatus(lastGoodReadMessage([failed]));
+    else languageStatus(unchecked().length > 0 ? `Some paths are not checked: ${joinedReasons(unchecked())}` : undefined);
   };
   const tellStanding = () => {
     const standing: Told[] = [...held].flatMap(([key, { answer }]) => [
-      ...answer.unread.map((line) => ({ key: `${key}\n${line}`, message: `The Problems panel does not check every path ${nameOf(answer.plugin)} names.`, why: line })),
-      ...answer.failure == null ? [] : [{ key: `${key}\nfailure`, message: `The Problems panel checks only some of the paths ${nameOf(answer.plugin)} names.`, why: answer.failure }],
+      ...answer.unread.map((line) => ({ key: `${key}\n${line}`, message: `The Problems panel does not check every path ${quotedPluginName(answer.plugin)} names.`, why: line })),
+      ...answer.failure == null ? [] : [{ key: `${key}\nfailure`, message: `The Problems panel checks only some of the paths ${quotedPluginName(answer.plugin)} names.`, why: answer.failure }],
     ]);
     tell([...standing, ...[...failures].map(([target, why]) => ({ key: `failed ${target}`, message: 'The Problems panel shows the last paths mEdit answered.', why }))]);
   };

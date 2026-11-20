@@ -7,7 +7,9 @@ import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
-import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
+import { askedAgain, askingWhenNotLate, settling, type Asked, type Feed, type Position } from './feedShape';
+import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
+import { lastGoodReadMessage, quotedPluginName } from '../wire/reasons';
 import { answerOf } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -21,7 +23,7 @@ export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate' | 'onUnsavedHandOver'>;
   ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
   /** Says why the Problems panel shows the last good read; undefined when it shows the latest. */
@@ -57,7 +59,6 @@ interface Contribution { links: OnFiles; stops: OnFiles }
 interface Unplaced extends Told { plugin: string; told: boolean }
 interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[] }
 
-const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
 const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
 const placedBefore = new WeakMap<PluginProblems, readonly [string, Contribution | undefined, Unplaced?]>();
@@ -69,7 +70,7 @@ function placedPlugin(answer: PluginProblems, { sourceFiles }: SourceProblemsDep
   const files = sourceFiles(plugin.origin);
   const key = pluginAddressKey(plugin);
   const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
-  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined || failureKind !== 'LaterRead' };
+  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${quotedPluginName(plugin)}.`, why, plugin: quotedPluginName(plugin), told: files === undefined || failureKind !== 'LaterRead' };
   if (files === undefined) return [key, undefined, unplaced];
   const contribution: Contribution = { links: new Map(), stops: new Map() };
   const byPath = new Map<string, SourceProblem[]>();
@@ -116,7 +117,9 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   const { client, reporter, publish, languageStatus, unsavedStatus } = deps;
-  const tellUnplaced = tellingOnSurface(reporter);
+  const tellUnplaced = tellingOnSurface(reporter, 'warning');
+  const tellHandOver = tellingOnSurface(reporter, 'warning');
+  const tellKept = tellingOnSurface(reporter, 'warning');
   let held = new Map<string, Contribution>();
   let unplacedHeld = new Map<string, Unplaced>();
   let published = false;
@@ -124,24 +127,24 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   let handOverFailed: string | undefined;
   const showStatus = () => {
     const failed = [...failures.values()][0];
-    if (failed !== undefined) languageStatus(lastRead(failed));
-    else if (handOverFailed !== undefined) languageStatus(lastRead(handOverFailed));
+    if (failed !== undefined) languageStatus(lastGoodReadMessage([failed]));
+    else if (handOverFailed !== undefined) languageStatus(lastGoodReadMessage([handOverFailed]));
     else languageStatus(unplacedStatus());
   };
   const handedOver = (failure: WriteRefused | undefined) => {
     const why = failure?.message;
-    if (why !== undefined && why !== handOverFailed) {
-      reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why);
-    }
+    tellHandOver(why === undefined ? [] : [{ key: 'handOver', message: 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why }]);
     handOverFailed = why;
-    unsavedStatus(why === undefined ? undefined : lastRead(why));
+    unsavedStatus(lastGoodReadMessage(why === undefined ? [] : [why]));
     showStatus();
   };
-  const unplacedStatus = () => unplacedHeld.size > 0
-    ? lastRead([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`).join('; '))
-    : undefined;
+  const unplacedStatus = () => lastGoodReadMessage([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`));
+  const tellFailures = () => {
+    tellKept([...failures].map(([target, why]) => ({ key: target, message: 'The Problems panel shows mEdit\'s last answer.', why })));
+  };
   const settle = (target: string, { ofPlugin, unplaced }: Placed) => {
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
+    tellFailures();
     const before = held;
     held = new Map([...outsideTarget(held, target), ...nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)))]);
     unplacedHeld = new Map([...outsideTarget(unplacedHeld, target), ...unplaced.map((one) => [one.key, one] as const)]);
@@ -150,9 +153,8 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     tellUnplaced([...unplacedHeld.values()].filter(({ told }) => told));
   };
   const keepLastAnswer = (target: string, error: unknown) => {
-    const why = errorMessage(error);
-    if (why !== failures.get(target)) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
-    failures.set(target, why);
+    failures.set(target, errorMessage(error));
+    tellFailures();
     showStatus();
   };
   const ask = async (plugin?: PluginAddress, first = false, keys?: readonly string[]) => {

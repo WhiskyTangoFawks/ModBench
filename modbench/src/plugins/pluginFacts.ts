@@ -5,6 +5,8 @@ import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { exactPluginAddressKey, OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { joinedReasons, lastGoodReadMessage, pluginReason } from '../wire/reasons';
+import { messageLine } from '../drivingLib/messageLine';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress, type NamedPlugins } from './pluginAddress';
@@ -121,6 +123,7 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
  *  shows from them (plugins.md, A row). */
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
+  private rowsStoodAtLastReconcile = new ByPluginAddress<true>();
   private answers = new Map<string, PluginMetadata>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
@@ -178,8 +181,9 @@ export class PluginFacts {
   }
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, the active plugins as
-   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
+   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. Names each
+   *  failure that took away rows that stood when the last reconcile landed (common.md, Reporting). */
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): PluginLoadFailure[] {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -188,6 +192,9 @@ export class PluginFacts {
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
     this.judgeSorting(activeOrder, loot);
+    const rowsGone = failures.filter((f) => this.rowsStoodAtLastReconcile.has(f) && !this.rowsStand(f));
+    this.rowsStoodAtLastReconcile = heldSet(plugins.filter((p) => p.rowsFrom != null));
+    return rowsGone;
   }
 
   /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed, and
@@ -268,7 +275,7 @@ export class PluginFacts {
     this.matches = matches;
     this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
       pluginAddressKey(p),
-      `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
+      pluginReason(p, joinedReasons(p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`))),
     ] as const]));
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
     const judged = JSON.stringify(plugins.map((p) => [pluginAddressKey(p), p.masters, p.isMaster, p.isBlueprint, p.description]));
@@ -416,8 +423,8 @@ export class PluginFacts {
   expansion(address: PluginAddress): Expansion {
     if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
     const failure = this.reachableFailures.get(address)?.reason;
-    if (this.isHeld(address) && (failure === undefined || this.rowsStand(address))) return { kind: 'records' };
-    if (failure !== undefined) return { kind: 'error', message: failure };
+    if (failure !== undefined) return this.rowsStand(address) ? { kind: 'records' } : { kind: 'error', message: failure };
+    if (this.isHeld(address)) return { kind: 'records' };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
   }
@@ -427,15 +434,11 @@ export class PluginFacts {
   readFailureMessage(instanceReadFailure?: string): string | undefined {
     const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
     const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
-    const failedWithRows = this.loadFailures.values().filter((f) => this.rowsStand(f)).map(({ name, origin, reason }) => `"${name}" (${origin}): ${reason}`);
+    const failedWithRows = this.loadFailures.values().filter((f) => this.rowsStand(f)).map((f) => pluginReason(f, f.reason));
     const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failedWithRows, ...failed.filter((read) => read.answered).map(said)]
       .filter((reason) => reason !== undefined);
     const neverAnswered = failed.filter((read) => !read.answered).map(said);
-    const lines = [
-      lastGood.length === 0 ? undefined : `Showing the last good read: ${lastGood.join('; ')}`,
-      neverAnswered.length === 0 ? undefined : `Failed to load: ${neverAnswered.join('; ')}`,
-    ].filter((line) => line !== undefined);
-    return lines.length === 0 ? undefined : lines.join(' ');
+    return messageLine(lastGoodReadMessage(lastGood), neverAnswered.length === 0 ? undefined : `Failed to load: ${joinedReasons(neverAnswered)}`);
   }
 
   /** The failed index (plugins.md, States 6). */

@@ -12,7 +12,7 @@ interface SourceNamesDeps {
   /** What mEdit's record index names across every compiled plugin's source. */
   paths: FilePathsAsked;
   sourceFiles: SourceFilesOf;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 type AssetType = NonNullable<DocumentName['assetType']>;

@@ -1,6 +1,7 @@
 // mods-conflicts.md, Opening and States: a mod's conflict table, a read-only custom editor over an
 // address of its own, so preview, an open tab and restore-after-reload are VS Code's.
 
+import { lastGoodReadMessage } from '../wire/reasons';
 import * as vscode from 'vscode';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 import type { InstanceView } from '../instanceLoader/instance';
@@ -83,7 +84,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         const reason = errorMessage(err);
         this.reporter.shownOnSurface('error', `Failed to read the copies of "${mod}"'s conflicts.`, reason);
         if (lastGood === undefined) post({ kind: 'error', reason });
-        else post(lastGood, `Showing the last good read: ${reason}`);
+        else post(lastGood, lastGoodReadMessage([reason]));
       }
     };
     const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }));
