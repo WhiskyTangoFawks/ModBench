@@ -71,6 +71,8 @@ public sealed class SwaggerSchemaTests
     [InlineData("post", "/records/delete-changes", RefusalKind.RecordEdit)]
     [InlineData("post", "/plugins/{plugin}/create-record", RefusalKind.RecordEdit)]
     [InlineData("post", "/plugins/{plugin}/create-record-changes", RefusalKind.RecordEdit)]
+    [InlineData("post", "/plugins/make-patch", RefusalKind.PluginCreate)]
+    [InlineData("post", "/plugins/make-patch", RefusalKind.RecordEdit)]
     public async Task AWriteRoute_DeclaresEveryStatusItsRefusalMapsTo_ElseSwashbuckleEmitsContentNeverForIt(
         string method, string path, RefusalKind kind)
     {

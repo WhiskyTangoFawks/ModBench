@@ -123,6 +123,21 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertTrue((self.fixture.instance / 'overwrite' / NEW_PLUGIN).exists())
         self.assertEqual(changed(self.source), [])
 
+    def test_makes_a_patch_plugin_from_the_records_read_with_no_plugin_source(self) -> None:
+        patch = medit.make_patch_plugin(NEW_PLUGIN, EMPTY_MOD, [medit.read(CONDITIONS, RECIPE)], flags=[])
+        self.assertEqual(patch.plugin, medit.Plugin(NEW_PLUGIN, EMPTY_MOD))
+        self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
+
+    def test_makes_a_patch_plugin_holding_a_record_copied_as_new_as_the_type_given(self) -> None:
+        recipe = medit.read(CONDITIONS, RECIPE)
+        medit.make_patch_plugin(NEW_PLUGIN, EMPTY_MOD, [medit.NewRecord('cobj', recipe | {'FormKey': f'000800:{NEW_PLUGIN}'})], flags=[])
+        self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
+
+    def test_raises_for_a_patch_plugin_over_a_file_at_its_path(self) -> None:
+        with self.assertRaises(medit.MEditError) as raised:
+            medit.make_patch_plugin(CONDITIONS.name, CONDITIONS.origin, [medit.read(CONDITIONS, RECIPE)], flags=[])
+        self.assertIn(f'already holds a file named {CONDITIONS.name}', str(raised.exception))
+
     def test_raises_for_a_create_of_a_plugin_in_a_place_the_load_order_does_not_offer_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
             medit.create_plugin(NEW_PLUGIN, 'No Such Mod', flags=[])

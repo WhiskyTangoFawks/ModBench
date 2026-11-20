@@ -691,6 +691,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/make-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Writes a generated patch plugin from records: a script's patch, with no plugin source.
+         * @description Writes a plugin holding each record given, a document as plugin source holds it, into the folder of an enabled mod or Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and a container not given lands by its winning copy's own fields. A record no plugin holds needs its record type, and is refused when it lives in a container. Refused, writing nothing, as compile refuses, and over a file at its path. Answers compile's diagnostics.
+         */
+        post: operations["MakePatchPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/decompile": {
         parameters: {
             query?: never;
@@ -1725,6 +1745,10 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        GivenRecord: {
+            text: string;
+            recordType?: string | null;
+        };
         GridPosition: {
             /** Format: int32 */
             x?: number | null;
@@ -1802,6 +1826,12 @@ export interface components {
             path: string;
             vouchedFor: boolean;
         };
+        MakePatchRequest: {
+            origin: string;
+            name: string;
+            records?: components["schemas"]["GivenRecord"][] | null;
+            flags?: string[] | null;
+        };
         MemberReferences: {
             copies: components["schemas"]["CopyNamingAtMembers"][];
             unread: string[];
@@ -1869,6 +1899,10 @@ export interface components {
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             versionInGitPhase?: components["schemas"]["VersionInGitPhase"] | null;
+        };
+        PatchMade: {
+            plugin: components["schemas"]["PluginAddress"];
+            diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         PathHop: {
             kind: string;
@@ -2064,7 +2098,7 @@ export interface components {
             edit: components["schemas"]["RecordEditRequest"];
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "UnsavedChanges" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "TemplatedFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "NoTextInStringsLanguage" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
+        RecordEditRefusal: "None" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "UnsavedChanges" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "TemplatedFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "ContainerUnknown" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "NoTextInStringsLanguage" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -4034,6 +4068,84 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    MakePatchPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MakePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatchMade"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

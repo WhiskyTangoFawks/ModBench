@@ -127,6 +127,9 @@ public interface IPluginAdapter
     Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
 
+    /// <summary>The whole-mod door's tree of a plugin with no records, its header flagged as <paramref name="flags"/> say.</summary>
+    IReadOnlyList<TreeFile> EmptyTree(ModKey modKey, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
+
     /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
     string PathOfEmpty(ModKey modKey, string folder);
 

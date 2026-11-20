@@ -50,6 +50,18 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
+    public async Task ACommitOverNoFile_WithAFileAtThePluginsPath_LeavesIt()
+    {
+        using var data = new PluginFixtureBuilder("pw-save-over-no-file").WithPlugin("TestPlugin.esp").Build();
+        var path = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var before = Convert.ToHexString(await File.ReadAllBytesAsync(path));
+
+        var committed = await TreeSaves.SaveAsync(path, prep => prep.CommitOverNoFile());
+
+        Assert.Equal((false, before), (committed, Convert.ToHexString(await File.ReadAllBytesAsync(path))));
+    }
+
+    [Fact]
     public async Task Commit_LeavesTheDataFolderHoldingTheSameFiles()
     {
         using var data = new PluginFixtureBuilder("pw-save-no-tmpdir")

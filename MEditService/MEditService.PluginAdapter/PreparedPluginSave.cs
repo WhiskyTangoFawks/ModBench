@@ -50,6 +50,21 @@ public sealed class PreparedPluginSave : IDisposable
         File.Move(_tmpPath, _finalPath, overwrite: true);
     }
 
+    /// <summary>The binary put in place over no file, as a plugin with no strings is: false, writing nothing, when a file is
+    /// at its path.</summary>
+    public bool CommitOverNoFile()
+    {
+        try
+        {
+            File.Move(_tmpPath, _finalPath, overwrite: false);
+            return true;
+        }
+        catch (IOException) when (File.Exists(_finalPath))
+        {
+            return false;
+        }
+    }
+
     public void Dispose()
     {
         try

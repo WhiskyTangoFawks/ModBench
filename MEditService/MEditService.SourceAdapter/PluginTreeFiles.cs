@@ -26,8 +26,20 @@ public sealed class PluginTreeFiles
         SourceFailure.Answer(() => new PluginTreeFiles(
             pluginFileName, new PluginSourceFiles(SourceRepositoryLayout.PristineFilesOf(pluginFileName, files), null), release, located: null));
 
+    /// <summary>The tree of <paramref name="header"/>, the whole-mod door's header document and meta, and of
+    /// <paramref name="records"/>, each laid out where a source folder holds it, each FormKey once.</summary>
+    public static Answer<PluginTreeFiles, SourceFailure> Made(
+        string pluginFileName, IReadOnlyList<TreeFile> header, IReadOnlyList<MadeRecord> records, GameRelease release) =>
+        SourceFailure.Answer(() => new PluginTreeFiles(
+            pluginFileName,
+            new PluginSourceFiles([.. SourceRepositoryLayout.PristineFilesOf(pluginFileName, header), .. MadeTree.FilesOf(pluginFileName, records, release)], null),
+            release, located: null));
+
     /// <summary>The tree as the whole-mod door reads it, empty when a file is unreadable.</summary>
     public IReadOnlyList<TreeFile> Files { get; }
+
+    /// <summary>Whether a source folder on disk holds the tree, as it does not one made.</summary>
+    public bool OnDisk => _located is not null;
 
     /// <summary>The file the read stopped at, relative to the source folder.</summary>
     public string? Unreadable => _held.Unreadable;
@@ -51,12 +63,15 @@ public sealed class PluginTreeFiles
     public Answer<PluginDiagnosis, SourceFailure> Named(PluginDiagnosis diagnosis) =>
         SourceFailure.Answer(() => SourceRepositoryLayout.InSourceNames(_pluginFileName, diagnosis, _held.Files, _release, Named));
 
-    /// <summary>The file at <paramref name="path"/>, relative to the source folder, as a refusal names it.</summary>
+    /// <summary>The file at <paramref name="path"/>, relative to the source folder, as a refusal names it. A tree made from
+    /// records names a file it does not hold by its path in the tree.</summary>
     public string Named(string path)
     {
         if (_located is not null) return path;
         var held = _held.Files.FirstOrDefault(file => file.RelativePath == path);
-        return held is null ? path : PluginSourceChecks.FormKeyOf(path, held.Content, _pluginFileName) ?? path;
+        return held is null
+            ? Path.GetRelativePath(SourceRepositoryLayout.RootFor(_pluginFileName), path)
+            : PluginSourceChecks.FormKeyOf(path, held.Content, _pluginFileName) ?? path;
     }
 
     /// <summary>The record <paramref name="identity"/> names, as a refusal names it.</summary>

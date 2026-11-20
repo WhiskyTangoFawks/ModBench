@@ -164,7 +164,7 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     {
         var names = DoorNames(pluginFileName, [.. files], gameRelease).Select(name => (Source: named(name.Source), name.Door)).ToList();
         string SourceOf(string door) =>
-            names.FirstOrDefault(name => name.Door == door).Source ?? Path.Combine(RootFor(pluginFileName), door);
+            names.FirstOrDefault(name => name.Door == door).Source ?? named(Path.Combine(RootFor(pluginFileName), door));
 
         return diagnosis with
         {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -114,6 +115,16 @@ public sealed class PluginAdapterTests
         Assert.Equal((master, light), (((IModFlagsGetter)reread).IsMaster, ((IModFlagsGetter)reread).IsSmallMaster));
         const int headerVersionOffset = 24 + 6;
         Assert.Equal(GameConstants.Get(release).DefaultModHeaderVersion, BitConverter.ToSingle(await File.ReadAllBytesAsync(path), headerVersionOffset));
+    }
+
+    [Fact]
+    public void AnEmptyTree_IsAHeaderFlaggedAsGiven_BesideTheMetaOfASourceTheCodecReads()
+    {
+        var tree = Adapter.EmptyTree(ModKey.FromFileName("Light.esl"), GameRelease.Fallout4, Flags("Master,Small"));
+
+        var header = (IModFlagsGetter)HeaderDocument.Read(tree.Single(file => file.RelativePath == DocumentFileNames.Root).Content, GameRelease.Fallout4);
+        var meta = tree.Single(file => file.RelativePath == SpriggitMeta.FileName).Content;
+        Assert.Equal((2, true, true, (string?)null), (tree.Count, header.IsMaster, header.IsSmallMaster, SpriggitMeta.WhyRefused(GameCodecs.For(GameRelease.Fallout4), meta)));
     }
 
     [Fact]
