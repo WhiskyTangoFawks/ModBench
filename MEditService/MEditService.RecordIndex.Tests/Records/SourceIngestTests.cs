@@ -239,8 +239,9 @@ public sealed class SourceIngestTests : IDisposable
             [.. _fixture.Plugins, new LoadOrderEntry("Partner.esp", partnerPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)]);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
         PluginBinaries.Touch(partnerPath);
+        var before = index.Sequence;
 
-        index.NextCheck();
+        index.NextCheckUnsettledUntil(() => index.Sequence > before, "the sequence moving");
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);

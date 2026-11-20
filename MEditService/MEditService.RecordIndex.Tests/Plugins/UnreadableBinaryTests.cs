@@ -86,8 +86,9 @@ public sealed class UnreadableBinaryTests : IDisposable
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
         other.WriteToBinary(OtherPluginPath);
+        var sequence = _index.Sequence;
 
-        _index.NextCheck();
+        _index.NextCheckUnsettledUntil(() => _index.Sequence > sequence, "the sequence moving");
 
         Assert.All(
             _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),

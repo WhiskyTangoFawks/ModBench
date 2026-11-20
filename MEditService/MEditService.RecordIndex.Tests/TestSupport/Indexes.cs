@@ -5,7 +5,6 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
@@ -36,7 +35,7 @@ internal static class Indexes
         if (source is null) services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
         else services.AddSingleton(source);
         services.AddSingleton(SharedSchemaReflector.Instance);
-        services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
+        services.AddSingleton(loggerFactory ?? TestOutput.LoggerFactory);
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddLogging();
         if (notifications is not null) services.AddSingleton(notifications);
@@ -136,11 +135,16 @@ internal static class Indexes
         }, what);
 
     /// <summary>A change signalled, answered once the rows it changed are announced as the sequence moving, which a
-    /// projection does after it has re-applied the filter.</summary>
+    /// projection does after it has re-applied the filter. A failed check, moving the sequence or not, fails the wait.</summary>
     internal static void NextCheck(this OpenedIndex index)
     {
         var before = index.Sequence;
-        index.NextCheckUnsettledUntil(() => index.Sequence > before, "the sequence moving");
+        index.NextCheckUnsettledUntil(
+            () => index.Sequence > before || index.Status is { State: LoadOrderState.Failed } or { Failures.Count: > 0 },
+            "the sequence moving or a failure");
+        var status = index.Status;
+        if (status.State != LoadOrderState.Ready || status.Failures.Count > 0)
+            Assert.Fail($"The check ended {status.State}: {status.Message}{Environment.NewLine}{string.Join(Environment.NewLine, status.Failures)}");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

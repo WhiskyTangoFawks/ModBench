@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -88,7 +89,9 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     {
         var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE {ActivePlugins} RENAME TO active_aside");
-        index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
+        var winner = index.DocumentOf(_npc, _winnerKey);
+        SourceMods.RepositoryOf(_winner).Remove(_winnerKey, new RecordIdentity(winner.FormKey, winner.RecordType, winner.EditorId)).Wrote();
+        index.SignalChange();
         Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
         IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE active_aside RENAME TO {ActivePlugins}");
         return index;
