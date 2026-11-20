@@ -1127,7 +1127,7 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", failure.Name, failure.Origin, failure.Reason);
     }
 
-    // ADR-0019: the reason says only what failed; the front end says what each surface still shows.
+    // ADR-0019: what still shows is the front end's to say, from PluginResponse.RowsFrom.
     private static string ReadFailure(string reason) => $"Could not read this plugin ({reason}).";
 
     // Registers first: the record index's reads are scoped by registration, so validate would otherwise

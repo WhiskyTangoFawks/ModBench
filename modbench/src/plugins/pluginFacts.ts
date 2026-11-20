@@ -72,6 +72,7 @@ interface PluginRead {
   blueprint: boolean;
   parseFailure: boolean;
   description: string;
+  rowsStand: boolean;
 }
 
 // plugins.md, A row, Plugin: each status's words and tooltip line.
@@ -251,6 +252,7 @@ export class PluginFacts {
         readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
         masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint, description: p.description ?? '',
+        rowsStand: p.rowsFrom != null,
       };
       reads.set(p, read);
       readOf.set(p.name.toLowerCase(), [...readOf.get(p.name.toLowerCase()) ?? [], read]);
@@ -409,8 +411,8 @@ export class PluginFacts {
    *  and 6). */
   expansion(address: PluginAddress): Expansion {
     if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
-    if (this.isHeld(address)) return { kind: 'records' };
     const failure = this.reachableFailures.get(address)?.reason;
+    if (this.isHeld(address) && (failure === undefined || this.reads.get(address)?.rowsStand !== false)) return { kind: 'records' };
     if (failure !== undefined) return { kind: 'error', message: failure };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
@@ -421,7 +423,8 @@ export class PluginFacts {
   readFailureMessage(instanceReadFailure?: string): string | undefined {
     const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
     const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
-    const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failed.filter((read) => read.answered).map(said)]
+    const failedWithRows = this.loadFailures.values().filter((f) => this.reads.get(f)?.rowsStand === true).map(({ name, origin, reason }) => `"${name}" (${origin}): ${reason}`);
+    const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failedWithRows, ...failed.filter((read) => read.answered).map(said)]
       .filter((reason) => reason !== undefined);
     const neverAnswered = failed.filter((read) => !read.answered).map(said);
     const lines = [

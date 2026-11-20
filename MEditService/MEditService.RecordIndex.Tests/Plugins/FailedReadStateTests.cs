@@ -427,6 +427,7 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextCheckThatMayFailUntil(() => Failed(index), "the rewritten binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Equal(DerivedFrom.Binary, index.PluginResponseOf(Plugin.Key).Require().RowsFrom);
         Assert.StartsWith("Could not read this plugin (", Reason(index), StringComparison.Ordinal);
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
     }

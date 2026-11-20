@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.RecordIndex;
 
 /// <summary>Which truth a plugin's rows were derived from (ADR-0007). A compiled plugin whose plugin
 /// source is missing or cannot be read is derived from its binary (plugins.md, A row, Plugin).</summary>
-internal enum DerivedFrom
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DerivedFrom
 {
     Binary,
     SourceTree,

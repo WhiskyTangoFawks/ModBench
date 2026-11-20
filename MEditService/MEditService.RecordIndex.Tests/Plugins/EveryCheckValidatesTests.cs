@@ -165,6 +165,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
         var failure = Assert.Single(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
         Assert.DoesNotContain("showing", failure.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(_index.PluginResponseOf(_compiledPlugin.Key).Require().RowsFrom);
     }
 
     [Fact]
