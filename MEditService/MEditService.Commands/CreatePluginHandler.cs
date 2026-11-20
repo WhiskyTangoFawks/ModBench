@@ -121,7 +121,7 @@ public sealed class CreatePluginHandler
         var release = loadOrder.GameRelease;
         if (!HeaderOf(plugin.Name, release, flags).Holds(out var header, out var refused)) return refused;
         var (modKey, chosenFlags) = header;
-        if (_source.SourceReads(RegisteredIn(plugin, new PluginProvider.FromMod(plugin.Origin, folder, sourceFolder))))
+        if (_source.PlacesHoldingPluginSourceOf([new PluginPlace(plugin.Origin, folder, sourceFolder)], plugin.Name).Count > 0)
         {
             return new PluginCreateRefused(
                 PluginCreateRefusal.CompiledPlugin, $"'{sourceFolder}' already holds plugin source for {plugin.Name}, so it was not created.");

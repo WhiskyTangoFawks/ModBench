@@ -34,6 +34,9 @@ public interface IQueries
     Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes();
     Answer<IReadOnlyList<string>, IndexRefused> GetCreatablePluginExtensions();
     Answer<IReadOnlyList<IReadOnlyList<string>>, IndexRefused> GetCreatablePluginFlags(string name);
+    /// <summary>Each place of the load order, by its origin, whose plugin source holds the plugin <paramref name="name"/>, so a create
+    /// there refuses.</summary>
+    Answer<IReadOnlyList<string>, IndexRefused> GetPlacesHoldingPluginSource(string name);
     // Null when the plugin holds no such record.
     Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(
         PluginAddress plugin, string formKey, CancellationToken cancel);

@@ -233,6 +233,17 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/places-holding-plugin-source", (string name, IQueries svc) =>
+                EndpointMapping.Ok(svc.GetPlacesHoldingPluginSource(name)))
+            .WithName("GetPlacesHoldingPluginSource")
+            .WithTags(Tag)
+            .WithDescription(
+                "Each place of the held load order, by its origin, whose plugin source holds the plugin of that name, compared without " +
+                "case, with or without its file: a create there refuses.")
+            .Produces<IReadOnlyList<string>>()
+            .ProducesProblem(400)
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/create-in-mod", CreatePluginInMod)
             .WithName("CreatePluginInMod")
             .WithTags(Tag)

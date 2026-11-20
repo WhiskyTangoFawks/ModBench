@@ -27,7 +27,7 @@ public sealed class MakePatchPluginHandler
 
     /// <summary>The plugin goes where a create in <paramref name="origin"/> puts one, never as a compiled plugin, and over no file
     /// unless <paramref name="replace"/>, which sets the file aside and names it on the push with every file still aside there.
-    /// Refuses, writing nothing, as create and compile refuse, and for a record no plugin's copy says how to lay out.</summary>
+    /// Refuses, writing nothing, as create and compile refuse, and for a record it cannot place.</summary>
     public async Task<Answer<PatchMade, PatchRefused>> Make(
         string origin, string name, IReadOnlyList<string>? flags, IReadOnlyList<GivenRecord> records, bool replace = false,
         CancellationToken cancel = default)

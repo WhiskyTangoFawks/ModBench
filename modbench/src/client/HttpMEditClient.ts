@@ -837,6 +837,10 @@ class HttpMEditClient implements MEditClient {
     return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { token });
   }
 
+  getPlacesHoldingPluginSource(name: string, token?: ReadCancellation): Promise<string[] | ReadFailed> {
+    return this.read('getPlacesHoldingPluginSource', (api, signal) => api.GET('/plugins/places-holding-plugin-source', { params: { query: { name } }, signal }), (data) => data ?? [], { token });
+  }
+
   getCreatablePluginFlags(name: string, token?: ReadCancellation): Promise<string[][] | ReadFailed> {
     return this.read('getCreatablePluginFlags', (api, signal) => api.GET('/plugins/creatable-flags', { params: { query: { name } }, signal }), (data) => data ?? [], { token });
   }

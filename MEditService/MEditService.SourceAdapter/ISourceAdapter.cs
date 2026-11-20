@@ -17,6 +17,10 @@ public interface ISourceAdapter
     /// repository of its own whose <c>main</c> exists, or none, in a repository whose index holds the build file.</summary>
     bool IsSourceMod(string sourceFolder);
 
+    /// <summary>Of <paramref name="places"/>, the name of each whose plugin source holds <paramref name="pluginFileName"/>, compared without
+    /// case, with or without its plugin file.</summary>
+    IReadOnlyList<string> PlacesHoldingPluginSourceOf(IReadOnlyList<PluginPlace> places, string pluginFileName);
+
     /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or an unlistable plugin
     /// source. Null when it reads, and when its mod is not a source mod.</summary>
     SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);

@@ -9,7 +9,7 @@ import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getPlacesHoldingPluginSource' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwners' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlacedReferences' | 'getPluginNameReferences' | 'getScriptReferences' | 'getPlacedScriptReferences' | 'getPlacedFileReferences' | 'getPlacedPluginNameReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
@@ -401,6 +401,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getCreatablePluginFlags(...args: Parameters<MEditClient['getCreatablePluginFlags']>): ReturnType<MEditClient['getCreatablePluginFlags']> {
     return this.query('getCreatablePluginFlags', args);
+  }
+  getPlacesHoldingPluginSource(...args: Parameters<MEditClient['getPlacesHoldingPluginSource']>): ReturnType<MEditClient['getPlacesHoldingPluginSource']> {
+    return this.query('getPlacesHoldingPluginSource', args);
   }
   getArchiveContents(...args: Parameters<MEditClient['getArchiveContents']>): ReturnType<MEditClient['getArchiveContents']> {
     return this.query('getArchiveContents', args);

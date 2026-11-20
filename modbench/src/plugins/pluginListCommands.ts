@@ -108,6 +108,17 @@ const FLAG_LABELS: Readonly<Record<string, string>> = { Master: 'ESM', Small: 'L
 const flagsLabel = (combination: readonly string[]): string =>
   combination.length === 0 ? 'No flags' : combination.map((flag) => FLAG_LABELS[flag] ?? flag).join(', ');
 
+async function placesHoldingPluginSource(
+  client: Pick<MEditClient, 'getPlacesHoldingPluginSource'>, reporter: Reporter, name: string,
+): Promise<readonly string[] | undefined> {
+  try {
+    return answerOf(await client.getPlacesHoldingPluginSource(name));
+  } catch (error) {
+    reporter.report('error', `Could not look up which places' plugin source holds "${name}".`, errorMessage(error));
+    return undefined;
+  }
+}
+
 async function pickFlags(
   client: Pick<MEditClient, 'getCreatablePluginFlags'>, reporter: Reporter, name: string,
 ): Promise<readonly string[] | undefined> {
@@ -141,7 +152,7 @@ function placeOf(call: AgentCall<CreateOptions>): { origin: string; label: strin
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
 // watch sees the file, so nothing here writes that line.
 export function registerCreatePluginCommand(
-  client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags'>,
+  client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getPlacesHoldingPluginSource'>,
   instance: Pick<Instance, 'value' | 'refresh'>,
   reporter: Reporter,
 ): vscode.Disposable {
@@ -150,7 +161,9 @@ export function registerCreatePluginCommand(
       const name = await promptPluginName(client, reporter);
       if (!name) return undefined;
 
-      const places = pluginPlaces(instance.value, name);
+      const heldAsPluginSource = await placesHoldingPluginSource(client, reporter, name);
+      if (!heldAsPluginSource) return undefined;
+      const places = pluginPlaces(instance.value, name, heldAsPluginSource);
       if (places.length === 0) {
         reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
         return undefined;

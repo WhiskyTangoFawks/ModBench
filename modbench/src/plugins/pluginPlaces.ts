@@ -10,9 +10,13 @@ function holdsPlugin(value: Pick<InstanceValue, 'plugins'>, plugin: PluginAddres
   return value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, plugin));
 }
 
-/** The places the snapshot offers, each left out when it already holds a plugin named `name`. */
-export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'paths' | 'plugins'>, name: string): PluginPlace[] {
-  return pluginPlacesOf(value).filter((place) => !holdsPlugin(value, { name, origin: place.name }));
+/** The places the snapshot offers, each left out when it already holds a plugin named `name`, or its plugin source does: one of
+ *  `heldAsPluginSource`, by origin. */
+export function pluginPlaces(
+  value: Pick<InstanceValue, 'mods' | 'paths' | 'plugins'>, name: string, heldAsPluginSource: readonly string[] = [],
+): PluginPlace[] {
+  return pluginPlacesOf(value).filter((place) => !holdsPlugin(value, { name, origin: place.name })
+    && !heldAsPluginSource.some((origin) => samePluginAddress({ name, origin }, { name, origin: place.name })));
 }
 
 /** The place, with a source mod's source folder; or what became of a mod between the pick and the answer, or that the

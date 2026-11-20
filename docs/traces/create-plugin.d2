@@ -7,14 +7,16 @@ client: @../../spec/architecture/target-architecture.modbench_repositories.clien
 client.label: mEdit client
 http: @../../spec/architecture/target-architecture.medit_driving.http
 http.label: HTTP endpoints
+recordindex: @../../spec/architecture/target-architecture.medit_readmodel.recordindex
+recordindex.label: Record index
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+source: @../../spec/architecture/target-architecture.medit_data.source
 commands: @../../spec/architecture/target-architecture.medit_core.commands
 commands.label: Commands
 pluginadapter: @../../spec/architecture/target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../../spec/architecture/target-architecture.medit_data.plugin
-sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
-sourceadapter.label: Source adapter
-source: @../../spec/architecture/target-architecture.medit_data.source
 indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
 indexer.label: Indexer
 instance: @../../spec/architecture/target-architecture.modbench_data.instance
@@ -29,6 +31,15 @@ plugincommands: @../../spec/architecture/target-architecture.modbench_core.plugi
 plugincommands.label: plugin commands
 
 plugins."the name, then the place"
+plugins -> client: "the places whose plugin source holds the name" {class: query}
+client -> http: envelope {class: query}
+http -> recordindex: envelope {class: query}
+recordindex -> sourceadapter: "the load order's places: whether each one's plugin source holds it" {class: query}
+source -> sourceadapter: "the plugin source's folders" {class: query}
+sourceadapter -> recordindex: "those places" {class: query}
+recordindex -> http: "those places, or why it cannot say" {class: query}
+http -> client: "those places, or why it cannot say" {class: query}
+client -> plugins: "those places" {class: query}
 plugins -> client: "create: origin, name, folder" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}

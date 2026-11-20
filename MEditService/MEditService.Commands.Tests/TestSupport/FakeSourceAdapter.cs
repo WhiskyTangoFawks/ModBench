@@ -35,6 +35,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public bool IsSourceMod(string modFolder) => _mods.ContainsKey(modFolder);
 
+    public IReadOnlyList<string> PlacesHoldingPluginSourceOf(IReadOnlyList<PluginPlace> places, string pluginFileName) =>
+        [.. places.Where(place => place.SourceFolder is { } sourceFolder && _mods.TryGetValue(sourceFolder, out var mod) && mod.SourceReads).Select(place => place.Name)];
+
     public bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && _mods.TryGetValue(sourceFolder, out var compiledPlugin) && compiledPlugin.SourceReads;
 

@@ -358,6 +358,8 @@ export interface MEditClient {
   getCreatablePluginExtensions(token?: ReadCancellation): Promise<string[] | ReadFailed>;
   /** The header flag combinations a new plugin of the file name's extension may take. */
   getCreatablePluginFlags(name: string, token?: ReadCancellation): Promise<string[][] | ReadFailed>;
+  /** Each place, by its origin, whose plugin source holds the plugin `name`, with or without its file: a create there refuses. */
+  getPlacesHoldingPluginSource(name: string, token?: ReadCancellation): Promise<string[] | ReadFailed>;
   /** What each archive holds, by its absolute path; the release says which game's format a BSA is read as. */
   getArchiveContents(gameRelease: string, archives: readonly string[], token?: ReadCancellation): Promise<ArchiveContents[] | ReadFailed>;
   /** The bytes of one file in an archive, by its path there. */

@@ -36,6 +36,10 @@ describe('pluginPlaces', () => {
     expect(pluginPlaces(value, 'held.ESP').map((p) => p.name)).toEqual(['Winning Mod', 'overwrite/']);
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.name)).toEqual(['Winning Mod', 'Losing Mod']);
   });
+
+  it('leaves out a place whose plugin source holds a plugin of that name, whatever the case of its mod\'s name', () => {
+    expect(pluginPlaces(value, 'New.esp', ['winning mod']).map((p) => p.name)).toEqual(['Losing Mod', 'overwrite/']);
+  });
 });
 
 describe('placeFolder', () => {

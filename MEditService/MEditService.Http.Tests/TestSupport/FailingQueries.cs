@@ -23,6 +23,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null,
     public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) =>
         ownersRefused ?? throw Failed();
 
+    public Answer<IReadOnlyList<string>, IndexRefused> GetPlacesHoldingPluginSource(string name) => throw Failed();
+
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         throw Failed();
 
