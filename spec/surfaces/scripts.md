@@ -1,6 +1,6 @@
 # Scripts
 
-A Modbench script is a program, here in Python, that I or my agent write, Modbench's evolution of the xEdit script, to do what an xEdit script does: building a patch plugin, a bulk fix, a pass over the load order. It reads and changes records through mEdit, and nothing else. xEdit decides what a Modbench script is for; Mutagen names what it reads and writes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Mod management is a task's or the agent's job, never a Modbench script's ([ADR-0021](../adr/0021-agents-reach-modbench-through-one-mcp-server-the-extension-serves.md)).
+A Modbench script is a program, here in Python, that I or my agent write, Modbench's evolution of the xEdit script, to do what an xEdit script does: making a patch plugin, a bulk fix, a pass over the load order. It reads and changes records through mEdit, and nothing else. xEdit decides what a Modbench script is for; Mutagen names what it reads and writes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Mod management is a task's or the agent's job, never a Modbench script's ([ADR-0021](../adr/0021-agents-reach-modbench-through-one-mcp-server-the-extension-serves.md)).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -21,7 +21,7 @@ As a user, I want:
 3. To find the records that reference a record. Cites: editor-referenced-by.md
 4. To name a plugin and a record as my agent does. Cites: agent.md, Names, stories 1 and 2; ADR-0012
 5. Every field named as plugin source and the record index name it. Cites: Mutagen's data
-6. A SELECT to read the records of every plugin the record index holds, each row saying whether its plugin is active, so a Modbench script sees the patch plugin it builds before I enable it. Cites: ADR-0012; Writing, story 4
+6. A SELECT to read the records of every plugin the record index holds, each row saying whether its plugin is active, so a Modbench script sees the patch plugin it makes before I enable it. Cites: ADR-0012; Writing, story 4
 7. To read, for many records in one call, each copy's state against its master within a plugin and its masters, as xEdit's cleaning judges it, so a Modbench script finds each copy identical to its master's. Cites: editor-conflicts.md, What takes part, stories 2 to 5 and 7; Default scripts, story 2; xEdit
 
 ## Writing
@@ -30,10 +30,12 @@ As a user, I want:
 
 1. To create a plugin, and in it to copy a record as an override or as new, create a record, edit a field and delete a record. Cites: xEdit; catalog, Plugin and Record; plugins.md, Sorting rules, story 9
 2. Each write to be a working-tree change in the plugin's source. Cites: ADR-0007
-3. A Modbench script never to write a plugin with no plugin source, and never to build, reorder plugins, or version in git. Those are my gestures. Cites: ADR-0007; ADR-0021
+3. A Modbench script never to edit a plugin with no plugin source, and never to build, reorder plugins, or version in git. Those are my gestures. Cites: ADR-0007; ADR-0021
 4. A query to see every write the Modbench script made before it. Cites: Never silently wrong
 5. A Modbench script's writes to reach every view. Cites: common, A view, story 2
 6. A write to a file I hold unsaved changes in to be refused, naming the file, so my unsaved text never reaches the disk through a Modbench script. Cites: Never silently wrong
+7. To make a generated patch plugin from the records my Modbench script gives it, so a patch of thousands of overrides is quick to make and adds no plugin source.
+8. Making a generated patch plugin to be refused as compile refuses, and over a file at its path unless my Modbench script asks to replace it. A replaced file goes to the trash. A compiled plugin at that path refuses even then, naming its plugin source, since its next compile would overwrite the plugin. Cites: ADR-0007
 
 ## Default scripts
 
