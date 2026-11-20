@@ -599,6 +599,20 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     );
   });
 
+  it.each([
+    ['while its rows stand, says it shows the last good read and expands into them', 'Binary',
+      'Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).', RECORDS],
+    ['with no rows left, says no last good read and expands into the error row', null,
+      undefined, errorOf('Could not read this plugin (truncated).')],
+  ] as const)('a plugin whose read failed, %s', (_label, rowsFrom, message, expansion) => {
+    const facts = new PluginFacts();
+
+    facts.reconciled([held({ rowsFrom })], [failure('Could not read this plugin (truncated).')], [], []);
+
+    expect(facts.readFailureMessage()).toBe(message);
+    expect(facts.expansion(A)).toEqual(expansion);
+  });
+
   it.each([[null], [undefined]])('says nothing once the next read answers %s', (answer) => {
     const facts = new PluginFacts();
     facts.refreshed([failing]);

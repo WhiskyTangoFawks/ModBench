@@ -40,7 +40,9 @@ public sealed record PluginResponse(
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
     IReadOnlyList<SourceProblem>? LaterReadFailure,
     // The description in the plugin's header, which LOOT's version() reads. Null for a header with none.
-    string? Description = null);
+    string? Description = null,
+    // common.md, States, stories 2 and 6: what its rows were read from, null when the record index holds none of it.
+    DerivedFrom? RowsFrom = null);
 
 public record RecordDetail(
     string FormKey,
