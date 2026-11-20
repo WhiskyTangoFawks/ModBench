@@ -90,7 +90,7 @@ internal sealed class GameCodec : IGameCodec
             return record;
         var copy = record.DeepCopy();
         Targets.ForEach(copy, DefaultTargetAsRead);
-        Breaks.ForEach(copy, FirstBreakAlone);
+        Breaks.ForEach(copy, VersioningBreaks.KeepFirst);
         if (!localized) StringHolders.ForEach(copy, InDefaultLanguage);
         switch (copy)
         {
@@ -151,24 +151,7 @@ internal sealed class GameCodec : IGameCodec
             radius.Target = new LocationTarget();
     }
 
-    private static readonly ConcurrentDictionary<Type, PropertyInfo?> BreaksByType = new();
-
-    private static PropertyInfo? BreaksOf(Type type) => BreaksByType.GetOrAdd(type, declaring =>
-        declaring.IsClass && declaring.GetProperty("Versioning", BindingFlags.Public | BindingFlags.Instance) is
-            { CanWrite: true, PropertyType: { IsEnum: true, Name: "VersioningBreaks" } } versioning
-            ? versioning
-            : null);
-
-    private static readonly RecordGraph Breaks = new(type => BreaksOf(type) is not null);
-
-    // Mutagen writes a struct up to the first break its Versioning holds. Of bytes that end at a break, a binary
-    // overlay holds that break and each after it, a read into a record the first alone.
-    private static void FirstBreakAlone(object node)
-    {
-        var versioning = BreaksOf(node.GetType()) ?? throw new InvalidOperationException($"Expected {node.GetType().Name} to hold its Versioning.");
-        var breaks = Convert.ToInt64(versioning.GetValue(node), System.Globalization.CultureInfo.InvariantCulture);
-        versioning.SetValue(node, Enum.ToObject(versioning.PropertyType, breaks & -breaks));
-    }
+    private static readonly RecordGraph Breaks = new(type => type.IsClass && VersioningBreaks.VersioningOf(type) is not null);
 
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();
 
@@ -178,14 +161,14 @@ internal sealed class GameCodec : IGameCodec
 
     private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
 
-    // A plugin that is not localized holds a string's text in its target language, or the empty text when it has none,
-    // and never its language, so its reread holds that text in the language the read gives.
+    // A plugin that is not localized holds a string's text in its target language, or the empty text, and never its
+    // language, so its reread holds that text in the language the read gives. Text in another language alone is lost.
     private static void InDefaultLanguage(object holder)
     {
         foreach (var property in StringProperties(holder.GetType()))
         {
-            if (property.GetValue(holder) is TranslatedString held)
-                property.SetValue(holder, new TranslatedString(TranslatedString.DefaultLanguage, held.String ?? ""));
+            if (property.GetValue(holder) is TranslatedString held && (held.String ?? (held.Any() ? null : "")) is { } written)
+                property.SetValue(holder, new TranslatedString(TranslatedString.DefaultLanguage, written));
         }
     }
 

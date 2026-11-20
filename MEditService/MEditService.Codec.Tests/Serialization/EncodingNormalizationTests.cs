@@ -16,23 +16,24 @@ public sealed class EncodingNormalizationTests
     private static TranslatedString Named(params (Language Language, string Text)[] texts) =>
         new(Language.English, texts.Select(text => new KeyValuePair<Language, string>(text.Language, text.Text)));
 
-    public static TheoryData<string, TranslatedString> StringsOfALocalizedMaster => new()
+    public static TheoryData<string, TranslatedString, string, bool> StringsOfALocalizedMaster => new()
     {
-        { "in several languages", Named((Language.English, "The Big Door"), (Language.French, "La Grande Porte")) },
-        { "with no text in its target language", Named((Language.French, "La Grande Porte")) },
-        { "with no text", Named() },
+        { "in several languages", Named((Language.English, "The Big Door"), (Language.French, "La Grande Porte")), "The Big Door", true },
+        { "with no text", Named(), "", true },
+        { "with text in another language alone", Named((Language.French, "La Grande Porte")), "", false },
     };
 
     [Theory]
     [MemberData(nameof(StringsOfALocalizedMaster))]
-    public void AStringReadFromALocalizedMaster_WrittenIntoAPluginNotLocalized_IsTheStringItsRereadHolds(string _, TranslatedString name)
+    public void AStringReadFromALocalizedMaster_WrittenIntoAPluginNotLocalized_IsTheStringItsRereadHolds_UnlessItsTextIsLost(
+        string _, TranslatedString name, string written, bool same)
     {
         var master = new Fallout4Mod(Master, Fallout4Release.Fallout4) { UsingLocalization = true };
         master.Doors.AddNew("Door").Name = name;
 
         var (read, reread) = ReadThenRewrittenNotLocalized(master, (patch, door) => patch.Doors.Add((Door)door));
 
-        Assert.Equal(Normalized(reread), Normalized(read));
+        Assert.Equal((written, same), (((IDoorGetter)reread).Name?.String, Normalized(reread) == Normalized(read)));
     }
 
     [Fact]
@@ -48,12 +49,14 @@ public sealed class EncodingNormalizationTests
 
         var (read, reread) = ReadThenRewrittenNotLocalized(master, (patch, cell) => patch.AddInteriorCells((Cell)cell));
 
+        Assert.Equal(CellLighting.VersioningBreaks.Break0, ((ICellGetter)NormalizedRecord(read)).Lighting?.Versioning);
         Assert.Equal(Normalized(reread), Normalized(read));
     }
 
-    private static string Normalized(IMajorRecordGetter record) =>
-        RecordTextCodec.SerializeToText(
-            GameCodecs.For(GameRelease.Fallout4).NormalizeEncoding(record, localized: false, _ => null), GameRelease.Fallout4);
+    private static IMajorRecordGetter NormalizedRecord(IMajorRecordGetter record) =>
+        GameCodecs.For(GameRelease.Fallout4).NormalizeEncoding(record, localized: false, _ => null);
+
+    private static string Normalized(IMajorRecordGetter record) => RecordTextCodec.SerializeToText(NormalizedRecord(record), GameRelease.Fallout4);
 
     private static (IMajorRecordGetter Read, IMajorRecordGetter Reread) ReadThenRewrittenNotLocalized(
         Fallout4Mod master, Action<Fallout4Mod, IMajorRecord> add)
