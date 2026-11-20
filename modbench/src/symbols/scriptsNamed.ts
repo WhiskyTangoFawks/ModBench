@@ -2,7 +2,8 @@ import type { MEditClient, PluginAddress } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { PluginRecords } from '../drivingLib/namedPlugins';
 import type { Reporter } from '../ports/reporter';
-import { pluginAddressKey, pluginRowName } from '../wire/pluginAddress';
+import { pluginAddressKey } from '../wire/pluginAddress';
+import { joinedReasons, pluginReason } from '../wire/reasons';
 import { failureReason, isNotYetAnswerable, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
 export interface FilePathsAsked { getPluginFilePaths(plugin?: PluginAddress, keys?: readonly string[]): ReturnType<MEditClient['getPluginFilePaths']> }
@@ -25,7 +26,7 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
   let told = '';
 
   const tellUnread = (answers: Answered) => {
-    const why = answers.flatMap(({ plugin, failure, unread }) => [...failure == null ? [] : [failure], ...unread].map((line) => `${pluginRowName(plugin)}: ${line}`)).join('; ');
+    const why = joinedReasons(answers.flatMap(({ plugin, failure, unread }) => [...failure == null ? [] : [failure], ...unread].map((line) => pluginReason(plugin, line))));
     if (why !== '' && why !== told) reporter.shownOnSurface('warning', 'The Problems panel does not check every script plugin source names.', why);
     told = why;
   };

@@ -1,5 +1,6 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
+import { lastGoodReadMessage } from '../wire/reasons';
 import { basename } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import {
@@ -134,10 +135,10 @@ export class ModStatuses {
   message(): string | undefined {
     if (this.gitFailure !== undefined) {
       const why = `git could not say which folders it holds: ${this.gitFailure}.`;
-      return this.shown.size === 0 ? `The statuses could not be read: ${why}` : `Showing the last good read: ${why}`;
+      return this.shown.size === 0 ? `The statuses could not be read: ${why}` : lastGoodReadMessage([why]);
     }
     if (this.unreadable.size === 0) return undefined;
-    return `Showing the last good read: ${[...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`).join(' ')}`;
+    return lastGoodReadMessage([...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`));
   }
 
   onMessageChanged(listener: () => void): Listening {

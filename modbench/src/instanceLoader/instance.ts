@@ -1,3 +1,4 @@
+import { lastGoodReadMessage } from '../wire/reasons';
 import type { Log } from '../ports/log';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type GameFolderArchived, type FileWinners, type StackedCopies } from './fileConflictIndex';
 import {
@@ -240,7 +241,7 @@ export function instanceLastGoodReadFailure({ sequence, readFailure }: Pick<Inst
  *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then. */
 export function instanceMessages(view: Pick<InstanceOf<keyof typeof MESSAGE_READS>, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
   const reason = instanceLastGoodReadFailure(view);
-  return [managerRunningMessage(view.value), reason === undefined ? undefined : `Showing the last good read: ${reason}`];
+  return [managerRunningMessage(view.value), lastGoodReadMessage(reason === undefined ? [] : [reason])];
 }
 
 interface Workspace {
