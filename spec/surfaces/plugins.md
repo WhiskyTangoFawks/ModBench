@@ -47,7 +47,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Sorting errors | it is active, and Sorting rules shows an Error for it; once the snapshot is indexed | `$(error)` red | 1 error, N errors |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
-| Plugin source unreadable | it is a compiled plugin, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
+| Plugin source unreadable | it is a compiled plugin, and its plugin source is missing or cannot be read | `$(error)` red | plugin source unreadable |
 | Changed outside Modbench | it is a compiled plugin, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 | Sorting warnings | it is active, and Sorting rules shows a Warning for it; once the snapshot is indexed | `$(warning)` yellow | 1 warning, N warnings |
@@ -59,7 +59,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. Cites: common.md, Reporting
 - A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last wrote. Cites: ADR-0003
 - A plugin that holds one FormKey in two groups fails to read, as xEdit refuses a duplicate FormID. The reason is also an error in the Problems panel, on the plugin file. Cites: ruling; xEdit
-- A plugin whose plugin source is unreadable on disk shows the records of its plugin file, read-only, until decompile writes its source. It is also a warning in the Problems panel, on the plugin file, pointing at decompile. An unsaved document that does not read is a failed later read, as [common.md](common.md), States, story 6 says. Cites: ruling
+- A plugin whose plugin source is unreadable on disk shows the records of its plugin file, read-only, until its plugin source reads. It is also an error in the Problems panel, on the plugin file. An unsaved document that does not read is a failed later read, as [common.md](common.md), States, story 6 says. Cites: ruling
 
 ### A plugin the game loads with no line
 
@@ -114,8 +114,8 @@ Modbench judges what the game loads from the plugin order I have against the gam
 | Level | A sorting rule broken, or a LOOT message or cleaning data that applies |
 |---|---|
 | Error | the game moves a plugin from where `plugins.txt` lists it · a master loads after a plugin that lists it · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
-| Warning | a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
-| Info | a plugin loads out of its LOOT group's place · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
+| Warning | a plugin loads before a plugin its sorting rule says it loads after · LOOT's cleaning data says the plugin is dirty · a LOOT warning message |
+| Info | a plugin loads out of its LOOT group's place · a LOOT say message |
 
 As a user, I want:
 
@@ -275,7 +275,7 @@ As a user, I want:
 As a user, I want:
 
 1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index, or `(not active)`. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Cites: catalog `copy`
-2. A copy as new to take the next free FormKey. A reference to itself follows it.
+2. A copy as new to take its FormKey as a new record does (Create record, stories 2 and 3). A reference to itself follows it.
 3. A copy as override into a plugin that loads before a master the copy needs, its origin or a plugin holding a record it references, refused: that is an underride (commands.md, A compiled plugin is its files). A record xEdit does not copy as new, such as a cell or a worldspace, refused.
 4. A container the destination lacks copied in as an override, in every mode. Where the game lets it be a Partial Form, it is one, so it carries only its children and overrides none of the container's own fields. Cites: xedit.md, divergence 30; editor-fields.md, Partial Form
 5. A copy, in either mode, to copy each record without its child records. To copy a child record too, I select it. Cites: xEdit; commands.md, An all variant is select all, then the gesture

@@ -61,7 +61,7 @@ As a user, I want:
 
 ## Arrays
 
-Every array takes add and remove, and an array without a key takes move (xedit.md, divergence 14). Some arrays' elements have a key, which is the element's identity. Cites: catalog `add element`, `remove element`, `move element`
+Every array takes add and remove. Some arrays' elements have a key, which is the element's identity. Cites: catalog `add element`, `remove element`
 
 As a user, I want:
 
@@ -71,7 +71,7 @@ As a user, I want:
 4. A key another element holds to be accepted, on add and on edit: the game uses a repeated key, as a leveled list weights an entry by repeating it. Story 2 shows each on a row of its own. Cites: xEdit
 5. Move up absent on the first element, and move down on the last. Cites: No dead entries
 6. One element pasted on an array's row to be added to that array, where the array can hold it (Every field, story 5). Cites: xEdit's drop; editor.md, Drag and drop, story 1
-7. Move absent on an array the format sorts. Cites: No dead entries; ADR-0030
+7. Move only on an array whose order the game reads. Cites: catalog `move element`; xEdit
 
 ## A field of several kinds
 
