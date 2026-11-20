@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -196,6 +197,18 @@ public sealed class CompiledTreeDropTests
         Assert.Equal((npc.FormKey.ToString(), "EditorID"), (drop.Record.FormKey, drop.Field));
     }
 
+    [Fact]
+    public async Task DropsIn_OfADeletedCompressedCell_AnswersThatThePluginWrittenDoesNotReadBack_NamingTheCell()
+    {
+        var mod = NewMod();
+        var cell = new Cell(mod) { MajorRecordFlagsRaw = (int)DeletedFlag.Bit, IsCompressed = true };
+        mod.AddInteriorCells(cell);
+
+        var unread = (await DropsAnswerOf(mod)).Failure();
+
+        Assert.StartsWith($"Cell {cell.FormKey} — ", unread.Reason, StringComparison.Ordinal);
+    }
+
     private static IPlaced DeletedReference(Fallout4Mod mod, bool trap, string? editorId)
     {
         var baseRecord = FormKey.Factory($"000801:{Plugin.FileName}");
@@ -209,7 +222,9 @@ public sealed class CompiledTreeDropTests
 
     private static Fallout4Mod NewMod() => new(Plugin, Fallout4Release.Fallout4);
 
-    private static async Task<IReadOnlyList<DroppedValue>> DropsOf(Fallout4Mod mod)
+    private static async Task<IReadOnlyList<DroppedValue>> DropsOf(Fallout4Mod mod) => (await DropsAnswerOf(mod)).Answered();
+
+    private static async Task<Answer<IReadOnlyList<DroppedValue>, PluginFailure>> DropsAnswerOf(Fallout4Mod mod)
     {
         using var scratch = new ScratchDirectory("medit-drops-");
         var treeFolder = Directory.CreateDirectory(Path.Combine(scratch.Path, "tree")).FullName;

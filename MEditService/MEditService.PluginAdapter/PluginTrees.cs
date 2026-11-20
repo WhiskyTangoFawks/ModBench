@@ -287,14 +287,13 @@ public sealed class CompiledTree
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
-    /// <summary>Each record of the tree that <paramref name="save"/>'s bytes do not hold model-identical (ADR-0006).</summary>
-    public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
-    {
-        var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease, _language);
-        return [.. ModelIdentity.RecordDivergences(_mod.EnumerateMajorRecords(), written).Select(drop => new DroppedValue(
-            new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
-            drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))];
-    }
+    /// <summary>Each record of the tree that <paramref name="save"/>'s bytes do not hold model-identical (ADR-0006), or why
+    /// those bytes do not read back.</summary>
+    public Answer<IReadOnlyList<DroppedValue>, PluginFailure> DropsIn(PreparedPluginSave save) =>
+        PluginFailure.Answer(() => save.Reread(_mod.ModKey, _loadOrder.GameRelease, _language)).Then(written =>
+            PluginAnswer.Of<IReadOnlyList<DroppedValue>>([.. ModelIdentity.RecordDivergences(_mod.EnumerateMajorRecords(), written).Select(drop => new DroppedValue(
+                new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
+                drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))]));
 
     // Mutagen writes a master under the first spelling a record carries, so own keys and links are
     // respelled as masterOrder spells them.

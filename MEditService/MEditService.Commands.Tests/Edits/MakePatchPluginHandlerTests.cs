@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -178,6 +179,23 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
         var unread = $"{Patch} could not be read from the records given: ";
         Assert.Equal((CompileRefusal.SourceDoesNotParse, unread), (compiled.Refusal, compiled.Message[..unread.Length]));
+    }
+
+    [Fact]
+    public async Task ACellMutagenWritesAsBytesItCannotReadBack_IsRefused_AndWritesNothing()
+    {
+        var deletedCompressed = _interior.DeepCopy();
+        deletedCompressed.MajorRecordFlagsRaw = (int)DeletedFlag.Bit;
+        deletedCompressed.IsCompressed = true;
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(deletedCompressed)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
+        var unread = $"{Patch} cannot be made: the plugin written from the records given does not read back, so nothing was written: ";
+        Assert.Equal(
+            (CompileRefusal.SourceValueDropped, unread, false),
+            (compiled.Refusal, compiled.Message[..unread.Length], File.Exists(PatchPath)));
     }
 
     [Fact]
