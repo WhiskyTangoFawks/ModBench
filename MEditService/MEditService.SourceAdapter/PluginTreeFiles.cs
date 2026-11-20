@@ -20,8 +20,8 @@ public sealed class PluginTreeFiles
         Files = SourceRepositoryLayout.DoorTreeOf(pluginFileName, held.Files, release);
     }
 
-    /// <summary>The tree of <paramref name="files"/>, the whole-mod door's. A container's directory holding several
-    /// documents, none named RecordData.json, is ambiguous.</summary>
+    /// <summary>The tree of <paramref name="files"/>, the whole-mod door's, as <see cref="Files"/> reads it back once written. A
+    /// container's directory holding several documents, none named RecordData.json, is ambiguous.</summary>
     public static Answer<PluginTreeFiles, SourceFailure> Made(string pluginFileName, IReadOnlyList<TreeFile> files, GameRelease release) =>
         SourceFailure.Answer(() => new PluginTreeFiles(
             pluginFileName, new PluginSourceFiles(SourceRepositoryLayout.PristineFilesOf(pluginFileName, files), null), release, located: null));

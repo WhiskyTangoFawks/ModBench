@@ -176,8 +176,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<IPluginAdapter>(),
             new PluginDecompiler(
-                sp.GetRequiredService<ILogger<SourceModBuild>>(), sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<ISourceAdapter>(),
-                sp.GetRequiredService<SchemaReflector>())));
+                sp.GetRequiredService<ILogger<SourceModBuild>>(), sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<SchemaReflector>())));
 
         services.AddSingleton(sp => new BuildModHandler(
             sp.GetRequiredService<SourceModBuild>(),

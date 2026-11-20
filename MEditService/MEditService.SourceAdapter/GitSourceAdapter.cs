@@ -73,8 +73,5 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo) =>
         SourceFailure.Answer(() => SourceRepositoryGit.FollowMove(sourceFolder, movedTo));
 
-    public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);
-
     private UnsavedFiles Files() => new(unsaved.Current);
 }

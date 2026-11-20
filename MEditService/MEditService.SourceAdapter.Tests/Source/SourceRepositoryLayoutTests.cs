@@ -185,7 +185,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [4]),
         ];
 
-        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, Release);
+        var readBack = PluginTreeFiles.Made("Mixed.ESP", tree, Release).Value().Files;
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())),
@@ -207,7 +207,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine(quest, "Scenes", "S - 000804_Mixed.ESP.json"), [6]),
         ];
 
-        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, Release);
+        var readBack = PluginTreeFiles.Made("Mixed.ESP", tree, Release).Value().Files;
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())).Order(),
@@ -225,7 +225,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine(topic, "Responses", "000802_Mixed.ESP.json"), [3]),
         ];
 
-        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, GameRelease.SkyrimSE);
+        var readBack = PluginTreeFiles.Made("Mixed.ESP", tree, GameRelease.SkyrimSE).Value().Files;
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())).Order(),

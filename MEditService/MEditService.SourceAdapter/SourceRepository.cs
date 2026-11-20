@@ -79,15 +79,6 @@ internal sealed class SourceRepository : ISourceRepository
     /// writes to (ADR-0003).</summary>
     internal static bool HoldsAnotherRepository(string sourceFolder) => SourceRepositoryGit.HoldsAnotherRepository(sourceFolder);
 
-    /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
-    /// what a round-trip gate compiles, so that it compiles what is written.</summary>
-    internal static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        SourceFailure.Answer(() => SourceRepositoryLayout.DoorTreeOf(
-                pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease))
-            .Holds(out var readBack, out var failure)
-            ? readBack
-            : throw new InvalidOperationException($"Expected the whole-mod door to write one document per container: {failure.Reason}");
-
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
 

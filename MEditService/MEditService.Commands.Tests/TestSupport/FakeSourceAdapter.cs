@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -92,9 +91,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) => throw Unreached();
 
     public SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo) => throw Unreached();
-
-    public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
 
     private static NotSupportedException Unreached() => new("The fake Source adapter does not serve this verb.");
 
