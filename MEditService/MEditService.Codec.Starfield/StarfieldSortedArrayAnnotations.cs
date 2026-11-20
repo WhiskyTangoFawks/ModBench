@@ -215,6 +215,8 @@ internal static class StarfieldSortedArrayAnnotations
         ("INavigationMapInfoGetter", "PreferredMerges"),
         ("IPreCutMapEntryGetter", "Triangles"),
         ("INpcGetter", "HeadParts"),
+        ("ILocationCoordinateGetter", "Coordinates"),
+        ("IStaticPartGetter", "Placements"),
         ("IOutfitGetter", "Items"),
         ("IRaceGetter", "MovementTypeNames"),
         ("ISnapTemplateRnamTraversalGetter", "NodeIDs"),

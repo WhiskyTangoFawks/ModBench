@@ -168,6 +168,7 @@ internal static class Fallout4SortedArrayAnnotations
         ("ILocationGetter", "InitiallyDisabledReferencesStatic"),
         ("ILocationGetter", "EnableParentReferencesAdded"),
         ("ILocationGetter", "EnableParentReferencesStatic"),
+        ("ILocationCoordinateGetter", "Coordinates"),
         ("IOutfitGetter", "Items"),
         ("ICollisionLayerGetter", "CollidesWith"),
         ("IMagicEffectGetter", "CounterEffects"),

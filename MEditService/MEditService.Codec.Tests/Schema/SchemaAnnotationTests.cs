@@ -89,6 +89,7 @@ public sealed class SchemaAnnotationTests
     [InlineData(GameRelease.Fallout4, "npc_", "Factions", false)]
     [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesRemoved", false)]
     [InlineData(GameRelease.Fallout4, "term", "Properties", false)]
+    [InlineData(GameRelease.Fallout4, "lctn", "WorldspaceCellsAdded.[].Coordinates", false)]
     [InlineData(GameRelease.Fallout4, "npc_", "Packages", true)]
     [InlineData(GameRelease.Fallout4, "cobj", "Conditions", true)]
     [InlineData(GameRelease.SkyrimSE, "npc_", "Keywords", false)]
@@ -96,6 +97,7 @@ public sealed class SchemaAnnotationTests
     [InlineData(GameRelease.SkyrimSE, "cobj", "Conditions", true)]
     [InlineData(GameRelease.Starfield, "npc_", "Keywords", false)]
     [InlineData(GameRelease.Starfield, "npc_", "Factions", false)]
+    [InlineData(GameRelease.Starfield, "scol", "Parts.[].Placements", false)]
     public void MoveIsOffered_OnlyOnAnArrayWhoseOrderTheGameReads(GameRelease release, string table, string path, bool takesMove)
     {
         var array = SchemaFields.At(release, table, path);
