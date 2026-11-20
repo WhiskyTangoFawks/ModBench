@@ -2,9 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -93,9 +91,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) => throw Unreached();
 
     public SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo) => throw Unreached();
-
-    public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
 
     private static NotSupportedException Unreached() => new("The fake Source adapter does not serve this verb.");
 
@@ -230,19 +225,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public Answer<IReadOnlySet<string>, SourceFailure> FormKeysUsed(PluginAddress plugin) => throw Unreached();
 
-        public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) => throw Unreached();
-
-        public Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
-            throw Unreached();
-
-        public Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
-            throw Unreached();
-
-        public Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin) =>
-            throw Unreached();
-
-        public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
-            throw Unreached();
+        public Answer<PluginTreeFiles, SourceFailure> TreeOf(PluginAddress plugin) => throw Unreached();
 
         public Answer<SourceChanges, SourceFailure> ChangesToPut(PluginAddress plugin, SourceDocument document) => throw Unreached();
 

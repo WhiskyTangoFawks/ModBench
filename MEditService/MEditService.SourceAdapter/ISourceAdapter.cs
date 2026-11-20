@@ -101,8 +101,4 @@ public interface ISourceAdapter
     /// <summary>What git holds of the source folder <paramref name="sourceFolder"/> follows it to <paramref name="movedTo"/>:
     /// its index entries, staged as they were, the refs of what Modbench last wrote, and a submodule's work tree.</summary>
     SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo);
-
-    /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
-    /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>
-    IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease);
 }

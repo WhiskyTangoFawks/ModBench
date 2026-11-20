@@ -20,7 +20,7 @@ public sealed class DecompilePluginHandler
     internal DecompilePluginHandler(
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
         ILogger<DecompilePluginHandler> logger) =>
-        (_loadOrder, _source, _held, _decompiler) = (loadOrder, source, held, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        (_loadOrder, _source, _held, _decompiler) = (loadOrder, source, held, new PluginDecompiler(logger, adapter, schemaReflector));
 
     /// <summary>Refuses, writing nothing, when no load order is held or git cannot run. A plugin whose source has
     /// working-tree changes is refused unless <paramref name="force"/>.</summary>

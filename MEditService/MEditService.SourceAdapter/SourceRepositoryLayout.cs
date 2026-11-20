@@ -157,11 +157,12 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     }
 
     /// <summary><paramref name="diagnosis"/> of a read of <paramref name="files"/>' door tree, each file it
-    /// names named where <paramref name="files"/> hold it. A name inside another path is that path's.</summary>
+    /// names as <paramref name="named"/> names the file <paramref name="files"/> hold. A name inside another path is
+    /// that path's.</summary>
     internal static PluginDiagnosis InSourceNames(
-        string pluginFileName, PluginDiagnosis diagnosis, IEnumerable<TreeFile> files, GameRelease gameRelease)
+        string pluginFileName, PluginDiagnosis diagnosis, IEnumerable<TreeFile> files, GameRelease gameRelease, Func<string, string> named)
     {
-        var names = DoorNames(pluginFileName, [.. files], gameRelease).ToList();
+        var names = DoorNames(pluginFileName, [.. files], gameRelease).Select(name => (Source: named(name.Source), name.Door)).ToList();
         string SourceOf(string door) =>
             names.FirstOrDefault(name => name.Door == door).Source ?? Path.Combine(RootFor(pluginFileName), door);
 
