@@ -10,8 +10,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.TestSupport;
 
-/// <summary>A face that fails every question; given a rebuild refusal, answers a rebuild with it.</summary>
-internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null) : IQueries
+/// <summary>A face that fails every question; given a rebuild refusal, answers a rebuild with it, and given an index
+/// refusal, answers who holds a record with it.</summary>
+internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null, IndexRefused? ownersRefused = null) : IQueries
 {
     public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins(IReadOnlyCollection<PluginAddress>? plugins, CancellationToken cancel) => throw Failed();
 
@@ -19,7 +20,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, CancellationToken cancel) =>
         throw Failed();
 
-    public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) => throw Failed();
+    public Answer<IReadOnlyList<PluginAddress>, IndexRefused> GetRecordOwners(string formKey, CancellationToken cancel) =>
+        ownersRefused ?? throw Failed();
 
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         throw Failed();
@@ -118,8 +120,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked, CancellationToken cancel) =>
         throw Failed();
 
-    internal static void Replace(IServiceCollection services, StoreRebuildRefused? rebuildRefusal = null) =>
-        services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal));
+    internal static void Replace(IServiceCollection services, StoreRebuildRefused? rebuildRefusal = null, IndexRefused? ownersRefused = null) =>
+        services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal, ownersRefused));
 
     private static InvalidOperationException Failed() => new("The record index failed.");
 }

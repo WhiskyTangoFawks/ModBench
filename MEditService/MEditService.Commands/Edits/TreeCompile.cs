@@ -21,15 +21,16 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
         Func<PreparedPluginSave, Answer<bool, PluginCompileOutcome>> write)
     {
         var plugin = registered.Key;
-        if (!tree.RefusedFiles().Holds(out var refusedFiles, out var unread)) return SourceDoesNotParse(plugin, unread);
+        var words = Words.Of(tree);
+        if (!tree.RefusedFiles().Holds(out var refusedFiles, out var unread)) return Unparsed(plugin, unread, words);
         if (refusedFiles.Count > 0)
         {
             return PluginCompileOutcome.Refused(
-                CompileRefusal.SourceRegenerable,
-                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{tree.Named(file.Path)}: {file.Reason}"))}");
+                words.Regenerable,
+                $"{plugin.Name} cannot be {words.Done}: {string.Join("; ", refusedFiles.Select(file => $"{tree.Named(file.Path)}: {file.Reason}"))}");
         }
 
-        var (parsedTree, deserializeRefusal) = await DeserializeSource(tree, plugin, loadOrder);
+        var (parsedTree, deserializeRefusal) = await DeserializeSource(tree, plugin, loadOrder, words);
         if (deserializeRefusal != null) return deserializeRefusal;
         var compiled = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
@@ -47,34 +48,34 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
         // than pick a winner. Asked of the files: the reader's group cache has already resolved a
         // same-folder collision before the tree is read.
         if (!tree.CollidingFormKeys(compiled.FormKeys).Holds(out var collidingFormKeys, out unread))
-            return SourceDoesNotParse(plugin, unread);
+            return Unparsed(plugin, unread, words);
         if (collidingFormKeys.Count > 0)
         {
             return PluginCompileOutcome.Refused(
                 CompileRefusal.FormKeyCollision,
-                $"{plugin.Name} cannot be compiled: more than one source file claims the same FormKey — " +
+                $"{plugin.Name} cannot be {words.Done}: more than one {words.Claimant} claims the same FormKey — " +
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
         if (!tree.Compare(await compiled.SerializeTreeAsync()).Holds(out var comparison, out unread))
-            return SourceDoesNotParse(plugin, unread);
-        if (RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin, tree) is { } roundTripRefusal) return roundTripRefusal;
+            return Unparsed(plugin, unread, words);
+        if (RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin, tree, words) is { } roundTripRefusal) return roundTripRefusal;
 
         var content = ContentFacts(compiled, plugin, loadOrder);
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var saved = await compiled.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, compiled, plugin, tree, write));
+        var saved = await compiled.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, compiled, plugin, tree, words, write));
         if (!saved.Holds(out var landed, out var failure))
         {
             return failure switch
             {
-                PluginFailure.PrunedMaster => PluginCompileOutcome.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
-                PluginFailure.MasterNotInLoadOrder => PluginCompileOutcome.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                PluginFailure.PrunedMaster => PluginCompileOutcome.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be {words.Done}: {failure.Reason}"),
+                PluginFailure.MasterNotInLoadOrder => PluginCompileOutcome.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be {words.Done}: {failure.Reason}"),
                 PluginFailure.MasterUnreadable master => PluginCompileOutcome.Refused(
                     CompileRefusal.MasterUnreadable,
-                    $"{plugin.Name} could not be compiled: {failure.Reason} Fix or restore {master.Master}, then compile again."),
-                _ => WriteFailed(plugin, failure.Reason),
+                    $"{plugin.Name} could not be {words.Done}: {failure.Reason} Fix or restore {master.Master}, then {words.Again}."),
+                _ => WriteFailed(plugin, failure.Reason, words),
             };
         }
         if (!landed.Holds(out var recorded, out var refused)) return refused;
@@ -96,31 +97,55 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
         return PluginCompileOutcome.Success(diagnostics);
     }
 
-    internal static PluginCompileOutcome SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
-        PluginCompileOutcome.Refused(
-            unread.DecompileRepairs ? CompileRefusal.SourceRegenerable : CompileRefusal.SourceDoesNotParse,
-            $"{plugin.Name} could not be read from its source: {unread.Reason}");
+    // What a refusal calls the tree and the gesture: a plugin's source compiled, or records made into a plugin, which has
+    // no plugin to regenerate them from.
+    private sealed record Words(
+        string Done, string From, string Through, string Claimant, string Again, string AfterAFailedWrite, CompileRefusal Regenerable)
+    {
+        internal static readonly Words Compile = new(
+            "compiled", "its source", "its own source", "source file", "compile again",
+            " Its source is untouched, so compiling again rebuilds it.", CompileRefusal.SourceRegenerable);
 
-    internal static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason) =>
+        internal static readonly Words Make = new(
+            "made", "the records given", "the records given", "record given", "make it again", "", CompileRefusal.SourceDoesNotParse);
+
+        internal static Words Of(PluginTreeFiles tree) => tree.OnDisk ? Compile : Make;
+    }
+
+    internal static PluginCompileOutcome SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) => Unparsed(plugin, unread, Words.Compile);
+
+    private static PluginCompileOutcome Unparsed(PluginAddress plugin, SourceFailure unread, Words words) =>
         PluginCompileOutcome.Refused(
-            CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason} Its source is untouched, so compiling again rebuilds it.");
+            unread.DecompileRepairs ? words.Regenerable : CompileRefusal.SourceDoesNotParse,
+            $"{plugin.Name} could not be read from {words.From}: {unread.Reason}");
+
+    internal static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason) => WriteFailed(plugin, reason, Words.Compile);
+
+    /// <summary>Records that could not be made into a tree, refused as compile refuses an unreadable one.</summary>
+    internal static PluginCompileOutcome RecordsDoNotParse(PluginAddress plugin, SourceFailure unread) => Unparsed(plugin, unread, Words.Make);
+
+    /// <summary>A plugin made from records whose write the file system refused.</summary>
+    internal static PluginCompileOutcome NotWritten(PluginAddress plugin, string reason) => WriteFailed(plugin, reason, Words.Make);
+
+    private static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason, Words words) =>
+        PluginCompileOutcome.Refused(CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason}{words.AfterAFailedWrite}");
 
     private static Answer<bool, PluginCompileOutcome> Land(
-        PreparedPluginSave save, CompiledTree compiled, PluginAddress plugin, PluginTreeFiles tree,
+        PreparedPluginSave save, CompiledTree compiled, PluginAddress plugin, PluginTreeFiles tree, Words words,
         Func<PreparedPluginSave, Answer<bool, PluginCompileOutcome>> write) =>
-        compiled.DropsIn(save) is { Count: > 0 } drops ? Dropped(plugin, tree, drops) : write(save);
+        compiled.DropsIn(save) is { Count: > 0 } drops ? Dropped(plugin, tree, words, drops) : write(save);
 
-    private static PluginCompileOutcome Dropped(PluginAddress plugin, PluginTreeFiles tree, IReadOnlyList<DroppedValue> drops)
+    private static PluginCompileOutcome Dropped(PluginAddress plugin, PluginTreeFiles tree, Words words, IReadOnlyList<DroppedValue> drops)
     {
         var named = new List<string>();
         foreach (var drop in drops)
         {
-            if (!tree.Named(drop.Record).Holds(out var held, out var unread)) return SourceDoesNotParse(plugin, unread);
+            if (!tree.Named(drop.Record).Holds(out var held, out var unread)) return Unparsed(plugin, unread, words);
             named.Add($"in {held}, '{drop.Field}'");
         }
         return PluginCompileOutcome.Refused(
             CompileRefusal.SourceValueDropped,
-            $"{plugin.Name} cannot be compiled: the plugin written from its source would not hold, {string.Join("; ", named)}. Nothing was written.");
+            $"{plugin.Name} cannot be {words.Done}: the plugin written from {words.From} would not hold, {string.Join("; ", named)}. Nothing was written.");
     }
 
     private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links, IReadOnlySet<string> Masters);
@@ -143,27 +168,28 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
     }
 
     private async Task<(CompiledTree? Tree, PluginCompileOutcome? Refusal)> DeserializeSource(
-        PluginTreeFiles tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
+        PluginTreeFiles tree, PluginAddress plugin, LoadOrderSnapshot loadOrder, Words words)
     {
         if ((await adapter.ReadTreeAsync(tree.Files, loadOrder)).Holds(out var compiled, out var failure)) return (compiled, null);
 
-        logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
+        logger.LogWarning("{Plugin} could not be read from {From}: {Reason}", plugin.Name, words.From, failure.Reason);
         if (failure is PluginFailure.Unparsed unparsed && tree.Named(unparsed.Diagnosis).Holds(out var named, out _))
-            return (null, PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {named.Describe()}"));
-        return (null, PluginCompileOutcome.Refused(CompileRefusal.SourceRegenerable, $"{plugin.Name} could not be read from its source: {failure.Reason}"));
+            return (null, PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from {words.From}: {named.Describe()}"));
+        return (null, PluginCompileOutcome.Refused(words.Regenerable, $"{plugin.Name} could not be read from {words.From}: {failure.Reason}"));
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
     // throwing, so a successful parse proves nothing.
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when init
     // parses an external binary, never from Compile.
-    private static PluginCompileOutcome? RefuseIfSourceDoesNotRoundTrip(IReadOnlyList<SourceDivergence> found, PluginAddress plugin, PluginTreeFiles tree)
+    private static PluginCompileOutcome? RefuseIfSourceDoesNotRoundTrip(
+        IReadOnlyList<SourceDivergence> found, PluginAddress plugin, PluginTreeFiles tree, Words words)
     {
         if (found.Count == 0) return null;
 
         return PluginCompileOutcome.Refused(
-            found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? CompileRefusal.SourceRegenerable : CompileRefusal.SourceDoesNotParse,
-            $"{plugin.Name} does not round-trip through its own source: {string.Join("; ", found.Select(divergence => Describe(divergence, tree)))}.");
+            found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? words.Regenerable : CompileRefusal.SourceDoesNotParse,
+            $"{plugin.Name} does not round-trip through {words.Through}: {string.Join("; ", found.Select(divergence => Describe(divergence, tree)))}.");
     }
 
     private static string Describe(SourceDivergence divergence, PluginTreeFiles tree)

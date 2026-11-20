@@ -1,12 +1,13 @@
 using System.Reflection;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The record index a writer hands its write to: it keeps each hand, and answers it as <see cref="Answer"/> does.
-/// It serves no read.</summary>
+/// The one read it serves is of the plugin holding each record's winning copy, as <see cref="Owners"/> says.</summary>
 public class HandedWrites : DispatchProxy
 {
     private readonly List<IReadOnlyList<HandedPlugin>?> _hands = [];
@@ -20,12 +21,20 @@ public class HandedWrites : DispatchProxy
 
     public IQueries Queries => (IQueries)(object)this;
 
+    /// <summary>The plugin of each FormKey's winning copy; one it does not name no plugin holds.</summary>
+    public Dictionary<string, PluginAddress> Owners { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Why the record index cannot say who holds a record; null while it can.</summary>
+    public IndexRefused? OwnersRefused { get; set; }
+
     public static HandedWrites Create() => (HandedWrites)(object)Create<IQueries, HandedWrites>();
 
     private readonly Dictionary<string, IReadOnlyList<string>> _changedOutside = [];
 
     /// <summary>What the writer last told of each plugin of a mod changed outside Modbench.</summary>
     public IReadOnlyList<string> ChangedOutside(string origin) => _changedOutside.TryGetValue(origin, out var held) ? held : [];
+
+    private static Answer<T, IndexRefused> Answered<T>(T value) => value;
 
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
@@ -35,6 +44,12 @@ public class HandedWrites : DispatchProxy
             var before = _changedOutside.TryGetValue(origin, out var was) ? was : [];
             _changedOutside[origin] = plugins;
             return (IReadOnlyList<PluginAddress>)[.. before.Except(plugins).Concat(plugins.Except(before)).Select(name => new PluginAddress(name, origin))];
+        }
+        if (targetMethod?.Name == nameof(IQueries.GetRecordOwners))
+        {
+            if (OwnersRefused is { } refused) return (Answer<IReadOnlyList<PluginAddress>, IndexRefused>)refused;
+            IReadOnlyList<PluginAddress> owners = Owners.TryGetValue((string)args.Require()[0].Require(), out var owner) ? [owner] : [];
+            return Answered(owners);
         }
         if (targetMethod?.Name != nameof(IQueries.Hold)) throw new NotSupportedException($"The record index here serves no {targetMethod?.Name}.");
         var (written, cancel) = ((IReadOnlyList<HandedPlugin>?)args.Require()[0], (CancellationToken)args.Require()[1].Require());

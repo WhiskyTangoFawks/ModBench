@@ -360,6 +360,21 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public string PathOfEmpty(ModKey modKey, string folder) => Path.Combine(folder, modKey.FileName.String);
 
+    public IReadOnlyList<TreeFile> EmptyTree(ModKey modKey, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
+    [
+        new TreeFile(DocumentFileNames.Root, HeaderDocument.Write(Flagged(modKey, gameRelease, flags))),
+        SpriggitMeta.Of(GameCodecs.For(gameRelease), modKey, gameRelease),
+    ];
+
+    private static IMod Flagged(ModKey modKey, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags)
+    {
+        var plugin = CreateEmpty(modKey, gameRelease);
+        plugin.IsMaster = flags.Contains(HeaderFlag.Master);
+        plugin.IsSmallMaster = flags.Contains(HeaderFlag.Small);
+        if (flags.Contains(HeaderFlag.Medium)) plugin.IsMediumMaster = true;
+        return plugin;
+    }
+
     public Answer<EmptyPluginTakeBack, PluginFailure> TakeBackEmpty(ModKey modKey, string folder, string written) =>
         PluginFailure.Answer(() =>
         {
@@ -379,10 +394,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         if (!Directory.Exists(folder)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FolderGone);
         if (File.Exists(destinationPath)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FileExists);
 
-        var plugin = CreateEmpty(modKey, gameRelease);
-        plugin.IsMaster = flags.Contains(HeaderFlag.Master);
-        plugin.IsSmallMaster = flags.Contains(HeaderFlag.Small);
-        if (flags.Contains(HeaderFlag.Medium)) plugin.IsMediumMaster = true;
+        var plugin = Flagged(modKey, gameRelease, flags);
 
         // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
         // folder of its own — nothing here can create or resurrect one. The fixed .tmp suffix

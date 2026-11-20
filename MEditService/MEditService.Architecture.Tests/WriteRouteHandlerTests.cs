@@ -21,6 +21,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler), "CopyRecordChanges"),
         ("POST", "/plugins/create", typeof(CreatePluginHandler), "CreatePlugin"),
         ("POST", "/plugins/create-in-mod", typeof(CreatePluginInModHandler), "CreatePluginInMod"),
+        ("POST", "/plugins/make-patch", typeof(MakePatchPluginHandler), "MakePatch"),
         ("POST", "/plugins/decompile", typeof(DecompilePluginHandler), "Decompile"),
         ("POST", "/plugins/decompile-and-repair", typeof(DecompileAndRepairPluginHandler), "DecompileAndRepair"),
         ("POST", "/plugins/compile", typeof(CompilePluginHandler), "Compile"),

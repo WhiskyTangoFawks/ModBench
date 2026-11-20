@@ -18,14 +18,14 @@ public sealed class CreatePluginInModHandler
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
-
-        var place = loadOrder.Places.FirstOrDefault(held => string.Equals(held.Name, origin, StringComparison.OrdinalIgnoreCase));
-        if (place is null)
-        {
-            return new PluginCreateRefused(PluginCreateRefusal.OriginNotAMod,
-                $"'{origin}' is not an enabled mod or Overwrite, so {name} was not created in it.");
-        }
+        if (!PlaceOf(loadOrder, origin, name).Holds(out var place, out var refused)) return refused;
 
         return await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags, cancel);
     }
+
+    /// <summary>The enabled mod or Overwrite <paramref name="origin"/> names, which a new plugin named <paramref name="name"/> goes into.</summary>
+    internal static Answer<PluginPlace, PluginCreateRefused> PlaceOf(LoadOrderSnapshot loadOrder, string origin, string name) =>
+        loadOrder.Places.FirstOrDefault(held => string.Equals(held.Name, origin, StringComparison.OrdinalIgnoreCase)) is { } place
+            ? place
+            : new PluginCreateRefused(PluginCreateRefusal.OriginNotAMod, $"'{origin}' is not an enabled mod or Overwrite, so {name} was not created in it.");
 }

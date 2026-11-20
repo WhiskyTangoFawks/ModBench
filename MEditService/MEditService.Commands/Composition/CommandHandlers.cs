@@ -207,6 +207,18 @@ public static class CommandHandlers
             sp.GetRequiredService<CreatePluginHandler>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
+        services.AddSingleton(sp => new MakePatchPluginHandler(
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<IPluginAdapter>(),
+            new PatchRecords(
+                sp.GetRequiredService<IQueries>(),
+                sp.GetRequiredService<LoadOrderResolution>(),
+                sp.GetRequiredService<ISourceAdapter>(),
+                sp.GetRequiredService<SchemaReflector>()),
+            new TreeCompile(
+                sp.GetRequiredService<SchemaReflector>(), sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<ILogger<MakePatchPluginHandler>>()),
+            sp.GetRequiredService<HeldWrites>()));
+
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<LoadOrderHolder>(),
