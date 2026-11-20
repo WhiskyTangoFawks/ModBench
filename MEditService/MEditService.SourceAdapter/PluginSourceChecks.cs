@@ -8,7 +8,7 @@ namespace MEditService.SourceAdapter;
 
 /// <summary>A plugin's whole source tree, and the file the read stopped at, relative to the source folder.
 /// Files is empty when one is named: half a tree compiles to a binary missing records.</summary>
-public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
+internal sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
 public enum SourceDivergenceKind
 {
@@ -186,7 +186,7 @@ internal static class PluginSourceChecks
         return misplaced;
     }
 
-    private static string? FormKeyOf(string relativePath, byte[] content, string pluginFileName) =>
+    internal static string? FormKeyOf(string relativePath, byte[] content, string pluginFileName) =>
         DocumentText.FormKeyDeclaredIn(
             Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(content)), relativePath, pluginFileName);
 

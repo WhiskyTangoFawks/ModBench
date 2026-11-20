@@ -4,7 +4,6 @@ using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -230,19 +229,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public Answer<IReadOnlySet<string>, SourceFailure> FormKeysUsed(PluginAddress plugin) => throw Unreached();
 
-        public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) => throw Unreached();
-
-        public Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
-            throw Unreached();
-
-        public Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
-            throw Unreached();
-
-        public Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin) =>
-            throw Unreached();
-
-        public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
-            throw Unreached();
+        public Answer<PluginTreeFiles, SourceFailure> TreeOf(PluginAddress plugin) => throw Unreached();
 
         public Answer<SourceChanges, SourceFailure> ChangesToPut(PluginAddress plugin, SourceDocument document) => throw Unreached();
 

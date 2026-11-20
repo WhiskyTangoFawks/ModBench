@@ -111,7 +111,7 @@ public sealed class SourceRepositoryLayoutTests
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "Hand.json"));
         var read = new PluginDiagnosis(Path.Combine("Worldspaces", "ByHand", "RecordData.json"), PluginDiagnosis.UnknownClass, null, "bad JSON");
 
-        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var named = RepositoryOver(modFolder).TreeOf(Mixed).Value().Named(read);
 
         Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand", "Hand.json"), named.Value().Anchor);
     }
@@ -124,7 +124,7 @@ public sealed class SourceRepositoryLayoutTests
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(flat, [1]));
         var read = new PluginDiagnosis(flat, PluginDiagnosis.UnknownClass, null, "bad JSON");
 
-        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var named = RepositoryOver(modFolder).TreeOf(Mixed).Value().Named(read);
 
         Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", flat), named.Value().Anchor);
     }
@@ -146,7 +146,7 @@ public sealed class SourceRepositoryLayoutTests
         ];
         var read = new PluginDiagnosis(null, PluginDiagnosis.UnknownClass, null, string.Format(CultureInfo.InvariantCulture, message, paths));
 
-        var answered = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var answered = RepositoryOver(modFolder).TreeOf(Mixed).Value().Named(read);
 
         Assert.Equal(string.Format(CultureInfo.InvariantCulture, named, paths), answered.Value().Message);
     }
