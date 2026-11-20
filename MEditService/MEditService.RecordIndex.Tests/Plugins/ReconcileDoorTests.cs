@@ -121,7 +121,7 @@ public sealed class ReconcileDoorTests
         var rewrittenA = new Fallout4Mod(ModKey.FromFileName(A.Name), Fallout4Release.Fallout4);
         rewrittenA.Npcs.AddNew("FromARewritten");
         rewrittenA.WriteToBinary(data.Plugins.Single(p => p.Name == A.Name).Path);
-        index.NextCheckUntil(() => index.ListedIn(A).Any(row => row.EditorId == "FromARewritten"), "A's rewritten record");
+        index.NextCheckThatMayFailUntil(() => index.ListedIn(A).Any(row => row.EditorId == "FromARewritten"), "A's rewritten record");
 
         Assert.Equal(1, Volatile.Read(ref readsOfB));
         Assert.Contains(index.Status.Failures, f => f.Name == B.Name);
@@ -136,7 +136,7 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         PluginBinaries.Touch(data.Plugins.Single(p => p.Name == B.Name).Path);
-        index.NextCheckUntil(() => index.Status.Failures.Any(f => f.Name == B.Name), "B's failure");
+        index.NextCheckThatMayFailUntil(() => index.Status.Failures.Any(f => f.Name == B.Name), "B's failure");
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.StartsWith("Could not read this plugin", index.Status.Failures.Single(f => f.Name == B.Name).Reason, StringComparison.Ordinal);
@@ -261,7 +261,7 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
-        index.NextCheckUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
+        index.NextCheckThatMayFailUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, []));
 
         var retried = StatusesPublished(notifications)[before..];

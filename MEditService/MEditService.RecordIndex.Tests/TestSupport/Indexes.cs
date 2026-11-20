@@ -5,7 +5,6 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
@@ -36,7 +35,7 @@ internal static class Indexes
         if (source is null) services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
         else services.AddSingleton(source);
         services.AddSingleton(SharedSchemaReflector.Instance);
-        services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
+        services.AddSingleton(loggerFactory ?? TestOutput.LoggerFactory);
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddLogging();
         if (notifications is not null) services.AddSingleton(notifications);
@@ -115,13 +114,43 @@ internal static class Indexes
 
     /// <summary>The check, answered once <paramref name="announced"/> holds and its status is out:
     /// no pass through the write gate, which would re-apply the filter a test may be asserting on.
-    /// </summary>
+    /// A check that did not end clean fails the wait, naming why.</summary>
     internal static void NextCheckUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
+    {
+        var standing = index.Status;
+        index.NextCheckThatMayFailUnsettledUntil(() => announced() || FailedAnew(index.Status, standing), what);
+        index.EndedClean();
+        Waits.Reached(announced, what);
+    }
+
+    private static void EndedClean(this OpenedIndex index)
+    {
+        var status = index.Status;
+        if (NotClean(status))
+            Assert.Fail($"The check ended {status.State}: {status.Message}{Environment.NewLine}{string.Join(Environment.NewLine, status.Failures)}");
+    }
+
+    /// <summary><see cref="NextCheckUntil"/> for a test that reads the check's failure from the status itself.</summary>
+    internal static void NextCheckThatMayFailUntil(this OpenedIndex index, Func<bool> announced, string what)
+    {
+        index.NextCheckThatMayFailUnsettledUntil(announced, what);
+        index.Settled();
+    }
+
+    /// <summary><see cref="NextCheckUnsettledUntil"/> for a test that reads the check's failure from the status itself.</summary>
+    internal static void NextCheckThatMayFailUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
         index.SignalChange();
         Waits.Reached(announced, what);
         Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the check's status");
     }
+
+    private static bool NotClean(LoadOrderStatus status) =>
+        status.State is not (LoadOrderState.Ready or LoadOrderState.Reconciling) || status.Failures.Count > 0;
+
+    private static bool FailedAnew(LoadOrderStatus status, LoadOrderStatus standing) =>
+        status.State != LoadOrderState.None && NotClean(status)
+        && !(status.State == standing.State && status.Failures.SequenceEqual(standing.Failures));
 
     /// <summary>Checks the disk until the index is Ready and <paramref name="recovered"/> holds: after a fatal error the
     /// next check reopens the store (ADR-0003).</summary>
@@ -141,6 +170,13 @@ internal static class Indexes
     {
         var before = index.Sequence;
         index.NextCheckUnsettledUntil(() => index.Sequence > before, "the sequence moving");
+    }
+
+    /// <summary><see cref="NextCheck"/> for a test that reads the check's failure from the status itself.</summary>
+    internal static void NextCheckThatMayFail(this OpenedIndex index)
+    {
+        var before = index.Sequence;
+        index.NextCheckThatMayFailUnsettledUntil(() => index.Sequence > before, "the sequence moving");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

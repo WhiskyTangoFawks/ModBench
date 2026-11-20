@@ -87,7 +87,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
         other.WriteToBinary(OtherPluginPath);
 
-        _index.NextCheck();
+        _index.NextCheckThatMayFail();
 
         Assert.All(
             _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),
@@ -118,7 +118,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         var before = _notifications.Notifications.Count;
 
         File.WriteAllText(_pluginPath, "still not a plugin");
-        _index.NextCheckUntil(
+        _index.NextCheckThatMayFailUntil(
             () => _notifications.Since(before).OfType<LoadOrderStatusNotification>().Any(), "the status naming the failure again");
 
         var published = _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>().Last();

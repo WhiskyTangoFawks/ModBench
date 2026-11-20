@@ -88,7 +88,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     {
         var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE {ActivePlugins} RENAME TO active_aside");
-        index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
+        _winner.RemoveFromTree(index.DocumentOf(_npc, _winnerKey));
+        index.SignalChange();
         Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
         IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE active_aside RENAME TO {ActivePlugins}");
         return index;

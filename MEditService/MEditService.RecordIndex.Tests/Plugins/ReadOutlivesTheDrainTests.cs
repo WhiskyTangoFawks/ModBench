@@ -123,7 +123,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         var read = await AReadOutlivingEveryDrain(_index, _fixture.InstanceRoot);
         IndexFiles.Invalidate(_fixture.InstanceRoot);
 
-        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the check's failed status");
+        _index.NextCheckThatMayFailUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the check's failed status");
 
         Assert.StartsWith("FATAL Error", _index.Status.Message, StringComparison.Ordinal);
         Assert.EndsWith($" {NotReopened}", _index.Status.Message, StringComparison.Ordinal);

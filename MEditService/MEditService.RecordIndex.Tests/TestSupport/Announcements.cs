@@ -22,7 +22,17 @@ internal static class Announcements
     /// <summary>Two checks of the disk, each answered once the change it found is announced and its validation has
     /// closed, so a plugin neither announced is known quiet.</summary>
     internal static IReadOnlyList<INotification> AnnouncedByChecks(
-        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
+        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change) =>
+        index.AnnouncedByChecks(notifications, change, Indexes.NextCheckUntil);
+
+    /// <summary>The same two checks, while a failure the test staged stands.</summary>
+    internal static IReadOnlyList<INotification> AnnouncedByChecksWhileAFailureStands(
+        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change) =>
+        index.AnnouncedByChecks(notifications, change, Indexes.NextCheckThatMayFailUntil);
+
+    private static IReadOnlyList<INotification> AnnouncedByChecks(
+        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change,
+        Action<OpenedIndex, Func<bool>, string> nextCheck)
     {
         AwaitValidationClosed(index, notifications);
         var start = notifications.Notifications.Count;
@@ -30,7 +40,7 @@ internal static class Announcements
         {
             var announced = change();
             var before = notifications.Notifications.Count;
-            index.NextCheckUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the check found");
+            nextCheck(index, () => notifications.Since(before).Any(n => announced(n)), "the change the check found");
             AwaitValidationClosed(index, notifications);
         }
         return notifications.Since(start).WithoutValidations();

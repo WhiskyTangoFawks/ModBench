@@ -52,10 +52,14 @@ public sealed class EveryCheckValidatesTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-    private void CheckAnnouncing(Predicate<INotification> announced)
+    private void CheckAnnouncing(Predicate<INotification> announced) => CheckAnnouncing(announced, Indexes.NextCheckUntil);
+
+    private void CheckThatMayFailAnnouncing(Predicate<INotification> announced) => CheckAnnouncing(announced, Indexes.NextCheckThatMayFailUntil);
+
+    private void CheckAnnouncing(Predicate<INotification> announced, Action<OpenedIndex, Func<bool>, string> nextCheck)
     {
         var before = _notifications.Notifications.Count;
-        _index.NextCheckUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
+        nextCheck(_index, () => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
     }
 
     private void HandEditCompiledPlugin(string editorId = "EditedByHand")
@@ -156,8 +160,9 @@ public sealed class EveryCheckValidatesTests : IDisposable
 
         AnotherTool.Delete(Path.Combine(_compiledPlugin.ModFolderOf(), ".git"));
         File.Delete(_compiledPlugin.Path);
-        CheckAnnouncing(PluginChanged(_compiledPlugin));
+        CheckThatMayFailAnnouncing(PluginChanged(_compiledPlugin));
 
+        Assert.Contains(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
     }
 
@@ -191,9 +196,9 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void ACheck_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
     {
         File.WriteAllText(_nonCompiledPlugin.Path, "not a plugin");
-        CheckAnnouncing(FailureNamed(NonCompiledPlugin));
+        CheckThatMayFailAnnouncing(FailureNamed(NonCompiledPlugin));
 
-        var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecksWhileAFailureStands(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
@@ -234,7 +239,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void ACheck_ReadsABinaryThatFailedAgain_OnceItsBytesChange()
     {
         File.WriteAllText(_nonCompiledPlugin.Path, "not a plugin");
-        CheckAnnouncing(FailureNamed(NonCompiledPlugin));
+        CheckThatMayFailAnnouncing(FailureNamed(NonCompiledPlugin));
 
         RewriteNonCompiledPlugin("FixedByAnotherTool");
         CheckAnnouncing(PluginChanged(_nonCompiledPlugin));

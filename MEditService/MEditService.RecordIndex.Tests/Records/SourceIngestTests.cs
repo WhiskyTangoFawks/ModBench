@@ -240,7 +240,7 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
         PluginBinaries.Touch(partnerPath);
 
-        index.NextCheck();
+        index.NextCheckThatMayFail();
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);

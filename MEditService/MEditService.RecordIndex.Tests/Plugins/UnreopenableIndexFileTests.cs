@@ -103,7 +103,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
     }
 
     private void NextCheckSaysTheReopenFailed(int before) =>
-        _index.NextCheckUnsettledUntil(
+        _index.NextCheckThatMayFailUnsettledUntil(
             () => _notifications.Since(before).Any(n => n is LoadOrderStatusNotification { Status: { State: LoadOrderState.Failed, Message: { } message } }
                 && message.Contains("FATAL Error", StringComparison.Ordinal)
                 && message.Contains("mEdit's record index was not reopened: ", StringComparison.Ordinal)
@@ -115,7 +115,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         LoadOrderStatus? Refused() => _notifications.Since(before).OfType<LoadOrderStatusNotification>()
             .FirstOrDefault(n => n.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)?.Status;
 
-        _index.NextCheckUnsettledUntil(() => Refused() is not null, "the reopen's refusal");
+        _index.NextCheckThatMayFailUnsettledUntil(() => Refused() is not null, "the reopen's refusal");
 
         var refused = Refused().Require();
         Assert.Equal(LoadOrderState.HeldElsewhere, refused.State);
