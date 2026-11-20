@@ -103,6 +103,39 @@ describe('the status bar, one item saying what mEdit is doing', () => {
     expect(bar.standing()).toBe(text);
   });
 
+  describe('while the record index fills', () => {
+    const FILLING = { done: 1, total: 3, version: 1, settled: false };
+
+    it.each([
+      ['a first index', undefined],
+      ['a reconcile after Ready', 2],
+    ] as const)('names it with the count, to the item and the agent alike, during %s', (_case, ready) => {
+      const client = new InMemoryMEditClient();
+      client.setStatus('running');
+      const bar = createStatusBar(client, reporterFor);
+      if (ready !== undefined) bar.ready(ready);
+
+      client.setProgress(FILLING);
+
+      expect([theItem().text, bar.standing()]).toEqual(['$(sync~spin) mEdit: Indexing (1 of 3 plugins)', 'mEdit is Indexing (1 of 3 plugins)']);
+    });
+
+    it.each([
+      ['settled', { ...FILLING, done: 3, settled: true }],
+      ['refused', { ...FILLING, refusal: { kind: 'failed', message: 'bad' } }],
+      ['dropped', undefined],
+    ] as const)('gives the item back to mEdit\'s own state once the load order is %s', (_case, progress) => {
+      const client = new InMemoryMEditClient();
+      client.setStatus('running');
+      const bar = createStatusBar(client, reporterFor);
+      client.setProgress(FILLING);
+
+      client.setProgress(progress);
+
+      expect([theItem().text, bar.standing()]).toEqual(['$(plug) mEdit: Running', 'mEdit is Running']);
+    });
+  });
+
   it('does nothing on a click', () => {
     createStatusBar(new InMemoryMEditClient(), reporterFor);
 

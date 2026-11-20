@@ -72,16 +72,16 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
   });
 
   it.each([
-    ['a later reconcile starts', { settled: false, total: 2, version: 2 }],
-    ['the record index is dropped', undefined],
-  ] as const)('gives Ready back to mEdit\'s own state when %s', async (_when, holds) => {
+    ['a later reconcile starts', { settled: false, total: 2, version: 2 }, '$(sync~spin) mEdit: Indexing (0 of 2 plugins)'],
+    ['the record index is dropped', undefined, '$(plug) mEdit: Running'],
+  ] as const)('takes Ready off the status bar when %s', async (_when, holds, text) => {
     const { client, handedOver } = followed();
     await tell(client, { total: 2 });
     await handedOver();
 
     await tell(client, holds);
 
-    expect(statusBarText()).toBe('$(plug) mEdit: Running');
+    expect(statusBarText()).toBe(text);
   });
 
   it('hands a refusal to the tree, and gives the status bar back to mEdit\'s own state', async () => {
