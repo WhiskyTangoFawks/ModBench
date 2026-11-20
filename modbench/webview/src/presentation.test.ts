@@ -28,11 +28,15 @@ describe('a collapsed row reads a translated string in the strings language', ()
   });
 });
 
-it('a collapsed element keyed by a member the schema leaves out reads the key as the document holds it', () => {
-  const defaultObject = diffNode({ fieldName: '[0]', values: { [COLUMN]: { Use: 'AACT', Object: '000801:Test.esp' } } });
+describe('a collapsed element keyed by a member the schema leaves out', () => {
   const meta = fieldMeta({ name: '', type: 'struct', fields: [fieldMeta({ name: 'Object', type: 'formKey' })] });
 
-  expect(collapsedReading(defaultObject, meta, COLUMN, 'English', true, ['Use']).text).toBe('AACT');
+  it.each([
+    ['reads the key as the document holds it', { Use: 'AACT', Object: '000801:Test.esp' }, 'AACT'],
+    ['reads {…} when the document omits the key', { Object: '000801:Test.esp' }, '{…}'],
+  ])('%s', (_case, held, reads) => {
+    expect(collapsedReading(diffNode({ fieldName: '[0]', values: { [COLUMN]: held } }), meta, COLUMN, 'English', true, ['Use']).text).toBe(reads);
+  });
 });
 
 describe('Version Control Info 1 reads as the date, user and index it packs', () => {

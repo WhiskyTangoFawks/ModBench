@@ -293,11 +293,11 @@ function keyReading(
     const path = name.split('.');
     const memberMeta = metaAtPath(meta, memberPath(path), value);
     const held = getAtPath(value, memberPath(path));
-    if (!memberMeta) return toStr(held);
+    if (!memberMeta) return held == null ? undefined : toStr(held);
     const reading = displayValue(shownValue(held ?? defaultOf(memberMeta), memberMeta, stringsLanguage), memberMeta, diffAt(diff, path)?.resolutions?.[column]);
     return reading === '' && memberMeta.type === 'formKey' ? NO_REFERENCE : reading;
   });
-  return readings.join(', ');
+  return readings.every(r => r != null) ? readings.join(', ') : undefined;
 }
 
 function namedReading(
