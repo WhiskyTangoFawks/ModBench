@@ -50,7 +50,7 @@ public sealed class ValidationFaultTests : IDisposable
         notifications.FaultsOn = n => n is PluginChangedNotification;
         RewriteThePlugin();
 
-        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
+        index.NextCheckThatMayFailUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
 
         lock (_log)
             Assert.Contains(_log, e => e.Level == LogLevel.Error && e.Exception?.Message == InMemoryNotificationPublisher.FaultReason);

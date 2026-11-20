@@ -261,7 +261,7 @@ public sealed class PluginFilePathsTests : IDisposable
         Build(compiled: true, Compiled);
         using var index = Indexes.Reconciled(Fixture, adapter: _holdingUnreadable);
         CopyToClaimTheFormKey(Compiled, "Other");
-        index.NextCheckUntil(() => index.Status.Failures.Count > 0, "the re-read's failure");
+        index.NextCheckThatMayFailUntil(() => index.Status.Failures.Count > 0, "the re-read's failure");
 
         var answered = Assert.Single(index.Queries.GetFilePaths(null).Value());
 

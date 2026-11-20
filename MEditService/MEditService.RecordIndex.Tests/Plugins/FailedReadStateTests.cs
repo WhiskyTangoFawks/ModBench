@@ -194,7 +194,7 @@ public sealed class FailedReadStateTests : IDisposable
         Mend();
         File.WriteAllText(StrayDocument, "{}");
 
-        index.NextCheckUntil(() => TreeReads() > readsBefore, "the changed tree read again");
+        index.NextCheckThatMayFailUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
         Assert.Empty(index.ListedIn(Plugin.Key));
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
@@ -357,9 +357,9 @@ public sealed class FailedReadStateTests : IDisposable
     {
         using var index = Reconciled(new FailsToOpen(PluginFailures.Inaccessible(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenBeforeTheHold"));
-        index.NextCheckUntil(() => Failed(index), "the held read's failure");
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the held read's failure");
 
-        index.NextCheckUntil(() => !Failed(index), "the binary read again");
+        index.NextCheckThatMayFailUntil(() => !Failed(index), "the binary read again");
 
         Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "WrittenBeforeTheHold");
     }
@@ -413,7 +413,7 @@ public sealed class FailedReadStateTests : IDisposable
         SourceMods.Init(Plugin);
         ClaimedTwice();
 
-        index.NextCheckUntil(() => Failed(index), "the tree's and the binary's failure");
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the tree's and the binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
@@ -425,7 +425,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
 
-        index.NextCheckUntil(() => Failed(index), "the rewritten binary's failure");
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the rewritten binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
@@ -448,7 +448,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(new HeldAtFirstRead());
         Assert.True(Failed(index));
 
-        index.NextCheckUntil(() => !Failed(index), "the binary opened again");
+        index.NextCheckThatMayFailUntil(() => !Failed(index), "the binary opened again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
@@ -464,7 +464,7 @@ public sealed class FailedReadStateTests : IDisposable
         Arm(TreeMoment.RecordRead, () => throw thrown);
         var readsBefore = TreeReads();
 
-        index.NextCheckUntil(() => Failed(index), "the plugin's failure");
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the plugin's failure");
 
         Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
         Assert.Equal(readsBefore, TreeReads());
@@ -487,7 +487,7 @@ public sealed class FailedReadStateTests : IDisposable
         };
         var readsBefore = TreeReads();
 
-        index.NextCheckUntil(() => Failed(index), "the plugin's failure");
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the plugin's failure");
 
         Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
         Assert.Equal(readsBefore, TreeReads());

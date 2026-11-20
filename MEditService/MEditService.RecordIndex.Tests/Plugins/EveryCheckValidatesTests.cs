@@ -58,6 +58,12 @@ public sealed class EveryCheckValidatesTests : IDisposable
         _index.NextCheckUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
     }
 
+    private void CheckThatMayFailAnnouncing(Predicate<INotification> announced)
+    {
+        var before = _notifications.Notifications.Count;
+        _index.NextCheckThatMayFailUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
+    }
+
     private void HandEditCompiledPlugin(string editorId = "EditedByHand")
     {
         var document = _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key);
@@ -156,7 +162,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
 
         AnotherTool.Delete(Path.Combine(_compiledPlugin.ModFolderOf(), ".git"));
         File.Delete(_compiledPlugin.Path);
-        CheckAnnouncing(PluginChanged(_compiledPlugin));
+        CheckThatMayFailAnnouncing(PluginChanged(_compiledPlugin));
 
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
     }
@@ -191,9 +197,9 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void ACheck_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
     {
         File.WriteAllText(_nonCompiledPlugin.Path, "not a plugin");
-        CheckAnnouncing(FailureNamed(NonCompiledPlugin));
+        CheckThatMayFailAnnouncing(FailureNamed(NonCompiledPlugin));
 
-        var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecksWhileAFailureStands(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
@@ -234,10 +240,10 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void ACheck_ReadsABinaryThatFailedAgain_OnceItsBytesChange()
     {
         File.WriteAllText(_nonCompiledPlugin.Path, "not a plugin");
-        CheckAnnouncing(FailureNamed(NonCompiledPlugin));
+        CheckThatMayFailAnnouncing(FailureNamed(NonCompiledPlugin));
 
         RewriteNonCompiledPlugin("FixedByAnotherTool");
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckThatMayFailAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == NonCompiledPlugin);

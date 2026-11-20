@@ -241,7 +241,7 @@ public sealed class SourceIngestTests : IDisposable
         PluginBinaries.Touch(partnerPath);
         var before = index.Sequence;
 
-        index.NextCheckUnsettledUntil(() => index.Sequence > before, "the sequence moving");
+        index.NextCheckThatMayFailUnsettledUntil(() => index.Sequence > before, "the sequence moving");
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);

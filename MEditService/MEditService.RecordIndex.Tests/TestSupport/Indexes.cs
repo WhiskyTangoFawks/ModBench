@@ -114,13 +114,32 @@ internal static class Indexes
 
     /// <summary>The check, answered once <paramref name="announced"/> holds and its status is out:
     /// no pass through the write gate, which would re-apply the filter a test may be asserting on.
-    /// </summary>
+    /// A check that did not end clean fails the wait, naming why.</summary>
     internal static void NextCheckUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
+    {
+        index.NextCheckThatMayFailUnsettledUntil(() => announced() || NotClean(index.Status), what);
+        var status = index.Status;
+        if (NotClean(status))
+            Assert.Fail($"The check ended {status.State}: {status.Message}{Environment.NewLine}{string.Join(Environment.NewLine, status.Failures)}");
+    }
+
+    /// <summary><see cref="NextCheckUntil"/> for a test that reads the check's failure from the status itself.</summary>
+    internal static void NextCheckThatMayFailUntil(this OpenedIndex index, Func<bool> announced, string what)
+    {
+        index.NextCheckThatMayFailUnsettledUntil(announced, what);
+        index.Settled();
+    }
+
+    /// <summary><see cref="NextCheckUnsettledUntil"/> for a test that reads the check's failure from the status itself.</summary>
+    internal static void NextCheckThatMayFailUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
         index.SignalChange();
         Waits.Reached(announced, what);
         Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the check's status");
     }
+
+    private static bool NotClean(LoadOrderStatus status) =>
+        status.State is not (LoadOrderState.Ready or LoadOrderState.Reconciling) || status.Failures.Count > 0;
 
     /// <summary>Checks the disk until the index is Ready and <paramref name="recovered"/> holds: after a fatal error the
     /// next check reopens the store (ADR-0003).</summary>
@@ -135,16 +154,11 @@ internal static class Indexes
         }, what);
 
     /// <summary>A change signalled, answered once the rows it changed are announced as the sequence moving, which a
-    /// projection does after it has re-applied the filter. A failed check, moving the sequence or not, fails the wait.</summary>
+    /// projection does after it has re-applied the filter.</summary>
     internal static void NextCheck(this OpenedIndex index)
     {
         var before = index.Sequence;
-        index.NextCheckUnsettledUntil(
-            () => index.Sequence > before || index.Status is { State: LoadOrderState.Failed } or { Failures.Count: > 0 },
-            "the sequence moving or a failure");
-        var status = index.Status;
-        if (status.State != LoadOrderState.Ready || status.Failures.Count > 0)
-            Assert.Fail($"The check ended {status.State}: {status.Message}{Environment.NewLine}{string.Join(Environment.NewLine, status.Failures)}");
+        index.NextCheckUnsettledUntil(() => index.Sequence > before, "the sequence moving");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

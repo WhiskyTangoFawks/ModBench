@@ -13,27 +13,31 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 /// <summary>The backend's warnings and errors, written to the output of the test whose flow logged them.</summary>
 internal static class TestOutput
 {
-    private static readonly AsyncLocal<StringBuilder?> Running = new();
+    private static readonly AsyncLocal<StringBuilder?> Captured = new();
 
     internal static readonly ILoggerFactory LoggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(
         logging => logging.SetMinimumLevel(LogLevel.Warning).AddProvider(new Provider()));
 
-    internal static readonly ILogEventSink Serilog = new SerilogSink();
+    internal static readonly ILogEventSink SerilogWarnings = new SerilogSink();
 
-    internal static void Started() => Running.Value = new StringBuilder();
+    internal static void Started() => Captured.Value = new StringBuilder();
 
     internal static string Written()
     {
-        var written = Running.Value;
+        var written = Captured.Value;
         if (written is null) return "";
         lock (written) return written.ToString();
     }
 
-    private static void WriteLine(string line)
+    private static void WriteLine(string line, Exception? exception)
     {
-        var written = Running.Value;
+        var written = Captured.Value;
         if (written is null) return;
-        lock (written) written.AppendLine(line);
+        lock (written)
+        {
+            written.AppendLine(line);
+            if (exception is not null) written.AppendLine(exception.ToString());
+        }
     }
 
     private sealed class Provider : ILoggerProvider
@@ -50,13 +54,13 @@ internal static class TestOutput
         public bool IsEnabled(LogLevel logLevel) => true;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            WriteLine($"{logLevel} {category}: {formatter(state, exception)}{exception?.ToString().Insert(0, Environment.NewLine)}");
+            WriteLine($"{logLevel} {category}: {formatter(state, exception)}", exception);
     }
 
     private sealed class SerilogSink : ILogEventSink
     {
         public void Emit(LogEvent logEvent) =>
-            WriteLine($"{logEvent.Level}: {logEvent.RenderMessage()}{logEvent.Exception?.ToString().Insert(0, Environment.NewLine)}");
+            WriteLine($"{logEvent.Level}: {logEvent.RenderMessage()}", logEvent.Exception);
     }
 }
 
@@ -82,7 +86,7 @@ internal sealed class TestOutputSink(IMessageBus bus) : LongLivedMarshalByRefObj
 public sealed class TestOutputFramework : SchemaWarmedTestFramework
 {
     public TestOutputFramework(IMessageSink messageSink) : base(messageSink) =>
-        Log.Logger = new LoggerConfiguration().MinimumLevel.Warning().WriteTo.Sink(TestOutput.Serilog).CreateLogger();
+        Log.Logger = new LoggerConfiguration().MinimumLevel.Warning().WriteTo.Sink(TestOutput.SerilogWarnings).CreateLogger();
 
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName) => new Executor(base.CreateExecutor(assemblyName));
 
