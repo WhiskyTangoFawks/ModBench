@@ -55,8 +55,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private MakePatchPluginHandler HandlerOver(IPluginAdapter adapter) =>
         TestEditService.Over(_holder, adapter: adapter, index: _index.Queries).GetRequiredService<MakePatchPluginHandler>();
 
-    // A file that lands at the path after the make looked for one.
-    private sealed class SeeingNoFile(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
+    private sealed class MissingTheFileThatLandsAfterTheCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
     {
         public override bool Exists(string pluginPath) => false;
     }
@@ -95,15 +94,27 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     [Fact]
     public async Task ARecordAsATypeOtherThanTheOneItIs_IsRefused_NamingTheRecordAndBothTypes()
     {
-        var types = RecordTypes.For(GameRelease.Fallout4);
-        var (npcType, placedType) = (types.RecordTypeOf(_npc), types.RecordTypeOf(_interiorRef));
-
-        var made = await Handler.Make(Mod, Patch, [], [Given(_npc, placedType)]);
+        var made = await Handler.Make(Mod, Patch, [], [Given(_npc, "refr")]);
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal(
-            $"{_npc.FormKey} is a {npcType} in {Base}, not the {placedType} given.",
+            $"{_npc.FormKey} is a npc_ in {Base}, not the refr given.",
             refused.Message);
+    }
+
+    [Fact]
+    public async Task ANewPlacedRecordGivenAlone_IsRefused_SayingToGiveItInsideItsContainersDocument()
+    {
+        var placed = new PlacedObject(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4);
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(placed, "refr")]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            new PatchRefused.OfRecord(
+                RecordEditRefusal.ContainerUnknown,
+                $"No plugin's copy of 000800:{Patch} says which container it lives in. Give it inside its container's document."),
+            refused);
     }
 
     [Fact]
@@ -163,7 +174,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     {
         await File.WriteAllTextAsync(PatchPath, "landed");
 
-        var made = await HandlerOver(new SeeingNoFile(TestAdapters.Mutagen())).Make(Mod, Patch, [], [Given(_npc)]);
+        var made = await HandlerOver(new MissingTheFileThatLandsAfterTheCheck(TestAdapters.Mutagen())).Make(Mod, Patch, [], [Given(_npc)]);
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal(
@@ -189,7 +200,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         ARecordNamingNoFormKey,
         ARecordTwice,
         ARecordNoPluginHoldsWithNoType,
-        APlacedRecordNoPluginHolds,
         ANativeFormIdOutsideTheLightRange,
         ARecordAsNoRecordType,
         APlacedRecordWhoseCellNoPluginHolds,
@@ -202,7 +212,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
     private (string Name, IReadOnlyList<string> Flags, IReadOnlyList<GivenRecord> Records) Making(Giving giving)
     {
-        var placedType = RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(_interiorRef);
         switch (giving)
         {
             case Giving.AFileAtItsPath:
@@ -214,8 +223,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 return (Patch, [], [Given(_npc), Given(_npc)]);
             case Giving.ARecordNoPluginHoldsWithNoType:
                 return (Patch, [], [Given(new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4))]);
-            case Giving.APlacedRecordNoPluginHolds:
-                return (Patch, [], [Given(new PlacedObject(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4), placedType)]);
             case Giving.ARecordAsNoRecordType:
                 return (Patch, [], [Given(_npc, "nothing")]);
             case Giving.APlacedRecordWhoseCellNoPluginHolds:
@@ -249,7 +256,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         { Giving.ARecordNamingNoFormKey, new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, "") },
         { Giving.ARecordTwice, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },
         { Giving.ARecordNoPluginHoldsWithNoType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
-        { Giving.APlacedRecordNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.ANativeFormIdOutsideTheLightRange, new PatchRefused.AsCompile(CompileRefusal.FormIdOutsideFlagLimit, "") },
         { Giving.ARecordAsNoRecordType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
         { Giving.APlacedRecordWhoseCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
