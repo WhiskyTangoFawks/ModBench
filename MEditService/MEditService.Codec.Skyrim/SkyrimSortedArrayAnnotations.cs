@@ -45,7 +45,7 @@ internal static class SkyrimSortedArrayAnnotations
         ("IBodyPartDataGetter", "Parts", ["PartNode"]),
 
         ("IAPerkEffectGetter", "Conditions", ["RunOnTabIndex"]),
-        // xEdit keys an effect by its header, then its effect data. Mutagen holds the effect type and data as the union's leaf, which no key member reaches.
+        // xEdit keys an effect by its header, then its effect data and function parameters. Mutagen holds the effect type and data as the union's leaf, which no key member reaches.
         ("IPerkGetter", "Effects", ["Rank", "Priority"]),
         ("IQuestGetter", "Stages", ["Index"]),
         ("IQuestGetter", "Objectives", ["Index"]),

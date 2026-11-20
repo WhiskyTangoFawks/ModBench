@@ -115,30 +115,27 @@ public sealed class SchemaAnnotationTests
     private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> overlay) =>
         new(annotationsOf: _ => overlay(GameCodecs.For(GameRelease.Fallout4).Annotations));
 
-    [Fact]
-    public void AnUnkeyedSortedArrayRowTheWalkNeverMeets_FailsTheSchemaBuild_NamingTheRow()
+    public static TheoryData<Func<SchemaAnnotations, SchemaAnnotations>, string> RowsTheWalkNeverMeets => new()
     {
-        var reflector = Fallout4With(annotations => annotations with
         {
-            UnkeyedSortedArrays = [.. annotations.UnkeyedSortedArrays, ("INpcGetter", "Unwalked")],
-        });
+            annotations => annotations with { UnkeyedSortedArrays = [.. annotations.UnkeyedSortedArrays, ("INpcGetter", "Unwalked")] },
+            "UnkeyedSortedArrays: INpcGetter.Unwalked"
+        },
+        {
+            annotations => annotations with { KeyedArrays = new(annotations.KeyedArrays) { [("IHeadDataGetter", "HeadParts")] = ["Number"] } },
+            "KeyedArrays: IHeadDataGetter.HeadParts"
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(RowsTheWalkNeverMeets))]
+    public void ASortedArrayRowTheWalkNeverMeets_FailsTheSchemaBuild_NamingTheRow(Func<SchemaAnnotations, SchemaAnnotations> overlay, string row)
+    {
+        var reflector = Fallout4With(overlay);
 
         var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
 
-        Assert.Contains("UnkeyedSortedArrays: INpcGetter.Unwalked", failure.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AKeyedArrayRowTheWalkNeverMeets_FailsTheSchemaBuild_NamingTheRow()
-    {
-        var reflector = Fallout4With(annotations => annotations with
-        {
-            KeyedArrays = new(annotations.KeyedArrays) { [("IHeadDataGetter", "HeadParts")] = ["Number"] },
-        });
-
-        var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
-
-        Assert.Contains("KeyedArrays: IHeadDataGetter.HeadParts", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(row, failure.Message, StringComparison.Ordinal);
     }
 
     [Theory]
