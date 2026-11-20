@@ -28,6 +28,17 @@ describe('a collapsed row reads a translated string in the strings language', ()
   });
 });
 
+describe('a collapsed element keyed by a member the schema leaves out', () => {
+  const meta = fieldMeta({ name: '', type: 'struct', fields: [fieldMeta({ name: 'Object', type: 'formKey' })] });
+
+  it.each([
+    ['reads the key as the document holds it', { Use: 'AACT', Object: '000801:Test.esp' }, 'AACT'],
+    ['reads {…} when the document omits the key', { Object: '000801:Test.esp' }, '{…}'],
+  ])('%s', (_case, held, reads) => {
+    expect(collapsedReading(diffNode({ fieldName: '[0]', values: { [COLUMN]: held } }), meta, COLUMN, 'English', true, ['Use']).text).toBe(reads);
+  });
+});
+
 describe('Version Control Info 1 reads as the date, user and index it packs', () => {
   const formVersion = fieldMeta({ name: 'FormVersion', type: 'int' });
   const copy = (version: number | null) => compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fields: [{ metadata: formVersion, value: version }] });
