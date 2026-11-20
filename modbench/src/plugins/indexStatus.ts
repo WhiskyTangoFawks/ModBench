@@ -52,8 +52,11 @@ export type FollowedNarrator = ReconcileNarrator & { hearNow(): Promise<void> };
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNarrator } & vscode.Disposable {
   const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
   const tellOnce = tellingOnSurface(reporter, 'error');
-  const tellFailedReads = (failures: readonly PluginLoadFailure[]): void => {
-    tellOnce(failures.map((f) => ({ key: pluginAddressKey(f), message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
+  // A refusal hears only the plugins its reconcile reached, so it adds to what the last one heard.
+  let heardFailures = new Map<string, PluginLoadFailure>();
+  const tellFailedReads = (failures: readonly PluginLoadFailure[], adding = false): void => {
+    heardFailures = new Map([...adding ? heardFailures : [], ...failures.map((f) => [pluginAddressKey(f), f] as const)]);
+    tellOnce([...heardFailures].map(([key, f]) => ({ key, message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
   };
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
@@ -62,7 +65,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
       statusBar.showMEditState();
     },
     applyRefused: (refusal, failures) => {
-      tellFailedReads(failures);
+      tellFailedReads(failures, true);
       facts.refused(refusal);
       statusBar.showMEditState();
     },

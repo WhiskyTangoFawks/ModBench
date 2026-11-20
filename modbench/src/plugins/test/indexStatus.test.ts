@@ -206,6 +206,18 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.reporter.shownFailures).toEqual([{ severity: 'error', message: 'Failed to read "Bad.esp" (SomeMod).', detail: 'RACE parse' }]);
   });
 
+  it('tells a failed read once across a refusal that heard none of it', async () => {
+    const { client, deps, handedOver, followed: following } = followed();
+
+    await tell(client, { total: 2, failures: [badFailure] });
+    await handedOver();
+    await tell(client, { version: 2, total: 2, refusal: { kind: 'failed', message: 'the reconcile threw' } });
+    await tell(client, { version: 3, total: 2, failures: [badFailure] });
+    await following.narrator.settled(3);
+
+    expect(deps.reporter.shownFailures).toHaveLength(1);
+  });
+
   it('hands the tree the record index\'s own failures and counts the snapshot\'s total in the log', async () => {
     const { client, deps, handedOver } = followed();
 

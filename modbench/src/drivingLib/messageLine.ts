@@ -2,5 +2,5 @@
 export function messageLine(...parts: (string | undefined)[]): string | undefined {
   const said = parts.filter((part) => part !== undefined);
   if (said.length === 0) return undefined;
-  return said.map((part, i) => (i < said.length - 1 && !part.endsWith('.') ? `${part}.` : part)).join(' ');
+  return said.map((part, i) => (i < said.length - 1 && !/[.…?!]$/.test(part) ? `${part}.` : part)).join(' ');
 }

@@ -123,8 +123,7 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
  *  shows from them (plugins.md, A row). */
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
-  // The plugins whose rows stood when the last reconcile landed.
-  private stood = new ByPluginAddress<true>();
+  private rowsStoodAtLastReconcile = new ByPluginAddress<true>();
   private answers = new Map<string, PluginMetadata>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
@@ -193,8 +192,8 @@ export class PluginFacts {
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
     this.judgeSorting(activeOrder, loot);
-    const rowsGone = failures.filter((f) => this.stood.has(f) && !this.rowsStand(f));
-    this.stood = heldSet(plugins.filter((p) => p.rowsFrom != null));
+    const rowsGone = failures.filter((f) => this.rowsStoodAtLastReconcile.has(f) && !this.rowsStand(f));
+    this.rowsStoodAtLastReconcile = heldSet(plugins.filter((p) => p.rowsFrom != null));
     return rowsGone;
   }
 

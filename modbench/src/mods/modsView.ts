@@ -118,7 +118,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const own = <T extends vscode.Disposable>(disposable: T): T => { owned.push(disposable); return disposable; };
   const nexusRow = nexusRowInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.downloadsView], 'modbench.mod.nexusRowIn');
   const sourceGestureRows = selectionInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.sourceGestures.pluginsView], 'modbench.mod.sourceGestureRowsIn');
-  // instance-repository.md, Status, story 1. The last good read's reasons are the provider's, under one prefix with the instance's.
+  // instance-repository.md, Status, story 1.
   const statusMessage = () => (instance.value.holdsRepository ? statuses.unreadMessage() : undefined);
   const open = new OpenRows(instance);
   const provider = new ModListProvider({ instance, statuses, open, reporter: reporterFor('modlist.drop') });
