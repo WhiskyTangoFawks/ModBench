@@ -42,10 +42,11 @@ internal static class GameAnnotations
             {
                 [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
             },
-            KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
+            KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldSortedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            UnkeyedSortedArrays: [.. StarfieldSortedArrayAnnotations.UnkeyedSortedArrays],
             FormatSortedLists: FormatNormalization.SortedLists,
-            ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+            ExtendedKeys: StarfieldSortedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],
             // xEdit's wbVec3PosRot: the Data of REFR, ACHR and the projectile placements.

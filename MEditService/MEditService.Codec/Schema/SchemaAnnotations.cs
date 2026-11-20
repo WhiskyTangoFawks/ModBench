@@ -72,6 +72,9 @@ public sealed record SchemaAnnotations(
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
+    // xEdit's wbArrayS whose elements have no key: the game does not read the order, so the array takes no
+    // move. Aligned in sequence, kept in the order held.
+    HashSet<(string TypeName, string MemberName)> UnkeyedSortedArrays,
     IReadOnlyList<(Type Declarer, string Member)> FormatSortedLists,
     // See FieldMetadata.ExtendedKeyMembers; every row extends a KeyedArrays row.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> ExtendedKeys,
@@ -303,9 +306,13 @@ public sealed record SchemaAnnotations(
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     internal IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
-    internal bool IsSortedByFormat(PropertyInfo prop) => IsSortedByFormat(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
+    internal bool IsSorted(PropertyInfo prop) => IsSorted(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
     internal bool IsSortedByFormat(Type owner, string member) =>
         FormatSortedLists.Any(list => list.Member == member && list.Declarer.IsAssignableFrom(owner));
+    private bool IsSorted(Type owner, string member) =>
+        UnkeyedSortedArrays.Contains((owner.Name, member)) || IsSortedByFormat(owner, member);
+    private bool TakesMove(Type owner, string member) =>
+        !KeyedArrays.ContainsKey((owner.Name, member)) && !IsSorted(owner, member);
     internal IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
@@ -691,9 +698,11 @@ public sealed record SchemaAnnotations(
                 .Select(t => $"{nameof(CycleTruncations)}: {t} never stops the walk or lets a loop through"),
             .. EmptySubSchemaTypes.Where(t => !observed.EmptySubSchemas.Contains(t)).Order(StringComparer.Ordinal)
                 .Select(t => $"{nameof(EmptySubSchemaTypes)}: {t} never comes out empty in the walk"),
+            .. Unwalked(nameof(KeyedArrays), KeyedArrays.Keys, observed),
+            .. Unwalked(nameof(UnkeyedSortedArrays), UnkeyedSortedArrays, observed),
             .. FormatSortedLists.SelectMany(sorted => observed.ListsWalked
                     .Where(walked => walked.Member == sorted.Member && walked.Declarer != sorted.Declarer
-                        && (sorted.Declarer.IsAssignableFrom(walked.Declarer) || walked.Declarer.IsAssignableFrom(sorted.Declarer)))
+                        && walked.Declarer.IsAssignableFrom(sorted.Declarer) && TakesMove(walked.Declarer, walked.Member))
                     .Select(walked => $"{nameof(FormatSortedLists)}: the format sorts {sorted.Declarer.Name}.{sorted.Member}, " +
                         $"which the schema walks as {walked.Declarer.Name}.{walked.Member}, so an array of it offers a move")),
             .. RecordFlagNames.Where(r => !observed.NamedFlags.Contains((r.TypeName, r.Bit)))
@@ -707,6 +716,13 @@ public sealed record SchemaAnnotations(
                 $"— fix or delete each entry: {string.Join("; ", idle)}");
         }
     }
+
+    private static IEnumerable<string> Unwalked(
+        string table, IEnumerable<(string TypeName, string MemberName)> rows, WalkObservations observed) =>
+        rows
+            .Where(row => !observed.ListsWalked.Any(walked => walked.Declarer.Name == row.TypeName && walked.Member == row.MemberName))
+            .Select(row => $"{table}: {row.TypeName}.{row.MemberName} is no array the walk meets")
+            .Order(StringComparer.Ordinal);
 }
 
 /// <summary>What the walk did with the rows that claim something about the walk itself. Every

@@ -1,6 +1,9 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins.Aspects;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -64,12 +67,19 @@ public sealed class SchemaAnnotationTests
     [InlineData(GameRelease.Fallout4, "navi", "MapInfos.[].LinkedDoors", "Door", null)]
     [InlineData(GameRelease.Fallout4, "navi", "PreferredPathing.NavmeshTree", "NodeIndex", null)]
     [InlineData(GameRelease.Fallout4, "land", "Layers", "Header.Quadrant,Header.LayerNumber", null)]
+    [InlineData(GameRelease.Fallout4, "dobj", "Objects", "Use", null)]
+    [InlineData(GameRelease.Fallout4, "perk", "Effects", "Rank,Priority", null)]
     [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", "Faction", null)]
+    [InlineData(GameRelease.SkyrimSE, "dobj", "Objects", "Use", null)]
+    [InlineData(GameRelease.SkyrimSE, "perk", "Effects", "Rank,Priority", null)]
     [InlineData(GameRelease.SkyrimSE, "lvli", "Entries", "Data.Level,Data.Reference", "Data.Count,ExtraData.ItemCondition,ExtraData.Owner")]
     [InlineData(GameRelease.Starfield, "npc_", "Factions", "Faction", null)]
     [InlineData(GameRelease.Starfield, "lvli", "Entries", "Level,Reference", "Count,Data.ItemCondition,Data.Owner")]
     [InlineData(GameRelease.Starfield, "lvlp", "Entries", "Level,Reference", "Count,Conditions")]
     [InlineData(GameRelease.Starfield, "stag", "Tags", "Tag", null)]
+    [InlineData(GameRelease.Starfield, "dobj", "Objects", "Use", null)]
+    [InlineData(GameRelease.Starfield, "perk", "Ranks.[].Effects", "Rank,Priority", null)]
+    [InlineData(GameRelease.Starfield, "biom", "Terrain", "Main", null)]
     public void AnArrayXEditSorts_AlignsByTheKeyXEditSortsItBy_AndAnyOtherAlignsInSequence(
         GameRelease release, string table, string path, string? keys, string? extendedKeys)
     {
@@ -80,16 +90,83 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
-    [InlineData(GameRelease.Fallout4, "npc_", "ActorEffect", true)]
-    [InlineData(GameRelease.Fallout4, "npc_", "Factions", true)]
     [InlineData(GameRelease.Fallout4, "npc_", "Keywords", false)]
-    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesAdded", true)]
+    [InlineData(GameRelease.Fallout4, "armo", "Keywords", false)]
+    [InlineData(GameRelease.Fallout4, "npc_", "ActorEffect", false)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Factions", false)]
+    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesRemoved", false)]
     [InlineData(GameRelease.Fallout4, "term", "Properties", false)]
-    [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", true)]
-    [InlineData(GameRelease.Starfield, "npc_", "Factions", true)]
-    public void AnArrayTheFormatSorts_SaysSo(GameRelease release, string table, string path, bool sorted)
+    [InlineData(GameRelease.Fallout4, "lctn", "WorldspaceCellsAdded.[].Coordinates", false)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Packages", true)]
+    [InlineData(GameRelease.Fallout4, "cobj", "Conditions", true)]
+    [InlineData(GameRelease.SkyrimSE, "npc_", "Keywords", false)]
+    [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", false)]
+    [InlineData(GameRelease.SkyrimSE, "cobj", "Conditions", true)]
+    [InlineData(GameRelease.Starfield, "npc_", "Keywords", false)]
+    [InlineData(GameRelease.Starfield, "npc_", "Factions", false)]
+    [InlineData(GameRelease.Starfield, "scol", "Parts.[].Placements", false)]
+    public void OnlyAnArrayWhoseOrderTheGameReads_IsNeitherKeyedNorSorted(GameRelease release, string table, string path, bool takesMove)
     {
-        Assert.Equal(sorted, SchemaFields.At(release, table, path).SortedByFormat);
+        var array = SchemaFields.At(release, table, path);
+
+        Assert.Equal(takesMove, array.KeyMembers == null && !array.SortedByFormat);
+    }
+
+    private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> overlay) =>
+        new(annotationsOf: _ => overlay(GameCodecs.For(GameRelease.Fallout4).Annotations));
+
+    public static TheoryData<Func<SchemaAnnotations, SchemaAnnotations>, string> RowsTheWalkNeverMeets => new()
+    {
+        {
+            annotations => annotations with { UnkeyedSortedArrays = [.. annotations.UnkeyedSortedArrays, ("INpcGetter", "Unwalked")] },
+            "UnkeyedSortedArrays: INpcGetter.Unwalked"
+        },
+        {
+            annotations => annotations with { KeyedArrays = new(annotations.KeyedArrays) { [("IHeadDataGetter", "HeadParts")] = ["Number"] } },
+            "KeyedArrays: IHeadDataGetter.HeadParts"
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(RowsTheWalkNeverMeets))]
+    public void ASortedArrayRowTheWalkNeverMeets_FailsTheSchemaBuild_NamingTheRow(Func<SchemaAnnotations, SchemaAnnotations> overlay, string row)
+    {
+        var reflector = Fallout4With(overlay);
+
+        var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
+
+        Assert.Contains(row, failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords", true)]
+    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences", false)]
+    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema_SortedUnderItsDeclarerOnly(
+        Type sorted, string member, string table, string path, bool sortedByFormat)
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            UnkeyedSortedArrays = [],
+            FormatSortedLists = [.. annotations.FormatSortedLists, (sorted, member)],
+        });
+
+        var array = reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(column => column.Name == path).Field;
+
+        Assert.Equal(sortedByFormat, array.SortedByFormat);
+    }
+
+    [Fact]
+    public void AFormatSortedListWalkedUnderAProperBaseThatLeavesItMovable_FailsTheSchemaBuild_NamingBoth()
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            FormatSortedLists = [.. annotations.FormatSortedLists, (typeof(IPlacedArrowGetter), "LocationRefTypes")],
+        });
+
+        var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
+
+        Assert.Contains("IPlacedArrowGetter.LocationRefTypes", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("IAPlacedTrapGetter.LocationRefTypes", failure.Message, StringComparison.Ordinal);
     }
 
     private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>

@@ -17,12 +17,12 @@ public sealed class DecompileChurnTests : TestInstance
     public DecompileChurnTests()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("ChurnFixture.esp"), Fallout4Release.Fallout4);
-        var first = mod.Keywords.AddNew("ChurnKeywordA");
-        var second = mod.Keywords.AddNew("ChurnKeywordB");
-        var third = mod.Keywords.AddNew("ChurnKeywordC");
+        var first = mod.Packages.AddNew("ChurnPackageA");
+        var second = mod.Packages.AddNew("ChurnPackageB");
+        var third = mod.Packages.AddNew("ChurnPackageC");
         mod.Npcs.AddNew("ChurnNpcPlain");
         var tagged = mod.Npcs.AddNew("ChurnNpcTagged");
-        tagged.Keywords = [first.ToLink(), second.ToLink(), third.ToLink()];
+        tagged.Packages.AddRange([first.ToLink(), second.ToLink(), third.ToLink()]);
         _taggedNpc = tagged.FormKey;
         var ranked = mod.Npcs.AddNew("ChurnNpcRanked");
         ranked.Factions.AddRange(
@@ -112,7 +112,7 @@ public sealed class DecompileChurnTests : TestInstance
     {
         var file = SourceModTree.DocumentFile(ModFolder, _plugin, _taggedNpc.ToString()).Require();
 
-        var moved = EditHandler.Edit(_plugin, _taggedNpc.ToString(), MoveTo(1, Member("Keywords"), At(0)));
+        var moved = EditHandler.Edit(_plugin, _taggedNpc.ToString(), MoveTo(1, Member("Packages"), At(0)));
         Assert.True(moved.Applied, moved.Message);
         await CompileHandler.CompileLandedAsync(_plugin);
         await Decompile();

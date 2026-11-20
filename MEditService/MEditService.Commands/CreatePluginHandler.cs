@@ -24,7 +24,7 @@ public sealed class CreatePluginHandler
     internal CreatePluginHandler(
         IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
         ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _held, _decompiler) = (adapter, holder, source, held, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        (_adapter, _holder, _source, _held, _decompiler) = (adapter, holder, source, held, new PluginDecompiler(logger, adapter, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)

@@ -86,13 +86,13 @@ public sealed class RecordDocumentEditTests : IDisposable
     [Fact]
     public void Move_ToThePositionTheElementHolds_IsRefusedAsMalformed_AndChangesNothing()
     {
-        var formKey = SeedNpc();
+        var formKey = SeedCobj();
         var before = _fixture.Document(formKey);
 
-        var (result, after) = _fixture.Apply(formKey, MoveTo(0, Member("Keywords"), At(0)));
+        var (result, after) = _fixture.Apply(formKey, MoveTo(0, Member("Conditions"), At(0)));
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Equal("'Keywords[0]': the element is already at position 0.", result.Message);
+        Assert.Equal("'Conditions[0]': the element is already at position 0.", result.Message);
         Assert.Null(after);
         Assert.Equal(before, _fixture.Document(formKey));
     }

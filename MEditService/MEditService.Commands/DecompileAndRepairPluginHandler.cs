@@ -28,7 +28,7 @@ public sealed class DecompileAndRepairPluginHandler
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
         SchemaReflector schemaReflector, HeldWrites held, ILogger<DecompileAndRepairPluginHandler> logger)
     {
-        var decompiler = new PluginDecompiler(logger, adapter, source, schemaReflector);
+        var decompiler = new PluginDecompiler(logger, adapter, schemaReflector);
         (_loadOrder, _adapter, _source, _held, _logger) = (loadOrder, adapter, source, held, logger);
         _repairer = new PluginRepairer(adapter, decompiler);
         _init = new ModInit(logger, source, modFolders, decompiler);

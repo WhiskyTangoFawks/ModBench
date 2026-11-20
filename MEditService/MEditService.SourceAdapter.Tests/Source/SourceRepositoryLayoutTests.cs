@@ -111,7 +111,7 @@ public sealed class SourceRepositoryLayoutTests
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "Hand.json"));
         var read = new PluginDiagnosis(Path.Combine("Worldspaces", "ByHand", "RecordData.json"), PluginDiagnosis.UnknownClass, null, "bad JSON");
 
-        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var named = RepositoryOver(modFolder).TreeOf(Mixed).Value().Named(read);
 
         Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand", "Hand.json"), named.Value().Anchor);
     }
@@ -124,7 +124,7 @@ public sealed class SourceRepositoryLayoutTests
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(flat, [1]));
         var read = new PluginDiagnosis(flat, PluginDiagnosis.UnknownClass, null, "bad JSON");
 
-        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var named = RepositoryOver(modFolder).TreeOf(Mixed).Value().Named(read);
 
         Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", flat), named.Value().Anchor);
     }
@@ -146,7 +146,7 @@ public sealed class SourceRepositoryLayoutTests
         ];
         var read = new PluginDiagnosis(null, PluginDiagnosis.UnknownClass, null, string.Format(CultureInfo.InvariantCulture, message, paths));
 
-        var answered = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var answered = RepositoryOver(modFolder).TreeOf(Mixed).Value().Named(read);
 
         Assert.Equal(string.Format(CultureInfo.InvariantCulture, named, paths), answered.Value().Message);
     }
@@ -185,7 +185,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [4]),
         ];
 
-        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, Release);
+        var readBack = PluginTreeFiles.Made("Mixed.ESP", tree, Release).Value().Files;
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())),
@@ -207,7 +207,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine(quest, "Scenes", "S - 000804_Mixed.ESP.json"), [6]),
         ];
 
-        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, Release);
+        var readBack = PluginTreeFiles.Made("Mixed.ESP", tree, Release).Value().Files;
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())).Order(),
@@ -225,7 +225,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine(topic, "Responses", "000802_Mixed.ESP.json"), [3]),
         ];
 
-        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, GameRelease.SkyrimSE);
+        var readBack = PluginTreeFiles.Made("Mixed.ESP", tree, GameRelease.SkyrimSE).Value().Files;
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())).Order(),

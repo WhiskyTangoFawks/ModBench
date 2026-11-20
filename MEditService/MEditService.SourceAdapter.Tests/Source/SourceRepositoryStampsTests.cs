@@ -140,7 +140,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
 
         Assert.Equal(meta, problem.SourceRelativePath);
-        Assert.Equal(Assert.Single(_repository.RefusedFilesOf(Plugin).Value()).Reason, problem.Message);
+        Assert.Equal(Assert.Single(_repository.TreeOf(Plugin).Value().RefusedFiles().Value()).Reason, problem.Message);
     }
 
     [Fact]

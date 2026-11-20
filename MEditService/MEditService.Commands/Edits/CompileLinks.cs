@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands.Edits;
 
 internal sealed record LinkCheckScope(
-    PluginAddress Address, RegisteredPlugin Registered, LoadOrderSnapshot LoadOrder, ISourceRepository Repository);
+    PluginAddress Address, RegisteredPlugin Registered, LoadOrderSnapshot LoadOrder, PluginTreeFiles Tree);
 
 internal sealed record SourceRecord(
     string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId);
@@ -38,7 +38,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
     private List<CompileDiagnostic> LinkDiagnostics(
         LinkCheckScope compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
-        var (plugin, registered, loadOrder, repository) = compiled;
+        var (plugin, registered, loadOrder, tree) = compiled;
         var answers = adapter.LinkTargets(loadOrder, registered, links);
         ResolvedFormKey? Resolve(string formKey) =>
             answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
@@ -53,7 +53,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         var diagnostics = answers.UnreadableFiles
             .Where(file => linkedFiles.Contains(file.FileName))
             .Select(file => PluginDiagnostic(
-                plugin, repository, UncheckedLinks.NoLinkInto(file.FileName, file.Reason)))
+                tree, plugin, UncheckedLinks.NoLinkInto(file.FileName, file.Reason)))
             .ToList();
         foreach (var record in records)
         {
@@ -65,7 +65,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
             // Only records with something to report pay for their path, which keeps a container's
             // subtree scan off the common path.
             var identity = new RecordIdentity(record.Document.FormKey, record.RecordType, record.EditorId);
-            var relativePath = PathOf(repository, plugin, identity);
+            var relativePath = PathOf(tree, identity);
             diagnostics.AddRange(errors.Select(
                 message => new CompileDiagnostic(record.Document.FormKey, relativePath, message)));
         }
@@ -74,15 +74,14 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
 
     // A plugin-level problem is the header record's: it is the one source unit that stands for the
     // whole plugin, so the Problems entry lands on a file the author can open.
-    internal static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, ISourceRepository repository, string message)
+    internal static CompileDiagnostic PluginDiagnostic(PluginTreeFiles tree, PluginAddress plugin, string message)
     {
         var header = PluginHeader.IdentityOf(plugin.Name);
-        return new(header.FormKey, PathOf(repository, plugin, header), message);
+        return new(header.FormKey, PathOf(tree, header), message);
     }
 
-    private static string PathOf(ISourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
-        repository.RelativePathOf(plugin, identity).Holds(out var path, out var failure) && path is not null
+    private static string? PathOf(PluginTreeFiles tree, RecordIdentity identity) =>
+        tree.FileOf(identity).Holds(out var path, out var failure)
             ? path
-            : throw new InvalidOperationException(
-                $"Expected the tree this compile read to hold {identity.FormKey}'s document: {failure?.Reason ?? "it holds none"}");
+            : throw new InvalidOperationException($"Expected the tree this compile read to hold {identity.FormKey}'s document: {failure.Reason}");
 }
