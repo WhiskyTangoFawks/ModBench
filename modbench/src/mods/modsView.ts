@@ -141,7 +141,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     viewMessage,
     standingMessage: () => provider.standingMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
-    onViewMessageChanged: (listener) => joinSyncMessages(modSync, statuses).onMessageChanged(listener),
+    onViewMessageChanged: (listener) => joinSyncMessages(modSync, { message: statusMessage, onMessageChanged: (heard) => statuses.onMessageChanged(heard) }).onMessageChanged(listener),
   });
   const sayPhase = (message: string | undefined) => { phaseMessage = message; nameFilter.refresh(); };
   const showCount = () => nameFilter.setBaseDescription(provider.description());
