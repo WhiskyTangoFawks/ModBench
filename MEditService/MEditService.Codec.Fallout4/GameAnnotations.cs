@@ -54,10 +54,11 @@ internal static class GameAnnotations
                 [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
                 [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
             },
-            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
+            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4SortedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            UnkeyedSortedArrays: [.. Fallout4SortedArrayAnnotations.UnkeyedSortedArrays],
             FormatSortedLists: FormatNormalization.SortedLists,
-            ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+            ExtendedKeys: Fallout4SortedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             // xEdit's wbVec3PosRot: the Data of REFR, ACHR and the projectile placements.

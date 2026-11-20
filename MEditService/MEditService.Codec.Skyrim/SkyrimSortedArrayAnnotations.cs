@@ -1,8 +1,8 @@
 namespace MEditService.Codec.Game;
 
-/// <summary>The Skyrim keyed arrays outside the virtual machine adapter and conditions, overlaid on
+/// <summary>The Skyrim arrays xEdit sorts, outside the virtual machine adapter and conditions, overlaid on
 /// the reflected schema.</summary>
-internal static class SkyrimKeyedArrayAnnotations
+internal static class SkyrimSortedArrayAnnotations
 {
     /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over a wbStructSK,
     /// keyed as it aligns (a wbStructExSK by its non-extended key), transcribed from
@@ -83,5 +83,58 @@ internal static class SkyrimKeyedArrayAnnotations
         ("ILeveledItemGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
         ("ILeveledNpcGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
         ("ILeveledSpellGetter", "Entries", ["Data.Count"]),
+    ];
+
+    /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over an element with no key,
+    /// transcribed from <c>wbDefinitionsTES5.pas</c> and <c>wbDefinitionsCommon.pas</c>. xEdit's callback leaves a
+    /// FormID List unsorted, so it is not one.</summary>
+    public static readonly (string TypeName, string MemberName)[] UnkeyedSortedArrays =
+    [
+        ("IActivatorGetter", "Keywords"),
+        ("IAmmunitionGetter", "Keywords"),
+        ("IArmorGetter", "Keywords"),
+        ("IBookGetter", "Keywords"),
+        ("IFloraGetter", "Keywords"),
+        ("IFurnitureGetter", "Keywords"),
+        ("IIngestibleGetter", "Keywords"),
+        ("IIngredientGetter", "Keywords"),
+        ("IKeyGetter", "Keywords"),
+        ("ILocationGetter", "Keywords"),
+        ("IMagicEffectGetter", "Keywords"),
+        ("IMiscItemGetter", "Keywords"),
+        ("INpcGetter", "Keywords"),
+        ("IQuestAliasGetter", "Keywords"),
+        ("IRaceGetter", "Keywords"),
+        ("IScrollGetter", "Keywords"),
+        ("ISoulGemGetter", "Keywords"),
+        ("ISpellGetter", "Keywords"),
+        ("ITalkingActivatorGetter", "Keywords"),
+        ("IWeaponGetter", "Keywords"),
+
+        ("INpcGetter", "ActorEffect"),
+        ("IRaceGetter", "ActorEffect"),
+        ("IArmorAddonGetter", "AdditionalRaces"),
+        ("ICellGetter", "Regions"),
+        ("IPlacedObjectGetter", "LitWater"),
+        ("IPlacedObjectGetter", "LinkedRooms"),
+        ("IHeadPartGetter", "ExtraParts"),
+        ("INavigationMapInfoGetter", "MergedTo"),
+        ("INavigationMapInfoGetter", "PreferredMerges"),
+        ("ILocationGetter", "PersistentActorReferencesRemoved"),
+        ("ILocationGetter", "UniqueActorReferencesRemoved"),
+        ("ILocationGetter", "LocationRefTypeReferencesRemoved"),
+        ("ILocationGetter", "InitiallyDisabledReferencesAdded"),
+        ("ILocationGetter", "InitiallyDisabledReferencesStatic"),
+        ("ILocationCoordinateGetter", "Coordinates"),
+        ("IOutfitGetter", "Items"),
+        ("ICollisionLayerGetter", "CollidesWith"),
+        ("ILandscapeTextureGetter", "Grasses"),
+        ("IMagicEffectGetter", "CounterEffects"),
+        ("INpcGetter", "HeadParts"),
+        ("IRaceGetter", "MovementTypeNames"),
+        ("IRaceGetter", "Hairs"),
+        ("IRaceGetter", "Eyes"),
+        ("IRaceGetter", "EquipmentSlots"),
+        ("IWeatherGetter", "SkyStatics"),
     ];
 }

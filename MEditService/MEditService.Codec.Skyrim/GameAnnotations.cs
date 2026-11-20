@@ -46,10 +46,11 @@ internal static class GameAnnotations
             {
                 [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
             },
-            KeyedArrays: SkyrimVmadAnnotations.KeyedArrays.Concat(SkyrimKeyedArrayAnnotations.KeyedArrays).ToDictionary(
+            KeyedArrays: SkyrimVmadAnnotations.KeyedArrays.Concat(SkyrimSortedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            UnkeyedSortedArrays: [.. SkyrimSortedArrayAnnotations.UnkeyedSortedArrays],
             FormatSortedLists: FormatNormalization.SortedLists,
-            ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+            ExtendedKeys: SkyrimSortedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],
             // xEdit's wbVec3PosRot: which Mutagen's Placement holds here.

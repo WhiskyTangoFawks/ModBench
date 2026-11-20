@@ -1,6 +1,9 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins.Aspects;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -80,16 +83,70 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
-    [InlineData(GameRelease.Fallout4, "npc_", "ActorEffect", true)]
-    [InlineData(GameRelease.Fallout4, "npc_", "Factions", true)]
     [InlineData(GameRelease.Fallout4, "npc_", "Keywords", false)]
-    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesAdded", true)]
+    [InlineData(GameRelease.Fallout4, "armo", "Keywords", false)]
+    [InlineData(GameRelease.Fallout4, "npc_", "ActorEffect", false)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Factions", false)]
+    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesRemoved", false)]
     [InlineData(GameRelease.Fallout4, "term", "Properties", false)]
-    [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", true)]
-    [InlineData(GameRelease.Starfield, "npc_", "Factions", true)]
-    public void AnArrayTheFormatSorts_SaysSo(GameRelease release, string table, string path, bool sorted)
+    [InlineData(GameRelease.Fallout4, "npc_", "Packages", true)]
+    [InlineData(GameRelease.Fallout4, "cobj", "Conditions", true)]
+    [InlineData(GameRelease.SkyrimSE, "npc_", "Keywords", false)]
+    [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", false)]
+    [InlineData(GameRelease.SkyrimSE, "cobj", "Conditions", true)]
+    [InlineData(GameRelease.Starfield, "npc_", "Keywords", false)]
+    [InlineData(GameRelease.Starfield, "npc_", "Factions", false)]
+    public void MoveIsOffered_OnlyOnAnArrayWhoseOrderTheGameReads(GameRelease release, string table, string path, bool takesMove)
     {
-        Assert.Equal(sorted, SchemaFields.At(release, table, path).SortedByFormat);
+        var array = SchemaFields.At(release, table, path);
+
+        Assert.Equal(takesMove, array.KeyMembers == null && !array.SortedByFormat);
+    }
+
+    private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> overlay) =>
+        new(annotationsOf: _ => overlay(GameCodecs.For(GameRelease.Fallout4).Annotations));
+
+    [Fact]
+    public void AnUnkeyedSortedArrayRowTheWalkNeverMeets_FailsTheSchemaBuild_NamingTheRow()
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            UnkeyedSortedArrays = [.. annotations.UnkeyedSortedArrays, ("INpcGetter", "Unwalked")],
+        });
+
+        var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
+
+        Assert.Contains("UnkeyedSortedArrays: INpcGetter.Unwalked", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords")]
+    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences")]
+    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema(Type sorted, string member, string table, string path)
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            UnkeyedSortedArrays = [],
+            FormatSortedLists = [.. annotations.FormatSortedLists, (sorted, member)],
+        });
+
+        var array = reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(column => column.Name == path).Field;
+
+        Assert.True(array.KeyMembers != null || array.SortedByFormat);
+    }
+
+    [Fact]
+    public void AFormatSortedListWalkedUnderAProperBaseThatLeavesItMovable_FailsTheSchemaBuild_NamingBoth()
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            FormatSortedLists = [.. annotations.FormatSortedLists, (typeof(IPlacedArrowGetter), "LocationRefTypes")],
+        });
+
+        var failure = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
+
+        Assert.Contains("IPlacedArrowGetter.LocationRefTypes", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("IAPlacedTrapGetter.LocationRefTypes", failure.Message, StringComparison.Ordinal);
     }
 
     private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>
