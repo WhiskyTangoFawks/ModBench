@@ -93,6 +93,35 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ARecordAsATypeOtherThanTheOneItIs_IsRefused_NamingTheRecordAndBothTypes()
+    {
+        var types = RecordTypes.For(GameRelease.Fallout4);
+        var (npcType, placedType) = (types.RecordTypeOf(_npc), types.RecordTypeOf(_interiorRef));
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(_npc, placedType)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            $"{_npc.FormKey} is a {npcType} in {Base}, not the {placedType} given.",
+            refused.Message);
+    }
+
+    [Fact]
+    public async Task ANewPlacedRecord_EmbeddedInTheDocumentOfTheCellGiven_LandsInThatCell()
+    {
+        var withNew = _interior.DeepCopy();
+        withNew.Persistent.Add(new PlacedObject(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4));
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(withNew)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        using var written = Written();
+        Assert.Equal(
+            new HashSet<FormKey> { _interiorRef.FormKey, FormKey.Factory($"000800:{Patch}") },
+            Assert.Single(InteriorCellsOf(written)).Persistent.Select(placed => placed.FormKey).ToHashSet());
+    }
+
+    [Fact]
     public async Task ARecordNoPluginHolds_LandsAsTheTypeGiven()
     {
         var fresh = new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { EditorID = "PatchNpc" };
@@ -137,6 +166,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         ARecordNoPluginHoldsWithNoType,
         APlacedRecordNoPluginHolds,
         ANativeFormIdOutsideTheLightRange,
+        ARecordAsATypeOtherThanTheOneItIs,
     }
 
     private (string Name, IReadOnlyList<string> Flags, IReadOnlyList<GivenRecord> Records) Making(Giving giving)
@@ -155,6 +185,8 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 return (Patch, [], [Given(new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4))]);
             case Giving.APlacedRecordNoPluginHolds:
                 return (Patch, [], [Given(new PlacedObject(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4), placedType)]);
+            case Giving.ARecordAsATypeOtherThanTheOneItIs:
+                return (Patch, [], [Given(_npc, placedType)]);
             case Giving.ANativeFormIdOutsideTheLightRange:
                 return ("Patch.esl", ["Master", "Small"], [Given(new Npc(FormKey.Factory("0FF000:Patch.esl"), Fallout4Release.Fallout4), "npc_")]);
             default:
@@ -170,6 +202,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         { Giving.ARecordNoPluginHoldsWithNoType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
         { Giving.APlacedRecordNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.ANativeFormIdOutsideTheLightRange, new PatchRefused.AsCompile(CompileRefusal.FormIdOutsideFlagLimit, "") },
+        { Giving.ARecordAsATypeOtherThanTheOneItIs, new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, "") },
     };
 
     [Theory]

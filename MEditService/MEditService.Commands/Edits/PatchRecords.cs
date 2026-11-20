@@ -55,18 +55,22 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             return Laid(new RecordIdentity(formKey, type, DocumentTokens.EditorIdIn(record.Text).EditorId), record.Text);
         }
 
+        // A record's type is the one every copy of its FormKey holds, so a type given that differs is refused.
         private Answer<string, PatchRefused> TypeOf(string formKey, string? given)
         {
-            if (given is not null)
-            {
-                return schemas.ContainsKey(given) && given != PluginHeader.RecordType
-                    ? given
-                    : new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, $"'{given}', given for {formKey}, is no record type.");
-            }
+            if (given is not null && (!schemas.ContainsKey(given) || given == PluginHeader.RecordType))
+                return new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, $"'{given}', given for {formKey}, is no record type.");
             if (!OwnerOf(formKey).Holds(out var owner, out var refused)) return refused;
             if (owner is not { } held)
-                return new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, $"No plugin holds {formKey}, so its record type must be given.");
-            return Read(formKey, held, copies.Of(held).Identity(formKey).Then<string>(identity => (identity ?? throw NotHeld(held, formKey)).RecordType));
+            {
+                return given ?? (Answer<string, PatchRefused>)new PatchRefused.OfRecord(
+                    RecordEditRefusal.RecordTypeNotFound, $"No plugin holds {formKey}, so its record type must be given.");
+            }
+            var read = Read(formKey, held, copies.Of(held).Identity(formKey).Then<string>(identity => (identity ?? throw NotHeld(held, formKey)).RecordType));
+            if (!read.Holds(out var type, out var unread)) return unread;
+            return given is null || given == type
+                ? type
+                : new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"{formKey} is a {type} in {held.Name}, not the {given} given.");
         }
 
         private PatchRefused? CarriedIn(string formKey)
