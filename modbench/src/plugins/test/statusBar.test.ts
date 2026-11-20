@@ -19,7 +19,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { createStatusBar } from '../statusBar';
+import { createStatusBar, type StatusBar } from '../statusBar';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { present } from '../../ports/present';
 import type { Reporter } from '../../ports/reporter';
@@ -91,16 +91,46 @@ describe('the status bar, one item saying what mEdit is doing', () => {
     expect(theItem().text).toBe('$(plug) mEdit: Running');
   });
 
+  const FILLING = { done: 1, total: 3, version: 1, settled: false };
+
+  it('names a fill with its count, over an earlier Ready', () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('running');
+    createStatusBar(client, reporterFor).ready(2);
+
+    client.setProgress(FILLING);
+
+    expect(theItem().text).toBe('$(sync~spin) mEdit: Indexing (1 of 3 plugins)');
+  });
+
   it.each([
-    ['before the snapshot is indexed', undefined, 'mEdit is Running'],
-    ['once it is indexed', 2, undefined],
-  ] as const)('tells the agent the status bar\'s words only %s', (_case, ready, text) => {
+    ['before the snapshot is indexed', () => undefined, 'mEdit is Running'],
+    ['once it is indexed', (bar: StatusBar) => { bar.ready(2); }, undefined],
+    ['during a first index', (_bar: StatusBar, client: InMemoryMEditClient) => { client.setProgress(FILLING); }, 'mEdit is Indexing (1 of 3 plugins)'],
+    ['during a reconcile after Ready', (bar: StatusBar, client: InMemoryMEditClient) => { bar.ready(2); client.setProgress(FILLING); }, 'mEdit is Indexing (1 of 3 plugins)'],
+  ] as const)('tells the agent the item\'s words unless it says Ready: %s', (_case, arrange, line) => {
     const client = new InMemoryMEditClient();
     client.setStatus('running');
     const bar = createStatusBar(client, reporterFor);
-    if (ready !== undefined) bar.ready(ready);
 
-    expect(bar.standing()).toBe(text);
+    arrange(bar, client);
+
+    expect(bar.standing()).toBe(line);
+  });
+
+  it.each([
+    ['settled', { ...FILLING, done: 3, settled: true }],
+    ['refused', { ...FILLING, refusal: { kind: 'failed', message: 'bad' } }],
+    ['dropped', undefined],
+  ] as const)('gives the item and the agent mEdit\'s own state once the load order is %s', (_case, progress) => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('running');
+    const bar = createStatusBar(client, reporterFor);
+    client.setProgress(FILLING);
+
+    client.setProgress(progress);
+
+    expect([theItem().text, bar.standing()]).toEqual(['$(plug) mEdit: Running', 'mEdit is Running']);
   });
 
   it('does nothing on a click', () => {
