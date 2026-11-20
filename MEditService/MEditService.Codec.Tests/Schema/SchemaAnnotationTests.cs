@@ -98,7 +98,7 @@ public sealed class SchemaAnnotationTests
     [InlineData(GameRelease.Starfield, "npc_", "Keywords", false)]
     [InlineData(GameRelease.Starfield, "npc_", "Factions", false)]
     [InlineData(GameRelease.Starfield, "scol", "Parts.[].Placements", false)]
-    public void MoveIsOffered_OnlyOnAnArrayWhoseOrderTheGameReads(GameRelease release, string table, string path, bool takesMove)
+    public void OnlyAnArrayWhoseOrderTheGameReads_IsNeitherKeyedNorSorted(GameRelease release, string table, string path, bool takesMove)
     {
         var array = SchemaFields.At(release, table, path);
 
@@ -122,9 +122,10 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
-    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords")]
-    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences")]
-    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema(Type sorted, string member, string table, string path)
+    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords", true)]
+    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences", false)]
+    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema_SortedUnderItsDeclarerOnly(
+        Type sorted, string member, string table, string path, bool sortedByFormat)
     {
         var reflector = Fallout4With(annotations => annotations with
         {
@@ -134,7 +135,7 @@ public sealed class SchemaAnnotationTests
 
         var array = reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(column => column.Name == path).Field;
 
-        Assert.True(array.KeyMembers != null || array.SortedByFormat);
+        Assert.Equal(sortedByFormat, array.SortedByFormat);
     }
 
     [Fact]
