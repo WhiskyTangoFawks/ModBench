@@ -11,6 +11,7 @@ import type { CopyReads } from '../mods/sameCopies';
 import type { ArchivedCopies } from '../mods/archivedCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
+import { lastGoodReadMessage } from '../wire/reasons';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -50,7 +51,7 @@ export interface AgentServerOptions {
   symbols: SymbolIndex;
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
-  statuses: Pick<ModStatuses, 'current'> | undefined;
+  statuses: Pick<ModStatuses, 'current' | 'lastGoodReasons'> | undefined;
   deployment: DeploymentRead | undefined;
   standing: Record<Exclude<Source, 'instance' | 'recordIndex'>, () => readonly string[]>;
   pluginsShown: PluginsShown | undefined;
@@ -64,7 +65,7 @@ export interface AgentServer {
 }
 
 type Instance = NonNullable<AgentServerOptions['instance']>;
-type OpenOptions = AgentServerOptions & { instance: Instance; copyReads: CopyReads; archivedCopies: ArchivedCopies; statuses: Pick<ModStatuses, 'current'>; deployment: DeploymentRead; pluginsShown: PluginsShown };
+type OpenOptions = AgentServerOptions & { instance: Instance; copyReads: CopyReads; archivedCopies: ArchivedCopies; statuses: Pick<ModStatuses, 'current' | 'lastGoodReasons'>; deployment: DeploymentRead; pluginsShown: PluginsShown };
 
 function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal(instance.readFailure === undefined ? 'The instance has not been read yet.' : `Failed to load: ${instance.readFailure}`);
@@ -140,7 +141,14 @@ function mcpServerOf({ instance, copyReads, archivedCopies, mEdit, symbols, prob
     // While mEdit indexes, the mEdit line says Indexing, and so says the record index may be late.
     recordIndex: () => [...standingSources.mEdit(), ...(mEdit.recordIndexMayBeLate && !indexing(mEdit.recordIndexProgress) ? ['The record index may be late: this answer may predate a write.'] : [])],
   };
-  const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
+  // The mod statuses' last good read joins the instance's under one prefix (common.md, States, story 6).
+  const statusReasons = () => (instance.value.holdsRepository ? statuses.lastGoodReasons() : []);
+  const linesOf = (read: readonly Source[]) => (source: Source): readonly string[] => {
+    if (source === 'instance') return instanceMessages(instance, read.includes('modList') ? statusReasons() : []).filter((line) => line !== undefined);
+    if (source === 'modList' && !read.includes('instance')) return [...sources.modList(), ...[lastGoodReadMessage(statusReasons())].filter((line) => line !== undefined)];
+    return sources[source]();
+  };
+  const reading = (...read: Source[]) => () => [...new Set(read.flatMap(linesOf(read)))];
   register(server, log, reading('instance'), { ...LIST_PROFILES, input: NO_INPUT }, () => LIST_PROFILES.of(currentValue(instance), deployment));
   for (const list of INSTANCE_LISTS) register(server, log, reading(...list.reads), list, (args) => list.of(currentValue(instance), args));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));

@@ -26,7 +26,7 @@ export interface PathProblemsDeps {
   ask: Pick<Asked, 'getPluginFilePaths' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   paths: PathStanding;
   /** Replaces every path problem published before. */
   publish: (problems: ProblemsByFile) => void;

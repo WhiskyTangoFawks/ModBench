@@ -12,7 +12,7 @@ export interface FilePathsAsked { getPluginFilePaths(plugin?: PluginAddress, key
 interface ScriptsNamedDeps {
   paths: FilePathsAsked;
   sourceFiles: SourceFilesOf;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 type NamedInFile = { file: string; name: string };

@@ -23,7 +23,7 @@ export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate' | 'onUnsavedHandOver'>;
   ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
   /** Says why the Problems panel shows the last good read; undefined when it shows the latest. */

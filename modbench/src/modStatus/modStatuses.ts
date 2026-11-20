@@ -1,6 +1,5 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
-import { lastGoodReadMessage } from '../wire/reasons';
 import { basename } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import {
@@ -130,10 +129,6 @@ export class ModStatuses {
 
   onDidChange(listener: () => void): Listening {
     return listenedBy(this.changed, listener);
-  }
-
-  message(): string | undefined {
-    return lastGoodReadMessage(this.lastGoodReasons()) ?? this.unreadMessage();
   }
 
   /** Why the statuses shown are the last good ones (common.md, States, story 6). */

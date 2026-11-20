@@ -223,7 +223,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       dataPathOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
       fileTooltip: (path) => winningCopyTooltip(instance.value, path),
     },
-    standingLines: () => [modSync.message(), instance.value.holdsRepository ? statuses.message() : undefined].filter((line) => line !== undefined),
+    standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
     tooltipOf: (entry) => { const { tooltip } = provider.entryRow(entry) ?? {}; return typeof tooltip === 'string' ? tooltip : undefined; },
     dispose: () => { disposable.dispose(); },
   };

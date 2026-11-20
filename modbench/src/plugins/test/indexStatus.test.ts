@@ -188,7 +188,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.reporter.reports).toEqual([]);
   });
 
-  it('notifies naming each plugin whose rows a failed read took away, and why', async () => {
+  it('notifies naming each plugin whose rows a failed read took away, and why, as its one line in the Output', async () => {
     const { client, deps, handedOver } = followed();
     deps.facts.reconciled.mockResolvedValue({ held: 1, active: 1, rowsGone: [badFailure] });
 
@@ -196,6 +196,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     await handedOver();
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'The records of "Bad.esp" (SomeMod) no longer show: its read failed.', detail: 'RACE parse' }]);
+    expect(deps.reporter.shownFailures).toEqual([]);
   });
 
   it('tells in the Output each plugin\'s failed read a refused reconcile heard', async () => {
