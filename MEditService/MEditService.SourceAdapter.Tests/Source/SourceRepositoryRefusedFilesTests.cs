@@ -45,7 +45,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     [Fact]
     public void ATreeTheCodecReadsThrough_RefusesNoFile()
     {
-        Assert.Empty(Repository.RefusedFilesOf(Plugin).Value());
+        Assert.Empty(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     {
         Rewrite(BlockPath, "BlockNumber", "BlockNumbr");
 
-        var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
+        var refused = Assert.Single(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
 
         Assert.Equal(BlockPath, refused.Path);
         Assert.Contains("BlockNumbr", refused.Reason, StringComparison.Ordinal);
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
         _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
         File.Move(held, misfiled);
 
-        var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
+        var refused = Assert.Single(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
 
         Assert.Equal(Path.GetRelativePath(_modFolder, misfiled), refused.Path);
         Assert.DoesNotContain("Object reference", refused.Reason, StringComparison.Ordinal);
@@ -80,7 +80,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     {
         Rewrite(HeaderPath, "\"GameRelease\": \"Fallout4\"", "\"GameRelease\": \"Fallout4\",\n  \"ModHeader\": { \"Stats\": { \"Version\": \"x\" } }");
 
-        var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
+        var refused = Assert.Single(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
 
         Assert.Equal(HeaderPath, refused.Path);
     }
@@ -91,7 +91,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
         Rewrite(BlockPath, "BlockNumber", "BlockNumbr");
         Rewrite(MetaPath, GameCodecs.For(GameRelease.Fallout4).SpriggitVersion, "0.1.0");
 
-        var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
+        var refused = Assert.Single(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
 
         Assert.Equal(MetaPath, refused.Path);
     }
@@ -101,7 +101,7 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     {
         File.Delete(Path.Combine(_modFolder, MetaPath));
 
-        var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
+        var refused = Assert.Single(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
 
         Assert.Equal(MetaPath, refused.Path);
     }

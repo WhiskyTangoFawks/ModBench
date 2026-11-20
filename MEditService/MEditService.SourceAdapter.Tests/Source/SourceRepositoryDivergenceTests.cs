@@ -57,12 +57,12 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         file => file.RelativePath == DoorPathOf(modFolderPath) ? null : file;
 
     private (SourceDivergenceKind Kind, string Path)[] Divergences(IReadOnlyList<TreeFile> serialized) =>
-        [.. Repository.Compare(Plugin, serialized).Value().Divergences.Select(divergence => (divergence.Kind, divergence.Path))];
+        [.. Repository.TreeOf(Plugin).Value().Compare(serialized).Value().Divergences.Select(divergence => (divergence.Kind, divergence.Path))];
 
     [Fact]
     public void ASerializationOfTheSameTree_IsNoDivergence()
     {
-        Assert.Empty(Repository.Compare(Plugin, Serialized()).Value().Divergences);
+        Assert.Empty(Repository.TreeOf(Plugin).Value().Compare(Serialized()).Value().Divergences);
     }
 
     public enum Serializing
@@ -119,7 +119,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     [Fact]
     public void ADocumentOfAnotherMeaning_NamesTheFieldThatDiffers()
     {
-        var divergence = Assert.Single(Repository.Compare(Plugin, Serialized(Respelling(NpcPath))).Value().Divergences);
+        var divergence = Assert.Single(Repository.TreeOf(Plugin).Value().Compare(Serialized(Respelling(NpcPath))).Value().Divergences);
 
         Assert.Equal("FormKey", divergence.Field);
     }
@@ -130,7 +130,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var serialized = Serialized();
         File.WriteAllText(Path.Combine(_modFolder, NpcPath), "{\"EditorID\":\"FixtureNpc\",\n\n\"FormKey\":\"000800:Diverge.esp\"}");
 
-        Assert.Empty(Repository.Compare(Plugin, serialized).Value().Divergences);
+        Assert.Empty(Repository.TreeOf(Plugin).Value().Compare(serialized).Value().Divergences);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var serialized = Serialized();
         var npcPath = RenameTheNpcFile(out var renamedPath);
 
-        var comparison = Repository.Compare(Plugin, serialized).Value();
+        var comparison = Repository.TreeOf(Plugin).Value().Compare(serialized).Value();
 
         Assert.Empty(comparison.Divergences);
         Assert.Equal([new MisplacedFile(NpcFormKey, renamedPath, npcPath)], comparison.Misplaced);
@@ -170,7 +170,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var npcPath = RenameTheNpcFile(out var renamedPath);
         File.AppendAllText(Path.Combine(_modFolder, renamedPath), " ");
 
-        var comparison = Repository.Compare(Plugin, serialized).Value();
+        var comparison = Repository.TreeOf(Plugin).Value().Compare(serialized).Value();
 
         Assert.Empty(comparison.Divergences);
         Assert.Equal([new MisplacedFile(NpcFormKey, renamedPath, npcPath)], comparison.Misplaced);
@@ -185,7 +185,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var renamed = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(held)).Require(), "ByHand", Path.GetFileName(held));
         Directory.Move(Path.Combine(_modFolder, Path.GetDirectoryName(held).Require()), Path.Combine(_modFolder, Path.GetDirectoryName(renamed).Require()));
 
-        var comparison = Repository.Compare(Plugin, serialized).Value();
+        var comparison = Repository.TreeOf(Plugin).Value().Compare(serialized).Value();
 
         Assert.Empty(comparison.Divergences);
         Assert.Equal([new MisplacedFile(CellFormKey, renamed, held)], comparison.Misplaced);
@@ -201,7 +201,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var npcPath = RenameTheNpcFile(out var renamedPath);
         File.WriteAllText(Path.Combine(_modFolder, renamedPath), NpcBody.Replace("FixtureNpc", "Renamed", StringComparison.Ordinal));
 
-        var comparison = Repository.Compare(Plugin, serialized).Value();
+        var comparison = Repository.TreeOf(Plugin).Value().Compare(serialized).Value();
 
         Assert.Empty(comparison.Misplaced);
         Assert.Equal(

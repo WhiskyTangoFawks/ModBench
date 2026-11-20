@@ -21,7 +21,7 @@ internal readonly record struct RoundTripRefusal(string Message, bool RepairClea
 
 /// <summary>Init and decompile both read a plugin into its plugin source through this one gate.
 /// </summary>
-internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter, SchemaReflector schemaReflector)
+internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, SchemaReflector schemaReflector)
 {
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
@@ -93,8 +93,10 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
     {
         var gameRelease = loadOrder.GameRelease;
         using var scratch = ScratchPlugin.For(pluginName);
-        if (!(await adapter.WriteFromTreeAsync(
-                    sourceAdapter.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, loadOrder, cancel))
+        var written = PluginTreeFiles.Made(pluginName, source.Files, gameRelease).Holds(out var tree, out var ambiguous)
+            ? tree.Files
+            : throw new InvalidOperationException($"Expected the whole-mod door to write one document per container: {ambiguous.Reason}");
+        if (!(await adapter.WriteFromTreeAsync(written, scratch.PluginPath, source.Masters, loadOrder, cancel))
                 .Holds(out var recompiledPath, out var failure)
             || !(await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, loadOrder, cancel)).Holds(out var comparison, out failure))
         {

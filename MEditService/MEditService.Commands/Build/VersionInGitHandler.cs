@@ -25,7 +25,7 @@ public sealed class VersionInGitHandler
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
         INotificationPublisher notifications, SchemaReflector schemaReflector, HeldWrites held, ILogger<VersionInGitHandler> logger) =>
         (_loadOrder, _source, _notifications, _held, _init) =
-            (loadOrder, source, notifications, held, new ModInit(logger, source, modFolders, new PluginDecompiler(logger, adapter, source, schemaReflector)));
+            (loadOrder, source, notifications, held, new ModInit(logger, source, modFolders, new PluginDecompiler(logger, adapter, schemaReflector)));
 
     /// <summary>Each mod's plugins and folder are the held load order's. Refuses, writing nothing, when none is held or
     /// git cannot run.</summary>

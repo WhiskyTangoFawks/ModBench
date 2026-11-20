@@ -79,15 +79,6 @@ internal sealed class SourceRepository : ISourceRepository
     /// writes to (ADR-0003).</summary>
     internal static bool HoldsAnotherRepository(string sourceFolder) => SourceRepositoryGit.HoldsAnotherRepository(sourceFolder);
 
-    /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
-    /// what a round-trip gate compiles, so that it compiles what is written.</summary>
-    internal static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        SourceFailure.Answer(() => SourceRepositoryLayout.DoorTreeOf(
-                pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease))
-            .Holds(out var readBack, out var failure)
-            ? readBack
-            : throw new InvalidOperationException($"Expected the whole-mod door to write one document per container: {failure.Reason}");
-
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
 
@@ -289,40 +280,12 @@ internal sealed class SourceRepository : ISourceRepository
             _sourceFolder, _release, _git, _memory.Committed, Locator, Spelled(plugin),
             [.. files.Select(file => Path.GetRelativePath(_sourceFolder, Path.GetFullPath(file)))], new WrittenDocuments(written)));
 
-    public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
+    public Answer<PluginTreeFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
-            var held = Locator.FilesOf(spelled);
-            return held with { Files = SourceRepositoryLayout.DoorTreeOf(spelled.Name, held.Files, _release) };
-        });
-
-    public Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
-        SourceFailure.Answer(() =>
-        {
-            var spelled = Spelled(plugin);
-            return SourceRepositoryLayout.InSourceNames(spelled.Name, diagnosis, Locator.FilesOf(spelled).Files, _release);
-        });
-
-    public Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
-        SourceFailure.Answer(() =>
-        {
-            var spelled = Spelled(plugin);
-            return PluginSourceChecks.CollidingFormKeys(spelled.Name, Locator.FilesOf(spelled), formKeys, _release);
-        });
-
-    public Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin) =>
-        SourceFailure.Answer(() =>
-        {
-            var spelled = Spelled(plugin);
-            return PluginSourceChecks.RefusedFilesOf(spelled.Name, Locator.FilesOf(spelled), _release);
-        });
-
-    public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
-        SourceFailure.Answer(() =>
-        {
-            var spelled = Spelled(plugin);
-            return PluginSourceChecks.Compare(spelled.Name, Locator.FilesOf(spelled), serialized, _release);
+            return new PluginTreeFiles(
+                spelled.Name, Locator.FilesOf(spelled), _release, identity => Locator.Locate(spelled, identity)?.RelativePath);
         });
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and

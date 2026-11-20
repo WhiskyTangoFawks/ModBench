@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
@@ -39,24 +38,9 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// header's synthetic one.</summary>
     Answer<IReadOnlySet<string>, SourceFailure> FormKeysUsed(PluginAddress plugin);
 
-    /// <summary>The plugin's source in the working tree as the whole-mod door reads it, empty when there is
-    /// none. A container's directory holding several documents, none named RecordData.json, is ambiguous.</summary>
-    Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin);
-
-    /// <summary><paramref name="diagnosis"/> of a read of <see cref="TreeOf"/>'s tree, each file it names
-    /// named as this tree holds it, relative to the source folder.</summary>
-    Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis);
-
-    /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the files, not of the
-    /// compiled mod: Mutagen's FormKey-keyed RecordCache collapses two documents in one group folder to the last read.</summary>
-    Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys);
-
-    /// <summary>Every file of the plugin's tree the Codec refuses, with its reason.</summary>
-    Answer<IReadOnlyList<RefusedFile>, SourceFailure> RefusedFilesOf(PluginAddress plugin);
-
-    /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,
-    /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>
-    Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized);
+    /// <summary>The plugin's source in the working tree, empty when there is none. A container's directory holding
+    /// several documents, none named RecordData.json, is ambiguous.</summary>
+    Answer<PluginTreeFiles, SourceFailure> TreeOf(PluginAddress plugin);
 
     /// <summary>The changes that create or replace the record's document, placing an absent one from its identity
     /// alone. A file at its path that is no document is unreadable.</summary>
