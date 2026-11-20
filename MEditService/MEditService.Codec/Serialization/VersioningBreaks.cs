@@ -11,7 +11,7 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>Mutagen's versioning breaks: bytes that end at a break hold no member past it. Mutagen's
 /// copy stops at a set break, so what a copy of a filled object leaves at its default is unheld.</summary>
-internal static class VersioningBreaks
+public static class VersioningBreaks
 {
     public const string Member = "Versioning";
 
@@ -25,14 +25,30 @@ internal static class VersioningBreaks
 
     private static readonly ConcurrentDictionary<Type, IReadOnlyDictionary<string, IReadOnlyList<string>>> UnheldByClass = new();
 
+    private static readonly ConcurrentDictionary<Type, PropertyInfo?> VersioningByClass = new();
+
+    /// <summary>The breaks <paramref name="loquiClass"/> holds, or null for a class with none.</summary>
+    public static PropertyInfo? VersioningOf(Type loquiClass) => VersioningByClass.GetOrAdd(loquiClass, declaring =>
+        declaring.GetProperty(Member) is { CanWrite: true, PropertyType: { IsEnum: true, Name: EnumName } } versioning ? versioning : null);
+
+    /// <summary><paramref name="versioned"/> holding its first break alone: Mutagen writes up to it. Of bytes that end at
+    /// a break, a binary overlay holds that break and each after it, and a read into a record the first alone.</summary>
+    public static void KeepFirst(object versioned)
+    {
+        var versioning = VersioningOf(versioned.GetType())
+            ?? throw new InvalidOperationException($"Expected {versioned.GetType().Name} to hold versioning breaks.");
+        var breaks = Convert.ToInt64(versioning.GetValue(versioned), CultureInfo.InvariantCulture);
+        versioning.SetValue(versioned, Enum.ToObject(versioning.PropertyType, breaks & -breaks));
+    }
+
     /// <summary>Each member of <paramref name="loquiClass"/> a break leaves unheld, with every break that
     /// does, spelled <c>Versioning.Break0</c>.</summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<string>> UnheldWhen(Type loquiClass) =>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> UnheldWhen(Type loquiClass) =>
         UnheldByClass.GetOrAdd(loquiClass, Derive);
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Derive(Type loquiClass)
     {
-        if (loquiClass.GetProperty(Member) is not { PropertyType: { IsEnum: true, Name: EnumName } breaks } versioning
+        if (VersioningOf(loquiClass) is not { PropertyType: var breaks } versioning
             || LoquiUnions.ConcreteUnder(loquiClass) is not { IsGenericTypeDefinition: false } concrete
             || ReflectedTypes.GetOwnGetterType(concrete) is not { } getter)
         {
