@@ -359,7 +359,7 @@ public sealed class FailedReadStateTests : IDisposable
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenBeforeTheHold"));
         index.NextCheckThatMayFailUntil(() => Failed(index), "the held read's failure");
 
-        index.NextCheckThatMayFailUntil(() => !Failed(index), "the binary read again");
+        index.NextCheckUntil(() => !Failed(index), "the binary read again");
 
         Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "WrittenBeforeTheHold");
     }
@@ -448,7 +448,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(new HeldAtFirstRead());
         Assert.True(Failed(index));
 
-        index.NextCheckThatMayFailUntil(() => !Failed(index), "the binary opened again");
+        index.NextCheckUntil(() => !Failed(index), "the binary opened again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }

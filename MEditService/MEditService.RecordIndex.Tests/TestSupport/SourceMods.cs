@@ -130,7 +130,11 @@ internal static class SourceMods
     /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the next check of the disk.</summary>
     internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document)
     {
-        RepositoryOf(entry).Remove(entry.Key, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
+        entry.RemoveFromTree(document);
         index.NextCheck();
     }
+
+    /// <summary>The working tree's copy of <paramref name="document"/> taken out, with no check.</summary>
+    internal static void RemoveFromTree(this LoadOrderEntry entry, RecordDetail document) =>
+        RepositoryOf(entry).Remove(entry.Key, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
 }

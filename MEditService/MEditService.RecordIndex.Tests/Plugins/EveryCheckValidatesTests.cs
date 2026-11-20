@@ -52,16 +52,14 @@ public sealed class EveryCheckValidatesTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-    private void CheckAnnouncing(Predicate<INotification> announced)
-    {
-        var before = _notifications.Notifications.Count;
-        _index.NextCheckUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
-    }
+    private void CheckAnnouncing(Predicate<INotification> announced) => CheckAnnouncing(announced, Indexes.NextCheckUntil);
 
-    private void CheckThatMayFailAnnouncing(Predicate<INotification> announced)
+    private void CheckThatMayFailAnnouncing(Predicate<INotification> announced) => CheckAnnouncing(announced, Indexes.NextCheckThatMayFailUntil);
+
+    private void CheckAnnouncing(Predicate<INotification> announced, Action<OpenedIndex, Func<bool>, string> nextCheck)
     {
         var before = _notifications.Notifications.Count;
-        _index.NextCheckThatMayFailUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
+        nextCheck(_index, () => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
     }
 
     private void HandEditCompiledPlugin(string editorId = "EditedByHand")
@@ -243,7 +241,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
         CheckThatMayFailAnnouncing(FailureNamed(NonCompiledPlugin));
 
         RewriteNonCompiledPlugin("FixedByAnotherTool");
-        CheckThatMayFailAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == NonCompiledPlugin);

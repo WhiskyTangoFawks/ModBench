@@ -86,9 +86,8 @@ public sealed class UnreadableBinaryTests : IDisposable
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
         other.WriteToBinary(OtherPluginPath);
-        var sequence = _index.Sequence;
 
-        _index.NextCheckThatMayFailUnsettledUntil(() => _index.Sequence > sequence, "the sequence moving");
+        _index.NextCheckThatMayFail();
 
         Assert.All(
             _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),
@@ -105,7 +104,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         NonCompiledPluginOverAnUnreadableBinary();
 
         WriteValidPlugin(_pluginPath);
-        _index.NextCheckThatMayFailUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
+        _index.NextCheckUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
 
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
         Assert.Contains(_index.ListedIn(_key), row => row.EditorId == "FreshlyAppearedNpc");

@@ -55,7 +55,7 @@ public sealed class ReconcileDoorTests
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexFolder).Order(StringComparer.Ordinal));
 
         otherWindow.Dispose();
-        index.NextCheckThatMayFailUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
     }
 
@@ -205,7 +205,7 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
         File.Delete(blocker);
-        index.NextCheckThatMayFailUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 

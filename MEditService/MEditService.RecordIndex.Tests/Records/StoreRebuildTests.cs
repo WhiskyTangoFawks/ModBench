@@ -67,7 +67,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.False(Directory.Exists(gone));
 
         Directory.CreateDirectory(gone);
-        _index.NextCheckThatMayFailUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
 
         Assert.NotEmpty(_index.ListedIn(Key));
     }
@@ -95,7 +95,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.False(Directory.Exists(gone));
 
         Directory.CreateDirectory(gone);
-        _index.NextCheckThatMayFailUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
     }
 
     [Fact]
@@ -274,10 +274,7 @@ public sealed class StoreRebuildTests : IDisposable
             Assert.NotNull(index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
             index.ClearFilter();
             otherWindow.ForEach(window => window.Dispose());
-            var before = index.Sequence;
-            index.NextCheckThatMayFailUnsettledUntil(() => index.Sequence > before, "the sequence moving");
-
-            Assert.Equal(LoadOrderState.Ready, index.Status.State);
+            index.NextCheck();
 
             Assert.Null(index.Queries.GetFilter().Value());
             Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));

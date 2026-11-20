@@ -85,7 +85,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         Assert.Equal(StoreRebuildRefusal.StillServingReads, refused?.Refusal);
         AwaitNotReopened();
         await ReadEnds(read);
-        _index.NextCheckThatMayFailUnsettledUntil(() => _index.Status.State == LoadOrderState.Ready, "the reopened index");
+        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Ready, "the reopened index");
         Assert.NotEmpty(_index.ListedIn(Key));
     }
 
