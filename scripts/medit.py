@@ -193,15 +193,17 @@ def create_plugin(name: str, origin: str, flags: list[str] | None = None) -> Plu
 
 
 def make_patch_plugin(
-        name: str, origin: str, records: Iterable[JsonRecord | NewRecord], flags: list[str] | None = None) -> Patch:
+        name: str, origin: str, records: Iterable[JsonRecord | NewRecord], flags: list[str] | None = None,
+        replace: bool = False) -> Patch:
     """Writes a generated patch plugin holding each record, a document as read gives one, into an enabled mod or Overwrite,
     with no plugin source. A record lands in the container its winning copy sits in; a new one that lives in a container
-    goes inside its container's document. Refused as compile refuses, and over a file at its path. flags: header flags."""
+    goes inside its container's document. Refused as compile refuses, as a compiled plugin, and over a file at its path
+    unless replace, whose replaced file goes to the trash. flags: header flags."""
     given = [
         {'text': json.dumps(record.document), 'recordType': record.record_type} if isinstance(record, NewRecord)
         else {'text': json.dumps(record)}
         for record in records]
-    made = _call('POST', '/plugins/make-patch', {'origin': origin, 'name': name, 'records': given, 'flags': flags})
+    made = _call('POST', '/plugins/make-patch', {'origin': origin, 'name': name, 'records': given, 'flags': flags, 'replace': replace})
     return Patch(
         _plugin_of(made['plugin']),
         [Diagnostic(diagnostic['formKey'], diagnostic['message']) for diagnostic in made['diagnostics']])

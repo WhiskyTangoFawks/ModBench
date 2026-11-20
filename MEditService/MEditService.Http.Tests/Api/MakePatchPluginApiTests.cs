@@ -41,8 +41,8 @@ public sealed class MakePatchPluginApiTests : HostedTests
             $"/plugins/{Base}/records/{Uri.EscapeDataString(formKey)}/rendered-document?origin={Uri.EscapeDataString(PluginOrigin.DataDirectory)}")).GetProperty("text").GetString(),
     };
 
-    private Task<HttpResponseMessage> Make(string name, IReadOnlyList<object> records, IReadOnlyList<string>? flags = null) =>
-        Client.PostAsJsonAsync("/plugins/make-patch", new { origin = Mod, name, records, flags = flags ?? [] });
+    private Task<HttpResponseMessage> Make(string name, IReadOnlyList<object> records) =>
+        Client.PostAsJsonAsync("/plugins/make-patch", new { origin = Mod, name, records, flags = Array.Empty<string>() });
 
     [Fact]
     public async Task RecordsAScriptReads_MakeAPluginHoldingThem_EachInItsContainer()

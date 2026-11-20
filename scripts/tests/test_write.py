@@ -135,6 +135,11 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
         self.assertEqual([diagnostic.form_key for diagnostic in patch.diagnostics], [f'000800:{NEW_PLUGIN}'])
 
+    def test_replaces_a_patch_plugin_made_before_when_asked_to(self) -> None:
+        medit.make_patch_plugin(NEW_PLUGIN, EMPTY_MOD, [medit.read(CONDITIONS, RECIPE)], flags=[])
+        patch = medit.make_patch_plugin(NEW_PLUGIN, EMPTY_MOD, [medit.read(CONDITIONS, RECIPE)], flags=[], replace=True)
+        self.assertEqual(patch.plugin, medit.Plugin(NEW_PLUGIN, EMPTY_MOD))
+
     def test_raises_for_a_patch_plugin_named_as_a_compiled_plugin_naming_its_plugin_source(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
             medit.make_patch_plugin(CONDITIONS.name, CONDITIONS.origin, [medit.read(CONDITIONS, RECIPE)], flags=[])

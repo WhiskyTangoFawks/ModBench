@@ -256,8 +256,9 @@ internal static class PluginEndpoints
                 "Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and " +
                 "a container not given lands by its winning copy's own fields. A record no active or compiled plugin holds needs its record type, " +
                 "and one that lives in a container goes inside its container's document. " +
-                "Refused, writing nothing, as compile refuses, over a file at its path, its name compared without case, and where its mod's " +
-                "plugin source compiles to it. Answers compile's diagnostics.")
+                "Refused, writing nothing, as compile refuses, where its mod's plugin source compiles to it, and over a file at its path, its " +
+                "name compared without case, unless replace, which sets the file aside and names it on the notification stream for the " +
+                "client to trash. Answers compile's diagnostics.")
             .Produces<PatchMade>()
             .ProducesProblem(400)
             .ProducesProblem(404)
@@ -416,7 +417,7 @@ internal static class PluginEndpoints
 
         return EndpointMapping.Answered(
             "Make patch", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
-            await make.Make(plugin.Origin, plugin.Name, req.Flags, req.Records ?? [], cancel));
+            await make.Make(plugin.Origin, plugin.Name, req.Flags, req.Records ?? [], req.Replace, cancel));
     }
 
     internal static IResult RenameSourceChanges(
@@ -529,7 +530,8 @@ internal sealed record CreatePluginRequest(string Origin, string Name, string Fo
 internal sealed record CreatePluginInModRequest(string Origin, string Name, IReadOnlyList<string>? Flags = null);
 
 /// <summary>The mod that provides the patch plugin (ADR-0012), its file name, the records it holds and its header flags.</summary>
-internal sealed record MakePatchRequest(string Origin, string Name, IReadOnlyList<GivenRecord>? Records, IReadOnlyList<string>? Flags = null);
+internal sealed record MakePatchRequest(
+    string Origin, string Name, IReadOnlyList<GivenRecord>? Records, IReadOnlyList<string>? Flags = null, bool Replace = false);
 
 /// <summary>The plugin by its origin and file name (ADR-0012), its new file name, whether mod order resolves its file
 /// name to this copy, and each file of its source folder a build reads by its name.</summary>

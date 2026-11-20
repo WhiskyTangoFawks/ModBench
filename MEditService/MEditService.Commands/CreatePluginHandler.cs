@@ -33,7 +33,7 @@ public sealed class CreatePluginHandler
 
         var mod = new PluginProvider.FromMod(address.Origin, folder, sourceFolder);
         var modKey = ModKey.FromFileName(address.Name);
-        var plugin = new RegisteredPlugin(address.Name, address.Origin, _adapter.PathOfEmpty(modKey, folder), mod, Line: null, PluginStrings.None);
+        var plugin = RegisteredIn(address, mod);
         if (!_source.IsSourceMod(plugin)) return address;
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
@@ -46,6 +46,9 @@ public sealed class CreatePluginHandler
         return new PluginCreateRefused(PluginCreateRefusal.WriteFailed,
             $"Could not write {address.Name}'s source into {mod.SourceFolder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
     }
+
+    private RegisteredPlugin RegisteredIn(PluginAddress address, PluginProvider.FromMod mod) =>
+        new(address.Name, address.Origin, _adapter.PathOfEmpty(ModKey.FromFileName(address.Name), mod.Folder), mod, Line: null, PluginStrings.None);
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> WrittenOnceItsSourceLands(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)
@@ -118,6 +121,11 @@ public sealed class CreatePluginHandler
         var release = loadOrder.GameRelease;
         if (!HeaderOf(plugin.Name, release, flags).Holds(out var header, out var refused)) return refused;
         var (modKey, chosenFlags) = header;
+        if (_source.SourceReads(RegisteredIn(plugin, new PluginProvider.FromMod(plugin.Origin, folder, sourceFolder))))
+        {
+            return new PluginCreateRefused(
+                PluginCreateRefusal.CompiledPlugin, $"'{sourceFolder}' already holds plugin source for {plugin.Name}, so it was not created.");
+        }
 
         if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release, chosenFlags)).Holds(out var created, out var failure))
             return new PluginCreateRefused(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");

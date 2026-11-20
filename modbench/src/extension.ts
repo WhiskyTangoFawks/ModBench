@@ -85,6 +85,7 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
 import { askedOnceLoadOrderPut, fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
+import { trashSetAsideOn } from './pluginCommands/setAside';
 import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryCommands';
 import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
@@ -113,7 +114,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'latestLoadOrder' | 'loadOrderApplied' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getPlacedScriptReferences' | 'getPlacedFileReferences' | 'getPlacedPluginNameReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'recordIndexProgress' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
+  | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getPlacedScriptReferences' | 'getPlacedFileReferences' | 'getPlacedPluginNameReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'recordIndexProgress' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies' | 'onFilesSetAside'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -247,6 +248,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const commandsOfPlugins = pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) });
+  own(trashSetAsideOn({ client, adapter, trash, reporter: reporterFor('plugin.setAside') }));
   const entryRenames = entryRenameCommands({ adapter, client });
   own(registerFollowRename(followRenames({
     adapter, plugins: commandsOfPlugins, entries: entryRenames, downloads: downloadedFileCommands(adapter), profiles: commands, source: deps.sourceEditing, instance,

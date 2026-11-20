@@ -119,10 +119,9 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             if (container is { } slot) return new MadeRecord(identity, text, slot);
             if (!isCell)
             {
-                var unsaid = owner is { } holder ? $"{holder.Name}'s copy of {identity.FormKey} names no container" : NoneHolds(identity.FormKey);
                 return new PatchRefused.OfRecord(
                     RecordEditRefusal.ContainerUnknown,
-                    $"{unsaid}, so which container it lives in is unknown. Give it inside its container's document.");
+                    $"No active or compiled plugin's copy of {identity.FormKey} says which container it lives in. Give it inside its container's document.");
             }
             if (worldspace is not null)
             {
@@ -138,7 +137,6 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
                 : new MadeRecord(identity, text);
         }
 
-        // The record index names a record's owners among the active and compiled plugins only (IQueries.GetRecordOwners).
         private static string NoneHolds(string formKey) => $"No active plugin and no compiled plugin holds {formKey}";
 
         private static bool HasGrid(string text) => Document.TryRead(text, out var document, out _) && document.Grid is not null;

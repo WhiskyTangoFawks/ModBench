@@ -108,6 +108,24 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "EmptiedMod", folder)));
     }
 
+    [Theory]
+    [InlineData("First.esp")]
+    [InlineData("first.ESP")]
+    public async Task CreatePlugin_OfAPluginTheSourceModsPluginSourceHolds_WithNoBinary_IsRefusedNamingIt_AndLeavesItsSource(string name)
+    {
+        var folder = await SourceModWith("SourcedMod", "First.esp");
+        var first = new PluginAddress("First.esp", "SourcedMod");
+        var sourceBefore = string.Join(", ", SourceModTree.Records(folder, first));
+        File.Delete(Path.Combine(folder, "First.esp"));
+
+        var result = (await Create(name, folder, "SourcedMod")).Refused();
+
+        Assert.Equal(
+            (new PluginCreateRefused(PluginCreateRefusal.CompiledPlugin, $"'{folder}' already holds plugin source for {name}, so it was not created."),
+                sourceBefore, false),
+            (result, string.Join(", ", SourceModTree.Records(folder, first)), File.Exists(Path.Combine(folder, name))));
+    }
+
     [Fact]
     public async Task CreatePlugin_WhoseSourceCannotBeWritten_TakesBackTheFileItWrote_AndWritesNothing()
     {

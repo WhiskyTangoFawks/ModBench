@@ -122,13 +122,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
-    public string? HeldAt(string pluginPath)
-    {
-        var folder = Path.GetDirectoryName(pluginPath) ?? throw new InvalidOperationException($"Expected '{pluginPath}' to have a parent directory.");
-        if (!Directory.Exists(folder)) return null;
-        var name = Path.GetFileName(pluginPath);
-        return Directory.EnumerateFiles(folder).Select(Path.GetFileName).FirstOrDefault(held => string.Equals(held, name, StringComparison.OrdinalIgnoreCase));
-    }
+    public string? HeldAt(string pluginPath) => PluginFolder.HeldAt(pluginPath);
+
+    public IReadOnlyList<string> SetAsideIn(string folder) => PluginFolder.Replaced.In(folder);
 
     public IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease)
     {

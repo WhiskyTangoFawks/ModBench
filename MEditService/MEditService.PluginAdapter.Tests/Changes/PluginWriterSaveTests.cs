@@ -62,6 +62,25 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
+    public async Task ACommitSettingAside_ThatCannotPutThePluginInPlace_PutsTheFileItSetAsideBack_AndSaysWhy()
+    {
+        using var data = new PluginFixtureBuilder("pw-save-setting-aside").WithPlugin("TestPlugin.esp").Build();
+        var path = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var before = Convert.ToHexString(await File.ReadAllBytesAsync(path));
+        var entriesBefore = string.Join(", ", FolderEntries.Of(data.DataFolder));
+
+        var why = await TreeSaves.SaveAsync(path, prep =>
+        {
+            Directory.Delete(Assert.Single(Directory.GetDirectories(data.DataFolder, ".medit_tmp_*")), recursive: true);
+            return prep.CommitSettingAside();
+        });
+
+        Assert.Equal(
+            (true, before, entriesBefore),
+            (why is not null, Convert.ToHexString(await File.ReadAllBytesAsync(path)), string.Join(", ", FolderEntries.Of(data.DataFolder))));
+    }
+
+    [Fact]
     public async Task Commit_LeavesTheDataFolderHoldingTheSameFiles()
     {
         using var data = new PluginFixtureBuilder("pw-save-no-tmpdir")

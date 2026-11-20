@@ -34,6 +34,10 @@ public interface IPluginAdapter
     /// reads a plugin's name; null when there is none.</summary>
     string? HeldAt(string pluginPath);
 
+    /// <summary>Each file a <see cref="PreparedPluginSave.CommitSettingAside"/> set aside in <paramref name="folder"/> that is there
+    /// still, by its forward-slash path in it.</summary>
+    IReadOnlyList<string> SetAsideIn(string folder);
+
     /// <summary>The plugins whose file, or strings named for them, is at <paramref name="path"/>, or plugins it cannot name
     /// for another archive or strings file the game loads.</summary>
     PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);

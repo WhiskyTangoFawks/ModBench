@@ -2,6 +2,7 @@ import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { EventEmitter, type Disposable } from '../eventEmitter';
 import type {
   MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocumentChange, WriteRefused,
+  FilesSetAside,
 } from '../MEditClient';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
@@ -68,6 +69,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private readonly handOverListeners = new Set<(failure: WriteRefused | undefined) => void>();
+  private readonly setAsideListeners = new Set<(setAside: FilesSetAside) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private signalAnswer: () => Promise<void> = () => Promise.resolve();
@@ -267,6 +269,16 @@ export class InMemoryMEditClient implements MEditClient {
   onUnsavedHandOver(listener: (failure: WriteRefused | undefined) => void): () => void {
     this.handOverListeners.add(listener);
     return () => { this.handOverListeners.delete(listener); };
+  }
+
+  onFilesSetAside(listener: (setAside: FilesSetAside) => void): () => void {
+    this.setAsideListeners.add(listener);
+    return () => { this.setAsideListeners.delete(listener); };
+  }
+
+  /** mEdit names the files it holds set aside in a folder. */
+  setAside(setAside: FilesSetAside): void {
+    for (const listener of this.setAsideListeners) listener(setAside);
   }
 
   /** A hand-over answers: undefined when mEdit took it, else why not. */

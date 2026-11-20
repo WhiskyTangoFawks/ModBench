@@ -218,7 +218,8 @@ public static class CommandHandlers
                 sp.GetRequiredService<SchemaReflector>()),
             new TreeCompile(
                 sp.GetRequiredService<SchemaReflector>(), sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<ILogger<MakePatchPluginHandler>>()),
-            sp.GetRequiredService<HeldWrites>()));
+            sp.GetRequiredService<HeldWrites>(),
+            sp.GetRequiredService<INotificationPublisher>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<IModFolderRepository>(),
