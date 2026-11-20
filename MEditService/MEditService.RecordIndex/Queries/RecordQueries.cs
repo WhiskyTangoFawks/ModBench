@@ -328,6 +328,9 @@ internal sealed class RecordQueries(
                 : new IndexRefused(IndexRefusal.NameRefused, $"{name} is not a plugin file name.");
         });
 
+    public Answer<IReadOnlyList<string>, IndexRefused> GetPlacesHoldingPluginSource(string name) =>
+        _answer.Of(() => source.PlacesHoldingPluginSourceOf(_loadOrder.Require().Places, name));
+
     public Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(
         PluginAddress plugin, string formKey, CancellationToken cancel) =>
         _answer.Of<IReadOnlyList<RecordTypeChoice>?>(() => ChildRecordTypesOf(plugin, formKey, cancel));

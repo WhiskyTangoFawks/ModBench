@@ -322,6 +322,11 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(['.esp', '.esm', '.esl']));
       return;
     }
+    if (url.startsWith('/plugins/places-holding-plugin-source')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
+      return;
+    }
     if (url.startsWith('/plugins/creatable-flags')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify([[], ['Small']]));

@@ -122,6 +122,10 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public bool Exists(string pluginPath) => File.Exists(pluginPath);
 
+    public string? HeldAt(string pluginPath) => PluginFolder.HeldAt(pluginPath);
+
+    public IReadOnlyList<string> SetAsideIn(string folder) => PluginFolder.Replaced.In(folder);
+
     public IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease)
     {
         var modPath = new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path);
@@ -392,7 +396,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     {
         var destinationPath = PathOfEmpty(modKey, folder);
         if (!Directory.Exists(folder)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FolderGone);
-        if (File.Exists(destinationPath)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FileExists);
+        if (HeldAt(destinationPath) is { } held) return PluginAnswer.Of(new EmptyPluginCreated(EmptyPluginWrite.FileExists, Held: held));
 
         var plugin = Flagged(modKey, gameRelease, flags);
 
@@ -410,7 +414,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
         catch (IOException) when (File.Exists(destinationPath))
         {
-            return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FileExists);
+            return PluginAnswer.Of(new EmptyPluginCreated(EmptyPluginWrite.FileExists, Held: Path.GetFileName(destinationPath)));
         }
         catch (DirectoryNotFoundException) when (!Directory.Exists(folder))
         {

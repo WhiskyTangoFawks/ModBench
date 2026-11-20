@@ -30,6 +30,8 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.CountRecords(modPath, loadOrder);
 
     public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);
+    public virtual string? HeldAt(string pluginPath) => inner.HeldAt(pluginPath);
+    public virtual IReadOnlyList<string> SetAsideIn(string folder) => inner.SetAsideIn(folder);
 
     public virtual IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease) =>
         inner.WrittenByCompile(plugin, paths, gameRelease);

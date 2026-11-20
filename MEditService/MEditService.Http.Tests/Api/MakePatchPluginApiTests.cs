@@ -41,8 +41,8 @@ public sealed class MakePatchPluginApiTests : HostedTests
             $"/plugins/{Base}/records/{Uri.EscapeDataString(formKey)}/rendered-document?origin={Uri.EscapeDataString(PluginOrigin.DataDirectory)}")).GetProperty("text").GetString(),
     };
 
-    private Task<HttpResponseMessage> Make(string name, IReadOnlyList<object> records, IReadOnlyList<string>? flags = null) =>
-        Client.PostAsJsonAsync("/plugins/make-patch", new { origin = Mod, name, records, flags = flags ?? [] });
+    private Task<HttpResponseMessage> Make(string name, IReadOnlyList<object> records) =>
+        Client.PostAsJsonAsync("/plugins/make-patch", new { origin = Mod, name, records, flags = Array.Empty<string>() });
 
     [Fact]
     public async Task RecordsAScriptReads_MakeAPluginHoldingThem_EachInItsContainer()
@@ -68,6 +68,25 @@ public sealed class MakePatchPluginApiTests : HostedTests
         Assert.Equal(
             (HttpStatusCode.Conflict, "FileExists", "held"),
             (made.StatusCode, (await made.Body()).GetProperty("refusal").GetString(), await File.ReadAllTextAsync(Path.Combine(_folder, Patch))));
+    }
+
+    [Fact]
+    public async Task MakingAPluginACompiledPluginOfItsModCompilesTo_Is409_EvenWithNoBinaryAtItsPath()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-make-patch-compiled").WithPlugin(Patch, origin: Mod).BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Mod)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == Mod).Path) ?? throw new InvalidOperationException("A mod plugin has a folder.");
+        File.Delete(Path.Combine(modFolder, Patch));
+        (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(
+            fx.DataFolder, fx.InstanceRoot, fx.Plugins.Where(plugin => plugin.Origin != Mod),
+            places: new[] { new { name = Mod, folder = modFolder, sourceFolder = modFolder } }))).EnsureSuccessStatusCode();
+
+        var made = await Make(Patch, []);
+
+        Assert.Equal(
+            (HttpStatusCode.Conflict, "CompiledPlugin", false),
+            (made.StatusCode, (await made.Body()).GetProperty("refusal").GetString(), File.Exists(Path.Combine(modFolder, Patch))));
     }
 
     [Fact]

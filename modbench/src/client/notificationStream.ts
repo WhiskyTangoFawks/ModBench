@@ -25,7 +25,7 @@ class NotificationListenerRegistry {
 
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'version-in-git-progress': new Set(), 'rows-changed': new Set(),
-    'plugin-changed': new Set(), 'record-index-changed': new Set(),
+    'plugin-changed': new Set(), 'record-index-changed': new Set(), 'files-set-aside': new Set(),
   };
 
   private heard = 0;
@@ -73,6 +73,9 @@ class NotificationListenerRegistry {
         break;
       case 'record-index-changed':
         this.deliver('record-index-changed', {});
+        break;
+      case 'files-set-aside':
+        if (event.folder && event.setAside) this.deliver(kind, { folder: event.folder, paths: event.setAside });
         break;
     }
   }
@@ -139,6 +142,8 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     modlistProgress?: NotificationEvent['modlistProgress'];
     versionInGitPhase?: NotificationEvent['versionInGitPhase'];
+    folder?: NotificationEvent['folder'];
+    setAside?: NotificationEvent['setAside'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
   if (!isString(w.plugin)) throw new Error('Expected a notification event to carry a string plugin.');
@@ -148,6 +153,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
     loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, versionInGitPhase: w.versionInGitPhase,
+    folder: w.folder, setAside: w.setAside,
   };
 }
 

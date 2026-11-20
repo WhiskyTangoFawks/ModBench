@@ -8,6 +8,9 @@ public enum PluginCreateRefusal
 {
     FolderGone,
     FileExists,
+
+    /// <summary>The place's plugin source compiles to the plugin, so its next compile would overwrite what was written.</summary>
+    CompiledPlugin,
     LightPluginUnsupported,
     NotAPluginFile,
     OriginNotAMod,

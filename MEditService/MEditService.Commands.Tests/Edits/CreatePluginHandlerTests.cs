@@ -108,6 +108,24 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "EmptiedMod", folder)));
     }
 
+    [Theory]
+    [InlineData("First.esp")]
+    [InlineData("first.ESP")]
+    public async Task CreatePlugin_OfAPluginTheSourceModsPluginSourceHolds_WithNoBinary_IsRefusedNamingIt_AndLeavesItsSource(string name)
+    {
+        var folder = await SourceModWith("SourcedMod", "First.esp");
+        var first = new PluginAddress("First.esp", "SourcedMod");
+        var sourceBefore = string.Join(", ", SourceModTree.Records(folder, first));
+        File.Delete(Path.Combine(folder, "First.esp"));
+
+        var result = (await Create(name, folder, "SourcedMod")).Refused();
+
+        Assert.Equal(
+            (new PluginCreateRefused(PluginCreateRefusal.CompiledPlugin, $"'{folder}' already holds plugin source for {name}, so it was not created."),
+                sourceBefore, false),
+            (result, string.Join(", ", SourceModTree.Records(folder, first)), File.Exists(Path.Combine(folder, name))));
+    }
+
     [Fact]
     public async Task CreatePlugin_WhoseSourceCannotBeWritten_TakesBackTheFileItWrote_AndWritesNothing()
     {
@@ -235,6 +253,20 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Contains(folder, result.Message, StringComparison.Ordinal);
         Assert.Contains("Occupied.esp", result.Message, StringComparison.Ordinal);
         Assert.Equal("another tool's file", File.ReadAllText(occupied));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_OverAFileSpelledInAnotherCase_IsRefusedNamingItAsItIsSpelled_AndLeavesItAsItWas()
+    {
+        var folder = ModFolder("OccupiedMod");
+        File.WriteAllText(Path.Combine(folder, "occupied.ESP"), "another tool's file");
+
+        var result = (await Create("Occupied.esp", folder, "OccupiedMod")).Refused();
+
+        Assert.Equal(
+            (new PluginCreateRefused(PluginCreateRefusal.FileExists, $"{folder} already holds occupied.ESP, so Occupied.esp was not created."),
+                "occupied.ESP"),
+            (result, string.Join(", ", Directory.GetFiles(folder).Select(Path.GetFileName))));
     }
 
     [Theory]

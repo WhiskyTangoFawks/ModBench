@@ -73,7 +73,7 @@ export function isRefused<Words extends Message = string>(result: unknown): resu
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'version-in-git-progress', 'record-index-changed',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'version-in-git-progress', 'record-index-changed', 'files-set-aside',
 ] as const;
 
 /** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed subscription
@@ -88,7 +88,11 @@ export interface NotificationPayloads {
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
   'record-index-changed': Record<string, never>;
+  'files-set-aside': FilesSetAside;
 }
+
+/** Files mEdit set aside in `folder` in place of overwriting them, each by its forward-slash path in it and named as it was. */
+export interface FilesSetAside { readonly folder: string; readonly paths: readonly string[] }
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
  *  `string`) is narrowed to `NotificationKind` for dispatch. */
@@ -354,6 +358,8 @@ export interface MEditClient {
   getCreatablePluginExtensions(token?: ReadCancellation): Promise<string[] | ReadFailed>;
   /** The header flag combinations a new plugin of the file name's extension may take. */
   getCreatablePluginFlags(name: string, token?: ReadCancellation): Promise<string[][] | ReadFailed>;
+  /** Each place, by its origin, whose plugin source holds the plugin `name`, with or without its file: a create there refuses. */
+  getPlacesHoldingPluginSource(name: string, token?: ReadCancellation): Promise<string[] | ReadFailed>;
   /** What each archive holds, by its absolute path; the release says which game's format a BSA is read as. */
   getArchiveContents(gameRelease: string, archives: readonly string[], token?: ReadCancellation): Promise<ArchiveContents[] | ReadFailed>;
   /** The bytes of one file in an archive, by its path there. */
@@ -465,6 +471,8 @@ export interface MEditClient {
   handUnsavedDocument(change: UnsavedDocumentChange): void;
   /** Told as each hand-over answers: undefined when mEdit holds every document as handed, else why not the first. */
   onUnsavedHandOver(listener: (failure: WriteRefused | undefined) => void): () => void;
+  /** Told each time mEdit names the files it holds set aside in a folder, a make's own and those still there from before. */
+  onFilesSetAside(listener: (setAside: FilesSetAside) => void): () => void;
 
   // The backend process: today's four values, read as a current value and observed through a
   // status-changed event.

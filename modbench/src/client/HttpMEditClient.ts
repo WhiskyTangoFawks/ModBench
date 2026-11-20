@@ -30,7 +30,7 @@ import {
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocumentChange, type RenameSourceChangesOutcome, type RenameSourceAsked,
   type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type PlacedReferences, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
-  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, isRefused,
+  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, type FilesSetAside, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
@@ -245,6 +245,7 @@ class HttpMEditClient implements MEditClient {
 
   handUnsavedDocument(change: UnsavedDocumentChange): void { this.handOver.hand(change); }
   onUnsavedHandOver(listener: (failure: WriteRefused | undefined) => void): () => void { return this.handOver.onSettled(listener); }
+  onFilesSetAside(listener: (setAside: FilesSetAside) => void): () => void { return this.notifications.onNotification('files-set-aside', listener); }
 
   private async putUnsavedDocument(change: UnsavedDocumentChange, opened: boolean): Promise<WriteRefused | undefined> {
     const handed = await this.sendNow({
@@ -834,6 +835,10 @@ class HttpMEditClient implements MEditClient {
 
   getCreatablePluginExtensions(token?: ReadCancellation): Promise<string[] | ReadFailed> {
     return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { token });
+  }
+
+  getPlacesHoldingPluginSource(name: string, token?: ReadCancellation): Promise<string[] | ReadFailed> {
+    return this.read('getPlacesHoldingPluginSource', (api, signal) => api.GET('/plugins/places-holding-plugin-source', { params: { query: { name } }, signal }), (data) => data ?? [], { token });
   }
 
   getCreatablePluginFlags(name: string, token?: ReadCancellation): Promise<string[][] | ReadFailed> {

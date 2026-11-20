@@ -5,7 +5,7 @@ using MEditService.RecordIndex.Queries;
 namespace MEditService.Commands;
 
 /// <summary>A record a Modbench script gives a generated patch plugin: a document as plugin source holds it, and its record
-/// type, which a record no plugin holds needs.</summary>
+/// type, which a record no active or compiled plugin holds needs.</summary>
 public sealed record GivenRecord(string Text, string? RecordType = null);
 
 /// <summary>The generated patch plugin written, and compile's diagnostics of it.</summary>

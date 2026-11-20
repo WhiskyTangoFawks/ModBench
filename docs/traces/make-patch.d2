@@ -1,0 +1,53 @@
+# A Modbench script makes a generated patch plugin, blue.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+scripts: @../../spec/architecture/target-architecture.medit_drivers.scripts
+scripts.label: Scripts
+http: @../../spec/architecture/target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../../spec/architecture/target-architecture.medit_core.commands
+commands.label: Commands
+recordindex: @../../spec/architecture/target-architecture.medit_readmodel.recordindex
+recordindex.label: Record index
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+pluginadapter: @../../spec/architecture/target-architecture.medit_repositories.pluginadapter
+pluginadapter.label: Plugin adapter
+plugin: @../../spec/architecture/target-architecture.medit_data.plugin
+port: @../../spec/architecture/target-architecture.medit_kernel.ports
+port.label: Ports
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+plugincommands: @../../spec/architecture/target-architecture.modbench_core.plugincommands
+plugincommands.label: plugin commands
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+
+scripts -> http: "make patch: name, origin, records, whether to replace" {class: edit}
+http -> commands: envelope {class: edit}
+commands -> sourceadapter: "whether the place's plugin source holds the plugin" {class: compile}
+sourceadapter -> commands: "held, or not" {class: compile}
+commands -> recordindex: "the winning copy of each record whose type or container is not given" {class: query}
+recordindex -> commands: "its plugin, or why it cannot say" {class: query}
+commands."lay out the records; check them as compile does"
+commands -> pluginadapter: "bytes · replace the file at the path" {class: compile}
+pluginadapter -> plugin: "the plugin · the file it replaced, set aside beside it" {class: compile}
+pluginadapter -> commands: "written · each file set aside in its folder, by this make or one before" {class: compile}
+commands -> recordindex: "read back the plugin" {class: compile}
+recordindex -> commands: "held, or why not" {class: compile}
+commands -> port: "files set aside: the folder, each file" {class: push}
+port -> http: publish {class: push}
+http -> client: stream {class: push}
+client -> plugincommands: "files set aside" {class: push}
+plugincommands -> instanceadapter: "trash: each file set aside, where it lies" {class: compile}
+instanceadapter -> instance: "the trash" {class: compile}
+commands -> http: "applied, with the diagnostics" {class: edit}
+http -> scripts: "200: the plugin and the diagnostics" {class: edit}
+
+refused: "refused before any write: as compile refuses, a compiled plugin, or a file at the path not asked to replace" {
+  commands -> http: the refusal {class: edit}
+  http -> scripts: the refusal {class: edit}
+}
+
+scripts."a refusal raises, naming why"

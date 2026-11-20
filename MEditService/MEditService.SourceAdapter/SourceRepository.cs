@@ -64,7 +64,7 @@ internal sealed class SourceRepository : ISourceRepository
     internal static bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && HoldsTreeFor(sourceFolder, plugin.Name);
 
-    private static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
+    internal static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
         IsSourceMod(sourceFolder) && SourceRepositoryLayout.TreeNameIn(sourceFolder, pluginFileName).Holds(out _, out _);
 
     /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or an unlistable plugin

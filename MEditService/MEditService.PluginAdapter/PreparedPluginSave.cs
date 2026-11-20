@@ -50,10 +50,11 @@ public sealed class PreparedPluginSave : IDisposable
         File.Move(_tmpPath, _finalPath, overwrite: true);
     }
 
-    /// <summary>The binary put in place over no file, as a plugin with no strings is: false, writing nothing, when a file is
-    /// at its path.</summary>
+    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is: false,
+    /// writing nothing, when a file is at its path.</summary>
     public bool CommitOverNoFile()
     {
+        if (PluginFolder.HeldAt(_finalPath) is not null) return false;
         try
         {
             File.Move(_tmpPath, _finalPath, overwrite: false);
@@ -62,6 +63,34 @@ public sealed class PreparedPluginSave : IDisposable
         catch (IOException) when (File.Exists(_finalPath))
         {
             return false;
+        }
+    }
+
+    /// <summary>The binary put in place as a plugin with no strings is, the file at its path, its name compared without case, first
+    /// set aside in a new folder beside it: null, else why the file system refused, with the file put back.</summary>
+    public string? CommitSettingAside()
+    {
+        var folder = Path.GetDirectoryName(_finalPath) ?? throw new InvalidOperationException($"Expected '{_finalPath}' to have a parent directory.");
+        var held = PluginFolder.HeldAt(_finalPath);
+        var aside = held is null ? null : PluginFolder.Replaced.NewFolderIn(folder);
+        try
+        {
+            if (held is not null && aside is not null)
+            {
+                Directory.CreateDirectory(aside);
+                File.Move(Path.Combine(folder, held), Path.Combine(aside, held));
+            }
+            File.Move(_tmpPath, _finalPath, overwrite: false);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (held is not null && aside is not null && Directory.Exists(aside))
+            {
+                if (File.Exists(Path.Combine(aside, held))) File.Move(Path.Combine(aside, held), Path.Combine(folder, held));
+                Directory.Delete(aside);
+            }
+            return ex.Message;
         }
     }
 

@@ -64,7 +64,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             if (owner is not { } held)
             {
                 return given ?? (Answer<string, PatchRefused>)new PatchRefused.OfRecord(
-                    RecordEditRefusal.RecordTypeNotFound, $"No plugin holds {formKey}, so its record type must be given.");
+                    RecordEditRefusal.RecordTypeNotFound, $"{NoneHolds(formKey)}, so its record type must be given.");
             }
             if (!HeldIdentity(formKey, held, copies.Of(held)).Holds(out var identity, out var unread)) return unread;
             var type = identity.RecordType;
@@ -77,7 +77,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         {
             if (!OwnerOf(formKey).Holds(out var owner, out var refused)) return refused;
             if (owner is not { } held)
-                return new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, $"No plugin holds {formKey}, which holds a record given.");
+                return new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, $"{NoneHolds(formKey)}, which holds a record given.");
             var copy = copies.Of(held);
             var read = HeldIdentity(formKey, held, copy).Then(identity => Read(formKey, held, CarriedCopy(copy, identity)));
             if (!read.Holds(out var document, out var unread)) return unread;
@@ -121,7 +121,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             {
                 return new PatchRefused.OfRecord(
                     RecordEditRefusal.ContainerUnknown,
-                    $"No plugin's copy of {identity.FormKey} says which container it lives in. Give it inside its container's document.");
+                    $"No active or compiled plugin's copy of {identity.FormKey} says which container it lives in. Give it inside its container's document.");
             }
             if (worldspace is not null)
             {
@@ -133,9 +133,11 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             }
             return owner is null && HasGrid(text)
                 ? new PatchRefused.OfRecord(
-                    RecordEditRefusal.ContainerUnknown, $"{identity.FormKey} is an exterior cell no plugin holds, so which worldspace it sits in is unknown.")
+                    RecordEditRefusal.ContainerUnknown, $"{NoneHolds(identity.FormKey)}, an exterior cell, so which worldspace it sits in is unknown.")
                 : new MadeRecord(identity, text);
         }
+
+        private static string NoneHolds(string formKey) => $"No active plugin and no compiled plugin holds {formKey}";
 
         private static bool HasGrid(string text) => Document.TryRead(text, out var document, out _) && document.Grid is not null;
 

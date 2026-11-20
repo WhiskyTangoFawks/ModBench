@@ -674,6 +674,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/places-holding-plugin-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each place of the held load order, by its origin, whose plugin source holds the plugin of that name, compared without case, with or without its file: a create there refuses. */
+        get: operations["GetPlacesHoldingPluginSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create-in-mod": {
         parameters: {
             query?: never;
@@ -702,7 +719,7 @@ export interface paths {
         put?: never;
         /**
          * Writes a generated patch plugin from records: a script's patch, with no plugin source.
-         * @description Writes a plugin holding each record given, a document as plugin source holds it, into the folder of an enabled mod or Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and a container not given lands by its winning copy's own fields. A record no plugin holds needs its record type, and one that lives in a container goes inside its container's document. Refused, writing nothing, as compile refuses, and over a file at its path. Answers compile's diagnostics.
+         * @description Writes a plugin holding each record given, a document as plugin source holds it, into the folder of an enabled mod or Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and a container not given lands by its winning copy's own fields. A record no active or compiled plugin holds needs its record type, and one that lives in a container goes inside its container's document. Refused, writing nothing, as compile refuses, where its mod's plugin source compiles to it, and over a file at its path, its name compared without case, unless replace, which sets the file aside and names it on the notification stream for the client to trash. Answers compile's diagnostics.
          */
         post: operations["MakePatchPlugin"];
         delete?: never;
@@ -1833,6 +1850,7 @@ export interface components {
             name: string;
             records?: components["schemas"]["GivenRecord"][] | null;
             flags?: string[] | null;
+            replace: boolean;
         };
         MemberReferences: {
             copies: components["schemas"]["CopyNamingAtMembers"][];
@@ -1901,6 +1919,8 @@ export interface components {
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             versionInGitPhase?: components["schemas"]["VersionInGitPhase"] | null;
+            folder?: string | null;
+            setAside?: string[] | null;
         };
         PatchMade: {
             plugin: components["schemas"]["PluginAddress"];
@@ -4002,6 +4022,46 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPlacesHoldingPluginSource: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

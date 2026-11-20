@@ -71,6 +71,22 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ThePlacesHoldingPluginSource_NameASourceModWhosePluginSourceHoldsThePlugin_ThoughItsBinaryIsGone()
+    {
+        var fx = Owned(OneMod());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == Origin).Path) ?? throw new InvalidOperationException("A mod plugin has a folder.");
+        File.Delete(Path.Combine(modFolder, Held));
+        (await PutWithPlaces(
+            fx, fx.Plugins.Where(plugin => plugin.Origin != Origin), new { name = Origin, folder = modFolder, sourceFolder = modFolder })).EnsureSuccessStatusCode();
+
+        var held = await Client.GetFromJsonAsync<string[]>($"/plugins/places-holding-plugin-source?name={Held}");
+
+        Assert.Equal([Origin], held.Require());
+    }
+
+    [Fact]
     public async Task CreatingAPluginInASourceModPlaceWithNoPlugin_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
     {
         var fx = Owned(OneMod());

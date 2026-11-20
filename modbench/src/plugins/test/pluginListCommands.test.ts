@@ -89,8 +89,10 @@ const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
 describe('registerCreatePluginCommand', () => {
   function invoke(
     client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2>, creatableExtensions = ['.esm', '.esl', '.esp'], flagChoices = [['Master']],
+    heldAsPluginSource: string[] = [],
   ) {
     client.setQueryAnswer('getCreatablePluginExtensions', creatableExtensions);
+    client.setQueryAnswer('getPlacesHoldingPluginSource', heldAsPluginSource);
     client.setQueryAnswer('getCreatablePluginFlags', flagChoices);
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2.instance, reporter);
@@ -99,6 +101,7 @@ describe('registerCreatePluginCommand', () => {
 
   const extensionsQuery = { method: 'getCreatablePluginExtensions', args: [] };
   const flagsQuery = { method: 'getCreatablePluginFlags', args: ['MyPatch.esp'] };
+  const placesQuery = { method: 'getPlacesHoldingPluginSource', args: ['MyPatch.esp'] };
 
   type Place = { label: string; origin: string };
   const offering = (): { offered: Place[] } => {
@@ -112,6 +115,17 @@ describe('registerCreatePluginCommand', () => {
   const pickOrigin = (origin: string) => showQuickPick.mockImplementation((places: Place[]) =>
     Promise.resolve(places.find((p) => p.origin === origin)));
 
+  it('does not offer a place whose plugin source mEdit says holds a plugin of that name', async () => {
+    const client = new InMemoryMEditClient();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    const pick = offering();
+    const { run } = invoke(client, makeMo2(), undefined, undefined, ['Winning Mod']);
+
+    await run();
+
+    expect(pick.offered.map((place) => place.label)).toEqual(['Overwrite']);
+  });
+
   it('sends the origin, the file name and the picked place\'s folder, and lands the created toast', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', WROTE);
@@ -123,6 +137,7 @@ describe('registerCreatePluginCommand', () => {
 
     expect(client.calls).toEqual([
       extensionsQuery,
+      placesQuery,
       flagsQuery,
       { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', ['Master']] },
     ]);
@@ -162,6 +177,21 @@ describe('registerCreatePluginCommand', () => {
 
     expect(client.calls.some((call) => call.method === 'createPlugin')).toBe(false);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports why, and offers no place, when mEdit cannot say which places\' plugin source holds the name', async () => {
+    const client = new InMemoryMEditClient();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    const pick = offering();
+
+    const { run, reporter } = invoke(client, makeMo2());
+    client.setQueryFailure('getPlacesHoldingPluginSource', { failed: 'refused', refusal: 'The record index is reading.' });
+    await run();
+
+    expect(pick.offered).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not look up which places\' plugin source holds "MyPatch.esp".', detail: 'The record index is reading.' },
+    ]);
   });
 
   it('reports why, and creates nothing, when mEdit cannot say which header flags the plugin may take', async () => {
@@ -237,7 +267,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(client.calls).toEqual([extensionsQuery]);
+    expect(client.calls).toEqual([extensionsQuery, placesQuery]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
@@ -259,7 +289,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([extensionsQuery]);
+    expect(client.calls).toEqual([extensionsQuery, placesQuery]);
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
   });
 

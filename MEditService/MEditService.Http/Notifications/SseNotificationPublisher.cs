@@ -64,7 +64,9 @@ internal sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
     ModlistProgress? ModlistProgress = null,
-    VersionInGitPhase? VersionInGitPhase = null)
+    VersionInGitPhase? VersionInGitPhase = null,
+    string? Folder = null,
+    IReadOnlyList<string>? SetAside = null)
 {
     public static NotificationEvent From(INotification notification) => notification switch
     {
@@ -73,6 +75,7 @@ internal sealed record NotificationEvent(
         RecordIndexChangedNotification n => new("record-index-changed", "", "", [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
         VersionInGitProgressNotification n => new("version-in-git-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, VersionInGitPhase: n.Phase),
+        FilesSetAsideNotification n => new("files-set-aside", "", "", [], 0, Folder: n.Folder, SetAside: n.Paths),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
     };

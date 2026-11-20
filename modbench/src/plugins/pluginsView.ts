@@ -55,7 +55,7 @@ export interface PluginsViewDeps {
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
-    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged' | 'getFilterCleared' | 'getPluginsIndexing' | 'recordIndexProgress' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags'>;
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onDidChange' | 'onDidChangeRecordIndexProgress' | 'onStatusChanged' | 'getFilterCleared' | 'getPluginsIndexing' | 'recordIndexProgress' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags' | 'getPlacesHoldingPluginSource'>;
   statusBar: StatusBar;
   /** Registers the source mods' repositories: a reconcile reached Ready. */
   registerRepositories: () => Promise<void>;

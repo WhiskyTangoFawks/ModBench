@@ -281,6 +281,8 @@ describe('SseNotificationSubscriber — typed listeners', () => {
   };
   const modlistProgress: NotificationEvent['modlistProgress'] = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
 
+  const filesSetAside = rowsChanged([], { kind: 'files-set-aside', folder: '/mods/ModA', setAside: ['.medit_tmp_aside_x/Patch.esp'] });
+
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), {
       totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false, validating: false,
@@ -288,6 +290,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['version-in-git-progress', rowsChanged([], { kind: 'version-in-git-progress', modlistProgress, versionInGitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
+    ['files-set-aside', filesSetAside, { folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }],
   ];
 
   function listenToEveryKind(subscriber: SseNotificationSubscriber): unknown[] {
@@ -297,6 +300,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     subscriber.onNotification('version-in-git-progress', hear('version-in-git-progress'));
     subscriber.onNotification('rows-changed', hear('rows-changed'));
     subscriber.onNotification('plugin-changed', hear('plugin-changed'));
+    subscriber.onNotification('files-set-aside', hear('files-set-aside'));
     return heard;
   }
 
@@ -309,7 +313,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     expect(heard).toEqual([[kind, payload]]);
   });
 
-  it.each(['load-order-status', 'version-in-git-progress'] as const)('skips a %s frame missing its payload', (kind) => {
+  it.each(['load-order-status', 'version-in-git-progress', 'files-set-aside'] as const)('skips a %s frame missing its payload', (kind) => {
     const subscriber = unopened();
     const heard: unknown[] = [];
     subscriber.onNotification(kind, (p) => heard.push(p));
@@ -317,6 +321,16 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     subscriber.dispatch(rowsChanged([], { kind }));
 
     expect(heard).toEqual([]);
+  });
+
+  it('hands a files-set-aside listener the folder and paths a frame off the stream carries', async () => {
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: () => Promise.resolve(streamResponse([sseFrame(filesSetAside)])) });
+    const heard: unknown[] = [];
+    subscriber.onNotification('files-set-aside', (p) => heard.push(p));
+
+    subscriber.start();
+    await vi.waitFor(() => expect(heard).toEqual([{ folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }]));
+    subscriber.stop();
   });
 
   it('unsubscribe stops a typed listener', () => {

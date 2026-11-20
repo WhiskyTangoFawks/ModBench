@@ -15,6 +15,8 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
     public virtual ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => inner.Over(plugin, release);
 
     public virtual bool SourceReads(RegisteredPlugin plugin) => inner.SourceReads(plugin);
+    public virtual IReadOnlyList<string> PlacesHoldingPluginSourceOf(IReadOnlyList<PluginPlace> places, string pluginFileName) =>
+        inner.PlacesHoldingPluginSourceOf(places, pluginFileName);
 
     public virtual bool IsSourceMod(RegisteredPlugin plugin) => inner.IsSourceMod(plugin);
 

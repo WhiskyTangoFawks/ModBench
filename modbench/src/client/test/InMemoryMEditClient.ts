@@ -2,13 +2,14 @@ import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { EventEmitter, type Disposable } from '../eventEmitter';
 import type {
   MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocumentChange, WriteRefused,
+  FilesSetAside,
 } from '../MEditClient';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getPlacesHoldingPluginSource' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwners' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlacedReferences' | 'getPluginNameReferences' | 'getScriptReferences' | 'getPlacedScriptReferences' | 'getPlacedFileReferences' | 'getPlacedPluginNameReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
@@ -68,6 +69,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private readonly handOverListeners = new Set<(failure: WriteRefused | undefined) => void>();
+  private readonly setAsideListeners = new Set<(setAside: FilesSetAside) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private signalAnswer: () => Promise<void> = () => Promise.resolve();
@@ -269,6 +271,16 @@ export class InMemoryMEditClient implements MEditClient {
     return () => { this.handOverListeners.delete(listener); };
   }
 
+  onFilesSetAside(listener: (setAside: FilesSetAside) => void): () => void {
+    this.setAsideListeners.add(listener);
+    return () => { this.setAsideListeners.delete(listener); };
+  }
+
+  /** mEdit names the files it holds set aside in a folder. */
+  setAside(setAside: FilesSetAside): void {
+    for (const listener of this.setAsideListeners) listener(setAside);
+  }
+
   /** A hand-over answers: undefined when mEdit took it, else why not. */
   settleHandOver(failure: WriteRefused | undefined): void {
     for (const listener of this.handOverListeners) listener(failure);
@@ -389,6 +401,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getCreatablePluginFlags(...args: Parameters<MEditClient['getCreatablePluginFlags']>): ReturnType<MEditClient['getCreatablePluginFlags']> {
     return this.query('getCreatablePluginFlags', args);
+  }
+  getPlacesHoldingPluginSource(...args: Parameters<MEditClient['getPlacesHoldingPluginSource']>): ReturnType<MEditClient['getPlacesHoldingPluginSource']> {
+    return this.query('getPlacesHoldingPluginSource', args);
   }
   getArchiveContents(...args: Parameters<MEditClient['getArchiveContents']>): ReturnType<MEditClient['getArchiveContents']> {
     return this.query('getArchiveContents', args);

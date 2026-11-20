@@ -4,6 +4,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -102,12 +103,21 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
     private MakePatchPluginHandler Handler => HandlerOver(TestAdapters.Mutagen());
 
+    private readonly InMemoryNotificationPublisher _pushed = new();
+
     private MakePatchPluginHandler HandlerOver(IPluginAdapter adapter) =>
-        TestEditService.Over(_holder, adapter: adapter, index: _index.Queries).GetRequiredService<MakePatchPluginHandler>();
+        TestEditService.Over(_holder, adapter: adapter, notifications: _pushed, index: _index.Queries).GetRequiredService<MakePatchPluginHandler>();
 
     private sealed class MissingTheFileThatLandsAfterTheCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
     {
-        public override bool Exists(string pluginPath) => false;
+        private bool _checked;
+
+        public override string? HeldAt(string pluginPath)
+        {
+            if (_checked) return base.HeldAt(pluginPath);
+            _checked = true;
+            return null;
+        }
     }
 
     private static GivenRecord Given(IMajorRecordGetter record, string? recordType = null) =>
@@ -192,7 +202,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal(
             new PatchRefused.OfRecord(
                 RecordEditRefusal.ContainerUnknown,
-                $"No plugin's copy of 000800:{Patch} says which container it lives in. Give it inside its container's document."),
+                $"No active or compiled plugin's copy of 000800:{Patch} says which container it lives in. Give it inside its container's document."),
             refused);
     }
 
@@ -267,17 +277,92 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
             (compiled.Refusal, compiled.Message[..unread.Length], File.Exists(PatchPath)));
     }
 
-    [Fact]
-    public async Task AFileLandingAtThePathWhileThePluginIsMade_IsLeft_AndRefusesTheMake()
+    [Theory]
+    [InlineData(Patch)]
+    [InlineData("patch.ESP")]
+    public async Task AFileLandingAtThePathWhileThePluginIsMade_IsLeft_AndRefusesTheMake(string landed)
     {
-        await File.WriteAllTextAsync(PatchPath, "landed");
+        await File.WriteAllTextAsync(Path.Combine(_folder, landed), "landed");
 
         var made = await HandlerOver(new MissingTheFileThatLandsAfterTheCheck(TestAdapters.Mutagen())).Make(Mod, Patch, [], [Given(_npc)]);
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal(
-            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, ""), "landed"),
-            (refused with { Message = "" }, await File.ReadAllTextAsync(PatchPath)));
+            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds {landed}, so {Patch} was not made."), "landed"),
+            (refused, await File.ReadAllTextAsync(Path.Combine(_folder, landed))));
+    }
+
+    [Theory]
+    [InlineData(Patch)]
+    [InlineData("patch.ESP")]
+    public async Task Replacing_AFileAtItsPath_WritesThePlugin_AndSetsTheFileAside_NamingItOnThePush(string held)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_folder, held), "held");
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(_npc)], replace: true);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        using var written = Written();
+        var setAside = Assert.IsType<FilesSetAsideNotification>(Assert.Single(_pushed.Notifications));
+        var aside = Assert.Single(setAside.Paths);
+        Assert.Equal(
+            (_folder, held, "held", _npc.FormKey, Patch),
+            (setAside.Folder, Path.GetFileName(aside), await File.ReadAllTextAsync(Path.Combine(_folder, aside)), written.Npcs.Single().FormKey,
+                string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName))));
+    }
+
+    [Fact]
+    public async Task AFileSetAsideByAnEarlierMake_IsNamedAgainByTheNextMakeInItsFolder()
+    {
+        await File.WriteAllTextAsync(PatchPath, "held");
+        await Handler.Make(Mod, Patch, [], [Given(_npc)], replace: true);
+        var earlier = Assert.IsType<FilesSetAsideNotification>(Assert.Single(_pushed.Notifications));
+
+        var made = await Handler.Make(Mod, "Other.esp", [], [Given(_npc)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        Assert.Equal(earlier.Paths, Assert.IsType<FilesSetAsideNotification>(_pushed.Notifications[^1]).Paths);
+    }
+
+    [Theory]
+    [InlineData(CompileFixture.PluginName, "NoSuch.esp", false)]
+    [InlineData(CompileFixture.PluginName, "NoSuch.esp", true)]
+    [InlineData(CompileFixture.PluginName, CompileFixture.PluginName, false)]
+    [InlineData("compile.esp", CompileFixture.PluginName, false)]
+    public async Task APatchNamedAsACompiledPluginOfItsMod_IsRefusedNamingItsPluginSource_WithOrWithoutItsBinary_EvenAskedToReplace(
+        string name, string deleted, bool replace)
+    {
+        using var compiled = new CompileFixture();
+        File.Delete(Path.Combine(compiled.ModFolder, deleted));
+        var holder = new LoadOrderHolder();
+        holder.Apply(SnapshotPlugins.Snapshot(
+            compiled.DataFolder, null, GameRelease.Fallout4, compiled.Entries,
+            [new PluginPlace(CompileFixture.Origin, compiled.ModFolder, compiled.ModFolder)]));
+        var heldBefore = string.Join(", ", Directory.GetFiles(compiled.ModFolder));
+
+        var made = await TestEditService.Over(holder, index: compiled.Index.Queries).GetRequiredService<MakePatchPluginHandler>()
+            .Make(CompileFixture.Origin, name, [], [], replace);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            (new PatchRefused.AsCreate(
+                PluginCreateRefusal.CompiledPlugin,
+                $"'{compiled.ModFolder}' holds plugin source for {name}, and its next compile would overwrite the plugin, so {name} was not made."),
+                heldBefore),
+            (refused, string.Join(", ", Directory.GetFiles(compiled.ModFolder))));
+    }
+
+    [Fact]
+    public async Task AFileAtItsPathSpelledInAnotherCase_RefusesTheMake_NamingTheFileAsItIsSpelled()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_folder, "patch.ESP"), "held");
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(_npc)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP"),
+            (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName))));
     }
 
     [Fact]
@@ -290,6 +375,20 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal((new PatchRefused.OfIndex(notReady), false), (refused, File.Exists(PatchPath)));
+    }
+
+    [Theory]
+    [InlineData(Giving.ARecordNoPluginHoldsWithNoType, "No active plugin and no compiled plugin holds 000800:Patch.esp, so its record type must be given.")]
+    [InlineData(Giving.APlacedRecordWhoseCellNoPluginHolds, "No active plugin and no compiled plugin holds {0}, which holds a record given.")]
+    [InlineData(Giving.AnExteriorCellNoPluginHolds, "No active plugin and no compiled plugin holds 000800:Patch.esp, an exterior cell, so which worldspace it sits in is unknown.")]
+    public async Task ARecordNoActiveOrCompiledPluginHolds_IsRefusedSayingSo_SinceAnInactivePluginMayHoldIt(Giving giving, string expected)
+    {
+        var (origin, name, flags, records) = Making(giving);
+
+        var made = await Handler.Make(origin, name, flags, records);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, expected, _interior.FormKey), refused.Message);
     }
 
     public enum Giving
