@@ -15,6 +15,7 @@ import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient, ReadCancellation } from '../client/MEditClient';
+import { reconciling } from '../client';
 import type { Source } from './source';
 import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
@@ -45,13 +46,13 @@ export interface AgentServerOptions {
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
   archivedCopies: ArchivedCopies | undefined;
-  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordOwners' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument'>;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'recordIndexProgress' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordOwners' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument'>;
   symbols: SymbolIndex;
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
-  standing: Record<Exclude<Source, 'instance'>, () => readonly string[]>;
+  standing: Record<Exclude<Source, 'instance' | 'recordIndex'>, () => readonly string[]>;
   pluginsShown: PluginsShown | undefined;
   reporter: Reporter;
   log: Log;
@@ -127,13 +128,18 @@ const namesAnOrigin = (args: unknown): boolean =>
   typeof args === 'object' && args !== null
   && Object.entries(args).some(([key, value]) => (key === 'origin' && typeof value === 'string') || namesAnOrigin(value));
 
-const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'unsavedSource'];
+const RECORD_READS: readonly Source[] = ['instance', 'recordIndex', 'plugins', 'unsavedSource'];
 
 const SYMBOL_READS: readonly Source[] = [...RECORD_READS, 'modList'];
 
 function mcpServerOf({ instance, copyReads, archivedCopies, mEdit, symbols, problemsCaughtUp, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
-  const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
+  const sources: Record<Source, () => readonly string[]> = {
+    ...standingSources,
+    instance: () => instanceMessages(instance).filter((line) => line !== undefined),
+    // While the record index reconciles, the mEdit line says Indexing, and so says the record index may be late.
+    recordIndex: () => [...standingSources.mEdit(), ...(mEdit.recordIndexMayBeLate && !reconciling(mEdit.recordIndexProgress) ? ['The record index may be late: this answer may predate a write.'] : [])],
+  };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
   register(server, log, reading('instance'), { ...LIST_PROFILES, input: NO_INPUT }, () => LIST_PROFILES.of(currentValue(instance), deployment));
   for (const list of INSTANCE_LISTS) register(server, log, reading(...list.reads), list, (args) => list.of(currentValue(instance), args));
@@ -154,8 +160,7 @@ function mcpServerOf({ instance, copyReads, archivedCopies, mEdit, symbols, prob
     const { modDirs, sourceDirs, overwriteDir } = currentValue(instance).paths;
     return [...modDirs.values(), ...sourceDirs.values(), overwriteDir, deployment.folder()].filter((folder) => folder !== undefined);
   };
-  const maybeLate = () => (mEdit.recordIndexMayBeLate ? ['The record index may be late: this answer may predate a write.'] : []);
-  register(server, log, () => [...reading('instance', 'sortingRules', 'sourceLanguage')(), ...maybeLate()], PROBLEMS, async (args, cancelled) => {
+  register(server, log, reading('instance', 'recordIndex', 'sortingRules', 'sourceLanguage'), PROBLEMS, async (args, cancelled) => {
     await mEdit.refreshRecordIndexLateness(readCancellationOf(cancelled));
     await untilCaughtUp(problemsCaughtUp, cancelled);
     return PROBLEMS.of(args, problemFolders);
