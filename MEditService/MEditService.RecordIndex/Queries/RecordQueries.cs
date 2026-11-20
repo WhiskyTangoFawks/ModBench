@@ -8,7 +8,6 @@ using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Assets;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Queries;
 
@@ -324,7 +323,7 @@ internal sealed class RecordQueries(
         _answer.Flat<IReadOnlyList<IReadOnlyList<string>>>(() =>
         {
             var release = _loadOrder.Require().GameRelease;
-            return ModKey.TryFromFileName(name, out var modKey)
+            return PluginFileName.FaultOf(name, out var modKey) == PluginFileNameFault.None
                 ? CreatablePluginFlags.Names(CreatablePluginFlags.Of(release, modKey.Type)).ToList()
                 : new IndexRefused(IndexRefusal.NameRefused, $"{name} is not a plugin file name.");
         });

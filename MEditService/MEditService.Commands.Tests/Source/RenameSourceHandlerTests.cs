@@ -143,15 +143,17 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Contains("New - Main.ba2", result.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void RenameSource_ToANameThatIsNoPluginFile_RefusesIt_AndWritesNothing()
+    [Theory]
+    [InlineData("New.txt")]
+    [InlineData("sub/New.esp")]
+    public void RenameSource_ToANameThatIsNoPluginFile_RefusesIt_AndWritesNothing(string name)
     {
         var before = SourceModTree.Records(_sourceMod, Old);
 
-        var result = RenameSource(Old, "New.txt");
+        var result = RenameSource(Old, name);
 
         Assert.Equal(RenameSourceRefusal.NotAPluginFile, result.Refusal);
-        Assert.Contains("New.txt", result.Message, StringComparison.Ordinal);
+        Assert.Contains(name, result.Message, StringComparison.Ordinal);
         Assert.Equal(before, SourceModTree.Records(_sourceMod, Old));
     }
 

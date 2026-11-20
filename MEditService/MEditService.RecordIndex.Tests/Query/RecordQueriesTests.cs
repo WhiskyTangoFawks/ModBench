@@ -646,10 +646,12 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         Assert.Equal(expected, string.Join('|', _svc.GetCreatablePluginFlags(name).Value().Select(combination => string.Join('+', combination))));
     }
 
-    [Fact]
-    public void TheCreatablePluginFlags_OfANameThatIsNoPluginFile_AreRefused()
+    [Theory]
+    [InlineData("Mod.txt")]
+    [InlineData("sub/Mod.esp")]
+    public void TheCreatablePluginFlags_OfANameThatIsNoPluginFile_AreRefused(string name)
     {
-        Assert.Equal(IndexRefusal.NameRefused, _svc.GetCreatablePluginFlags("Mod.txt").Refused().Refusal);
+        Assert.Equal(IndexRefusal.NameRefused, _svc.GetCreatablePluginFlags(name).Refused().Refusal);
     }
 
     [Fact]
