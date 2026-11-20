@@ -55,7 +55,7 @@ class Edited:
 
 
 class NewRecord(NamedTuple):
-    """A record no plugin holds, as make_patch_plugin takes one: its record type, such as npc_, and its document."""
+    """A record no active or compiled plugin holds, as make_patch_plugin takes one: its record type, such as npc_, and its document."""
     record_type: str
     document: JsonRecord
 

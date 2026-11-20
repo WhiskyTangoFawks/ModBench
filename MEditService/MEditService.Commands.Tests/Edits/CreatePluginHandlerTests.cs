@@ -237,6 +237,20 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Equal("another tool's file", File.ReadAllText(occupied));
     }
 
+    [Fact]
+    public async Task CreatePlugin_OverAFileSpelledInAnotherCase_IsRefusedNamingItAsItIsSpelled_AndLeavesItAsItWas()
+    {
+        var folder = ModFolder("OccupiedMod");
+        File.WriteAllText(Path.Combine(folder, "occupied.ESP"), "another tool's file");
+
+        var result = (await Create("Occupied.esp", folder, "OccupiedMod")).Refused();
+
+        Assert.Equal(
+            (new PluginCreateRefused(PluginCreateRefusal.FileExists, $"{folder} already holds occupied.ESP, so Occupied.esp was not created."),
+                "occupied.ESP"),
+            (result, string.Join(", ", Directory.GetFiles(folder).Select(Path.GetFileName))));
+    }
+
     [Theory]
     [InlineData(GameRelease.Oblivion)]
     [InlineData(GameRelease.OblivionRE)]

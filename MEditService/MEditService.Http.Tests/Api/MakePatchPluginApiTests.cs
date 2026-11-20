@@ -71,6 +71,25 @@ public sealed class MakePatchPluginApiTests : HostedTests
     }
 
     [Fact]
+    public async Task MakingAPluginACompiledPluginOfItsModCompilesTo_Is409_EvenWithNoBinaryAtItsPath()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-make-patch-compiled").WithPlugin(Patch, origin: Mod).BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Mod)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == Mod).Path) ?? throw new InvalidOperationException("A mod plugin has a folder.");
+        File.Delete(Path.Combine(modFolder, Patch));
+        (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(
+            fx.DataFolder, fx.InstanceRoot, fx.Plugins.Where(plugin => plugin.Origin != Mod),
+            places: new[] { new { name = Mod, folder = modFolder, sourceFolder = modFolder } }))).EnsureSuccessStatusCode();
+
+        var made = await Make(Patch, []);
+
+        Assert.Equal(
+            (HttpStatusCode.Conflict, "CompiledPlugin", false),
+            (made.StatusCode, (await made.Body()).GetProperty("refusal").GetString(), File.Exists(Path.Combine(modFolder, Patch))));
+    }
+
+    [Fact]
     public async Task ARecordNamingNoFormKey_Is400_AndWritesNothing()
     {
         await Loaded();

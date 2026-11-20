@@ -122,14 +122,14 @@ public sealed class CreatePluginHandler
         if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release, chosenFlags)).Holds(out var created, out var failure))
             return new PluginCreateRefused(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");
 
-        return created.Outcome switch
+        return created switch
         {
-            EmptyPluginWrite.Written => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written, cancel),
-            EmptyPluginWrite.FolderGone => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
+            { Outcome: EmptyPluginWrite.Written } => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written, cancel),
+            { Outcome: EmptyPluginWrite.FolderGone } => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
-            EmptyPluginWrite.FileExists => new PluginCreateRefused(PluginCreateRefusal.FileExists,
-                $"{folder} already holds a file named {plugin.Name}, so it was not created."),
-            var outcome => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginWrite)} outcome: {outcome}."),
+            { Outcome: EmptyPluginWrite.FileExists, Held: var held } => new PluginCreateRefused(PluginCreateRefusal.FileExists,
+                $"{folder} already holds {held}, so {plugin.Name} was not created."),
+            _ => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginWrite)} outcome: {created.Outcome}."),
         };
     }
 }

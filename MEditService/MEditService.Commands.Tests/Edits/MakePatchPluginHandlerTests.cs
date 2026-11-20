@@ -66,7 +66,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
     private sealed class MissingTheFileThatLandsAfterTheCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
     {
-        public override bool Exists(string pluginPath) => false;
+        public override string? HeldAt(string pluginPath) => null;
     }
 
     private static GivenRecord Given(IMajorRecordGetter record, string? recordType = null) =>
@@ -122,7 +122,8 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal(
             new PatchRefused.OfRecord(
                 RecordEditRefusal.ContainerUnknown,
-                $"No plugin's copy of 000800:{Patch} says which container it lives in. Give it inside its container's document."),
+                $"No active plugin and no compiled plugin holds 000800:{Patch}, so which container it lives in is unknown. " +
+                "Give it inside its container's document."),
             refused);
     }
 
@@ -193,6 +194,46 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
             (refused with { Message = "" }, await File.ReadAllTextAsync(PatchPath)));
     }
 
+    [Theory]
+    [InlineData(CompileFixture.PluginName, true)]
+    [InlineData(CompileFixture.PluginName, false)]
+    [InlineData("compile.esp", false)]
+    public async Task APatchNamedAsACompiledPluginOfItsMod_IsRefusedNamingItsPluginSource_WithOrWithoutItsBinary(string name, bool binaryHeld)
+    {
+        using var compiled = new CompileFixture();
+        var binary = Path.Combine(compiled.ModFolder, CompileFixture.PluginName);
+        if (!binaryHeld) File.Delete(binary);
+        var holder = new LoadOrderHolder();
+        holder.Apply(SnapshotPlugins.Snapshot(
+            compiled.DataFolder, null, GameRelease.Fallout4, compiled.Entries,
+            [new PluginPlace(CompileFixture.Origin, compiled.ModFolder, compiled.ModFolder)]));
+        var heldBefore = string.Join(", ", Directory.GetFiles(compiled.ModFolder));
+
+        var made = await TestEditService.Over(holder, index: compiled.Index.Queries).GetRequiredService<MakePatchPluginHandler>()
+            .Make(CompileFixture.Origin, name, [], []);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            (new PatchRefused.AsCreate(
+                PluginCreateRefusal.CompiledPlugin,
+                $"'{compiled.ModFolder}' holds plugin source for {name}, and its next compile would overwrite the plugin, so {name} was not made."),
+                heldBefore),
+            (refused, string.Join(", ", Directory.GetFiles(compiled.ModFolder))));
+    }
+
+    [Fact]
+    public async Task AFileAtItsPathSpelledInAnotherCase_RefusesTheMake_NamingTheFileAsItIsSpelled()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_folder, "patch.ESP"), "held");
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(_npc)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP"),
+            (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName))));
+    }
+
     [Fact]
     public async Task ARecordTheRecordIndexCannotYetPlace_IsRefusedAsTheRecordIndexRefuses()
     {
@@ -203,6 +244,20 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal((new PatchRefused.OfIndex(notReady), false), (refused, File.Exists(PatchPath)));
+    }
+
+    [Theory]
+    [InlineData(Giving.ARecordNoPluginHoldsWithNoType, "No active plugin and no compiled plugin holds 000800:Patch.esp, so its record type must be given.")]
+    [InlineData(Giving.APlacedRecordWhoseCellNoPluginHolds, "No active plugin and no compiled plugin holds {0}, which holds a record given.")]
+    [InlineData(Giving.AnExteriorCellNoPluginHolds, "No active plugin and no compiled plugin holds 000800:Patch.esp, an exterior cell, so which worldspace it sits in is unknown.")]
+    public async Task ARecordNoActiveOrCompiledPluginHolds_IsRefusedSayingSo_SinceAnInactivePluginMayHoldIt(Giving giving, string expected)
+    {
+        var (origin, name, flags, records) = Making(giving);
+
+        var made = await Handler.Make(origin, name, flags, records);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, expected, _interior.FormKey), refused.Message);
     }
 
     public enum Giving

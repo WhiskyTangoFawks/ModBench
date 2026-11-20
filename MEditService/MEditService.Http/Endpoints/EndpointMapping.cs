@@ -119,7 +119,7 @@ internal static class EndpointMapping
         r => r switch
         {
             PluginCreateRefusal.FolderGone or PluginCreateRefusal.OriginNotAMod => 404,
-            PluginCreateRefusal.FileExists => 409,
+            PluginCreateRefusal.FileExists or PluginCreateRefusal.CompiledPlugin => 409,
             PluginCreateRefusal.NotAPluginFile => 400,
             // Well-formed, and still not a plugin this game can load or a write the file system will take.
             _ => 422,

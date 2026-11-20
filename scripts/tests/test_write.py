@@ -135,10 +135,10 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
         self.assertEqual([diagnostic.form_key for diagnostic in patch.diagnostics], [f'000800:{NEW_PLUGIN}'])
 
-    def test_raises_for_a_patch_plugin_over_a_file_at_its_path(self) -> None:
+    def test_raises_for_a_patch_plugin_named_as_a_compiled_plugin_naming_its_plugin_source(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
             medit.make_patch_plugin(CONDITIONS.name, CONDITIONS.origin, [medit.read(CONDITIONS, RECIPE)], flags=[])
-        self.assertIn(f'already holds a file named {CONDITIONS.name}', str(raised.exception))
+        self.assertIn(f'holds plugin source for {CONDITIONS.name}', str(raised.exception))
 
     def test_raises_for_a_create_of_a_plugin_in_a_place_the_load_order_does_not_offer_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:

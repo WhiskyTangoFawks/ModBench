@@ -30,6 +30,10 @@ public interface IPluginAdapter
 
     bool Exists(string pluginPath);
 
+    /// <summary>The name of the file in <paramref name="pluginPath"/>'s folder spelled as its name without case, as the game
+    /// reads a plugin's name; null when there is none.</summary>
+    string? HeldAt(string pluginPath);
+
     /// <summary>The plugins whose file, or strings named for them, is at <paramref name="path"/>, or plugins it cannot name
     /// for another archive or strings file the game loads.</summary>
     PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
@@ -123,7 +127,7 @@ public interface IPluginAdapter
 
     /// <summary>A new plugin in <paramref name="folder"/>: a header flagged as <paramref name="flags"/> say,
     /// no records and no masters. Written whole or not at all, into no folder it made and over
-    /// no file.</summary>
+    /// no file, its name compared without case.</summary>
     Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
 
@@ -174,9 +178,9 @@ public sealed record PluginByteComparison(
 /// <summary>The first record that differs after a round trip, with each malformation of that record.</summary>
 public sealed record PluginDivergence(string Description, IReadOnlyList<RepairPreview>? Causes);
 
-/// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the
-/// hash of those bytes, which the take-back is later handed.</summary>
-public readonly record struct EmptyPluginCreated(EmptyPluginWrite Outcome, string Written = "")
+/// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did: for a plugin it wrote, the hash of those bytes, which
+/// the take-back is later handed; for a file at its path, that file's name.</summary>
+public readonly record struct EmptyPluginCreated(EmptyPluginWrite Outcome, string Written = "", string Held = "")
 {
     public static implicit operator EmptyPluginCreated(EmptyPluginWrite outcome) => new(outcome);
 }

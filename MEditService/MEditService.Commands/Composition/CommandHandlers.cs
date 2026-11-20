@@ -210,6 +210,7 @@ public static class CommandHandlers
         services.AddSingleton(sp => new MakePatchPluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             new PatchRecords(
                 sp.GetRequiredService<IQueries>(),
                 sp.GetRequiredService<LoadOrderResolution>(),
