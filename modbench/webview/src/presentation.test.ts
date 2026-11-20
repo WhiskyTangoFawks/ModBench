@@ -28,6 +28,13 @@ describe('a collapsed row reads a translated string in the strings language', ()
   });
 });
 
+it('a collapsed element keyed by a member the schema leaves out reads the key as the document holds it', () => {
+  const defaultObject = diffNode({ fieldName: '[0]', values: { [COLUMN]: { Use: 'AACT', Object: '000801:Test.esp' } } });
+  const meta = fieldMeta({ name: '', type: 'struct', fields: [fieldMeta({ name: 'Object', type: 'formKey' })] });
+
+  expect(collapsedReading(defaultObject, meta, COLUMN, 'English', true, ['Use']).text).toBe('AACT');
+});
+
 describe('Version Control Info 1 reads as the date, user and index it packs', () => {
   const formVersion = fieldMeta({ name: 'FormVersion', type: 'int' });
   const copy = (version: number | null) => compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fields: [{ metadata: formVersion, value: version }] });

@@ -292,12 +292,12 @@ function keyReading(
   const readings = keyMembers.map(name => {
     const path = name.split('.');
     const memberMeta = metaAtPath(meta, memberPath(path), value);
-    if (!memberMeta) return undefined;
-    const held = getAtPath(value, memberPath(path)) ?? defaultOf(memberMeta);
-    const reading = displayValue(shownValue(held, memberMeta, stringsLanguage), memberMeta, diffAt(diff, path)?.resolutions?.[column]);
+    const held = getAtPath(value, memberPath(path));
+    if (!memberMeta) return toStr(held);
+    const reading = displayValue(shownValue(held ?? defaultOf(memberMeta), memberMeta, stringsLanguage), memberMeta, diffAt(diff, path)?.resolutions?.[column]);
     return reading === '' && memberMeta.type === 'formKey' ? NO_REFERENCE : reading;
   });
-  return readings.every(r => r != null) ? readings.join(', ') : undefined;
+  return readings.join(', ');
 }
 
 function namedReading(
