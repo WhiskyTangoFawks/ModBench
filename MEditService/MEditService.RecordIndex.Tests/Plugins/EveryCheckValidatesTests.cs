@@ -162,6 +162,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
         File.Delete(_compiledPlugin.Path);
         CheckThatMayFailAnnouncing(PluginChanged(_compiledPlugin));
 
+        Assert.Contains(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
     }
 

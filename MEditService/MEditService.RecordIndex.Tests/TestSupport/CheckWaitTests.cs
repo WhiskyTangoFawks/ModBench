@@ -5,7 +5,7 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 
 public sealed class CheckWaitTests
 {
-    private static readonly Dictionary<string, Action<OpenedIndex>> Waits = new()
+    private static readonly Dictionary<string, Action<OpenedIndex>> WaitsOnTheCheck = new()
     {
         ["the next check"] = index => index.NextCheck(),
         ["the next check until"] = index => index.NextCheckUntil(() => false, "an answer the failed check never gives"),
@@ -24,7 +24,7 @@ public sealed class CheckWaitTests
         using var index = Indexes.Reconciled(fixture);
         File.WriteAllText(fixture.Plugins.Single().Path, "not a plugin");
 
-        var thrown = Record.Exception(() => Waits[wait](index));
+        var thrown = Record.Exception(() => WaitsOnTheCheck[wait](index));
 
         Assert.NotNull(thrown);
         Assert.Contains("Checked.esp", thrown.Message, StringComparison.Ordinal);

@@ -110,6 +110,7 @@ internal static class Indexes
     {
         index.NextCheckUnsettledUntil(announced, what);
         index.Settled();
+        index.EndedClean();
     }
 
     /// <summary>The check, answered once <paramref name="announced"/> holds and its status is out:
@@ -119,10 +120,15 @@ internal static class Indexes
     {
         var standing = index.Status;
         index.NextCheckThatMayFailUnsettledUntil(() => announced() || FailedAnew(index.Status, standing), what);
+        index.EndedClean();
+        Waits.Reached(announced, what);
+    }
+
+    private static void EndedClean(this OpenedIndex index)
+    {
         var status = index.Status;
         if (NotClean(status))
             Assert.Fail($"The check ended {status.State}: {status.Message}{Environment.NewLine}{string.Join(Environment.NewLine, status.Failures)}");
-        Waits.Reached(announced, what);
     }
 
     /// <summary><see cref="NextCheckUntil"/> for a test that reads the check's failure from the status itself.</summary>
