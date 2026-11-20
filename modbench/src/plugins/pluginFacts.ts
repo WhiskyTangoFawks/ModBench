@@ -5,6 +5,7 @@ import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { exactPluginAddressKey, OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { joinedReasons, lastGoodReadMessage } from '../wire/lastGoodRead';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress, type NamedPlugins } from './pluginAddress';
@@ -268,7 +269,7 @@ export class PluginFacts {
     this.matches = matches;
     this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
       pluginAddressKey(p),
-      `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
+      `"${p.name}" (${p.origin}): ${joinedReasons(p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`))}`,
     ] as const]));
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
     const judged = JSON.stringify(plugins.map((p) => [pluginAddressKey(p), p.masters, p.isMaster, p.isBlueprint, p.description]));
@@ -432,8 +433,8 @@ export class PluginFacts {
       .filter((reason) => reason !== undefined);
     const neverAnswered = failed.filter((read) => !read.answered).map(said);
     const lines = [
-      lastGood.length === 0 ? undefined : `Showing the last good read: ${lastGood.join('; ')}`,
-      neverAnswered.length === 0 ? undefined : `Failed to load: ${neverAnswered.join('; ')}`,
+      lastGoodReadMessage(lastGood),
+      neverAnswered.length === 0 ? undefined : `Failed to load: ${joinedReasons(neverAnswered)}`,
     ].filter((line) => line !== undefined);
     return lines.length === 0 ? undefined : lines.join(' ');
   }

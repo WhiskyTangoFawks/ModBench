@@ -553,7 +553,7 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     facts.refreshed([failing, held({ name: 'B.esp', laterReadFailure: [{ sourceRelativePath: 'B.esp/X.json', message: 'bad' }] })]);
 
     expect(facts.readFailureMessage()).toBe(
-      'Showing the last good read: "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; "B.esp" (SomeMod): B.esp/X.json: bad',
+      'Showing the last good read: "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12; A.esp/Cell.json: Duplicate FormKey; "B.esp" (SomeMod): B.esp/X.json: bad',
     );
   });
 
@@ -595,7 +595,7 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     facts.scanFailed('503');
 
     expect(facts.readFailureMessage('mo2 gone')).toBe(
-      'Showing the last good read: mo2 gone; "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; the malformed-plugin scan: 503',
+      'Showing the last good read: mo2 gone; "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12; A.esp/Cell.json: Duplicate FormKey; the malformed-plugin scan: 503',
     );
   });
 
