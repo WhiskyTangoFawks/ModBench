@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -79,6 +80,25 @@ public sealed class MakePatchPluginApiTests : HostedTests
         Assert.Equal(
             (HttpStatusCode.BadRequest, "InvalidEnvelope", false),
             (made.StatusCode, (await made.Body()).GetProperty("refusal").GetString(), File.Exists(Path.Combine(_folder, Patch))));
+    }
+
+    [Fact]
+    public async Task ARecordTheRecordIndexCannotYetPlace_Is503_NamingTheRecordIndexsRefusal()
+    {
+        await using var app = new MEditHost(services => FailingQueries.Replace(
+            services, ownersRefused: new IndexRefused(IndexRefusal.IndexNotReady, "The record index is reading.")));
+        var client = app.CreateClient();
+        var fx = Owned(new PluginFixtureBuilder("api-make-patch-index").WithPlugin(Base).BuildScattered());
+        var folder = Directory.CreateDirectory(Path.Combine(fx.Root, Mod)).FullName;
+        (await client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(
+            fx.DataFolder, fx.InstanceRoot, fx.Plugins, places: new[] { new { name = Mod, folder } }))).EnsureSuccessStatusCode();
+
+        var made = await client.PostAsJsonAsync(
+            "/plugins/make-patch", new { origin = Mod, name = Patch, records = new[] { new { text = $$"""{"FormKey": "000800:{{Base}}"}""" } }, flags = Array.Empty<string>() });
+
+        Assert.Equal(
+            (HttpStatusCode.ServiceUnavailable, "IndexNotReady"),
+            (made.StatusCode, (await made.Body()).GetProperty("refusal").GetString()));
     }
 
     [Fact]

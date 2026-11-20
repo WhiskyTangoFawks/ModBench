@@ -150,6 +150,15 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task MakingInAnOriginThatIsNoEnabledMod_IsRefusedAsCreateRefuses()
+    {
+        var made = await Handler.Make("No Such Mod", Patch, [], [Given(_npc)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(new PatchRefused.AsCreate(PluginCreateRefusal.OriginNotAMod, ""), refused with { Message = "" });
+    }
+
+    [Fact]
     public async Task AFileLandingAtThePathWhileThePluginIsMade_IsLeft_AndRefusesTheMake()
     {
         await File.WriteAllTextAsync(PatchPath, "landed");
@@ -186,6 +195,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         APlacedRecordWhoseCellNoPluginHolds,
         AnExteriorCellWithNoGrid,
         AnExteriorCellNoPluginHolds,
+        ANameThatIsNoPluginFile,
         ARecordTheRecordIndexNamesAPluginNotHolding,
         ARecordWhosePluginCannotBeRead,
     }
@@ -215,6 +225,8 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 var gridless = _exterior.DeepCopy();
                 gridless.Grid = null;
                 return (Patch, [], [Given(gridless)]);
+            case Giving.ANameThatIsNoPluginFile:
+                return ("Patch.txt", [], [Given(_npc)]);
             case Giving.AnExteriorCellNoPluginHolds:
                 var cellType = RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(_exterior);
                 return (Patch, [], [Given(new Cell(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { Grid = new CellGrid() }, cellType)]);
@@ -243,6 +255,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         { Giving.APlacedRecordWhoseCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.AnExteriorCellWithNoGrid, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.AnExteriorCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
+        { Giving.ANameThatIsNoPluginFile, new PatchRefused.AsCreate(PluginCreateRefusal.NotAPluginFile, "") },
         { Giving.ARecordTheRecordIndexNamesAPluginNotHolding, new PatchRefused.OfRecord(RecordEditRefusal.RecordNotFound, "") },
         { Giving.ARecordWhosePluginCannotBeRead, new PatchRefused.OfRecord(RecordEditRefusal.RecordParseFailed, "") },
     };

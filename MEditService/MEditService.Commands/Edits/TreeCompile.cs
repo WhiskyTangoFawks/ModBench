@@ -99,13 +99,15 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
 
     // What a refusal calls the tree and the gesture: a plugin's source compiled, or records made into a plugin, which has
     // no plugin to regenerate them from.
-    private sealed record Words(string Done, string From, string Claimant, string Again, string AfterAFailedWrite, CompileRefusal Regenerable)
+    private sealed record Words(
+        string Done, string From, string Through, string Claimant, string Again, string AfterAFailedWrite, CompileRefusal Regenerable)
     {
         internal static readonly Words Compile = new(
-            "compiled", "its source", "source file", "compile again", " Its source is untouched, so compiling again rebuilds it.",
-            CompileRefusal.SourceRegenerable);
+            "compiled", "its source", "its own source", "source file", "compile again",
+            " Its source is untouched, so compiling again rebuilds it.", CompileRefusal.SourceRegenerable);
 
-        internal static readonly Words Make = new("made", "the records given", "record given", "make it again", "", CompileRefusal.SourceDoesNotParse);
+        internal static readonly Words Make = new(
+            "made", "the records given", "the records given", "record given", "make it again", "", CompileRefusal.SourceDoesNotParse);
 
         internal static Words Of(PluginTreeFiles tree) => tree.OnDisk ? Compile : Make;
     }
@@ -187,7 +189,7 @@ internal sealed class TreeCompile(SchemaReflector schemaReflector, IPluginAdapte
 
         return PluginCompileOutcome.Refused(
             found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? words.Regenerable : CompileRefusal.SourceDoesNotParse,
-            $"{plugin.Name} does not round-trip through {words.From}: {string.Join("; ", found.Select(divergence => Describe(divergence, tree)))}.");
+            $"{plugin.Name} does not round-trip through {words.Through}: {string.Join("; ", found.Select(divergence => Describe(divergence, tree)))}.");
     }
 
     private static string Describe(SourceDivergence divergence, PluginTreeFiles tree)
