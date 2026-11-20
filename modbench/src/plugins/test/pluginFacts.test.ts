@@ -599,22 +599,18 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     );
   });
 
-  it('says a plugin whose read failed shows its last good read while its rows stand', () => {
+  it.each([
+    ['while its rows stand, says it shows the last good read and expands into them', 'Binary',
+      'Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).', RECORDS],
+    ['with no rows left, says no last good read and expands into the error row', null,
+      undefined, errorOf('Could not read this plugin (truncated).')],
+  ] as const)('a plugin whose read failed, %s', (_label, rowsFrom, message, expansion) => {
     const facts = new PluginFacts();
 
-    facts.reconciled([held({ rowsFrom: 'Binary' })], [failure('Could not read this plugin (truncated).')], [], []);
+    facts.reconciled([held({ rowsFrom })], [failure('Could not read this plugin (truncated).')], [], []);
 
-    expect(facts.readFailureMessage()).toBe('Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).');
-    expect(facts.expansion(A)).toEqual(RECORDS);
-  });
-
-  it('gives a plugin whose read failed with no rows left the error row, and no last good read', () => {
-    const facts = new PluginFacts();
-
-    facts.reconciled([held({ rowsFrom: null })], [failure('Could not read this plugin (gone).')], [], []);
-
-    expect(facts.readFailureMessage()).toBeUndefined();
-    expect(facts.expansion(A)).toEqual(errorOf('Could not read this plugin (gone).'));
+    expect(facts.readFailureMessage()).toBe(message);
+    expect(facts.expansion(A)).toEqual(expansion);
   });
 
   it.each([[null], [undefined]])('says nothing once the next read answers %s', (answer) => {

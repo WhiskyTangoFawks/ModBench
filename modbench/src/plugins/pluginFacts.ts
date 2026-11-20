@@ -407,12 +407,16 @@ export class PluginFacts {
     return this.held.has(address);
   }
 
+  private rowsStand(address: PluginAddress): boolean {
+    return this.reads.get(address)?.rowsStand === true;
+  }
+
   /** What expanding the plugin's row shows, in precedence order (plugins.md, States, stories 2-4
    *  and 6). */
   expansion(address: PluginAddress): Expansion {
     if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
     const failure = this.reachableFailures.get(address)?.reason;
-    if (this.isHeld(address) && (failure === undefined || this.reads.get(address)?.rowsStand !== false)) return { kind: 'records' };
+    if (this.isHeld(address) && (failure === undefined || this.rowsStand(address))) return { kind: 'records' };
     if (failure !== undefined) return { kind: 'error', message: failure };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
@@ -423,7 +427,7 @@ export class PluginFacts {
   readFailureMessage(instanceReadFailure?: string): string | undefined {
     const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
     const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
-    const failedWithRows = this.loadFailures.values().filter((f) => this.reads.get(f)?.rowsStand === true).map(({ name, origin, reason }) => `"${name}" (${origin}): ${reason}`);
+    const failedWithRows = this.loadFailures.values().filter((f) => this.rowsStand(f)).map(({ name, origin, reason }) => `"${name}" (${origin}): ${reason}`);
     const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failedWithRows, ...failed.filter((read) => read.answered).map(said)]
       .filter((reason) => reason !== undefined);
     const neverAnswered = failed.filter((read) => !read.answered).map(said);
