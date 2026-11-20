@@ -588,12 +588,12 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     });
   });
 
-  it('joins the last good read and a read that never answered as one list of reasons', () => {
+  it('says the last good read and a read that never answered as two statements', () => {
     const facts = new PluginFacts();
     facts.refreshed([held({ name: 'B.esp', laterReadFailure: [{ sourceRelativePath: 'B.esp/X.json', message: 'bad' }] })]);
     facts.scanFailed('503');
 
-    expect(facts.readFailureMessage()).toBe('Showing the last good read: "B.esp" (SomeMod): B.esp/X.json: bad; Failed to load: the malformed-plugin scan: 503');
+    expect(facts.readFailureMessage()).toBe('Showing the last good read: "B.esp" (SomeMod): B.esp/X.json: bad. Failed to load: the malformed-plugin scan: 503');
   });
 
   it('puts the instance read failure and every failed read under one prefix', () => {

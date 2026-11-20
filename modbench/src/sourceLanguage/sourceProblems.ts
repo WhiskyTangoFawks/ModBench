@@ -7,8 +7,9 @@ import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
-import { askedAgain, lastRead, askingWhenNotLate, settling, type Asked, type Feed, type Position } from './feedShape';
+import { askedAgain, askingWhenNotLate, settling, type Asked, type Feed, type Position } from './feedShape';
 import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
+import { lastGoodReadMessage, pluginNamed } from '../wire/reasons';
 import { answerOf } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -58,7 +59,6 @@ interface Contribution { links: OnFiles; stops: OnFiles }
 interface Unplaced extends Told { plugin: string; told: boolean }
 interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[] }
 
-const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
 const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
 const placedBefore = new WeakMap<PluginProblems, readonly [string, Contribution | undefined, Unplaced?]>();
@@ -70,7 +70,7 @@ function placedPlugin(answer: PluginProblems, { sourceFiles }: SourceProblemsDep
   const files = sourceFiles(plugin.origin);
   const key = pluginAddressKey(plugin);
   const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
-  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined || failureKind !== 'LaterRead' };
+  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${pluginNamed(plugin)}.`, why, plugin: pluginNamed(plugin), told: files === undefined || failureKind !== 'LaterRead' };
   if (files === undefined) return [key, undefined, unplaced];
   const contribution: Contribution = { links: new Map(), stops: new Map() };
   const byPath = new Map<string, SourceProblem[]>();
@@ -125,8 +125,8 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   let handOverFailed: string | undefined;
   const showStatus = () => {
     const failed = [...failures.values()][0];
-    if (failed !== undefined) languageStatus(lastRead(failed));
-    else if (handOverFailed !== undefined) languageStatus(lastRead(handOverFailed));
+    if (failed !== undefined) languageStatus(lastGoodReadMessage([failed]));
+    else if (handOverFailed !== undefined) languageStatus(lastGoodReadMessage([handOverFailed]));
     else languageStatus(unplacedStatus());
   };
   const handedOver = (failure: WriteRefused | undefined) => {
@@ -135,12 +135,10 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
       reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why);
     }
     handOverFailed = why;
-    unsavedStatus(why === undefined ? undefined : lastRead(why));
+    unsavedStatus(lastGoodReadMessage(why === undefined ? [] : [why]));
     showStatus();
   };
-  const unplacedStatus = () => unplacedHeld.size > 0
-    ? lastRead([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`).join('; '))
-    : undefined;
+  const unplacedStatus = () => lastGoodReadMessage([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`));
   const settle = (target: string, { ofPlugin, unplaced }: Placed) => {
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
     const before = held;

@@ -5,7 +5,7 @@ import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { exactPluginAddressKey, OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
-import { joinedReasons, lastGoodReadMessage, pluginReason } from '../wire/reasons';
+import { joinedReasons, joinedSentences, lastGoodReadMessage, pluginReason } from '../wire/reasons';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress, type NamedPlugins } from './pluginAddress';
@@ -436,7 +436,7 @@ export class PluginFacts {
       lastGoodReadMessage(lastGood),
       neverAnswered.length === 0 ? undefined : `Failed to load: ${joinedReasons(neverAnswered)}`,
     ].filter((line) => line !== undefined);
-    return lines.length === 0 ? undefined : joinedReasons(lines);
+    return lines.length === 0 ? undefined : joinedSentences(lines);
   }
 
   /** The failed index (plugins.md, States 6). */

@@ -18,7 +18,7 @@ describe('the message saying the panel shows the last good read', () => {
     ['names the reason the panel\'s own read failed', 'mEdit is stopped.', [], [{ plugin: 'A.esp', origin: 'Data/' }],
       'Showing the last good read: mEdit is stopped.'],
     ['says it once when the panel\'s own read and a shown plugin\'s both failed',
-      'mEdit is stopped.', [failure('A.esp', 'Data/', 'truncated')], [{ plugin: 'A.esp', origin: 'Data/' }],
+      'mEdit is stopped', [failure('A.esp', 'Data/', 'truncated')], [{ plugin: 'A.esp', origin: 'Data/' }],
       'Showing the last good read: mEdit is stopped; "A.esp" (Data/): truncated'],
   ])('%s', (_case, readFailure, failures, shown, message) => {
     expect(recordPanelLoadFailureMessage(readFailure, failures, shown)).toBe(message);
