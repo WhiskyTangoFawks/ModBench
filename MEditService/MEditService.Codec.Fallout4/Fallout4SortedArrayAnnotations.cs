@@ -1,8 +1,8 @@
 namespace MEditService.Codec.Game;
 
-/// <summary>The Fallout 4 keyed arrays outside the virtual machine adapter, overlaid on the reflected
+/// <summary>The Fallout 4 arrays xEdit sorts, outside the virtual machine adapter, overlaid on the reflected
 /// schema.</summary>
-internal static class Fallout4KeyedArrayAnnotations
+internal static class Fallout4SortedArrayAnnotations
 {
     /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over a wbStructSK,
     /// keyed as it aligns (a wbStructExSK by its non-extended key), transcribed from
@@ -104,5 +104,80 @@ internal static class Fallout4KeyedArrayAnnotations
         ("IQuestReferenceAliasGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
         ("ILeveledItemGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
         ("ILeveledNpcGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
+    ];
+
+    /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over an element with no key,
+    /// transcribed from <c>wbDefinitionsFO4.pas</c> and <c>wbDefinitionsCommon.pas</c>. xEdit's callback leaves a
+    /// FormID List unsorted, so it is not one.</summary>
+    public static readonly (string TypeName, string MemberName)[] UnkeyedSortedArrays =
+    [
+        ("IActivatorGetter", "Keywords"),
+        ("IAmmunitionGetter", "Keywords"),
+        ("IArmorGetter", "Keywords"),
+        ("IArtObjectGetter", "Keywords"),
+        ("IBookGetter", "Keywords"),
+        ("IContainerGetter", "Keywords"),
+        ("IDoorGetter", "Keywords"),
+        ("IFloraGetter", "Keywords"),
+        ("IFurnitureGetter", "Keywords"),
+        ("IIdleMarkerGetter", "Keywords"),
+        ("IIngestibleGetter", "Keywords"),
+        ("IIngredientGetter", "Keywords"),
+        ("IInstanceNamingRuleGetter", "Keywords"),
+        ("IKeyGetter", "Keywords"),
+        ("ILightGetter", "Keywords"),
+        ("ILocationGetter", "Keywords"),
+        ("IMagicEffectGetter", "Keywords"),
+        ("IMiscItemGetter", "Keywords"),
+        ("IMovableStaticGetter", "Keywords"),
+        ("INpcGetter", "Keywords"),
+        ("IQuestReferenceAliasGetter", "Keywords"),
+        ("IRaceGetter", "Keywords"),
+        ("ISceneGetter", "Keywords"),
+        ("ISpellGetter", "Keywords"),
+        ("ITalkingActivatorGetter", "Keywords"),
+        ("ITerminalGetter", "Keywords"),
+        ("IWeaponGetter", "Keywords"),
+
+        ("INpcGetter", "ActorEffect"),
+        ("IRaceGetter", "ActorEffect"),
+        ("IArmorGetter", "AttachParentSlots"),
+        ("IFurnitureGetter", "AttachParentSlots"),
+        ("INpcGetter", "AttachParentSlots"),
+        ("IRaceGetter", "AttachParentSlots"),
+        ("IWeaponGetter", "AttachParentSlots"),
+        ("IIngestibleGetter", "Effects"),
+        ("IIngredientGetter", "Effects"),
+        ("IObjectEffectGetter", "Effects"),
+        ("ISpellGetter", "Effects"),
+
+        ("IArmorAddonGetter", "AdditionalRaces"),
+        ("ICellGetter", "Regions"),
+        ("ICellGetter", "PhysicsReferences"),
+        ("ICellGetter", "CombinedMeshes"),
+        ("IPlacedObjectGetter", "LitWater"),
+        ("IPlacedObjectGetter", "LinkedRooms"),
+        ("IHeadPartGetter", "ExtraParts"),
+        ("IPreCutMapEntryGetter", "Triangles"),
+        ("INavigationMapInfoGetter", "MergedTo"),
+        ("INavigationMapInfoGetter", "PreferredMerges"),
+        ("ILocationGetter", "PersistentActorReferencesRemoved"),
+        ("ILocationGetter", "UniqueActorReferencesRemoved"),
+        ("ILocationGetter", "LocationRefTypeReferencesRemoved"),
+        ("ILocationGetter", "InitiallyDisabledReferencesAdded"),
+        ("ILocationGetter", "InitiallyDisabledReferencesStatic"),
+        ("ILocationGetter", "EnableParentReferencesAdded"),
+        ("ILocationGetter", "EnableParentReferencesStatic"),
+        ("ILocationCoordinateGetter", "Coordinates"),
+        ("IOutfitGetter", "Items"),
+        ("ICollisionLayerGetter", "CollidesWith"),
+        ("IMagicEffectGetter", "CounterEffects"),
+        ("IConstructibleObjectGetter", "Categories"),
+        ("INpcGetter", "HeadParts"),
+        ("IQuestReferenceAliasGetter", "Spells"),
+        ("IQuestReferenceAliasGetter", "Factions"),
+        ("IRaceGetter", "MovementTypeNames"),
+        ("IStaticPartGetter", "Placements"),
+        ("IWeatherGetter", "SkyStatics"),
     ];
 }

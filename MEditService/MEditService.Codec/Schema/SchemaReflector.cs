@@ -14,10 +14,12 @@ namespace MEditService.Codec.Schema;
 public sealed class SchemaReflector
 {
     private readonly ILogger _logger;
+    private readonly Func<GameCategory, SchemaAnnotations> _annotationsOf;
 
-    public SchemaReflector(ILogger<SchemaReflector>? logger = null)
+    public SchemaReflector(ILogger<SchemaReflector>? logger = null, Func<GameCategory, SchemaAnnotations>? annotationsOf = null)
     {
         _logger = logger ?? NullLogger<SchemaReflector>.Instance;
+        _annotationsOf = annotationsOf ?? (category => GameCodecs.For(category).Annotations);
     }
 
     private sealed record GameSchemaCache(
@@ -87,7 +89,7 @@ public sealed class SchemaReflector
 
     private GameSchemaCache GetCache(GameCategory category, Assembly assembly) =>
         _cache.GetOrAdd(category, c => BuildForCategory(
-            c, assembly, GameCodecs.For(c).Annotations, _logger));
+            c, assembly, _annotationsOf(c), _logger));
 
     private static GameSchemaCache BuildForCategory(
         GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)
