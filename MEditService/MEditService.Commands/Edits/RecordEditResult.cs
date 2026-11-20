@@ -113,6 +113,9 @@ public enum RecordEditRefusal
     /// persistent cell, a worldspace's grid position or a cell's landscape does; the way out is outside the gesture.</summary>
     ChildSlotHeldByAnotherRecord,
 
+    /// <summary>A record given a generated patch plugin lives in a container, and no plugin's copy of it says which.</summary>
+    ContainerUnknown,
+
     /// <summary>A plugin cannot lose its header: the whole-mod door needs it, and its FormKey is synthetic.</summary>
     HeaderDeleteNotSupported,
 

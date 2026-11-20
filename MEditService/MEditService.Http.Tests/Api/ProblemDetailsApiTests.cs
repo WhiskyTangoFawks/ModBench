@@ -37,6 +37,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         new(
             "POST /plugins/rename-source-changes",
             (client, _) => client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin = Origin, name = "New.esp", newName = "Renamed.esp" })),
+        new(
+            "POST /plugins/make-patch",
+            (client, _) => client.PostAsJsonAsync("/plugins/make-patch", new { origin = Origin, name = "New.esp", records = Array.Empty<object>() })),
         new("POST /plugin-source/names", (client, _) => client.PostAsJsonAsync("/plugin-source/names", new { text = "{}" })),
         new(
             "POST /records/delete-changes",

@@ -92,6 +92,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
         inner.CreateAndWriteAsync(modKey, folder, gameRelease, flags);
 
+    public virtual IReadOnlyList<TreeFile> EmptyTree(ModKey modKey, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
+        inner.EmptyTree(modKey, gameRelease, flags);
+
     public virtual string PathOfEmpty(ModKey modKey, string folder) => inner.PathOfEmpty(modKey, folder);
 
     public virtual Answer<EmptyPluginTakeBack, PluginFailure> TakeBackEmpty(ModKey modKey, string folder, string written) =>

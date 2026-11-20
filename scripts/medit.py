@@ -5,7 +5,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
@@ -52,6 +52,24 @@ class Edited:
     left_behind: list[SourceLeftBehind]
     copies_left_behind: list[CopyLeftBehind]
     copies_unread: str | None
+
+
+class NewRecord(NamedTuple):
+    """A record no plugin holds, as make_patch_plugin takes one: its record type, such as npc_, and its document."""
+    record_type: str
+    document: JsonRecord
+
+
+class Diagnostic(NamedTuple):
+    """What compile warns of a plugin it wrote, and the record it concerns, if one."""
+    form_key: str | None
+    message: str
+
+
+@dataclass(frozen=True)
+class Patch:
+    plugin: Plugin
+    diagnostics: list[Diagnostic]
 
 
 @dataclass(frozen=True)
@@ -172,6 +190,21 @@ def create_plugin(name: str, origin: str, flags: list[str] | None = None) -> Plu
     source mod; elsewhere a write is refused until its mod is decompiled and committed. flags: header flags."""
     _call('POST', '/plugins/create-in-mod', {'origin': origin, 'name': name, 'flags': flags})
     return Plugin(name, origin)
+
+
+def make_patch_plugin(
+        name: str, origin: str, records: Iterable[JsonRecord | NewRecord], flags: list[str] | None = None) -> Patch:
+    """Writes a generated patch plugin holding each record, a document as read gives one, into an enabled mod or Overwrite,
+    with no plugin source. A record lands in the container its winning copy sits in; a new one that lives in a container
+    goes inside its container's document. Refused as compile refuses, and over a file at its path. flags: header flags."""
+    given = [
+        {'text': json.dumps(record.document), 'recordType': record.record_type} if isinstance(record, NewRecord)
+        else {'text': json.dumps(record)}
+        for record in records]
+    made = _call('POST', '/plugins/make-patch', {'origin': origin, 'name': name, 'records': given, 'flags': flags})
+    return Patch(
+        _plugin_of(made['plugin']),
+        [Diagnostic(diagnostic['formKey'], diagnostic['message']) for diagnostic in made['diagnostics']])
 
 
 def create_record(

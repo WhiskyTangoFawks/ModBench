@@ -67,6 +67,21 @@ public sealed class CreatePluginHandler
         };
     }
 
+    /// <summary>The ModKey and header flags of a new plugin named <paramref name="name"/>, or why <paramref name="release"/> takes no
+    /// such plugin. <paramref name="flags"/> may be left out where one combination is offered.</summary>
+    internal static Answer<(ModKey Key, IReadOnlyCollection<HeaderFlag> Flags), PluginCreateRefused> HeaderOf(
+        string name, GameRelease release, IReadOnlyList<string>? flags)
+    {
+        if (!ModKey.TryFromFileName(name, out var modKey))
+            return new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, NotAPluginFile.Message(name, release));
+
+        if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
+            return new PluginCreateRefused(PluginCreateRefusal.LightPluginUnsupported, $"{release} has no light plugins, so {name} cannot be created.");
+
+        if (!ChosenFlags(name, modKey, release, flags).Holds(out var chosen, out var unchosen)) return unchosen;
+        return (modKey, chosen);
+    }
+
     private static string Spelled(IEnumerable<string> flags) => $"[{string.Join(", ", flags.Select(flag => $"\"{flag}\""))}]";
 
     private static string SpelledAll(IEnumerable<IReadOnlyList<HeaderFlag>> combinations) =>
@@ -101,18 +116,8 @@ public sealed class CreatePluginHandler
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
         var release = loadOrder.GameRelease;
-        if (!ModKey.TryFromFileName(plugin.Name, out var modKey))
-        {
-            return new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, NotAPluginFile.Message(plugin.Name, release));
-        }
-
-        if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
-        {
-            return new PluginCreateRefused(PluginCreateRefusal.LightPluginUnsupported,
-                $"{release} has no light plugins, so {plugin.Name} cannot be created.");
-        }
-
-        if (!ChosenFlags(plugin.Name, modKey, release, flags).Holds(out var chosenFlags, out var unchosen)) return unchosen;
+        if (!HeaderOf(plugin.Name, release, flags).Holds(out var header, out var refused)) return refused;
+        var (modKey, chosenFlags) = header;
 
         if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release, chosenFlags)).Holds(out var created, out var failure))
             return new PluginCreateRefused(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");

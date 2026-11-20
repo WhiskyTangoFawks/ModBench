@@ -266,6 +266,29 @@ internal static class EndpointMapping
         return Refusal(refused.Refusal, refused.Message);
     }
 
+    /// <summary>A generated patch plugin made answers 200 with it, or the refusal that wrote nothing: as create's, as compile's
+    /// at 422, as a write's to a record, or as the record index's (ADR-0019).</summary>
+    internal static IResult Answered(string gesture, ILogger logger, Answer<PatchMade, PatchRefused> answer)
+    {
+        if (answer.Holds(out var made, out var refused)) return Results.Ok(made);
+        switch (refused)
+        {
+            case PatchRefused.AsCreate created:
+                LogRefusal(logger, gesture, created.Refusal, created.Message);
+                return Refusal(created.Refusal, created.Message);
+            case PatchRefused.AsCompile compiled:
+                LogRefusal(logger, gesture, compiled.Refusal, compiled.Message);
+                return Problem(compiled.Refusal, CompileRefusal.NoLoadOrder, compiled.Message, _ => StatusCodes.Status422UnprocessableEntity);
+            case PatchRefused.OfRecord record:
+                LogRefusal(logger, gesture, record.Refusal, record.Message);
+                return RecordEditProblem(record.Refusal, record.Message, path: null);
+            case PatchRefused.OfIndex index:
+                return Refusal(index.Refused);
+            default:
+                throw new InvalidOperationException($"Unhandled {nameof(PatchRefused)}: {refused.GetType().Name}.");
+        }
+    }
+
     internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, RenameSourceResult result) =>
         result.Match(
             Results.Ok,

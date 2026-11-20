@@ -247,6 +247,24 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/make-patch", MakePatch)
+            .WithName("MakePatchPlugin")
+            .WithTags(Tag)
+            .WithSummary("Writes a generated patch plugin from records: a script's patch, with no plugin source.")
+            .WithDescription(
+                "Writes a plugin holding each record given, a document as plugin source holds it, into the folder of an enabled mod or " +
+                "Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and " +
+                "a container not given lands by its winning copy's own fields. A record no plugin holds needs its record type, " +
+                "and one that lives in a container goes inside its container's document. " +
+                "Refused, writing nothing, as compile refuses, and over a file at its path. Answers compile's diagnostics.")
+            .Produces<PatchMade>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(422)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/decompile", Decompile)
             .WithName("DecompilePlugin")
             .WithTags(Tag)
@@ -390,6 +408,16 @@ internal static class PluginEndpoints
             : null;
     }
 
+    internal static async Task<IResult> MakePatch(
+        MakePatchRequest req, MakePatchPluginHandler make, ILoggerFactory loggerFactory, CancellationToken cancel)
+    {
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
+
+        return EndpointMapping.Answered(
+            "Make patch", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
+            await make.Make(plugin.Origin, plugin.Name, req.Flags, req.Records ?? [], cancel));
+    }
+
     internal static IResult RenameSourceChanges(
         RenameSourceChangesRequest req, RenameSourceChangesHandler rename, ILoggerFactory loggerFactory)
     {
@@ -498,6 +526,9 @@ internal sealed record CreatePluginRequest(string Origin, string Name, string Fo
 
 /// <summary>The mod that provides the plugin (ADR-0012) and its file name.</summary>
 internal sealed record CreatePluginInModRequest(string Origin, string Name, IReadOnlyList<string>? Flags = null);
+
+/// <summary>The mod that provides the patch plugin (ADR-0012), its file name, the records it holds and its header flags.</summary>
+internal sealed record MakePatchRequest(string Origin, string Name, IReadOnlyList<GivenRecord>? Records, IReadOnlyList<string>? Flags = null);
 
 /// <summary>The plugin by its origin and file name (ADR-0012), its new file name, whether mod order resolves its file
 /// name to this copy, and each file of its source folder a build reads by its name.</summary>
