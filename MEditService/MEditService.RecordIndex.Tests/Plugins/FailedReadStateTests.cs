@@ -471,6 +471,25 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void AFailedValidation_SaysItsRowsStillShow_UntilACheckTakesThem()
+    {
+        SourceMods.Init(Plugin);
+        using var index = Reconciled();
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        Arm(TreeMoment.RecordRead, () => throw Faults.Of(typeof(OutOfMemoryException)));
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the validation's failure");
+        Assert.Contains("Still showing what was last read from its source tree.", Reason(index), StringComparison.Ordinal);
+
+        AnotherTool.Delete(Path.Combine(Plugin.ModFolderOf(), ".git"));
+        File.Delete(Plugin.Path);
+        index.NextCheckThatMayFailUntil(() => index.ListedIn(Plugin.Key).Count == 0, "the plugin's rows taken");
+
+        Assert.StartsWith("Could not validate this plugin's source tree", Reason(index), StringComparison.Ordinal);
+        Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void AnEditWhoseProjectionRunsOutOfMemoryAfterTheCheckStampedIt_IsThePluginsFailedToRead_WithoutReadingItWhole()
     {
         SourceMods.Init(Plugin);

@@ -1105,7 +1105,7 @@ internal sealed class Indexer : IDisposable
         catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             _logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            FailRead(scope, plugin.Key, ReadFailure(LoadFailureReason.Of(ex), scope.Store.DerivationOf(plugin.Key)));
+            FailRead(scope, plugin.Key, ReadFailure(LoadFailureReason.Of(ex)));
         }
         finally
         {
@@ -1127,14 +1127,7 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", failure.Name, failure.Origin, failure.Reason);
     }
 
-    // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
-    private static string ReadFailure(string reason, DerivedFrom? rowsFrom) =>
-        $"Could not read this plugin ({reason})." + rowsFrom switch
-        {
-            null => "",
-            DerivedFrom.SourceTree => " Still showing what was last read from its source tree.",
-            _ => " Still showing what was last read from its compiled binary.",
-        };
+    private static string ReadFailure(string reason) => $"Could not read this plugin ({reason}).";
 
     // Registers first: the record index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
@@ -1170,11 +1163,11 @@ internal sealed class Indexer : IDisposable
     private void FailRead(OpenScope scope, PluginAddress key, string reason, string? diagnosis = null)
     {
         RememberFileFailedAt(scope, key);
-        if (scope.Held.SetFailure(key, reason, diagnosis)) PublishStatus();
+        if (scope.Held.SetFailure(key, reason, scope.Store.DerivationOf(key), diagnosis)) PublishStatus();
     }
 
     private void FailRead(OpenScope scope, PluginAddress key, LoadFailure failure) =>
-        FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)), failure.IsDiagnosis ? failure.Reason : null);
+        FailRead(scope, key, ReadFailure(failure.Reason), failure.IsDiagnosis ? failure.Reason : null);
 
     // A landing reapplies the record filter, so arrivals indexed before, and plugins a check validates, land together. A
     // plugin the record index has not read lands alone, so no plugin waits on its read to be listed.
@@ -1423,7 +1416,9 @@ internal sealed class Indexer : IDisposable
         {
             if (!holdsTree && !_adapter.Exists(plugin.Path))
             {
-                if (indexed.FileOf(key) is not null) store.Unindex(key);
+                if (indexed.FileOf(key) is null) return false;
+                store.Unindex(key);
+                if (held.RowsTaken(key)) PublishStatus();
                 return false;
             }
 
@@ -1509,10 +1504,8 @@ internal sealed class Indexer : IDisposable
         return reopened;
     }
 
-    // editor.md, States, story 6: the rows stay the last good read, and say why.
     private static string ValidationFailure(bool holdsTree, string reason) =>
-        $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
-        "what was last read from it.";
+        $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}).";
 
     // A check of the disk that changed the status reads Reconciling until the plugins are validated. The message
     // when validation failed outright, which becomes status data.
@@ -1566,7 +1559,7 @@ internal sealed class Indexer : IDisposable
         }
         catch (Exception ex)
         {
-            FailRead(scope, key, ReadFailure(LoadFailureReason.Of(ex), scope.Store.DerivationOf(key)));
+            FailRead(scope, key, ReadFailure(LoadFailureReason.Of(ex)));
             throw;
         }
         if (outcome.Failure is { } failure)

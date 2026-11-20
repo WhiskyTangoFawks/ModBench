@@ -19,7 +19,7 @@ internal sealed class HeldPlugins
     private readonly ILogger _logger;
 
     // ADR-0012.
-    private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = new(PluginAddress.Comparer);
+    private readonly Dictionary<PluginAddress, StandingFailure> _loadFailures = new(PluginAddress.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
     // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
@@ -116,7 +116,7 @@ internal sealed class HeldPlugins
             _plugins.Add(metadata);
             PublishPlugins();
             if (!clearFailure || !_loadFailures.Remove(metadata.Key)) return;
-            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+            PublishFailures();
         }
     }
 
@@ -137,7 +137,7 @@ internal sealed class HeldPlugins
             var removed = _plugins.RemoveAll(p => PluginAddress.Comparer.Equals(p.Key, key)) > 0;
             if (_loadFailures.Remove(key))
             {
-                Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+                PublishFailures();
                 removed = true;
             }
             if (removed) PublishPlugins();
@@ -187,22 +187,22 @@ internal sealed class HeldPlugins
             if (!_loadFailures.Keys.Any(key => PluginAddress.Comparer.Equals(key, now) && key != now)) return;
             var failure = _loadFailures[now];
             _loadFailures.Remove(now);
-            _loadFailures[now] = failure with { Name = now.Name, Origin = now.Origin };
-            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+            _loadFailures[now] = failure with { Failure = failure.Failure with { Name = now.Name, Origin = now.Origin } };
+            PublishFailures();
         }
     }
 
     /// <summary>Lets the Indexer report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures. False when the plugin
     /// already failed for this reason.</summary>
-    internal bool SetFailure(PluginAddress key, string reason, string? diagnosis = null)
+    internal bool SetFailure(PluginAddress key, string reason, DerivedFrom? rowsFrom, string? diagnosis = null)
     {
-        var failure = new PluginLoadFailure(key.Name, key.Origin, reason, diagnosis);
+        var failure = new StandingFailure(new PluginLoadFailure(key.Name, key.Origin, reason, diagnosis), rowsFrom);
         lock (_mutation)
         {
             if (_loadFailures.TryGetValue(key, out var standing) && standing == failure) return false;
             _loadFailures[key] = failure;
-            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+            PublishFailures();
             return true;
         }
     }
@@ -214,14 +214,42 @@ internal sealed class HeldPlugins
         lock (_mutation)
         {
             if (!_loadFailures.Remove(key)) return false;
-            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+            PublishFailures();
             return true;
         }
     }
 
+    /// <summary>The plugin's rows went while its failure stands. False when its failure claimed no rows.</summary>
+    internal bool RowsTaken(PluginAddress key)
+    {
+        lock (_mutation)
+        {
+            if (_loadFailures.GetValueOrDefault(key) is not { RowsFrom: not null } standing) return false;
+            _loadFailures[key] = standing with { RowsFrom = null };
+            PublishFailures();
+            return true;
+        }
+    }
+
+    private void PublishFailures() => Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values.Select(failure => failure.Shown)]);
+
+    // common.md, States, stories 2 and 6 (ADR-0019): the reason says whose rows a failed read left, and only while they stand.
+    private sealed record StandingFailure(PluginLoadFailure Failure, DerivedFrom? RowsFrom)
+    {
+        public PluginLoadFailure Shown => Failure with
+        {
+            Reason = Failure.Reason + RowsFrom switch
+            {
+                null => "",
+                DerivedFrom.SourceTree => " Still showing what was last read from its source tree.",
+                _ => " Still showing what was last read from its compiled binary.",
+            },
+        };
+    }
+
     internal PluginLoadFailure? FailureOf(PluginAddress key)
     {
-        lock (_mutation) return _loadFailures.GetValueOrDefault(key);
+        lock (_mutation) return _loadFailures.GetValueOrDefault(key)?.Shown;
     }
 
     /// <summary>Held, and its last read failed: a plugin the open itself failed on is not held, and
