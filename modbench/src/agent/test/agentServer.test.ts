@@ -634,12 +634,20 @@ describe('the agent server, given an instance value', () => {
     expect(await asked).toEqual([]);
   });
 
-  describe('list_problems, when the record index may be late', () => {
+  describe('when the record index may be late', () => {
     const LATE_LINE = 'The record index may be late: this answer may predate a write.';
-    const blocksOf = async (client: Client) => CallToolResultSchema.parse(await client.callTool({ name: 'list_problems', arguments: {} })).content
+    const RECORD_INDEX_TOOLS = ['list_problems', 'select_rows', 'read_record', 'resolve_names', 'find_definition', 'list_references'];
+    const blocksOf = async (client: Client, tool = 'list_problems') => CallToolResultSchema.parse(await client.callTool({ name: tool, arguments: {} })).content
       .map((block) => (block.type === 'text' ? block.text : ''));
+    const lateMEdit = () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setStatus('running');
+      mEdit.answerPuts(() => new Promise(() => undefined));
+      void mEdit.sendLoadOrder(EMPTY_SNAPSHOT);
+      return mEdit;
+    };
 
-    it('says its answer may predate a write mEdit has made and the client has not heard', async () => {
+    it('list_problems says its answer may predate a write mEdit has made and the client has not heard', async () => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setStatus('running');
       mEdit.sequenceMEditStandsAt = 5;
@@ -648,20 +656,35 @@ describe('the agent server, given an instance value', () => {
       expect(await blocksOf(client)).toContain(LATE_LINE);
     });
 
-    it('says its answer may predate a write', async () => {
-      const mEdit = new InMemoryMEditClient();
-      mEdit.setStatus('running');
-      mEdit.answerPuts(() => new Promise(() => undefined));
-      void mEdit.sendLoadOrder(EMPTY_SNAPSHOT);
-      const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    it.each(RECORD_INDEX_TOOLS)('%s says its answer may predate a write', async (tool) => {
+      const { client } = await clientOf(new FakeInstance(VALUE), lateMEdit());
 
-      expect(await blocksOf(client)).toContain(LATE_LINE);
+      expect(await blocksOf(client, tool)).toContain(LATE_LINE);
     });
 
-    it('says nothing of lateness when the record index is not late', async () => {
+    it.each(RECORD_INDEX_TOOLS)('%s says it once while mEdit indexes: in the mEdit line, with the count', async (tool) => {
+      const INDEXING = 'mEdit is Indexing (3 of 10 plugins)';
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setStatus('running');
+      mEdit.setProgress({ done: 3, total: 10, version: 1, settled: false });
+      const { client } = await clientOf(new FakeInstance(VALUE), mEdit, undefined, undefined, { ...NO_STANDING, mEdit: () => [INDEXING] });
+
+      const blocks = await blocksOf(client, tool);
+
+      expect(blocks).toContain(INDEXING);
+      expect(blocks).not.toContain(LATE_LINE);
+    });
+
+    it.each(['list_plugins', 'list_sorting_rules', 'list_mods'])('%s, which reads no record index, says nothing of it', async (tool) => {
+      const { client } = await clientOf(new FakeInstance(VALUE), lateMEdit());
+
+      expect(await blocksOf(client, tool)).not.toContain(LATE_LINE);
+    });
+
+    it.each(RECORD_INDEX_TOOLS)('%s says nothing of lateness when the record index is not late', async (tool) => {
       const { client } = await clientOf(new FakeInstance(VALUE));
 
-      expect(await blocksOf(client)).not.toContain(LATE_LINE);
+      expect(await blocksOf(client, tool)).not.toContain(LATE_LINE);
     });
   });
 
@@ -779,7 +802,7 @@ describe('the agent server, given an instance value', () => {
     it.each([
       ['list_plugins', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
       ['list_sorting_rules', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
-      ['list_problems', ['No masterlist', 'a source problem']],
+      ['list_problems', ['mEdit is Running', 'No masterlist', 'a source problem']],
       ['read_record', ['mEdit is Running', 'plugins read failed', 'the unsaved plugin source was not taken']],
       ['select_rows', ['mEdit is Running', 'plugins read failed', 'the unsaved plugin source was not taken']],
     ])('reach %s with its own sources, instance lines first', async (tool, own) => {
