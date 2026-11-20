@@ -72,7 +72,7 @@ public sealed class StringsLanguageTests : IDisposable
         var source = (await adapter.ReadSourceOfAsync(plugin, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
 
-        var drops = (await tree.SaveAsync(Path.Combine(_root, "Out", PluginName), source.Masters, [], tree.DropsIn)).Answered();
+        var drops = (await tree.SaveAsync(Path.Combine(_root, "Out", PluginName), source.Masters, [], save => tree.DropsIn(save).Answered())).Answered();
 
         Assert.Empty(drops);
     }

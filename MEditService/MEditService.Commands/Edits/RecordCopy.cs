@@ -183,25 +183,10 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             worldspaceCopy = copied;
         }
 
-        if (!source.Identity(cellFormKey).Holds(out var named, out var why)) return WriteTargets.RefuseUnreadableSource(cellFormKey, why);
-        var sourceCell = named
-            ?? throw new InvalidOperationException(
-                $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
-        if (!source.Body(sourceCell).Holds(out var sourceCellText, out why)) return WriteTargets.RefuseUnreadableSource(cellFormKey, why);
-        var landing = WithGridFrom(sourceCellText, cell with { RecordType = sourceCell.RecordType }, release);
         var (session, plugin, _) = destination;
         if (worldspaceCopy is not null) session.Apply(session.Repository.ChangesToPut(plugin, worldspaceCopy));
-        session.Apply(session.Repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
+        session.Apply(session.Repository.ChangesToPutInWorldspace(plugin, cell, worldspaceFormKey));
         return RecordEditResult.Success();
-    }
-
-    private static SourceDocument WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
-    {
-        var sourceCell = Document.Parse(sourceCellText);
-        if (sourceCell.DocumentAt(RecordTypes.CellGridMember) is null) return cell;
-
-        var withGrid = Document.Parse(cell.Body).WithCopyOf(sourceCell, RecordTypes.CellGridMember);
-        return cell with { Body = RecordTextCodec.RoundTrip(withGrid.Text, release, cell.RecordType) };
     }
 
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing
@@ -242,19 +227,14 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     {
         (copy, refused) = (null, null);
         var schema = schemaReflector.GetSchemas(release)[container.RecordType];
-        if (!TemporaryExterior(source, container, release).Holds(out var temporaryExterior, out var why))
+        if (!PartialFormCopyOf(source, container, schema, release).Holds(out var partialForm, out var why))
         {
             refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
             return false;
         }
-        if (CanBePartial.Of(schema, release, container.FormKey, temporaryExterior) is CanBePartial.Verdict.Can)
+        if (partialForm is not null)
         {
-            if (!source.Document(container).Holds(out var document, out why))
-            {
-                refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
-                return false;
-            }
-            copy = PartialFormOf(document, schema, release);
+            copy = partialForm;
             return true;
         }
 
@@ -278,6 +258,15 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         return true;
     }
 
+    /// <summary>The container as a copy carries it in to hold a child: a Partial Form with no children, or null where the
+    /// game does not let it be one (plugins.md, Copy, story 4).</summary>
+    internal static CopyRead<SourceDocument?> PartialFormCopyOf(
+        CopySource source, RecordIdentity container, RecordTableSchema schema, GameRelease release) =>
+        TemporaryExterior(source, container, release).Then(temporaryExterior =>
+            CanBePartial.Of(schema, release, container.FormKey, temporaryExterior) is CanBePartial.Verdict.Can
+                ? source.Document(container).Then<SourceDocument?>(document => PartialFormOf(document, schema, release))
+                : (SourceDocument?)null);
+
     private static CopyRead<bool?> TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release)
     {
         if (!RecordTypes.For(release).IsCell(container.RecordType)) return (bool?)null;
@@ -287,10 +276,11 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                     CanBePartial.TemporaryExterior((flags & PersistentFlag.Bit) != 0, held is not null, worldspace is null))));
     }
 
+    // The tree places an exterior cell it does not yet hold by its Grid, so a copied-in Partial Form keeps it.
     private static SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
     {
-        var body = ContainerDocumentEdits.WithoutChildren(container.Body, release, container.RecordType);
-        var partialForm = RecordEmptying.AsPartialForm(Document.Parse(body), schema, release);
+        var body = Document.Parse(ContainerDocumentEdits.WithoutChildren(container.Body, release, container.RecordType));
+        var partialForm = RecordEmptying.AsPartialForm(body, schema, release).WithCopyOf(body, RecordTypes.CellGridMember);
         return container with { Body = RecordTextCodec.RoundTrip(partialForm.Text, release, container.RecordType) };
     }
 

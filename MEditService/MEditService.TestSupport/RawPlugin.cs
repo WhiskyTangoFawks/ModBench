@@ -102,42 +102,54 @@ public static class RawPlugin
     public static byte[] EditRecord(
         byte[] plugin, uint formId, Func<List<(string Signature, byte[] Payload)>, IEnumerable<(string Signature, byte[] Payload)>> edit)
     {
-        var openGroups = new Stack<(int Start, int End)>();
+        var entered = new List<(int Start, int End)>();
+        var at = RecordAt(plugin, formId, (start, end) => entered.Add((start, end)));
+        var end = at + HeaderLength + (int)BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 4));
+
+        var subrecords = new List<(string, byte[])>();
+        for (var sub = at + HeaderLength; sub < end;)
+        {
+            var length = BinaryPrimitives.ReadUInt16LittleEndian(plugin.AsSpan(sub + 4));
+            subrecords.Add((Encoding.ASCII.GetString(plugin, sub, 4), plugin[(sub + 6)..(sub + 6 + length)]));
+            sub += 6 + length;
+        }
+        var record = Concat([plugin[at..(at + HeaderLength)], .. edit(subrecords).Select(s => Subrecord(s.Signature, s.Payload))]);
+        BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(4), (uint)(record.Length - HeaderLength));
+
+        var edited = Concat(plugin[..at], record, plugin[end..]);
+        foreach (var (start, _) in entered.Where(group => group.End > at))
+        {
+            var groupSize = BinaryPrimitives.ReadUInt32LittleEndian(edited.AsSpan(start + 4));
+            BinaryPrimitives.WriteUInt32LittleEndian(edited.AsSpan(start + 4), (uint)(groupSize + record.Length - (end - at)));
+        }
+        return edited;
+    }
+
+    /// <summary>The plugin with <paramref name="flags"/> set in its record <paramref name="formId"/>'s header and its body
+    /// left as it was, as a deleted record that keeps its fields, which Mutagen never writes.</summary>
+    public static byte[] WithRecordFlags(byte[] plugin, uint formId, uint flags)
+    {
+        var at = RecordAt(plugin, formId, (_, _) => { });
+        var flagged = plugin.ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(flagged.AsSpan(at + 8), BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 8)) | flags);
+        return flagged;
+    }
+
+    // Where record formId starts, each group the walk enters handed to entered.
+    private static int RecordAt(byte[] plugin, uint formId, Action<int, int> entered)
+    {
         for (var at = 0; at < plugin.Length;)
         {
-            while (openGroups.TryPeek(out var group) && group.End <= at) openGroups.Pop();
             var type = Encoding.ASCII.GetString(plugin, at, 4);
             var size = (int)BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 4));
             if (type == "GRUP")
             {
-                openGroups.Push((at, at + size));
+                entered(at, at + size);
                 at += HeaderLength;
                 continue;
             }
-            var end = at + HeaderLength + size;
-            if (type == "TES4" || BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 12)) != formId)
-            {
-                at = end;
-                continue;
-            }
-
-            var subrecords = new List<(string, byte[])>();
-            for (var sub = at + HeaderLength; sub < end;)
-            {
-                var length = BinaryPrimitives.ReadUInt16LittleEndian(plugin.AsSpan(sub + 4));
-                subrecords.Add((Encoding.ASCII.GetString(plugin, sub, 4), plugin[(sub + 6)..(sub + 6 + length)]));
-                sub += 6 + length;
-            }
-            var record = Concat([plugin[at..(at + HeaderLength)], .. edit(subrecords).Select(s => Subrecord(s.Signature, s.Payload))]);
-            BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(4), (uint)(record.Length - HeaderLength));
-
-            var edited = Concat(plugin[..at], record, plugin[end..]);
-            foreach (var (start, _) in openGroups)
-            {
-                var groupSize = BinaryPrimitives.ReadUInt32LittleEndian(edited.AsSpan(start + 4));
-                BinaryPrimitives.WriteUInt32LittleEndian(edited.AsSpan(start + 4), (uint)(groupSize + record.Length - (end - at)));
-            }
-            return edited;
+            if (type != "TES4" && BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 12)) == formId) return at;
+            at += HeaderLength + size;
         }
         throw new InvalidOperationException($"The plugin holds no record {formId:X8}.");
     }

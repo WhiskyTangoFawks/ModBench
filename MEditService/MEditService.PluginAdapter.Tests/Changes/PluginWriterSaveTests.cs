@@ -181,7 +181,7 @@ public sealed class PluginWriterSaveTests
 
         var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
         {
-            var dropped = tree.DropsIn(save);
+            var dropped = tree.DropsIn(save).Answered();
             save.Commit(_ => false);
             return dropped;
         })).Answered();
@@ -227,7 +227,7 @@ public sealed class PluginWriterSaveTests
         var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
         {
             File.WriteAllBytes(Path.Combine(scratch, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
-            return tree.DropsIn(save);
+            return tree.DropsIn(save).Answered();
         })).Answered();
 
         Assert.Empty(drops);
