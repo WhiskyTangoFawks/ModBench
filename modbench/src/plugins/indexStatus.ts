@@ -2,9 +2,10 @@ import type * as vscode from 'vscode';
 import { isMEditGone, loadFailuresOf, type MEditClient, type PluginLoadFailure } from '../client';
 import { isReadFailed } from '../wire/readFailed';
 import type { Reporter } from '../ports/reporter';
+import { tellingOnSurface } from '../drivingLib/tellingOnSurface';
+import { pluginAddressKey } from '../wire/pluginAddress';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
-import { tellFailedReads } from './pluginFailures';
 import { createReconcileNarrator, type Heard, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
@@ -49,7 +50,10 @@ export type FollowedNarrator = ReconcileNarrator & { hearNow(): Promise<void> };
 
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNarrator } & vscode.Disposable {
   const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
-  const tellReads = tellFailedReads(reporter);
+  const tellFailedReads = tellingOnSurface(reporter, 'error');
+  const tellReads = (failures: readonly PluginLoadFailure[]): void => {
+    tellFailedReads(failures.map((f) => ({ key: pluginAddressKey(f), message: `Failed to read "${f.name}" (${f.origin}).`, why: f.reason })));
+  };
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
     applyIndexed: (indexedPlugins, failures) => {

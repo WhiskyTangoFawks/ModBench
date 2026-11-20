@@ -1,6 +1,6 @@
 import { columnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
-import { lastGoodReadMessage } from '../../src/wire/lastGoodRead';
+import { lastGoodReadMessage, pluginReason } from '../../src/wire/reasons';
 import type { CompareOverride, PluginLoadFailure } from './types';
 
 /** The panel keeps what it read while its own read fails, or mEdit cannot read a plugin it shows;
@@ -11,6 +11,6 @@ export function recordPanelLoadFailureMessage(
   const shownKeys = new Set(shown.map(o => columnKey(pluginAddressOf(o))));
   return lastGoodReadMessage([
     ...readFailure === null ? [] : [readFailure],
-    ...failures.filter(f => shownKeys.has(columnKey(f))).map(f => `"${f.name}" (${f.origin}): ${f.reason}`),
+    ...failures.filter(f => shownKeys.has(columnKey(f))).map(f => pluginReason(f, f.reason)),
   ]);
 }

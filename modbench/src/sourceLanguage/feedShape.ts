@@ -1,7 +1,6 @@
 import type { MEditClient, PluginAddress, PluginFilePaths, PluginProblems } from '../client';
 import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import { coalesced } from '../ports/coalesced';
-import type { Reporter } from '../ports/reporter';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 
@@ -20,17 +19,6 @@ export const lastRead = (why: string): string => `Showing the last good read: ${
 export const askedAgain = (whole: () => void, one: (event: { plugin: PluginAddress }) => void) => (plugin?: PluginAddress): void => {
   if (plugin) one({ plugin }); else whole();
 };
-
-export interface Told { key: string; message: string; why: string }
-
-/** Shows each told line on the surface once, and again only when its reason changes; a key absent from `standing` is forgotten. */
-export function tellingOnSurface(reporter: Pick<Reporter, 'shownOnSurface'>): (standing: Told[]) => void {
-  let told = new Map<string, string>();
-  return (standing) => {
-    for (const { key, message, why } of standing) if (told.get(key) !== why) reporter.shownOnSurface('warning', message, why);
-    told = new Map(standing.map(({ key, why }) => [key, why]));
-  };
-}
 
 type Lateness = Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate'>;
 

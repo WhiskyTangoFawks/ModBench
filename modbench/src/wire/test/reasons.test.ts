@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lastGoodReadMessage } from '../lastGoodRead';
+import { lastGoodReadMessage } from '../reasons';
 
 describe('the message line saying a view shows the last good read', () => {
   it.each([

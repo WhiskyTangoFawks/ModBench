@@ -6,7 +6,8 @@ import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
-import { askedAgain, lastRead, positionAt, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
+import { askedAgain, lastRead, positionAt, askingWhenNotLate, settling, type Asked, type Feed } from './feedShape';
+import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
@@ -70,7 +71,7 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
   const { client, reporter, paths, publish, languageStatus } = deps;
   const held = new Map<string, Held>();
   const failures = new Map<string, string>();
-  const tell = tellingOnSurface(reporter);
+  const tell = tellingOnSurface(reporter, 'warning');
   let shown = 0;
 
   const unchecked = () => [...held.values()].flatMap(({ answer }) => [

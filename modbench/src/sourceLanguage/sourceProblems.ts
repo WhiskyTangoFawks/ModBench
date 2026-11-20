@@ -7,7 +7,8 @@ import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
-import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, askingWhenNotLate, settling, type Asked, type Feed, type Position } from './feedShape';
+import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
 import { answerOf } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -116,7 +117,7 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   const { client, reporter, publish, languageStatus, unsavedStatus } = deps;
-  const tellUnplaced = tellingOnSurface(reporter);
+  const tellUnplaced = tellingOnSurface(reporter, 'warning');
   let held = new Map<string, Contribution>();
   let unplacedHeld = new Map<string, Unplaced>();
   let published = false;
