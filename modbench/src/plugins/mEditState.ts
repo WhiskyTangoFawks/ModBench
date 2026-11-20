@@ -10,7 +10,7 @@ const SHOWN: Record<MEditStatus, { icon: string; state: string }> = {
 };
 
 // common.md, The status bar, story 1.
-export function mEditState(status: MEditStatus, filling: RecordIndexProgress | undefined, indexedActivePlugins: number | undefined): { icon: string; state: string } {
-  if (filling !== undefined) return { icon: 'sync~spin', state: `Indexing (${filling.done} of ${filling.total} plugins)` };
+export function mEditState(status: MEditStatus, indexing: RecordIndexProgress | undefined, indexedActivePlugins: number | undefined): { icon: string; state: string } {
+  if (indexing !== undefined) return { icon: 'sync~spin', state: `Indexing (${indexing.done} of ${indexing.total} plugins)` };
   return indexedActivePlugins === undefined ? SHOWN[status] : { icon: 'check', state: `Ready (${indexedActivePlugins} plugins)` };
 }
