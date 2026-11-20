@@ -59,7 +59,7 @@ internal sealed class RecordQueries(
                 HasParseFailure: parseFailures.Contains(plugin.Key),
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList(),
-                content.Description);
+                content.Description, derivedFrom);
         }
 
         if (filter.Current is null)

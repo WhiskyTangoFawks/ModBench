@@ -407,7 +407,7 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void AJustSourceModTreeWhoseBinaryAlsoFails_SaysTheBinarysLastReadStillShows()
+    public void AJustSourceModTreeWhoseBinaryAlsoFails_KeepsTheBinarysLastRead()
     {
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
         SourceMods.Init(Plugin);
@@ -416,11 +416,10 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextCheckThatMayFailUntil(() => Failed(index), "the tree's and the binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ABinaryRewrittenThatFailsToRead_SaysItsLastReadStillShows()
+    public void ABinaryRewrittenThatFailsToRead_KeepsItsLastRead_AndItsReasonSaysOnlyWhatFailed()
     {
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
@@ -428,18 +427,20 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextCheckThatMayFailUntil(() => Failed(index), "the rewritten binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+        Assert.Equal(DerivedFrom.Binary, index.PluginResponseOf(Plugin.Key).Require().RowsFrom);
+        Assert.StartsWith("Could not read this plugin (", Reason(index), StringComparison.Ordinal);
+        Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ABinaryHeldWhenAWarmLoadOpensIt_SaysItsLastReadStillShows()
+    public void ABinaryHeldWhenAWarmLoadOpensIt_KeepsItsLastRead()
     {
         Reconciled().Dispose();
 
         using var index = Reconciled(new HeldAtFirstRead());
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+        Assert.True(Failed(index));
     }
 
     [Fact]
@@ -468,6 +469,22 @@ public sealed class FailedReadStateTests : IDisposable
 
         Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
         Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
+    public void AFailedValidation_KeepsItsRows_AndItsReasonSaysOnlyWhatFailed()
+    {
+        SourceMods.Init(Plugin);
+        using var index = Reconciled();
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        Arm(TreeMoment.RecordRead, () => throw Faults.Of(typeof(OutOfMemoryException)));
+
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the validation's failure");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.StartsWith("Could not validate this plugin's source tree (", Reason(index), StringComparison.Ordinal);
+        Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
