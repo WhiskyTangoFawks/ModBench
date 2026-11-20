@@ -66,8 +66,8 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
                 return given ?? (Answer<string, PatchRefused>)new PatchRefused.OfRecord(
                     RecordEditRefusal.RecordTypeNotFound, $"No plugin holds {formKey}, so its record type must be given.");
             }
-            var read = Read(formKey, held, copies.Of(held).Identity(formKey).Then<string>(identity => (identity ?? throw NotHeld(held, formKey)).RecordType));
-            if (!read.Holds(out var type, out var unread)) return unread;
+            if (!HeldIdentity(formKey, held, copies.Of(held)).Holds(out var identity, out var unread)) return unread;
+            var type = identity.RecordType;
             return given is null || given == type
                 ? type
                 : new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"{formKey} is a {type} in {held.Name}, not the {given} given.");
@@ -79,7 +79,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             if (owner is not { } held)
                 return new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, $"No plugin holds {formKey}, which holds a record given.");
             var copy = copies.Of(held);
-            var read = Read(formKey, held, copy.Identity(formKey).Then(identity => copy.Document(identity ?? throw NotHeld(held, formKey))));
+            var read = HeldIdentity(formKey, held, copy).Then(identity => Read(formKey, held, copy.Document(identity)));
             if (!read.Holds(out var document, out var unread)) return unread;
             return Laid(document.Identity, ContainerDocumentEdits.WithChildSlotsCut(document.Body, document.RecordType, copy.Snapshot.GameRelease));
         }
@@ -97,31 +97,36 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             var isCell = types.IsCell(identity.RecordType);
             if (types.IsCreatable(identity.RecordType) && !isCell) return new MadeRecord(identity, text);
             if (!OwnerOf(identity.FormKey).Holds(out var owner, out var refused)) return refused;
-            if (owner is not { } held)
+
+            DocumentContainment? container = null;
+            string? worldspace = null;
+            if (owner is { } held)
             {
-                return isCell && !HasGrid(text)
-                    ? new MadeRecord(identity, text)
-                    : new PatchRefused.OfRecord(
-                        RecordEditRefusal.ContainerUnknown,
-                        $"{identity.FormKey} lives in a container, and no plugin holds it, so which container is unknown.");
+                var copy = copies.Of(held);
+                if (!Read(identity.FormKey, held, copy.ContainerOf(identity)).Holds(out container, out var unread)) return unread;
+                if (container is null && isCell && !Read(identity.FormKey, held, copy.WorldspaceOf(identity)).Holds(out worldspace, out unread))
+                    return unread;
             }
 
-            var copy = copies.Of(held);
-            if (!Read(identity.FormKey, held, copy.ContainerOf(identity)).Holds(out var container, out var unread)) return unread;
             if (container is { } slot) return new MadeRecord(identity, text, slot);
             if (!isCell)
             {
                 return new PatchRefused.OfRecord(
-                    RecordEditRefusal.ContainerUnknown, $"{held.Name}'s copy of {identity.FormKey} sits in no container, so where it goes is unknown.");
-            }
-
-            if (!Read(identity.FormKey, held, copy.WorldspaceOf(identity)).Holds(out var worldspace, out unread)) return unread;
-            if (worldspace is null) return new MadeRecord(identity, text);
-            return HasGrid(text)
-                ? new MadeRecord(identity, text, Worldspace: worldspace)
-                : new PatchRefused.OfRecord(
                     RecordEditRefusal.ContainerUnknown,
-                    $"{identity.FormKey} is an exterior cell of {worldspace}, and its document holds no Grid, so where it sits is unknown.");
+                    $"No plugin's copy of {identity.FormKey} says which container it lives in. Give it inside its container's document.");
+            }
+            if (worldspace is not null)
+            {
+                return HasGrid(text)
+                    ? new MadeRecord(identity, text, Worldspace: worldspace)
+                    : new PatchRefused.OfRecord(
+                        RecordEditRefusal.ContainerUnknown,
+                        $"{identity.FormKey} is an exterior cell of {worldspace}, and its document holds no Grid, so where it sits is unknown.");
+            }
+            return owner is null && HasGrid(text)
+                ? new PatchRefused.OfRecord(
+                    RecordEditRefusal.ContainerUnknown, $"{identity.FormKey} is an exterior cell no plugin holds, so which worldspace it sits in is unknown.")
+                : new MadeRecord(identity, text);
         }
 
         private static bool HasGrid(string text) => Document.TryRead(text, out var document, out _) && document.Grid is not null;
@@ -133,8 +138,12 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             return _owners[formKey] = owners.Count > 0 ? owners[0] : null;
         }
 
-        private static InvalidOperationException NotHeld(PluginAddress owner, string formKey) =>
-            new($"The record index names {owner.Name} as holding {formKey}, which it does not.");
+        // The record index can lag a change another program made to the plugin (ADR-0003).
+        private static Answer<RecordIdentity, PatchRefused> HeldIdentity(string formKey, PluginAddress owner, CopySource copy) =>
+            Read(formKey, owner, copy.Identity(formKey)).Then<RecordIdentity>(identity => identity is { } held
+                ? held
+                : new PatchRefused.OfRecord(
+                    RecordEditRefusal.RecordNotFound, $"The record index names {owner.Name} as holding {formKey}, which it does not now."));
 
         private static Answer<T, PatchRefused> Read<T>(string formKey, PluginAddress owner, CopyRead<T> read) =>
             read.Holds(out var value, out var unread)

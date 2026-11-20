@@ -195,8 +195,8 @@ def create_plugin(name: str, origin: str, flags: list[str] | None = None) -> Plu
 def make_patch_plugin(
         name: str, origin: str, records: Iterable[JsonRecord | NewRecord], flags: list[str] | None = None) -> Patch:
     """Writes a generated patch plugin holding each record, a document as read gives one, into an enabled mod or Overwrite,
-    with no plugin source. A record lands in the container its winning copy sits in. Refused as compile refuses, and over a
-    file at its path. flags: header flags."""
+    with no plugin source. A record lands in the container its winning copy sits in; a new one that lives in a container
+    goes inside its container's document. Refused as compile refuses, and over a file at its path. flags: header flags."""
     given = [
         {'text': json.dumps(record.document), 'recordType': record.record_type} if isinstance(record, NewRecord)
         else {'text': json.dumps(record)}

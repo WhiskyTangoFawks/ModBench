@@ -702,7 +702,7 @@ export interface paths {
         put?: never;
         /**
          * Writes a generated patch plugin from records: a script's patch, with no plugin source.
-         * @description Writes a plugin holding each record given, a document as plugin source holds it, into the folder of an enabled mod or Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and a container not given lands by its winning copy's own fields. A record no plugin holds needs its record type, and is refused when it lives in a container. Refused, writing nothing, as compile refuses, and over a file at its path. Answers compile's diagnostics.
+         * @description Writes a plugin holding each record given, a document as plugin source holds it, into the folder of an enabled mod or Overwrite the held load order names, by its origin. A record lands in the container its winning copy sits in, and a container not given lands by its winning copy's own fields. A record no plugin holds needs its record type, and one that lives in a container goes inside its container's document. Refused, writing nothing, as compile refuses, and over a file at its path. Answers compile's diagnostics.
          */
         post: operations["MakePatchPlugin"];
         delete?: never;

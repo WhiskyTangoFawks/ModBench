@@ -122,15 +122,31 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ARecordNoPluginHolds_LandsAsTheTypeGiven()
+    public async Task RecordsNoPluginHolds_LandAsTheTypesGiven_ACellWithNoGridAsAnInteriorCell()
     {
-        var fresh = new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { EditorID = "PatchNpc" };
+        var types = RecordTypes.For(GameRelease.Fallout4);
+        var npc = new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { EditorID = "PatchNpc" };
+        var cell = new Cell(FormKey.Factory($"000801:{Patch}"), Fallout4Release.Fallout4) { EditorID = "PatchCell", Flags = Cell.Flag.IsInteriorCell };
 
-        var made = await Handler.Make(Mod, Patch, [], [Given(fresh, RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(fresh))]);
+        var made = await Handler.Make(Mod, Patch, [], [Given(npc, types.RecordTypeOf(npc)), Given(cell, types.RecordTypeOf(cell))]);
 
         Assert.True(made.Holds(out _, out var refused), refused?.Message);
         using var written = Written();
-        Assert.Equal("PatchNpc", written.Npcs.Single().EditorID);
+        Assert.Equal(("PatchNpc", "PatchCell"), (written.Npcs.Single().EditorID, InteriorCellsOf(written).Single().EditorID));
+    }
+
+    [Fact]
+    public async Task ARecordTheCodecWouldWriteOtherwise_IsRefusedAsCompileRefuses_InTheWordsOfAMake()
+    {
+        var sparse = new GivenRecord($$"""{"FormKey": "000800:{{Patch}}", "EditorID": "Sparse"}""", "npc_");
+
+        var made = await Handler.Make(Mod, Patch, [], [sparse]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
+        Assert.Equal(
+            (CompileRefusal.SourceDoesNotParse, $"{Patch} cannot be made: 000800:{Patch}: "),
+            (compiled.Refusal, compiled.Message[..$"{Patch} cannot be made: 000800:{Patch}: ".Length]));
     }
 
     [Fact]
@@ -166,7 +182,12 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         ARecordNoPluginHoldsWithNoType,
         APlacedRecordNoPluginHolds,
         ANativeFormIdOutsideTheLightRange,
-        ARecordAsATypeOtherThanTheOneItIs,
+        ARecordAsNoRecordType,
+        APlacedRecordWhoseCellNoPluginHolds,
+        AnExteriorCellWithNoGrid,
+        AnExteriorCellNoPluginHolds,
+        ARecordTheRecordIndexNamesAPluginNotHolding,
+        ARecordWhosePluginCannotBeRead,
     }
 
     private (string Name, IReadOnlyList<string> Flags, IReadOnlyList<GivenRecord> Records) Making(Giving giving)
@@ -185,8 +206,24 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 return (Patch, [], [Given(new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4))]);
             case Giving.APlacedRecordNoPluginHolds:
                 return (Patch, [], [Given(new PlacedObject(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4), placedType)]);
-            case Giving.ARecordAsATypeOtherThanTheOneItIs:
-                return (Patch, [], [Given(_npc, placedType)]);
+            case Giving.ARecordAsNoRecordType:
+                return (Patch, [], [Given(_npc, "nothing")]);
+            case Giving.APlacedRecordWhoseCellNoPluginHolds:
+                _index.Owners.Remove(_interior.FormKey.ToString());
+                return (Patch, [], [Given(_interiorRef)]);
+            case Giving.AnExteriorCellWithNoGrid:
+                var gridless = _exterior.DeepCopy();
+                gridless.Grid = null;
+                return (Patch, [], [Given(gridless)]);
+            case Giving.AnExteriorCellNoPluginHolds:
+                var cellType = RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(_exterior);
+                return (Patch, [], [Given(new Cell(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4) { Grid = new CellGrid() }, cellType)]);
+            case Giving.ARecordTheRecordIndexNamesAPluginNotHolding:
+                _index.Owners[_npc.FormKey.ToString()] = new PluginAddress("Gone.esp", PluginOrigin.DataDirectory);
+                return (Patch, [], [Given(_npc)]);
+            case Giving.ARecordWhosePluginCannotBeRead:
+                File.WriteAllText(Path.Combine(_data.DataFolder, Base), "no plugin");
+                return (Patch, [], [Given(_interiorRef)]);
             case Giving.ANativeFormIdOutsideTheLightRange:
                 return ("Patch.esl", ["Master", "Small"], [Given(new Npc(FormKey.Factory("0FF000:Patch.esl"), Fallout4Release.Fallout4), "npc_")]);
             default:
@@ -202,7 +239,12 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         { Giving.ARecordNoPluginHoldsWithNoType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
         { Giving.APlacedRecordNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.ANativeFormIdOutsideTheLightRange, new PatchRefused.AsCompile(CompileRefusal.FormIdOutsideFlagLimit, "") },
-        { Giving.ARecordAsATypeOtherThanTheOneItIs, new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, "") },
+        { Giving.ARecordAsNoRecordType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
+        { Giving.APlacedRecordWhoseCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
+        { Giving.AnExteriorCellWithNoGrid, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
+        { Giving.AnExteriorCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
+        { Giving.ARecordTheRecordIndexNamesAPluginNotHolding, new PatchRefused.OfRecord(RecordEditRefusal.RecordNotFound, "") },
+        { Giving.ARecordWhosePluginCannotBeRead, new PatchRefused.OfRecord(RecordEditRefusal.RecordParseFailed, "") },
     };
 
     [Theory]
