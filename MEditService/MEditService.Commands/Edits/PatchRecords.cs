@@ -24,9 +24,9 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         IQueries index, CopySources copies, IReadOnlyDictionary<string, RecordTableSchema> schemas, RecordTypes types, string pluginName,
         CancellationToken cancel)
     {
-        private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.Ordinal);
-        private readonly HashSet<string> _containers = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _containers = new(StringComparer.OrdinalIgnoreCase);
 
         internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> All(IReadOnlyList<GivenRecord> given)
         {
@@ -46,7 +46,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
             {
                 List<string> carried = [.. _containers.Where(formKey => !_laid.ContainsKey(formKey))];
                 _containers.Clear();
-                if (CarriedIn(carried) is { } refused) return refused;
+                if (CarriedInLayer(carried) is { } refused) return refused;
             }
             return _laid.Values.ToList();
         }
@@ -80,7 +80,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
                 : new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, $"{formKey} is a {type} in {held.Name}, not the {given} given.");
         }
 
-        private PatchRefused? CarriedIn(IReadOnlyList<string> containers)
+        private PatchRefused? CarriedInLayer(IReadOnlyList<string> containers)
         {
             if (AskOwners(containers) is { } notAsked) return notAsked;
             foreach (var formKey in containers)
@@ -159,7 +159,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         private PatchRefused.OfIndex? AskOwners(IReadOnlyList<string> formKeys)
         {
             if (formKeys.Count == 0) return null;
-            if (!index.GetOwnersOfRecords([.. formKeys.Distinct(StringComparer.Ordinal)], cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
+            if (!index.GetRecordOwners(formKeys, cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
             foreach (var (formKey, held) in owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
             return null;
         }

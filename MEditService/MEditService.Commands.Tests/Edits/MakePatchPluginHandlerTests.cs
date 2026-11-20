@@ -407,6 +407,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         AFileAtItsPath,
         ARecordNamingNoFormKey,
         ARecordTwice,
+        ARecordTwiceInPluginNamesOfDifferentCase,
         ARecordNoPluginHoldsWithNoType,
         ANativeFormIdOutsideTheLightRange,
         ARecordAsNoRecordType,
@@ -430,6 +431,9 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 return (Mod, Patch, [], [new GivenRecord("{\"EditorID\": \"Nameless\"}", "npc_")]);
             case Giving.ARecordTwice:
                 return (Mod, Patch, [], [Given(_npc), Given(_npc)]);
+            case Giving.ARecordTwiceInPluginNamesOfDifferentCase:
+                var given = Given(_npc);
+                return (Mod, Patch, [], [given, given with { Text = given.Text.Replace($"\"{_npc.FormKey}\"", $"\"{_npc.FormKey.ToString().ToLowerInvariant()}\"", StringComparison.Ordinal) }]);
             case Giving.ARecordNoPluginHoldsWithNoType:
                 return (Mod, Patch, [], [Given(new Npc(FormKey.Factory($"000800:{Patch}"), Fallout4Release.Fallout4))]);
             case Giving.ARecordAsNoRecordType:
@@ -466,6 +470,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         { Giving.AFileAtItsPath, new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, "") },
         { Giving.ARecordNamingNoFormKey, new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, "") },
         { Giving.ARecordTwice, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },
+        { Giving.ARecordTwiceInPluginNamesOfDifferentCase, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },
         { Giving.ARecordNoPluginHoldsWithNoType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
         { Giving.ANativeFormIdOutsideTheLightRange, new PatchRefused.AsCompile(CompileRefusal.FormIdOutsideFlagLimit, "") },
         { Giving.ARecordAsNoRecordType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },

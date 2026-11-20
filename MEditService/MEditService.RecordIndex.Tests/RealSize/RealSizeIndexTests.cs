@@ -699,7 +699,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     {
         IReadOnlyList<PluginAddress>? owners = null;
 
-        Budgets.Ran(OneKeystroke, () => owners = Index.Queries.GetRecordOwners(Modlist.OverriddenRecord).Value(), "Reading a record's owner", Runs);
+        Budgets.Ran(OneKeystroke, () => owners = Index.Queries.GetRecordOwners([Modlist.OverriddenRecord]).Value()[Modlist.OverriddenRecord], "Reading a record's owner", Runs);
         Assert.Single(owners ?? []);
     }
 

@@ -29,7 +29,7 @@ public sealed class RecordOwnersTests
         if (@base.Compiled) SourceMods.Init(fixture.Plugins.Single(p => p.Name == Base.Name));
         if (over.Compiled) SourceMods.Init(fixture.Plugins.Single(p => p.Name == Over.Name));
         using var index = Indexes.Reconciled(fixture);
-        return index.Queries.GetRecordOwners(npc.ToString()).Value();
+        return index.Queries.GetRecordOwners([npc.ToString()]).Value()[npc.ToString()];
     }
 
     [Theory]
@@ -60,10 +60,27 @@ public sealed class RecordOwnersTests
         using var index = Indexes.Reconciled(fixture);
         var unheld = $"000FFF:{Base.Name}";
 
-        var owners = index.Queries.GetOwnersOfRecords([shared.ToString(), alone.ToString(), unheld]).Value();
+        var owners = index.Queries.GetRecordOwners([shared.ToString(), alone.ToString(), unheld]).Value();
 
         Assert.Equal(
             new Dictionary<string, IReadOnlyList<PluginAddress>> { [shared.ToString()] = [Over], [alone.ToString()] = [Base], [unheld] = [] },
             owners);
+    }
+
+    [Fact]
+    public void AFormKeyAskedInAnotherCase_OrTwiceInTwoCases_IsAnsweredItsOwnersOnce()
+    {
+        FormKey npc = default;
+        using var fixture = new PluginFixtureBuilder("records-owners-case")
+            .WithPlugin(Base.Name, mod => npc = mod.Npcs.AddNew("Npc").FormKey, origin: Base.Origin)
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+        var lower = npc.ToString().ToLowerInvariant();
+
+        var alone = index.Queries.GetRecordOwners([lower]).Value();
+        var twice = index.Queries.GetRecordOwners([npc.ToString(), lower]).Value();
+
+        Assert.Equal([Base], alone[lower]);
+        Assert.Equal([Base], Assert.Single(twice).Value);
     }
 }

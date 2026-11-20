@@ -22,7 +22,7 @@ public class HandedWrites : DispatchProxy
     public IQueries Queries => (IQueries)(object)this;
 
     /// <summary>The plugin of each FormKey's winning copy; one it does not name no plugin holds.</summary>
-    public Dictionary<string, PluginAddress> Owners { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, PluginAddress> Owners { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Why the record index cannot say who holds a record; null while it can.</summary>
     public IndexRefused? OwnersRefused { get; set; }
@@ -48,13 +48,14 @@ public class HandedWrites : DispatchProxy
             _changedOutside[origin] = plugins;
             return (IReadOnlyList<PluginAddress>)[.. before.Except(plugins).Concat(plugins.Except(before)).Select(name => new PluginAddress(name, origin))];
         }
-        if (targetMethod?.Name == nameof(IQueries.GetOwnersOfRecords))
+        if (targetMethod?.Name == nameof(IQueries.GetRecordOwners))
         {
             if (OwnersRefused is { } refused) return (Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused>)refused;
             var formKeys = (IReadOnlyCollection<string>)args.Require()[0].Require();
             OwnersAsked.Add(formKeys);
-            return Answered<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>>(formKeys.ToDictionary(
-                formKey => formKey, formKey => (IReadOnlyList<PluginAddress>)(Owners.TryGetValue(formKey, out var owner) ? [owner] : [])));
+            return Answered<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>>(formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
+                formKey => formKey, formKey => (IReadOnlyList<PluginAddress>)(Owners.TryGetValue(formKey, out var owner) ? [owner] : []),
+                StringComparer.OrdinalIgnoreCase));
         }
         if (targetMethod?.Name != nameof(IQueries.Hold)) throw new NotSupportedException($"The record index here serves no {targetMethod?.Name}.");
         var (written, cancel) = ((IReadOnlyList<HandedPlugin>?)args.Require()[0], (CancellationToken)args.Require()[1].Require());
