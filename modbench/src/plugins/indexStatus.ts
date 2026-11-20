@@ -4,7 +4,7 @@ import { isReadFailed } from '../wire/readFailed';
 import type { Reporter } from '../ports/reporter';
 import { tellingOnSurface } from '../drivingLib/tellingOnSurface';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { pluginNamed } from '../wire/reasons';
+import { quotedPluginName } from '../wire/reasons';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
 import { createReconcileNarrator, type Heard, type ReconcileNarrator } from './reconcileNarrator';
@@ -53,7 +53,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
   const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
   const tellFailedReads = tellingOnSurface(reporter, 'error');
   const tellReads = (failures: readonly PluginLoadFailure[]): void => {
-    tellFailedReads(failures.map((f) => ({ key: pluginAddressKey(f), message: `Failed to read ${pluginNamed(f)}.`, why: f.reason })));
+    tellFailedReads(failures.map((f) => ({ key: pluginAddressKey(f), message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
   };
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),

@@ -5,7 +5,7 @@ import type { CompareOverride, PluginLoadFailure } from './types';
 
 /** The panel keeps what it read while its own read fails, or mEdit cannot read a plugin it shows;
  *  a plugin the panel shows no column for is not its business (editor.md, States). */
-export function recordPanelLoadFailureMessage(
+export function recordPanelLastGoodReadMessage(
   readFailure: string | null, failures: readonly PluginLoadFailure[], shown: readonly Pick<CompareOverride, 'plugin' | 'origin'>[],
 ): string | undefined {
   const shownKeys = new Set(shown.map(o => columnKey(pluginAddressOf(o))));

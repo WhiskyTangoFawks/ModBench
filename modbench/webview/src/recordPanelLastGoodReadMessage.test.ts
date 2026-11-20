@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
+import { recordPanelLastGoodReadMessage } from './recordPanelLastGoodReadMessage';
 
 const failure = (name: string, origin: string, reason: string) => ({ name, origin, reason });
 
@@ -21,6 +21,6 @@ describe('the message saying the panel shows the last good read', () => {
       'mEdit is stopped', [failure('A.esp', 'Data/', 'truncated')], [{ plugin: 'A.esp', origin: 'Data/' }],
       'Showing the last good read: mEdit is stopped; "A.esp" (Data/): truncated'],
   ])('%s', (_case, readFailure, failures, shown, message) => {
-    expect(recordPanelLoadFailureMessage(readFailure, failures, shown)).toBe(message);
+    expect(recordPanelLastGoodReadMessage(readFailure, failures, shown)).toBe(message);
   });
 });

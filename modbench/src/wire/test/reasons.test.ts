@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { joinedSentences, lastGoodReadMessage } from '../reasons';
+import { lastGoodReadMessage } from '../reasons';
 
 describe('the message line saying a view shows the last good read', () => {
   it.each([
@@ -13,12 +13,3 @@ describe('the message line saying a view shows the last good read', () => {
   });
 });
 
-describe('statements joined into one message line', () => {
-  it.each([
-    ['ends a statement with no full stop before the next', ['Showing the last good read: bad', 'Failed to load: 503'], 'Showing the last good read: bad. Failed to load: 503'],
-    ['keeps a statement\'s own full stop', ['Showing the last good read: stopped.', 'Failed to load: 503'], 'Showing the last good read: stopped. Failed to load: 503'],
-    ['leaves the last statement as it is', ['Failed to load: 503'], 'Failed to load: 503'],
-  ])('%s', (_case, statements, line) => {
-    expect(joinedSentences(statements)).toBe(line);
-  });
-});

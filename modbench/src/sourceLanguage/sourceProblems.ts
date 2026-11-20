@@ -9,7 +9,7 @@ import { locationOf, type Segment } from './sourceText';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, askingWhenNotLate, settling, type Asked, type Feed, type Position } from './feedShape';
 import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
-import { lastGoodReadMessage, pluginNamed } from '../wire/reasons';
+import { lastGoodReadMessage, quotedPluginName } from '../wire/reasons';
 import { answerOf } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -70,7 +70,7 @@ function placedPlugin(answer: PluginProblems, { sourceFiles }: SourceProblemsDep
   const files = sourceFiles(plugin.origin);
   const key = pluginAddressKey(plugin);
   const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
-  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${pluginNamed(plugin)}.`, why, plugin: pluginNamed(plugin), told: files === undefined || failureKind !== 'LaterRead' };
+  const unplaced = why == null ? undefined : { key, message: `The Problems panel keeps the last problems of ${quotedPluginName(plugin)}.`, why, plugin: quotedPluginName(plugin), told: files === undefined || failureKind !== 'LaterRead' };
   if (files === undefined) return [key, undefined, unplaced];
   const contribution: Contribution = { links: new Map(), stops: new Map() };
   const byPath = new Map<string, SourceProblem[]>();
