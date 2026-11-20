@@ -10,7 +10,7 @@ export interface StatusBar extends vscode.Disposable {
   ready(activePlugins: number): void;
   /** While the snapshot is not indexed. */
   showMEditState(): void;
-  /** The words the item shows, without its icon, while the snapshot is not indexed. */
+  /** The words the item shows, without its icon, unless it says Ready. */
   standing(): string | undefined;
 }
 

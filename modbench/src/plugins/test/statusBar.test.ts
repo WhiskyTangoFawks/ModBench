@@ -91,33 +91,24 @@ describe('the status bar, one item saying what mEdit is doing', () => {
     expect(theItem().text).toBe('$(plug) mEdit: Running');
   });
 
-  it.each([
-    ['before the snapshot is indexed', undefined, 'mEdit is Running'],
-    ['once it is indexed', 2, undefined],
-  ] as const)('tells the agent the status bar\'s words only %s', (_case, ready, text) => {
-    const client = new InMemoryMEditClient();
-    client.setStatus('running');
-    const bar = createStatusBar(client, reporterFor);
-    if (ready !== undefined) bar.ready(ready);
-
-    expect(bar.standing()).toBe(text);
-  });
-
   describe('while the record index fills', () => {
     const FILLING = { done: 1, total: 3, version: 1, settled: false };
+    const INDEXING = ['$(sync~spin) mEdit: Indexing (1 of 3 plugins)', 'mEdit is Indexing (1 of 3 plugins)'];
 
     it.each([
-      ['a first index', undefined],
-      ['a reconcile after Ready', 2],
-    ] as const)('names it with the count, to the item and the agent alike, during %s', (_case, ready) => {
+      ['before the snapshot is indexed', undefined, undefined, ['$(plug) mEdit: Running', 'mEdit is Running']],
+      ['once it is indexed', 2, undefined, ['$(check) mEdit: Ready (2 plugins)', undefined]],
+      ['during a first index', undefined, FILLING, INDEXING],
+      ['during a reconcile after Ready', 2, FILLING, INDEXING],
+    ] as const)('tells the agent the item\'s words, unless it says Ready: %s', (_case, ready, progress, shown) => {
       const client = new InMemoryMEditClient();
       client.setStatus('running');
       const bar = createStatusBar(client, reporterFor);
       if (ready !== undefined) bar.ready(ready);
 
-      client.setProgress(FILLING);
+      client.setProgress(progress);
 
-      expect([theItem().text, bar.standing()]).toEqual(['$(sync~spin) mEdit: Indexing (1 of 3 plugins)', 'mEdit is Indexing (1 of 3 plugins)']);
+      expect([theItem().text, bar.standing()]).toEqual(shown);
     });
 
     it.each([
