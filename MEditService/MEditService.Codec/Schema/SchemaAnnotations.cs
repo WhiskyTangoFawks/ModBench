@@ -698,10 +698,8 @@ public sealed record SchemaAnnotations(
                 .Select(t => $"{nameof(CycleTruncations)}: {t} never stops the walk or lets a loop through"),
             .. EmptySubSchemaTypes.Where(t => !observed.EmptySubSchemas.Contains(t)).Order(StringComparer.Ordinal)
                 .Select(t => $"{nameof(EmptySubSchemaTypes)}: {t} never comes out empty in the walk"),
-            .. UnkeyedSortedArrays
-                .Where(row => !observed.ListsWalked.Any(walked => walked.Declarer.Name == row.TypeName && walked.Member == row.MemberName))
-                .Select(row => $"{nameof(UnkeyedSortedArrays)}: {row.TypeName}.{row.MemberName} is no array the walk meets")
-                .Order(StringComparer.Ordinal),
+            .. Unwalked(nameof(KeyedArrays), KeyedArrays.Keys, observed),
+            .. Unwalked(nameof(UnkeyedSortedArrays), UnkeyedSortedArrays, observed),
             .. FormatSortedLists.SelectMany(sorted => observed.ListsWalked
                     .Where(walked => walked.Member == sorted.Member && walked.Declarer != sorted.Declarer
                         && walked.Declarer.IsAssignableFrom(sorted.Declarer) && TakesMove(walked.Declarer, walked.Member))
@@ -718,6 +716,13 @@ public sealed record SchemaAnnotations(
                 $"— fix or delete each entry: {string.Join("; ", idle)}");
         }
     }
+
+    private static IEnumerable<string> Unwalked(
+        string table, IEnumerable<(string TypeName, string MemberName)> rows, WalkObservations observed) =>
+        rows
+            .Where(row => !observed.ListsWalked.Any(walked => walked.Declarer.Name == row.TypeName && walked.Member == row.MemberName))
+            .Select(row => $"{table}: {row.TypeName}.{row.MemberName} is no array the walk meets")
+            .Order(StringComparer.Ordinal);
 }
 
 /// <summary>What the walk did with the rows that claim something about the walk itself. Every

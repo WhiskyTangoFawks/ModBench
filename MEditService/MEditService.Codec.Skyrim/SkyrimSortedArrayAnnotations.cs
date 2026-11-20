@@ -23,8 +23,6 @@ internal static class SkyrimSortedArrayAnnotations
         ("IActivateParentsGetter", "Parents", ["Reference"]),
 
         ("IModelGetter", "AlternateTextures", ["Name", "Index"]),
-        ("IModelBehaviorGetter", "AlternateTextures", ["Name", "Index"]),
-        ("IModelBodyTextureGetter", "AlternateTextures", ["Name", "Index"]),
 
         ("IConstructibleObjectGetter", "Items", ["Item.Item"]),
         ("IContainerGetter", "Items", ["Item.Item"]),
@@ -42,12 +40,13 @@ internal static class SkyrimSortedArrayAnnotations
         ("INpcSoundTypeGetter", "Sounds", ["Sound"]),
         ("IRaceGetter", "Attacks", ["AttackEvent"]),
         ("IRaceGetter", "MovementTypes", ["MovementType"]),
-        ("IHeadDataGetter", "HeadParts", ["Number"]),
         ("IFactionGetter", "Relations", ["Target"]),
         ("IFactionGetter", "Ranks", ["Number"]),
         ("IBodyPartDataGetter", "Parts", ["PartNode"]),
 
         ("IAPerkEffectGetter", "Conditions", ["RunOnTabIndex"]),
+        // xEdit keys an effect by its header, then its effect data and function parameters. Mutagen holds the effect type and data as the union's leaf, which no key member reaches.
+        ("IPerkGetter", "Effects", ["Rank", "Priority"]),
         ("IQuestGetter", "Stages", ["Index"]),
         ("IQuestGetter", "Objectives", ["Index"]),
 
@@ -70,6 +69,7 @@ internal static class SkyrimSortedArrayAnnotations
         ("IRegionSoundsGetter", "Sounds", ["Sound"]),
         ("IImpactDataSetGetter", "Impacts", ["Material"]),
         ("IMagicEffectGetter", "Sounds", ["Type"]),
+        ("IDefaultObjectManagerGetter", "Objects", ["Use"]),
     ];
 
     /// <summary>What a wbStructExSK adds to its key. A leveled spell's entries carry no COED, so their

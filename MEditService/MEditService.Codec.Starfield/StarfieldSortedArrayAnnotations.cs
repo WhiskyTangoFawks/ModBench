@@ -79,6 +79,8 @@ internal static class StarfieldSortedArrayAnnotations
         ("IBodyPartDataGetter", "Parts", ["PartNode"]),
 
         ("IAPerkEffectGetter", "Conditions", ["RunOnTabIndex"]),
+        // xEdit keys an effect by its header, then its effect data. Mutagen holds the effect type and data as the union's leaf, which no key member reaches.
+        ("IPerkRankGetter", "Effects", ["Rank", "Priority"]),
         ("IQuestGetter", "Stages", ["Index"]),
 
         ("ILocationGetter", "AddedPersistLocationReferences", ["Actor"]),
@@ -98,9 +100,12 @@ internal static class StarfieldSortedArrayAnnotations
         ("IImpactDataSetGetter", "Impacts", ["Material"]),
         ("ILensFlareGetter", "Sprites", ["LensFlareSpriteId"]),
         ("IStaticCollectionGetter", "Parts", ["Static"]),
+        ("IDefaultObjectManagerGetter", "Objects", ["Use"]),
         ("IAmbientSoundEventGetter", "PlanetCustomizations", ["Planet", "SwitchState"]),
         ("IBiomeGetter", "ProceduralObjectGeneration", ["ProceduralObjectGenerationMaskName"]),
         ("IBiomeProceduralObjectGenerationGetter", "Objects", ["PackIn"]),
+        // Mutagen joins xEdit's union elements into one: the main data, the alternate and the noise textures.
+        ("IBiomeGetter", "Terrain", ["Main"]),
         ("IVehicleMaterialTableGetter", "AudioRules", ["Rule"]),
         ("IVehicleMaterialTableGetter", "VfxRules", ["Rule"]),
         ("IVehicleMaterialTableGetter", "FrictionRules", ["Rule"]),

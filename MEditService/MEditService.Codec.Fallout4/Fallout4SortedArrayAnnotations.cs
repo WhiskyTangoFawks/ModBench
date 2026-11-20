@@ -63,12 +63,13 @@ internal static class Fallout4SortedArrayAnnotations
         ("INpcGetter", "FaceTintingLayers", ["Index"]),
         ("IRaceGetter", "Attacks", ["AttackEvent"]),
         ("IRaceGetter", "MovementDataOverrides", ["MovementType"]),
-        ("IHeadDataGetter", "HeadParts", ["Number"]),
         ("IFactionGetter", "Relations", ["Target"]),
         ("IFactionGetter", "Ranks", ["Number"]),
         ("IBodyPartDataGetter", "Parts", ["PartNode"]),
 
         ("IAPerkEffectGetter", "Conditions", ["RunOnTabIndex"]),
+        // xEdit keys an effect by its header, then its effect data. Mutagen holds the effect type and data as the union's leaf, which no key member reaches.
+        ("IPerkGetter", "Effects", ["Rank", "Priority"]),
         ("IQuestGetter", "Stages", ["Index"]),
 
         ("ILocationGetter", "PersistentActorReferencesAdded", ["Actor"]),
@@ -92,6 +93,7 @@ internal static class Fallout4SortedArrayAnnotations
         ("ILensFlareGetter", "Sprites", ["LensFlareSpriteId"]),
         ("IMaterialSwapGetter", "Substitutions", ["OriginalMaterial"]),
         ("IStaticCollectionGetter", "Parts", ["Static"]),
+        ("IDefaultObjectManagerGetter", "Objects", ["Use"]),
     ];
 
     /// <summary>What a wbStructExSK adds to its key, which orders the elements sharing a key before
