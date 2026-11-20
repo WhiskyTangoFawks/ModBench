@@ -1,23 +1,16 @@
-// ADR-0019; plugins.md, Reporting, story 1.
-
 import type { PluginLoadFailure } from '../client';
+import type { Reporter } from '../ports/reporter';
+import { pluginAddressKey } from '../wire/pluginAddress';
 
-export interface FailureSink {
-  log: (msg: string) => void;
-  warn: (msg: string) => void;
-}
-
-export function reportSkippedPlugins(
-  failures: readonly PluginLoadFailure[],
-  sink: FailureSink,
-): void {
-  if (failures.length === 0) return;
-  for (const f of failures) {
-    sink.log(`skipped plugin '${f.name}': ${f.reason}`);
-  }
-  const names = failures.map((f) => f.name).join(', ');
-  sink.warn(
-    `${failures.length} plugin(s) were skipped — their records are NOT loaded: ${names}. ` +
-      'See the Modbench output for details.',
-  );
+/** common.md, States, stories 2 and 6: one Output line for each plugin's failed read, again only
+ *  when its reason changes. The views say whether its rows still show. */
+export function tellFailedReads(reporter: Pick<Reporter, 'shownOnSurface'>): (failures: readonly PluginLoadFailure[]) => void {
+  let told = new Set<string>();
+  const keyOf = (f: PluginLoadFailure): string => JSON.stringify([pluginAddressKey(f), f.reason]);
+  return (failures) => {
+    for (const f of failures) {
+      if (!told.has(keyOf(f))) reporter.shownOnSurface('error', `Failed to read "${f.name}" (${f.origin}).`, f.reason);
+    }
+    told = new Set(failures.map(keyOf));
+  };
 }

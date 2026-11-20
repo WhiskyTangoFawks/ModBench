@@ -178,15 +178,14 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.registerRepositories).toHaveBeenCalledOnce();
   });
 
-  it('warns and logs a skipped plugin by name', async () => {
+  it('tells a plugin\'s failed read in the Output, with no notification', async () => {
     const { client, deps, handedOver } = followed();
 
     await tell(client, { total: 2, failures: [badFailure] });
     await handedOver();
 
-    expect(deps.reporter.reports.map((report) => report.severity)).toEqual(['warning']);
-    expect(deps.reporter.reports[0]?.message).toContain('Bad.esp');
-    expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('Bad.esp'));
+    expect(deps.reporter.shownFailures).toEqual([{ severity: 'error', message: 'Failed to read "Bad.esp" (SomeMod).', detail: 'RACE parse' }]);
+    expect(deps.reporter.reports).toEqual([]);
   });
 
   it('hands the tree the record index\'s own failures and counts the snapshot\'s total in the log', async () => {

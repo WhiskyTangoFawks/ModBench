@@ -179,7 +179,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     post(plugin, { op: 'set', path: hops, value });
   }, [post]);
 
-  const loadFailureMessage = recordPanelLoadFailureMessage(loadFailures, result?.overrides ?? []);
+  const loadFailureMessage = recordPanelLoadFailureMessage(error, loadFailures, result?.overrides ?? []);
 
   const rows = useMemo(
     () => result
@@ -386,10 +386,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600 }}>
         {`${result.recordTypeName} ${title}`}
       </div>
-      {error && <div style={messageStyle}>Showing the last good read: {error}</div>}
+      {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {/* See recordPanelIncompleteMessage. Clears itself with no user action once refresh() next
           lands a settled `comparisonComplete`. */}
-      {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {incompleteMessage && <div style={messageStyle}>{incompleteMessage}</div>}
       {fileCopyAlone && <div style={messageStyle}>This file's plugin is not active: no other copy is compared.</div>}
       {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport space (the

@@ -1,31 +1,34 @@
-import { describe, it, expect, vi } from 'vitest';
-import { reportSkippedPlugins } from '../pluginFailures';
+import { describe, it, expect } from 'vitest';
+import { tellFailedReads } from '../pluginFailures';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginLoadFailure } from '../../client';
 
-function failure(name: string, reason = 'could not be parsed'): PluginLoadFailure {
-  return { name, origin: 'SomeMod', reason };
-}
+const failure = (name: string, origin: string, reason: string): PluginLoadFailure => ({ name, origin, reason });
+const told = (name: string, origin: string, reason: string) =>
+  ({ severity: 'error', message: `Failed to read "${name}" (${origin}).`, detail: reason });
 
-describe('reportSkippedPlugins', () => {
-  it('says nothing when nothing was skipped', () => {
-    const sink = { log: vi.fn(), warn: vi.fn() };
+describe('the Output line for each plugin whose read failed', () => {
+  it.each([
+    ['tells nothing when no read failed', [[]], []],
+    ['tells each failed read once, naming its plugin by filename and origin, and the reason',
+      [[failure('A.esp', 'ModA', 'truncated'), failure('A.esp', 'ModB', 'bad header')]],
+      [told('A.esp', 'ModA', 'truncated'), told('A.esp', 'ModB', 'bad header')]],
+    ['tells a failure that holds across reconciles once',
+      [[failure('A.esp', 'ModA', 'truncated')], [failure('A.esp', 'ModA', 'truncated')]],
+      [told('A.esp', 'ModA', 'truncated')]],
+    ['tells a failure again when its reason changes',
+      [[failure('A.esp', 'ModA', 'truncated')], [failure('A.esp', 'ModA', 'bad header')]],
+      [told('A.esp', 'ModA', 'truncated'), told('A.esp', 'ModA', 'bad header')]],
+    ['tells a failure again when it recurs after a good read',
+      [[failure('A.esp', 'ModA', 'truncated')], [], [failure('A.esp', 'ModA', 'truncated')]],
+      [told('A.esp', 'ModA', 'truncated'), told('A.esp', 'ModA', 'truncated')]],
+  ])('%s', (_case, reconciles, lines) => {
+    const reporter = recordingReporter();
+    const tell = tellFailedReads(reporter);
 
-    reportSkippedPlugins([], sink);
+    reconciles.forEach(tell);
 
-    expect(sink.log).not.toHaveBeenCalled();
-    expect(sink.warn).not.toHaveBeenCalled();
-  });
-
-  it('warns naming every skipped plugin and the Modbench output, and logs each reason', () => {
-    const sink = { log: vi.fn(), warn: vi.fn() };
-
-    reportSkippedPlugins([failure('A.esp'), failure('B.esp', 'unreadable header')], sink);
-
-    expect(sink.log).toHaveBeenCalledWith("skipped plugin 'A.esp': could not be parsed");
-    expect(sink.log).toHaveBeenCalledWith("skipped plugin 'B.esp': unreadable header");
-    expect(sink.warn).toHaveBeenCalledWith(
-      '2 plugin(s) were skipped — their records are NOT loaded: A.esp, B.esp. '
-        + 'See the Modbench output for details.',
-    );
+    expect(reporter.shownFailures).toEqual(lines);
+    expect(reporter.reports).toEqual([]);
   });
 });

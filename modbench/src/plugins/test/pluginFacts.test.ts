@@ -599,15 +599,25 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     );
   });
 
+  const truncated = failure('Could not read this plugin (truncated).');
+  const reconciledFailing = (rowsFrom: PluginMetadata['rowsFrom']): Scene => (facts) => facts.reconciled([held({ rowsFrom })], [truncated], [], []);
+  const tickedFailing = (rowsFrom: PluginMetadata['rowsFrom']): Scene => (facts) => {
+    facts.refreshed([held({ rowsFrom })]);
+    facts.indexed([], [truncated]);
+  };
   it.each([
-    ['while its rows stand, says it shows the last good read and expands into them', 'Binary',
+    ['while its rows stand, says it shows the last good read and expands into them', reconciledFailing('Binary'),
       'Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).', RECORDS],
-    ['with no rows left, says no last good read and expands into the error row', null,
+    ['with no rows left, says no last good read and expands into the error row', reconciledFailing(null),
       undefined, errorOf('Could not read this plugin (truncated).')],
-  ] as const)('a plugin whose read failed, %s', (_label, rowsFrom, message, expansion) => {
+    ['while its rows stand through a reconcile\'s tick, says it shows the last good read and expands into them', tickedFailing('Binary'),
+      'Showing the last good read: "A.esp" (SomeMod): Could not read this plugin (truncated).', RECORDS],
+    ['with no rows left through a reconcile\'s tick, says no last good read and expands into the error row', tickedFailing(null),
+      undefined, errorOf('Could not read this plugin (truncated).')],
+  ] as const)('a plugin whose read failed, %s', (_label, scene, message, expansion) => {
     const facts = new PluginFacts();
 
-    facts.reconciled([held({ rowsFrom })], [failure('Could not read this plugin (truncated).')], [], []);
+    scene(facts);
 
     expect(facts.readFailureMessage()).toBe(message);
     expect(facts.expansion(A)).toEqual(expansion);

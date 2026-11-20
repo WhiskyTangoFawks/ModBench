@@ -4,13 +4,12 @@ import { isReadFailed } from '../wire/readFailed';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
-import { reportSkippedPlugins } from './pluginFailures';
+import { tellFailedReads } from './pluginFailures';
 import { createReconcileNarrator, type Heard, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
 interface ReconciledDeps {
-  log: (msg: string) => void;
-  warn: (msg: string) => void;
+  tellReads: (failures: readonly PluginLoadFailure[]) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
@@ -21,7 +20,7 @@ interface ReconciledDeps {
 // Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
 // so conflicts are computed.
 async function settleReconciled({ progress, failures }: Heard, deps: ReconciledDeps): Promise<void> {
-  reportSkippedPlugins(failures, deps);
+  deps.tellReads(failures);
   deps.registerRepositories();
   const active = await deps.applyReconciled(failures, progress.total);
   if (active !== undefined) deps.statusBar.ready(active);
@@ -40,7 +39,7 @@ interface IndexStatusDeps {
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
   registerRepositories: () => void;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
-  reporter: Reporter;
+  reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
 // plugins.md, States 2–4 and 6: the record index status the stream carries drives the Plugins view,
@@ -50,8 +49,7 @@ export type FollowedNarrator = ReconcileNarrator & { hearNow(): Promise<void> };
 
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNarrator } & vscode.Disposable {
   const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
-  const info = (m: string) => log('info', `[loadOrder] ${m}`);
-  const warn = (m: string) => reporter.report('warning', m);
+  const tellReads = tellFailedReads(reporter);
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
     applyIndexed: (indexedPlugins, failures) => {
@@ -63,7 +61,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
       statusBar.showMEditState();
     },
     settle: (heard) => settleReconciled(heard, {
-      log: info, warn, statusBar, registerRepositories,
+      tellReads, statusBar, registerRepositories,
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),

@@ -416,8 +416,8 @@ export class PluginFacts {
   expansion(address: PluginAddress): Expansion {
     if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
     const failure = this.reachableFailures.get(address)?.reason;
-    if (this.isHeld(address) && (failure === undefined || this.rowsStand(address))) return { kind: 'records' };
-    if (failure !== undefined) return { kind: 'error', message: failure };
+    if (failure !== undefined) return this.rowsStand(address) ? { kind: 'records' } : { kind: 'error', message: failure };
+    if (this.isHeld(address)) return { kind: 'records' };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
   }
