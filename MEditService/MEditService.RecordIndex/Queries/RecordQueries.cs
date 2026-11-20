@@ -465,7 +465,7 @@ internal sealed class RecordQueries(
     {
         using var reads = RequireReads(cancel, inOneSnapshot: true);
         if (reads.GetCopyText(formKey, plugin) is not var (identity, body)) return null;
-        return (identity, body, reads.GetCarryingRecord(formKey, plugin) ?? identity);
+        return (identity, body, reads.GetCarryingRecord(identity, plugin) ?? identity);
     }
 
     // A compiled plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
