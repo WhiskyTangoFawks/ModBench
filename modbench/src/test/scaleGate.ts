@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import { vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Instance, type InstanceSubscriber, type InstanceValue } from '../instanceLoader/instance';
@@ -63,6 +63,9 @@ async function syntheticInstance(mods: number): Promise<string> {
     await writeFile(join(root, 'mods', name, `${name}.esp`), 'plugin');
     await Promise.all(['a.dds', 'b.dds', 'c.dds'].map((file) => writeFile(join(root, 'mods', name, 'textures', name, file), file)));
   }));
+  // A modlist's files were written long before a gesture, each stamp old enough to trust.
+  const long = new Date(Date.now() - 3_600_000);
+  await Promise.all([root, ...(await readdir(root, { recursive: true })).map((path) => join(root, path))].map((path) => utimes(path, long, long)));
   return root;
 }
 

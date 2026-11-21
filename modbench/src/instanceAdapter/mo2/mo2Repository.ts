@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path';
 import { commitFolder } from '../commitFolder';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, GIT_DIR, ignoreSkippedLink, listDirByStamp, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
+import { exists, existsByStamp, get, GIT_DIR, ignoreSkippedLink, listDirByStamp, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../fileContents/hashIndex';
 import { isBareName, type DeployedPath, type FileRead, type GameFile, type InstanceAdapter } from '../instanceAdapter';
@@ -125,7 +125,7 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
         join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
         hashIndexDir(instanceRoot), sourceRootDir(instanceRoot), ...Object.values(sortingRuleFilePaths(instanceRoot)),
       ];
-      const held = (await Promise.all(fixed.map(async (path) => (await exists(path) ? [path] : [])))).flat();
+      const held = (await Promise.all(fixed.map(async (path) => (await existsByStamp(path) ? [path] : [])))).flat();
       return {
         present: [...held, ...inFolders.flat()],
         owns: (path) => fixed.includes(path) || isManifestPath(instanceRoot, path),

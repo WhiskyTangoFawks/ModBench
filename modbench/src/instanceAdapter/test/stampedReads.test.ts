@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -34,6 +33,12 @@ const modifiedLater = async (path: string): Promise<void> => {
   await utimes(path, later, later);
 };
 const namesOf = async (folder: string, list = listDirByStamp): Promise<string[]> => (await list(folder)).map((entry) => entry.name).sort();
+const NOTES = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
+// Each fact of `landed` that `again` holds as another object, the notes for the Output aside.
+const factsMoved = <R extends object>(landed: R, again: R): string[] => {
+  const now = new Map(Object.entries(again));
+  return Object.entries(landed).filter(([fact, held]) => !NOTES.has(fact) && now.get(fact) !== held).map(([fact]) => fact);
+};
 
 describe('a folder listed and a file parsed by their stamps', () => {
   let root: string;
@@ -344,10 +349,9 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     const first = await adapter.reading(CHECK_THE_DISK);
 
-    const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false }, first)));
+    const again = await adapter.reading({ named: [], disk: false }, first);
 
-    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
-    expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+    expect(factsMoved(first, again)).toEqual([]);
   });
 
   it.each([
@@ -365,10 +369,19 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     await writeFile(path, text);
     await modifiedLater(path);
 
-    const again = new Map(Object.entries(await adapter.reading({ named: [path], disk: false }, landed)));
+    const again = await adapter.reading({ named: [path], disk: false }, landed);
 
-    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
-    expect(Object.entries(landed).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+    expect(factsMoved(landed, again)).toEqual([]);
+  });
+
+  it('names unchanged a file nothing wrote, its stamp old enough to trust', async () => {
+    const adapter = managerOver(instance);
+    const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    await adapter.reading(CHECK_THE_DISK);
+    const landed = await adapter.reading(CHECK_THE_DISK);
+
+    expect((await adapter.reading({ named: [modlist], disk: false }, landed)).unchangedFiles).toEqual([modlist]);
   });
 
   it('names unchanged a file rewritten with its own bytes', async () => {
@@ -482,7 +495,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       for (const io of IO) io.mockClear();
       await adapter.reading({ named: [named], disk: false });
       const touched = IO.flatMap((io) => io.mock.calls.flatMap((call: unknown[]) => (typeof call[0] === 'string' ? [call[0]] : [])));
-      return touched.filter((path) => path !== named && path !== dirname(named) && existsSync(path));
+      return touched.filter((path) => path !== named && path !== dirname(named));
     };
 
     it('reads, lists and stats nothing of a repository with a source mod but the file a re-read is named and its folder', async () => {

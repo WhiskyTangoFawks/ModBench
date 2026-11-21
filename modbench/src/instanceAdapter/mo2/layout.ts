@@ -178,8 +178,12 @@ const EVERYTHING_BELOW = '**';
 export const FIRST_LEVEL = '?*';
 
 export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] => [
-  // A profile switch rewrites the settings and nothing else; a repository appears at, or vanishes from, the root.
-  { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${SUBMODULES_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
+  // A profile switch rewrites the settings and nothing else; a repository, and each file and folder a publisher keeps out,
+  // appears at, or vanishes from, the root.
+  {
+    base: instanceRoot,
+    pattern: `{${[SETTINGS_FILE_NAME, IGNORE_LIST_FILE, SUBMODULES_FILE, GIT_DIR, RECORD_INDEX, HASH_INDEX, SOURCE_MODS_FOLDER, ...Object.values(SORTING_RULE_FILES)].join(',')}}`,
+  },
   { base: modsDir(instanceRoot), pattern: EVERYTHING_BELOW },
   { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
   { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },

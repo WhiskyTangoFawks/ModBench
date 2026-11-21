@@ -196,7 +196,8 @@ export function originFilesReader(
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   // Every walk it answers, kept to answer again where its stamps cover it.
   const walked = new Map<string, Walked | undefined>();
-  // A reading hands its own mod folders, so a new one starts a reading. What any caller asks for until the next counts as used.
+  // A reading hands its own mod folders, so other folders start a reading, and what any caller asks for until the next counts
+  // as used. Readings that overlap each start one in turn, so a walk one still asks for can be forgotten and made again.
   const readings = new Map<boolean, { readonly folders: ModFolders; readonly used: Set<string> }>();
 
   const started = (rootOnly: boolean, folders: ModFolders): void => {
