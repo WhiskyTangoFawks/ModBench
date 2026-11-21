@@ -33,7 +33,7 @@ import {
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, type FilesSetAside, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
-import { nameWrites } from '../repositoriesLib/writesTold';
+import { leaveWritesUnnamed, nameWrites } from '../repositoriesLib/writesTold';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -67,8 +67,6 @@ interface HttpMEditClientDeps {
   fetch?: (input: Request) => Promise<Response>;
   log?: Log;
   listenerThrows: ListenerThrows;
-  /** Called by each write mEdit refused, which may have written files no answer names. */
-  leaveWritesUnnamed: () => void;
   timeoutMs?: number;
   reconnectDelayMs?: number;
 }
@@ -138,14 +136,12 @@ class HttpMEditClient implements MEditClient {
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   private readonly handOver: UnsavedHandOver;
   private readonly changes: RecordIndexChanges;
-  private readonly leaveWritesUnnamed: () => void;
   private sweepsAwaited = 0;
   private mEditSequence = 0;
   private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
   private readonly progress = trackProgress(() => this.recordIndexProgress);
 
   constructor(deps: HttpMEditClientDeps) {
-    this.leaveWritesUnnamed = deps.leaveWritesUnnamed;
     this.log = deps.log ?? SILENT_LOG;
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
     this.fetchImpl = deps.fetch ?? createUnlimitedFetch();
@@ -280,7 +276,7 @@ class HttpMEditClient implements MEditClient {
     }
     const answer = await this.sendNow(spec);
     if ('written' in spec) {
-      if (isRefused(answer)) this.leaveWritesUnnamed();
+      if (isRefused(answer)) leaveWritesUnnamed();
       else nameWrites(spec.written(answer));
     }
     return answer;

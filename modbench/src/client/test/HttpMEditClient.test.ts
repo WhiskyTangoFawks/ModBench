@@ -23,9 +23,9 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Partial<Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log' | 'leaveWritesUnnamed'>> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Partial<Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log'>> = {},
 ) {
-  return createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+  return createMEditClient({ listenerThrows: IGNORED_THROWS,
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(answered(health === 'up')),
@@ -332,12 +332,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   };
 
   it.each(posts)('$name names the files mEdit answers it wrote, unless it only answers changes', async ({ name, verb, answer }) => {
-    const leaveWritesUnnamed = vi.fn();
-    const client = makeClient(() => answers(200, answer)(), { leaveWritesUnnamed });
+    const client = makeClient(() => answers(200, answer)());
 
-    const { named } = await naming(() => verb(client));
-
-    expect([named, leaveWritesUnnamed.mock.calls.length]).toEqual([answeringChangesOnly.includes(name) ? [] : WRITTEN, 0]);
+    expect(await naming(() => verb(client))).toEqual({ named: answeringChangesOnly.includes(name) ? [] : WRITTEN, unnamed: 0 });
   });
 
   const writing = [
@@ -351,11 +348,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   });
 
   it.each(writing)('$name refused leaves the files it may have written unnamed', async ({ verb }) => {
-    const leaveWritesUnnamed = vi.fn();
-
-    const { named } = await naming(() => verb(makeClient(() => answers(500, { detail: 'git failed' })(), { leaveWritesUnnamed })));
-
-    expect([named, leaveWritesUnnamed.mock.calls.length]).toEqual([[], 1]);
+    expect(await naming(() => verb(makeClient(() => answers(500, { detail: 'git failed' })())))).toEqual({ named: [], unnamed: 1 });
   });
 
   it.each([
@@ -918,7 +911,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
   it('stays stopped after a crash, telling its exit once: a snapshot answers backendFailed', async () => {
     const children: EventEmitter[] = [];
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
@@ -953,7 +946,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ]);
     const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
     child.stdin.on('finish', () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); });
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
         pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(true)),
@@ -1038,7 +1031,7 @@ describe('HttpMEditClient — a read before mEdit has started', () => {
   it('fails as unreachable, and files the reason in the log alone', async () => {
     const log = leveledLog();
     const fetch = vi.fn();
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined, backendLog: fakeLogChannel(), fetch, log });
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(), fetch, log });
 
     await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
     expect(fetch).not.toHaveBeenCalled();
@@ -1075,7 +1068,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
       state.healthy = true;
       return { kill: vi.fn(), on: vi.fn(), stdin: new PassThrough(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
     });
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
         checkHealth: () => Promise.resolve(answered(state.healthy)),

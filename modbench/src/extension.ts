@@ -12,7 +12,7 @@ import { surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites, type Man
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
-import { leaveWritesUnnamed, diskCheckedBy, writesToldTo } from './repositoriesLib/writesTold';
+import { diskCheckedBy, nameWrites, writesToldTo } from './repositoriesLib/writesTold';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
@@ -312,7 +312,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerDeployCommands({
     commands: deployCommands({
       adapter,
-      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt, leaveWritesUnnamed),
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt, nameWrites),
       deploymentFolder: deploymentFolderSetting,
     }),
     instance, reporterFor,
@@ -403,7 +403,7 @@ function start(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')), leaveWritesUnnamed });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
   context.subscriptions.push(registerArchiveFiles(meditClient));
   const focusedView = createFocusedView();
 
