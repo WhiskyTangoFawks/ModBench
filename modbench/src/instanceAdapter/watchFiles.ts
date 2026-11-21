@@ -4,20 +4,19 @@ import * as vscode from 'vscode';
 import type { HeldFolderWatch } from './heldFolders';
 import type { Subscription } from './instanceAdapter';
 
-/** Each change beneath `base` that matches `glob`, created, changed or deleted alike. */
-export function watchFiles(base: string, glob: string, onChange: (path: string) => void, held?: HeldFolderWatch): Subscription {
+/** Each change beneath `base` that matches `glob`, created, changed or deleted alike; `changed` when VS Code reported it as one. */
+export function watchFiles(base: string, glob: string, onChange: (path: string, changed: boolean) => void, held?: HeldFolderWatch): Subscription {
   const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(base), glob));
   void held?.open();
-  const heard = (uri: vscode.Uri): void => onChange(uri.fsPath);
-  const madeAnew = (uri: vscode.Uri): void => {
-    heard(uri);
+  const madeAnew = (changed: boolean) => (uri: vscode.Uri): void => {
+    onChange(uri.fsPath, changed);
     void held?.created(uri.fsPath);
   };
-  watcher.onDidCreate(madeAnew);
+  watcher.onDidCreate(madeAnew(false));
   // VS Code reports a folder deleted and made again in one burst as changed.
-  watcher.onDidChange(madeAnew);
+  watcher.onDidChange(madeAnew(true));
   watcher.onDidDelete((uri) => {
-    heard(uri);
+    onChange(uri.fsPath, false);
     held?.removed(uri.fsPath);
   });
   return {

@@ -1,6 +1,9 @@
 // MO2's watch, armed while anyone listens: VS Code's file watcher on the instance, the downloads folder and the game
 // folder's files Mod Management reads; the game-folder setting; VS Code's git.
 
+import { join } from 'node:path';
+import { pathKey } from '../../repositoriesLib/stampedReads';
+import { GIT_DIR } from '../files';
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
 import type { ChangeListener, Subscription, UnwatchedFolder, WatcherExclude } from '../instanceAdapter';
@@ -48,7 +51,13 @@ export function mo2Watch(
   const onSourceChange = (path: string): void => {
     if (isRepositoryChange(path)) changed(path);
   };
-  const onChangeFor = (base: string): ((path: string) => void) => (base === sources ? onSourceChange : changed);
+  // A write inside .git can report the folder itself changed, as Windows does; only its making or removal is the root's.
+  const dotGit = pathKey(join(instanceRoot, GIT_DIR));
+  const onRootChange = (path: string, asChanged = false): void => {
+    if (!asChanged || pathKey(path) !== dotGit) changed(path);
+  };
+  const onChangeFor = (base: string): ((path: string, asChanged?: boolean) => void) =>
+    (base === sources ? onSourceChange : base === instanceRoot ? onRootChange : changed);
   const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
   const heldFor = (base: string, glob: string): HeldFolderWatch | undefined => {
     const key = heldKey(base, glob);
