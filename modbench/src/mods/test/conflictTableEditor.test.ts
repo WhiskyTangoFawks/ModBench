@@ -331,6 +331,29 @@ describe('a mod\'s conflict table, open in a tab', () => {
     expect(copiesDouble.asked).toEqual([['a.dds'], ['a.dds']]);
   });
 
+  it('on Windows, reads its copies again when a change names one in another case, as the watcher spells a path', async () => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const held = (name: string) => ({ origin: { kind: 'mod' as const, name }, name: 'a.dds' });
+    const instance = instanceOver(fakeInstanceAdapter(readingFixture({
+      mods: [{ kind: 'mod', name: 'High', enabled: true }, { kind: 'mod', name: 'Low', enabled: true }], ...pluginFilesHeld(held('High'), held('Low')),
+    })).adapter);
+
+    try {
+      await instance.refresh();
+      const panel = openTable(instance, 'High');
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+      await instance.refresh(['/INSTANCE/mods/Low/A.DDS']);
+      await posted(panel, 2);
+    } finally {
+      instance.dispose();
+      if (real !== undefined) Object.defineProperty(process, 'platform', real);
+    }
+
+    expect(copiesDouble.asked).toEqual([['a.dds'], ['a.dds']]);
+  });
+
   it('shows the answer of the newest value only, though an older one answers last', async () => {
     const instance = new FakeInstance(await shared());
     const answers: (() => void)[] = [];

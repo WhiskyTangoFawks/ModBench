@@ -196,7 +196,7 @@ describe('Deploy', () => {
 describe('the problems on the files the deployment folder holds that deploy does not manage', () => {
   const held = () => [...present(collections[0], 'the collection')].map(([uri, [problem]]) => [uri.fsPath, problem?.message]);
 
-  it('are read again at a check of the disk and at no change a watch names, as no watch follows the deployment folder (ADR-0029)', async () => {
+  it('are read again at a check of the disk and at a change a watch names in the deployment folder, and at no other (ADR-0029)', async () => {
     const instance = instanceOver(fakeInstanceAdapter(readingFixture()).adapter);
     const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: [] }));
     const { reporterFor } = tagRecordingReporterFor();
@@ -204,10 +204,11 @@ describe('the problems on the files the deployment folder holds that deploy does
 
     await instance.refresh();
     await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+    await instance.refresh(['/deployed/Data/a.esp']);
     await instance.refresh();
 
     instance.dispose();
-    expect(unmanaged).toHaveBeenCalledTimes(2);
+    expect(unmanaged).toHaveBeenCalledTimes(3);
   });
 
   it('are one on each file after a deploy, naming the file it left out at a path', async () => {

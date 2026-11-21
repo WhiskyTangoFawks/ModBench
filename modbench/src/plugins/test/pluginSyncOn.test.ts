@@ -113,8 +113,8 @@ describe('plugin sync on the instance', () => {
     expect(around.named).toEqual([]);
   });
 
-  it('runs on a change to a plugin file or a manifest, whose masters and names it reads, and on no change to another file', async () => {
-    const instance = instanceOver(fakeInstanceAdapter(readingFixture()).adapter);
+  it('runs on a change to a plugin file, its plugin source or a manifest, whose masters and names it reads, and on no change to another file', async () => {
+    const instance = instanceOver(fakeInstanceAdapter(readingFixture({ sourceModFolders: new Map([['A', '/instance/source/Repo']]) })).adapter);
     const syncPlugins = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
     const { pluginSync } = pluginSyncOn({ instance, channel, syncPlugins });
 
@@ -122,9 +122,10 @@ describe('plugin sync on the instance', () => {
     await instance.refresh(['/instance/mods/A/textures/a.dds']);
     await instance.refresh(['/instance/mods/A/A.esp']);
     await instance.refresh(['/instance/mods/A/A.manifest.json']);
+    await instance.refresh(['/instance/source/Repo/plugin-source/A.esp/records.yaml']);
     await pluginSync.settled();
 
     instance.dispose();
-    expect(syncPlugins).toHaveBeenCalledTimes(3);
+    expect(syncPlugins).toHaveBeenCalledTimes(4);
   });
 });

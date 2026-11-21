@@ -8,6 +8,7 @@ import { deployFailures, deployWarnings } from './deployProblems';
 import { MOVE_TO_OVERWRITE, unmanagedProblems } from './unmanagedProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
+import { isInside } from '../ports/pathInside';
 
 interface DeployGestureDeps {
   commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite' | 'unmanaged'>;
@@ -20,13 +21,17 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
   const collection = vscode.languages.createDiagnosticCollection('modbench-deployment-unmanaged');
   const problems = unmanagedProblems(collection);
   let leftOut: readonly { path: string; winner: string }[] = [];
+  let deploymentFolder: string | undefined;
   const publishProblems = async (): Promise<void> => {
     const held = await commands.unmanaged();
+    deploymentFolder = held.applied ? held.folder : undefined;
     if (held.applied) problems.publish(held.unmanaged, leftOut);
     else collection.clear();
   };
-  // No watch follows the deployment folder: a check of the disk reads again what the user changed there by hand (ADR-0029).
-  const subscription = instance.subscribe(() => { void publishProblems(); }, {});
+  // A watch follows the deployment folder only where it is the game folder: a check of the disk reads again what the user
+  // changed there by hand, and a change the watch names there is read again (ADR-0029).
+  const inDeploymentFolder = (path: string): boolean => deploymentFolder !== undefined && isInside(path, deploymentFolder, process.platform);
+  const subscription = instance.subscribe(() => { void publishProblems(); }, {}, inDeploymentFolder);
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });

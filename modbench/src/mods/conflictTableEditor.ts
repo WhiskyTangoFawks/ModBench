@@ -19,6 +19,7 @@ import type { ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { errorMessage } from '../ports/errorMessage';
+import { pathKey } from '../repositoriesLib/stampedReads';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 const CONFLICT_TABLE_VIEW_TYPE = 'modbench.conflicts';
@@ -68,7 +69,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
       const mine = ++newest;
       try {
         const files = copiesToRead(view.value, conflictPaths(view, mod));
-        read = new Set(files.flatMap(({ copies }) => copies.map(({ at }) => (at.kind === 'loose' ? at.path : at.archive))));
+        read = new Set(files.flatMap(({ copies }) => copies.map(({ at }) => pathKey(at.kind === 'loose' ? at.path : at.archive))));
         const copies = await this.copiesOf(files);
         if (mine !== newest) return;
         const unreadable = copies.flatMap(({ relativePath, copies: each }) => each.flatMap((copy) =>
@@ -90,7 +91,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         else post(lastGood, lastGoodReadMessage([reason]));
       }
     };
-    const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }), CONFLICT_TABLE_READS, (path) => read.has(path));
+    const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }), CONFLICT_TABLE_READS, (path) => read.has(pathKey(path)));
     const setting = onSettingChange(this.settings.onDidChangeConfiguration, CELL_VALUE_SETTING, () => { void show(this.instance); });
     panel.onDidDispose(() => {
       subscription.dispose();

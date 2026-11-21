@@ -606,26 +606,44 @@ describe('Mod status (mod-status trace)', () => {
     expect([...(await statuses.current()).keys()]).toEqual(['B']);
   });
 
-  it('reads the files of each mod folder and source folder, the downloads folder, the game folder and the repository, and no other', () => {
+  it.each([
+    ['a file of a mod\'s folder', '/instance/mods/A/a.dds', true],
+    ['a file of its source folder', '/instance/source/A/plugin-source/A.esp/records.yaml', true],
+    ['an installation file', '/downloads/A.7z', true],
+    ['a game file', '/game/Data/Fallout4.esm', true],
+    ['the repository git answers from', '/instance/.git', true],
+    ['the plugin order', '/instance/profiles/Default/plugins.txt', false],
+    ['a file of a folder whose name a mod\'s folder\'s begins', '/instance/mods/AB/a.dds', false],
+  ])('reads %s: %s, %s', (_what, path, read) => {
     const value = valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', '/instance/mods/A')], { paths: { sourceDirs: new Map([['A', '/instance/source/A']]), downloadsDir: '/downloads' } });
-    const paths = [
-      '/instance/mods/A/a.dds', '/instance/source/A/plugin-source/A.esp/records.yaml', '/downloads/A.7z', '/game/Data/Fallout4.esm', '/instance/.git',
-      '/instance/profiles/Default/plugins.txt', '/instance/mods/AB/a.dds',
-    ];
 
-    expect(paths.map((path) => statusReadsFile(path, value))).toEqual([true, true, true, true, true, false, false]);
+    expect(statusReadsFile(path, value)).toBe(read);
   });
 
   describe('derives again only the mods a change touches', () => {
     it.each<{ change: string; changed: (value: StatusSource, b: string) => [StatusSource, { named: string[]; disk: boolean }]; derived: string[] }>([
       { change: 'a change that names a file of one mod', changed: (value, b) => [value, { named: [join(b, 'b.dds')], disk: false }], derived: ['B'] },
-      { change: 'a change to a fact it reads', changed: (value) => [{ ...value, flaggedHashes: new Map() }, { named: [], disk: false }], derived: ['A', 'B'] },
+      {
+        change: 'one mod\'s own files listed anew', derived: ['B'],
+        changed: (value, b) => [{ ...value, filesByMod: new Map([['A', value.filesByMod.get('A') ?? []], ['B', [{ relativePath: 'c.dds', sourcePath: join(b, 'c.dds') }]]]) }, { named: [join(b, 'c.dds')], disk: false }],
+      },
+      {
+        change: 'what an archive of one mod holds', derived: ['B'],
+        changed: (value, b) => [{ ...value, archiveContents: new Map([[join(b, 'B.ba2'), { kind: 'unanswered' }]]) }, { named: [], disk: false }],
+      },
+      {
+        change: 'what an archive in no one mod\'s folders holds', derived: ['A', 'B'],
+        changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/X.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false }],
+      },
+      { change: 'a change to a fact of every mod', changed: (value) => [{ ...value, gameName: 'Skyrim' }, { named: [], disk: false }], derived: ['A', 'B'] },
       { change: 'a check of the disk', changed: (value) => [value, { named: [], disk: true }], derived: ['A', 'B'] },
       { change: 'a change that names a file of no one mod, as an installation file is', changed: (value) => [value, { named: ['/downloads/A.7z'], disk: false }], derived: ['A', 'B'] },
     ])('$change: $derived', async ({ changed, derived }) => {
       const [a, b] = [await folderOf('A'), await folderOf('B')];
       const statuses = statusesLogging();
-      const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)]);
+      const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)], {
+        filesByMod: new Map([['A', [{ relativePath: 'a.dds', sourcePath: join(a, 'a.dds') }]], ['B', [{ relativePath: 'b.dds', sourcePath: join(b, 'b.dds') }]]]),
+      });
       statuses.derive(value);
       await statuses.current();
       asked.length = 0;

@@ -37,6 +37,12 @@ export const STATUS_READS = {
 
 const isStatusFact = (key: string): key is keyof StatusSource => key in STATUS_READS;
 
+// Keyed by a mod's entry or by a file it holds, so each is compared entry by entry: what changed of one mod touches it alone.
+const BY_ENTRY: ReadonlySet<keyof StatusSource> = new Set(['filesByMod', 'archiveContents', 'flaggedHashes']);
+
+const changedKeys = <V>(now: ReadonlyMap<string, V>, before: ReadonlyMap<string, V>): string[] =>
+  [...new Set([...now.keys(), ...before.keys()])].filter((key) => now.get(key) !== before.get(key));
+
 const inside = (path: string, folder: string): boolean => isInside(path, folder, process.platform);
 
 // git answers which files of a folder it holds, and the repository's change names its .git.
@@ -56,7 +62,7 @@ const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith(
 
 type Asked = ReturnType<typeof packagesAskedAt>;
 
-type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[]; readonly sourcePaths: ReadonlyMap<string, string> };
+type ModAndSourceFolder = ModAt & { readonly entry: string; readonly sourceFolder?: string; readonly files: readonly string[]; readonly sourcePaths: ReadonlyMap<string, string> };
 
 interface Listening {
   dispose(): void;
@@ -67,7 +73,7 @@ function modsAt(value: StatusSource): ModAndSourceFolder[] {
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath), sourcePaths: new Map((value.filesByMod.get(entry.name) ?? []).map(({ relativePath, sourcePath }) => [relativePath, sourcePath])) }];
+    return folder === undefined ? [] : [{ name: folder.modName, entry: entry.name, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath), sourcePaths: new Map((value.filesByMod.get(entry.name) ?? []).map(({ relativePath, sourcePath }) => [relativePath, sourcePath])) }];
   });
 }
 
@@ -193,17 +199,21 @@ export class ModStatuses {
     this.messageChanged.clear();
   }
 
-  // A change touches every mod when it is a check of the disk, changes a fact a status reads, or names a file it reads in no one
-  // mod's folders.
+  // A change touches every mod when it is a check of the disk, changes a fact of every mod, or names a file it reads that no one
+  // mod holds.
   private touchedBy(value: StatusSource, changed: Reread | undefined): Touched {
     const { handed } = this;
     if (changed === undefined || changed.disk || handed === undefined) return 'every';
-    if (Object.keys(STATUS_READS).filter(isStatusFact).some((fact) => value[fact] !== handed[fact])) return 'every';
+    if (Object.keys(STATUS_READS).filter(isStatusFact).some((fact) => !BY_ENTRY.has(fact) && value[fact] !== handed[fact])) return 'every';
     const mods = modsAt(value);
-    const touched = new Set<string>();
-    for (const path of changed.named) {
-      const owners = mods.filter(({ folder, sourceFolder }) => inside(path, folder) || (sourceFolder !== undefined && inside(path, sourceFolder)));
-      if (owners.length === 0 && statusReadsFile(path, value)) return 'every';
+    const listedAnew = new Set(changedKeys(value.filesByMod, handed.filesByMod));
+    const touched = new Set(mods.filter(({ entry }) => listedAnew.has(entry)).map(({ name }) => name));
+    const holding = (path: string) => mods.filter(({ folder, sourceFolder, sourcePaths }) =>
+      inside(path, folder) || (sourceFolder !== undefined && inside(path, sourceFolder)) || [...sourcePaths.values()].includes(path));
+    const readAgain = [...changedKeys(value.archiveContents, handed.archiveContents), ...changedKeys(value.flaggedHashes, handed.flaggedHashes)];
+    for (const path of [...changed.named, ...readAgain]) {
+      const owners = holding(path);
+      if (owners.length === 0 && (readAgain.includes(path) || statusReadsFile(path, value))) return 'every';
       for (const { name } of owners) touched.add(name);
     }
     return touched;

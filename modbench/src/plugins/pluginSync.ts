@@ -1,18 +1,21 @@
 import * as vscode from 'vscode';
 import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
 import { refreshWritten, whenNoChangeIsRunning } from '../drivingLib/writingGesture';
-import type { Concerns, Instance } from '../instanceLoader/instance';
+import type { Concerns, Instance, InstanceValue } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { isolatingWrites } from '../instanceLoader/ambientWrites';
 import type { PluginSyncRun } from '../pluginCommands/plugins';
 import { isPluginFile } from '../tables/pluginFile';
 import { MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
+import { isInside } from '../ports/pathInside';
 
-// What a sync reads from the adapter, as the facts that change with it.
-const SYNC_READS = { plugins: true, pluginsLoadedWithNoLine: true, mods: true, holdsRepository: true } as const;
+// What a sync reads from the adapter, as the facts that change with it, and where a source mod's plugin source is.
+const SYNC_READS = { plugins: true, pluginsLoadedWithNoLine: true, mods: true, holdsRepository: true, paths: true } as const;
 
-// A plugin's masters, which mEdit answers, and the plugins a manifest names change with their files.
-const readsFile = (path: string): boolean => isPluginFile(path) || path.toLowerCase().endsWith(MANIFEST_SUFFIX);
+// A plugin's masters, which mEdit answers from the plugin or a source mod's plugin source, and the plugins a manifest names
+// change with their files.
+const readsFile = (path: string, { paths }: Pick<InstanceValue, 'paths'>): boolean => isPluginFile(path) || path.toLowerCase().endsWith(MANIFEST_SUFFIX)
+  || [...paths.sourceDirs.values()].some((folder) => isInside(path, folder, process.platform));
 
 export interface PluginSyncOn {
   dispose(): void;
@@ -21,7 +24,7 @@ export interface PluginSyncOn {
 
 interface PluginSyncDeps {
   instance: Pick<Instance, 'refresh'> & {
-    subscribe(subscriber: () => Promise<void>, concerns: Concerns<keyof typeof SYNC_READS>, readsFile: (path: string) => boolean): { dispose(): void };
+    subscribe(subscriber: () => Promise<void>, concerns: Concerns<keyof typeof SYNC_READS>, readsFile: (path: string, value: Pick<InstanceValue, 'paths'>) => boolean): { dispose(): void };
   };
   syncPlugins: PluginSyncRun;
   channel: SyncChannel;
