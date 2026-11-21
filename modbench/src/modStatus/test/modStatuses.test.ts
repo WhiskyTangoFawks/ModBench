@@ -8,7 +8,7 @@ import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../ma
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { ArchiveEntries } from '../archiveEntries';
-import { ModStatuses, statusReadsFile, type HashEntries, type StatusSource } from '../modStatuses';
+import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
 
 let root: string;
 let logged: string[];
@@ -511,6 +511,18 @@ describe('Mod status (mod-status trace)', () => {
     expect([(await statuses.current()).size, asked]).toEqual([0, []]);
   });
 
+  it('derives no status for a change to one mod\'s file while the instance holds no repository', async () => {
+    const [a, b] = [await folderOf('A'), await folderOf('B')];
+    const statuses = statusesLogging();
+    const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)], { holdsRepository: false });
+    statuses.derive(value);
+    await statuses.current();
+
+    statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+
+    expect([(await statuses.current()).size, asked]).toEqual([0, []]);
+  });
+
   it('derives a value handed after one that held no repository', async () => {
     const mod = await folderOf('ModA');
     const statuses = statusesLogging();
@@ -617,7 +629,7 @@ describe('Mod status (mod-status trace)', () => {
   ])('reads %s: %s, %s', (_what, path, read) => {
     const value = valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', '/instance/mods/A')], { paths: { sourceDirs: new Map([['A', '/instance/source/A']]), downloadsDir: '/downloads' } });
 
-    expect(statusReadsFile(path, value)).toBe(read);
+    expect(statusesLogging().readsFile(path, value)).toBe(read);
   });
 
   it('on Windows, reads a file of a mod\'s folder the watcher names in another case and with the other separator', () => {
@@ -626,7 +638,7 @@ describe('Mod status (mod-status trace)', () => {
     try {
       const value = valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', 'C:/Instance/mods/A')]);
 
-      expect(statusReadsFile('c:\\instance\\MODS\\A\\a.dds', value)).toBe(true);
+      expect(statusesLogging().readsFile('c:\\instance\\MODS\\A\\a.dds', value)).toBe(true);
     } finally {
       if (real !== undefined) Object.defineProperty(process, 'platform', real);
     }
