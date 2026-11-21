@@ -499,6 +499,23 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([instance, join(instance, 'mods')]);
     });
 
+    it.each([
+      ['read', JSON.stringify({ Profile: 'Default', Include: ['mods/Patch Mod/Patch Mod.esp'] }), JSON.stringify({ Profile: 'Default' })],
+      ['unreadable', '{ "Profile": ', '{ "Include": ['],
+    ])('hands the publisher\'s configuration, %s, as the landed reading holds it once its settings are back as they were, whatever a reading between found', async (_kind, text, between) => {
+      const settings = join(instance, 'compiler_settings.json');
+      await writeFile(settings, text);
+      const adapter = adapterOver(instance, { gameFolder });
+      const landed = await adapter.reading(CHECK_THE_DISK);
+      await writeFile(settings, between);
+      await modifiedLater(settings);
+      await adapter.reading({ named: [settings], disk: false });
+      await writeFile(settings, text);
+      await modifiedLater(settings);
+
+      expect((await adapter.reading({ named: [settings], disk: false }, landed)).publisherConfiguration).toBe(landed.publisherConfiguration);
+    });
+
     it('shows a publisher tag\'s path made at the instance root, which no watch hears, at a re-read named another file', async () => {
       await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Include: ['tools/x.txt'] }));
       const adapter = adapterOver(instance, { gameFolder });

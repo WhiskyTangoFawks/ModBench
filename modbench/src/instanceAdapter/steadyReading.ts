@@ -1,6 +1,6 @@
 // A fact no kept read answers by identity stays the object it was while the values it was read as are the same.
 
-import { noneLeft, sameInputs } from '../ports/lastBuilt';
+import { asLanded, noneLeft, readAs, sameInputs } from '../ports/lastBuilt';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type {
   DataFolderArchives, DataFolderFiles, DataFolderPlugins, DataFolderUnlisted, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFile, OriginFiles,
@@ -162,18 +162,7 @@ function modlistEntryParts(entry: ModlistEntry): unknown[] {
 
 const pluginEntryParts = ({ name, enabled, ...rest }: PluginEntry): unknown[] => [name, enabled, ...noneLeft(rest)];
 
-// The parts each fact was read as, so a reading compares with a landed fact without taking it apart again.
-const partsOf = new WeakMap<object, readonly unknown[]>();
-
-// `fact`, or `landed` while the parts each was read as are the same.
-function asLanded<T extends object | undefined>(fact: T, parts: readonly unknown[], landed: T | undefined): T {
-  if (landed !== undefined) {
-    const before = partsOf.get(landed);
-    if (before !== undefined && sameInputs(before, parts)) return landed;
-  }
-  if (fact !== undefined) partsOf.set(fact, parts);
-  return fact;
-}
+const as = <T extends object | undefined>(fact: T, parts: readonly unknown[], landed: T | undefined): T => asLanded(readAs(fact, parts), landed);
 
 /** Each fact of a reading, or the object `landed`, the reading the caller's value last landed from, holds while it was read
  *  as the same: a fact read again for a stamp too fresh to trust, or after another reading saw other content, is the object
@@ -181,24 +170,24 @@ function asLanded<T extends object | undefined>(fact: T, parts: readonly unknown
 export function steadied(read: ReadFacts, landed?: ReadFacts): ReadFacts {
   const was: Partial<ReadFacts> = landed ?? {};
   return {
-    mods: asLanded(read.mods, read.mods.flatMap(modlistEntryParts), was.mods),
-    pluginOrder: asLanded(read.pluginOrder, read.pluginOrder.flatMap(pluginEntryParts), was.pluginOrder),
-    gameFolder: asLanded(read.gameFolder, gameFolderParts(read.gameFolder), was.gameFolder),
-    programVersions: asLanded(read.programVersions, programVersionsParts(read.programVersions), was.programVersions),
-    dataFolderPlugins: asLanded(read.dataFolderPlugins, dataFolderPluginsParts(read.dataFolderPlugins), was.dataFolderPlugins),
-    creationClubList: asLanded(read.creationClubList, read.creationClubList, was.creationClubList),
-    archiveList: asLanded(read.archiveList, read.archiveList, was.archiveList),
-    dataFolderArchives: asLanded(read.dataFolderArchives, dataFolderArchivesParts(read.dataFolderArchives), was.dataFolderArchives),
-    dataFolderFiles: asLanded(read.dataFolderFiles, dataFolderFilesParts(read.dataFolderFiles), was.dataFolderFiles),
-    profiles: asLanded(read.profiles, read.profiles, was.profiles),
-    modFolders: asLanded(read.modFolders, read.modFolders?.all.flatMap(modFolderParts) ?? [undefined], was.modFolders),
-    downloadedFiles: asLanded(read.downloadedFiles, downloadedFilesParts(read.downloadedFiles), was.downloadedFiles),
-    sourceModFolders: asLanded(read.sourceModFolders, [...read.sourceModFolders].flat(), was.sourceModFolders),
-    sortingRuleFiles: asLanded(read.sortingRuleFiles, sortingRuleFilesParts(read.sortingRuleFiles), was.sortingRuleFiles),
-    unwatchedFolders: asLanded(read.unwatchedFolders, read.unwatchedFolders.flatMap(unwatchedFolderParts), was.unwatchedFolders),
-    managerRunning: asLanded(read.managerRunning, managerRunningParts(read.managerRunning), was.managerRunning),
+    mods: as(read.mods, read.mods.flatMap(modlistEntryParts), was.mods),
+    pluginOrder: as(read.pluginOrder, read.pluginOrder.flatMap(pluginEntryParts), was.pluginOrder),
+    gameFolder: as(read.gameFolder, gameFolderParts(read.gameFolder), was.gameFolder),
+    programVersions: as(read.programVersions, programVersionsParts(read.programVersions), was.programVersions),
+    dataFolderPlugins: as(read.dataFolderPlugins, dataFolderPluginsParts(read.dataFolderPlugins), was.dataFolderPlugins),
+    creationClubList: as(read.creationClubList, read.creationClubList, was.creationClubList),
+    archiveList: as(read.archiveList, read.archiveList, was.archiveList),
+    dataFolderArchives: as(read.dataFolderArchives, dataFolderArchivesParts(read.dataFolderArchives), was.dataFolderArchives),
+    dataFolderFiles: as(read.dataFolderFiles, dataFolderFilesParts(read.dataFolderFiles), was.dataFolderFiles),
+    profiles: as(read.profiles, read.profiles, was.profiles),
+    modFolders: as(read.modFolders, read.modFolders?.all.flatMap(modFolderParts) ?? [undefined], was.modFolders),
+    downloadedFiles: as(read.downloadedFiles, downloadedFilesParts(read.downloadedFiles), was.downloadedFiles),
+    sourceModFolders: as(read.sourceModFolders, [...read.sourceModFolders].flat(), was.sourceModFolders),
+    sortingRuleFiles: as(read.sortingRuleFiles, sortingRuleFilesParts(read.sortingRuleFiles), was.sortingRuleFiles),
+    unwatchedFolders: as(read.unwatchedFolders, read.unwatchedFolders.flatMap(unwatchedFolderParts), was.unwatchedFolders),
+    managerRunning: as(read.managerRunning, managerRunningParts(read.managerRunning), was.managerRunning),
     modFiles: modFilesAsLanded(read.modFiles, was.modFiles),
     runtimeOutput: filesAsLanded(read.runtimeOutput, was.runtimeOutput),
-    folderMeta: asLanded(read.folderMeta, folderMetaParts(read.folderMeta), was.folderMeta),
+    folderMeta: as(read.folderMeta, folderMetaParts(read.folderMeta), was.folderMeta),
   };
 }

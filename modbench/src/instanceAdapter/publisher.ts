@@ -3,7 +3,7 @@
 
 import type { ChangeListener, InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Reread, Subscription } from './instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { lastHanded } from '../ports/lastBuilt';
+import { asLanded, readAs } from '../ports/lastBuilt';
 import type { PathSpelling, TokenProgram } from './pathTokens';
 import type { EntryNames, EntryReading, HeldTexts } from '../symbolNames/symbolNames';
 
@@ -64,7 +64,6 @@ export interface Publisher {
 const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: string): KeptFiles => ({ present: [...present, environmentFile], owns });
 
 export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scriptEnvironmentFilePath: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
-  const keepOutFailed = lastHanded<PublisherConfiguration>();
   const keptFiles = async (): Promise<KeptFiles> => withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath());
   const afterKeepingOut = async <T>(write: Promise<T>): Promise<T> => {
     const written = await write;
@@ -104,7 +103,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
     publisherConfigurationRefusal: () => publisher.refusal(),
     reading: async (reread, landed) => {
       const reading = await manager.reading(reread, landed);
-      return { ...reading, publisherConfiguration: await reading.trustingKept(keptOutConfiguration) };
+      return { ...reading, publisherConfiguration: asLanded(await reading.trustingKept(keptOutConfiguration), landed?.publisherConfiguration) };
     },
     subscribe: (listener) => {
       const heard = [manager.subscribe(listener), publisher.subscribe(listener)];
@@ -117,7 +116,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
       await publisher.keepOutWithinReading(keptFiles);
     } catch (err) {
       const reason = errorMessage(err);
-      return keepOutFailed({ kind: 'unreadable', reason }, [reason]);
+      return readAs({ kind: 'unreadable', reason }, [reason]);
     }
     return publisher.configuration();
   }

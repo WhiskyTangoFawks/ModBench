@@ -27,3 +27,19 @@ export function lastHanded<T>(): (fact: T, parts: readonly unknown[]) => T {
     return fact;
   };
 }
+
+// The parts each fact was read as, so a fact compares with a landed one without either taken apart again.
+const partsOf = new WeakMap<object, readonly unknown[]>();
+
+/** `fact`, noted as read as `parts`. */
+export function readAs<T extends object | undefined>(fact: T, parts: readonly unknown[]): T {
+  if (fact !== undefined) partsOf.set(fact, parts);
+  return fact;
+}
+
+/** `fact`, or `landed`, what the caller's value last landed from, while the two were read as the same parts. */
+export function asLanded<T extends object | undefined>(fact: T, landed: T | undefined): T {
+  if (fact === undefined || landed === undefined) return fact;
+  const [now, before] = [partsOf.get(fact), partsOf.get(landed)];
+  return now !== undefined && before !== undefined && sameInputs(now, before) ? landed : fact;
+}
