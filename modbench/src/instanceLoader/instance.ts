@@ -178,9 +178,13 @@ export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceVal
 /** The facts a subscriber reads, each named as a key. */
 export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
 
+/** Whether a subscriber reads the file at `path`, as `value` places it. */
+export type ReadsFile<K extends keyof InstanceValue = keyof InstanceValue> = (path: string, value: Pick<InstanceValue, K>) => boolean;
+
 interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
+  readonly readsFile: ReadsFile | undefined;
 }
 
 const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
@@ -318,6 +322,8 @@ export class Instance implements Subscription {
   private landedFrom: InstanceReading | undefined;
 
   private subscribers: Subscribed[] = [];
+  // What a failed read was for, which the next read reads again so its change names it (ADR-0029).
+  private unread: { readonly named: ReadonlySet<string>; readonly disk: boolean } = { named: new Set(), disk: false };
 
   private failureListeners: ReadFailureListener[] = [];
   private redrawListeners: (() => void)[] = [];
@@ -388,12 +394,12 @@ export class Instance implements Subscription {
     return this.failure;
   }
 
-  /** Called with each landed value and its sequence; with `concerns`, only with the first, the first after a failed read, a
-   *  check of the disk, and each in which a concern is not the object it was. */
+  /** Called with each landed value and its sequence. With `concerns`, only with the first, the first after a failed read, a check
+   *  of the disk, a value with a concern changed, and a change naming a file `readsFile` holds. */
   subscribe<K extends keyof InstanceValue>(
-    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
+    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>, readsFile?: ReadsFile<K>,
   ): Subscription {
-    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)) };
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), readsFile };
     this.subscribers.push(subscribed);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscribed); } };
   }
@@ -555,6 +561,9 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
+      for (const path of this.unread.named) run.named.add(path);
+      run.disk ||= this.unread.disk;
+      this.unread = { named: new Set(), disk: false };
       const { settled, failed } = await this.recompute(run);
       run.landValue(failed);
       run.land(settled);
@@ -573,6 +582,7 @@ export class Instance implements Subscription {
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
+      this.unread = { named: new Set(run.named), disk: run.disk };
       return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()), failed: new Error(failure) };
     }
     const before = this.current;
@@ -592,7 +602,8 @@ export class Instance implements Subscription {
     this.setLate(this.heardSinceRun());
     this.seq++;
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
-    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some(changed));
+    const told = this.subscribers.filter(({ concerns, readsFile }) =>
+      tellsEvery || concerns === undefined || concerns.some(changed) || (readsFile !== undefined && reread.named.some((path) => readsFile(path, next))));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 

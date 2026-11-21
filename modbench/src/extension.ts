@@ -57,7 +57,7 @@ import { registerArchiveFiles, registerArchiveOpen } from './mods/archiveFiles';
 import { fileProblemsOver } from './ports/fileProblems';
 import type { Log } from './ports/log';
 import { problemsHostOver } from './problemsHost';
-import { ModStatuses } from './modStatus/modStatuses';
+import { ModStatuses, STATUS_READS } from './modStatus/modStatuses';
 import { DOWNLOADS_KEY_ARGS } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
@@ -241,10 +241,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
   const archivedCopies = new ArchivedCopies(client, (path) => adapter.fileStamp(path));
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line), hashesOfEntries(archivedCopies)));
-  own(instance.subscribe(async (value) => {
-    modStatuses.derive(value);
+  own(instance.subscribe(async (value, _sequence, changed) => {
+    modStatuses.derive(value, changed);
     await modStatuses.current();
-  }));
+  }, STATUS_READS, (path, value) => modStatuses.readsFile(path, value)));
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const commandsOfPlugins = pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) });
