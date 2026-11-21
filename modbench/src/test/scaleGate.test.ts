@@ -12,15 +12,28 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { A_NEW_LOOSE_FILE, costOf, type Change, type Cost } from './scaleGate';
+import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
-  it.each<{ change: Change; layer: keyof Cost }>([
+  it.each<{ change: Gesture; layer: keyof Cost }>([
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
     const small = await costOf(3, change);
     const large = await costOf(60, change);
 
     expect(large[layer]).toBe(small[layer]);
+  });
+});
+
+describe('a gesture in a view costs what it shows, on a small and a large instance', () => {
+  const layers: (keyof Cost)[] = ['read', 'derived', 'subscribers', 'views'];
+  it.each<{ gesture: Gesture; layer: keyof Cost }>(
+    [...Object.values(IN_MODS), ...Object.values(IN_PLUGINS)].flatMap((gesture) => layers.map((layer) => ({ gesture, layer }))),
+  )('$gesture.name, at the $layer layer', async ({ gesture, layer }) => {
+    const small = await costOf(3, gesture);
+    const large = await costOf(60, gesture);
+
+    expect(small.shown).toBeGreaterThan(0);
+    expect(large[layer] / large.shown).toBe(small[layer] / small.shown);
   });
 });
