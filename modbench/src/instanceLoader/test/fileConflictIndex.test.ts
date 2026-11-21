@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, foldPath, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry, type FileConflictIndex,
+  buildFileConflictIndex, foldPath, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry, type FileConflictIndex, type LoadedArchive,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -225,6 +225,41 @@ const listing = (name: string, paths: string[]): OriginFiles =>
 
 const byPath = (a: { relativePath: string }, b: { relativePath: string }): number => foldPath(a.relativePath).localeCompare(foldPath(b.relativePath));
 
+describe('a lookup changed from the one before it', () => {
+  const entryAt = (path: string, winner = 'A'): ConflictEntry => ({ relativePath: path, winner: `/mods/${winner}/${path}`, winnerOrigin: modOrigin(winner), providers: [modOrigin(winner)] });
+  const lookupOf = (paths: string[]): FileConflictLookup => {
+    const lookup = new FileConflictLookup();
+    for (const path of paths) lookup.set(entryAt(path));
+    return lookup;
+  };
+  const pathsUpTo = (count: number): string[] => Array.from({ length: count }, (_, at) => `meshes/${at}.nif`);
+
+  it('holds what a lookup built afresh holds, and leaves the one before it as it was', () => {
+    const paths = pathsUpTo(2000);
+    const added = pathsUpTo(2500).slice(2000);
+    const was = lookupOf(paths);
+    const now = was.changed(new Map<string, ConflictEntry | undefined>([
+      ...paths.slice(0, 500).map((path) => [path, undefined] as const),
+      ...[...paths.slice(500, 1000), ...added].map((path) => [path, entryAt(path, 'B')] as const),
+    ]));
+
+    const afresh = lookupOf(paths.slice(1000));
+    for (const path of [...paths.slice(500, 1000), ...added]) afresh.set(entryAt(path, 'B'));
+    expect([...now].sort(byPath)).toEqual([...afresh].sort(byPath));
+    expect([...was].sort(byPath)).toEqual([...lookupOf(paths)].sort(byPath));
+  });
+
+  it('copies no more entries for a change to one path however many paths it holds', () => {
+    const was = lookupOf(pathsUpTo(30_000));
+    const sets = vi.spyOn(Map.prototype, 'set');
+    was.changed(new Map([['meshes/7.nif', entryAt('meshes/7.nif', 'B')]]));
+    const copied = sets.mock.calls.length;
+    sets.mockRestore();
+
+    expect(copied).toBeLessThan(100);
+  });
+});
+
 describe('the index kept current as a reading changes', () => {
   interface Reading { entries: ModlistEntry[]; overwrite: OriginFile[]; modFiles: Map<string, OriginFiles> }
   const reading = (): Reading => ({
@@ -233,7 +268,7 @@ describe('the index kept current as a reading changes', () => {
     modFiles: new Map([['A', listing('A', ['a.nif', SHARED])], ['B', listing('B', ['b.nif', SHARED])], ['C', listing('C', ['c.nif', SHARED])]]),
   });
   const indexOf = (build: typeof buildFileConflictIndex, { entries, overwrite, modFiles }: Reading) => build(entries, overwrite, modFiles);
-  const contentOf = ({ files, ...index }: FileConflictIndex) => ({ files: [...files].sort(byPath), ...index });
+  const contentOf = ({ files, ...index }: FileConflictIndex) => ({ files: [...files].sort(byPath), mods: [...index.filesByMod.keys()], ...index });
   const withListing = (name: string, paths: string[]) => (was: Reading): Reading => ({ ...was, modFiles: new Map(was.modFiles).set(name, listing(name, paths)) });
 
   it.each<[string, (was: Reading) => Reading]>([
@@ -243,7 +278,9 @@ describe('the index kept current as a reading changes', () => {
     ['a mod gains a case variant of a path it holds', withListing('C', ['c.nif', SHARED, SHARED.toUpperCase()])],
     ['a mod\'s copy of a path is excluded', (was) => ({ ...was, modFiles: new Map(was.modFiles).set('A', { ...listing('A', ['a.nif']), files: [fileIn('/mods/A', 'a.nif'), { ...fileIn('/mods/A', SHARED), excluded: true }] }) })],
     ['a mod is disabled', (was) => ({ ...was, entries: [mod('A', false), mod('B'), mod('C')] })],
-    ['the mods are reordered', (was) => ({ ...was, entries: [mod('C'), mod('A'), mod('B')] })],
+    ['a mod moves to the winning end', (was) => ({ ...was, entries: [mod('C'), mod('A'), mod('B')] })],
+    ['two mods swap places', (was) => ({ ...was, entries: [mod('B'), mod('A'), mod('C')] })],
+    ['the mod order is reversed', (was) => ({ ...was, entries: [mod('C'), mod('B'), mod('A')] })],
     ['a mod is removed', (was) => ({ ...was, entries: [mod('A'), mod('C')] })],
     ['a mod is added', (was) => ({ ...withListing('D', [SHARED])(was), entries: [mod('D'), ...was.entries] })],
     ['Overwrite\'s files change', (was) => ({ ...was, overwrite: [fileIn('/overwrite', SHARED)] })],
@@ -263,10 +300,23 @@ describe('the index kept current as a reading changes', () => {
     const changed = { ...present(was.modFiles.get('C'), 'C\'s listing'), files: listing('C', ['c.nif', SHARED, 'c2.nif']).files };
     const next = indexOf(build, { ...was, modFiles: new Map(was.modFiles).set('C', changed) });
 
-    const kept = (index: FileConflictIndex) => [
-      index.filesByMod.get('A'), index.filesByMod.get('B'), index.foldersByMod, index.files.get('a.nif'), index.files.get('b.nif'), index.files.get(SHARED),
-    ];
-    expect(kept(next).map((part, at) => part === kept(first)[at])).toEqual(kept(first).map(() => true));
+    expect(next.filesByMod.get('A')).toBe(first.filesByMod.get('A'));
+    expect(next.filesByMod.get('B')).toBe(first.filesByMod.get('B'));
+    expect(next.foldersByMod).toBe(first.foldersByMod);
+    expect(next.files.get('a.nif')).toBe(first.files.get('a.nif'));
+    expect(next.files.get('b.nif')).toBe(first.files.get('b.nif'));
+    expect(next.files.get(SHARED)).toBe(first.files.get(SHARED));
+  });
+
+  it('keeps each entry of a path the mod that moved does not provide the object it was', () => {
+    const build = indexReusing();
+    const was = reading();
+    const first = indexOf(build, was);
+    const next = indexOf(build, { ...was, entries: [mod('C'), mod('A'), mod('B')] });
+
+    expect(next.files.get('a.nif')).toBe(first.files.get('a.nif'));
+    expect(next.files.get('b.nif')).toBe(first.files.get('b.nif'));
+    expect(next.files.get(SHARED)?.winnerOrigin).toEqual(modOrigin('C'));
   });
 
   it('answers the same files when the listing that changed holds the same files', () => {
@@ -276,7 +326,8 @@ describe('the index kept current as a reading changes', () => {
     const folders = [{ relativePath: 'new', path: '/mods/B/new', includedPath: 'new', excluded: false }];
     const next = indexOf(build, { ...was, modFiles: new Map(was.modFiles).set('B', { ...present(was.modFiles.get('B'), 'B\'s listing'), folders }) });
 
-    expect([next.files === first.files, next.foldersByMod === first.foldersByMod]).toEqual([true, false]);
+    expect(next.files).toBe(first.files);
+    expect(next.foldersByMod).not.toBe(first.foldersByMod);
   });
 
   it('answers the index it built when the mods, their order and every listing are the same', () => {
@@ -357,28 +408,58 @@ describe('the copies of each file, stacked as the game stacks them', () => {
     ]);
   });
 
-  it('keeps the copies of each file a change to one mod\'s files leaves as they were, and stacks what a stack built afresh does', () => {
-    const [index, stack] = [indexReusing(), stackReusing()];
-    const loaded = [archive('A', 'A.ba2', [FILE, 'other.nif'])];
-    const before = new Map([['A', listing('A', [FILE, 'A.ba2'])], ['B', listing('B', ['b.nif'])]]);
-    const first = stack(index([mod('A'), mod('B')], [], before), loaded, 'Fallout4');
-    const now = new Map(before).set('A', listing('A', ['A.ba2']));
-    const next = stack(index([mod('A'), mod('B')], [], now), loaded, 'Fallout4');
+  interface Stacking { entries: ModlistEntry[]; overwrite: OriginFile[]; modFiles: Map<string, OriginFiles>; loaded: LoadedArchive[] }
+  const stacking = (): Stacking => ({
+    entries: [mod('A'), mod('B'), mod('C')],
+    overwrite: [],
+    modFiles: new Map([['A', listing('A', [FILE, 'A.ba2', 'a.nif'])], ['B', listing('B', ['B.ba2', 'b.nif'])], ['C', listing('C', [FILE, 'C.ba2'])]]),
+    loaded: [archive('A', 'A.ba2', [FILE, 'other.nif']), archive('B', 'B.ba2', [FILE, 'other.nif']), archive('C', 'C.ba2', ['c.nif'])],
+  });
+  const withFiles = (name: string, paths: string[]) => (was: Stacking): Stacking => ({ ...was, modFiles: new Map(was.modFiles).set(name, listing(name, paths)) });
+  const withLoaded = (...loaded: LoadedArchive[]) => (was: Stacking): Stacking => ({ ...was, loaded });
+  const stackWith = (index: typeof buildFileConflictIndex, stack: typeof stackCopies, { entries, overwrite, modFiles, loaded }: Stacking) =>
+    stack(index(entries, overwrite, modFiles), loaded, 'Fallout4');
 
-    expect([next.get('b.nif') === first.get('b.nif'), next.get('other.nif') === first.get('other.nif')]).toEqual([true, true]);
-    expect([...next].sort(byPath)).toEqual([...stackCopies(buildFileConflictIndex([mod('A'), mod('B')], [], now), loaded, 'Fallout4')].sort(byPath));
+  it.each<[string, (was: Stacking) => Stacking]>([
+    ['the winning loose copy goes, and its mod\'s archived copy shows', withFiles('A', ['A.ba2', 'a.nif'])],
+    ['a mod gains a loose copy of a path an archive holds', withFiles('B', ['B.ba2', 'b.nif', 'other.nif'])],
+    ['a mod gains a case variant of a loose path', withFiles('C', [FILE.toUpperCase(), 'C.ba2'])],
+    ['a mod is disabled', (was) => ({ ...was, entries: [mod('A', false), mod('B'), mod('C')] })],
+    ['a mod moves to the winning end', (was) => ({ ...was, entries: [mod('C'), mod('A'), mod('B')] })],
+    ['a mod is added', (was) => ({ ...withFiles('D', [FILE])(was), entries: [mod('D'), ...was.entries] })],
+    ['Overwrite gains a copy', (was) => ({ ...was, overwrite: [fileIn('/overwrite', 'other.nif')] })],
+    ['an archive is loaded', (was) => withLoaded(...was.loaded, archive('B', 'B - Extra.ba2', ['other.nif']))(withFiles('B', ['B.ba2', 'B - Extra.ba2', 'b.nif'])(was))],
+    ['the game loads one archive fewer', (was) => withLoaded(...was.loaded.slice(1))(was)],
+    ['an archive cannot be read', (was) => withLoaded(archive('A', 'A.ba2', undefined), ...was.loaded.slice(1))(was)],
+    ['an archive holds other files', (was) => withLoaded(archive('A', 'A.ba2', ['other.nif', 'c.nif']), ...was.loaded.slice(1))(was)],
+    ['the archives load in another order', (was) => withLoaded(...[...was.loaded].reverse())(was)],
+  ])('stacks what a stack built afresh does when %s', (_case, change) => {
+    const [index, stack] = [indexReusing(), stackReusing()];
+    const was = stacking();
+    stackWith(index, stack, was);
+    const now = change(was);
+
+    expect([...stackWith(index, stack, now)].sort(byPath)).toEqual([...stackWith(buildFileConflictIndex, stackCopies, now)].sort(byPath));
   });
 
-  it('answers the stack it built while the index and every archive it read are the same', () => {
+  it('keeps the copies of each file a change leaves as they were the objects they were', () => {
+    const [index, stack] = [indexReusing(), stackReusing()];
+    const was = stacking();
+    const first = stackWith(index, stack, was);
+    const next = stackWith(index, stack, withLoaded(archive('A', 'A.ba2', [FILE, 'other.nif', 'a2.nif']), ...was.loaded.slice(1))(withFiles('A', ['A.ba2', 'a.nif'])(was)));
+
+    expect(next.get('b.nif')).toBe(first.get('b.nif'));
+    expect(next.get('c.nif')).toBe(first.get('c.nif'));
+    expect(next.get('other.nif')).toBe(first.get('other.nif'));
+  });
+
+  it('answers the stack it built while the index and what every archive holds are the same', () => {
     const build = stackReusing();
     const index = indexOver([mod('A')], { A: ['A.ba2'] });
-    const files = [FILE];
-    const first = build(index, [archive('A', 'A.ba2', files)], 'Fallout4');
+    const first = build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4');
 
-    expect([
-      build(index, [archive('A', 'A.ba2', files)], 'Fallout4'),
-      build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4'),
-    ].map((stack) => stack === first)).toEqual([true, false]);
+    expect(build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4')).toBe(first);
+    expect(build(index, [archive('A', 'A.ba2', [FILE, 'other.nif'])], 'Fallout4')).not.toBe(first);
   });
 });
 
