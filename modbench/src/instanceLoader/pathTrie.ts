@@ -61,11 +61,13 @@ export class PathTrie<E> {
       const branch = this.owned.has(node) ? node : this.made([...node]);
       const at = (hash >>> shift) & MASK;
       branch[at] = this.placed(branch[at], hash, shift + BITS, key, entry);
-      return branch;
+      // An emptied node goes, so a trie holds no more than its keys need; the root stays.
+      return shift > 0 && branch.every((child) => child === undefined) ? undefined : branch;
     }
     const leaf = this.owned.has(node) ? node : this.made(new Map(node));
     if (entry === undefined) leaf.delete(key);
     else leaf.set(key, entry);
+    if (leaf.size === 0) return undefined;
     return leaf.size > LEAF_MOST && shift < LAST_SHIFT ? this.split(leaf, shift) : leaf;
   }
 

@@ -227,30 +227,47 @@ const byPath = (a: { relativePath: string }, b: { relativePath: string }): numbe
 
 describe('a lookup changed from the one before it', () => {
   const entryAt = (path: string, winner = 'A'): ConflictEntry => ({ relativePath: path, winner: `/mods/${winner}/${path}`, winnerOrigin: modOrigin(winner), providers: [modOrigin(winner)] });
-  const lookupOf = (paths: string[]): FileConflictLookup => {
+  const lookupOf = (entries: ConflictEntry[]): FileConflictLookup => {
     const lookup = new FileConflictLookup();
-    for (const path of paths) lookup.set(entryAt(path));
+    for (const entry of entries) lookup.set(entry);
     return lookup;
+  };
+  const objectsIn = (value: unknown): number => {
+    const seen = new Set<unknown>();
+    const toVisit = [value];
+    for (let next = toVisit.pop(); next !== undefined || toVisit.length > 0; next = toVisit.pop()) {
+      if (typeof next !== 'object' || next === null || seen.has(next)) continue;
+      seen.add(next);
+      const children: unknown[] = next instanceof Map ? [...next.values()] : Object.values(next);
+      toVisit.push(...children);
+    }
+    return seen.size;
   };
   const pathsUpTo = (count: number): string[] => Array.from({ length: count }, (_, at) => `meshes/${at}.nif`);
 
   it('holds what a lookup built afresh holds, and leaves the one before it as it was', () => {
     const paths = pathsUpTo(2000);
     const added = pathsUpTo(2500).slice(2000);
-    const was = lookupOf(paths);
+    const was = lookupOf(paths.map((path) => entryAt(path)));
     const now = was.changed(new Map<string, ConflictEntry | undefined>([
       ...paths.slice(0, 500).map((path) => [path, undefined] as const),
       ...[...paths.slice(500, 1000), ...added].map((path) => [path, entryAt(path, 'B')] as const),
     ]));
 
-    const afresh = lookupOf(paths.slice(1000));
-    for (const path of [...paths.slice(500, 1000), ...added]) afresh.set(entryAt(path, 'B'));
+    const afresh = lookupOf([...paths.slice(1000).map((path) => entryAt(path)), ...[...paths.slice(500, 1000), ...added].map((path) => entryAt(path, 'B'))]);
     expect([...now].sort(byPath)).toEqual([...afresh].sort(byPath));
-    expect([...was].sort(byPath)).toEqual([...lookupOf(paths)].sort(byPath));
+    expect([...was].sort(byPath)).toEqual([...lookupOf(paths.map((path) => entryAt(path)))].sort(byPath));
+  });
+
+  it('holds no more than an empty lookup once every path it held is taken out', () => {
+    const paths = pathsUpTo(2000);
+    const emptied = lookupOf(paths.map((path) => entryAt(path))).changed(new Map(paths.map((path) => [path, undefined])));
+
+    expect(objectsIn(emptied)).toBe(objectsIn(new FileConflictLookup()));
   });
 
   it('copies no more entries for a change to one path however many paths it holds', () => {
-    const was = lookupOf(pathsUpTo(30_000));
+    const was = lookupOf(pathsUpTo(30_000).map((path) => entryAt(path)));
     const sets = vi.spyOn(Map.prototype, 'set');
     was.changed(new Map([['meshes/7.nif', entryAt('meshes/7.nif', 'B')]]));
     const copied = sets.mock.calls.length;
