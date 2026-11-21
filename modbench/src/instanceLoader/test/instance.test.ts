@@ -861,6 +861,20 @@ describe('Instance — a value that survives a bad read', () => {
     expect(reads).toEqual([['/instance/mods/A/A.esp']]);
   });
 
+  it('names every path a read after a failed one was asked for, as the reading found them against a value that may not have landed', async () => {
+    const { instance, fake } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
+    await instance.refresh();
+    fake.failReading('ModOrganizer.ini is half-written');
+    await instance.refresh();
+    fake.failReading(undefined);
+    const reads: (readonly string[])[] = [];
+    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
+
+    await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+
+    expect(reads).toEqual([['/instance/profiles/Default/modlist.txt']]);
+  });
+
   it('lands nothing for a read that finds nothing new: the value and its sequence hold, and no subscriber is told', async () => {
     const { instance } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
     await instance.refresh();

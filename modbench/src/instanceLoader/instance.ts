@@ -574,7 +574,9 @@ export class Instance implements Subscription {
     }
     const before = this.current;
     const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
-    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
+    // What a reading found unchanged it found against the latest reading that answered, which a failed read may not have landed.
+    const unchanged = this.failure === undefined ? run.unchanged : new Set<string>();
+    const reread: Reread = { named: [...run.named].filter((path) => !unchanged.has(path)), disk: run.disk };
     const changed = (fact: keyof InstanceValue): boolean => next[fact] !== before[fact];
     // ADR-0029
     const nothingNew = !tellsEvery && reread.named.length === 0 && !Object.keys(next).filter(isFactOf(next)).some(changed);

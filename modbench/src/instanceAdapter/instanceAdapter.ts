@@ -668,7 +668,7 @@ export interface InstanceReading extends InstanceGame {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
   /** Each path the check of the disk found changed that no event named. */
   readonly unheardChanges: readonly string[];
-  /** Each path the reading was asked to read again whose content it read, or whose stamp it checked, and found as it held it. */
+  /** Each path the reading was asked to read again whose content it found as the latest reading that answered did. */
   readonly unchangedFiles?: readonly string[];
   /** Runs `read` trusting what the latest reading left kept, the instance's files and the manifests: each is read again
    *  only where a change named it or the disk was checked. */

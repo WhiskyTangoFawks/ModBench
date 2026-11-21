@@ -251,15 +251,17 @@ describe('a folder listed and a file parsed by their stamps', () => {
   });
 
   it.each([
-    ['a check', (path: string): Promise<unknown> => readTrustingKept([path], false, () => Promise.resolve())],
-    ['a read', (path: string): Promise<unknown> => textByStamp(path).catch(() => undefined)],
-  ])('compares a text read again with none %s found gone, so the same text back is a change', async (_by, findGone) => {
+    ['a reading that then failed', (path: string): Promise<unknown> =>
+      readTrustingKept([path], false, async () => { await textByStamp(path); throw new Error('another file is half-written'); }).catch(() => undefined)],
+    ['a read outside a reading', (path: string): Promise<unknown> => textByStamp(path)],
+  ])('finds a text unchanged only against what the latest reading that answered found, never against %s', async (_by, readTheNewText) => {
     const path = join(root, 'modlist.txt');
     await writeFile(path, '+A');
-    await textByStamp(path);
-    await rm(path);
-    await findGone(path);
-    await writeFile(path, '+A');
+    await readTrustingKept([path], false, () => textByStamp(path));
+    await writeFile(path, '+B');
+    await modifiedLater(path);
+    await readTheNewText(path);
+    await writeFile(path, '+B');
     await modifiedLater(path);
 
     expect((await readTrustingKept([path], false, () => textByStamp(path))).unchanged).toEqual(new Set());

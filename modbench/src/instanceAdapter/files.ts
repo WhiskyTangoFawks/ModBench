@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { foundUnchanged, handKept, keptTrusted, pathKey, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { handKept, keptTrusted, pathKey, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
@@ -306,11 +306,7 @@ export const stampByStamp = stampKept(stampOf);
 const texts = new Map<string, Kept<string>>();
 
 /** The text of a file, read again only when its stamp has changed; the text a write handed over stands for the one read that names it. */
-export const textByStamp = stampKept(async (path) => {
-  const text = await readText(path);
-  if (texts.get(pathKey(path))?.value === text) foundUnchanged(path);
-  return text;
-}, texts, true);
+export const textByStamp = stampKept(readText, texts, true);
 
 export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 

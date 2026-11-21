@@ -44,7 +44,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter, ManagerReading } from '../../publisher';
-import { CHECK_THE_DISK, type Reread, type WatcherExclude } from '../../instanceAdapter';
+import { CHECK_THE_DISK, type OriginFiles, type Reread, type WatcherExclude } from '../../instanceAdapter';
 import { mo2Watch } from '../mo2Watch';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import type { Mo2Context } from '../mo2Context';
@@ -1853,13 +1853,14 @@ describe('the MO2 Instance adapter', () => {
           expect(second.notes).toEqual([expect.stringMatching(/Gone/)]);
         });
 
-        it('keeps only the walks of the mod folders the latest reading names', async () => {
+        it('forgets, as a reading starts, the walk of a mod the reading before it did not use, its folder still there', async () => {
           await settled();
-          const folders = present((await adapter.reading()).modFolders, 'mod folders');
-          const first = await source.originFiles(mod('Harder VATS'), folders);
+          const reading = async (name: string): Promise<OriginFiles> => source.originFiles(mod(name), await source.modFolders(ignoreSkippedLink));
+          const first = await reading('Harder VATS');
 
-          await source.originFiles(mod('Other'), { ...folders, all: [] });
-          const again = await source.originFiles(mod('Harder VATS'), folders);
+          await reading('Other');
+          await reading('Other');
+          const again = await source.originFiles(mod('Harder VATS'), 'list');
 
           expect(again).not.toBe(first);
         });

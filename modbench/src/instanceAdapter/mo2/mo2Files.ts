@@ -197,20 +197,23 @@ const filesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFi
   [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
 
 /** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
- *  It keeps the walks of the mod folders the latest reading names, so it ends with the instance it describes. */
+ *  As a reading starts, it forgets each walk of a mod the reading before it did not use, so it keeps no more than the
+ *  latest two readings used. */
 export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   const walked = new Map<string, Walked>();
   // A walk again answers the files it answered last while they are the same.
   const answered = new Map<string, OriginFiles>();
-  let named: ModFolders | undefined;
+  // The latest reading of whole mods, and of their roots, by the mod folders it listed: each starts with a listing of its own.
+  const readings = new Map<boolean, { readonly folders: ModFolders; readonly used: Set<string> }>();
 
-  const forgetUnnamed = (modFolders: ModFolders): void => {
-    if (named === modFolders) return;
-    named = modFolders;
-    const live = new Set(modFolders.all.flatMap(({ path }) => [modKey(false, path), modKey(true, path)]));
-    for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) {
+  const started = (rootOnly: boolean, folders: ModFolders): void => {
+    const before = readings.get(rootOnly);
+    if (before?.folders === folders) return;
+    readings.set(rootOnly, { folders, used: new Set() });
+    if (before === undefined) return;
+    for (const key of answered.keys()) if (key.startsWith(modKey(rootOnly, '')) && !before.used.has(key)) {
       answered.delete(key);
       walked.delete(key);
       context.watch.listed(key, undefined);
@@ -241,10 +244,12 @@ export function originFilesReader(
       return walkedOnce(`overwrite|${rootOnly}`, () => listOverwrite(dir, rootOnly),
         ({ root, files, folders, notes }) => ({ origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes }));
     }
-    if (typeof modFolders === 'object') forgetUnnamed(modFolders);
+    if (typeof modFolders === 'object') started(rootOnly, modFolders);
     const folder = await originFolder(context, origin, modFolders);
     if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
-    return walkedOnce(modKey(rootOnly, folder), () => walkMod(folder, rootOnly),
+    const key = modKey(rootOnly, folder);
+    readings.get(rootOnly)?.used.add(key);
+    return walkedOnce(key, () => walkMod(folder, rootOnly),
       ({ files, folders, notes }) => ({ origin: origin.name, folder, files, folders, notes }));
   };
 }
