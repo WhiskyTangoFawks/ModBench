@@ -7,7 +7,7 @@ Issues live as GitHub issues. Use `gh` for all operations.
 Four kinds of open issue, nothing else:
 
 - Epic (`epic` label) — a work plan: the tickets for one spec change, minted by `/to-tickets` and delivered by one `/implement-work-plan` run. Always assigned to a goal or a lane. Its title is the change record's first line. Its body names the spec change's commit, then holds the verification plan, then the run's report, which the run writes as it goes. Future tense; spent when its tickets land and the developer has answered the report. The specs it points at are written before its tickets are built, never updated afterwards to match them.
-- Implementation ticket — a slice of an epic, minted by `/to-tickets`, or by `/implement-work-plan` for a defect it routes; a native sub-issue of the epic, pointing at the spec lines it makes true, with native blocked-by edges. No parentless implementation tickets.
+- Implementation ticket — a slice of an epic, minted by `/to-tickets`; a native sub-issue of the epic, pointing at the spec lines it makes true, with native blocked-by edges. No parentless implementation tickets.
 - Enhancement (`enhancement` label) — a request for new behaviour that no spec draws yet, from the developer or a user. A grill and `/to-spec` turn it into specification and then an epic, or it closes. It carries no tickets.
 - Bug (`bug` label) — something doesn't work: the code breaks the spec line the bug names. Reported by the developer, a user, or an agent with the developer's approval. Triage verifies it. A bug stands alone, in no epic: it is fixed in the loop, or `/implement` works it as its own ticket. A bug whose fix needs a sentence in `spec/` changed or added goes through grill → `/to-spec` → `/to-tickets` instead.
 
@@ -20,7 +20,7 @@ A ticket's state, as `/implement-work-plan` keeps it:
 - parked: open, `ready-for-human`, unassigned. Its question goes in the report.
 - landed: closed, with the merge commit's SHA as the close comment.
 
-Agents never create issues outside `/to-tickets` and `/implement-work-plan`, with one exception. In a session the developer is in, an agent files a `bug` the developer approves. The bug goes on the goal the session works toward, labelled `ready-for-agent` when it breaks a spec line and `needs-triage` otherwise. A finding met mid-task is fixed in the same session, reported to the developer in the session summary, or dropped. Only the developer escalates a finding into tracked work: by approving it as a bug, or through grill → `/to-spec` → `/to-tickets`.
+Agents never create issues outside `/to-tickets`, with one exception. In a session the developer is in, an agent files a `bug` the developer approves. The bug goes on the goal the session works toward, labelled `ready-for-agent` when it breaks a spec line and `needs-triage` otherwise. A finding met mid-task is fixed in the same session, reported to the developer in the session summary, or dropped. Only the developer escalates a finding into tracked work: by approving it as a bug, or through grill → `/to-spec` → `/to-tickets`.
 
 ## Milestones = goals
 
@@ -62,7 +62,7 @@ Issues/PRs share one number space — a bare number may be either; try `gh pr vi
 
 ## When a skill says "publish to the issue tracker"
 
-Only `/to-tickets` (an epic and its tickets), run by the developer, and `/implement-work-plan` (a ticket for a defect it routes) publish. Any other skill's instruction to file an issue is overridden by this repo's no-standing-backlog policy above: report the finding to the developer instead, who may approve it as a bug (above).
+Only `/to-tickets` (an epic and its tickets), run by the developer, publishes. Any other skill's instruction to file an issue is overridden by this repo's no-standing-backlog policy above: report the finding to the developer instead, who may approve it as a bug (above).
 
 ## When a skill says "fetch the relevant ticket"
 

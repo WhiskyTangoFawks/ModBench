@@ -17,7 +17,7 @@ When code work needs a sentence here changed, or a story needs an exception to o
 - `principles.md`: a rule every decision serves.
 - `adr/`: a decision that clears the bar in `adr/CLAUDE.md`.
 - `out-of-scope/`: a place Modbench diverges from its reference tool, or omits what it does.
-- `architecture/`: a box, a layer, or a reference between boxes.
+- `architecture/`: a box, a layer, a reference between boxes, or where a test goes.
 - `surfaces/`: what a user sees and does. A gesture lands in `surfaces/commands.md`.
 - `formats/`: a file that one machine or version writes and another reads.
 - `GLOSSARY.md`: a word of the developer's that a model would misread.

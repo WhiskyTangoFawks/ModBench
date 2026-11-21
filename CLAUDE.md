@@ -30,12 +30,13 @@ An agent runs each build and test through `.claude/skills/validate/slot-run.sh <
 ## The workflow
 
 - Epics, tickets and a run's report: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
-- The gates: `bash .claude/skills/validate/run-gates.sh --detach`, then `run-gates.sh --wait` until it prints a verdict (exit 3: wait again). Then the Windows gates, through `/windows-vm`.
+- The gates: `bash .claude/skills/validate/run-gates.sh --detach`, then `run-gates.sh --wait` until it prints a verdict (exit 3: wait again). Before a merge to main, the Windows gates too, through `/windows-vm`.
 - Acceptance stands the system up through `/acceptance`. Its throwaway instances and the Windows VM are cleared for subagents.
 - Lanes: the composition root is one module: `modbench/src/*.ts`, `modbench/package.json` and `MEditService.Http`'s `Program.cs`. `api.ts` is generated: `/regenerate-api`. Run 3 lanes at most.
 - In a worktree, symlink `modbench/node_modules` from the main checkout before the first frontend command.
 
 ## Resources
+- Where a test goes: `spec/architecture/tests.md`. How it is written: CODING_STANDARDS.md § Tests.
 - `spec/architecture/target-architecture.md` says how to read the diagrams. A view's specification is its surface in `spec/surfaces/`. A trace in `docs/traces/` is a diagram of how data flows, and holds no contract.
 - `spec/adr/` holds the decisions the code only cites. `ls spec/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, specification or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.
 - `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`, and `wabbajack/` (prior art for archives and hashing). Gitignored, so absent from every `git worktree`: read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
@@ -65,6 +66,5 @@ principle > ADR > architecture and surfaces > code. Together they are the specif
 - Generalize across mod managers. The game owns the format of `plugins.txt`. The mod manager owns the rest. MO2 is one implementation behind the Instance adapter. A scan holds the names. No scan can catch a design that assumes MO2's shape.
 - A plugin is `(origin, filename)` on every seam, payload, map key, tree row and temp path (ADR-0012). Keyed on the filename alone, two plugins that share a filename collapse into one and nothing fails. The backend scan sees only a public `string` member named `…plugin` with no `…origin` beside it; map keys, return values and all of modbench go unchecked.
 - Detection of an external change is gated; recovery is not. Anything that holds disk-derived state recovers when a file changed without Modbench's knowledge (ADR-0003).
-- A behaviour is tested once, at the box that owns it. CODING_STANDARDS.md § Tests holds the strategy.
 - A gate is code, and changing it is tactical. A change serves the gate's purpose: the gate still catches every defect it exists to catch.
 - A fixture taken from a real mod is committed only after the developer approves it.

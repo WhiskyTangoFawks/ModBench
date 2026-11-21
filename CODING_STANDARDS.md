@@ -20,7 +20,7 @@ A failure is data (ADR-0019) and a command returns its refusal (ADR-0019). These
 
 Development is /tdd: a failing test, then the code that passes it, one slice at a time.
 
-A behaviour has one owner: the box whose code decides it. Its test is at that box's seam, and no other box asserts it again.
+A test is where [spec/architecture/tests.md](spec/architecture/tests.md) puts it.
 
 A box's test asserts what its own code decides. It takes what a box beneath decides as given, through that box or its fake.
 
