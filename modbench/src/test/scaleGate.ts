@@ -40,7 +40,7 @@ export interface Cost {
   readonly derived: number;
   /** The subscribers called. */
   readonly subscribers: number;
-  /** The questions asked of mEdit, until the gesture settles. */
+  /** The calls to mEdit, until the gesture settles. */
   readonly mEdit: number;
   /** The rows the views are asked for, and the decorations each row is asked for. */
   readonly views: number;

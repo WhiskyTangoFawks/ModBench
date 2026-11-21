@@ -17,6 +17,7 @@ import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, costOf, type Cost, type Gesture 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
+    { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
     const small = await costOf(3, change);
     const large = await costOf(60, change);
