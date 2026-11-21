@@ -160,8 +160,8 @@ public sealed class WholeSetRefusalTests
         var asked = Task.Run(() => index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]));
         try
         {
-            // Well inside the gate's 30 seconds, after which the parked refill gives up its write.
-            Waits.Reached(() => asked.IsCompleted, "the ask answering while the refill holds its write", TimeSpan.FromSeconds(10));
+            Waits.Reached(
+                () => asked.IsCompleted, "the ask answering while the refill holds its write, inside the gate's 30 seconds", TimeSpan.FromSeconds(10));
         }
         finally
         {
