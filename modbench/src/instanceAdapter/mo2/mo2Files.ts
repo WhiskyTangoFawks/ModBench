@@ -207,7 +207,7 @@ export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   const walked = new Map<string, Walked>();
-  // A stamp too fresh to trust walks a folder again.
+  // A stamp too fresh to trust walks a folder again, so a walk answers the files it answered last while they are the same.
   const answered = new Map<string, OriginFiles>();
   let named: ModFolders | undefined;
 
