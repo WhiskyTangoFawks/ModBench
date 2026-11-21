@@ -94,7 +94,7 @@ const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>, entries: R
 
 type Derived = { status: ModStatus; packaged: ReadonlySet<string>; entries: ReadonlyMap<string, EntriesNoPackageHolds> };
 
-/** The mods a derivation derives again, by name: every one, or those a change touched. */
+// The mods a derivation derives again, by name: every one, or those a change touched.
 type Touched = 'every' | ReadonlySet<string>;
 
 const bothTouched = (one: Touched, other: Touched): Touched => (one === 'every' || other === 'every' ? 'every' : new Set([...one, ...other]));
@@ -114,9 +114,9 @@ export class ModStatuses {
   private readonly unreadable = new Map<string, string>();
   private gitFailure: string | undefined;
   private waiting: { value: StatusSource; touched: Touched } | undefined;
-  /** The value last handed, which a change is told against. */
+  // The value last handed, which a change is told against.
   private handed: StatusSource | undefined;
-  /** A derivation failed, so the next derives every mod, those it would have derived among them. */
+  // A derivation failed, so the next derives every mod, those it would have derived among them.
   private failedLast = false;
   private deriving = false;
   private started = 0;
