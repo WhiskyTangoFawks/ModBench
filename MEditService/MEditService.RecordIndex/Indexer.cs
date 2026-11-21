@@ -207,9 +207,9 @@ internal sealed class Indexer : IDisposable
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
     }
 
-    /// <summary><paramref name="read"/> over the winners decided for the load order of <paramref name="version"/>, as
-    /// IQueries.GetRecordOwnersForAWrite answers.</summary>
-    public T ReadingDecidedWinners<T>(long version, Func<RelationReads, T> read, CancellationToken cancel)
+    /// <summary><paramref name="read"/> over the winners decided for the load order of <paramref name="version"/>, and the
+    /// decision it read, as IQueries.GetRecordOwnersForAWrite answers.</summary>
+    public (T Answer, long Decision) ReadingDecidedWinners<T>(long version, long? decision, Func<RelationReads, T> read, CancellationToken cancel)
     {
         if (_holder.Held is null) throw new NoLoadOrderException();
         RequireReadyOn(version);
@@ -218,9 +218,12 @@ internal sealed class Indexer : IDisposable
         using var writes = EnterTheWriteGate();
         RequireReadyOn(version);
         // A sweep that failed after its rows committed stays owed while the status still reads Ready.
-        if (_scope?.Store.SweepOwed != false) throw new IndexNotReadyException(NotReadyOnTheWritesLoadOrder);
+        if (_scope is not { Store: { SweepOwed: false } store }) throw new IndexNotReadyException(NotReadyOnTheWritesLoadOrder);
+        // Under the gate the sequence names one decision of the winners: every write advances it before it lets go.
+        if (decision is { } earlier && store.Sequence != earlier)
+            throw new IndexNotReadyException("mEdit's record index changed between the write's reads of which copy of each record wins.");
         using var reads = RequireWholeSetReads(cancel, inOneSnapshot: true);
-        return read(reads);
+        return (read(reads), store.Sequence);
     }
 
     private const string NotReadyOnTheWritesLoadOrder = "mEdit's record index is not ready on the load order the write holds.";

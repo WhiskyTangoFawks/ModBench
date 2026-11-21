@@ -127,7 +127,7 @@ public sealed class WholeSetRefusalTests
         }
 
         Assert.Equal(IndexRefusal.IndexNotReady, midway);
-        Assert.Equal([FirstPlugin], index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]).Value()[npc]);
+        Assert.Equal([FirstPlugin], index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]).Value().Owners[npc]);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class WholeSetRefusalTests
         var npc = FirstNpc(index);
 
         Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetRecordOwnersForAWrite(Held(holder) + 1, [npc]).Refused().Refusal);
-        Assert.Equal([FirstPlugin], index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]).Value()[npc]);
+        Assert.Equal([FirstPlugin], index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]).Value().Owners[npc]);
     }
 
     [Fact]
@@ -188,7 +188,25 @@ public sealed class WholeSetRefusalTests
         gate.Release();
 
         Assert.False(answeredWhileParked);
-        Assert.Equal([later.Key], (await asked).Value()[npc]);
+        Assert.Equal([later.Key], (await asked).Value().Owners[npc]);
+    }
+
+    [Fact]
+    public void AReReadLandingBetweenTwoAsksOfOneWrite_RefusesTheSecond_AsItsWinnersAreAnotherDecision()
+    {
+        using var fixture = Fixture();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        var npc = FirstNpc(index);
+        var first = index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]).Value().Decision;
+        var later = fixture.Plugins.Single(plugin => plugin.Name == "Later.esp");
+        PluginBinaries.Rewrite(later.Path, mod => mod.Npcs.Add(new Npc(FormKey.Factory(npc), Fallout4Release.Fallout4) { EditorID = "Overridden" }));
+
+        index.SignalChange([later.Key]);
+        Waits.Reached(() => index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]).Value().Owners[npc].SequenceEqual([later.Key]), "the re-read");
+
+        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc], first).Refused().Refusal);
     }
 
     private static long Held(LoadOrderHolder holder) => holder.Held.Require().Version;

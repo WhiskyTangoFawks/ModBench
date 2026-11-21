@@ -26,6 +26,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
     {
         private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.OrdinalIgnoreCase);
+        private long? _decision;
         private readonly HashSet<string> _containers = new(StringComparer.OrdinalIgnoreCase);
 
         internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> All(IReadOnlyList<GivenRecord> given)
@@ -159,8 +160,10 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         private PatchRefused.OfIndex? AskOwners(IReadOnlyList<string> formKeys)
         {
             if (formKeys.Count == 0) return null;
-            if (!index.GetRecordOwnersForAWrite(version, formKeys, cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
-            foreach (var (formKey, held) in owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
+            if (!index.GetRecordOwnersForAWrite(version, _decision, formKeys, cancel).Holds(out var decided, out var refused))
+                return new PatchRefused.OfIndex(refused);
+            _decision = decided.Decision;
+            foreach (var (formKey, held) in decided.Owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
             return null;
         }
 

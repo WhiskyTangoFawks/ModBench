@@ -27,8 +27,9 @@ public class HandedWrites : DispatchProxy
     /// <summary>Why the record index cannot say who holds a record; null while it can.</summary>
     public IndexRefused? OwnersRefused { get; set; }
 
-    /// <summary>The load order version and FormKeys of each ask for whose plugin holds them, in the order asked.</summary>
-    public List<(long Version, IReadOnlyCollection<string> FormKeys)> OwnersAsked { get; } = [];
+    /// <summary>The load order version, decision carried and FormKeys of each ask for whose plugin holds them, in order. Each
+    /// answers decision 7.</summary>
+    public List<(long Version, long? Decision, IReadOnlyCollection<string> FormKeys)> OwnersAsked { get; } = [];
 
     public static HandedWrites Create() => (HandedWrites)(object)Create<IQueries, HandedWrites>();
 
@@ -50,12 +51,13 @@ public class HandedWrites : DispatchProxy
         }
         if (targetMethod?.Name == nameof(IQueries.GetRecordOwnersForAWrite))
         {
-            if (OwnersRefused is { } refused) return (Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused>)refused;
-            var (version, formKeys) = ((long)args.Require()[0].Require(), (IReadOnlyCollection<string>)args.Require()[1].Require());
-            OwnersAsked.Add((version, formKeys));
-            return Answered<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>>(formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
+            if (OwnersRefused is { } refused) return (Answer<DecidedOwners, IndexRefused>)refused;
+            var (version, decision, formKeys) =
+                ((long)args.Require()[0].Require(), (long?)args.Require()[1], (IReadOnlyCollection<string>)args.Require()[2].Require());
+            OwnersAsked.Add((version, decision, formKeys));
+            return Answered(new DecidedOwners(formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
                 formKey => formKey, formKey => (IReadOnlyList<PluginAddress>)(Owners.TryGetValue(formKey, out var owner) ? [owner] : []),
-                StringComparer.OrdinalIgnoreCase));
+                StringComparer.OrdinalIgnoreCase), Decision: 7));
         }
         if (targetMethod?.Name != nameof(IQueries.Hold)) throw new NotSupportedException($"The record index here serves no {targetMethod?.Name}.");
         var (written, cancel) = ((IReadOnlyList<HandedPlugin>?)args.Require()[0], (CancellationToken)args.Require()[1].Require());

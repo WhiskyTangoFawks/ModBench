@@ -377,13 +377,13 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task EveryAskOfAMake_IsForTheLoadOrderTheMakeHolds()
+    public async Task EveryAskOfAMake_IsForTheLoadOrderTheMakeHolds_AndEachAfterTheFirst_CarriesItsDecision()
     {
         var made = await Handler.Make(Mod, Patch, [], [Given(_interiorRef)]);
 
         Assert.True(made.Holds(out _, out var refused), refused?.Message);
         var held = _holder.Held.Require().Version;
-        Assert.Equal([held, held], _index.OwnersAsked.Select(asked => asked.Version));
+        Assert.Equal([(held, (long?)null), (held, 7)], _index.OwnersAsked.Select(asked => (asked.Version, asked.Decision)));
     }
 
     [Fact]

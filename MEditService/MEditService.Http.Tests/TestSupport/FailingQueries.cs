@@ -24,8 +24,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null,
         IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
         ownersRefused ?? throw Failed();
 
-    public Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetRecordOwnersForAWrite(
-        long version, IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
+    public Answer<DecidedOwners, IndexRefused> GetRecordOwnersForAWrite(
+        long version, long? decision, IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
         ownersRefused ?? throw Failed();
 
     public Answer<IReadOnlyList<string>, IndexRefused> GetPlacesHoldingPluginSource(string name) => throw Failed();
