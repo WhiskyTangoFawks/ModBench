@@ -1,9 +1,9 @@
 // A fact no kept read answers by identity stays the object it was while the values it was read as are the same.
 
-import { lastHanded, noneLeft } from '../ports/lastBuilt';
+import { lastHanded, noneLeft, sameInputs } from '../ports/lastBuilt';
 import type {
-  DataFolderArchives, DataFolderFiles, DataFolderPlugins, DataFolderUnlisted, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFiles,
-  SortingRuleFile, SortingRuleFiles, UnwatchedFolder,
+  DataFolderArchives, DataFolderFiles, DataFolderPlugins, DataFolderUnlisted, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFile, OriginFiles,
+  OriginFolder, SortingRuleFile, SortingRuleFiles, UnwatchedFolder,
 } from './instanceAdapter';
 import type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -27,6 +27,7 @@ export interface ReadFacts {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
   readonly managerRunning: ManagerRunning;
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
+  readonly runtimeOutput: OriginFiles;
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
 }
 
@@ -136,8 +137,25 @@ function managerRunningParts(running: ManagerRunning): unknown[] {
 const sortingRuleFilesParts = ({ masterlist, prelude, userlist, ...rest }: SortingRuleFiles): unknown[] =>
   [...sortingRuleFileParts(masterlist), ...sortingRuleFileParts(prelude), ...sortingRuleFileParts(userlist), ...noneLeft(rest)];
 
-/** Steadies each reading of one source against the one before it. */
-export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
+const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: OriginFolder): unknown[] => [relativePath, path, includedPath, excluded, ...noneLeft(rest)];
+
+const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
+
+const originFilesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
+  [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
+
+// A walk its stamps covered answers the object it answered, so only a walk made again is compared, and only with what landed.
+const filesAsLanded = (files: OriginFiles, landed: OriginFiles | undefined): OriginFiles =>
+  (landed !== undefined && (landed === files || sameInputs(originFilesParts(landed), originFilesParts(files))) ? landed : files);
+
+function modFilesAsLanded(modFiles: ReadonlyMap<string, OriginFiles>, landed: ReadonlyMap<string, OriginFiles> | undefined): ReadonlyMap<string, OriginFiles> {
+  const steady = new Map([...modFiles].map(([name, files]) => [name, filesAsLanded(files, landed?.get(name))] as const));
+  return landed !== undefined && sameInputs([...landed].flat(), [...steady].flat()) ? landed : steady;
+}
+
+/** Steadies each reading of one source against the one before it, and an origin's files against `landed`, the reading the
+ *  caller's value last landed from: a walk is made again for a stamp too fresh to trust, and any reading may walk. */
+export function readingSteadier(): (read: ReadFacts, landed?: Pick<SteadyFacts, 'modFiles' | 'runtimeOutput'>) => SteadyFacts {
   const steady = {
     mods: lastHanded<ReadFacts['mods']>(),
     gameFolder: lastHanded<GameFolder>(),
@@ -154,10 +172,9 @@ export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
     sortingRuleFiles: lastHanded<SortingRuleFiles>(),
     unwatchedFolders: lastHanded<readonly UnwatchedFolder[]>(),
     managerRunning: lastHanded<ManagerRunning>(),
-    modFiles: lastHanded<ReadonlyMap<string, OriginFiles>>(),
     folderMeta: lastHanded<ReadonlyMap<string, ModMeta>>(),
   };
-  return (read) => {
+  return (read, landed) => {
     const { sortingRuleFiles, managerRunning } = read;
     return {
       mods: steady.mods(read.mods, read.modsReadFrom),
@@ -175,7 +192,8 @@ export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
       sortingRuleFiles: steady.sortingRuleFiles(sortingRuleFiles, sortingRuleFilesParts(sortingRuleFiles)),
       unwatchedFolders: steady.unwatchedFolders(read.unwatchedFolders, read.unwatchedFolders.flatMap(unwatchedFolderParts)),
       managerRunning: steady.managerRunning(managerRunning, managerRunningParts(managerRunning)),
-      modFiles: steady.modFiles(read.modFiles, [...read.modFiles].flatMap(([name, listing]) => [name, listing.folder === undefined ? undefined : listing])),
+      modFiles: modFilesAsLanded(read.modFiles, landed?.modFiles),
+      runtimeOutput: filesAsLanded(read.runtimeOutput, landed?.runtimeOutput),
       folderMeta: steady.folderMeta(read.folderMeta, folderMetaParts(read.folderMeta)),
     };
   };

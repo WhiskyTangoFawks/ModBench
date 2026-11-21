@@ -130,12 +130,16 @@ async function folderMetaOf(
 
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
-export async function readInstance(source: ReadingSource, { named, disk }: Reread = CHECK_THE_DISK): Promise<ManagerReading> {
-  const { answer, unheard, unchanged } = await readTrustingKept(named, disk, () => readWhole(source));
-  return { ...answer, unheardChanges: unheard, unchangedFiles: named.filter((path) => unchanged.has(pathKey(path))), trustingKept };
+export async function readInstance(source: ReadingSource, { named, disk }: Reread = CHECK_THE_DISK, landed?: ManagerReading): Promise<ManagerReading> {
+  const { answer, unheard, found, unchanged } = await readTrustingKept(named, disk, () => readWhole(source, landed), landed?.contentsFound);
+  return {
+    ...answer, unheardChanges: unheard, unchangedFiles: named.filter((path) => unchanged.has(pathKey(path))), contentsFound: found, trustingKept,
+  };
 }
 
-async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'unheardChanges' | 'unchangedFiles' | 'trustingKept'>> {
+async function readWhole(
+  source: ReadingSource, landed: ManagerReading | undefined,
+): Promise<Omit<ManagerReading, 'unheardChanges' | 'unchangedFiles' | 'contentsFound' | 'trustingKept'>> {
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
@@ -178,12 +182,12 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
   const steadier = steadierOf(source);
   const steady = steadier.steadied({
     ...game, archiveList: game.archiveList.archives, mods, modsReadFrom: [listed, ...metas], downloadedFiles, profiles, modFolders, sourceModFolders,
-    sortingRuleFiles, unwatchedFolders: source.unwatchedFolders(), managerRunning, modFiles, folderMeta,
-  });
+    sortingRuleFiles, unwatchedFolders: source.unwatchedFolders(), managerRunning, modFiles, runtimeOutput, folderMeta,
+  }, landed);
   const pluginOrder = steadier.pluginOrder(pluginsListed);
   return {
     profile, gameName, gameRelease, ...steady, mods: steady.mods.kept, modGroups: steadier.modGroups(steady.mods.kept), pluginOrder: pluginOrder.kept,
-    orderNotes: [...mods.notes, ...pluginOrder.notes], archiveListNotes: game.archiveList.notes, runtimeOutput, holdsRepository, repositorySetUp,
+    orderNotes: [...mods.notes, ...pluginOrder.notes], archiveListNotes: game.archiveList.notes, holdsRepository, repositorySetUp,
     gameFolderLinks: gameFolderLinks.size,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };

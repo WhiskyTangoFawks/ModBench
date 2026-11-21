@@ -40,11 +40,9 @@ type Keeper = (checked: (key: string) => boolean) => Promise<string[]>;
 const everyKept: Keeper[] = [];
 // What a trusted read found of each file whose content it compares.
 const trusting = new AsyncLocalStorage<{ readonly found: Map<string, unknown> }>();
-// What the latest `readTrustingKept` that answered found: what the value it read stands on saw.
-let seen: ReadonlyMap<string, unknown> = new Map();
 
 /** A reader of `path` that reads it again only when its stamp has changed, and trusts what is kept inside a trusted read.
- *  `comparesText`: the answer is a file's content, which `readTrustingKept` compares with what the reading before it found. */
+ *  `comparesText`: the answer is a file's content, which `readTrustingKept` notes as found. */
 export function keptTrusted<T>(
   stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false, comparesText = false,
 ): (path: string) => Promise<T> {
@@ -113,18 +111,18 @@ async function forgetChanged<T>(
 }
 
 /** Runs `read` trusting what is kept, once what each kept path `named` touches, or every one when `disk`, is forgotten where
- *  it may have changed. Answers each changed stamp `named` does not touch, and each file whose content it found as the latest
- *  reading that answered did (ADR-0029). A read outside it checks each stamp. */
+ *  it may have changed. Answers each changed stamp `named` does not touch, the content it `found` of each file whose content
+ *  it compares, and each such file it found as `before`, what another run found, holds it (ADR-0029). A read outside it
+ *  checks each stamp. */
 export async function readTrustingKept<T>(
-  named: readonly string[], disk: boolean, read: () => Promise<T>,
-): Promise<{ answer: T; unheard: string[]; unchanged: ReadonlySet<string> }> {
+  named: readonly string[], disk: boolean, read: () => Promise<T>, before?: ReadonlyMap<string, unknown>,
+): Promise<{ answer: T; unheard: string[]; found: ReadonlyMap<string, unknown>; unchanged: ReadonlySet<string> }> {
   const touched = touchedBy(named);
   const changed = (await Promise.all(everyKept.map((forget) => forget(disk ? () => true : touched)))).flat();
   const found = new Map<string, unknown>();
   const answer = await trusting.run({ found }, read);
-  const unchanged = new Set([...found].filter(([key, value]) => seen.has(key) && Object.is(seen.get(key), value)).map(([key]) => key));
-  seen = new Map(found);
-  return { answer, unheard: [...new Set(changed)].filter((path) => !touched(pathKey(path))), unchanged };
+  const unchanged = new Set([...found].filter(([key, value]) => before?.has(key) === true && Object.is(before.get(key), value)).map(([key]) => key));
+  return { answer, unheard: [...new Set(changed)].filter((path) => !touched(pathKey(path))), found: new Map(found), unchanged };
 }
 
 /** Runs `read` trusting what the latest `readTrustingKept` left kept. */

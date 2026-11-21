@@ -10,7 +10,7 @@ import type { EntryNames, EntryReading, HeldTexts } from '../symbolNames/symbolN
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
 export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'scriptEnvironmentFile'> & {
-  reading(reread?: Reread): Promise<ManagerReading>;
+  reading(reread?: Reread, landed?: ManagerReading): Promise<ManagerReading>;
   filesKept(): Promise<KeptFiles>;
 };
 
@@ -102,8 +102,8 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
     changePublisherTag: (...change) => afterKeepingOut(publisher.changeTag(...change)),
     followModFolders: (moves) => afterKeepingOut(publisher.followFolders(moves)),
     publisherConfigurationRefusal: () => publisher.refusal(),
-    reading: async (reread) => {
-      const reading = await manager.reading(reread);
+    reading: async (reread, landed) => {
+      const reading = await manager.reading(reread, landed);
       return { ...reading, publisherConfiguration: await reading.trustingKept(keptOutConfiguration) };
     },
     subscribe: (listener) => {

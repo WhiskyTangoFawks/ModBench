@@ -5,7 +5,6 @@ import type { Dirent } from 'node:fs';
 import { dirname, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { noneLeft, sameInputs } from '../../ports/lastBuilt';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDir, listDirByStamp, realPathIfThere } from '../files';
@@ -189,23 +188,15 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
 
 const modKey = (rootOnly: boolean, folder: string): string => `mod|${rootOnly}|${folder}`;
 
-const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: OriginFolder): unknown[] => [relativePath, path, includedPath, excluded, ...noneLeft(rest)];
-
-const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
-
-const filesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
-  [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
-
 /** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
- *  As a reading starts, it forgets each walk of a mod the reading before it did not use, so it keeps no more than the
- *  latest two readings used. */
+ *  As a reading of whole mods, or of their roots, starts, it forgets each such walk of a mod the one before it did not ask
+ *  for, so it keeps no walk past the two latest readings that could ask for it. */
 export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
-  const walked = new Map<string, Walked>();
-  // A walk again answers the files it answered last while they are the same.
-  const answered = new Map<string, OriginFiles>();
-  // The latest reading of whole mods, and of their roots, by the mod folders it listed: each starts with a listing of its own.
+  // Every walk it answers, kept to answer again where its stamps cover it.
+  const walked = new Map<string, Walked | undefined>();
+  // A reading hands its own mod folders, so a new one starts a reading. What any caller asks for until the next counts as used.
   const readings = new Map<boolean, { readonly folders: ModFolders; readonly used: Set<string> }>();
 
   const started = (rootOnly: boolean, folders: ModFolders): void => {
@@ -213,28 +204,19 @@ export function originFilesReader(
     if (before?.folders === folders) return;
     readings.set(rootOnly, { folders, used: new Set() });
     if (before === undefined) return;
-    for (const key of answered.keys()) if (key.startsWith(modKey(rootOnly, '')) && !before.used.has(key)) {
-      answered.delete(key);
+    for (const key of walked.keys()) if (key.startsWith(modKey(rootOnly, '')) && !before.used.has(key)) {
       walked.delete(key);
       context.watch.listed(key, undefined);
     }
-  };
-
-  const steadied = (key: string, files: OriginFiles): OriginFiles => {
-    const last = answered.get(key);
-    if (last !== undefined && sameInputs(filesParts(last), filesParts(files))) return last;
-    answered.set(key, files);
-    return files;
   };
 
   async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
     const before = walked.get(key);
     if (before !== undefined && await listingsStill(before)) return before.files;
     const done = await walk();
-    const files = steadied(key, filesOf(done));
+    const files = filesOf(done);
     context.watch.listed(key, { folders: [done.root, ...files.folders.map(({ path }) => path)], files: files.files.map(({ path }) => path) });
-    if (done.stampsCover) walked.set(key, { listings: done.listings, files });
-    else walked.delete(key);
+    walked.set(key, done.stampsCover ? { listings: done.listings, files } : undefined);
     return files;
   }
 

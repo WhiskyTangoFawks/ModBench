@@ -254,17 +254,17 @@ describe('a folder listed and a file parsed by their stamps', () => {
     ['a reading that then failed', (path: string): Promise<unknown> =>
       readTrustingKept([path], false, async () => { await textByStamp(path); throw new Error('another file is half-written'); }).catch(() => undefined)],
     ['a read outside a reading', (path: string): Promise<unknown> => textByStamp(path)],
-  ])('finds a text unchanged only against what the latest reading that answered found, never against %s', async (_by, readTheNewText) => {
+  ])('finds a text unchanged only against what it is handed, never against %s', async (_by, readTheNewText) => {
     const path = join(root, 'modlist.txt');
     await writeFile(path, '+A');
-    await readTrustingKept([path], false, () => textByStamp(path));
+    const landed = await readTrustingKept([path], false, () => textByStamp(path));
     await writeFile(path, '+B');
     await modifiedLater(path);
     await readTheNewText(path);
     await writeFile(path, '+B');
     await modifiedLater(path);
 
-    expect((await readTrustingKept([path], false, () => textByStamp(path))).unchanged).toEqual(new Set());
+    expect((await readTrustingKept([path], false, () => textByStamp(path), landed.found)).unchanged).toEqual(new Set());
   });
 });
 
@@ -344,9 +344,9 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     const first = await adapter.reading(CHECK_THE_DISK);
 
-    const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false })));
+    const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false }, first)));
 
-    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles']);
+    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
     expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
   });
 
@@ -354,11 +354,44 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     const adapter = managerOver(instance);
     const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
-    await adapter.reading(CHECK_THE_DISK);
+    const landed = await adapter.reading(CHECK_THE_DISK);
     await writeFile(modlist, await readFile(modlist));
     await modifiedLater(modlist);
 
-    expect((await adapter.reading({ named: [modlist], disk: false })).unchangedFiles).toEqual([modlist]);
+    expect((await adapter.reading({ named: [modlist], disk: false }, landed)).unchangedFiles).toEqual([modlist]);
+  });
+
+  it('finds a file unchanged only against the landed reading it is handed, never against a reading between them', async () => {
+    const adapter = managerOver(instance);
+    const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await writeFile(modlist, `${await readFile(modlist, 'utf8')}+Another Mod\n`);
+    await modifiedLater(modlist);
+    await adapter.reading({ named: [modlist], disk: false });
+    await writeFile(modlist, await readFile(modlist));
+    await modifiedLater(modlist);
+
+    expect((await adapter.reading({ named: [modlist], disk: false }, landed)).unchangedFiles).toEqual([]);
+  });
+
+  it('hands the files of a mod walked again, its stamp too fresh to trust, as the landed reading holds them', async () => {
+    const adapter = managerOver(instance);
+    await writeFile(join(instance, 'mods', 'Harder VATS', 'fresh.txt'), '');
+    const landed = await adapter.reading();
+
+    const again = await adapter.reading(CHECK_THE_DISK, landed);
+
+    expect(again.modFiles).toBe(landed.modFiles);
+  });
+
+  it('hands each mod\'s files as the landed reading holds them while another reading overlaps it', async () => {
+    const adapter = managerOver(instance);
+    const landed = await adapter.reading(CHECK_THE_DISK);
+
+    const [again] = await Promise.all([adapter.reading({ named: [], disk: false }, landed), adapter.reading()]);
+
+    expect(again.modFiles).toBe(landed.modFiles);
   });
 
   it('takes a file\'s stamp again, within a reading, only where a re-read is named it or checks the disk, and outside one each time', async () => {

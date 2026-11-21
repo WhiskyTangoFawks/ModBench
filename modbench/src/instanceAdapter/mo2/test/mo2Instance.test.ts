@@ -44,7 +44,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter, ManagerReading } from '../../publisher';
-import { CHECK_THE_DISK, type OriginFiles, type Reread, type WatcherExclude } from '../../instanceAdapter';
+import { CHECK_THE_DISK, type ModFolders, type OriginFiles, type Reread, type WatcherExclude } from '../../instanceAdapter';
 import { mo2Watch } from '../mo2Watch';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import type { Mo2Context } from '../mo2Context';
@@ -1817,16 +1817,15 @@ describe('the MO2 Instance adapter', () => {
           expect(second).not.toBe(first);
         });
 
-        it('walks again a folder changed within the settle window, as its stamp may not change for a write that follows, and answers the files it answered while it walks the same', async () => {
+        it('walks again a folder changed within the settle window, as its stamp may not change for a write that follows', async () => {
           await mkdir(join(folder(), 'Textures'), { recursive: true });
           await writeFile(join(folder(), 'Textures', 'a.dds'), '');
 
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
           const walked = callsOn(readdir, join(folder(), 'Textures'));
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
 
           expect(callsOn(readdir, join(folder(), 'Textures'))).toBeGreaterThan(walked);
-          expect(second).toBe(first);
         });
 
         it('does not keep a walk that met a folder removed mid-read, though the stamp of the folder above it did not change', async () => {
@@ -1853,6 +1852,18 @@ describe('the MO2 Instance adapter', () => {
           expect(second.notes).toEqual([expect.stringMatching(/Gone/)]);
         });
 
+        it('keeps the walk of a mod\'s root through readings of whole mods, which never ask for it', async () => {
+          await settled();
+          const folders = (): Promise<ModFolders | undefined> => source.modFolders(ignoreSkippedLink);
+          const first = await source.originRootFiles(mod('Harder VATS'), await folders());
+          await source.originFiles(mod('Harder VATS'), await folders());
+          await source.originFiles(mod('Harder VATS'), await folders());
+
+          const again = await source.originRootFiles(mod('Harder VATS'), await folders());
+
+          expect(again).toBe(first);
+        });
+
         it('forgets, as a reading starts, the walk of a mod the reading before it did not use, its folder still there', async () => {
           await settled();
           const reading = async (name: string): Promise<OriginFiles> => source.originFiles(mod(name), await source.modFolders(ignoreSkippedLink));
@@ -1865,16 +1876,15 @@ describe('the MO2 Instance adapter', () => {
           expect(again).not.toBe(first);
         });
 
-        it('walks a mod that links to a file again each time, as a link\'s target is not stamped, and answers the files it answered while it walks the same', async () => {
+        it('walks a mod that links to a file again each time, as a link\'s target is not stamped', async () => {
           await settled();
           await symlink(join(folder(), 'Textures', 'a.dds'), join(folder(), 'Linked.dds'));
 
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
           const followed = callsOn(stat, join(folder(), 'Linked.dds'));
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
 
           expect(callsOn(stat, join(folder(), 'Linked.dds'))).toBeGreaterThan(followed);
-          expect(second).toBe(first);
         });
       });
 
