@@ -620,6 +620,18 @@ describe('Mod status (mod-status trace)', () => {
     expect(statusReadsFile(path, value)).toBe(read);
   });
 
+  it('on Windows, reads a file of a mod\'s folder the watcher names in another case and with the other separator', () => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      const value = valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', 'C:/Instance/mods/A')]);
+
+      expect(statusReadsFile('c:\\instance\\MODS\\A\\a.dds', value)).toBe(true);
+    } finally {
+      if (real !== undefined) Object.defineProperty(process, 'platform', real);
+    }
+  });
+
   describe('derives again only the mods a change touches', () => {
     it.each<{ change: string; changed: (value: StatusSource, b: string) => [StatusSource, { named: string[]; disk: boolean }]; derived: string[] }>([
       { change: 'a change that names a file of one mod', changed: (value, b) => [value, { named: [join(b, 'b.dds')], disk: false }], derived: ['B'] },
@@ -681,6 +693,29 @@ describe('Mod status (mod-status trace)', () => {
       await statuses.current();
 
       expect([...new Set(read)]).toEqual(['B']);
+    });
+
+    it('places a change against the mods\' folders at one cost on a small and a large modlist', async () => {
+      const placings = async (count: number): Promise<number> => {
+        let placed = 0;
+        const names = Array.from({ length: count }, (_, n) => `M${n}`);
+        const folders = await Promise.all(names.map((name) => folderOf(name)));
+        const counted = names.map((name, n): ModFolder => {
+          const { path, ...rest } = folder('mod', name, folders[n] ?? '');
+          return { ...rest, get path() { placed++; return path; } };
+        });
+        const value = valueOf(names.map((name) => ({ kind: 'mod', name })), counted, { entryKey: ({ name }) => { placed++; return name.toLowerCase(); } });
+        const statuses = statusesLogging();
+        statuses.derive(value);
+        await statuses.current();
+        placed = 0;
+
+        statuses.derive({ ...value }, { named: [join(folders[0] ?? '', 'a.dds'), '/instance/profiles/Default/plugins.txt'], disk: false });
+        await statuses.current();
+        return placed;
+      };
+
+      expect(await placings(60)).toBe(await placings(3));
     });
 
     it('derives every mod after a derivation that failed', async () => {
