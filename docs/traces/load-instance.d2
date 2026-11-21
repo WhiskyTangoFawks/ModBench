@@ -27,7 +27,6 @@ instanceloader -> manifestadapter: "get: the repository each mod folder's manife
 manifestadapter -> instanceloader: "the mod sources: each repository by the mod it builds" {class: loadorder}
 instanceloader -> client: "get: what each archive changed since the last read holds" {class: loadorder}
 client -> instanceloader: "each archive's files, or why it cannot be read" {class: loadorder}
-instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> activation: value {class: loadorder}
 activation -> instancecommands: "put load order: the snapshot" {class: loadorder}

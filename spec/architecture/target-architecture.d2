@@ -76,8 +76,8 @@ medit_readmodel: "MEDIT · Read model — the record index, a view over the repo
 }
 modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter and from what mEdit says of the instance's files, and the mod statuses derived from it, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\nowns: the instance value, recomputed on every change" {class: readmodel}
-  modstatus: "Mod status\nowns: each mod's status against its manifest,\nderived from each instance value" {class: readmodel}
+  instanceloader: "Instance loader\nowns: the instance value, kept current" {class: readmodel}
+  modstatus: "Mod status\nowns: each mod's status against its manifest" {class: readmodel}
 }
 
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
