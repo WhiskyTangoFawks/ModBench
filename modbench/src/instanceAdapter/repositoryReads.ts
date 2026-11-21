@@ -15,7 +15,7 @@ export interface RepositoryReads {
   /** What git answers, trimmed; '' where git exits 1, as `config --get` does for a key that is not set. */
   readonly git: (...args: string[]) => Promise<string>;
   /** Calls `listener` with the repository's HEAD, the path a reading names to read these answers again, when VS Code's git
-   *  says the repository changed. Its own state then holds the change, so that reading has it run no status. */
+   *  says the repository changed. Its state then holds the change, so that reading runs no status. */
   readonly changed: (listener: (path: string) => void) => Subscription;
 }
 
