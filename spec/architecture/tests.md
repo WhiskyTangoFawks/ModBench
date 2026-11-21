@@ -13,6 +13,6 @@ A test stands up a part of the [zoom-out](target-architecture.d2) and feeds it a
 - A behaviour's test is at the seam of the box whose code decides it.
 - A branch runs the tests of each box it touches, and of every box that reaches that box through the references [layers.d2](layers.d2) governs.
 - A slow test at a branch gets faster, because what it stands up, not its cost, decides when it runs.
-- A test that measures time or memory gates only on the platform its budget was set on.
+- A test whose result depends on the machine it runs on gates only on a real machine: a virtual machine has neither the user's hardware nor their game folder.
 - `/verify` is the one entry to a merge to main, so every workflow meets the same tests.
 - A test that skips at a merge to main fails it, and names the skip ([principles.md](../principles.md), Never silently wrong).
