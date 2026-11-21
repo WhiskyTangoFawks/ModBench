@@ -325,6 +325,9 @@ public enum IndexRefusal
 
 public record IndexRefused(IndexRefusal Refusal, string Message);
 
+/// <summary>Of each FormKey, the plugin of its winning copy, and the decision of the winners it was read from.</summary>
+public sealed record DecidedOwners(IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>> Owners, long Decision);
+
 /// <summary>A name as a person gives it: a plugin's file name, a record's EditorID or FormKey. An origin
 /// names a plugin and picks among those that share a file name.</summary>
 public sealed record NameQuery(string Name, string? Origin = null);

@@ -129,9 +129,8 @@ public interface IPluginAdapter
     Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
-    /// <summary>A new plugin in <paramref name="folder"/>: a header flagged as <paramref name="flags"/> say,
-    /// no records and no masters. Written whole or not at all, into no folder it made and over
-    /// no file, its name compared without case.</summary>
+    /// <summary>A new plugin with no records and no masters, its header flagged as <paramref name="flags"/> say. Written whole
+    /// or not at all, into no folder it made, over no file of its name in any case.</summary>
     Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
 

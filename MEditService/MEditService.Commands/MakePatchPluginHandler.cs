@@ -25,43 +25,41 @@ public sealed class MakePatchPluginHandler
         INotificationPublisher notifications) =>
         (_holder, _adapter, _source, _records, _compile, _held, _notifications) = (holder, adapter, source, records, compile, held, notifications);
 
-    /// <summary>The plugin goes where a create in <paramref name="origin"/> puts one, never as a compiled plugin, and over no file
-    /// unless <paramref name="replace"/>, which sets the file aside and names it on the push with every file still aside there.
-    /// Refuses, writing nothing, as create and compile refuse, and for a record it cannot place.</summary>
+    /// <summary>The plugin goes where a create puts one, never as a compiled plugin, and over no file unless
+    /// <paramref name="replace"/>, which sets the file aside and names it on the push.</summary>
     public async Task<Answer<PatchMade, PatchRefused>> Make(
         string origin, string name, IReadOnlyList<string>? flags, IReadOnlyList<GivenRecord> records, bool replace = false,
         CancellationToken cancel = default)
     {
-        if (_holder.Held is not { Snapshot: var loadOrder })
+        if (_holder.Held is not { Snapshot: var loadOrder, Version: var version })
             return new PatchRefused.AsCreate(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         var release = loadOrder.GameRelease;
         if (!CreatePluginInModHandler.PlaceOf(loadOrder, origin, name).Holds(out var place, out var notPlaced)) return Refused(notPlaced);
         if (!CreatePluginHandler.HeaderOf(name, release, flags).Holds(out var header, out var notCreatable)) return Refused(notCreatable);
 
-        var path = _adapter.PathOfEmpty(header.Key, place.Folder);
-        var registered = new RegisteredPlugin(name, place.Name, path, new PluginProvider.FromMod(place.Name, place.Folder, place.SourceFolder), Line: null, PluginStrings.None);
-        if (_source.SourceReads(registered))
+        var plugin = new PluginAddress(name, place.Name);
+        var registered = CreatePluginHandler.RegisteredIn(_adapter, plugin, new PluginProvider.FromMod(place.Name, place.Folder, place.SourceFolder));
+        if (_source.PlacesHoldingPluginSourceOf([place], name).Count > 0)
         {
             return new PatchRefused.AsCreate(
                 PluginCreateRefusal.CompiledPlugin,
                 $"'{place.SourceFolder}' holds plugin source for {name}, and its next compile would overwrite the plugin, so {name} was not made.");
         }
-        if (!replace && _adapter.HeldAt(path) is { } held) return new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, FileAt(place, held, name));
+        if (!replace && _adapter.HeldAt(registered.Path) is { } held) return new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, FileAt(place, held, name));
 
-        var plugin = new PluginAddress(name, place.Name);
-        if (!_records.Laid(name, records, release, cancel).Holds(out var laid, out var unlaid)) return unlaid;
+        if (!_records.Laid(name, records, release, version, cancel).Holds(out var laid, out var unlaid)) return unlaid;
         if (!PluginTreeFiles.Made(name, _adapter.EmptyTree(header.Key, release, header.Flags), laid, release).Holds(out var tree, out var unmade))
             return Refused(TreeCompile.RecordsDoNotParse(plugin, unmade));
 
-        string? fileAtPath = null;
+        PatchRefused.AsCreate? landedAtPath = null;
         var made = await _compile.CompileAsync(registered, tree, loadOrder, save =>
         {
             if (replace) return save.CommitSettingAside() is { } why ? TreeCompile.NotWritten(plugin, why) : (Answer<bool, PluginCompileOutcome>)true;
-            if (save.CommitOverNoFile()) return true;
-            fileAtPath = FileAt(place, _adapter.HeldAt(path) ?? name, name);
-            return TreeCompile.NotWritten(plugin, fileAtPath);
+            if (save.CommitOverNoFile() is not { } landed) return true;
+            landedAtPath = new(PluginCreateRefusal.FileExists, FileAt(place, landed, name));
+            return TreeCompile.NotWritten(plugin, landedAtPath.Message);
         });
-        if (fileAtPath is not null) return new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, fileAtPath);
+        if (landedAtPath is { } refused) return refused;
         if (!made.Succeeded) return Refused(made);
 
         await _held.ReadBack([plugin], cancel);

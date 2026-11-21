@@ -195,7 +195,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     await tell(client, { total: 2, failures: [badFailure] });
     await handedOver();
 
-    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'The records of "Bad.esp" (SomeMod) no longer show: its read failed.', detail: 'RACE parse' }]);
+    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'The records of "Bad.esp" (SomeMod) do not show: its read failed.', detail: 'RACE parse' }]);
     expect(deps.reporter.shownFailures).toEqual([]);
   });
 

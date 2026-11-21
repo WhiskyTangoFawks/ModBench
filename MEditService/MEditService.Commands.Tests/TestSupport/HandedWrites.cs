@@ -6,8 +6,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>The record index a writer hands its write to: it keeps each hand, and answers it as <see cref="Answer"/> does.
-/// The one read it serves is of the plugin holding each record's winning copy, as <see cref="Owners"/> says.</summary>
+/// <summary>The record index a writer hands its write to: it keeps each hand and answers it as <see cref="Answer"/> does. Its
+/// one read is the plugin of each record's winning copy, from Owners.</summary>
 public class HandedWrites : DispatchProxy
 {
     private readonly List<IReadOnlyList<HandedPlugin>?> _hands = [];
@@ -27,8 +27,9 @@ public class HandedWrites : DispatchProxy
     /// <summary>Why the record index cannot say who holds a record; null while it can.</summary>
     public IndexRefused? OwnersRefused { get; set; }
 
-    /// <summary>The FormKeys of each ask for whose plugin holds them, in the order asked.</summary>
-    public List<IReadOnlyCollection<string>> OwnersAsked { get; } = [];
+    /// <summary>The load order version, decision carried and FormKeys of each ask for whose plugin holds them, in order. Each
+    /// answers decision 7.</summary>
+    public List<(long Version, long? Decision, IReadOnlyCollection<string> FormKeys)> OwnersAsked { get; } = [];
 
     public static HandedWrites Create() => (HandedWrites)(object)Create<IQueries, HandedWrites>();
 
@@ -48,14 +49,15 @@ public class HandedWrites : DispatchProxy
             _changedOutside[origin] = plugins;
             return (IReadOnlyList<PluginAddress>)[.. before.Except(plugins).Concat(plugins.Except(before)).Select(name => new PluginAddress(name, origin))];
         }
-        if (targetMethod?.Name == nameof(IQueries.GetRecordOwners))
+        if (targetMethod?.Name == nameof(IQueries.GetRecordOwnersForAWrite))
         {
-            if (OwnersRefused is { } refused) return (Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused>)refused;
-            var formKeys = (IReadOnlyCollection<string>)args.Require()[0].Require();
-            OwnersAsked.Add(formKeys);
-            return Answered<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>>(formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
+            if (OwnersRefused is { } refused) return (Answer<DecidedOwners, IndexRefused>)refused;
+            var (version, decision, formKeys) =
+                ((long)args.Require()[0].Require(), (long?)args.Require()[1], (IReadOnlyCollection<string>)args.Require()[2].Require());
+            OwnersAsked.Add((version, decision, formKeys));
+            return Answered(new DecidedOwners(formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
                 formKey => formKey, formKey => (IReadOnlyList<PluginAddress>)(Owners.TryGetValue(formKey, out var owner) ? [owner] : []),
-                StringComparer.OrdinalIgnoreCase));
+                StringComparer.OrdinalIgnoreCase), Decision: 7));
         }
         if (targetMethod?.Name != nameof(IQueries.Hold)) throw new NotSupportedException($"The record index here serves no {targetMethod?.Name}.");
         var (written, cancel) = ((IReadOnlyList<HandedPlugin>?)args.Require()[0], (CancellationToken)args.Require()[1].Require());

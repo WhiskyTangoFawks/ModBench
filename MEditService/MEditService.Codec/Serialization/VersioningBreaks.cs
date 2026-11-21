@@ -31,8 +31,8 @@ public static class VersioningBreaks
     public static PropertyInfo? VersioningOf(Type loquiClass) => VersioningByClass.GetOrAdd(loquiClass, declaring =>
         declaring.GetProperty(Member) is { CanWrite: true, PropertyType: { IsEnum: true, Name: EnumName } } versioning ? versioning : null);
 
-    /// <summary><paramref name="versioned"/> holding its first break alone: Mutagen writes up to it. Of bytes that end at
-    /// a break, a binary overlay holds that break and each after it, and a read into a record the first alone.</summary>
+    /// <summary><paramref name="versioned"/> holding its first break alone: Mutagen writes up to it. Of bytes ending at a
+    /// break, an overlay holds that break and each after it; a read into a record, the first alone.</summary>
     public static void KeepFirst(object versioned)
     {
         var versioning = VersioningOf(versioned.GetType())

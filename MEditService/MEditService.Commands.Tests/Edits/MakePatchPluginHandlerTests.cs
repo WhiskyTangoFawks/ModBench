@@ -361,8 +361,8 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal(
-            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP"),
-            (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName))));
+            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP", "held"),
+            (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName)), await File.ReadAllTextAsync(Path.Combine(_folder, "patch.ESP"))));
     }
 
     [Fact]
@@ -373,7 +373,17 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.True(made.Holds(out _, out var refused), refused?.Message);
         Assert.Equal(
             [[_npc.FormKey, _interiorRef.FormKey, _exteriorRef.FormKey], [_interior.FormKey, _exterior.FormKey], [_world.FormKey]],
-            _index.OwnersAsked.Select(asked => asked.Select(formKey => FormKey.Factory(formKey))));
+            _index.OwnersAsked.Select(asked => asked.FormKeys.Select(formKey => FormKey.Factory(formKey))));
+    }
+
+    [Fact]
+    public async Task EveryAskOfAMake_IsForTheLoadOrderTheMakeHolds_AndEachAfterTheFirst_CarriesItsDecision()
+    {
+        var made = await Handler.Make(Mod, Patch, [], [Given(_interiorRef)]);
+
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        var held = _holder.Held.Require().Version;
+        Assert.Equal([(held, (long?)null), (held, 7)], _index.OwnersAsked.Select(asked => (asked.Version, asked.Decision)));
     }
 
     [Fact]

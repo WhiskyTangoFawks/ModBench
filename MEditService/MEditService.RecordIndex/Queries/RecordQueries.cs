@@ -112,6 +112,14 @@ internal sealed class RecordQueries(
         IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
         _answer.Of(() => ReadingWholeSet(reads => reads.GetOwners(formKeys), cancel));
 
+    public Answer<DecidedOwners, IndexRefused> GetRecordOwnersForAWrite(
+        long version, long? decision, IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
+        _answer.Of(() =>
+        {
+            var (owners, decided) = _index.ReadingDecidedWinners(version, decision, reads => reads.GetOwners(formKeys), cancel);
+            return new DecidedOwners(owners, decided);
+        });
+
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         _answer.Of(() => CompareOf(formKey, text, cancel));
 

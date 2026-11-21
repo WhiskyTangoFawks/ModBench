@@ -112,9 +112,8 @@ internal static class Indexes
         index.Settled();
     }
 
-    /// <summary>The check, answered once <paramref name="announced"/> holds and its status is out:
-    /// no pass through the write gate, which would re-apply the filter a test may be asserting on.
-    /// A check that did not end clean fails the wait, naming why.</summary>
+    /// <summary>The check, once <paramref name="announced"/> holds and its status is out; never through the write gate,
+    /// which re-applies the filter a test may assert on. A check not ending clean fails the wait, naming why.</summary>
     internal static void NextCheckUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
         var standing = index.Status;

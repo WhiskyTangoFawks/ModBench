@@ -50,24 +50,24 @@ public sealed class PreparedPluginSave : IDisposable
         File.Move(_tmpPath, _finalPath, overwrite: true);
     }
 
-    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is: false,
-    /// writing nothing, when a file is at its path.</summary>
-    public bool CommitOverNoFile()
+    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is: null,
+    /// else the file at its path, named as spelled, and nothing written.</summary>
+    public string? CommitOverNoFile()
     {
-        if (PluginFolder.HeldAt(_finalPath) is not null) return false;
+        if (PluginFolder.HeldAt(_finalPath) is { } held) return held;
         try
         {
             File.Move(_tmpPath, _finalPath, overwrite: false);
-            return true;
+            return null;
         }
         catch (IOException) when (File.Exists(_finalPath))
         {
-            return false;
+            return PluginFolder.HeldAt(_finalPath) ?? Path.GetFileName(_finalPath);
         }
     }
 
-    /// <summary>The binary put in place as a plugin with no strings is, the file at its path, its name compared without case, first
-    /// set aside in a new folder beside it: null, else why the file system refused, with the file put back.</summary>
+    /// <summary>The binary put in place, the file of its name in any case first set aside in a new folder beside it: null,
+    /// else why the file system refused, the file put back.</summary>
     public string? CommitSettingAside()
     {
         var folder = Path.GetDirectoryName(_finalPath) ?? throw new InvalidOperationException($"Expected '{_finalPath}' to have a parent directory.");

@@ -10,22 +10,23 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>A Modbench script's records laid out where their winning copies sit. A container not given is carried in as Copy
-/// as Override carries one in: a Partial Form where the game lets it be one, else its winning copy's own fields (ADR-0018).</summary>
+/// as Override carries one in (ADR-0018).</summary>
 internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolution, ISourceAdapter source, SchemaReflector schemaReflector)
 {
     internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> Laid(
-        string pluginName, IReadOnlyList<GivenRecord> given, GameRelease release, CancellationToken cancel)
+        string pluginName, IReadOnlyList<GivenRecord> given, GameRelease release, long version, CancellationToken cancel)
     {
         using var copies = new CopySources(resolution, new WriteSessions(source, []));
-        return new Laying(index, copies, schemaReflector.GetSchemas(release), RecordTypes.For(release), pluginName, cancel).All(given);
+        return new Laying(index, version, copies, schemaReflector.GetSchemas(release), RecordTypes.For(release), pluginName, cancel).All(given);
     }
 
     private sealed class Laying(
-        IQueries index, CopySources copies, IReadOnlyDictionary<string, RecordTableSchema> schemas, RecordTypes types, string pluginName,
+        IQueries index, long version, CopySources copies, IReadOnlyDictionary<string, RecordTableSchema> schemas, RecordTypes types, string pluginName,
         CancellationToken cancel)
     {
         private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.OrdinalIgnoreCase);
+        private long? _decision;
         private readonly HashSet<string> _containers = new(StringComparer.OrdinalIgnoreCase);
 
         internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> All(IReadOnlyList<GivenRecord> given)
@@ -159,8 +160,10 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         private PatchRefused.OfIndex? AskOwners(IReadOnlyList<string> formKeys)
         {
             if (formKeys.Count == 0) return null;
-            if (!index.GetRecordOwners(formKeys, cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
-            foreach (var (formKey, held) in owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
+            if (!index.GetRecordOwnersForAWrite(version, _decision, formKeys, cancel).Holds(out var decided, out var refused))
+                return new PatchRefused.OfIndex(refused);
+            _decision = decided.Decision;
+            foreach (var (formKey, held) in decided.Owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
             return null;
         }
 

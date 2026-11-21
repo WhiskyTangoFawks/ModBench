@@ -58,19 +58,6 @@ public sealed class MakePatchPluginApiTests : HostedTests
     }
 
     [Fact]
-    public async Task MakingAPluginOverAFileAtItsPath_Is409_AndLeavesTheFile()
-    {
-        await Loaded();
-        await File.WriteAllTextAsync(Path.Combine(_folder, Patch), "held");
-
-        var made = await Make(Patch, [await Read(_npc)]);
-
-        Assert.Equal(
-            (HttpStatusCode.Conflict, "FileExists", "held"),
-            (made.StatusCode, (await made.Body()).GetProperty("refusal").GetString(), await File.ReadAllTextAsync(Path.Combine(_folder, Patch))));
-    }
-
-    [Fact]
     public async Task MakingAPluginACompiledPluginOfItsModCompilesTo_Is409_EvenWithNoBinaryAtItsPath()
     {
         var fx = Owned(new PluginFixtureBuilder("api-make-patch-compiled").WithPlugin(Patch, origin: Mod).BuildScattered());

@@ -35,8 +35,8 @@ public enum CompileRefusal
     /// regenerating it would not clear that.</summary>
     SourceDoesNotParse,
 
-    /// <summary>The plugin written from the source would not hold a value the source does, such as a
-    /// list element Mutagen writes no bytes for, or would not read back at all; the way out is editing what the refusal names.</summary>
+    /// <summary>The plugin written from the source would not hold a value the source does, such as a list element
+    /// Mutagen writes no bytes for, or would not read back; the way out is editing what the refusal names.</summary>
     SourceValueDropped,
 
     /// <summary>Two source files claim one FormKey; which to keep is the user's call.</summary>
