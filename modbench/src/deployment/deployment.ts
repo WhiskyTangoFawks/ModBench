@@ -249,7 +249,6 @@ async function restoredRecord(record: DeploymentRecord, folder: string, recorded
   return err instanceof Error ? err : new Error(errorMessage(err));
 }
 
-// Each of `paths` in the deployment folder, and `pluginsTxt`.
 const writtenIn = (folder: string, paths: readonly string[], pluginsTxt: readonly string[]): string[] =>
   [...paths.map((path) => join(folder, path)), ...pluginsTxt];
 

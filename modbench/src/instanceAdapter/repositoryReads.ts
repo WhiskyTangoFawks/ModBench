@@ -46,15 +46,9 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     return repository !== undefined && isInstances(repository) ? repository : undefined;
   };
   const answers = keptUntilNamed(() => Promise.resolve(new Map<string, Promise<string>>()));
-  // VS Code's git tells of a change once its state holds it, so the reading that change names runs no status. The change
-  // its status run here tells is no news, so no reading follows it.
-  let told = false;
+  // The change VS Code's git tells of its status run here is no news, so no reading follows it.
   let running = false;
   const statusRun = keptUntilNamed(async () => {
-    if (told) {
-      told = false;
-      return;
-    }
     running = true;
     try {
       await repositoryIn(await api())?.status();
@@ -88,9 +82,7 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     git: (...args) => kept(args.join('\0'), () => gitOrNothing(root, args)),
     changed: (listener) => {
       const heard = (): void => {
-        if (running) return;
-        told = true;
-        listener(dotGit);
+        if (!running) listener(dotGit);
       };
       let stopped = false;
       let following: { dispose(): unknown }[] = [];

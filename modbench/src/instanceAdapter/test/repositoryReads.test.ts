@@ -64,7 +64,7 @@ describe('the instance repository\'s reads', () => {
     expect([await headIn(false), await headIn(true)]).toEqual([['one', 1], ['two', 2]]);
   });
 
-  it('runs no status of its own in a reading named the change VS Code\'s git says it made', async () => {
+  it('answers the HEAD of the change VS Code\'s git says it made, in the reading that change names', async () => {
     const held = hostGitHolding(folder, { head: 'one' });
     const reads = repositoryReads(folder, held.host);
     const heard = hearing(reads);
@@ -72,7 +72,7 @@ describe('the instance repository\'s reads', () => {
     held.head = 'two';
     held.changed();
 
-    expect([(await readTrustingKept(heard, false, reads.head)).answer, held.statusRuns()]).toEqual(['two', 2]);
+    expect([(await readTrustingKept(heard, false, reads.head)).answer, held.statusRuns()]).toEqual(['two', 3]);
   });
 
   it('has VS Code\'s git run its status in a reading that names the .git a write of Modbench\'s wrote, and tells nothing of that run', async () => {
@@ -85,6 +85,17 @@ describe('the instance repository\'s reads', () => {
     const read = await readTrustingKept([join(folder, '.git')], false, reads.head);
 
     expect([read.answer, held.statusRuns(), heard]).toEqual(['two', 2, []]);
+  });
+
+  it('has VS Code\'s git run its status in a reading a write of Modbench\'s names, though VS Code\'s git told of a change before it', async () => {
+    const held = hostGitHolding(folder, { head: 'one' });
+    const reads = repositoryReads(folder, held.host);
+    hearing(reads);
+    await readTrustingKept([], true, reads.head);
+    held.changed();
+    held.head = 'two';
+
+    expect((await readTrustingKept([join(folder, '.git')], false, reads.head)).answer).toBe('two');
   });
 
   it('follows the instance\'s repository VS Code\'s git opens once Modbench listens', async () => {
