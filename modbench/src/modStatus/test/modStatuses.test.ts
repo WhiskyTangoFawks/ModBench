@@ -8,7 +8,7 @@ import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../ma
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { ArchiveEntries } from '../archiveEntries';
-import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
+import { ModStatuses, statusReadsFile, type HashEntries, type StatusSource } from '../modStatuses';
 
 let root: string;
 let logged: string[];
@@ -67,7 +67,10 @@ const file = (name: string) => ({ kind: 'installationFile' as const, name, size:
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, flaggedHashes: new Map(), mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), archiveContents: new Map(), gameName: 'Fallout4', ...over });
+  ({
+    holdsRepository: true, flaggedHashes: new Map(), mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map(), downloadsDir: '/downloads' },
+    filesByMod: new Map(), archiveContents: new Map(), gameName: 'Fallout4', gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' }, ...over,
+  });
 
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
@@ -103,7 +106,7 @@ const hashEntries: HashEntries = (_gameName, archive, entries) => {
 
 const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); }, hashEntries);
 
-describe('Mod status, derived from each instance value (mod-status trace)', () => {
+describe('Mod status (mod-status trace)', () => {
   it('derives each listed mod\'s status by its folder\'s mod name, and none for a separator, which has no manifest, or an entry with no folder', async () => {
     const mod = await folderOf('ModA', { 'mine.txt': '' });
     await writeManifestIn(mod, EMPTY);
@@ -139,7 +142,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     const source = join(root, 'source', 'ModA');
     await mkdir(source, { recursive: true });
     await writeBuildFile(source, buildFileOf({ steps: [{ kind: 'compile', paths: ['Renamed.esp'] }] }));
-    const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } });
+    const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { downloadsDir: '/downloads', sourceDirs: new Map([['ModA', source]]) } });
     const statuses = statusesLogging();
 
     statuses.derive(value);
@@ -212,7 +215,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
       const statuses = statusesLogging();
 
-      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } }));
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { downloadsDir: '/downloads', sourceDirs: new Map([['ModA', source]]) } }));
       await statuses.current();
 
       expect([...statuses.heldByPackage('ModA')].sort()).toEqual(['copied.json', 'plugin.esp']);
@@ -224,7 +227,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       const source = join(root, 'source', 'ModA');
       await mkdir(source, { recursive: true });
       await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
-      const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } });
+      const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { downloadsDir: '/downloads', sourceDirs: new Map([['ModA', source]]) } });
       const delivered = downloads;
       downloads = new Map();
       const statuses = statusesLogging();
@@ -248,7 +251,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
       const statuses = statusesLogging();
 
-      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } }));
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { downloadsDir: '/downloads', sourceDirs: new Map([['ModA', source]]) } }));
       await statuses.current();
 
       expect(asked).toEqual(['ModA']);
@@ -277,7 +280,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
         const sourcePath = join(mod, ARCHIVE);
         const statuses = statusesLogging();
         statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], {
-          paths: { sourceDirs: new Map([['ModA', source]]) },
+          paths: { downloadsDir: '/downloads', sourceDirs: new Map([['ModA', source]]) },
           filesByMod: new Map([['ModA', [{ relativePath: ARCHIVE, sourcePath }]]]),
           archiveContents: new Map([[sourcePath, entries]]),
         }));
@@ -344,7 +347,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
         await mkdir(source, { recursive: true });
         await writeManifestIn(source, EMPTY);
         const statuses = statusesLogging();
-        statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } }));
+        statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { downloadsDir: '/downloads', sourceDirs: new Map([['ModA', source]]) } }));
         await statuses.current();
         return { held: [...statuses.heldByPackage('ModA')], sourceFolder: await readdir(source) };
       };
@@ -601,6 +604,65 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(valueOf([{ kind: 'mod', name: 'B' }], [folder('mod', 'B', b)]));
 
     expect([...(await statuses.current()).keys()]).toEqual(['B']);
+  });
+
+  it('reads the files of each mod folder and source folder, the downloads folder, the game folder and the repository, and no other', () => {
+    const value = valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', '/instance/mods/A')], { paths: { sourceDirs: new Map([['A', '/instance/source/A']]), downloadsDir: '/downloads' } });
+    const paths = [
+      '/instance/mods/A/a.dds', '/instance/source/A/plugin-source/A.esp/records.yaml', '/downloads/A.7z', '/game/Data/Fallout4.esm', '/instance/.git',
+      '/instance/profiles/Default/plugins.txt', '/instance/mods/AB/a.dds',
+    ];
+
+    expect(paths.map((path) => statusReadsFile(path, value))).toEqual([true, true, true, true, true, false, false]);
+  });
+
+  describe('derives again only the mods a change touches', () => {
+    it.each<{ change: string; changed: (value: StatusSource, b: string) => [StatusSource, { named: string[]; disk: boolean }]; derived: string[] }>([
+      { change: 'a change that names a file of one mod', changed: (value, b) => [value, { named: [join(b, 'b.dds')], disk: false }], derived: ['B'] },
+      { change: 'a change to a fact it reads', changed: (value) => [{ ...value, flaggedHashes: new Map() }, { named: [], disk: false }], derived: ['A', 'B'] },
+      { change: 'a check of the disk', changed: (value) => [value, { named: [], disk: true }], derived: ['A', 'B'] },
+      { change: 'a change that names a file of no one mod, as an installation file is', changed: (value) => [value, { named: ['/downloads/A.7z'], disk: false }], derived: ['A', 'B'] },
+    ])('$change: $derived', async ({ changed, derived }) => {
+      const [a, b] = [await folderOf('A'), await folderOf('B')];
+      const statuses = statusesLogging();
+      const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)]);
+      statuses.derive(value);
+      await statuses.current();
+      asked.length = 0;
+
+      statuses.derive(...changed(value, b));
+
+      expect([asked, [...(await statuses.current()).keys()]]).toEqual([derived, ['A', 'B']]);
+    });
+
+    it('derives every mod after a derivation that failed', async () => {
+      const [a, b] = [await folderOf('A'), await folderOf('B')];
+      const statuses = statusesLogging();
+      const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)]);
+      failingInstallationReads = 1;
+      statuses.derive(value);
+      await statuses.current().catch(() => undefined);
+
+      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+
+      expect([...(await statuses.current()).keys()]).toEqual(['A', 'B']);
+    });
+
+    it('derives every mod after git could not say what it holds', async () => {
+      const [a, b] = [await folderOf('A'), await folderOf('B')];
+      let gitFails = true;
+      const statuses = new ModStatuses({
+        ...instance, foldersHeldWhole: (folders) => (gitFails ? Promise.reject(new Error('git is gone')) : instance.foldersHeldWhole(folders)),
+      }, (line) => { logged.push(line); }, hashEntries);
+      const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)]);
+      statuses.derive(value);
+      await statuses.current();
+      gitFails = false;
+
+      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+
+      expect([...(await statuses.current()).values()].map(({ unreadable }) => unreadable)).toEqual([undefined, undefined]);
+    });
   });
 
   it('says it changed when a status changes, and not when a value derives the same statuses', async () => {

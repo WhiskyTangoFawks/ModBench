@@ -178,9 +178,13 @@ export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceVal
 /** The facts a subscriber reads, each named as a key. */
 export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
 
+/** Whether a subscriber reads the file at `path`, as `value` places it. */
+export type ReadsFile<K extends keyof InstanceValue = keyof InstanceValue> = (path: string, value: Pick<InstanceValue, K>) => boolean;
+
 interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
+  readonly readsFile: ReadsFile | undefined;
 }
 
 const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
@@ -389,11 +393,11 @@ export class Instance implements Subscription {
   }
 
   /** Called with each landed value and its sequence; with `concerns`, only with the first, the first after a failed read, a
-   *  check of the disk, and each in which a concern is not the object it was. */
+   *  check of the disk, each in which a concern is not the object it was, and each whose change names a file `readsFile` holds. */
   subscribe<K extends keyof InstanceValue>(
-    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
+    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>, readsFile?: ReadsFile<K>,
   ): Subscription {
-    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)) };
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), readsFile };
     this.subscribers.push(subscribed);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscribed); } };
   }
@@ -592,7 +596,8 @@ export class Instance implements Subscription {
     this.setLate(this.heardSinceRun());
     this.seq++;
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
-    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some(changed));
+    const told = this.subscribers.filter(({ concerns, readsFile }) =>
+      tellsEvery || concerns === undefined || concerns.some(changed) || (readsFile !== undefined && reread.named.some((path) => readsFile(path, next))));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 

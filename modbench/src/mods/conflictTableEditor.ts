@@ -4,14 +4,14 @@
 import { lastGoodReadMessage } from '../wire/reasons';
 import * as vscode from 'vscode';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
-import type { InstanceView } from '../instanceLoader/instance';
+import type { InstanceOf } from '../instanceLoader/instance';
 import { onSettingChange } from '../drivingLib/setting';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
   CONFLICT_CELL_VALUES, CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
-import { conflictPaths, conflictTable } from './conflictTable';
+import { CONFLICT_TABLE_READS, conflictPaths, conflictTable } from './conflictTable';
 import type { FileCopies, FileToCompare } from './sameCopies';
 import { copiesToRead } from './copiesToRead';
 import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
@@ -33,7 +33,7 @@ const conflictTableUri = (mod: string): vscode.Uri =>
 
 const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(1, -SUFFIX.length));
 
-type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'>;
+type TableInstance = Pick<InstanceOf<keyof typeof CONFLICT_TABLE_READS>, 'value' | 'sequence' | 'subscribe'>;
 
 type CopiesOf = (files: readonly FileToCompare[]) => Promise<FileCopies[]>;
 
@@ -58,15 +58,18 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
     let newest = 0;
     let told = new Set<string>();
     let lastGood: ConflictTable | undefined;
+    let read: ReadonlySet<string> = new Set();
     const post = (table: ConflictTable, notice?: string) => {
       const message: ConflictTableShown = notice === undefined
         ? { type: CONFLICT_TABLE_SHOWN, table } : { type: CONFLICT_TABLE_SHOWN, table, notice };
       void panel.webview.postMessage(message);
     };
-    const show = async (view: Pick<InstanceView, 'value' | 'sequence'>) => {
+    const show = async (view: Pick<TableInstance, 'value' | 'sequence'>) => {
       const mine = ++newest;
       try {
-        const copies = await this.copiesOf(copiesToRead(view.value, conflictPaths(view, mod)));
+        const files = copiesToRead(view.value, conflictPaths(view, mod));
+        read = new Set(files.flatMap(({ copies }) => copies.map(({ at }) => (at.kind === 'loose' ? at.path : at.archive))));
+        const copies = await this.copiesOf(files);
         if (mine !== newest) return;
         const unreadable = copies.flatMap(({ relativePath, copies: each }) => each.flatMap((copy) =>
           (copy.kind === 'unreadable' ? [{ key: JSON.stringify([copy.origin, relativePath, copy.reason]), relativePath, copy }] : [])));
@@ -87,7 +90,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         else post(lastGood, lastGoodReadMessage([reason]));
       }
     };
-    const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }));
+    const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }), CONFLICT_TABLE_READS, (path) => read.has(path));
     const setting = onSettingChange(this.settings.onDidChangeConfiguration, CELL_VALUE_SETTING, () => { void show(this.instance); });
     panel.onDidDispose(() => {
       subscription.dispose();

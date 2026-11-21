@@ -371,6 +371,18 @@ describe('Instance — what a read tells', () => {
     expect(told).toEqual([1, 2]);
   });
 
+  it('tells a subscriber that names the files it reads of a value whose change names one of them, and of no other', async () => {
+    const { instance } = loader({ mods: [mod('A')] });
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); }, { mods: true }, (path) => path.startsWith('/instance/mods/A/'));
+
+    await instance.refresh([MODLIST]);
+    await instance.refresh(['/instance/mods/A/a.dds']);
+    await instance.refresh(['/instance/mods/B/b.dds']);
+
+    expect(told).toEqual([1, 2]);
+  });
+
   it('tells a subscriber that names its concerns of each check of the disk, as a check is how the user recovers', async () => {
     const { instance } = loader({ mods: [mod('A')] });
     const told: number[] = [];

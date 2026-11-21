@@ -13,7 +13,7 @@ import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbo
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage, type RenamableEntry } from './entryLanguage';
-import { scriptLanguage, type ScriptClient } from './scriptLanguage';
+import { SCRIPTS_READ, scriptLanguage, type ScriptClient } from './scriptLanguage';
 import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { recordLanguage, type RecordClient } from './recordLanguage';
 import { renameSymbol } from './renameSymbol';
@@ -97,7 +97,8 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     script: scriptLanguage({ instance, names, client, reporter, ...fileCopies }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
-  const changed = (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
+  // Only a script names nothing, so names that name nothing are judged again on a change to what a script resolves against.
+  const changed = (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance, facts: SCRIPTS_READ }, listener) });
   const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
     plugin, entry, names, client, plugins: pluginRows,
