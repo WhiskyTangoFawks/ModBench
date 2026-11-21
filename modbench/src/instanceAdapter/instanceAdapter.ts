@@ -688,7 +688,7 @@ export interface TakenNames {
 
 export interface InstanceAdapter extends DataFileReads {
   /** The instance in one generation, reading again what `reread` asks for. An empty mod order is read again after a settle,
-   *  as another tool may be mid-write. `landed`: what the caller's value last landed from, each fact held against it. */
+   *  as another tool may be mid-write. Each fact is held against `landed`, what the value last landed from. */
   reading(reread?: Reread, landed?: InstanceReading): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
