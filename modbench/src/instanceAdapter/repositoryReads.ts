@@ -6,7 +6,7 @@ import { git } from './git';
 import type { Subscription } from './instanceAdapter';
 
 /** The instance repository's reads, from VS Code's git where its API answers them and from git elsewhere, kept until a
- *  check of the disk or a change that names the repository's .git. */
+ *  check of the disk or a change that names the repository's .git or a file in it. */
 export interface RepositoryReads {
   /** The commit HEAD names; undefined on a branch that has none. */
   readonly head: () => Promise<string | undefined>;
@@ -14,8 +14,8 @@ export interface RepositoryReads {
   readonly localConfig: (key: string) => Promise<string>;
   /** What git answers, trimmed; '' where git exits 1, as `config --get` does for a key that is not set. */
   readonly git: (...args: string[]) => Promise<string>;
-  /** Calls `listener` with the repository's .git, the path a reading names to read these answers again, when VS Code's git
-   *  says the repository changed. */
+  /** Calls `listener` with the repository's HEAD, the path a reading names to read these answers again, when VS Code's git
+   *  says the repository changed. Its own state then holds the change, so that reading has it run no status. */
   readonly changed: (listener: (path: string) => void) => Subscription;
 }
 
@@ -46,7 +46,9 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     return repository !== undefined && isInstances(repository) ? repository : undefined;
   };
   const answers = keptUntilNamed(() => Promise.resolve(new Map<string, Promise<string>>()));
-  // The change VS Code's git tells of its status run here is no news, so no reading follows it.
+  // Kept under the index, which Modbench's own git writes name, through the .git, and VS Code's change does not. VS Code's
+  // change during its status run here is no news.
+  const statusKey = join(dotGit, 'index');
   let running = false;
   const statusRun = keptUntilNamed(async () => {
     running = true;
@@ -75,14 +77,14 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     head: async () => {
       const repository = repositoryIn(await api());
       if (repository === undefined) return (await kept('head', () => gitOrNothing(root, ['rev-parse', '-q', '--verify', 'HEAD']))) || undefined;
-      await statusRun(dotGit);
+      await statusRun(statusKey);
       return repository.state.HEAD?.commit;
     },
     localConfig: (key) => kept(`config ${key}`, (repository) => repository?.getConfig(key) ?? gitOrNothing(root, ['config', '--local', '--get', key])),
     git: (...args) => kept(args.join('\0'), () => gitOrNothing(root, args)),
     changed: (listener) => {
       const heard = (): void => {
-        if (!running) listener(dotGit);
+        if (!running) listener(join(dotGit, 'HEAD'));
       };
       let stopped = false;
       let following: { dispose(): unknown }[] = [];
