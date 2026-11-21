@@ -62,7 +62,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
   const tellStanding = (rowsGone: readonly PluginLoadFailure[] = []): void => {
     const gone = new Set(rowsGone.map(pluginAddressKey));
     tellOnce([...heardFailures].map(([key, f]) => (gone.has(key)
-      ? { key, message: `The records of ${quotedPluginName(f)} are gone: its read failed.`, why: f.reason, notify: true }
+      ? { key, message: `The records of ${quotedPluginName(f)} do not show: its read failed.`, why: f.reason, notify: true }
       : { key, message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
   };
   const tellLanded = (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]): void => {
