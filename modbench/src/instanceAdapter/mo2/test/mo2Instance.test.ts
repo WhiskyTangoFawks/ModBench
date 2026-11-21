@@ -1265,13 +1265,12 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(2);
     });
 
-    it('hears nothing of a change the instance root\'s .git itself reports, as a write inside it can on Windows', () => {
-      let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+    it('hears a repository made again at the instance root, which VS Code reports as a change of its .git', () => {
+      const heard: (string | undefined)[] = [];
+      managerOver(root).subscribe((path) => { heard.push(path); });
 
-      watcherOf(join(root, '.git'))?.fireChange(join(root, '.git'));
-
-      expect(signals).toBe(0);
+      expect(fire(root, '.git')).toBe(true);
+      expect(heard).toEqual([join(root, '.git')]);
     });
 
     it('hears a change to .git/config, where git init writes the path filter and the hooks path', () => {
