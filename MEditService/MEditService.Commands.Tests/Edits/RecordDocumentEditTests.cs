@@ -153,24 +153,14 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void MovingAnElementOfAKeyedArray_IsRefusedAsMalformed_NamingTheArray()
+    public void MovingAnElementOfAnArrayWhoseOrderTheGameDoesNotRead_IsRefusedAsMalformed_NamingTheArray()
     {
-        var result = _fixture.Refused(
-            SeedNpc(), MoveTo(0, Member("VirtualMachineAdapter"), Member("Scripts"), At(0), Member("Properties"), At(0)));
+        _npc.Keywords = [_keyword.ToLink<IKeywordGetter>(), _mod.Keywords.AddNew("Kw2").ToLink<IKeywordGetter>()];
+
+        var result = _fixture.Refused(SeedNpc(), MoveTo(1, Member("Keywords"), At(0)));
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Contains("'VirtualMachineAdapter.Scripts[0].Properties' is a keyed array", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MovingAnElementOfAnArrayTheFormatSorts_IsRefusedAsMalformed_NamingTheArray()
-    {
-        _npc.ActorEffect = [_mod.Spells.AddNew("SpellA").ToLink<ISpellRecordGetter>(), _mod.Spells.AddNew("SpellB").ToLink<ISpellRecordGetter>()];
-
-        var result = _fixture.Refused(SeedNpc(), MoveTo(1, Member("ActorEffect"), At(0)));
-
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Contains("'ActorEffect' is an array the format sorts", result.Message, StringComparison.Ordinal);
+        Assert.Contains("'Keywords' is an array whose order the game does not read", result.Message, StringComparison.Ordinal);
     }
 
     [Theory]

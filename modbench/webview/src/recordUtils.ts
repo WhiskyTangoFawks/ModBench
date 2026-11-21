@@ -52,7 +52,7 @@ import type {
   StringValueContext,
 } from '../../src/wire/messages';
 
-// `siblings` is the length of the array in this column's own document; `noMove` is xedit.md, divergence 14.
+// `siblings` is the length of the array in this column's own document; `noMove` is editor-fields.md § Arrays, story 7.
 export function arrayElementContext(
   formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number, noMove: boolean,
 ): ArrayElementContext {

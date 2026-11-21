@@ -105,11 +105,11 @@ public sealed class SchemaAnnotationTests
     [InlineData(GameRelease.Starfield, "npc_", "Keywords", false)]
     [InlineData(GameRelease.Starfield, "npc_", "Factions", false)]
     [InlineData(GameRelease.Starfield, "scol", "Parts.[].Placements", false)]
-    public void OnlyAnArrayWhoseOrderTheGameReads_IsNeitherKeyedNorSorted(GameRelease release, string table, string path, bool takesMove)
+    public void OnlyAnArrayWhoseOrderTheGameReads_TakesMove(GameRelease release, string table, string path, bool takesMove)
     {
         var array = SchemaFields.At(release, table, path);
 
-        Assert.Equal(takesMove, array.KeyMembers == null && !array.SortedByFormat);
+        Assert.Equal(takesMove, array.TakesMove);
     }
 
     private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> overlay) =>
@@ -139,10 +139,9 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
-    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords", true)]
-    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences", false)]
-    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema_SortedUnderItsDeclarerOnly(
-        Type sorted, string member, string table, string path, bool sortedByFormat)
+    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords")]
+    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences")]
+    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema(Type sorted, string member, string table, string path)
     {
         var reflector = Fallout4With(annotations => annotations with
         {
@@ -152,7 +151,7 @@ public sealed class SchemaAnnotationTests
 
         var array = reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(column => column.Name == path).Field;
 
-        Assert.Equal(sortedByFormat, array.SortedByFormat);
+        Assert.False(array.TakesMove);
     }
 
     [Fact]

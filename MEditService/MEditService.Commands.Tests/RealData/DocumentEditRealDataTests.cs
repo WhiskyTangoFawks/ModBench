@@ -135,9 +135,8 @@ public sealed class DocumentEditRealDataTests : IDisposable
             var first = array[0];
             yield return (RemoveAt(Member(column.Name), At(0)), column.Name);
             yield return (AddAt(Member(column.Name)), column.Name);
-            var takesMove = meta.KeyMembers == null && !meta.SortedByFormat;
             var aMoveChangesSomething = array.GetArrayLength() > 1 && first.GetRawText() != array[1].GetRawText();
-            if (takesMove && aMoveChangesSomething)
+            if (meta.TakesMove && aMoveChangesSomething)
                 yield return (MoveTo(1, Member(column.Name), At(0)), column.Name);
 
             var discriminator = meta.ElementType?.Fields?.FirstOrDefault(f => f.IsDiscriminator);
