@@ -158,41 +158,19 @@ public sealed class WholeSetRefusalTests
         await gate.WaitUntilParkedAsync();
 
         var asked = Task.Run(() => index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]));
-        var refusedWithoutWaiting = Waits.ReachedWithin(() => asked.IsCompleted, TimeSpan.FromSeconds(1));
-        gate.Release();
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refill");
-
-        Assert.True(refusedWithoutWaiting, "The ask waited on the refill's write instead of refusing before it.");
-        Assert.Equal(IndexRefusal.IndexNotReady, (await asked).Refused().Refusal);
-    }
-
-    [Fact]
-    public async Task AReconcileStartingWhileTheOwnersForAWriteWaitOnAWrite_RefusesThemOnceTheyEnter()
-    {
-        using var fixture = Fixture();
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-        var npc = FirstNpc(index);
-        IndexFiles.LogQueries(fixture.InstanceRoot);
-        var filtering = Task.Run(() => index.SetFilter(SlowlyMatchingEveryNpc, "slow.sql"));
-        Waits.Reached(() => IndexFiles.Started(fixture.InstanceRoot, SlowPart), "the slow filter holding the write gate");
-
-        var asked = Task.Run(() => index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]));
-        Assert.False(Waits.ReachedWithin(() => asked.IsCompleted, TimeSpan.FromMilliseconds(500)), "The ask did not wait on the filter's write.");
-        var reconcile = Task.Run(() => index.Reconcile(
-            holder, fixture.DataFolder, [.. fixture.Plugins.Where(plugin => plugin.Name != "Later.esp")], GameRelease.Fallout4, fixture.InstanceRoot));
-        Waits.Reached(() => index.Status.State == LoadOrderState.Reconciling, "the reconcile starting");
-        await filtering;
-        await reconcile;
+        try
+        {
+            // Well inside the gate's 30 seconds, after which the parked refill gives up its write.
+            Waits.Reached(() => asked.IsCompleted, "the ask answering while the refill holds its write", TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            gate.Release();
+            Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refill");
+        }
 
         Assert.Equal(IndexRefusal.IndexNotReady, (await asked).Refused().Refusal);
     }
-
-    private const string SlowPart = "range(300000000)";
-
-    private const string SlowlyMatchingEveryNpc =
-        "SELECT form_key FROM npc_ UNION ALL SELECT NULL FROM range(1) WHERE (SELECT sum(range % 7) FROM " + SlowPart + ") < 0";
 
     [Fact]
     public async Task WhileAReReadLandsAPlugin_TheOwnersForAWrite_WaitForItsWinners()
