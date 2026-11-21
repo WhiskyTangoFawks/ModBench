@@ -95,8 +95,8 @@ function* foldersAbove(path: string): Generator<string> {
   }
 }
 
-// The folders a status reads, by their keys, and the listed mods each holds: built again only when a fact it is built from is
-// another object, so a change is placed by its path's folders whatever the size of the modlist.
+// The folders a status reads, by key, and the listed mods each holds. Built again only when a fact it is built from is another
+// object, so a path is placed by its folders whatever the modlist's size.
 interface Folders {
   readonly placed: readonly ModPlaced[];
   readonly byName: ReadonlyMap<string, ModPlaced>;
