@@ -17,8 +17,7 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { originsWinningFirst } from '../symbolNames/symbolNames';
 import { ignoreLink, type IgnoredLink } from './gameFolder/ownEntries';
 import { programVersions } from './gameFolder/programVersions';
-import { lastBuilt } from '../ports/lastBuilt';
-import { readingSteadier } from './steadyReading';
+import { steadied } from './steadyReading';
 
 export interface ArchiveReads {
   /** The archives the game's INIs list, in load order, a key's last value winning. `notes` says what
@@ -103,17 +102,8 @@ async function settled<T>(read: () => Promise<T>, lines: (read: T) => readonly u
 const metaOf = ({ version, nexusId, installationFileName, installedFileKeys }: ModMeta): ModMeta =>
   ({ version, nexusId, installationFileName, installedFileKeys });
 
-const steadiers = new WeakMap<ReadingSource, { readonly steadied: ReturnType<typeof readingSteadier>; readonly pluginOrder: (listed: PluginEntry[]) => { kept: PluginEntry[]; notes: string[] }; readonly modGroups: typeof groupModOrder }>();
-
-const steadierOf = (source: ReadingSource) => {
-  const steadier = steadiers.get(source) ?? {
-    steadied: readingSteadier(),
-    pluginOrder: lastBuilt((listed: PluginEntry[]) => withNotes(listed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`)),
-    modGroups: lastBuilt(groupModOrder),
-  };
-  steadiers.set(source, steadier);
-  return steadier;
-};
+const pluginOrderOf = (listed: PluginEntry[]): { kept: PluginEntry[]; notes: string[] } =>
+  withNotes(listed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
 
 // A listed mod's meta is the one already read. A folder the mod order does not list is read only
 // when downloaded files are there to be matched against it.
@@ -178,15 +168,13 @@ async function readWhole(
     source.repositorySetUp(),
     source.managerRunning(),
   ]);
-  const { listed, metas } = await modOrderRead;
-  const steadier = steadierOf(source);
-  const steady = steadier.steadied({
-    ...game, archiveList: game.archiveList.archives, mods, modsReadFrom: [listed, ...metas], downloadedFiles, profiles, modFolders, sourceModFolders,
+  const pluginOrder = pluginOrderOf(pluginsListed);
+  const steady = steadied({
+    ...game, archiveList: game.archiveList.archives, mods: mods.kept, pluginOrder: pluginOrder.kept, downloadedFiles, profiles, modFolders, sourceModFolders,
     sortingRuleFiles, unwatchedFolders: source.unwatchedFolders(), managerRunning, modFiles, runtimeOutput, folderMeta,
   }, landed);
-  const pluginOrder = steadier.pluginOrder(pluginsListed);
   return {
-    profile, gameName, gameRelease, ...steady, mods: steady.mods.kept, modGroups: steadier.modGroups(steady.mods.kept), pluginOrder: pluginOrder.kept,
+    profile, gameName, gameRelease, ...steady, modGroups: steady.mods === landed?.mods ? landed.modGroups : groupModOrder(steady.mods),
     orderNotes: [...mods.notes, ...pluginOrder.notes], archiveListNotes: game.archiveList.notes, holdsRepository, repositorySetUp,
     gameFolderLinks: gameFolderLinks.size,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),

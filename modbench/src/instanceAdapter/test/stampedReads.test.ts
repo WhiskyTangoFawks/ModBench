@@ -350,6 +350,27 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
   });
 
+  it.each([
+    ['modlist.txt', '+Another Mod\n'],
+    ['plugins.txt', '*Another.esp\n'],
+  ])('hands each fact as the landed reading holds it once %s is back as it was, whatever a reading between found', async (file, line) => {
+    const adapter = managerOver(instance);
+    const path = join(instance, 'profiles', 'Default', file);
+    const text = await readFile(path, 'utf8');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await writeFile(path, text + line);
+    await modifiedLater(path);
+    await adapter.reading({ named: [path], disk: false });
+    await writeFile(path, text);
+    await modifiedLater(path);
+
+    const again = new Map(Object.entries(await adapter.reading({ named: [path], disk: false }, landed)));
+
+    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
+    expect(Object.entries(landed).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+  });
+
   it('names unchanged a file rewritten with its own bytes', async () => {
     const adapter = managerOver(instance);
     const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
