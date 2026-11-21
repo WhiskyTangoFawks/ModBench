@@ -2,7 +2,7 @@
 """Stop hook: surface analyzer diagnostics on the files edited this turn.
 
 Gives the agent per-turn, diff-scoped code-quality feedback across both stacks
-instead of waiting for /validate:
+instead of waiting for the gates:
 
 - Backend (C#): builds each changed analyzed project with a SARIF error log,
   capturing *all* severities incl. the info/note rules (Sonar complexity, RCS,
@@ -15,7 +15,7 @@ instead of waiting for /validate:
 
 Design notes:
 - Fires once per settle cycle (stop_hook_active guard) so it never nags or loops;
-  /validate stays the hard gate. Advisory, matching the repo's "visible-but-not-
+  the gates stay the hard gate. Advisory, matching the repo's "visible-but-not-
   blocking, per-instance triage" stance on quality rules.
 - Everything is scoped to files changed vs HEAD, so it reports on your work, not
   the whole codebase.

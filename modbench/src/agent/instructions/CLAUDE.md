@@ -1,6 +1,6 @@
 # The agent's instructions
 
-The maintainer owns every file here, because human-owned text guides an agent better than text an agent generates. A file changes only through `/to-spec`'s process, on the maintainer's yes to its diff.
+The developer owns every file here, because human-owned text guides an agent better than text an agent generates. A file changes only through `/to-spec`'s process, on the developer's yes to its diff.
 
 The instructions and guides here are what Modbench tells the user's agent. They serve [surfaces/agent.md](../../../../spec/surfaces/agent.md).
 

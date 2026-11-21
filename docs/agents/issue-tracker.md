@@ -6,20 +6,27 @@ Issues live as GitHub issues. Use `gh` for all operations.
 
 Four kinds of open issue, nothing else:
 
-- Epic (`epic` label) — the bounded scope of one batch of work, drawn as pointers into the specs, minted only by the maintainer's grill → `/to-spec` → `/to-epic` pipeline. Always assigned to a goal or a lane. Future tense; spent when its slices ship. The specs it points at are written before its slices are built, never updated afterwards to match them. A batch joins an open epic whose goal holds it, and a batch of one ticket joins the open epic it sits beside, so an epic carries a stack for one `/orchestrate` run. A new epic is for a batch no open epic holds.
-- Implementation ticket — a slice of an epic, minted by `/to-tickets` run against that epic; a native sub-issue of it, pointing at the spec lines it makes true, with native blocked-by edges. No parentless implementation tickets.
-- Enhancement (`enhancement` label) — a request for new behaviour that no spec draws yet, from the maintainer or a user. A grill and `/to-spec` turn it into specification and then an epic, or it closes. It carries no tickets.
-- Bug (`bug` label) — something doesn't work: the code breaks the spec line the bug names. Reported by the maintainer, a user, or an agent with the maintainer's approval. Triage verifies it. A bug stands alone, in no epic: it is fixed in the loop, or `/orchestrate` works it as its own ticket. A bug whose fix needs a sentence in `spec/` changed or added goes through grill → `/to-spec` → `/to-epic` instead.
+- Epic (`epic` label) — a work plan: the tickets for one spec change, minted by `/to-tickets` and delivered by one `/implement-work-plan` run. Always assigned to a goal or a lane. Its title is the change record's first line. Its body names the spec change's commit, then holds the verification plan, then the run's report, which the run writes as it goes. Future tense; spent when its tickets land and the developer has answered the report. The specs it points at are written before its tickets are built, never updated afterwards to match them.
+- Implementation ticket — a slice of an epic, minted by `/to-tickets`, or by `/implement-work-plan` for a defect it routes; a native sub-issue of the epic, pointing at the spec lines it makes true, with native blocked-by edges. No parentless implementation tickets.
+- Enhancement (`enhancement` label) — a request for new behaviour that no spec draws yet, from the developer or a user. A grill and `/to-spec` turn it into specification and then an epic, or it closes. It carries no tickets.
+- Bug (`bug` label) — something doesn't work: the code breaks the spec line the bug names. Reported by the developer, a user, or an agent with the developer's approval. Triage verifies it. A bug stands alone, in no epic: it is fixed in the loop, or `/implement` works it as its own ticket. A bug whose fix needs a sentence in `spec/` changed or added goes through grill → `/to-spec` → `/to-tickets` instead.
 
 Every open issue carries one state label (`triage-labels.md`).
 
-Agents never create issues outside `/to-epic` and `/to-tickets`, with one exception. In a session the maintainer is in, an agent files a `bug` the maintainer approves. The bug goes on the goal the session works toward, labelled `ready-for-agent` when it breaks a spec line and `needs-triage` otherwise. A finding met mid-task is fixed in the same session, reported to the maintainer in the session summary, or dropped. Only the maintainer escalates a finding into tracked work: by approving it as a bug, or through grill → `/to-spec` → `/to-epic` → `/to-tickets`.
+A ticket's state, as `/implement-work-plan` keeps it:
+
+- queued: open, `ready-for-agent`, unassigned.
+- building: open, assigned: `gh issue edit <n> --add-assignee @me`.
+- parked: open, `ready-for-human`, unassigned. Its question goes in the report.
+- landed: closed, with the merge commit's SHA as the close comment.
+
+Agents never create issues outside `/to-tickets` and `/implement-work-plan`, with one exception. In a session the developer is in, an agent files a `bug` the developer approves. The bug goes on the goal the session works toward, labelled `ready-for-agent` when it breaks a spec line and `needs-triage` otherwise. A finding met mid-task is fixed in the same session, reported to the developer in the session summary, or dropped. Only the developer escalates a finding into tracked work: by approving it as a bug, or through grill → `/to-spec` → `/to-tickets`.
 
 ## Milestones = goals
 
 A milestone is a plan. An open issue with no milestone is not planned.
 
-- Goal: a numbered milestone, such as `2 — LitR is in Modbench`. Its description states the outcome and the acceptance the maintainer runs. The number is its priority. A goal closes when its acceptance passes, and the maintainer tags a release.
+- Goal: a numbered milestone, such as `2 — LitR is in Modbench`. Its description states the outcome and the acceptance the developer runs. The number is its priority. A goal closes when its acceptance passes, and the developer tags a release.
 - Lane: an unnumbered milestone that never closes. `Upkeep` holds hygiene that serves no goal. `Mutagen Bugs` holds upstream Mutagen defects, paired with the `mutagen` label.
 
 Traverse with `gh`:
@@ -35,7 +42,7 @@ Traverse with `gh`:
 - List: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`; add `--label`/`--state` as needed.
 - Comment: `gh issue comment <number> --body "..."` — same backtick hazard and same `--body-file` fix as Create.
 - Labels: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`. Label strings and roles: `triage-labels.md`.
-- `mutagen` label: any issue whose root cause is (or is suspected to be) in Mutagen itself — reported upstream, PR'd upstream, or still being investigated — carries this and sits on the `Mutagen Bugs` milestone. Lets `gh issue list --label mutagen` answer "what's actually Mutagen's problem, not ours" and cross-check against this maintainer's own open upstream issues/PRs (`gh issue list --repo Mutagen-Modding/Mutagen --author <user>`) before re-investigating something already reported.
+- `mutagen` label: any issue whose root cause is (or is suspected to be) in Mutagen itself — reported upstream, PR'd upstream, or still being investigated — carries this and sits on the `Mutagen Bugs` milestone. Lets `gh issue list --label mutagen` answer "what's actually Mutagen's problem, not ours" and cross-check against the developer's own open upstream issues/PRs (`gh issue list --repo Mutagen-Modding/Mutagen --author <user>`) before re-investigating something already reported.
 - Blocking links: dependency is tracker state, not a label or prose. A ticket body's "Blocked by" section is a human-readable mirror of the native edges, never the source of truth — an edge that exists only in prose is not set. `/to-tickets` publishes tickets in dependency order (blockers first, so every number exists), then sets every edge natively in the same run and reads them back to verify. Link the moment a dependency is known: `gh issue edit <n> --add-blocked-by <m>` (`--remove-blocked-by` to undo); read via `--json blockedBy` (nodes carry `state`). Blocked = any `OPEN` node. If `gh`'s installed version predates the `--add-blocked-by`/`--remove-blocked-by` flags (added after 2.45.0), use the REST endpoint directly instead — version-independent: `gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by --method POST -F issue_id=<numeric id>` (numeric `id`, not the issue number — get it via `gh api repos/<owner>/<repo>/issues/<m> --jq .id`; `-f` sends a string and the endpoint rejects it).
 - Close: `gh issue close <number> --comment "..."`
 
@@ -55,7 +62,7 @@ Issues/PRs share one number space — a bare number may be either; try `gh pr vi
 
 ## When a skill says "publish to the issue tracker"
 
-Only `/to-epic` (an epic) and `/to-tickets` (implementation tickets) publish — both run by the maintainer. Any other skill's instruction to file an issue is overridden by this repo's no-standing-backlog policy above: report the finding to the maintainer instead, who may approve it as a bug (above).
+Only `/to-tickets` (an epic and its tickets), run by the developer, and `/implement-work-plan` (a ticket for a defect it routes) publish. Any other skill's instruction to file an issue is overridden by this repo's no-standing-backlog policy above: report the finding to the developer instead, who may approve it as a bug (above).
 
 ## When a skill says "fetch the relevant ticket"
 

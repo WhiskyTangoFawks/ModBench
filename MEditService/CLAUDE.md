@@ -3,7 +3,7 @@
 C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide rules; the ADR named on each line is the full statement.
 
 ```bash
-# one box while iterating, through slot-run.sh; a full run goes through /validate
+# one box while iterating, through slot-run.sh; a full run goes through the gates
 dotnet test MEditService.<Box>.Tests -v minimal
 ```
 

@@ -20,12 +20,12 @@ When code work needs a sentence here changed, or a story needs an exception to o
 - `architecture/`: a box, a layer, or a reference between boxes.
 - `surfaces/`: what a user sees and does. A gesture lands in `surfaces/commands.md`.
 - `formats/`: a file that one machine or version writes and another reads.
-- `GLOSSARY.md`: a word of the maintainer's that a model would misread.
+- `GLOSSARY.md`: a word of the developer's that a model would misread.
 - A tactical decision lands in the Notes of the ticket it bears on, as a default the implementer may override with a reason, or nowhere.
 
 ## GLOSSARY.md
 
-GLOSSARY.md holds words already in the maintainer's head. Through it, an agent speaks the maintainer's language. An entry records a word the maintainer uses. A word an agent coined stays out. The file's opening says which words earn an entry.
+GLOSSARY.md holds words already in the developer's head. Through it, an agent speaks the developer's language. An entry records a word the developer uses. A word an agent coined stays out. The file's opening says which words earn an entry.
 
 - Two heading levels. `#` is a term. `##` is a kind of the `#` term above it, and its definition starts with that term: a [parent] that [difference]. A term with two parents stays a `#`, and its definition names both.
 - The heading is the canonical spelling, so `grep -E '^#+ Term$'` finds it. Where the language allows, a kind's heading contains its parent's name: Mod order, Patch plugin.

@@ -27,6 +27,14 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 
 An agent runs each build and test through `.claude/skills/validate/slot-run.sh <command>`, one at a time machine-wide. A hook blocks the bare form.
 
+## The workflow
+
+- Epics, tickets and a run's report: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
+- The gates: `bash .claude/skills/validate/run-gates.sh --detach`, then `run-gates.sh --wait` until it prints a verdict (exit 3: wait again). Then the Windows gates, through `/windows-vm`.
+- Acceptance stands the system up through `/acceptance`. Its throwaway instances and the Windows VM are cleared for subagents.
+- Lanes: the composition root is one module: `modbench/src/*.ts`, `modbench/package.json` and `MEditService.Http`'s `Program.cs`. `api.ts` is generated: `/regenerate-api`. Run 3 lanes at most.
+- In a worktree, symlink `modbench/node_modules` from the main checkout before the first frontend command.
+
 ## Resources
 - `spec/architecture/target-architecture.md` says how to read the diagrams. A view's specification is its surface in `spec/surfaces/`. A trace in `docs/traces/` is a diagram of how data flows, and holds no contract.
 - `spec/adr/` holds the decisions the code only cites. `ls spec/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, specification or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.
@@ -39,18 +47,18 @@ principle > ADR > architecture and surfaces > code. Together they are the specif
 
 @spec/principles.md
 
-- Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect: fix it. A defect an open epic already tracks is left to that epic. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
-- Stop and ask when the work does one of these:
+- Strategy is the developer's; tactics are yours. Code that disagrees with a document is a defect: fix it. A defect an open epic already tracks is left to that epic. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
+- Ask the developer, or park when unattended, when the work does one of these:
   - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no surface draws.
   - It needs a module or port that `spec/architecture/` does not draw.
   - It needs a reference that `layers.d2` forbids.
   - It moves a responsibility from one box to another.
   - It meets two documents at one level that disagree.
   - It needs a sentence in `spec/` changed to fit the code. Report the sentence as too tactical.
-- A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
-- Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.
-- The maintainer's documents are `spec/` and every `CLAUDE.md`.
-- GLOSSARY.md is the maintainer's modding vocabulary, outside the chain. Specification prose, code and identifiers use its words. A label the user sees uses the reference tool's word. A divergence can make that word mislead, such as "top" in a view whose sort the user can reverse. The label then uses another word, and the register records that divergence. A concept with no word in either is described, never named. When it needs a name, ask the maintainer.
+- A copy of another box's code is never the way around one of these; ADR-0014 rejects it.
+- Report every conflict: two documents in the chain that disagree about the work. Build to the higher one. A conflict and a park quote the texts at stake, name their levels and say what you built; the developer decides every change to their documents.
+- The developer's documents are `spec/` and every `CLAUDE.md`.
+- GLOSSARY.md is the developer's modding vocabulary, outside the chain. Specification prose, code and identifiers use its words. A label the user sees uses the reference tool's word. A divergence can make that word mislead, such as "top" in a view whose sort the user can reverse. The label then uses another word, and the register records that divergence. A concept with no word in either is described, never named. When it needs a name, ask the developer.
 
 ## Rules that matter
 - Generalize across Bethesda games. Modbench's scan holds the game-name literals, and mEdit's holds game namespaces and game-concrete type names; what no scan can hold is a design that assumes one game's shape, so an FO4-concrete path or fixture is a fixture choice and never a platform lock.
@@ -58,4 +66,5 @@ principle > ADR > architecture and surfaces > code. Together they are the specif
 - A plugin is `(origin, filename)` on every seam, payload, map key, tree row and temp path (ADR-0012). Keyed on the filename alone, two plugins that share a filename collapse into one and nothing fails. The backend scan sees only a public `string` member named `…plugin` with no `…origin` beside it; map keys, return values and all of modbench go unchecked.
 - Detection of an external change is gated; recovery is not. Anything that holds disk-derived state recovers when a file changed without Modbench's knowledge (ADR-0003).
 - A behaviour is tested once, at the box that owns it. CODING_STANDARDS.md § Tests holds the strategy.
-- A fixture taken from a real mod is committed only after the maintainer approves it.
+- A gate is code, and changing it is tactical. A change serves the gate's purpose: the gate still catches every defect it exists to catch.
+- A fixture taken from a real mod is committed only after the developer approves it.

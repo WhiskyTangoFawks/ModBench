@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A commit on main gets no /validate run, and a spec/ or docs/ change can break the scans that read them.
+# A commit on main gets no /verify run, and a spec/ or docs/ change can break the scans that read them.
 [[ $(git symbolic-ref -q --short HEAD) == main ]] || exit 0
 git diff --cached --name-only | grep -qE '^(spec|docs)/' || exit 0
 gates="$(git rev-parse --show-toplevel)/.claude/skills/validate/run-gates.sh"
