@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { adapterOver, managerOver } from '../../test/mo2/adapterOver';
-import { listDir, listDirByStamp, parsedBy, readTrustingKept } from '../files';
+import { listDir, listDirByStamp, parsedBy, readTrustingKept, textByStamp } from '../files';
 import { sortingRuleFilePaths } from '../mo2/layout';
 import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
@@ -249,6 +249,18 @@ describe('a folder listed and a file parsed by their stamps', () => {
     await rm(path);
     await expect(textAt(path)).rejects.toMatchObject({ code: 'ENOENT' });
   });
+
+  it('compares a text read again with none a read found gone, so the same text back is a change', async () => {
+    const path = join(root, 'modlist.txt');
+    await writeFile(path, '+A');
+    await textByStamp(path);
+    await rm(path);
+    await textByStamp(path).catch(() => undefined);
+    await writeFile(path, '+A');
+    await modifiedLater(path);
+
+    expect((await readTrustingKept([path], false, () => textByStamp(path))).unchanged).toEqual(new Set());
+  });
 });
 
 describe('the MO2 reading of an instance nothing changed in', () => {
@@ -331,6 +343,25 @@ describe('the MO2 reading of an instance nothing changed in', () => {
 
     const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles']);
     expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+  });
+
+  it.each([
+    ['rewritten with its own bytes', true],
+    ['gone and back with its own bytes', false],
+  ] as const)('names a file %s unchanged: %s', async (_how, rewritten) => {
+    const adapter = managerOver(instance);
+    const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
+    const bytes = await readFile(modlist);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    await adapter.reading(CHECK_THE_DISK);
+    if (!rewritten) {
+      await rm(modlist);
+      await adapter.reading({ named: [modlist], disk: false }).catch(() => undefined);
+    }
+    await writeFile(modlist, bytes);
+    await modifiedLater(modlist);
+
+    expect((await adapter.reading({ named: [modlist], disk: false })).unchangedFiles).toEqual(rewritten ? [modlist] : []);
   });
 
   it('takes a file\'s stamp again, within a reading, only where a re-read is named it or checks the disk, and outside one each time', async () => {

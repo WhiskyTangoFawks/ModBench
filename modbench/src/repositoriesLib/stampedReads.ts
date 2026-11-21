@@ -46,7 +46,8 @@ export const foundUnchanged = (path: string): void => {
 };
 
 /** A reader of `path` that reads it again only when its stamp has changed, and trusts what is kept inside a trusted read.
- *  `comparesText`: the answer is a file's content, which a settled stamp that holds shows unchanged. */
+ *  `comparesText`: the answer is a file's content, which a settled stamp that holds shows unchanged, and which a changed one
+ *  leaves kept for the read again to compare with (ADR-0029). */
 export function keptTrusted<T>(
   stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false, comparesText = false,
 ): (path: string) => Promise<T> {
@@ -90,22 +91,35 @@ function touchedBy(named: readonly string[]): (key: string) => boolean {
   return (key) => keys.has(key) || below.some((folder) => key.startsWith(folder));
 }
 
-const stampStill = async (stampOf: (path: string) => Promise<FileStamp>, { path, stamp }: Kept<unknown>): Promise<boolean> => {
+const stampNow = async (stampOf: (path: string) => Promise<FileStamp>, path: string): Promise<FileStamp | undefined> => {
   try {
-    return sameStamp(await stampOf(path), stamp);
+    return await stampOf(path);
   } catch {
-    return false;
+    return undefined;
   }
 };
+
+// What a check leaves kept of `held`, its stamp now `now`, or none when it is gone.
+function keptThrough<T>(held: Kept<T>, now: FileStamp | undefined, outright: boolean, comparable: boolean): Kept<T> | undefined {
+  if (outright || now === undefined) return undefined;
+  if (sameStamp(now, held.stamp)) return held;
+  return comparable ? { ...held, stamp: now, settled: false } : undefined;
+}
 
 async function forgetChanged<T>(
   kept: Map<string, Kept<T>>, stampOf: (path: string) => Promise<FileStamp>, checked: (key: string) => boolean, outright: boolean,
   unchanged?: Set<string>,
 ): Promise<string[]> {
   const changed = await Promise.all([...kept].filter(([key]) => checked(key)).map(async ([key, held]) => {
-    const still = await stampStill(stampOf, held);
-    if (unchanged !== undefined && still && held.settled && held.handed !== true) unchanged.add(pathKey(held.path));
-    if ((outright || !still) && kept.get(key) === held) kept.delete(key);
+    const now = await stampNow(stampOf, held.path);
+    const still = now !== undefined && sameStamp(now, held.stamp);
+    const comparable = unchanged !== undefined && held.handed !== true;
+    if (comparable && still && held.settled) unchanged.add(pathKey(held.path));
+    const left = keptThrough(held, now, outright, comparable);
+    if (kept.get(key) === held && left !== held) {
+      if (left === undefined) kept.delete(key);
+      else kept.set(key, left);
+    }
     return still ? [] : [held.path];
   }));
   return changed.flat();
@@ -134,14 +148,19 @@ function keptByStamp<T>(stampOf: (path: string) => Promise<FileStamp>, read: (pa
     const key = pathKey(path);
     const held = kept.get(key);
     if (held?.settled === true && trusting.getStore() !== undefined) return held.value;
-    const stamp = await stampOf(path);
+    // What a failed read kept is no longer what was found last.
+    const forget = (error: unknown): never => {
+      kept.delete(key);
+      throw error;
+    };
+    const stamp = await stampOf(path).catch(forget);
     if (held?.handed === true && trusting.getStore() !== undefined && sameStamp(held.stamp, stamp)) {
       kept.set(key, { ...held, handed: false });
       return held.value;
     }
     if (held?.settled === true && sameStamp(held.stamp, stamp)) return held.value;
     const readFromMs = Date.now();
-    const value = await read(path);
+    const value = await read(path).catch(forget);
     kept.set(key, { path, stamp, value, settled: settledBefore(stamp, readFromMs) });
     return value;
   };

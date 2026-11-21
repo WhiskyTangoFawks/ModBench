@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import { vi } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Instance, type InstanceSubscriber, type InstanceValue } from '../instanceLoader/instance';
@@ -188,6 +188,16 @@ export const NOTHING_WRITTEN: Gesture = {
   name: 'a read of the mod order nothing wrote',
   async make({ root, instance }) {
     await instance.refresh([join(root, 'profiles', 'Default', 'modlist.txt')]);
+    return 0;
+  },
+};
+
+export const REWRITTEN_WITH_ITS_OWN_BYTES: Gesture = {
+  name: 'a rewrite of the mod order with its own bytes',
+  async make({ root, instance }) {
+    const modlist = join(root, 'profiles', 'Default', 'modlist.txt');
+    await writeFile(modlist, await readFile(modlist));
+    await instance.refresh([modlist]);
     return 0;
   },
 };
