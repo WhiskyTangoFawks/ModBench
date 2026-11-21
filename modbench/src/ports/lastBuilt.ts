@@ -1,4 +1,5 @@
-const sameInputs = (a: readonly unknown[], b: readonly unknown[]): boolean => a.length === b.length && a.every((input, at) => Object.is(input, b[at]));
+/** Whether `a` and `b` hold the same items in the same places: an object by identity, a primitive by value. */
+export const sameInputs = (a: readonly unknown[], b: readonly unknown[]): boolean => a.length === b.length && a.every((input, at) => Object.is(input, b[at]));
 
 /** `build`, answering what it built last while each input is the one it built from: an object by identity, a primitive by
  *  value. */

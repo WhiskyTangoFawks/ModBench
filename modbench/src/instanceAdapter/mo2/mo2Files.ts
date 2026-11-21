@@ -5,7 +5,7 @@ import type { Dirent } from 'node:fs';
 import { dirname, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { noneLeft } from '../../ports/lastBuilt';
+import { noneLeft, sameInputs } from '../../ports/lastBuilt';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDir, listDirByStamp, realPathIfThere } from '../files';
@@ -196,11 +196,6 @@ const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unkno
 const filesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
   [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
 
-const samePartsAs = (a: OriginFiles, b: OriginFiles): boolean => {
-  const [before, after] = [filesParts(a), filesParts(b)];
-  return before.length === after.length && before.every((part, at) => Object.is(part, after[at]));
-};
-
 /** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
  *  It keeps the walks of the mod folders the latest reading names, so it ends with the instance it describes. */
 export function originFilesReader(
@@ -224,7 +219,7 @@ export function originFilesReader(
 
   const steadied = (key: string, files: OriginFiles): OriginFiles => {
     const last = answered.get(key);
-    if (last !== undefined && samePartsAs(last, files)) return last;
+    if (last !== undefined && sameInputs(filesParts(last), filesParts(files))) return last;
     answered.set(key, files);
     return files;
   };
