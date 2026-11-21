@@ -26,7 +26,7 @@ describe('a change costs the same on a small and a large instance', () => {
 });
 
 describe('a gesture in a view costs what it shows, on a small and a large instance', () => {
-  const layers: (keyof Cost)[] = ['read', 'derived', 'subscribers', 'views'];
+  const layers: (keyof Cost)[] = ['read', 'derived', 'subscribers', 'mEdit', 'views'];
   it.each<{ gesture: Gesture; layer: keyof Cost }>(
     [...Object.values(IN_MODS), ...Object.values(IN_PLUGINS)].flatMap((gesture) => layers.map((layer) => ({ gesture, layer }))),
   )('$gesture.name, at the $layer layer', async ({ gesture, layer }) => {

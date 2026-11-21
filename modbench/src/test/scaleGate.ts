@@ -27,6 +27,7 @@ import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { NO_MOD_STATUSES } from './noModStatuses';
 import { recordingReporter } from './surfacingDoubles';
 import { fileSystemCalls } from './fileSystemCalls';
+import { FakeCancellationToken } from './vscodeMock';
 import { present } from '../ports/present';
 import { insertModAtWinningEnd, setEnabledInText } from '../instanceAdapter/mo2/codecs/modlistText';
 import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
@@ -39,6 +40,8 @@ export interface Cost {
   readonly derived: number;
   /** The subscribers called. */
   readonly subscribers: number;
+  /** The questions asked of mEdit, until the gesture settles. */
+  readonly mEdit: number;
   /** The rows the views are asked for, and the decorations each row is asked for. */
   readonly views: number;
 }
@@ -52,7 +55,6 @@ async function syntheticInstance(mods: number): Promise<string> {
   await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
   await mkdir(join(root, 'overwrite'));
   await mkdir(join(root, 'Game', 'Data'), { recursive: true });
-  await writeFile(join(root, 'Game', 'Data', 'Fallout4.esm'), 'master');
   await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n');
   await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), names.reduceRight((text, name) => setEnabledInText(insertModAtWinningEnd(text, name), name, true), ''));
   await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), pluginsTextOf(names.map((name) => ({ name: `${name}.esp`, enabled: true }))));
@@ -100,8 +102,6 @@ export interface View {
   search(term: string): Promise<number>;
 }
 
-const NEVER_CANCELLED: vscode.CancellationToken = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
-
 const labelOf = ({ label }: vscode.TreeItem): string => (typeof label === 'string' ? label : label?.label ?? '');
 
 // VS Code as it draws each open view with every row collapsed, and asks the decorations of each row it shows.
@@ -113,7 +113,7 @@ function viewHost(trees: Readonly<Record<ViewName, Tree>>, decorations: readonly
   const decorate = (provider: vscode.FileDecorationProvider, uris: vscode.Uri | vscode.Uri[] | undefined): void => {
     for (const uri of uris === undefined ? [...decorated.values()] : [uris].flat()) {
       asked++;
-      pending.push(Promise.resolve(provider.provideFileDecoration(uri, NEVER_CANCELLED)));
+      pending.push(Promise.resolve(provider.provideFileDecoration(uri, new FakeCancellationToken())));
     }
   };
   const draw = async (tree: Tree, row: unknown): Promise<vscode.TreeItem> => {
@@ -234,12 +234,13 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & { r
     host.count();
     subscribers = 0;
     const start = fileSystemCalls.count;
+    const asked = client.calls.length;
     const landed = landings.length;
 
     const shown = await gesture.make({ root, instance, views: host.views });
     await settled();
 
-    return { read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(before, instance.value), subscribers, views: host.count(), shown };
+    return { read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(before, instance.value), subscribers, mEdit: client.calls.length - asked, views: host.count(), shown };
   } finally {
     for (const disposable of [modSyncing, pluginSyncing, outcomes, host, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });
