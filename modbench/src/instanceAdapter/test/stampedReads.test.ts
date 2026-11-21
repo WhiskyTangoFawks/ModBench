@@ -250,12 +250,15 @@ describe('a folder listed and a file parsed by their stamps', () => {
     await expect(textAt(path)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('compares a text read again with none a read found gone, so the same text back is a change', async () => {
+  it.each([
+    ['a check', (path: string): Promise<unknown> => readTrustingKept([path], false, () => Promise.resolve())],
+    ['a read', (path: string): Promise<unknown> => textByStamp(path).catch(() => undefined)],
+  ])('compares a text read again with none %s found gone, so the same text back is a change', async (_by, findGone) => {
     const path = join(root, 'modlist.txt');
     await writeFile(path, '+A');
     await textByStamp(path);
     await rm(path);
-    await textByStamp(path).catch(() => undefined);
+    await findGone(path);
     await writeFile(path, '+A');
     await modifiedLater(path);
 
@@ -345,23 +348,15 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
   });
 
-  it.each([
-    ['rewritten with its own bytes', true],
-    ['gone and back with its own bytes', false],
-  ] as const)('names a file %s unchanged: %s', async (_how, rewritten) => {
+  it('names unchanged a file rewritten with its own bytes', async () => {
     const adapter = managerOver(instance);
     const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
-    const bytes = await readFile(modlist);
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     await adapter.reading(CHECK_THE_DISK);
-    if (!rewritten) {
-      await rm(modlist);
-      await adapter.reading({ named: [modlist], disk: false }).catch(() => undefined);
-    }
-    await writeFile(modlist, bytes);
+    await writeFile(modlist, await readFile(modlist));
     await modifiedLater(modlist);
 
-    expect((await adapter.reading({ named: [modlist], disk: false })).unchangedFiles).toEqual(rewritten ? [modlist] : []);
+    expect((await adapter.reading({ named: [modlist], disk: false })).unchangedFiles).toEqual([modlist]);
   });
 
   it('takes a file\'s stamp again, within a reading, only where a re-read is named it or checks the disk, and outside one each time', async () => {

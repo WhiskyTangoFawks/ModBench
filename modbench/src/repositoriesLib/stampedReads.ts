@@ -99,7 +99,7 @@ const stampNow = async (stampOf: (path: string) => Promise<FileStamp>, path: str
   }
 };
 
-// What a check leaves kept of `held`, its stamp now `now`, or none when it is gone.
+// A text a read found stays kept through a changed stamp, for the read again to compare with (ADR-0029).
 function keptThrough<T>(held: Kept<T>, now: FileStamp | undefined, outright: boolean, comparable: boolean): Kept<T> | undefined {
   if (outright || now === undefined) return undefined;
   if (sameStamp(now, held.stamp)) return held;
