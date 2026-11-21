@@ -21,6 +21,7 @@ const linkArrayMeta = fieldMeta({
   name: 'Packages',
   type: 'array',
   isArray: true,
+  takesMove: true,
   elementType: fieldMeta({ name: '', type: 'formKey' }),
 });
 
@@ -508,12 +509,8 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Scripts'), at(1)] }));
   });
 
-  it.each([
-    ['keyed', scriptMeta, 'Ambush'], ['keyed', scriptMeta, 'Guard'],
-    ['sorted', { ...scriptMeta, keyMembers: null, sortedByFormat: true }, 'Ambush'],
-    ['sorted', { ...scriptMeta, keyMembers: null, sortedByFormat: true }, 'Guard'],
-  ])('the element of a %s array offers neither move', async (_kind, meta, label) => {
-    await renderGuardAfterAmbush(meta);
+  it.each(['Ambush', 'Guard'])('the element %s of an array that takes no move offers neither move', async label => {
+    await renderGuardAfterAmbush({ ...scriptMeta, keyMembers: null });
 
     expect(JSON.parse(required(myCell(rowLabelled(label)).getAttribute('data-vscode-context'), `${label}'s context`)))
       .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
@@ -637,7 +634,7 @@ describe('RecordPanel — an element of an array without a key is addressed at i
 });
 
 describe('RecordPanel — an element after a null slot is addressed at its own index', () => {
-  const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
+  const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, takesMove: true, elementType: fieldMeta({ name: '', type: 'string' }) });
   const sequenceAlignedWithNullSlot = compareResultFixture({
     overrides: [
       compareOverride({

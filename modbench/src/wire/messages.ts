@@ -169,7 +169,7 @@ export interface ColumnHeaderContext {
 }
 
 // A row's hops under its subtree root. An array's element has its own index in each column that
-// holds it, as its diff node states. `noMove` is xedit.md, divergence 14.
+// holds it, as its diff node states. `noMove` is editor-fields.md § Arrays, story 7.
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }

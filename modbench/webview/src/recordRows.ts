@@ -238,7 +238,7 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
       if (meta.type === 'array' && meta.elementType) {
         rows.push(...rowsOf(child, meta.elementType, {
           ...at,
-          path: [...path, { kind: 'element', indexes: child.indexes, noMove: !!meta.keyMembers || meta.sortedByFormat }],
+          path: [...path, { kind: 'element', indexes: child.indexes, noMove: !meta.takesMove }],
           key: childKey, parent: key, present: column => child.values[column] != null, depth: depth + 1,
           isLastElement: column => elementsIn(diff, column).at(-1) === child,
           keyMembers: meta.keyMembers,

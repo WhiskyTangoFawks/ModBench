@@ -43,9 +43,8 @@ public record FieldMetadata(
     // reach one struct member down.
     IReadOnlyList<string>? KeyMembers = null,
 
-    // An array whose order the game does not read: xEdit sorts it and its elements have no key, or the
-    // source's format writes it sorted (xedit.md, divergence 14). It takes no move.
-    bool SortedByFormat = false,
+    // An array whose order the game reads (editor-fields.md § Arrays, story 7).
+    bool TakesMove = false,
 
     // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
     // from a discriminator's value, which says which class an object turned out to be. Serialized

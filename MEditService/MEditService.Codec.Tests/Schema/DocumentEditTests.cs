@@ -795,6 +795,18 @@ public sealed class DocumentEditTests
     }
 
     [Fact]
+    public void TranslatedString_LanguagesOfALocalizedPlugin_TakeNoMove()
+    {
+        var held = NpcNamed("""{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"French","String":"Vieux"}]}""");
+
+        Assert.Null(DocumentEdit.Locate(
+            Document.Parse(held), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"], EditOp.Move,
+            [Member("Name"), Member("Values"), At(1)], localized: true, out var edit));
+
+        Assert.False(edit.Require().ElementTakesMove);
+    }
+
+    [Fact]
     public void Header_IsSmallMaster_WritesTheFlagsMemberAndNothingElse()
     {
         var before = HeaderTextHoldingAModHeader();

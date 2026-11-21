@@ -175,11 +175,10 @@ internal static class RecordTextEdit
 
     private static RecordEditResult? RefuseMove(DocumentEdit edit, RecordEditEnvelope envelope, string spelled)
     {
-        // xedit.md, divergence 14.
-        if (edit.InKeyedArray || edit.InSortedArray)
+        if (!edit.ElementTakesMove)
         {
-            var kind = edit.InKeyedArray ? "a keyed array" : "an array the format sorts";
-            return Malformed(spelled, $"'{RecordEditEnvelope.Spell(envelope.Path.SkipLast(1))}' is {kind}, and its elements take no move");
+            return Malformed(spelled,
+                $"'{RecordEditEnvelope.Spell(envelope.Path.SkipLast(1))}' is an array whose order the game does not read, and its elements take no move");
         }
         var destination = (envelope.Value ?? throw new InvalidOperationException("Expected a move's destination index.")).Integer;
         return destination == edit.Position ? Malformed(spelled, $"the element is already at position {destination}") : null;

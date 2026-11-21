@@ -306,13 +306,12 @@ public sealed record SchemaAnnotations(
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     internal IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
-    internal bool IsSorted(PropertyInfo prop) => IsSorted(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
+    internal bool TakesMove(PropertyInfo prop) => TakesMove(ReflectedTypes.DeclaringTypeOf(prop), prop.Name);
     internal bool IsSortedByFormat(Type owner, string member) =>
         FormatSortedLists.Any(list => list.Member == member && list.Declarer.IsAssignableFrom(owner));
-    private bool IsSorted(Type owner, string member) =>
-        UnkeyedSortedArrays.Contains((owner.Name, member)) || IsSortedByFormat(owner, member);
     private bool TakesMove(Type owner, string member) =>
-        !KeyedArrays.ContainsKey((owner.Name, member)) && !IsSorted(owner, member);
+        !KeyedArrays.ContainsKey((owner.Name, member)) && !UnkeyedSortedArrays.Contains((owner.Name, member))
+        && !IsSortedByFormat(owner, member);
     internal IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>

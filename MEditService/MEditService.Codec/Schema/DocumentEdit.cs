@@ -25,10 +25,7 @@ public sealed class DocumentEdit
     /// reason reaches every member below it (FieldMetadata.WithReadOnlyReason).</summary>
     public ReadOnlyMember? ReadOnlyTarget { get; }
 
-    /// <summary>Whether the path lands on an element of an array whose elements are keyed.</summary>
-    public bool InKeyedArray => _cursor.OwnerArray != null && _cursor.OwnerMeta?.KeyMembers != null;
-
-    public bool InSortedArray => _cursor.OwnerArray != null && _cursor.OwnerMeta?.SortedByFormat == true;
+    public bool ElementTakesMove => _cursor.OwnerArray != null && _cursor.OwnerMeta?.TakesMove == true;
 
     /// <summary>The element's position, where the path lands on an element.</summary>
     public int Position => _cursor.Index;
