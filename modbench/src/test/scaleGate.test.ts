@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
+vi.mock('node:fs', async (importOriginal) => (await import('./fileSystemCalls')).countingCalls(await importOriginal()));
 vi.mock('node:fs/promises', async (importOriginal) => (await import('./fileSystemCalls')).countingCalls(await importOriginal()));
 
 vi.mock('vscode', async () => {
@@ -11,18 +12,15 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { costOfOneChangedFile, type Cost } from './scaleGate';
+import { A_NEW_LOOSE_FILE, costOf, type Change, type Cost } from './scaleGate';
 
-describe('one changed file costs the same on a small and a large instance', () => {
-  let small: Cost;
-  let large: Cost;
+describe('a change costs the same on a small and a large instance', () => {
+  it.each<{ change: Change; layer: keyof Cost }>([
+    { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
+  ])('$change.name, at the $layer layer', async ({ change, layer }) => {
+    const small = await costOf(3, change);
+    const large = await costOf(60, change);
 
-  beforeAll(async () => {
-    small = await costOfOneChangedFile(3);
-    large = await costOfOneChangedFile(60);
-  });
-
-  it.each<keyof Cost>(['subscribers'])('at the %s layer', (layer) => {
     expect(large[layer]).toBe(small[layer]);
   });
 });

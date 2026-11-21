@@ -1,4 +1,4 @@
-// The scale gate's harness (ADR-0029, Consequences, bullet 5). Its test mocks `node:fs/promises` with `countingCalls`,
+// The scale gate's harness (ADR-0029, Consequences, bullet 5). Its test mocks `node:fs` and `node:fs/promises` with `countingCalls`,
 // and `vscode.window` with a `registerFileDecorationProvider`.
 
 import * as vscode from 'vscode';
@@ -22,13 +22,12 @@ import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { NO_MOD_STATUSES } from './noModStatuses';
 import { recordingReporter } from './surfacingDoubles';
 import { fileSystemCalls } from './fileSystemCalls';
-import { present } from '../ports/present';
 import { insertModAtWinningEnd, setEnabledInText } from '../instanceAdapter/mo2/codecs/modlistText';
 import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
 
-/** The work one changed file causes at each layer. */
+/** The work a change causes at each layer. */
 export interface Cost {
-  /** The file system calls until the value lands. */
+  /** The file system calls from the change until its value lands, or until it settles when none lands; its own writes too. */
   readonly read: number;
   /** The objects the value holds that the value before it did not. */
   readonly derived: number;
@@ -41,7 +40,6 @@ export interface Cost {
 const quiet = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const modName = (n: number): string => `Mod ${String(n).padStart(3, '0')}`;
 
-// Each mod holds its plugin and loose files of its own, and the game's Data folder the base master.
 async function syntheticInstance(mods: number): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'scale-gate-'));
   const names = Array.from({ length: mods }, (_, n) => modName(n));
@@ -60,8 +58,7 @@ async function syntheticInstance(mods: number): Promise<string> {
   return root;
 }
 
-// Every object reachable from `value`, through its fields and its maps' and sets' entries.
-function objectsOf(value: unknown): Set<object> {
+function reachableObjects(value: unknown): Set<object> {
   const seen = new Set<object>();
   const stack = [value];
   while (stack.length > 0) {
@@ -76,8 +73,8 @@ function objectsOf(value: unknown): Set<object> {
 }
 
 const newObjects = (before: InstanceValue, after: InstanceValue): number => {
-  const known = objectsOf(before);
-  return [...objectsOf(after)].filter((object) => !known.has(object)).length;
+  const known = reachableObjects(before);
+  return [...reachableObjects(after)].filter((object) => !known.has(object)).length;
 };
 
 type Tree = Pick<vscode.TreeDataProvider<unknown>, 'getChildren' | 'getTreeItem'> & { readonly onDidChangeTreeData: vscode.Event<unknown> };
@@ -117,8 +114,23 @@ function viewHost(trees: readonly Tree[], decorations: readonly vscode.FileDecor
   };
 }
 
-/** What one new loose file in one mod costs at each layer, on a synthetic instance of `mods` mods. */
-export async function costOfOneChangedFile(mods: number): Promise<Cost> {
+/** A change to the instance, made as a gesture or another program makes it, and the Instance loader told of it as it is. */
+export interface Change {
+  readonly name: string;
+  make(root: string, instance: Pick<Instance, 'refresh'>): Promise<void>;
+}
+
+export const A_NEW_LOOSE_FILE: Change = {
+  name: 'a new loose file in one mod',
+  async make(root, instance) {
+    const file = join(root, 'mods', modName(0), 'textures', modName(0), 'changed.dds');
+    await writeFile(file, 'changed');
+    await instance.refresh([file]);
+  },
+};
+
+/** What `change` costs at each layer, on a synthetic instance of `mods` mods. */
+export async function costOf(mods: number, change: Change): Promise<Cost> {
   const root = await syntheticInstance(mods);
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
   const client = new InMemoryMEditClient();
@@ -142,18 +154,16 @@ export async function costOfOneChangedFile(mods: number): Promise<Cost> {
   try {
     await instance.refresh();
     await settled();
-    const changed = join(root, 'mods', modName(0), 'textures', modName(0), 'changed.dds');
-    await writeFile(changed, 'changed');
     const before = instance.value;
     views.count();
     subscribers = 0;
     const start = fileSystemCalls.count;
     const landed = landings.length;
 
-    await instance.refresh([changed]);
+    await change.make(root, instance);
     await settled();
 
-    return { read: present(landings[landed], 'the value one changed file landed') - start, derived: newObjects(before, instance.value), subscribers, views: views.count() };
+    return { read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(before, instance.value), subscribers, views: views.count() };
   } finally {
     for (const disposable of [modSyncing, pluginSyncing, outcomes, views, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });
