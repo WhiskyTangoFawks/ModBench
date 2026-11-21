@@ -7,7 +7,7 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { lastHanded, noneLeft } from '../../ports/lastBuilt';
+import { noneLeft, readAs } from '../../ports/lastBuilt';
 import { listDir, putIfChanged, putIfChangedUntold, readOrAbsent, textByStamp } from '../files';
 import type { Covering, FileRead, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
@@ -468,7 +468,6 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     return { settings, ...judging };
   };
   const settingsText = () => readOrAbsent(() => textByStamp(file), undefined);
-  const configurationRead = lastHanded<PublisherConfiguration>();
   const readProfiles = async (held: HeldTexts): Promise<{ text: string; profiles: Segment[] } | undefined> => {
     const text = heldTextAt(held, file) ?? await settingsText();
     if (text === undefined) return undefined;
@@ -506,14 +505,14 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       try {
         const text = await settingsText();
         if (text === undefined) return NO_CONFIGURATION;
-        const { settings, tags, covering, reason } = await understood(text);
+        const { settings, key, tags, covering, reason } = await understood(text);
         const pathProblems = await tagsWithPathProblems(instanceRoot, settings, text, file);
-        return configurationRead({ kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems, unshippable: { file, reason } }, [
-          covering, tags, reason, ...pathProblems.flatMap(pathProblemParts),
+        return readAs({ kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems, unshippable: { file, reason } }, [
+          key, ...pathProblems.flatMap(pathProblemParts),
         ]);
       } catch (err) {
         const reason = errorMessage(err);
-        return configurationRead({ kind: 'unreadable', reason }, [reason]);
+        return readAs({ kind: 'unreadable', reason }, [reason]);
       }
     },
     refusal: async () => {

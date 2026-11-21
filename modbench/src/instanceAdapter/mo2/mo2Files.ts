@@ -5,7 +5,6 @@ import type { Dirent } from 'node:fs';
 import { dirname, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { lastHanded, noneLeft } from '../../ports/lastBuilt';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDir, listDirByStamp, realPathIfThere } from '../files';
@@ -189,37 +188,26 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
 
 const modKey = (rootOnly: boolean, folder: string): string => `mod|${rootOnly}|${folder}`;
 
-const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: OriginFolder): unknown[] => [relativePath, path, includedPath, excluded, ...noneLeft(rest)];
-
-const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
-
 /** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
- *  It keeps the walks of the mod folders the latest reading names, so it ends with the instance it describes. */
+ *  As a reading of whole mods, or of their roots, starts, it forgets each such walk of a mod the one before it did not ask
+ *  for, so it keeps no walk past the two latest readings that could ask for it. */
 export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
-  const walked = new Map<string, Walked>();
-  // A walk its stamps do not cover is walked each time, and answers the files it answered last while it walks the same.
-  const uncovered = new Map<string, ReturnType<typeof lastHanded<OriginFiles>>>();
-  let named: ModFolders | undefined;
+  // Every walk it answers, kept to answer again where its stamps cover it.
+  const walked = new Map<string, Walked | undefined>();
+  // A reading hands its own mod folders, so a new one starts a reading. What any caller asks for until the next counts as used.
+  const readings = new Map<boolean, { readonly folders: ModFolders; readonly used: Set<string> }>();
 
-  const forgetUnnamed = (modFolders: ModFolders): void => {
-    if (named === modFolders) return;
-    named = modFolders;
-    const live = new Set(modFolders.all.flatMap(({ path }) => [modKey(false, path), modKey(true, path)]));
-    for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) {
+  const started = (rootOnly: boolean, folders: ModFolders): void => {
+    const before = readings.get(rootOnly);
+    if (before?.folders === folders) return;
+    readings.set(rootOnly, { folders, used: new Set() });
+    if (before === undefined) return;
+    for (const key of walked.keys()) if (key.startsWith(modKey(rootOnly, '')) && !before.used.has(key)) {
       walked.delete(key);
       context.watch.listed(key, undefined);
     }
-  };
-
-  const walkedAgain = (key: string, files: OriginFiles): OriginFiles => {
-    const handed = uncovered.get(key) ?? lastHanded<OriginFiles>();
-    uncovered.set(key, handed);
-    const { origin, folder, notes, files: own, folders, ...rest } = files;
-    return handed(files, [
-      origin, folder, notes.length, ...notes, own.length, ...own.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest),
-    ]);
   };
 
   async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
@@ -228,9 +216,8 @@ export function originFilesReader(
     const done = await walk();
     const files = filesOf(done);
     context.watch.listed(key, { folders: [done.root, ...files.folders.map(({ path }) => path)], files: files.files.map(({ path }) => path) });
-    if (done.stampsCover) walked.set(key, { listings: done.listings, files });
-    else walked.delete(key);
-    return done.stampsCover ? files : walkedAgain(key, files);
+    walked.set(key, done.stampsCover ? { listings: done.listings, files } : undefined);
+    return files;
   }
 
   return async (origin, rootOnly, modFolders) => {
@@ -239,10 +226,12 @@ export function originFilesReader(
       return walkedOnce(`overwrite|${rootOnly}`, () => listOverwrite(dir, rootOnly),
         ({ root, files, folders, notes }) => ({ origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes }));
     }
-    if (typeof modFolders === 'object') forgetUnnamed(modFolders);
+    if (typeof modFolders === 'object') started(rootOnly, modFolders);
     const folder = await originFolder(context, origin, modFolders);
     if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
-    return walkedOnce(modKey(rootOnly, folder), () => walkMod(folder, rootOnly),
+    const key = modKey(rootOnly, folder);
+    readings.get(rootOnly)?.used.add(key);
+    return walkedOnce(key, () => walkMod(folder, rootOnly),
       ({ files, folders, notes }) => ({ origin: origin.name, folder, files, folders, notes }));
   };
 }

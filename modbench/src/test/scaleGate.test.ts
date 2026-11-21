@@ -12,7 +12,7 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, costOf, type Cost, type Gesture } from './scaleGate';
+import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
@@ -23,6 +23,16 @@ describe('a change costs the same on a small and a large instance', () => {
     const large = await costOf(60, change);
 
     expect(large[layer]).toBe(small[layer]);
+  });
+});
+
+describe('a read that finds nothing new is no change', () => {
+  it.each<{ change: Gesture; layer: keyof Cost }>(
+    [NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].flatMap((change) => (['derived', 'subscribers', 'mEdit', 'views'] as const).map((layer) => ({ change, layer }))),
+  )('$change.name, at the $layer layer', async ({ change, layer }) => {
+    const cost = await costOf(60, change);
+
+    expect(cost[layer]).toBe(0);
   });
 });
 

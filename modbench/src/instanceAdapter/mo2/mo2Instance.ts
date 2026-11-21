@@ -92,8 +92,8 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const followPathTokens = pathTokensFollowed(context, gameFolder, publisherFile);
   const adapter: ManagerAdapter = {
     names: source.names,
-    reading: async (reread) => {
-      const reading = await readInstance(source, reread);
+    reading: async (reread, landed) => {
+      const reading = await readInstance(source, reread, landed);
       await reading.trustingKept(() => Promise.all([showUnfiltered(), followPathTokens(), followSourceModLines()]));
       return reading;
     },

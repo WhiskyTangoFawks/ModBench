@@ -42,8 +42,8 @@ interface Run {
   readonly settled: Promise<void>;
   /** Settles when the read has landed, before its subscribers have settled; rejects with the failure of a read that failed. */
   readonly valueLanded: Promise<void>;
-  /** The named paths the read found as the value held them. */
-  unchanged: ReadonlySet<string>;
+  /** What the read answered. */
+  reading?: InstanceReading;
   landValue(failure?: Error): void;
   land(settled: Promise<void>): void;
 }
@@ -55,7 +55,7 @@ function nextRun(): Run {
   const valueLanded = new Promise<void>((resolve, reject) => { settleValueLanded = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
   // A refresh asks for `settled` alone, so a failure nobody asked `valueLanded` for is not an unhandled one.
   valueLanded.catch(() => undefined);
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, unchanged: new Set(), landValue: settleValueLanded, land };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, landValue: settleValueLanded, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -314,6 +314,9 @@ export class Instance implements Subscription {
 
   private failure: string | undefined;
 
+  // The reading the value last landed from: a file is unchanged against it (ADR-0029).
+  private landedFrom: InstanceReading | undefined;
+
   private subscribers: Subscribed[] = [];
 
   private failureListeners: ReadFailureListener[] = [];
@@ -368,7 +371,7 @@ export class Instance implements Subscription {
     return this.current;
   }
 
-  /** Rises once per landed recompute. A failed read leaves it where it was. */
+  /** Rises once per recompute that lands a change. A failed read, and one that finds nothing new, leave it where it was. */
   get sequence(): number {
     return this.seq;
   }
@@ -574,13 +577,22 @@ export class Instance implements Subscription {
     }
     const before = this.current;
     const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
+    const unchanged = new Set(run.reading?.unchangedFiles);
+    const reread: Reread = { named: [...run.named].filter((path) => !unchanged.has(path)), disk: run.disk };
+    const changed = (fact: keyof InstanceValue): boolean => next[fact] !== before[fact];
+    // ADR-0029
+    const nothingNew = !tellsEvery && reread.named.length === 0 && !Object.keys(next).filter(isFactOf(next)).some(changed);
+    if (nothingNew) {
+      this.setLate(this.heardSinceRun());
+      return { settled: Promise.resolve() };
+    }
     this.current = next;
+    this.landedFrom = run.reading;
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
-    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
+    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some(changed));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
@@ -610,9 +622,9 @@ export class Instance implements Subscription {
   private async read(run: Run): Promise<InstanceValue> {
     const { named, disk, tellsUnheard } = run;
     const { adapter, log } = this.options;
-    const reading = await adapter.reading({ named: [...named], disk });
+    const reading = await adapter.reading({ named: [...named], disk }, this.landedFrom);
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
-    run.unchanged = new Set(reading.unchangedFiles);
+    run.reading = reading;
     return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
       sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },
       archiveSources: (sources) => { this.tellArchivesNothingHolds(sources); },

@@ -1,17 +1,17 @@
 // A fact no kept read answers by identity stays the object it was while the values it was read as are the same.
 
-import { lastHanded, noneLeft } from '../ports/lastBuilt';
+import { asLanded, noneLeft, readAs, sameInputs } from '../ports/lastBuilt';
+import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type {
-  DataFolderArchives, DataFolderFiles, DataFolderPlugins, DataFolderUnlisted, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFiles,
-  SortingRuleFile, SortingRuleFiles, UnwatchedFolder,
+  DataFolderArchives, DataFolderFiles, DataFolderPlugins, DataFolderUnlisted, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFile, OriginFiles,
+  OriginFolder, SortingRuleFile, SortingRuleFiles, UnwatchedFolder,
 } from './instanceAdapter';
 import type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
 /** The facts of one reading as read, before they are steadied. */
 export interface ReadFacts {
-  readonly mods: { readonly kept: ModlistEntry[]; readonly notes: string[] };
-  /** What `mods` is made of: the mod order file's lines and each listed mod's meta, as their kept reads answer them. */
-  readonly modsReadFrom: readonly unknown[];
+  readonly mods: readonly ModlistEntry[];
+  readonly pluginOrder: readonly PluginEntry[];
   readonly gameFolder: GameFolder;
   readonly programVersions: ProgramVersions;
   readonly dataFolderPlugins: DataFolderPlugins;
@@ -27,10 +27,9 @@ export interface ReadFacts {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
   readonly managerRunning: ManagerRunning;
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
+  readonly runtimeOutput: OriginFiles;
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
 }
-
-export type SteadyFacts = Omit<ReadFacts, 'modsReadFrom'>;
 
 // Each parts function names every field of its fact; `noneLeft` fails to compile on a field it does not name.
 
@@ -136,47 +135,59 @@ function managerRunningParts(running: ManagerRunning): unknown[] {
 const sortingRuleFilesParts = ({ masterlist, prelude, userlist, ...rest }: SortingRuleFiles): unknown[] =>
   [...sortingRuleFileParts(masterlist), ...sortingRuleFileParts(prelude), ...sortingRuleFileParts(userlist), ...noneLeft(rest)];
 
-/** Steadies each reading of one source against the one before it. */
-export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
-  const steady = {
-    mods: lastHanded<ReadFacts['mods']>(),
-    gameFolder: lastHanded<GameFolder>(),
-    programVersions: lastHanded<ProgramVersions>(),
-    dataFolderPlugins: lastHanded<DataFolderPlugins>(),
-    creationClubList: lastHanded<readonly string[]>(),
-    archiveList: lastHanded<readonly string[]>(),
-    dataFolderArchives: lastHanded<DataFolderArchives>(),
-    dataFolderFiles: lastHanded<DataFolderFiles>(),
-    profiles: lastHanded<readonly string[]>(),
-    modFolders: lastHanded<ModFolders | undefined>(),
-    downloadedFiles: lastHanded<DownloadedFiles>(),
-    sourceModFolders: lastHanded<ReadonlyMap<string, string>>(),
-    sortingRuleFiles: lastHanded<SortingRuleFiles>(),
-    unwatchedFolders: lastHanded<readonly UnwatchedFolder[]>(),
-    managerRunning: lastHanded<ManagerRunning>(),
-    modFiles: lastHanded<ReadonlyMap<string, OriginFiles>>(),
-    folderMeta: lastHanded<ReadonlyMap<string, ModMeta>>(),
-  };
-  return (read) => {
-    const { sortingRuleFiles, managerRunning } = read;
-    return {
-      mods: steady.mods(read.mods, read.modsReadFrom),
-      gameFolder: steady.gameFolder(read.gameFolder, gameFolderParts(read.gameFolder)),
-      programVersions: steady.programVersions(read.programVersions, programVersionsParts(read.programVersions)),
-      dataFolderPlugins: steady.dataFolderPlugins(read.dataFolderPlugins, dataFolderPluginsParts(read.dataFolderPlugins)),
-      creationClubList: steady.creationClubList(read.creationClubList, read.creationClubList),
-      archiveList: steady.archiveList(read.archiveList, read.archiveList),
-      dataFolderArchives: steady.dataFolderArchives(read.dataFolderArchives, dataFolderArchivesParts(read.dataFolderArchives)),
-      dataFolderFiles: steady.dataFolderFiles(read.dataFolderFiles, dataFolderFilesParts(read.dataFolderFiles)),
-      profiles: steady.profiles(read.profiles, read.profiles),
-      modFolders: steady.modFolders(read.modFolders, read.modFolders?.all.flatMap(modFolderParts) ?? [undefined]),
-      downloadedFiles: steady.downloadedFiles(read.downloadedFiles, downloadedFilesParts(read.downloadedFiles)),
-      sourceModFolders: steady.sourceModFolders(read.sourceModFolders, [...read.sourceModFolders].flat()),
-      sortingRuleFiles: steady.sortingRuleFiles(sortingRuleFiles, sortingRuleFilesParts(sortingRuleFiles)),
-      unwatchedFolders: steady.unwatchedFolders(read.unwatchedFolders, read.unwatchedFolders.flatMap(unwatchedFolderParts)),
-      managerRunning: steady.managerRunning(managerRunning, managerRunningParts(managerRunning)),
-      modFiles: steady.modFiles(read.modFiles, [...read.modFiles].flatMap(([name, listing]) => [name, listing.folder === undefined ? undefined : listing])),
-      folderMeta: steady.folderMeta(read.folderMeta, folderMetaParts(read.folderMeta)),
-    };
+const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: OriginFolder): unknown[] => [relativePath, path, includedPath, excluded, ...noneLeft(rest)];
+
+const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
+
+const originFilesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
+  [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
+
+// A walk its stamps covered answers the object it answered, so only a walk made again is compared, and only with what landed.
+const filesAsLanded = (files: OriginFiles, landed: OriginFiles | undefined): OriginFiles =>
+  (landed !== undefined && (landed === files || sameInputs(originFilesParts(landed), originFilesParts(files))) ? landed : files);
+
+function modFilesAsLanded(modFiles: ReadonlyMap<string, OriginFiles>, landed: ReadonlyMap<string, OriginFiles> | undefined): ReadonlyMap<string, OriginFiles> {
+  const steady = new Map([...modFiles].map(([name, files]) => [name, filesAsLanded(files, landed?.get(name))] as const));
+  return landed !== undefined && sameInputs([...landed].flat(), [...steady].flat()) ? landed : steady;
+}
+
+function modlistEntryParts(entry: ModlistEntry): unknown[] {
+  if (entry.kind === 'separator') {
+    const { kind, name, enabled, ...rest } = entry;
+    return [kind, name, enabled, ...noneLeft(rest)];
+  }
+  const { kind, name, enabled, gameName, version, updateAvailable, nexusId, installationFileName, installedFileKeys, ...rest } = entry;
+  return [kind, name, enabled, gameName, version, updateAvailable, nexusId, installationFileName, installedFileKeys?.length, ...installedFileKeys ?? [], ...noneLeft(rest)];
+}
+
+const pluginEntryParts = ({ name, enabled, ...rest }: PluginEntry): unknown[] => [name, enabled, ...noneLeft(rest)];
+
+const as = <T extends object | undefined>(fact: T, parts: readonly unknown[], landed: T | undefined): T => asLanded(readAs(fact, parts), landed);
+
+/** Each fact of a reading, or the object `landed`, the reading the caller's value last landed from, holds while it was read
+ *  as the same: a fact read again for a stamp too fresh to trust, or after another reading saw other content, is the object
+ *  it was (ADR-0029). */
+export function steadied(read: ReadFacts, landed?: ReadFacts): ReadFacts {
+  const was: Partial<ReadFacts> = landed ?? {};
+  return {
+    mods: as(read.mods, read.mods.flatMap(modlistEntryParts), was.mods),
+    pluginOrder: as(read.pluginOrder, read.pluginOrder.flatMap(pluginEntryParts), was.pluginOrder),
+    gameFolder: as(read.gameFolder, gameFolderParts(read.gameFolder), was.gameFolder),
+    programVersions: as(read.programVersions, programVersionsParts(read.programVersions), was.programVersions),
+    dataFolderPlugins: as(read.dataFolderPlugins, dataFolderPluginsParts(read.dataFolderPlugins), was.dataFolderPlugins),
+    creationClubList: as(read.creationClubList, read.creationClubList, was.creationClubList),
+    archiveList: as(read.archiveList, read.archiveList, was.archiveList),
+    dataFolderArchives: as(read.dataFolderArchives, dataFolderArchivesParts(read.dataFolderArchives), was.dataFolderArchives),
+    dataFolderFiles: as(read.dataFolderFiles, dataFolderFilesParts(read.dataFolderFiles), was.dataFolderFiles),
+    profiles: as(read.profiles, read.profiles, was.profiles),
+    modFolders: as(read.modFolders, read.modFolders?.all.flatMap(modFolderParts) ?? [undefined], was.modFolders),
+    downloadedFiles: as(read.downloadedFiles, downloadedFilesParts(read.downloadedFiles), was.downloadedFiles),
+    sourceModFolders: as(read.sourceModFolders, [...read.sourceModFolders].flat(), was.sourceModFolders),
+    sortingRuleFiles: as(read.sortingRuleFiles, sortingRuleFilesParts(read.sortingRuleFiles), was.sortingRuleFiles),
+    unwatchedFolders: as(read.unwatchedFolders, read.unwatchedFolders.flatMap(unwatchedFolderParts), was.unwatchedFolders),
+    managerRunning: as(read.managerRunning, managerRunningParts(read.managerRunning), was.managerRunning),
+    modFiles: modFilesAsLanded(read.modFiles, was.modFiles),
+    runtimeOutput: filesAsLanded(read.runtimeOutput, was.runtimeOutput),
+    folderMeta: as(read.folderMeta, folderMetaParts(read.folderMeta), was.folderMeta),
   };
 }
