@@ -1,11 +1,16 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
-import type { FileOrigin, InstanceValue, InstanceView, Mod } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceOf, InstanceValue, Mod } from '../instanceLoader/instance';
 import { modifiedMs, type Copy, type FileCopies } from './sameCopies';
 import { copyInConflict, modOrigin, originLabel, sameOrigin, type StackedFile } from '../instanceLoader/fileConflictIndex';
 import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
 import { fileStates, worstCell, worstRow } from './conflictStates';
+
+/** The facts a conflict table reads. */
+export const CONFLICT_TABLE_READS = { mods: true, stackedCopies: true } as const;
+
+type TableView = Pick<InstanceOf<keyof typeof CONFLICT_TABLE_READS>, 'value' | 'sequence'>;
 
 type ReadCopy = Extract<Copy, { kind: 'read' }>;
 
@@ -53,7 +58,7 @@ function filesInConflict(value: Pick<InstanceValue, 'stackedCopies'>, name: stri
 }
 
 // Overwrite wins over every mod.
-function winningRank(value: InstanceValue, origin: FileOrigin): number {
+function winningRank(value: Pick<InstanceValue, 'mods'>, origin: FileOrigin): number {
   return origin.kind === 'mod' ? value.mods.findIndex((entry) => entry.kind === 'mod' && entry.name === origin.name) : -1;
 }
 
@@ -75,7 +80,7 @@ const fileRowsIn = (rows: readonly ConflictRow[]): FileRow[] =>
 
 type Scope = { readonly shown: ConflictTable } | { readonly files: StackedFile[] };
 
-function scopeOf({ value, sequence }: Pick<InstanceView, 'value' | 'sequence'>, name: string): Scope {
+function scopeOf({ value, sequence }: TableView, name: string): Scope {
   if (sequence === 0) return { shown: { kind: 'table', columns: [], rows: [] } };
   const listed = value.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === name);
   if (listed === undefined) return { shown: message(`"${name}" is gone from the mod list.`) };
@@ -85,7 +90,7 @@ function scopeOf({ value, sequence }: Pick<InstanceView, 'value' | 'sequence'>, 
 }
 
 /** Empty until the first read lands, so "not read yet" never reads as "no conflicts". */
-export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, name: string, copies: readonly FileCopies[], cellValue: ConflictCellValue): ConflictTable {
+export function conflictTable(view: TableView, name: string, copies: readonly FileCopies[], cellValue: ConflictCellValue): ConflictTable {
   const scope = scopeOf(view, name);
   if ('shown' in scope) return scope.shown;
   const { value } = view;
@@ -129,7 +134,7 @@ function stampOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: Readonly
   return { value: valueOf(copy, cellValue, letters), size: Number(copy.size), modified: modifiedMs(copy) };
 }
 
-export function conflictPaths(view: Pick<InstanceView, 'value' | 'sequence'>, name: string): string[] {
+export function conflictPaths(view: TableView, name: string): string[] {
   const scope = scopeOf(view, name);
   return 'files' in scope ? scope.files.map(({ relativePath }) => relativePath) : [];
 }

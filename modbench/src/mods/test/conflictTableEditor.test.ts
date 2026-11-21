@@ -24,7 +24,8 @@ import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
 import type { FileOrigin } from '../../instanceLoader/instance';
 import { sameCopies, type FileCopies } from '../sameCopies';
-import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, pluginFilesHeld, readingFixture } from '../../test/fakeInstanceAdapter';
+import { instanceOver } from '../../test/instanceOver';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
@@ -58,7 +59,7 @@ beforeEach(() => {
 type CopiesOf = Parameters<typeof registerConflictTable>[1];
 
 function setup(
-  instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter(),
+  instance: Parameters<typeof registerConflictTable>[0] = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter(),
   copiesOf: CopiesOf = (files) => {
     const paths = files.map(({ relativePath }) => relativePath);
     copiesDouble.asked.push(paths);
@@ -153,7 +154,7 @@ function isResolvingProvider(value: unknown): value is ResolvingProvider {
   return typeof value === 'object' && value !== null && 'openCustomDocument' in value && 'resolveCustomEditor' in value;
 }
 
-function openTable(instance: FakeInstance, modName: string, reporter = recordingReporter(), copiesOf?: CopiesOf): FakePanel {
+function openTable(instance: Parameters<typeof registerConflictTable>[0], modName: string, reporter = recordingReporter(), copiesOf?: CopiesOf): FakePanel {
   setup(instance, [], reporter, copiesOf);
   const [viewType, provider, options] = registerCustomEditorProvider.mock.calls.at(-1) ?? [];
   expect(viewType).toBe('modbench.conflicts');
@@ -310,6 +311,47 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     expect(shownTables(panel)).toEqual([{ kind: 'message', text: 'No file order conflicts.' }]);
     expect(copiesDouble.asked).toHaveLength(1);
+  });
+
+  it('reads its copies again when a change names one of them, and for no change to another file', async () => {
+    const held = (name: string) => ({ origin: { kind: 'mod' as const, name }, name: 'a.dds' });
+    const instance = instanceOver(fakeInstanceAdapter(readingFixture({
+      mods: [{ kind: 'mod', name: 'High', enabled: true }, { kind: 'mod', name: 'Low', enabled: true }], ...pluginFilesHeld(held('High'), held('Low')),
+    })).adapter);
+    await instance.refresh();
+    const panel = openTable(instance, 'High');
+    panel.webview.receive?.(ready);
+    await posted(panel, 1);
+
+    await instance.refresh(['/instance/mods/Low/b.dds']);
+    await instance.refresh(['/instance/mods/Low/a.dds']);
+    await posted(panel, 2);
+
+    instance.dispose();
+    expect(copiesDouble.asked).toEqual([['a.dds'], ['a.dds']]);
+  });
+
+  it('on Windows, reads its copies again when a change names one in another case, as the watcher spells a path', async () => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const held = (name: string) => ({ origin: { kind: 'mod' as const, name }, name: 'a.dds' });
+    const instance = instanceOver(fakeInstanceAdapter(readingFixture({
+      mods: [{ kind: 'mod', name: 'High', enabled: true }, { kind: 'mod', name: 'Low', enabled: true }], ...pluginFilesHeld(held('High'), held('Low')),
+    })).adapter);
+
+    try {
+      await instance.refresh();
+      const panel = openTable(instance, 'High');
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+      await instance.refresh(['/INSTANCE/mods/Low/A.DDS']);
+      await posted(panel, 2);
+    } finally {
+      instance.dispose();
+      if (real !== undefined) Object.defineProperty(process, 'platform', real);
+    }
+
+    expect(copiesDouble.asked).toEqual([['a.dds'], ['a.dds']]);
   });
 
   it('shows the answer of the newest value only, though an older one answers last', async () => {

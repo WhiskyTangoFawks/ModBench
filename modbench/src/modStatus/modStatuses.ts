@@ -1,7 +1,8 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import { basename } from 'node:path';
-import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
+import type { EntryRef, GameFolder, InstanceAdapter, ModFolder, Reread } from '../instanceAdapter/instanceAdapter';
+import { pathKey } from '../repositoriesLib/stampedReads';
 import {
   buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packageFilesOf, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
 } from '../manifestAdapter/manifestAdapter';
@@ -17,32 +18,143 @@ export interface StatusSource {
   readonly mods: readonly EntryRef[];
   readonly modFolders: readonly ModFolder[] | undefined;
   readonly entryKey: (entry: EntryRef) => string;
-  /** Each source mod's source folder, by its entry's name. */
-  readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
+  /** Each source mod's source folder, by its entry's name, and the downloads folder an installation file is in. */
+  readonly paths: { readonly sourceDirs: ReadonlyMap<string, string>; readonly downloadsDir: string | undefined };
   /** What each archive at the root of a listed mod holds, by the path it is read from. */
   readonly archiveContents: ReadonlyMap<string, ArchiveEntries>;
   readonly gameName: string;
   /** Each listed mod's own files, by its entry's name: what the reading already holds. */
   readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string; readonly sourcePath: string }[]>;
+  /** Where a package of the game folder is read. */
+  readonly gameFolder: GameFolder;
+}
+
+/** The facts a status is derived from. */
+export const STATUS_READS = {
+  holdsRepository: true, flaggedHashes: true, mods: true, modFolders: true, entryKey: true, paths: true, archiveContents: true, gameName: true, filesByMod: true,
+  gameFolder: true,
+} as const satisfies Record<keyof StatusSource, true>;
+
+const isStatusFact = (key: string): key is keyof StatusSource => key in STATUS_READS;
+
+// Keyed by a mod's entry or by a file it holds, so each is compared entry by entry: what changed of one mod touches it alone.
+const BY_ENTRY: ReadonlySet<keyof StatusSource> = new Set(['filesByMod', 'archiveContents', 'flaggedHashes']);
+
+// The mods the files `named` and the facts keyed per entry touch; every mod where one is in no one mod's.
+function touchedAmong(value: StatusSource, handed: StatusSource, named: readonly string[], folders: Folders): Touched {
+  const touched = new Set(changedKeys(value.filesByMod, handed.filesByMod).flatMap((entry) => folders.byEntry.get(entry)?.name ?? []));
+  const inFolders = (path: string): string[] => [...foldersAbove(path)].flatMap((folder) => folders.owners.get(folder) ?? []);
+  // An archive or a flagged plugin is keyed by the path it is read from, which a link puts outside its mod's folder.
+  let linked: ReadonlyMap<string, readonly string[]> | undefined;
+  const holding = (path: string): readonly string[] => {
+    const inFolder = inFolders(path);
+    return inFolder.length > 0 ? inFolder : (linked ??= modsHolding(value, folders.placed)).get(path) ?? [];
+  };
+  const readAgain = [...changedKeys(value.archiveContents, handed.archiveContents), ...changedKeys(value.flaggedHashes, handed.flaggedHashes)];
+  const placed = placedIn(named.filter((path) => readsIn(folders, path)), inFolders, touched) && placedIn(readAgain, holding, touched);
+  return placed ? touched : 'every';
+}
+
+// Adds to `touched` the mods each of `paths` belongs to; false at the first that belongs to none.
+function placedIn(paths: readonly string[], ownersOf: (path: string) => readonly string[], touched: Set<string>): boolean {
+  for (const path of paths) {
+    const owners = ownersOf(path);
+    if (owners.length === 0) return false;
+    for (const name of owners) touched.add(name);
+  }
+  return true;
+}
+
+// The mods that hold each file, by the path it is read from.
+function modsHolding(value: StatusSource, mods: readonly ModPlaced[]): ReadonlyMap<string, readonly string[]> {
+  const holding = new Map<string, string[]>();
+  for (const { entry, name } of mods) {
+    for (const { sourcePath } of value.filesByMod.get(entry) ?? []) holding.set(sourcePath, [...holding.get(sourcePath) ?? [], name]);
+  }
+  return holding;
+}
+
+const changedKeys = <V>(now: ReadonlyMap<string, V>, before: ReadonlyMap<string, V>): string[] =>
+  (now === before ? [] : [...new Set([...now.keys(), ...before.keys()])].filter((key) => now.get(key) !== before.get(key)));
+
+const separator = (): string => (process.platform === 'win32' ? '\\' : '/');
+
+// A folder as `pathKey` names it, with Windows's either separator as one.
+const folderKey = (path: string): string => {
+  const key = process.platform === 'win32' ? pathKey(path).replaceAll('/', '\\') : path;
+  return key.length > 1 && key.endsWith(separator()) ? key.slice(0, -1) : key;
+};
+
+// `path`, then each folder above it.
+function* foldersAbove(path: string): Generator<string> {
+  for (let at = folderKey(path); ; ) {
+    yield at;
+    const cut = at.lastIndexOf(separator());
+    if (cut <= 0) return;
+    at = at.slice(0, cut);
+  }
+}
+
+// The folders a status reads, by key, and the listed mods each holds. Built again only when a fact it is built from is another
+// object, so a path is placed by its folders whatever the modlist's size.
+interface Folders {
+  readonly placed: readonly ModPlaced[];
+  readonly byName: ReadonlyMap<string, ModPlaced>;
+  readonly byEntry: ReadonlyMap<string, ModPlaced>;
+  readonly owners: ReadonlyMap<string, readonly string[]>;
+  readonly read: ReadonlySet<string>;
+}
+
+// The facts the folders a status reads are built from.
+const foldersFrom = (value: StatusSource): readonly unknown[] => [value.mods, value.modFolders, value.entryKey, value.paths, value.gameFolder];
+
+function foldersIn(value: StatusSource): Folders {
+  const placed = placedAt(value);
+  const owners = new Map<string, string[]>();
+  for (const { name, folder, sourceFolder } of placed) {
+    for (const key of [folder, ...sourceFolder === undefined ? [] : [sourceFolder]].map(folderKey)) owners.set(key, [...owners.get(key) ?? [], name]);
+  }
+  const read = new Set([
+    ...(value.modFolders ?? []).map((folder) => folder.path), ...value.paths.sourceDirs.values(),
+    ...value.paths.downloadsDir === undefined ? [] : [value.paths.downloadsDir], ...value.gameFolder.kind === 'found' ? [value.gameFolder.root] : [],
+  ].map(folderKey));
+  return { placed, byName: new Map(placed.map((mod) => [mod.name, mod])), byEntry: new Map(placed.map((mod) => [mod.entry, mod])), owners, read };
+}
+
+// git answers which files of a folder it holds, and the repository's change names its .git.
+const isRepository = (path: string): boolean => /[\\/]\.git$/.test(path);
+
+function readsIn({ read }: Folders, path: string): boolean {
+  if (isRepository(path)) return true;
+  for (const folder of foldersAbove(path)) if (read.has(folder)) return true;
+  return false;
 }
 
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
 
 type Asked = ReturnType<typeof packagesAskedAt>;
 
-type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[]; readonly sourcePaths: ReadonlyMap<string, string> };
+type ModPlaced = ModAt & { readonly entry: string; readonly sourceFolder?: string };
+
+type ModAndSourceFolder = ModPlaced & { readonly files: readonly string[]; readonly sourcePaths: ReadonlyMap<string, string> };
 
 interface Listening {
   dispose(): void;
 }
 
-function modsAt(value: StatusSource): ModAndSourceFolder[] {
+// Where each listed mod is, with no file of it read: what a change is placed against.
+function placedAt(value: StatusSource): ModPlaced[] {
   const keyOf = (entry: EntryRef): string => `${entry.kind}:${value.entryKey(entry)}`;
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath), sourcePaths: new Map((value.filesByMod.get(entry.name) ?? []).map(({ relativePath, sourcePath }) => [relativePath, sourcePath])) }];
+    return folder === undefined ? [] : [{ name: folder.modName, entry: entry.name, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name) }];
   });
+}
+
+function withFiles(value: StatusSource, mod: ModPlaced): ModAndSourceFolder {
+  const files = value.filesByMod.get(mod.entry) ?? [];
+  return { ...mod, files: files.map(({ relativePath }) => relativePath), sourcePaths: new Map(files.map(({ relativePath, sourcePath }) => [relativePath, sourcePath])) };
 }
 
 // The installation files and game files of both: the packages of a source mod's source folder are read in the one pass over its folder.
@@ -68,6 +180,11 @@ const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>, entries: R
 
 type Derived = { status: ModStatus; packaged: ReadonlySet<string>; entries: ReadonlyMap<string, EntriesNoPackageHolds> };
 
+// The mods a derivation derives again, by name: every one, or those a change touched.
+type Touched = 'every' | ReadonlySet<string>;
+
+const bothTouched = (one: Touched, other: Touched): Touched => (one === 'every' || other === 'every' ? 'every' : new Set([...one, ...other]));
+
 const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening => {
   listeners.add(listener);
   return { dispose: () => { listeners.delete(listener); } };
@@ -82,7 +199,12 @@ export class ModStatuses {
   private readonly shown = new Map<string, ModStatus>();
   private readonly unreadable = new Map<string, string>();
   private gitFailure: string | undefined;
-  private waiting: StatusSource | undefined;
+  private waiting: { value: StatusSource; touched: Touched } | undefined;
+  // The value last handed, which a change is told against.
+  private handed: StatusSource | undefined;
+  // A derivation failed, so the next derives every mod, those it would have derived among them.
+  private failedLast = false;
+  private indexed: { readonly from: readonly unknown[]; readonly folders: Folders } | undefined;
   private deriving = false;
   private started = 0;
   private finished = 0;
@@ -93,9 +215,12 @@ export class ModStatuses {
 
   constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>, private readonly log: (line: string) => void, private readonly hashEntries: HashEntries) {}
 
-  /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
-  derive(value: StatusSource): void {
-    this.waiting = value;
+  /** Derives again from `value` the status of each mod `changed` touches, and every mod's without it; of the values handed
+   *  while one derives, the latest alone derives next, the mods each touched. */
+  derive(value: StatusSource, changed?: Reread): void {
+    const touched = this.touchedBy(value, changed);
+    this.handed = value;
+    this.waiting = { value, touched: this.waiting === undefined ? touched : bothTouched(this.waiting.touched, touched) };
     if (this.deriving) return;
     this.deriving = true;
     void this.deriveWhileWaiting();
@@ -155,15 +280,39 @@ export class ModStatuses {
     this.messageChanged.clear();
   }
 
+  // A change touches every mod when it is a check of the disk, changes a fact of every mod, or names a file it reads that no one
+  // mod holds.
+  private touchedBy(value: StatusSource, changed: Reread | undefined): Touched {
+    const { handed } = this;
+    if (changed === undefined || changed.disk || handed === undefined) return 'every';
+    if (Object.keys(STATUS_READS).filter(isStatusFact).some((fact) => !BY_ENTRY.has(fact) && value[fact] !== handed[fact])) return 'every';
+    return touchedAmong(value, handed, changed.named, this.foldersOf(value));
+  }
+
+  /** Whether a status reads the file at `path`: in a mod's folder or source folder, an installation file, a game file, or what
+   *  git holds. */
+  readsFile(path: string, value: StatusSource): boolean {
+    return readsIn(this.foldersOf(value), path);
+  }
+
+  private foldersOf(value: StatusSource): Folders {
+    const from = foldersFrom(value);
+    if (this.indexed === undefined || this.indexed.from.some((fact, at) => fact !== from[at])) this.indexed = { from, folders: foldersIn(value) };
+    return this.indexed.folders;
+  }
+
   private async deriveWhileWaiting(): Promise<void> {
-    for (let value = this.waiting; value !== undefined; value = this.waiting) {
+    for (let waiting = this.waiting; waiting !== undefined; waiting = this.waiting) {
       this.waiting = undefined;
       this.started += 1;
+      const touched = this.failedLast ? 'every' : waiting.touched;
+      this.failedLast = false;
       try {
-        await this.deriveFrom(value);
+        await this.deriveFrom(waiting.value, touched);
         this.failure = undefined;
       } catch (err) {
         this.failure = err instanceof Error ? err : new Error(String(err));
+        this.failedLast = true;
       }
       this.finished += 1;
       for (const resolve of this.finishedRun.splice(0)) resolve();
@@ -171,20 +320,24 @@ export class ModStatuses {
     this.deriving = false;
   }
 
-  private async deriveFrom(value: StatusSource): Promise<void> {
-    const mods = value.holdsRepository ? modsAt(value) : [];
+  private async deriveFrom(value: StatusSource, touched: Touched): Promise<void> {
+    const folders = this.foldersOf(value);
+    const listed = value.holdsRepository ? folders.placed : [];
+    const mods = (touched === 'every' || listed.length === 0 ? listed : [...touched].flatMap((name) => folders.byName.get(name) ?? [])).map((mod) => withFiles(value, mod));
     const held = await this.heldAmong(mods);
     if (held === undefined) {
-      this.derived = new Map(mods.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
+      this.derived = new Map(listed.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
+      this.failedLast = true;
       for (const listener of this.changed) listener();
       return;
     }
     const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), (held.files.get(mod.folder) ?? []).filter((path) => !isManifestPath(path)), value)));
+    const kept = <T>(before: ReadonlyMap<string, T>): Map<string, T> => new Map(touched === 'every' ? [] : before);
     const heldBefore = heldSnapshot(this.heldByPackages, this.entriesByMod);
-    this.heldByPackages = new Map(derived.map(({ status, packaged }) => [status.mod, packaged]));
-    this.entriesByMod = new Map(derived.map(({ status, entries }) => [status.mod, entries]));
+    this.heldByPackages = new Map([...kept(this.heldByPackages), ...derived.map(({ status, packaged }) => [status.mod, packaged] as const)]);
+    this.entriesByMod = new Map([...kept(this.entriesByMod), ...derived.map(({ status, entries }) => [status.mod, entries] as const)]);
     const heldChanged = heldSnapshot(this.heldByPackages, this.entriesByMod) !== heldBefore;
-    this.hold(new Map(derived.map(({ status }) => [status.mod, status])), heldChanged);
+    this.hold(new Map([...kept(this.derived), ...derived.map(({ status }) => [status.mod, status] as const)]), heldChanged);
   }
 
   // Git failing leaves the last good statuses shown, and says why once for all of them.
