@@ -8,11 +8,10 @@ import { fold, foldedPathsBelow } from './foldedPaths';
 import { PLUGINS_FILE_NAME, pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import { ASIDE, changeAll, fileIdAt, fileIdOf, recoveryIn, removedIfEmpty, type Link, type Step } from './changes';
 import { errorMessage } from '../ports/errorMessage';
+import type { WriteSink } from '../ports/writeSink';
 import { pluginsTxtChange, pluginsTxtPurge } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
 import { recordIn, type DeploymentRecord, type Recorded, type Written, type WrittenPluginsTxt } from './record';
-
-type NameWrites = (paths: readonly string[]) => void;
 
 /** A file the game gets: its path in the mod, `/`-separated, and the copy that wins it. */
 export interface FileTheGameGets {
@@ -250,8 +249,12 @@ async function restoredRecord(record: DeploymentRecord, folder: string, recorded
   return err instanceof Error ? err : new Error(errorMessage(err));
 }
 
+// Each of `paths` in the deployment folder, and `pluginsTxt`.
+const writtenIn = (folder: string, paths: readonly string[], pluginsTxt: readonly string[]): string[] =>
+  [...paths.map((path) => join(folder, path)), ...pluginsTxt];
+
 async function deployTo(
-  record: DeploymentRecord, place: PluginsTxtPlace, folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder, name: NameWrites,
+  record: DeploymentRecord, place: PluginsTxtPlace, folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder, name: WriteSink['name'],
 ): Promise<Deployed> {
   const { wanted, lost } = await linksOnTheFolderVolume(folder, files);
   const recorded = await record.of(folder);
@@ -263,7 +266,7 @@ async function deployTo(
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
   const made = await foldersToMake(folder, [...relinks, ...links].map(({ path }) => path));
   const folders = [...new Set([...recorded.folders, ...made])];
-  name([...[...removals, ...relinks, ...links].map(({ path }) => path), ...made].map((path) => join(folder, path)).concat(part.written));
+  name(writtenIn(folder, [...[...removals, ...relinks, ...links].map(({ path }) => path), ...made], part.written));
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();
     return record.write(folder, { files, folders, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
@@ -318,9 +321,9 @@ async function unmanagedLeft(folder: string, unfinished: string[]): Promise<stri
 }
 
 const purgeWrites = (folder: string, removals: readonly Written[], { folders, pluginsTxt }: Recorded): string[] =>
-  [...removals.map(({ path }) => path), ...folders].map((path) => join(folder, path)).concat(pluginsTxt?.path ?? []);
+  writtenIn(folder, [...removals.map(({ path }) => path), ...folders], pluginsTxt === undefined ? [] : [pluginsTxt.path]);
 
-async function purgeFrom(record: DeploymentRecord, folder: string, name: NameWrites): Promise<Purged> {
+async function purgeFrom(record: DeploymentRecord, folder: string, name: WriteSink['name']): Promise<Purged> {
   const recorded = await record.of(folder);
   const removals = [...(await stillWritten(folder, recorded.files)).values()];
   name(purgeWrites(folder, removals, recorded));
@@ -357,7 +360,7 @@ async function purgeFrom(record: DeploymentRecord, folder: string, name: NameWri
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of
  *  the instance's own that no deployment folder holds. */
-export function hardlinkDeployment(storage: string, place: PluginsTxtPlace, name: NameWrites): Deployment {
+export function hardlinkDeployment(storage: string, place: PluginsTxtPlace, name: WriteSink['name']): Deployment {
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {

@@ -75,6 +75,18 @@ describe('the instance repository\'s reads', () => {
     expect([(await readTrustingKept(heard, false, reads.head)).answer, held.statusRuns()]).toEqual(['two', 2]);
   });
 
+  it('has VS Code\'s git run its status in a reading that names the .git a write of Modbench\'s wrote, and tells nothing of that run', async () => {
+    const held = hostGitHolding(folder, { head: 'one' });
+    const reads = repositoryReads(folder, held.host);
+    const heard = hearing(reads);
+    await readTrustingKept([], true, reads.head);
+    held.head = 'two';
+
+    const read = await readTrustingKept([join(folder, '.git')], false, reads.head);
+
+    expect([read.answer, held.statusRuns(), heard]).toEqual(['two', 2, []]);
+  });
+
   it('follows the instance\'s repository VS Code\'s git opens once Modbench listens', async () => {
     const held = hostGitHolding(folder, { open: false });
     const reads = repositoryReads(folder, held.host);

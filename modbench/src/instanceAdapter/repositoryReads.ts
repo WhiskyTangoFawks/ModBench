@@ -31,8 +31,6 @@ type Repository<Folder> = HostGitRepository<Folder>;
 
 export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): RepositoryReads {
   const dotGit = join(root, GIT_DIR);
-  // No path holds this key, so only a check of the disk forgets it; a status run under a key VS Code's change forgets loops.
-  const statusKey = `git status:${root}`;
   let acquired: Promise<HostGitApi<Folder> | undefined> | undefined;
   const api = (): Promise<HostGitApi<Folder> | undefined> => (acquired ??= (async () => {
     try {
@@ -48,8 +46,21 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     return repository !== undefined && isInstances(repository) ? repository : undefined;
   };
   const answers = keptUntilNamed(() => Promise.resolve(new Map<string, Promise<string>>()));
+  // VS Code's git tells of a change once its state holds it, so the reading that change names runs no status. The change
+  // its status run here tells is no news, so no reading follows it.
+  let told = false;
+  let running = false;
   const statusRun = keptUntilNamed(async () => {
-    await repositoryIn(await api())?.status();
+    if (told) {
+      told = false;
+      return;
+    }
+    running = true;
+    try {
+      await repositoryIn(await api())?.status();
+    } finally {
+      running = false;
+    }
   });
 
   const kept = async (key: string, read: (repository: Repository<Folder> | undefined) => PromiseLike<string>): Promise<string> => {
@@ -70,13 +81,17 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     head: async () => {
       const repository = repositoryIn(await api());
       if (repository === undefined) return (await kept('head', () => gitOrNothing(root, ['rev-parse', '-q', '--verify', 'HEAD']))) || undefined;
-      await statusRun(statusKey);
+      await statusRun(dotGit);
       return repository.state.HEAD?.commit;
     },
     localConfig: (key) => kept(`config ${key}`, (repository) => repository?.getConfig(key) ?? gitOrNothing(root, ['config', '--local', '--get', key])),
     git: (...args) => kept(args.join('\0'), () => gitOrNothing(root, args)),
     changed: (listener) => {
-      const heard = (): void => { listener(dotGit); };
+      const heard = (): void => {
+        if (running) return;
+        told = true;
+        listener(dotGit);
+      };
       let stopped = false;
       let following: { dispose(): unknown }[] = [];
       let state: { dispose(): unknown } | undefined;

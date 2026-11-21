@@ -32,6 +32,7 @@ describe('git, which names the files it writes', () => {
     ['init', ['init']],
     ['a checkout', ['-c', 'advice.detachedHead=false', 'checkout', '--detach']],
     ['a reset of the working tree', ['reset', '--hard']],
+    ['a read of a tree into the working tree', ['read-tree', '-u', '--empty']],
   ])('leaves the files it writes unnamed for %s', async (_, args) => {
     root = await mkdtemp(join(tmpdir(), 'modbench-git-writes-'));
 
@@ -45,6 +46,9 @@ describe('git, which names the files it writes', () => {
     ['a config unset', ['config', '--unset-all', 'user.name']],
     ['an index update', ['update-index', '-z', '--index-info']],
     ['a reset of the index', ['reset', '-q', '--', 'mods']],
+    ['an add', ['add', '-A']],
+    ['a commit', ['commit', '-q', '-m', 'x']],
+    ['a read of a tree into the index', ['read-tree', '--empty']],
     ['a remote added', ['remote', 'add', 'origin', 'x']],
     ['a symbolic ref set', ['symbolic-ref', 'HEAD', 'refs/heads/x']],
     ['a symbolic ref deleted', ['symbolic-ref', '--delete', 'HEAD']],
@@ -80,11 +84,23 @@ describe('git, which names the files it writes', () => {
     expect({ named, unnamed }).toEqual({ named: [], unnamed: 0 });
   });
 
-  it('leaves nothing unnamed when it stages into an index of its own', async () => {
+  it.each([
+    ['an add', ['add', '-A']],
+    ['a read of a tree', ['read-tree', '--empty']],
+    ['an index update', ['update-index', '--add', '--cacheinfo', '100644,0000000000000000000000000000000000000000,a']],
+  ])('names nothing for %s staged into an index of its own', async (_, args) => {
     root = await mkdtemp(join(tmpdir(), 'modbench-git-staging-'));
 
-    await gitStagingInto(join(root, 'index')).git(root, 'add', '-A').catch(() => undefined);
+    await gitStagingInto(join(root, 'index')).git(root, ...args).catch(() => undefined);
 
     expect({ named, unnamed }).toEqual({ named: [], unnamed: 0 });
+  });
+
+  it('names the repository\'s .git for a commit staged into an index of its own', async () => {
+    root = await mkdtemp(join(tmpdir(), 'modbench-git-staging-'));
+
+    await gitStagingInto(join(root, 'index')).git(root, 'commit', '-q', '-m', 'x').catch(() => undefined);
+
+    expect({ named, unnamed }).toEqual({ named: [join(root, '.git')], unnamed: 0 });
   });
 });

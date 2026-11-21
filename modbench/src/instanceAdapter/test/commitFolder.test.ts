@@ -4,10 +4,15 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { commitFolder } from '../commitFolder';
+import { readTrustingKept } from '../files';
+import { repositoryReads } from '../repositoryReads';
+import { diskCheckedBy } from '../../repositoriesLib/writesTold';
+import { hostGitHolding } from '../../test/hostGitDouble';
 
 let root: string;
 
 afterEach(async () => {
+  diskCheckedBy({ name: () => undefined, leaveUnnamed: () => undefined });
   await rm(root, { recursive: true, force: true });
 });
 
@@ -34,6 +39,23 @@ async function committedIgnoreList(text: string): Promise<void> {
 const neverCalled = (): string => { throw new Error('no committed ignore list to add lines to'); };
 
 describe('commitFolder', () => {
+  it('names what it writes, so the HEAD a reading after it answers is its commit', async () => {
+    await repository();
+    await committedIgnoreList('');
+    await put('mods/Mod [A]/a.esp');
+    const held = hostGitHolding(root, { head: git('rev-parse', 'HEAD') });
+    const reads = repositoryReads(root, held.host);
+    reads.changed(() => undefined);
+    await readTrustingKept([], true, reads.head);
+    const named: string[] = [];
+    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { throw new Error('a write left its files unnamed'); } });
+
+    await commitFolder(root, join(root, 'mods', 'Mod [A]'), 'Init', (list) => list);
+    held.head = git('rev-parse', 'HEAD');
+
+    expect((await readTrustingKept(named, false, reads.head)).answer).toBe(held.head);
+  });
+
   it('commits the files of the folder alone, whatever else is staged or changed', async () => {
     await repository();
     await put('mods/Mod [A]/a.esp');
