@@ -2,11 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, foldPath, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry, type FileConflictIndex,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { fileIn } from '../../test/fakeInstanceAdapter';
+import { present } from '../../ports/present';
 
 const modPath = (name: string, relativePath: string): string => `/mods/${name}/${relativePath}`;
 
@@ -34,12 +35,6 @@ describe('the winner and providers of each path the mods ship', () => {
     expect(entry?.winnerOrigin).toEqual(modOrigin('ModA'));
     expect(entry?.winner).toBe(modPath('ModA', SHARED));
     expect(entry?.providers).toEqual([modOrigin('ModA'), modOrigin('ModB')]);
-  });
-
-  it('lists each path in the order its winner wins, Overwrite\'s first, then each mod\'s in mod order', () => {
-    const index = indexOver([mod('ModB'), mod('ModA')], { ModA: ['a.nif', 'shared.nif'], ModB: ['b.nif', 'shared.nif'] }, [fileIn('/overwrite', 'o.nif')]);
-
-    expect([...index.files].map((entry) => entry.relativePath)).toEqual(['o.nif', 'b.nif', 'shared.nif', 'a.nif']);
   });
 
   it('flips the winner when the mods are reordered', () => {
@@ -225,33 +220,71 @@ describe('whether a copy of a file wins or loses its file order conflict', () =>
   });
 });
 
-describe('the index reused while no listing changed', () => {
-  const listing = (name: string, paths: string[]): OriginFiles =>
-    ({ origin: name, folder: `/mods/${name}`, folders: [], notes: [], files: paths.map((path) => fileIn(`/mods/${name}`, path)) });
-  const listings = (): Map<string, OriginFiles> => new Map([['ModA', listing('ModA', [SHARED])], ['ModB', listing('ModB', [SHARED])]]);
-  const entries = (): ModlistEntry[] => [mod('ModA'), mod('ModB')];
-  const NO_OVERWRITE: OriginFile[] = [];
+const listing = (name: string, paths: string[]): OriginFiles =>
+  ({ origin: name, folder: `/mods/${name}`, folders: [], notes: [], files: paths.map((path) => fileIn(`/mods/${name}`, path)) });
+
+const byPath = (a: { relativePath: string }, b: { relativePath: string }): number => foldPath(a.relativePath).localeCompare(foldPath(b.relativePath));
+
+describe('the index kept current as a reading changes', () => {
+  interface Reading { entries: ModlistEntry[]; overwrite: OriginFile[]; modFiles: Map<string, OriginFiles> }
+  const reading = (): Reading => ({
+    entries: [mod('A'), mod('B'), mod('C')],
+    overwrite: [],
+    modFiles: new Map([['A', listing('A', ['a.nif', SHARED])], ['B', listing('B', ['b.nif', SHARED])], ['C', listing('C', ['c.nif', SHARED])]]),
+  });
+  const indexOf = (build: typeof buildFileConflictIndex, { entries, overwrite, modFiles }: Reading) => build(entries, overwrite, modFiles);
+  const contentOf = ({ files, ...index }: FileConflictIndex) => ({ files: [...files].sort(byPath), ...index });
+  const withListing = (name: string, paths: string[]) => (was: Reading): Reading => ({ ...was, modFiles: new Map(was.modFiles).set(name, listing(name, paths)) });
+
+  it.each<[string, (was: Reading) => Reading]>([
+    ['a mod\'s listing gains a file', withListing('B', ['b.nif', SHARED, 'b2.nif'])],
+    ['the winning mod\'s listing lacks the path', withListing('A', ['a.nif'])],
+    ['a losing mod\'s listing lacks the path', withListing('B', ['b.nif'])],
+    ['a mod gains a case variant of a path it holds', withListing('C', ['c.nif', SHARED, SHARED.toUpperCase()])],
+    ['a mod\'s copy of a path is excluded', (was) => ({ ...was, modFiles: new Map(was.modFiles).set('A', { ...listing('A', ['a.nif']), files: [fileIn('/mods/A', 'a.nif'), { ...fileIn('/mods/A', SHARED), excluded: true }] }) })],
+    ['a mod is disabled', (was) => ({ ...was, entries: [mod('A', false), mod('B'), mod('C')] })],
+    ['the mods are reordered', (was) => ({ ...was, entries: [mod('C'), mod('A'), mod('B')] })],
+    ['a mod is removed', (was) => ({ ...was, entries: [mod('A'), mod('C')] })],
+    ['a mod is added', (was) => ({ ...withListing('D', [SHARED])(was), entries: [mod('D'), ...was.entries] })],
+    ['Overwrite\'s files change', (was) => ({ ...was, overwrite: [fileIn('/overwrite', SHARED)] })],
+  ])('indexes what an index built afresh does when %s', (_case, change) => {
+    const build = indexReusing();
+    const was = reading();
+    indexOf(build, was);
+    const now = change(was);
+
+    expect(contentOf(indexOf(build, now))).toEqual(contentOf(indexOf(buildFileConflictIndex, now)));
+  });
+
+  it('keeps each entry a change to one mod\'s files leaves as it was the object it was', () => {
+    const build = indexReusing();
+    const was = reading();
+    const first = indexOf(build, was);
+    const changed = { ...present(was.modFiles.get('C'), 'C\'s listing'), files: listing('C', ['c.nif', SHARED, 'c2.nif']).files };
+    const next = indexOf(build, { ...was, modFiles: new Map(was.modFiles).set('C', changed) });
+
+    const kept = (index: FileConflictIndex) => [
+      index.filesByMod.get('A'), index.filesByMod.get('B'), index.foldersByMod, index.files.get('a.nif'), index.files.get('b.nif'), index.files.get(SHARED),
+    ];
+    expect(kept(next).map((part, at) => part === kept(first)[at])).toEqual(kept(first).map(() => true));
+  });
+
+  it('answers the same files when the listing that changed holds the same files', () => {
+    const build = indexReusing();
+    const was = reading();
+    const first = indexOf(build, was);
+    const folders = [{ relativePath: 'new', path: '/mods/B/new', includedPath: 'new', excluded: false }];
+    const next = indexOf(build, { ...was, modFiles: new Map(was.modFiles).set('B', { ...present(was.modFiles.get('B'), 'B\'s listing'), folders }) });
+
+    expect([next.files === first.files, next.foldersByMod === first.foldersByMod]).toEqual([true, false]);
+  });
 
   it('answers the index it built when the mods, their order and every listing are the same', () => {
     const build = indexReusing();
-    const modFiles = listings();
-    const first = build(entries(), NO_OVERWRITE, modFiles);
+    const was = reading();
+    const first = indexOf(build, was);
 
-    expect(build(entries(), NO_OVERWRITE, new Map(modFiles))).toBe(first);
-  });
-
-  it.each<[string, () => ModlistEntry[], (modFiles: Map<string, OriginFiles>) => void, OriginFile[]]>([
-    ['a mod is disabled', () => [mod('ModA', false), mod('ModB')], () => undefined, NO_OVERWRITE],
-    ['the mods are reordered', () => [mod('ModB'), mod('ModA')], () => undefined, NO_OVERWRITE],
-    ['a mod\'s listing is read again', entries, (modFiles) => modFiles.set('ModB', listing('ModB', [SHARED, 'b.nif'])), NO_OVERWRITE],
-    ['Overwrite\'s files are read again', entries, () => undefined, [fileIn('/overwrite', SHARED)]],
-  ])('builds the index again when %s', (_case, entriesNow, change, overwrite) => {
-    const build = indexReusing();
-    const modFiles = listings();
-    const first = build(entries(), NO_OVERWRITE, modFiles);
-    change(modFiles);
-
-    expect(build(entriesNow(), overwrite, modFiles)).not.toBe(first);
+    expect(indexOf(build, { ...reading(), overwrite: was.overwrite, modFiles: new Map(was.modFiles) })).toBe(first);
   });
 });
 
@@ -322,6 +355,18 @@ describe('the copies of each file, stacked as the game stacks them', () => {
     expect(stack.get(FILE)?.copies.map(({ at }) => at)).toEqual([
       { kind: 'loose', path: `/overwrite/${FILE}` }, { kind: 'loose', path: modPath('overwrite', FILE) },
     ]);
+  });
+
+  it('keeps the copies of each file a change to one mod\'s files leaves as they were, and stacks what a stack built afresh does', () => {
+    const [index, stack] = [indexReusing(), stackReusing()];
+    const loaded = [archive('A', 'A.ba2', [FILE, 'other.nif'])];
+    const before = new Map([['A', listing('A', [FILE, 'A.ba2'])], ['B', listing('B', ['b.nif'])]]);
+    const first = stack(index([mod('A'), mod('B')], [], before), loaded, 'Fallout4');
+    const now = new Map(before).set('A', listing('A', ['A.ba2']));
+    const next = stack(index([mod('A'), mod('B')], [], now), loaded, 'Fallout4');
+
+    expect([next.get('b.nif') === first.get('b.nif'), next.get('other.nif') === first.get('other.nif')]).toEqual([true, true]);
+    expect([...next].sort(byPath)).toEqual([...stackCopies(buildFileConflictIndex([mod('A'), mod('B')], [], now), loaded, 'Fallout4')].sort(byPath));
   });
 
   it('answers the stack it built while the index and every archive it read are the same', () => {

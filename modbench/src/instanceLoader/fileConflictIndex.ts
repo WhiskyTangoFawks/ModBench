@@ -1,9 +1,10 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
 import { pluginCompanionRule } from '../tables/gamePaths';
-import {
-  filesWinningFirst, type FileOrigin, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type OriginProvides,
-} from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, ModlistEntry, OriginFile, OriginFiles, OriginFolder, OriginProvides } from '../instanceAdapter/instanceAdapter';
+import { originsWinningFirst } from '../symbolNames/symbolNames';
+import { sameInputs } from '../ports/lastBuilt';
+import { present } from '../ports/present';
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
@@ -65,7 +66,7 @@ export function foldPath(relativePath: string): string {
 /** Keyed by folded path, so a case-variant pair resolves to one entry. No raw Map is
  *  exposed: a caller cannot look up with an unfolded path and silently miss. */
 export class FileConflictLookup<E extends { readonly relativePath: string } = ConflictEntry> {
-  private readonly byFoldedPath = new Map<string, E>();
+  private byFoldedPath = new Map<string, E>();
 
   set(entry: E): void {
     this.byFoldedPath.set(foldPath(entry.relativePath), entry);
@@ -75,7 +76,19 @@ export class FileConflictLookup<E extends { readonly relativePath: string } = Co
     return this.byFoldedPath.get(foldPath(relativePath));
   }
 
-  /** Each path once, in the order its winner wins: Overwrite's paths first, then each enabled mod's in mod order. */
+  /** This lookup, with each folded path `changes` names holding the entry it gives, or none where it gives none. */
+  changed(changes: ReadonlyMap<string, E | undefined>): FileConflictLookup<E> {
+    if (changes.size === 0) return this;
+    const next = new FileConflictLookup<E>();
+    next.byFoldedPath = new Map(this.byFoldedPath);
+    for (const [folded, entry] of changes) {
+      if (entry === undefined) next.byFoldedPath.delete(folded);
+      else next.byFoldedPath.set(folded, entry);
+    }
+    return next;
+  }
+
+  /** Each path once. */
   values(): IterableIterator<E> {
     return this.byFoldedPath.values();
   }
@@ -85,9 +98,9 @@ export class FileConflictLookup<E extends { readonly relativePath: string } = Co
   }
 }
 
-/** The winner lookup minus its one mutator.
+/** The winner lookup minus what builds it.
  *  Every reader of the Instance's `files` field takes this. */
-export type FileWinners = Omit<FileConflictLookup, 'set'>;
+export type FileWinners = Omit<FileConflictLookup, 'set' | 'changed'>;
 
 export interface FileConflictIndex {
   /** Conflict/winner info, for every path provided by >=1 enabled mod or by Overwrite. */
@@ -115,52 +128,152 @@ function provide(files: FileConflictLookup, seen: Set<string>, file: OriginFile,
   }
 }
 
-export function buildFileConflictIndex(
-  entries: readonly ModlistEntry[],
-  overwriteFiles: readonly OriginFile[],
-  modFiles: ReadonlyMap<string, OriginFiles>,
-): FileConflictIndex {
-  const files = new FileConflictLookup();
-  const filesByMod = new Map<string, readonly OriginFile[]>();
-  const foldersByMod = new Map<string, readonly OriginFolder[]>();
+const listingsOf = (entries: readonly ModlistEntry[], modFiles: ReadonlyMap<string, OriginFiles>): [string, OriginFiles][] =>
+  entries.flatMap((entry) => {
+    if (entry.kind !== 'mod') return [];
+    const listing = modFiles.get(entry.name);
+    if (listing === undefined) throw new Error(`The reading holds no files for ${entry.name}`);
+    return [[entry.name, listing]];
+  });
 
-  for (const mod of entries.filter((entry) => entry.kind === 'mod')) {
-    const listing = modFiles.get(mod.name);
-    if (listing === undefined) throw new Error(`The reading holds no files for ${mod.name}`);
-    filesByMod.set(mod.name, listing.files);
-    foldersByMod.set(mod.name, listing.folders);
+// `was` while every entry is the one it holds.
+function mapKeeping<V>(entries: readonly (readonly [string, V])[], was: Map<string, V> | undefined): Map<string, V> {
+  return was !== undefined && was.size === entries.length && entries.every(([key, value]) => was.get(key) === value) ? was : new Map(entries);
+}
+
+// Overwrite, then each enabled mod in mod order, with the files nothing excludes: `was`'s object for an origin whose files
+// are the ones it was built from.
+function winningFirstOf(entries: readonly ModlistEntry[], overwrite: readonly OriginFile[], filesByMod: ReadonlyMap<string, readonly OriginFile[]>, was?: readonly OriginProvides[]): OriginProvides[] {
+  const kept = new Map((was ?? []).map((provided) => [originKey(provided.origin), provided]));
+  return originsWinningFirst(entries).map((origin) => {
+    const files = origin.kind === 'mod' ? filesByMod.get(origin.name) ?? [] : overwrite;
+    const prior = kept.get(originKey(origin));
+    return prior !== undefined && providedFrom.get(prior) === files ? prior : provides(origin, files);
+  });
+}
+
+const providedFrom = new WeakMap<OriginProvides, readonly OriginFile[]>();
+
+function provides(origin: FileOrigin, files: readonly OriginFile[]): OriginProvides {
+  const provided = { origin, files: files.filter((file) => !file.excluded) };
+  providedFrom.set(provided, files);
+  return provided;
+}
+
+const foldedFiles = new WeakMap<OriginProvides, ReadonlyMap<string, OriginFile>>();
+
+// Each path the origin provides, by its folded path, at the first of its case variants.
+function foldedFilesOf(provided: OriginProvides): ReadonlyMap<string, OriginFile> {
+  let folded = foldedFiles.get(provided);
+  if (folded === undefined) {
+    const each = new Map<string, OriginFile>();
+    for (const file of provided.files) if (!each.has(foldPath(file.relativePath))) each.set(foldPath(file.relativePath), file);
+    folded = each;
+    foldedFiles.set(provided, folded);
   }
+  return folded;
+}
 
-  const winningFirst = filesWinningFirst(entries, overwriteFiles, (mod) => filesByMod.get(mod) ?? []);
+// One winning-first order of the origins against the one before it, by `originKey`: `changed` holds each origin whose
+// files changed or that only one order holds, and `paths` each folded path those provide or provided.
+interface OriginsChanged {
+  readonly now: ReadonlyMap<string, OriginProvides>;
+  readonly rank: ReadonlyMap<string, number>;
+  readonly changed: ReadonlySet<string>;
+  readonly paths: ReadonlySet<string>;
+}
+
+// None when the origins both orders hold are in another order: then every path may have another winner.
+
+function originsChanged(was: readonly OriginProvides[], now: readonly OriginProvides[]): OriginsChanged | undefined {
+  const byKey = (order: readonly OriginProvides[]) => new Map(order.map((provided) => [originKey(provided.origin), provided]));
+  const [before, after] = [byKey(was), byKey(now)];
+  const kept = (order: readonly OriginProvides[], other: ReadonlyMap<string, OriginProvides>) =>
+    order.map(({ origin }) => originKey(origin)).filter((key) => other.has(key));
+  if (!sameInputs(kept(was, after), kept(now, before))) return undefined;
+  const changed = new Set([...before.keys(), ...after.keys()].filter((key) => before.get(key) !== after.get(key)));
+  const paths = new Set([...changed].flatMap((key) => [before.get(key), after.get(key)].flatMap((provided) => (provided === undefined ? [] : [...foldedFilesOf(provided).keys()]))));
+  return { now: after, rank: new Map(now.map(({ origin }, at) => [originKey(origin), at])), changed, paths };
+}
+
+// The origins that provide the folded path, winning-most first: `kept`, those of them no change touched, and each changed
+// origin that provides it now.
+function providersOf(folded: string, kept: readonly FileOrigin[], { now, rank, changed }: OriginsChanged): FileOrigin[] {
+  const joined = [...changed].flatMap((key) => {
+    const provided = now.get(key);
+    return provided !== undefined && foldedFilesOf(provided).has(folded) ? [provided.origin] : [];
+  });
+  const rankOf = (origin: FileOrigin): number => rank.get(originKey(origin)) ?? 0;
+  return [...kept.filter((origin) => !changed.has(originKey(origin))), ...joined].sort((a, b) => rankOf(a) - rankOf(b));
+}
+
+const sameOrigins = (a: readonly FileOrigin[], b: readonly FileOrigin[]): boolean => a.length === b.length && a.every((origin, at) => {
+  const other = b[at];
+  return other !== undefined && sameOrigin(origin, other);
+});
+
+// The file at the folded path of an origin that provides it now.
+const fileAt = ({ now }: OriginsChanged, origin: FileOrigin, folded: string): OriginFile =>
+  present(foldedFilesOf(present(now.get(originKey(origin)), 'a provider among the origins')).get(folded), 'the provider\'s file');
+
+function entryAt(folded: string, was: ConflictEntry | undefined, origins: OriginsChanged): ConflictEntry | undefined {
+  const providers = providersOf(folded, was?.providers ?? [], origins);
+  const [winnerOrigin] = providers;
+  if (winnerOrigin === undefined) return undefined;
+  const file = fileAt(origins, winnerOrigin, folded);
+  const entry = { relativePath: file.relativePath, winner: file.sourcePath, winnerOrigin, providers };
+  const same = was !== undefined && was.relativePath === entry.relativePath && was.winner === entry.winner && sameOrigins(was.providers, providers);
+  return same ? was : entry;
+}
+
+// `was`'s files, with each path the changed origins provide, or provided, provided again.
+function filesAgain(was: FileConflictLookup, origins: OriginsChanged): FileConflictLookup {
+  const changes = new Map<string, ConflictEntry | undefined>();
+  for (const folded of origins.paths) {
+    const before = was.get(folded);
+    const now = entryAt(folded, before, origins);
+    if (now !== before) changes.set(folded, now);
+  }
+  return was.changed(changes);
+}
+
+// From `was`, the index before, each part and entry that is as it was stays `was`'s object, and only the paths of the
+// origins that changed are indexed again.
+function indexFrom(
+  was: FileConflictIndex | undefined, entries: readonly ModlistEntry[], overwriteFiles: readonly OriginFile[], modFiles: ReadonlyMap<string, OriginFiles>,
+): FileConflictIndex {
+  const listings = listingsOf(entries, modFiles);
+  const filesByMod = mapKeeping(listings.map(([name, listing]) => [name, listing.files] as const), was?.filesByMod);
+  const foldersByMod = mapKeeping(listings.map(([name, listing]) => [name, listing.folders] as const), was?.foldersByMod);
+  const order = winningFirstOf(entries, overwriteFiles, filesByMod, was?.winningFirst);
+  const winningFirst = was !== undefined && sameInputs(was.winningFirst, order) ? was.winningFirst : order;
+  return { files: filesOf(winningFirst, was), filesByMod, foldersByMod, winningFirst };
+}
+
+function filesOf(winningFirst: readonly OriginProvides[], was: FileConflictIndex | undefined): FileConflictLookup {
+  if (was?.winningFirst === winningFirst) return was.files;
+  const origins = was === undefined ? undefined : originsChanged(was.winningFirst, winningFirst);
+  if (was !== undefined && origins !== undefined) return filesAgain(was.files, origins);
+  const files = new FileConflictLookup();
   for (const { origin, files: provided } of winningFirst) {
     const seen = new Set<string>();
     for (const file of provided) provide(files, seen, file, origin);
   }
-
-  return { files, filesByMod, foldersByMod, winningFirst };
+  return files;
 }
 
-const sameEntries = (a: readonly ModlistEntry[], b: readonly ModlistEntry[]): boolean =>
-  a.length === b.length && a.every((entry, at) => entry.kind === b.at(at)?.kind && entry.name === b.at(at)?.name && entry.enabled === b.at(at)?.enabled);
-
-interface Built {
-  readonly entries: readonly ModlistEntry[];
-  readonly overwrite: readonly OriginFile[];
-  readonly listings: ReadonlyMap<string, OriginFiles | undefined>;
-  readonly index: FileConflictIndex;
+/** The index of the mods' files and Overwrite's. */
+export function buildFileConflictIndex(entries: readonly ModlistEntry[], overwriteFiles: readonly OriginFile[], modFiles: ReadonlyMap<string, OriginFiles>): FileConflictIndex {
+  return indexFrom(undefined, entries, overwriteFiles, modFiles);
 }
 
-/** `buildFileConflictIndex`, answering the index it built last while the mods, their order, Overwrite's files and every mod's
- *  listing are the ones it built from. The cost of a refresh then grows with the listings it changed. */
+/** `buildFileConflictIndex` from the index it built last, which it answers while nothing it holds changed. */
 export function indexReusing(): typeof buildFileConflictIndex {
-  let last: Built | undefined;
+  let last: FileConflictIndex | undefined;
   return (entries, overwrite, modFiles) => {
-    const listings = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, modFiles.get(entry.name)] as const] : [])));
-    if (last !== undefined && last.overwrite === overwrite && sameEntries(last.entries, entries)
-      && [...listings].every(([name, listing]) => last?.listings.get(name) === listing)) return last.index;
-    const index = buildFileConflictIndex(entries, overwrite, modFiles);
-    last = { entries, overwrite, listings, index };
-    return index;
+    const index = indexFrom(last, entries, overwrite, modFiles);
+    if (last === undefined || !sameInputs(Object.values(last), Object.values(index))) last = index;
+    return last;
   };
 }
 
@@ -185,7 +298,7 @@ export interface StackedFile {
   readonly copies: StackedCopy[];
 }
 
-export type StackedCopies = Omit<FileConflictLookup<StackedFile>, 'set'>;
+export type StackedCopies = Omit<FileConflictLookup<StackedFile>, 'set' | 'changed'>;
 
 /** Whether `own` has a copy of the file, and another origin has one too. */
 export const copyInConflict = (file: StackedFile | undefined, own: FileOrigin): boolean =>
@@ -276,17 +389,68 @@ function add(stack: FileConflictLookup<StackedFile>, relativePath: string, copy:
   else if (!entry.copies.some(({ origin }) => sameOrigin(origin, copy.origin))) entry.copies.push(copy);
 }
 
+type ArchiveRule = (file: OriginFile) => boolean;
+
+// A file an origin provides is a loose copy unless it is an archive in `loaded` the game reads the files of.
+function looseIn(loaded: readonly LoadedArchive[], gameRelease: string): ArchiveRule {
+  const isArchive = pluginCompanionRule(gameRelease)?.isArchive ?? (() => false);
+  const unreadable = new Set(loaded.filter(({ files }) => files === undefined).map(({ archive }) => archive));
+  return (file) => !isArchive(file.relativePath) || unreadable.has(file.sourcePath);
+}
+
+// Each file the archives in `loaded` (in load order) hold, one copy from each origin, the game's own first.
+function archivedCopiesOf(loaded: readonly LoadedArchive[], gameRelease: string): FileConflictLookup<StackedFile> {
+  const archived = new FileConflictLookup<StackedFile>();
+  for (const { origin, archive, files } of [...loaded].reverse()) {
+    for (const file of files ?? []) add(archived, file, { origin, at: { kind: 'archived', gameRelease, archive, file } });
+  }
+  return archived;
+}
+
+function stackOf(winningFirst: readonly OriginProvides[], isLoose: ArchiveRule, archived: FileConflictLookup<StackedFile>): FileConflictLookup<StackedFile> {
+  const stack = new FileConflictLookup<StackedFile>();
+  for (const { origin, files } of winningFirst) for (const file of files) if (isLoose(file)) add(stack, file.relativePath, { origin, at: { kind: 'loose', path: file.sourcePath } });
+  for (const { relativePath, copies } of archived) for (const copy of copies) add(stack, relativePath, copy);
+  return stack;
+}
+
 /** Each file a mod or Overwrite provides, loose or in an archive in `loaded` (in load order), as the game stacks its
  *  copies. An archive is the files it holds: one not loaded gives none, one unreadable stays a file. */
 export function stackCopies(index: Pick<FileConflictIndex, 'winningFirst'>, loaded: readonly LoadedArchive[], gameRelease: string): StackedCopies {
-  const isArchive = pluginCompanionRule(gameRelease)?.isArchive ?? (() => false);
-  const stack = new FileConflictLookup<StackedFile>();
-  const unreadable = new Set(loaded.filter(({ files }) => files === undefined).map(({ archive }) => archive));
-  for (const { origin, files } of index.winningFirst) for (const file of files) if (!isArchive(file.relativePath) || unreadable.has(file.sourcePath)) add(stack, file.relativePath, { origin, at: { kind: 'loose', path: file.sourcePath } });
-  for (const { origin, archive, files } of [...loaded].reverse()) {
-    for (const file of files ?? []) add(stack, file, { origin, at: { kind: 'archived', gameRelease, archive, file } });
+  return stackOf(index.winningFirst, looseIn(loaded, gameRelease), archivedCopiesOf(loaded, gameRelease));
+}
+
+// The copies of the folded path: `was`'s from each origin no change touched, and each changed origin's now.
+function stackedAt(folded: string, was: StackedFile | undefined, origins: OriginsChanged, isLoose: ArchiveRule, archived: FileConflictLookup<StackedFile>): StackedFile | undefined {
+  const wasLoose = (was?.copies ?? []).filter(({ at }) => at.kind === 'loose');
+  const loose = providersOf(folded, wasLoose.map(({ origin }) => origin), origins).flatMap((origin): StackedCopy[] => {
+    const kept = wasLoose.find((copy) => sameOrigin(copy.origin, origin));
+    if (kept !== undefined && !origins.changed.has(originKey(origin))) return [kept];
+    const file = fileAt(origins, origin, folded);
+    return isLoose(file) ? [{ origin, at: { kind: 'loose', path: file.sourcePath } }] : [];
+  });
+  const inArchives = archived.get(folded);
+  if (inArchives === undefined && loose.length === 0) return undefined;
+  const copies = [...loose, ...(inArchives?.copies ?? []).filter((copy) => !loose.some(({ origin }) => sameOrigin(origin, copy.origin)))];
+  const relativePath = relativePathOf(folded, loose, inArchives, was, origins);
+  return was !== undefined && was.relativePath === relativePath && sameInputs(was.copies, copies) ? was : { relativePath, copies };
+}
+
+// The winning loose copy's own spelling, else the first archive's that holds it.
+function relativePathOf(folded: string, loose: readonly StackedCopy[], inArchives: StackedFile | undefined, was: StackedFile | undefined, origins: OriginsChanged): string {
+  const [first] = loose;
+  if (first === undefined) return present(inArchives, 'an archived copy').relativePath;
+  return was?.copies[0] === first ? was.relativePath : fileAt(origins, first.origin, folded).relativePath;
+}
+
+function restacked(was: FileConflictLookup<StackedFile>, origins: OriginsChanged, isLoose: ArchiveRule, archived: FileConflictLookup<StackedFile>): FileConflictLookup<StackedFile> {
+  const changes = new Map<string, StackedFile | undefined>();
+  for (const folded of origins.paths) {
+    const before = was.get(folded);
+    const now = stackedAt(folded, before, origins, isLoose, archived);
+    if (now !== before) changes.set(folded, now);
   }
-  return stack;
+  return was.changed(changes);
 }
 
 /** The game folder's archived copies by lower-case path, and each Data-folder archive's load rank. The stack holds no game
@@ -314,14 +478,29 @@ const sameLoaded = (a: readonly LoadedArchive[], b: readonly LoadedArchive[]): b
     return other !== undefined && sameOrigin(one.origin, other.origin) && one.archive === other.archive && one.files === other.files;
   });
 
-/** `stackCopies`, answering the stack it built last while the index, the archives loaded and what each holds are the ones
- *  it built from. */
+interface Stacked {
+  readonly winningFirst: readonly OriginProvides[];
+  readonly loaded: readonly LoadedArchive[];
+  readonly gameRelease: string;
+  readonly archived: FileConflictLookup<StackedFile>;
+  readonly stack: FileConflictLookup<StackedFile>;
+}
+
+function stackAgain(was: Stacked | undefined, winningFirst: readonly OriginProvides[], isLoose: ArchiveRule, archived: FileConflictLookup<StackedFile>): FileConflictLookup<StackedFile> {
+  const origins = was === undefined ? undefined : originsChanged(was.winningFirst, winningFirst);
+  return was === undefined || origins === undefined ? stackOf(winningFirst, isLoose, archived) : restacked(was.stack, origins, isLoose, archived);
+}
+
+/** `stackCopies`, from the stack it built last: while the archives loaded and what each holds are the same, a change
+ *  costs the paths of the origins it changed. */
 export function stackReusing(): typeof stackCopies {
-  let last: { readonly index: object; readonly loaded: readonly LoadedArchive[]; readonly gameRelease: string; readonly stack: StackedCopies } | undefined;
-  return (index, loaded, gameRelease) => {
-    if (last !== undefined && last.index === index && last.gameRelease === gameRelease && sameLoaded(last.loaded, loaded)) return last.stack;
-    const stack = stackCopies(index, loaded, gameRelease);
-    last = { index, loaded, gameRelease, stack };
+  let last: Stacked | undefined;
+  return ({ winningFirst }, loaded, gameRelease) => {
+    const was = last?.gameRelease === gameRelease && sameLoaded(last.loaded, loaded) ? last : undefined;
+    if (was?.winningFirst === winningFirst) return was.stack;
+    const archived = was?.archived ?? archivedCopiesOf(loaded, gameRelease);
+    const stack = stackAgain(was, winningFirst, looseIn(loaded, gameRelease), archived);
+    last = { winningFirst, loaded, gameRelease, archived, stack };
     return stack;
   };
 }
