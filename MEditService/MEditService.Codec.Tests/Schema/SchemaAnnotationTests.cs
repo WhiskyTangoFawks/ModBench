@@ -139,19 +139,33 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
-    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "Keywords", "npc_", "Keywords")]
-    [InlineData(typeof(IPlacedArrowGetter), "LinkedReferences", "parw", "LinkedReferences")]
-    public void AFormatSortedListWalkedWhereItTakesNoMove_BuildsTheSchema(Type sorted, string member, string table, string path)
+    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "npc_", false)]
+    [InlineData(typeof(INpcGetter), "npc_", false)]
+    [InlineData(typeof(INpcGetter), "armo", true)]
+    public void AFormatSortedList_TakesNoMove_OnlyUnderItsDeclarer(Type declarer, string table, bool takesMove)
     {
         var reflector = Fallout4With(annotations => annotations with
         {
             UnkeyedSortedArrays = [],
-            FormatSortedLists = [.. annotations.FormatSortedLists, (sorted, member)],
+            FormatSortedLists = [.. annotations.FormatSortedLists, (declarer, "Keywords")],
         });
 
-        var array = reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(column => column.Name == path).Field;
+        var keywords = reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(column => column.Name == "Keywords").Field;
 
-        Assert.False(array.TakesMove);
+        Assert.Equal(takesMove, keywords.TakesMove);
+    }
+
+    [Fact]
+    public void AFormatSortedListWalkedUnderAProperBaseThatKeysIt_BuildsTheSchema_KeyedThere()
+    {
+        var reflector = Fallout4With(annotations => annotations with
+        {
+            FormatSortedLists = [.. annotations.FormatSortedLists, (typeof(IPlacedArrowGetter), "LinkedReferences")],
+        });
+
+        var linked = reflector.GetSchemas(GameRelease.Fallout4)["parw"].RecordColumns.Single(column => column.Name == "LinkedReferences").Field;
+
+        Assert.Equal(["KeywordOrReference"], linked.KeyMembers);
     }
 
     [Fact]

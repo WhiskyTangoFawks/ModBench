@@ -510,7 +510,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
   });
 
   it.each(['Ambush', 'Guard'])('the element %s of an array that takes no move offers neither move', async label => {
-    await renderGuardAfterAmbush({ ...scriptMeta, takesMove: false });
+    await renderGuardAfterAmbush({ ...scriptMeta, keyMembers: null });
 
     expect(JSON.parse(required(myCell(rowLabelled(label)).getAttribute('data-vscode-context'), `${label}'s context`)))
       .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
