@@ -322,6 +322,8 @@ export class Instance implements Subscription {
   private landedFrom: InstanceReading | undefined;
 
   private subscribers: Subscribed[] = [];
+  // What a failed read was for, which the next read reads again so its change names it (ADR-0029).
+  private unread: { readonly named: ReadonlySet<string>; readonly disk: boolean } = { named: new Set(), disk: false };
 
   private failureListeners: ReadFailureListener[] = [];
   private redrawListeners: (() => void)[] = [];
@@ -559,6 +561,9 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
+      for (const path of this.unread.named) run.named.add(path);
+      run.disk ||= this.unread.disk;
+      this.unread = { named: new Set(), disk: false };
       const { settled, failed } = await this.recompute(run);
       run.landValue(failed);
       run.land(settled);
@@ -577,6 +582,7 @@ export class Instance implements Subscription {
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
+      this.unread = { named: new Set(run.named), disk: run.disk };
       return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()), failed: new Error(failure) };
     }
     const before = this.current;

@@ -383,6 +383,23 @@ describe('Instance — what a read tells', () => {
     expect(told).toEqual([1, 2]);
   });
 
+  it.each([
+    ['the files it named', ['/instance/mods/A/a.dds'], { named: ['/instance/mods/A/a.dds', '/instance/mods/B/b.dds'], disk: false }],
+    ['a check of the disk', undefined, { named: ['/instance/mods/B/b.dds'], disk: true }],
+  ])('reads again at the next read what a failed read was for, %s, and its change names it (ADR-0029)', async (_what, failedFor, told) => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    const rereads: Reread[] = [];
+    instance.subscribe((_value, _sequence, { named, disk }) => { rereads.push({ named: [...named].sort(), disk }); }, { mods: true });
+    await instance.refresh([MODLIST]);
+
+    fake.failReading('locked');
+    await instance.refresh(failedFor);
+    fake.failReading(undefined);
+    await instance.refresh(['/instance/mods/B/b.dds']);
+
+    expect(rereads.at(-1)).toEqual(told);
+  });
+
   it('tells a subscriber that names its concerns of each check of the disk, as a check is how the user recovers', async () => {
     const { instance } = loader({ mods: [mod('A')] });
     const told: number[] = [];
