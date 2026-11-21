@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { leaveWritesUnnamed } from '../repositoriesLib/writesTold';
+import { leaveWritesUnnamed, nameWrites } from '../repositoriesLib/writesTold';
+import { GIT_DIR } from './files';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,32 +14,64 @@ type GitFed = (folder: string, input: string | Buffer, ...args: string[]) => Pro
 
 const READS = new Set(['status', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'for-each-ref', 'grep', 'show', 'check-ignore', 'check-attr', 'rev-list', 'log', 'diff', 'hash-object']);
 const READING_ARGUMENTS = new Set(['--get', '--get-all', '--get-regexp', '--list', 'get-url']);
+const WORKING_TREE_RESETS = new Set(['--hard', '--merge', '--keep']);
 
-function subcommandOf(args: readonly string[]): string | undefined {
-  for (let i = 0; i < args.length; i++) {
+const isOption = (arg: string): boolean => /^-/.test(arg);
+
+function subcommandAt(args: readonly string[]): number {
+  let i = 0;
+  for (; i < args.length; i++) {
     if (args[i] === '-c') i++;
-    else if (!/^-/.test(args[i] ?? '')) return args[i];
+    else if (!isOption(args[i] ?? '')) break;
   }
-  return undefined;
+  return i;
 }
 
-// A subcommand not known to only read may write any file of the working tree.
-function leaveWritesUnnamedUnlessReading(args: readonly string[]): void {
-  const subcommand = subcommandOf(args);
-  const reads = subcommand !== undefined && (READS.has(subcommand) || (['config', 'remote'].includes(subcommand) && args.some((arg) => READING_ARGUMENTS.has(arg))));
-  if (!reads) leaveWritesUnnamed();
+function configFile(rest: readonly string[]): string | undefined {
+  const at = rest.findIndex((arg) => arg === '-f' || arg === '--file');
+  return at === -1 ? rest.find((arg) => arg.startsWith('--file='))?.slice('--file='.length) : rest[at + 1];
+}
+
+const operands = (rest: readonly string[]): number => rest.filter((arg) => !isOption(arg)).length;
+
+type Written = (rest: readonly string[], folder: string, gitDir: readonly string[]) => readonly string[] | undefined;
+
+// The repository's .git stands for git's own files: the instance keeps what it read of the repository under it.
+const WRITES = new Map<string, Written>([
+  ['config', (rest, folder, gitDir) => {
+    if (rest.some((arg) => READING_ARGUMENTS.has(arg))) return [];
+    const file = configFile(rest);
+    return file === undefined ? gitDir : [resolve(folder, file)];
+  }],
+  ['remote', (rest, _folder, gitDir) => (operands(rest) === 0 || rest.includes('get-url') ? [] : gitDir)],
+  ['symbolic-ref', (rest, _folder, gitDir) => (operands(rest) < 2 && !rest.some((arg) => arg === '-d' || arg === '--delete') ? [] : gitDir)],
+  ['update-index', (_rest, _folder, gitDir) => gitDir],
+  ['reset', (rest, _folder, gitDir) => (rest.some((arg) => WORKING_TREE_RESETS.has(arg)) ? undefined : gitDir)],
+]);
+
+// What a subcommand writes; undefined for one that may write any file of the working tree.
+function writtenBy(folder: string, args: readonly string[]): readonly string[] | undefined {
+  const at = subcommandAt(args);
+  const subcommand = args[at] ?? '';
+  if (READS.has(subcommand)) return [];
+  return WRITES.get(subcommand)?.(args.slice(at + 1), folder, [join(folder, GIT_DIR)]);
 }
 
 function gitWith(env: NodeJS.ProcessEnv | undefined, writesTheWorkingTree: boolean): { git: Git; gitFed: GitFed } {
   const options = env === undefined ? OPTIONS : { ...OPTIONS, env };
-  const leaving = (args: readonly string[]): void => { if (writesTheWorkingTree) leaveWritesUnnamedUnlessReading(args); };
+  const naming = (folder: string, args: readonly string[]): void => {
+    if (!writesTheWorkingTree) return;
+    const written = writtenBy(folder, args);
+    if (written === undefined) leaveWritesUnnamed();
+    else if (written.length > 0) nameWrites(written);
+  };
   return {
     git: async (folder, ...args) => {
-      leaving(args);
+      naming(folder, args);
       return (await execFileAsync('git', ['-C', folder, ...args], options)).stdout;
     },
     gitFed: async (folder, input, ...args) => {
-      leaving(args);
+      naming(folder, args);
       const running = execFileAsync('git', ['-C', folder, ...args], options);
       // git that exits before it reads its input closes the pipe; its exit says why.
       running.child.stdin?.on('error', () => undefined);
