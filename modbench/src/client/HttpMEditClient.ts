@@ -42,7 +42,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 // A write has no limit: the writer finishes its own write.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
-/** The call answers the changes a write makes, which Modbench makes itself; or it writes files, which its answer names. */
+// The call answers the changes a write makes, which Modbench makes itself; or it writes files, which its answer names.
 type Writes<T> = { readonly answersChanges: true } | { readonly written: (answer: T) => readonly string[] };
 
 interface Post<T> {
