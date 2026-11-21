@@ -238,8 +238,7 @@ export function instanceLastGoodReadFailure({ sequence, readFailure }: Pick<Inst
 }
 
 /** What every view of the instance says on its message line (common.md, States), in order: the mod manager running
- *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then, with the view's
- *  own `lastGood` reasons. */
+ *  (story 8), and a read that failed after rows landed (story 6), with the view's own `lastGood` reasons. */
 export function instanceMessages(
   view: Pick<InstanceOf<keyof typeof MESSAGE_READS>, 'value' | 'sequence' | 'readFailure'>, lastGood: readonly string[] = [],
 ): (string | undefined)[] {

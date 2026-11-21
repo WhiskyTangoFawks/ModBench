@@ -64,6 +64,13 @@ internal sealed class SourceRepository : ISourceRepository
     internal static bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder } && HoldsTreeFor(sourceFolder, plugin.Name);
 
+    /// <summary>Whether a source mod's plugin source holds a tree spelled as <paramref name="pluginFileName"/> without case, one that
+    /// reads or not; false when its plugin source cannot be listed.</summary>
+    internal static bool HoldsPluginSourceNamed(string sourceFolder, string pluginFileName) =>
+        IsSourceMod(sourceFolder)
+        && SourceFailure.Answer<IReadOnlyList<string>>(() => SourceRepositoryLayout.TreesNamedIn(sourceFolder, pluginFileName)).Holds(out var named, out _)
+        && named.Count > 0;
+
     internal static bool HoldsTreeFor(string sourceFolder, string pluginFileName) =>
         IsSourceMod(sourceFolder) && SourceRepositoryLayout.TreeNameIn(sourceFolder, pluginFileName).Holds(out _, out _);
 

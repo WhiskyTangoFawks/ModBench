@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { join } from 'node:path';
 import { trashSetAsideOn } from '../setAside';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
@@ -34,7 +35,7 @@ describe('trashSetAsideOn — scripts.md, Writing, story 8: a file a make replac
     await vi.waitFor(() => expect(instance.calls).toHaveLength(2));
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Moving Patch.esp, which a Modbench script replaced, to the trash did not finish. It was at /mods/Patch/.medit_tmp_replaced_a/Patch.esp.',
+      message: `Moving Patch.esp, which a Modbench script replaced, to the trash did not finish. It was at ${join('/mods/Patch', refused)}.`,
       detail: 'the trash is full',
     }]);
   });

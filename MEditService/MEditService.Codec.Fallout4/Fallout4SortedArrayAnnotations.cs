@@ -108,9 +108,9 @@ internal static class Fallout4SortedArrayAnnotations
         ("ILeveledNpcGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
     ];
 
-    /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over an element with no key,
-    /// transcribed from <c>wbDefinitionsFO4.pas</c> and <c>wbDefinitionsCommon.pas</c>. xEdit's callback leaves a
-    /// FormID List unsorted, so it is not one.</summary>
+    /// <summary>Arrays xEdit declares <c>wbArrayS</c> or <c>wbRArrayS</c> over an element with no key, from
+    /// <c>wbDefinitionsFO4.pas</c> and <c>wbDefinitionsCommon.pas</c>. A FormID List is not one: xEdit's callback leaves it
+    /// unsorted.</summary>
     public static readonly (string TypeName, string MemberName)[] UnkeyedSortedArrays =
     [
         ("IActivatorGetter", "Keywords"),

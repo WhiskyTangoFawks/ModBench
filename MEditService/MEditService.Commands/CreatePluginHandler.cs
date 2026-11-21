@@ -33,7 +33,7 @@ public sealed class CreatePluginHandler
 
         var mod = new PluginProvider.FromMod(address.Origin, folder, sourceFolder);
         var modKey = ModKey.FromFileName(address.Name);
-        var plugin = RegisteredIn(address, mod);
+        var plugin = RegisteredIn(_adapter, address, mod);
         if (!_source.IsSourceMod(plugin)) return address;
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
@@ -47,8 +47,9 @@ public sealed class CreatePluginHandler
             $"Could not write {address.Name}'s source into {mod.SourceFolder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
     }
 
-    private RegisteredPlugin RegisteredIn(PluginAddress address, PluginProvider.FromMod mod) =>
-        new(address.Name, address.Origin, _adapter.PathOfEmpty(ModKey.FromFileName(address.Name), mod.Folder), mod, Line: null, PluginStrings.None);
+    /// <summary>A new plugin as it will sit in <paramref name="mod"/>'s folder.</summary>
+    internal static RegisteredPlugin RegisteredIn(IPluginAdapter adapter, PluginAddress address, PluginProvider.FromMod mod) =>
+        new(address.Name, address.Origin, adapter.PathOfEmpty(ModKey.FromFileName(address.Name), mod.Folder), mod, Line: null, PluginStrings.None);
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> WrittenOnceItsSourceLands(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)

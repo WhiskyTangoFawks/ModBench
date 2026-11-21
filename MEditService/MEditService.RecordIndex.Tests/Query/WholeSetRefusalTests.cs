@@ -14,6 +14,7 @@ public sealed class WholeSetRefusalTests
     private static readonly Dictionary<string, Func<IQueries, IndexRefused>> BehindTheWholeSetGuard = new()
     {
         [nameof(IQueries.GetRecordOwners)] = q => q.GetRecordOwners(["000800:First.esp"]).Refused(),
+        [nameof(IQueries.GetRecordOwnersForAWrite)] = q => q.GetRecordOwnersForAWrite(["000800:First.esp"]).Refused(),
         [nameof(IQueries.GetCompareRecords)] = q => q.GetCompareRecords([new RecordCopy("000800:First.esp", FirstPlugin)]).Refused(),
         [nameof(IQueries.GetCopyStates)] = q => q.GetCopyStates(["000800:First.esp"], plugin: null).Refused(),
         [nameof(IQueries.GetPlacedReferences)] = q => q.GetPlacedReferences("000800:First.esp").Refused(),
@@ -78,6 +79,57 @@ public sealed class WholeSetRefusalTests
             await load;
         }
     }
+
+    [Fact]
+    public async Task WhileTheFirstReadFills_TheOwnersForAWrite_AreNotReady_ForNoCopyHasYetBeenDecidedTheWinner()
+    {
+        using var fixture = Fixture();
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
+        using var index = Indexes.Open(holder, gate);
+        var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+
+        try
+        {
+            Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetRecordOwnersForAWrite([FirstNpc(index)]).Refused().Refusal);
+        }
+        finally
+        {
+            gate.Release();
+            await load;
+        }
+    }
+
+    [Fact]
+    public async Task WhileAReconcileOverARead_HasNotDecidedItsWinners_TheOwnersForAWrite_AreNotReady_AndAreOnceItHas()
+    {
+        using var fixture = Fixture();
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
+        using var index = Indexes.Open(holder, gate);
+        index.Reconcile(holder, fixture.DataFolder, [.. fixture.Plugins.Where(plugin => plugin.Name != "Later.esp")], GameRelease.Fallout4);
+        var npc = FirstNpc(index);
+        var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+
+        IndexRefusal midway;
+        try
+        {
+            midway = index.Queries.GetRecordOwnersForAWrite([npc]).Refused().Refusal;
+        }
+        finally
+        {
+            gate.Release();
+            await load;
+        }
+
+        Assert.Equal(IndexRefusal.IndexNotReady, midway);
+        Assert.Equal([FirstPlugin], index.Queries.GetRecordOwnersForAWrite([npc]).Value().Owners[npc]);
+    }
+
+    private static string FirstNpc(OpenedIndex index) =>
+        Assert.Single(index.Queries.Selected("SELECT form_key FROM npc_")).GetProperty("form_key").GetString().Require();
 
     [Theory]
     [MemberData(nameof(WholeSetGuard))]

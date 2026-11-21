@@ -15,9 +15,8 @@ interface ReconciledDeps {
   tellHeard: (failures: readonly PluginLoadFailure[]) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
-  /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
-   *  it without the rest. Answers how many plugins are active, and each failure that took away
-   *  rows that stood; none when it did not land. */
+  /** The completed reconcile's whole hand-off to the tree, so no caller applies one part without the rest. Answers
+   *  how many plugins are active and each failure that took away rows that stood; none when it did not land. */
   applyReconciled: (failures: readonly PluginLoadFailure[], totalPlugins: number) => Promise<{ active: number; rowsGone: PluginLoadFailure[] } | undefined>;
 }
 
@@ -63,7 +62,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
   const tellStanding = (rowsGone: readonly PluginLoadFailure[] = []): void => {
     const gone = new Set(rowsGone.map(pluginAddressKey));
     tellOnce([...heardFailures].map(([key, f]) => (gone.has(key)
-      ? { key, message: `The records of ${quotedPluginName(f)} no longer show: its read failed.`, why: f.reason, notify: true }
+      ? { key, message: `The records of ${quotedPluginName(f)} are gone: its read failed.`, why: f.reason, notify: true }
       : { key, message: `Failed to read ${quotedPluginName(f)}.`, why: f.reason })));
   };
   const tellLanded = (failures: readonly PluginLoadFailure[], rowsGone: readonly PluginLoadFailure[]): void => {

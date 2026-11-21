@@ -177,6 +177,14 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
+    public void TwinTreesNeitherSpelledAsTheLoadOrderNamesIt_AreStillPluginSourceItsModHolds()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+
+        Assert.Equal([TestMod.Name], TestAdapters.Source().PlacesHoldingPluginSourceOf([new PluginPlace(TestMod.Name, _modFolder, _modFolder)], "fixture.esp"));
+    }
+
+    [PosixFact]
     public void WhyTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_DoNotRead_NamesBothFolders()
     {
         MakeTwinOfTheTreeIn(Recased.Name);

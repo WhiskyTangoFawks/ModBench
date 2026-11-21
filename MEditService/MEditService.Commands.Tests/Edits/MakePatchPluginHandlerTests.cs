@@ -361,8 +361,8 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal(
-            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP"),
-            (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName))));
+            (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP", "held"),
+            (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName)), await File.ReadAllTextAsync(Path.Combine(_folder, "patch.ESP"))));
     }
 
     [Fact]
@@ -374,6 +374,19 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal(
             [[_npc.FormKey, _interiorRef.FormKey, _exteriorRef.FormKey], [_interior.FormKey, _exterior.FormKey], [_world.FormKey]],
             _index.OwnersAsked.Select(asked => asked.Select(formKey => FormKey.Factory(formKey))));
+    }
+
+    [Fact]
+    public async Task AMake_WhoseAsksTheRecordIndexAnswersFromTwoDecisionsOfTheWinners_IsRefused_AndWritesNothing()
+    {
+        _index.OwnersSequenceSteps = true;
+
+        var made = await Handler.Make(Mod, Patch, [], [Given(_interiorRef)]);
+
+        Assert.False(made.Holds(out _, out var refused));
+        Assert.Equal(
+            (IndexRefusal.IndexNotReady, false),
+            (Assert.IsType<PatchRefused.OfIndex>(refused).Refused.Refusal, File.Exists(PatchPath)));
     }
 
     [Fact]

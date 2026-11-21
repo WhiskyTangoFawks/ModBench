@@ -58,7 +58,7 @@ public sealed class PluginWriterSaveTests
 
         var committed = await TreeSaves.SaveAsync(path, prep => prep.CommitOverNoFile());
 
-        Assert.Equal((false, before), (committed, Convert.ToHexString(await File.ReadAllBytesAsync(path))));
+        Assert.Equal((new OverNoFile(Written: false, "TestPlugin.esp"), before), (committed, Convert.ToHexString(await File.ReadAllBytesAsync(path))));
     }
 
     [Fact]

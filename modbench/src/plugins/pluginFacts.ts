@@ -180,9 +180,8 @@ export class PluginFacts {
     this.indexFailure = undefined;
   }
 
-  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, the active plugins as
-   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. Names each
-   *  failure that took away rows that stood when the last reconcile landed (common.md, Reporting). */
+  /** The completed reconcile's hand-off: the plugins mEdit holds, their facts and failures, the active plugins in the
+   *  view's order, and every plugins.txt line. Names each failure that took away rows that stood (common.md, Reporting). */
   reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): PluginLoadFailure[] {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);

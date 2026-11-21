@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>A Modbench script's records laid out where their winning copies sit. A container not given is carried in as Copy
-/// as Override carries one in: a Partial Form where the game lets it be one, else its winning copy's own fields (ADR-0018).</summary>
+/// as Override carries one in (ADR-0018).</summary>
 internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolution, ISourceAdapter source, SchemaReflector schemaReflector)
 {
     internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> Laid(
@@ -26,6 +26,7 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
     {
         private readonly Dictionary<string, MadeRecord> _laid = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PluginAddress?> _owners = new(StringComparer.OrdinalIgnoreCase);
+        private long? _decidedAt;
         private readonly HashSet<string> _containers = new(StringComparer.OrdinalIgnoreCase);
 
         internal Answer<IReadOnlyList<MadeRecord>, PatchRefused> All(IReadOnlyList<GivenRecord> given)
@@ -159,8 +160,14 @@ internal sealed class PatchRecords(IQueries index, LoadOrderResolution resolutio
         private PatchRefused.OfIndex? AskOwners(IReadOnlyList<string> formKeys)
         {
             if (formKeys.Count == 0) return null;
-            if (!index.GetRecordOwners(formKeys, cancel).Holds(out var owners, out var refused)) return new PatchRefused.OfIndex(refused);
-            foreach (var (formKey, held) in owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
+            if (!index.GetRecordOwnersForAWrite(formKeys, cancel).Holds(out var decided, out var refused)) return new PatchRefused.OfIndex(refused);
+            // One make places every record by one decision of the winners.
+            if ((_decidedAt ??= decided.Sequence) != decided.Sequence)
+            {
+                return new PatchRefused.OfIndex(new IndexRefused(
+                    IndexRefusal.IndexNotReady, "mEdit's record index changed while the make read which copy of each record wins. Make it again."));
+            }
+            foreach (var (formKey, held) in decided.Owners) _owners[formKey] = held.Count > 0 ? held[0] : null;
             return null;
         }
 

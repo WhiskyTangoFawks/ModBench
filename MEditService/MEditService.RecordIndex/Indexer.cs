@@ -207,6 +207,26 @@ internal sealed class Indexer : IDisposable
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
     }
 
+    /// <summary><paramref name="read"/> over one snapshot and the store sequence it read at, refused unless the held load
+    /// order's winners stood decided through it: a reconcile decides them only once its last plugin lands (ADR-0013).</summary>
+    public (T Answer, long Sequence) ReadingDecidedWinners<T>(Func<RelationReads, T> read, CancellationToken cancel)
+    {
+        var before = DecidedAt();
+        using var reads = RequireWholeSetReads(cancel, inOneSnapshot: true);
+        var answer = read(reads);
+        if (before is { } sequence && DecidedAt() == sequence) return (answer, sequence);
+        throw new IndexNotReadyException("mEdit's record index has not yet decided which copy of each record wins in the load order it holds.");
+    }
+
+    // The store's sequence while the held load order's winners stand decided, every winner sweep paid; else null.
+    private long? DecidedAt()
+    {
+        var status = Status;
+        return status.ConflictsComputed && _holder.Held?.Version == status.Version && _scope is { Store: var store } && !store.SweepOwed
+            ? store.Sequence
+            : null;
+    }
+
     // The failure is of the bytes that were there (ADR-0003): a file rewritten since is not yet read again.
     private void RememberFileFailedAt(OpenScope scope, PluginAddress key)
     {

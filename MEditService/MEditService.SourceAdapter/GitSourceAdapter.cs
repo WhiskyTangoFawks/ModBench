@@ -18,7 +18,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public bool IsSourceMod(string sourceFolder) => SourceRepository.IsSourceMod(sourceFolder);
 
     public IReadOnlyList<string> PlacesHoldingPluginSourceOf(IReadOnlyList<PluginPlace> places, string pluginFileName) =>
-        [.. places.Where(place => place.SourceFolder is { } sourceFolder && SourceRepository.HoldsTreeFor(sourceFolder, pluginFileName)).Select(place => place.Name)];
+        [.. places.Where(place => place.SourceFolder is { } sourceFolder && SourceRepository.HoldsPluginSourceNamed(sourceFolder, pluginFileName))
+            .Select(place => place.Name)];
 
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
 

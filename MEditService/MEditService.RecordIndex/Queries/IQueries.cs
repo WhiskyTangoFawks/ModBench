@@ -22,6 +22,10 @@ public interface IQueries
     Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetRecordOwners(
         IReadOnlyCollection<string> formKeys, CancellationToken cancel);
 
+    /// <summary>The same, for a write that bakes the answer into a file: refused until the record index has decided the
+    /// winners of the load order it holds.</summary>
+    Answer<DecidedOwners, IndexRefused> GetRecordOwnersForAWrite(IReadOnlyCollection<string> formKeys, CancellationToken cancel);
+
     Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel);
 
     Answer<CompareRecordsAnswer, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies, CancellationToken cancel);

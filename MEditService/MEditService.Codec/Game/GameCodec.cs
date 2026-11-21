@@ -161,8 +161,8 @@ internal sealed class GameCodec : IGameCodec
 
     private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
 
-    // A plugin that is not localized holds a string's text in its target language, or the empty text, and never its
-    // language, so its reread holds that text in the language the read gives. Text in another language alone is lost.
+    // A plugin that is not localized holds a string's text, or the empty text, and never its language, so a reread holds
+    // the text in the language the read gives. Text in another language alone is lost.
     private static void InDefaultLanguage(object holder)
     {
         foreach (var property in StringProperties(holder.GetType()))

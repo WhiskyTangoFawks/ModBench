@@ -30,9 +30,8 @@ public sealed record RecordIndexChangedNotification(long Sequence) : INotificati
 /// Ready, the same transitions <c>GET /load-order/status</c> polling would have observed.</summary>
 public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INotification;
 
-/// <summary>Files a make set aside in <paramref name="Folder"/> in place of overwriting them, by their paths in it, each named as it
-/// was, for the client to send to the trash (scripts.md, Writing, story 8). A file still aside is named again by the next make
-/// there.</summary>
+/// <summary>Files a make set aside in <paramref name="Folder"/> in place of overwriting them, by their paths in it, for the
+/// client to trash. The next make there names again each one still aside.</summary>
 public sealed record FilesSetAsideNotification(string Folder, IReadOnlyList<string> Paths) : INotification;
 
 /// <summary>Why a compiled plugin's source does not read, and whether decompile gets past it.</summary>

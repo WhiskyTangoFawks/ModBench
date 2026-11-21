@@ -7,6 +7,10 @@ using Noggog;
 
 namespace MEditService.PluginAdapter;
 
+/// <summary>Whether a commit over no file put the plugin in place, else the file it left at its path, named as it is
+/// spelled.</summary>
+public readonly record struct OverNoFile(bool Written, string Held = "");
+
 /// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
 /// into place; Dispose discards the temp state either way.</summary>
 public sealed class PreparedPluginSave : IDisposable
@@ -50,24 +54,24 @@ public sealed class PreparedPluginSave : IDisposable
         File.Move(_tmpPath, _finalPath, overwrite: true);
     }
 
-    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is: false,
-    /// writing nothing, when a file is at its path.</summary>
-    public bool CommitOverNoFile()
+    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is; writing
+    /// nothing when a file is at its path.</summary>
+    public OverNoFile CommitOverNoFile()
     {
-        if (PluginFolder.HeldAt(_finalPath) is not null) return false;
+        if (PluginFolder.HeldAt(_finalPath) is { } held) return new OverNoFile(Written: false, held);
         try
         {
             File.Move(_tmpPath, _finalPath, overwrite: false);
-            return true;
+            return new OverNoFile(Written: true);
         }
         catch (IOException) when (File.Exists(_finalPath))
         {
-            return false;
+            return new OverNoFile(Written: false, PluginFolder.HeldAt(_finalPath) ?? Path.GetFileName(_finalPath));
         }
     }
 
-    /// <summary>The binary put in place as a plugin with no strings is, the file at its path, its name compared without case, first
-    /// set aside in a new folder beside it: null, else why the file system refused, with the file put back.</summary>
+    /// <summary>The binary put in place, the file of its name in any case first set aside in a new folder beside it: null,
+    /// else why the file system refused, the file put back.</summary>
     public string? CommitSettingAside()
     {
         var folder = Path.GetDirectoryName(_finalPath) ?? throw new InvalidOperationException($"Expected '{_finalPath}' to have a parent directory.");
