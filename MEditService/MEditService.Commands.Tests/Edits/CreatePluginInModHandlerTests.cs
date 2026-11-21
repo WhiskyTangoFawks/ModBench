@@ -47,9 +47,9 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp", []);
 
-        Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created());
+        Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created().Plugin);
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
-        Assert.Equal([HandedPlugin.ReadBack(result.Created())], Assert.Single(_index.Hands).Require());
+        Assert.Equal([HandedPlugin.ReadBack(result.Created().Plugin)], Assert.Single(_index.Hands).Require());
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
         var result = await Handler.CreatePluginIn(LoadOrderEntry.OverwriteOrigin, "Patch.esp", []);
 
-        Assert.Equal(new PluginAddress("Patch.esp", LoadOrderEntry.OverwriteOrigin), result.Created());
+        Assert.Equal(new PluginAddress("Patch.esp", LoadOrderEntry.OverwriteOrigin), result.Created().Plugin);
         Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
     }
 

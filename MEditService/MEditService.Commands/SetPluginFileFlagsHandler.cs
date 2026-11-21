@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
@@ -34,7 +35,7 @@ public sealed record PluginFileFlagsSet(string Path, string Hash);
 /// <summary>A plugin file and the load flags to set or clear in it.</summary>
 public sealed record PluginFileFlagsToSet(string Path, IReadOnlyDictionary<string, bool> Flags);
 
-public sealed record SetPluginFileFlagsResult(IReadOnlyList<PluginFileFlagsSet> Applied, IReadOnlyList<PluginFileFlagRefused> Refused)
+public sealed record SetPluginFileFlagsResult(IReadOnlyList<PluginFileFlagsSet> Applied, IReadOnlyList<PluginFileFlagRefused> Refused, IReadOnlyList<string> Written)
     : ISelectionAnswer<PluginFileFlagRefused>;
 
 /// <summary>Restore's setting of the load flags a manifest records for a plugin it wrote from its package (ADR-0022).</summary>
@@ -51,6 +52,13 @@ public sealed class SetPluginFileFlagsHandler
     /// <summary>Answers once the record index has read back each plugin the load order holds that was written.</summary>
     public async Task<SetPluginFileFlagsResult> Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease, CancellationToken cancel = default)
     {
+        var ((applied, refused), written) = WrittenFiles.Of(() => SetEach(files, gameRelease));
+        await _held.ReadBack(PluginsWritten(applied.Select(set => set.Path)), cancel);
+        return new SetPluginFileFlagsResult(applied, refused, written);
+    }
+
+    private (List<PluginFileFlagsSet> Applied, List<PluginFileFlagRefused> Refused) SetEach(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease)
+    {
         var known = GameCodecs.For(gameRelease).LoadFlags;
         List<PluginFileFlagsSet> applied = [];
         List<PluginFileFlagRefused> refused = [];
@@ -62,9 +70,7 @@ public sealed class SetPluginFileFlagsHandler
                 applied.Add(new PluginFileFlagsSet(file.Path, hash));
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
-
-        await _held.ReadBack(PluginsWritten(applied.Select(set => set.Path)), cancel);
-        return new SetPluginFileFlagsResult(applied, refused);
+        return (applied, refused);
     }
 
     // The record index holds nothing of a file no plugin of the load order is, so a write to one has nothing to be read.

@@ -43,7 +43,11 @@ public sealed record RenameSourceChanges(
 public sealed record SourceLeftBehind(PluginAddress Plugin, string Reason);
 
 /// <summary>Whether what Modbench last wrote moved, or why it did not.</summary>
-public sealed record MoveLastWrittenResult(RenameSourceRefusal? Refusal = null, string? Message = null);
+public sealed record MoveLastWrittenResult(RenameSourceRefusal? Refusal = null, string? Message = null)
+{
+    /// <summary>Each file the write wrote, or a folder holding them (ADR-0029).</summary>
+    public IReadOnlyList<string> Written { get; init; } = [];
+}
 
 /// <summary>Why a step of renaming a plugin's source wrote nothing (ADR-0019): each value is a different way out.</summary>
 public enum RenameSourceRefusal

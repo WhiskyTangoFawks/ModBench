@@ -6,7 +6,7 @@ namespace MEditService.Commands;
 
 /// <summary>Landed or refused, per mod (ADR-0019), never the status of the call.</summary>
 public sealed record VersionInGitResult(
-    IReadOnlyList<VersionedMod> Applied, IReadOnlyList<VersionInGitRefused> Refused)
+    IReadOnlyList<VersionedMod> Applied, IReadOnlyList<VersionInGitRefused> Refused, IReadOnlyList<string> Written)
     : ISelectionAnswer<VersionInGitRefused>;
 
 /// <summary>A mod of the selection that landed whole: every plugin whose source its commit holds. A mod with any

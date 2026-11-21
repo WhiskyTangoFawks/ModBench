@@ -24,8 +24,11 @@ public sealed class FollowSourceFolderMoveHandler
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal FollowSourceFolderMoveHandler(ISourceAdapter source) => _source = source;
 
-    public SourceFolderMoveRefused? Follow(string sourceFolder, string movedTo) =>
-        _source.FollowSourceFolderMove(sourceFolder, movedTo) is { } failure ? SourceFolderMoveRefused.Of(failure) : null;
+    public Answer<FilesWritten, SourceFolderMoveRefused> Follow(string sourceFolder, string movedTo)
+    {
+        var (failure, written) = WrittenFiles.Of(() => _source.FollowSourceFolderMove(sourceFolder, movedTo));
+        return failure is null ? new FilesWritten(written) : SourceFolderMoveRefused.Of(failure);
+    }
 }
 
 public sealed record SourceFolderMoveRefused(SourceFolderMoveRefusal Refusal, string Message)

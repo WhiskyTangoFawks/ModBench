@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
@@ -16,6 +17,12 @@ public sealed class MoveLastWrittenHandler
     /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
     /// <paramref name="newName"/>'s; a plugin outside a source mod has none. A refusal leaves it where it was.</summary>
     public MoveLastWrittenResult MoveLastWritten(PluginAddress plugin, string treeName, string newName)
+    {
+        var (result, written) = WrittenFiles.Of(() => Moved(plugin, treeName, newName));
+        return result with { Written = written };
+    }
+
+    private MoveLastWrittenResult Moved(PluginAddress plugin, string treeName, string newName)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new MoveLastWrittenResult(RenameSourceRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);

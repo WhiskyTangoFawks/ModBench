@@ -33,6 +33,7 @@ import {
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, type FilesSetAside, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
+import { nameWrites } from '../repositoriesLib/writesTold';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -41,15 +42,20 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 // A write has no limit: the writer finishes its own write.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
-interface PostSpec<T> {
+/** The call answers the changes a write makes, which Modbench makes itself; or it writes files, which its answer names. */
+type Writes<T> = { readonly answersChanges: true } | { readonly written: (answer: T) => readonly string[] };
+
+interface Post<T> {
   op: string;
   failMsg: string;
   post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
   /** What a 2xx with no body answers. */
   noContent?: T;
-  /** The call answers the changes a write makes, which Modbench makes itself; every other call writes files only mEdit can name. */
-  answersChanges?: true;
 }
+
+type PostSpec<T> = Writes<T> & Post<T>;
+
+const writtenOf = ({ written }: { readonly written: readonly string[] }): readonly string[] => written;
 
 interface HttpMEditClientDeps {
   /** The process this client is the front of. It spawns the bundled backend unless told otherwise. */
@@ -61,7 +67,7 @@ interface HttpMEditClientDeps {
   fetch?: (input: Request) => Promise<Response>;
   log?: Log;
   listenerThrows: ListenerThrows;
-  /** Called by each call that writes files its caller cannot name. */
+  /** Called by each write mEdit refused, which may have written files no answer names. */
   leaveWritesUnnamed: () => void;
   timeoutMs?: number;
   reconnectDelayMs?: number;
@@ -266,19 +272,23 @@ class HttpMEditClient implements MEditClient {
   // Every write verb below shares this shape: wait for the load order and unsaved documents it
   // depends on, then `sendNow`. No refresh, no toast — the caller does both, from what this returns.
   private async mutate<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
-    if (spec.answersChanges !== true) this.leaveWritesUnnamed();
     try {
       await this.handOver.sent();
       await this.loadOrder.applied();
     } catch (e) {
       return this.refusedUnreachable(spec, e);
     }
-    return this.sendNow(spec);
+    const answer = await this.sendNow(spec);
+    if ('written' in spec) {
+      if (isRefused(answer)) this.leaveWritesUnnamed();
+      else nameWrites(spec.written(answer));
+    }
+    return answer;
   }
 
   // POST, PUT or DELETE, map a non-ok response or a thrown request onto WriteRefused, otherwise hand back the wire
   // data untouched. For a request that depends on neither the load order nor the unsaved documents.
-  private async sendNow<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
+  private async sendNow<T>(spec: Post<T>): Promise<T | WriteRefused> {
     try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
@@ -299,17 +309,16 @@ class HttpMEditClient implements MEditClient {
 
   // A write over a selection: each item lands or is refused on its own, and the counted phrase
   // ("3 plugins") names the selection in the log line and the refusal.
-  private async mutateEach<T extends { refused: { item: unknown; message: string }[] }, O>(spec: {
+  private async mutateEach<T extends { refused: { item: unknown; message: string }[] }, O>(spec: Writes<T> & {
     gesture: (counted: string) => string;
     noun: string;
     items: readonly unknown[];
     op: (counted: string) => string;
     post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
     outcome: (answer: T) => O;
-    answersChanges?: true;
   }): Promise<O | WriteRefused> {
     const counted = spec.items.length === 1 ? `1 ${spec.noun}` : `${spec.items.length} ${spec.noun}s`;
-    const answer = await this.mutate({ op: spec.op(counted), failMsg: `Could not ${spec.gesture(counted)}`, post: spec.post, answersChanges: spec.answersChanges });
+    const answer = await this.mutate({ ...spec, op: spec.op(counted), failMsg: `Could not ${spec.gesture(counted)}` });
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
@@ -321,8 +330,9 @@ class HttpMEditClient implements MEditClient {
       op: `createPlugin(${plugin.name}, ${plugin.origin})`,
       failMsg,
       post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder, flags: flags === undefined ? undefined : [...flags] } }),
+      written: writtenOf,
     });
-    return answer;
+    return isRefused(answer) ? answer : answer.plugin;
   }
 
   async getRenameSourceChanges(
@@ -339,12 +349,13 @@ class HttpMEditClient implements MEditClient {
   }
 
   async moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused> {
-    return this.mutate({
+    const answer = await this.mutate({
       op: `moveLastWritten(${plugin.name}, ${plugin.origin})`,
       failMsg: `Could not move what Modbench last wrote for "${plugin.name}"`,
       post: () => this.apiClient.POST('/plugins/move-last-written', { body: { origin: plugin.origin, name: plugin.name, treeName, newName } }),
-      noContent: { moved: true },
+      written: writtenOf,
     });
+    return isRefused(answer) ? answer : { moved: true };
   }
 
   async getSourceFolderMoveChanges(sourceFolder: string, movedTo: string, files: readonly SourceMove[]): Promise<SourceChanges | WriteRefused> {
@@ -357,12 +368,13 @@ class HttpMEditClient implements MEditClient {
   }
 
   async followSourceFolderMove(sourceFolder: string, movedTo: string): Promise<{ followed: true } | WriteRefused> {
-    return this.mutate({
+    const answer = await this.mutate({
       op: `followSourceFolderMove(${sourceFolder})`,
       failMsg: `Could not follow the move of "${sourceFolder}" in git`,
       post: () => this.apiClient.POST('/source-folders/follow-move', { body: { sourceFolder, movedTo } }),
-      noContent: { followed: true },
+      written: writtenOf,
     });
+    return isRefused(answer) ? answer : { followed: true };
   }
 
   /** Discards the record index and refills it against the load order mEdit holds (commands.md, Instance). A 423 is
@@ -554,6 +566,7 @@ class HttpMEditClient implements MEditClient {
         op: (counted) => `versionInGit(${counted})`,
         post: () => this.apiClient.POST('/version-in-git', { body: { mods: [...mods] } }),
         outcome: kindedSelectionOutcome,
+        written: writtenOf,
       });
     } finally {
       unsubscribe();
@@ -607,6 +620,7 @@ class HttpMEditClient implements MEditClient {
       op: (counted) => `decompile(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins], force } }),
       outcome: kindedSelectionOutcome,
+      written: writtenOf,
     });
   }
 
@@ -618,6 +632,7 @@ class HttpMEditClient implements MEditClient {
       op: (counted) => `decompileAndRepair(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], force } }),
       outcome: kindedSelectionOutcome,
+      written: writtenOf,
     });
   }
 
@@ -628,6 +643,7 @@ class HttpMEditClient implements MEditClient {
       gesture: (counted) => `build ${counted}`, noun: 'mod', items: mods,
       op: (counted) => `build(${counted})`,
       post: () => this.apiClient.POST('/build', { body: { mods: [...mods], ...facts } }),
+      written: writtenOf,
       outcome: (answer) => ({
         landed: answer.applied.map((m) => ({
           mod: m.mod, compiled: m.compiled,
@@ -650,6 +666,7 @@ class HttpMEditClient implements MEditClient {
       op: `cloneSubmodules(${submodules.length})`,
       failMsg: 'Could not clone the submodules the instance repository pins',
       post: () => this.apiClient.POST('/clone-submodules', { body: { submodules: [...submodules] } }),
+      written: writtenOf,
     });
   }
 
@@ -658,6 +675,7 @@ class HttpMEditClient implements MEditClient {
       op: `setPluginFileFlags(${files.length})`,
       failMsg: 'Could not set the load flags of the plugin files',
       post: () => this.apiClient.POST('/plugin-files/set-flags', { body: { gameRelease, files: [...files] } }),
+      written: writtenOf,
     });
   }
 

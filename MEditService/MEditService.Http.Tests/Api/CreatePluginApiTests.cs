@@ -39,15 +39,16 @@ public sealed class CreatePluginApiTests : HostedTests
         Directory.CreateDirectory(Path.Combine(fx.Root, name)).FullName;
 
     [Fact]
-    public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote()
+    public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote_AndTheFileItWrote()
     {
         var fx = Owned(await Loaded());
         var modFolder = NewModFolder(fx, "mod-minted");
 
         var created = await Created("Minted.esp", modFolder, "MintedMod");
 
-        Assert.Equal("Minted.esp", created.GetProperty("name").GetString());
-        Assert.Equal("MintedMod", created.GetProperty("origin").GetString());
+        var plugin = created.GetProperty("plugin");
+        Assert.Equal(("Minted.esp", "MintedMod"), (plugin.GetProperty("name").GetString(), plugin.GetProperty("origin").GetString()));
+        Assert.Equal([Path.Combine(modFolder, "Minted.esp")], created.GetProperty("written").EnumerateArray().Select(path => path.GetString()));
         Assert.True(File.Exists(Path.Combine(modFolder, "Minted.esp")));
     }
 
