@@ -164,9 +164,8 @@ function modlistEntryParts(entry: ModlistEntry): unknown[] {
 
 const pluginEntryParts = ({ name, enabled, ...rest }: PluginEntry): unknown[] => [name, enabled, ...noneLeft(rest)];
 
-/** Each fact of a reading, or the object `landed`, the reading the caller's value last landed from, holds while it was read
- *  as the same: a fact read again for a stamp too fresh to trust, or after another reading saw other content, is the object
- *  it was (ADR-0029). */
+/** Each fact of a reading, or the object `landed` holds while both were read as the same (ADR-0029). `landed` is the reading
+ *  the caller's value last landed from. */
 export function steadied(read: ReadFacts, landed?: ReadFacts): ReadFacts {
   const was: Partial<ReadFacts> = landed ?? {};
   return {

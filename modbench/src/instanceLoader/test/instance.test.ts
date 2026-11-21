@@ -886,21 +886,20 @@ describe('Instance — a value that survives a bad read', () => {
   it('hands each reading the reading its value last landed from, though a reading between answered and its value failed', async () => {
     const handed: (InstanceReading | undefined)[] = [];
     const answered: InstanceReading[] = [];
-    let valueFails = false;
+    let spoiled: Partial<InstanceReading> = {};
     const { instance } = loader({}, (adapter) => ({
       ...adapter,
       reading: async (reread, landed) => {
         handed.push(landed);
-        const reading = await adapter.reading(reread);
-        const answer = valueFails ? { ...reading, trustingKept: () => Promise.reject(new Error('a file is half-written')) } : { ...reading };
+        const answer = { ...(await adapter.reading(reread)), ...spoiled };
         answered.push(answer);
         return answer;
       },
     }));
     await instance.refresh();
-    valueFails = true;
+    spoiled = { trustingKept: () => Promise.reject(new Error('a file is half-written')) };
     await instance.refresh();
-    valueFails = false;
+    spoiled = {};
     await instance.refresh();
 
     expect(instance.readFailure).toBeUndefined();

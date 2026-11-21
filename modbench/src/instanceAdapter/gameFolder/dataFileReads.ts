@@ -1,7 +1,7 @@
 import { access, constants, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { crc32Of } from '../fileContents/contentDigest';
-import { isAbsent } from '../files';
+import { isAbsent } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FileAnswer } from '../../sortingRules/lootConditions';
 import type { GameFolder } from '../instanceAdapter';

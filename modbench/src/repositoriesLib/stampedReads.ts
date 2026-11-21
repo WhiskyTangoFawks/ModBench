@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { dirname, sep } from 'node:path';
-import { errnoCode } from '../ports/errno';
+import { isAbsent } from '../ports/errno';
 
 /** What the file system says of a file without a read of its bytes. A tool can keep a file's size
  *  and date modified across a write, and ADR-0003 accepts that. */
@@ -32,16 +32,15 @@ interface Answered<T> {
   readonly handed?: boolean;
 }
 
-/** A path found not there, with the failure that said so. */
+// A path found not there, with the failure that said so.
 interface Absent {
   readonly path: string;
-  readonly absent: unknown;
+  readonly absent: Error;
 }
 
 export type Kept<T> = Answered<T> | Absent;
 
-// The path, or a folder along it, is missing or is a file.
-const isAbsence = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';
+const answeredOf = <T>(held: Kept<T> | undefined): Answered<T> | undefined => (held === undefined || 'absent' in held ? undefined : held);
 
 // Windows names a file whatever the case of its path, and VS Code's watcher spells a drive in lower case.
 export const pathKey = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
@@ -53,8 +52,8 @@ const everyKept: Keeper[] = [];
 // What a trusted read found of each file whose content it compares.
 const trusting = new AsyncLocalStorage<{ readonly found: Map<string, unknown> }>();
 
-/** A reader of `path` that reads it again only when its stamp has changed, and trusts what is kept inside a trusted read, a
- *  path found not there too. `comparesText`: the answer is a file's content, which `readTrustingKept` notes as found. */
+/** A reader of `path`, read again once its stamp changed. Inside a trusted read what it kept, settled or absent, stands until
+ *  a change names the path or the disk is checked. `comparesText`: it answers content, noted as found. */
 export function keptTrusted<T>(
   stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false, comparesText = false,
 ): (path: string) => Promise<T> {
@@ -104,11 +103,12 @@ function touchedBy(named: readonly string[]): (key: string) => boolean {
 }
 
 const stampStill = async (stampOf: (path: string) => Promise<FileStamp>, held: Kept<unknown>): Promise<boolean> => {
+  const answered = answeredOf(held);
   try {
     const stamp = await stampOf(held.path);
-    return !('absent' in held) && sameStamp(stamp, held.stamp);
+    return answered !== undefined && sameStamp(stamp, answered.stamp);
   } catch (err) {
-    return 'absent' in held && isAbsence(err);
+    return answered === undefined && isAbsent(err);
   }
 };
 
@@ -123,10 +123,8 @@ async function forgetChanged<T>(
   return changed.flat();
 }
 
-/** Runs `read` trusting what is kept, once what each kept path `named` touches, or every one when `disk`, is forgotten where
- *  it may have changed. Answers each changed stamp `named` does not touch, the content it `found` of each file whose content
- *  it compares, and each such file it found as `before`, what another run found, holds it (ADR-0029). A read outside it
- *  checks each stamp. */
+/** Runs `read` trusting what is kept, once what `named` touches, or all when `disk`, is forgotten where it may have changed.
+ *  Answers the changes `named` missed, what it found, and each file found as `before` holds it. */
 export async function readTrustingKept<T>(
   named: readonly string[], disk: boolean, read: () => Promise<T>, before?: ReadonlyMap<string, unknown>,
 ): Promise<{ answer: T; unheard: string[]; found: ReadonlyMap<string, unknown>; unchanged: ReadonlySet<string> }> {
@@ -144,21 +142,17 @@ export const trustingKept = <T>(read: () => Promise<T>): Promise<T> => trusting.
 /** Runs `arm` outside any read that trusts what is kept, so a timer, watch or listener it arms reads as any other caller. */
 export const outsideTrustedRead = <T>(arm: () => T): T => trusting.exit(arm);
 
-const answeredOf = <T>(held: Kept<T> | undefined): Answered<T> | undefined => (held === undefined || 'absent' in held ? undefined : held);
-
-// What a trusted read hands of what is kept without a look at the stamp: a settled answer, or the absence found.
-function trustedAsKept<T>(held: Kept<T> | undefined): Answered<T> | undefined {
-  if (held !== undefined && 'absent' in held) throw held.absent;
-  const answered = answeredOf(held);
-  return answered?.settled === true ? answered : undefined;
+// What a trusted read answers from what is kept, with no look at the stamp; undefined where it must look.
+function keptAnswer<T>(held: Kept<T> | undefined): Promise<T> | undefined {
+  if (held !== undefined && 'absent' in held) return Promise.reject(held.absent);
+  return held?.settled === true ? Promise.resolve(held.value) : undefined;
 }
 
-// `path`'s stamp; a path found not there is kept as not there.
 async function stampKeepingAbsence<T>(stampOf: (path: string) => Promise<FileStamp>, kept: Map<string, Kept<T>>, key: string, path: string): Promise<FileStamp> {
   try {
     return await stampOf(path);
   } catch (err) {
-    if (isAbsence(err)) kept.set(key, { path, absent: err });
+    if (isAbsent(err) && err instanceof Error) kept.set(key, { path, absent: err });
     throw err;
   }
 }
@@ -169,8 +163,8 @@ function keptByStamp<T>(stampOf: (path: string) => Promise<FileStamp>, read: (pa
     const key = pathKey(path);
     const trusts = trusting.getStore() !== undefined;
     const was = kept.get(key);
-    const trusted = trusts ? trustedAsKept(was) : undefined;
-    if (trusted !== undefined) return trusted.value;
+    const answer = trusts ? keptAnswer(was) : undefined;
+    if (answer !== undefined) return answer;
     const held = answeredOf(was);
     const stamp = await stampKeepingAbsence(stampOf, kept, key, path);
     if (trusts && held?.handed === true && sameStamp(held.stamp, stamp)) {

@@ -303,7 +303,7 @@ export const listDirByStamp = keptTrusted(stampOf, listDir, listings, true);
 /** `path`'s stamp, kept as `listDirByStamp` keeps a listing. */
 export const stampByStamp = stampKept(stampOf);
 
-/** As `exists`, kept as `stampByStamp` keeps a stamp. Only for a path a watch hears made and removed. */
+/** As `exists`, kept as `stampByStamp` keeps a stamp. */
 export const existsByStamp = (path: string): Promise<boolean> => readOrAbsent(() => stampByStamp(path).then(() => true), false);
 
 const texts = new Map<string, Kept<string>>();
@@ -494,9 +494,6 @@ export async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<
     return { kind: 'unreadable', reason: errorMessage(err) };
   }
 }
-
-/** Whether a failure says the path is not there: it, or a folder it names, is missing or is a file. */
-export const isAbsent = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';
 
 /** A missing file answers `absent`; any other failure rejects. */
 export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promise<T> {

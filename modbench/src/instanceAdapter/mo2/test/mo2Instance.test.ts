@@ -1265,11 +1265,11 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(2);
     });
 
-    it.each(['.git/config', '.git/hooks/pre-push'])('hears a change to %s, where git init writes the path filter and the push check', (inside) => {
+    it('hears a change to .git/config, where git init writes the path filter and the hooks path', () => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
 
-      expect(fire(root, inside)).toBe(true);
+      expect(fire(root, '.git/config')).toBe(true);
       expect(signals).toBe(1);
     });
 
@@ -1334,6 +1334,9 @@ describe('the MO2 Instance adapter', () => {
       ['a profile\'s INI, in any case', 'profiles/Default/fallout4.INI', 1],
       ['no other file of a profile', 'profiles/Default/other.txt', 0],
       ['a file deeper in a mod', 'mods/Harder VATS/Textures/a.dds', 1],
+      ['the record index folder', 'modbench', 1],
+      ['the hash index folder', 'hash-index', 1],
+      ['the source folder', 'source', 1],
     ])('signals a change to %s', async (_what, relativePath, signalled) => {
       const watched = managerOver(root);
       let signals = 0;
@@ -1354,6 +1357,22 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(root, join('source/Harder VATS/.git', inside), join('source/Harder VATS/git', inside))).toBe(true);
         expect(signals).toBe(1);
       });
+
+    it.each([
+      ['git keeps its hooks', '.git/hooks'],
+      ['core.hooksPath puts it', '.git/kept-hooks'],
+    ])('signals a change to the push check where %s, once a reading found the repository', async (_where, hooks) => {
+      execFileSync('git', ['init', '-q', root]);
+      execFileSync('git', ['-C', root, 'config', 'core.hooksPath', hooks]);
+      const watched = managerOver(root);
+      let signals = 0;
+      watched.subscribe(() => { signals++; });
+      await watched.reading();
+      signals = 0;
+
+      expect(fire(root, `${hooks}/pre-push`)).toBe(true);
+      expect(signals).toBe(1);
+    });
 
     it('tells a ref from git\'s bookkeeping in a Windows path', () => {
       let signals = 0;

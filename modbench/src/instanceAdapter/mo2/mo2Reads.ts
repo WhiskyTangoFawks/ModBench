@@ -18,7 +18,7 @@ import { listOwnEntries } from '../gameFolder/ownEntries';
 import { sameName } from '../../symbolNames/symbolNames';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, isAbsent, keptUntilNamed, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp } from '../files';
+import { get, ignoreSkippedLink, keptUntilNamed, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
 import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type ModMeta, type SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
@@ -29,7 +29,7 @@ import { entryKey, listModFolders, modFolderNamed, modFoldersOf, originFolder, t
 import { originFilesReader } from './mo2Files';
 import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
-import { errnoCode } from '../../ports/errno';
+import { errnoCode, isAbsent } from '../../ports/errno';
 import { holdsPathToken } from '../pathTokens';
 
 /** The names of the downloaded files in `downloadsDir`; undefined when it is absent. */

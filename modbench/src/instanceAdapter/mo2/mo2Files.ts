@@ -188,16 +188,15 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
 
 const modKey = (rootOnly: boolean, folder: string): string => `mod|${rootOnly}|${folder}`;
 
-/** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
- *  As a reading of whole mods, or of their roots, starts, it forgets each such walk of a mod the one before it did not ask
- *  for, so it keeps no walk past the two latest readings that could ask for it. */
+/** An instance's origin files, a walk answered again while each folder it listed answers the same listing. A reading that
+ *  starts forgets each walk of a mod the reading before it did not ask for. */
 export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   // Every walk it answers, kept to answer again where its stamps cover it.
   const walked = new Map<string, Walked | undefined>();
-  // A reading hands its own mod folders, so other folders start a reading, and what any caller asks for until the next counts
-  // as used. Readings that overlap each start one in turn, so a walk one still asks for can be forgotten and made again.
+  // Each reading hands its own mod folders, so other folders start one, and what is asked until the next counts as used.
+  // Overlapping readings take turns starting, so a walk one still needs can be forgotten and made again.
   const readings = new Map<boolean, { readonly folders: ModFolders; readonly used: Set<string> }>();
 
   const started = (rootOnly: boolean, folders: ModFolders): void => {

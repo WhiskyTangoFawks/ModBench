@@ -199,9 +199,13 @@ async function submoduleIn(instanceRoot: string, name: string): Promise<Submodul
 
 const isOwnHook = (hook: string): Promise<boolean> => textByStamp(hook).then((text) => text === PRE_PUSH_HOOK, () => false);
 
-/** Whether the repository holds Modbench's pre-push hook, in the place `refuseUnpublishedPins` writes it. */
+/** Whether the repository holds Modbench's pre-push hook, in the place `refuseUnpublishedPins` writes it, which the watch
+ *  follows. */
 export const pushRefusalWritten = (context: Mo2Context): Promise<boolean> =>
-  hooksFolder(context).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
+  hooksFolder(context).then((hooks) => {
+    context.watch.follow('pushCheck', [hooks], PRE_PUSH_HOOK_NAME);
+    return isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME));
+  }, () => false);
 
 const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
 

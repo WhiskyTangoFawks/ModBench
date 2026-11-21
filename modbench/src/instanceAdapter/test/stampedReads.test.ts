@@ -34,7 +34,6 @@ const modifiedLater = async (path: string): Promise<void> => {
 };
 const namesOf = async (folder: string, list = listDirByStamp): Promise<string[]> => (await list(folder)).map((entry) => entry.name).sort();
 const NOTES = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
-// Each fact of `landed` that `again` holds as another object, the notes for the Output aside.
 const factsMoved = <R extends object>(landed: R, again: R): string[] => {
   const now = new Map(Object.entries(again));
   return Object.entries(landed).filter(([fact, held]) => !NOTES.has(fact) && now.get(fact) !== held).map(([fact]) => fact);

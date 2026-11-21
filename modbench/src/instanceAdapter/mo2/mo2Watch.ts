@@ -9,7 +9,7 @@ import { followedFolders } from './followedFolders';
 import { distinct, EXCLUDED, listedExclusions } from './listedExclusions';
 import { FIRST_LEVEL, instanceWatches, sourceRootDir } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'profileFolders' | 'excludedFolders';
+type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'profileFolders' | 'excludedFolders' | 'pushCheck';
 
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {
