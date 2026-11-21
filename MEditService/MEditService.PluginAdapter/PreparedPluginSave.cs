@@ -7,10 +7,6 @@ using Noggog;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Whether a commit over no file put the plugin in place, else the file it left at its path, named as it is
-/// spelled.</summary>
-public readonly record struct OverNoFile(bool Written, string Held = "");
-
 /// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
 /// into place; Dispose discards the temp state either way.</summary>
 public sealed class PreparedPluginSave : IDisposable
@@ -54,19 +50,19 @@ public sealed class PreparedPluginSave : IDisposable
         File.Move(_tmpPath, _finalPath, overwrite: true);
     }
 
-    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is; writing
-    /// nothing when a file is at its path.</summary>
-    public OverNoFile CommitOverNoFile()
+    /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is: null,
+    /// else the file at its path, named as spelled, and nothing written.</summary>
+    public string? CommitOverNoFile()
     {
-        if (PluginFolder.HeldAt(_finalPath) is { } held) return new OverNoFile(Written: false, held);
+        if (PluginFolder.HeldAt(_finalPath) is { } held) return held;
         try
         {
             File.Move(_tmpPath, _finalPath, overwrite: false);
-            return new OverNoFile(Written: true);
+            return null;
         }
         catch (IOException) when (File.Exists(_finalPath))
         {
-            return new OverNoFile(Written: false, PluginFolder.HeldAt(_finalPath) ?? Path.GetFileName(_finalPath));
+            return PluginFolder.HeldAt(_finalPath) ?? Path.GetFileName(_finalPath);
         }
     }
 

@@ -112,12 +112,9 @@ internal sealed class RecordQueries(
         IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
         _answer.Of(() => ReadingWholeSet(reads => reads.GetOwners(formKeys), cancel));
 
-    public Answer<DecidedOwners, IndexRefused> GetRecordOwnersForAWrite(IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
-        _answer.Of(() =>
-        {
-            var (owners, sequence) = _index.ReadingDecidedWinners(reads => reads.GetOwners(formKeys), cancel);
-            return new DecidedOwners(owners, sequence);
-        });
+    public Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused> GetRecordOwnersForAWrite(
+        long version, IReadOnlyCollection<string> formKeys, CancellationToken cancel) =>
+        _answer.Of(() => _index.ReadingDecidedWinners(version, reads => reads.GetOwners(formKeys), cancel));
 
     public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         _answer.Of(() => CompareOf(formKey, text, cancel));

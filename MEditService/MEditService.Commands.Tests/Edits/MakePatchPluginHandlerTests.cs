@@ -373,20 +373,17 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.True(made.Holds(out _, out var refused), refused?.Message);
         Assert.Equal(
             [[_npc.FormKey, _interiorRef.FormKey, _exteriorRef.FormKey], [_interior.FormKey, _exterior.FormKey], [_world.FormKey]],
-            _index.OwnersAsked.Select(asked => asked.Select(formKey => FormKey.Factory(formKey))));
+            _index.OwnersAsked.Select(asked => asked.FormKeys.Select(formKey => FormKey.Factory(formKey))));
     }
 
     [Fact]
-    public async Task AMake_WhoseAsksTheRecordIndexAnswersFromTwoDecisionsOfTheWinners_IsRefused_AndWritesNothing()
+    public async Task EveryAskOfAMake_IsForTheLoadOrderTheMakeHolds()
     {
-        _index.OwnersSequenceSteps = true;
-
         var made = await Handler.Make(Mod, Patch, [], [Given(_interiorRef)]);
 
-        Assert.False(made.Holds(out _, out var refused));
-        Assert.Equal(
-            (IndexRefusal.IndexNotReady, false),
-            (Assert.IsType<PatchRefused.OfIndex>(refused).Refused.Refusal, File.Exists(PatchPath)));
+        Assert.True(made.Holds(out _, out var refused), refused?.Message);
+        var held = _holder.Held.Require().Version;
+        Assert.Equal([held, held], _index.OwnersAsked.Select(asked => asked.Version));
     }
 
     [Fact]

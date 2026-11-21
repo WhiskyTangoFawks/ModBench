@@ -1,13 +1,12 @@
 namespace MEditService.RecordIndex.Store;
 
-/// <summary>The one gate every index write passes through; reads never take it. A reentrant
-/// <see cref="Lock"/>, not a SemaphoreSlim, because doors nest on the ordinary path. Always taken
-/// outside <c>Indexer._lock</c>, never inside.</summary>
+/// <summary>The one gate every index write passes through, and a read a write bakes into a file. A reentrant
+/// <see cref="Lock"/>, as doors nest. Taken outside <c>Indexer._lock</c>, never inside.</summary>
 internal sealed class IndexWriteGate
 {
     // On one DuckDBConnection a second BeginTransaction throws and an unwrapped statement joins the
-    // other caller's transaction, dying with its rollback. Reads skip the gate: listing during an
-    // edit is the ordinary case and must not queue behind it.
+    // other caller's transaction, dying with its rollback. A view's read skips the gate: it must not
+    // queue behind an edit.
 
     /// <summary>Long enough that no legitimate write hits it (a whole-plugin re-derivation is tens of
     /// seconds on a large plugin), short enough that a stuck one is reported rather than hung on.</summary>
@@ -33,8 +32,7 @@ internal sealed class IndexWriteGate
     }
 }
 
-/// <summary>A projection waited out the gate: busy, not broken. No caller offers a retry: a record
-/// gesture never takes the gate.</summary>
+/// <summary>A caller waited out the gate: busy, not broken.</summary>
 internal sealed class IndexWriteGateTimeoutException : TimeoutException
 {
     private const string DefaultMessage = "Another write to the record index is still in progress.";

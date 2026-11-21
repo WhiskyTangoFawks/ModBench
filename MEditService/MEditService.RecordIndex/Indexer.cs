@@ -207,24 +207,40 @@ internal sealed class Indexer : IDisposable
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
     }
 
-    /// <summary><paramref name="read"/> over one snapshot and the store sequence it read at, refused unless the held load
-    /// order's winners stood decided through it: a reconcile decides them only once its last plugin lands (ADR-0013).</summary>
-    public (T Answer, long Sequence) ReadingDecidedWinners<T>(Func<RelationReads, T> read, CancellationToken cancel)
+    /// <summary><paramref name="read"/> over the winners decided for the load order of <paramref name="version"/>, as
+    /// IQueries.GetRecordOwnersForAWrite answers.</summary>
+    public T ReadingDecidedWinners<T>(long version, Func<RelationReads, T> read, CancellationToken cancel)
     {
-        var before = DecidedAt();
+        if (_holder.Held is null) throw new NoLoadOrderException();
+        RequireReadyOn(version);
+        // A write holds the gate from its rows through their winner sweep, so a read under it meets none half-landed. A
+        // reconcile may land writes while this waits for it, so the check runs again under it.
+        using var writes = EnterTheWriteGate();
+        RequireReadyOn(version);
+        // A sweep that failed after its rows committed stays owed while the status still reads Ready.
+        if (_scope?.Store.SweepOwed != false) throw new IndexNotReadyException(NotReadyOnTheWritesLoadOrder);
         using var reads = RequireWholeSetReads(cancel, inOneSnapshot: true);
-        var answer = read(reads);
-        if (before is { } sequence && DecidedAt() == sequence) return (answer, sequence);
-        throw new IndexNotReadyException("mEdit's record index has not yet decided which copy of each record wins in the load order it holds.");
+        return read(reads);
     }
 
-    // The store's sequence while the held load order's winners stand decided, every winner sweep paid; else null.
-    private long? DecidedAt()
+    private const string NotReadyOnTheWritesLoadOrder = "mEdit's record index is not ready on the load order the write holds.";
+
+    private void RequireReadyOn(long version)
     {
-        var status = Status;
-        return status.ConflictsComputed && _holder.Held?.Version == status.Version && _scope is { Store: var store } && !store.SweepOwed
-            ? store.Sequence
-            : null;
+        if (Status is not { State: LoadOrderState.Ready } ready || ready.Version != version)
+            throw new IndexNotReadyException(NotReadyOnTheWritesLoadOrder);
+    }
+
+    private IndexWriteGate.Holding EnterTheWriteGate()
+    {
+        try
+        {
+            return _gate.Enter();
+        }
+        catch (IndexWriteGateTimeoutException busy)
+        {
+            throw new IndexNotReadyException(busy.Message);
+        }
     }
 
     // The failure is of the bytes that were there (ADR-0003): a file rewritten since is not yet read again.

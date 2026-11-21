@@ -27,13 +27,8 @@ public class HandedWrites : DispatchProxy
     /// <summary>Why the record index cannot say who holds a record; null while it can.</summary>
     public IndexRefused? OwnersRefused { get; set; }
 
-    /// <summary>The record index's sequence each ask answers at; the next ask's is one on when it steps.</summary>
-    public long OwnersSequence { get; set; }
-
-    public bool OwnersSequenceSteps { get; set; }
-
-    /// <summary>The FormKeys of each ask for whose plugin holds them, in the order asked.</summary>
-    public List<IReadOnlyCollection<string>> OwnersAsked { get; } = [];
+    /// <summary>The load order version and FormKeys of each ask for whose plugin holds them, in the order asked.</summary>
+    public List<(long Version, IReadOnlyCollection<string> FormKeys)> OwnersAsked { get; } = [];
 
     public static HandedWrites Create() => (HandedWrites)(object)Create<IQueries, HandedWrites>();
 
@@ -55,15 +50,12 @@ public class HandedWrites : DispatchProxy
         }
         if (targetMethod?.Name == nameof(IQueries.GetRecordOwnersForAWrite))
         {
-            if (OwnersRefused is { } refused) return (Answer<DecidedOwners, IndexRefused>)refused;
-            var formKeys = (IReadOnlyCollection<string>)args.Require()[0].Require();
-            OwnersAsked.Add(formKeys);
-            var owners = formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
+            if (OwnersRefused is { } refused) return (Answer<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>, IndexRefused>)refused;
+            var (version, formKeys) = ((long)args.Require()[0].Require(), (IReadOnlyCollection<string>)args.Require()[1].Require());
+            OwnersAsked.Add((version, formKeys));
+            return Answered<IReadOnlyDictionary<string, IReadOnlyList<PluginAddress>>>(formKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
                 formKey => formKey, formKey => (IReadOnlyList<PluginAddress>)(Owners.TryGetValue(formKey, out var owner) ? [owner] : []),
-                StringComparer.OrdinalIgnoreCase);
-            var answer = Answered(new DecidedOwners(owners, OwnersSequence));
-            if (OwnersSequenceSteps) OwnersSequence++;
-            return answer;
+                StringComparer.OrdinalIgnoreCase));
         }
         if (targetMethod?.Name != nameof(IQueries.Hold)) throw new NotSupportedException($"The record index here serves no {targetMethod?.Name}.");
         var (written, cancel) = ((IReadOnlyList<HandedPlugin>?)args.Require()[0], (CancellationToken)args.Require()[1].Require());

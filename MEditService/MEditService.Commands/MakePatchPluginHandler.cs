@@ -31,7 +31,7 @@ public sealed class MakePatchPluginHandler
         string origin, string name, IReadOnlyList<string>? flags, IReadOnlyList<GivenRecord> records, bool replace = false,
         CancellationToken cancel = default)
     {
-        if (_holder.Held is not { Snapshot: var loadOrder })
+        if (_holder.Held is not { Snapshot: var loadOrder, Version: var version })
             return new PatchRefused.AsCreate(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         var release = loadOrder.GameRelease;
         if (!CreatePluginInModHandler.PlaceOf(loadOrder, origin, name).Holds(out var place, out var notPlaced)) return Refused(notPlaced);
@@ -47,7 +47,7 @@ public sealed class MakePatchPluginHandler
         }
         if (!replace && _adapter.HeldAt(registered.Path) is { } held) return new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, FileAt(place, held, name));
 
-        if (!_records.Laid(name, records, release, cancel).Holds(out var laid, out var unlaid)) return unlaid;
+        if (!_records.Laid(name, records, release, version, cancel).Holds(out var laid, out var unlaid)) return unlaid;
         if (!PluginTreeFiles.Made(name, _adapter.EmptyTree(header.Key, release, header.Flags), laid, release).Holds(out var tree, out var unmade))
             return Refused(TreeCompile.RecordsDoNotParse(plugin, unmade));
 
@@ -55,7 +55,7 @@ public sealed class MakePatchPluginHandler
         var made = await _compile.CompileAsync(registered, tree, loadOrder, save =>
         {
             if (replace) return save.CommitSettingAside() is { } why ? TreeCompile.NotWritten(plugin, why) : (Answer<bool, PluginCompileOutcome>)true;
-            if (save.CommitOverNoFile() is not { Written: false, Held: var landed }) return true;
+            if (save.CommitOverNoFile() is not { } landed) return true;
             landedAtPath = new(PluginCreateRefusal.FileExists, FileAt(place, landed, name));
             return TreeCompile.NotWritten(plugin, landedAtPath.Message);
         });
