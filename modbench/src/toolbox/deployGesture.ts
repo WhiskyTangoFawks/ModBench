@@ -28,8 +28,8 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
     if (held.applied) problems.publish(held.unmanaged, leftOut);
     else collection.clear();
   };
-  // A watch follows the deployment folder only where it is the game folder: a check of the disk reads again what the user
-  // changed there by hand, and a change the watch names there is read again (ADR-0029).
+  // No watch follows the deployment folder, so a check of the disk reads again what the user changed there by hand. Where it
+  // is the game folder, a change the watch names there is read again too (ADR-0029).
   const inDeploymentFolder = (path: string): boolean => deploymentFolder !== undefined && isInside(path, deploymentFolder, process.platform);
   const subscription = instance.subscribe(() => { void publishProblems(); }, {}, inDeploymentFolder);
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {

@@ -632,6 +632,10 @@ describe('Mod status (mod-status trace)', () => {
         changed: (value, b) => [{ ...value, archiveContents: new Map([[join(b, 'B.ba2'), { kind: 'unanswered' }]]) }, { named: [], disk: false }],
       },
       {
+        change: 'what an archive a link puts outside its mod\'s folder holds', derived: ['B'],
+        changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/B.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false }],
+      },
+      {
         change: 'what an archive in no one mod\'s folders holds', derived: ['A', 'B'],
         changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/X.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false }],
       },
@@ -642,15 +646,41 @@ describe('Mod status (mod-status trace)', () => {
       const [a, b] = [await folderOf('A'), await folderOf('B')];
       const statuses = statusesLogging();
       const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)], {
-        filesByMod: new Map([['A', [{ relativePath: 'a.dds', sourcePath: join(a, 'a.dds') }]], ['B', [{ relativePath: 'b.dds', sourcePath: join(b, 'b.dds') }]]]),
+        filesByMod: new Map([
+          ['A', [{ relativePath: 'a.dds', sourcePath: join(a, 'a.dds') }]],
+          ['B', [{ relativePath: 'b.dds', sourcePath: join(b, 'b.dds') }, { relativePath: 'B.ba2', sourcePath: '/elsewhere/B.ba2' }]],
+        ]),
       });
       statuses.derive(value);
       await statuses.current();
       asked.length = 0;
 
       statuses.derive(...changed(value, b));
+      const keys = [...(await statuses.current()).keys()];
 
-      expect([asked, [...(await statuses.current()).keys()]]).toEqual([derived, ['A', 'B']]);
+      expect([[...asked].sort(), keys]).toEqual([derived, ['A', 'B']]);
+    });
+
+    it('reads the files of the mod a change names alone, whatever the size of the modlist', async () => {
+      const [a, b] = [await folderOf('A'), await folderOf('B')];
+      const read: string[] = [];
+      class Reading<V> extends Map<string, V> {
+        override get(mod: string): V | undefined {
+          read.push(mod);
+          return super.get(mod);
+        }
+      }
+      const filesByMod = new Reading([['A', [{ relativePath: 'a.dds', sourcePath: join(a, 'a.dds') }]], ['B', [{ relativePath: 'b.dds', sourcePath: join(b, 'b.dds') }]]]);
+      const statuses = statusesLogging();
+      const value = valueOf([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'B' }], [folder('mod', 'A', a), folder('mod', 'B', b)], { filesByMod });
+      statuses.derive(value);
+      await statuses.current();
+      read.length = 0;
+
+      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+      await statuses.current();
+
+      expect([...new Set(read)]).toEqual(['B']);
     });
 
     it('derives every mod after a derivation that failed', async () => {
