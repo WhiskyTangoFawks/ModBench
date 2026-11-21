@@ -576,8 +576,9 @@ export class Instance implements Subscription {
     const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
     const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     const changed = (fact: keyof InstanceValue): boolean => next[fact] !== before[fact];
-    // A read that finds nothing new is no change (ADR-0029): the value, its sequence and its subscribers stay as they were.
-    if (!tellsEvery && reread.named.length === 0 && !Object.keys(next).filter(isFactOf(next)).some(changed)) {
+    // ADR-0029
+    const nothingNew = !tellsEvery && reread.named.length === 0 && !Object.keys(next).filter(isFactOf(next)).some(changed);
+    if (nothingNew) {
       this.setLate(this.heardSinceRun());
       return { settled: Promise.resolve() };
     }

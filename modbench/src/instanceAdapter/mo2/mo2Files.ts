@@ -5,7 +5,7 @@ import type { Dirent } from 'node:fs';
 import { dirname, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { lastHanded, noneLeft } from '../../ports/lastBuilt';
+import { noneLeft } from '../../ports/lastBuilt';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDir, listDirByStamp, realPathIfThere } from '../files';
@@ -193,14 +193,22 @@ const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: Or
 
 const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
 
+const filesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
+  [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
+
+const samePartsAs = (a: OriginFiles, b: OriginFiles): boolean => {
+  const [before, after] = [filesParts(a), filesParts(b)];
+  return before.length === after.length && before.every((part, at) => Object.is(part, after[at]));
+};
+
 /** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
  *  It keeps the walks of the mod folders the latest reading names, so it ends with the instance it describes. */
 export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   const walked = new Map<string, Walked>();
-  // A walk answers the files it answered last while it walks the same: a stamp too fresh to trust walks a folder again.
-  const handed = new Map<string, ReturnType<typeof lastHanded<OriginFiles>>>();
+  // A stamp too fresh to trust walks a folder again.
+  const answered = new Map<string, OriginFiles>();
   let named: ModFolders | undefined;
 
   const forgetUnnamed = (modFolders: ModFolders): void => {
@@ -208,19 +216,17 @@ export function originFilesReader(
     named = modFolders;
     const live = new Set(modFolders.all.flatMap(({ path }) => [modKey(false, path), modKey(true, path)]));
     for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) {
-      handed.delete(key);
+      answered.delete(key);
       walked.delete(key);
       context.watch.listed(key, undefined);
     }
   };
 
   const steadied = (key: string, files: OriginFiles): OriginFiles => {
-    const hand = handed.get(key) ?? lastHanded<OriginFiles>();
-    handed.set(key, hand);
-    const { origin, folder, notes, files: own, folders, ...rest } = files;
-    return hand(files, [
-      origin, folder, notes.length, ...notes, own.length, ...own.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest),
-    ]);
+    const last = answered.get(key);
+    if (last !== undefined && samePartsAs(last, files)) return last;
+    answered.set(key, files);
+    return files;
   };
 
   async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
