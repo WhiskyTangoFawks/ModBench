@@ -883,6 +883,29 @@ describe('Instance — a value that survives a bad read', () => {
     expect(handed.map((reading) => (reading === undefined ? 'none' : answered.indexOf(reading)))).toEqual(['none', 0, 0, 1]);
   });
 
+  it('hands each reading the reading its value last landed from, though a reading between answered and its value failed', async () => {
+    const handed: (InstanceReading | undefined)[] = [];
+    const answered: InstanceReading[] = [];
+    let spoiled: Partial<InstanceReading> = {};
+    const { instance } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (reread, landed) => {
+        handed.push(landed);
+        const answer = { ...(await adapter.reading(reread)), ...spoiled };
+        answered.push(answer);
+        return answer;
+      },
+    }));
+    await instance.refresh();
+    spoiled = { trustingKept: () => Promise.reject(new Error('a file is half-written')) };
+    await instance.refresh();
+    spoiled = {};
+    await instance.refresh();
+
+    expect(instance.readFailure).toBeUndefined();
+    expect(handed.map((reading) => (reading === undefined ? 'none' : answered.indexOf(reading)))).toEqual(['none', 0, 0]);
+  });
+
   it('lands nothing for a read that finds nothing new: the value and its sequence hold, and no subscriber is told', async () => {
     const { instance } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
     await instance.refresh();

@@ -16,6 +16,7 @@ import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
+    ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
     { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {

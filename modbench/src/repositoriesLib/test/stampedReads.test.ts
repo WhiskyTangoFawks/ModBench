@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { keptTrusted, stampFrom, trustingKept } from '../stampedReads';
+import { keptTrusted, readTrustingKept, stampFrom, trustingKept } from '../stampedReads';
 
 const keptByStamp = <T>(read: (path: string) => Promise<T>): ((path: string) => Promise<T>) =>
   keptTrusted(async (path) => stampFrom(await stat(path, { bigint: true })), read);
@@ -99,5 +99,38 @@ describe('a read kept by the stamp of its file', () => {
     await expect(kept(path)).rejects.toThrow('unreadable');
 
     expect(await kept(path)).toBe(2);
+  });
+
+  describe('of a file that is not there', () => {
+    const absent = (): string => join(root, 'absent.txt');
+
+    it('hands its absence without looking again while it trusts', async () => {
+      const kept = keptByStamp(read);
+      await expect(kept(absent())).rejects.toMatchObject({ code: 'ENOENT' });
+      await writeFile(absent(), 'made');
+
+      await expect(trustingKept(() => kept(absent()))).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await kept(absent())).toBe(1);
+    });
+
+    it('reads it once a re-read is named it', async () => {
+      const kept = keptByStamp(read);
+      await expect(kept(absent())).rejects.toMatchObject({ code: 'ENOENT' });
+      await writeFile(absent(), 'made');
+
+      expect((await readTrustingKept([absent()], false, () => kept(absent()))).answer).toBe(1);
+    });
+
+    it('answers it as unheard at a check of the disk that finds it made, and not while it is still not there', async () => {
+      await readTrustingKept([], true, () => Promise.resolve());
+      const kept = keptByStamp(read);
+      await expect(kept(absent())).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const stillAbsent = await readTrustingKept([], true, () => Promise.resolve());
+      await writeFile(absent(), 'made');
+      const made = await readTrustingKept([], true, () => kept(absent()));
+
+      expect([stillAbsent.unheard, made]).toEqual([[], { answer: 1, unheard: [absent()], found: new Map(), unchanged: new Set() }]);
+    });
   });
 });

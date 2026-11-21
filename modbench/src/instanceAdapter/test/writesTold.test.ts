@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -35,6 +36,7 @@ describe('a write through the adapter', () => {
   const writes: Write[] = [
     ...writesUnderALock,
     ['a new mod folder', (a) => a.createModFolder('Fresh'), (r) => [join(r, 'mods', 'Fresh')]],
+    ['the push check', (a) => { execFileSync('git', ['init', '-q', root]); return a.refuseUnpublishedPins(); }, (r) => [join(r, '.git', 'hooks', 'pre-push')]],
     ['a change that changes nothing', (a) => a.changeModOrder(PROFILE, () => []), () => []],
   ];
 

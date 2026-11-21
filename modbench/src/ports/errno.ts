@@ -9,3 +9,6 @@ export function errnoCode(err: unknown): string | undefined {
   const witness = err as { code?: unknown };
   return typeof witness.code === 'string' ? witness.code : undefined;
 }
+
+/** Whether a failure says the path is not there: it, or a folder it names, is missing or is a file. */
+export const isAbsent = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';

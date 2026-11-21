@@ -142,9 +142,11 @@ const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unkno
 const originFilesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
   [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
 
+const as = <T extends object | undefined>(fact: T, parts: readonly unknown[], landed: T | undefined): T => asLanded(readAs(fact, parts), landed);
+
 // A walk its stamps covered answers the object it answered, so only a walk made again is compared, and only with what landed.
 const filesAsLanded = (files: OriginFiles, landed: OriginFiles | undefined): OriginFiles =>
-  (landed !== undefined && (landed === files || sameInputs(originFilesParts(landed), originFilesParts(files))) ? landed : files);
+  (landed === files ? landed : as(files, originFilesParts(files), landed));
 
 function modFilesAsLanded(modFiles: ReadonlyMap<string, OriginFiles>, landed: ReadonlyMap<string, OriginFiles> | undefined): ReadonlyMap<string, OriginFiles> {
   const steady = new Map([...modFiles].map(([name, files]) => [name, filesAsLanded(files, landed?.get(name))] as const));
@@ -162,11 +164,8 @@ function modlistEntryParts(entry: ModlistEntry): unknown[] {
 
 const pluginEntryParts = ({ name, enabled, ...rest }: PluginEntry): unknown[] => [name, enabled, ...noneLeft(rest)];
 
-const as = <T extends object | undefined>(fact: T, parts: readonly unknown[], landed: T | undefined): T => asLanded(readAs(fact, parts), landed);
-
-/** Each fact of a reading, or the object `landed`, the reading the caller's value last landed from, holds while it was read
- *  as the same: a fact read again for a stamp too fresh to trust, or after another reading saw other content, is the object
- *  it was (ADR-0029). */
+/** Each fact of a reading, or the object `landed` holds while both were read as the same (ADR-0029). `landed` is the reading
+ *  the caller's value last landed from. */
 export function steadied(read: ReadFacts, landed?: ReadFacts): ReadFacts {
   const was: Partial<ReadFacts> = landed ?? {};
   return {

@@ -1,6 +1,6 @@
 // A source mod with a remote is a submodule of the instance repository; git decides the config and the staging.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { gitPath } from '../foldersHeldWhole';
 import { errnoCode } from '../../ports/errno';
@@ -15,6 +15,7 @@ import {
 import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
+import { toldAfter } from '../../repositoriesLib/writesTold';
 import { sourceFoldersTracked } from './sourceModFolders';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'followFoldersInRepository' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
@@ -196,11 +197,15 @@ async function submoduleIn(instanceRoot: string, name: string): Promise<Submodul
   return { folder: resolve(instanceRoot, path), pin, ...(branch === '' ? {} : { branch }) };
 }
 
-const isOwnHook = (hook: string): Promise<boolean> => readFile(hook, 'utf8').then((text) => text === PRE_PUSH_HOOK, () => false);
+const isOwnHook = (hook: string): Promise<boolean> => textByStamp(hook).then((text) => text === PRE_PUSH_HOOK, () => false);
 
-/** Whether the repository holds Modbench's pre-push hook, in the place `refuseUnpublishedPins` writes it. */
+/** Whether the repository holds Modbench's pre-push hook, in the place `refuseUnpublishedPins` writes it, which the watch
+ *  follows. */
 export const pushRefusalWritten = (context: Mo2Context): Promise<boolean> =>
-  hooksFolder(context).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
+  hooksFolder(context).then((hooks) => {
+    context.watch.follow('pushCheck', [hooks], PRE_PUSH_HOOK_NAME);
+    return isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME));
+  }, () => false);
 
 const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
 
@@ -344,7 +349,7 @@ export function mo2Submodules(context: Mo2Context): Mo2Submodules {
       await mkdir(hooks, { recursive: true });
       const hook = join(hooks, PRE_PUSH_HOOK_NAME);
       let written = true;
-      await writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' }).catch(async (err: unknown) => {
+      await toldAfter([hook], () => writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' })).catch(async (err: unknown) => {
         if (errnoCode(err) !== 'EEXIST') throw err;
         if (!(await isOwnHook(hook))) throw hookExists(hook);
         written = false;
