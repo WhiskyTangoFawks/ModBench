@@ -52,7 +52,7 @@ describe('a write over the real adapter', () => {
     expect(vi.mocked(readFile).mock.calls.filter(([path]) => path === modlist).length - readsBefore).toBe(1);
   });
 
-  it('is named to the subscribers once, and the watch\'s echo of it, read again by the guard against a stamp too fresh to trust, names nothing', async () => {
+  it('is named to the subscribers once, and the watch\'s echo of it, read again by the guard against a stamp too fresh to trust, is no change', async () => {
     const { adapter, instance: loader, modlist } = await wiredInstance();
     const heard: (readonly string[])[] = [];
     loader.subscribe((_value, _sequence, { named }) => { heard.push(named); });
@@ -60,7 +60,7 @@ describe('a write over the real adapter', () => {
     await adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]);
     await loader.refresh([modlist]);
 
-    expect(heard).toEqual([[modlist], []]);
+    expect(heard).toEqual([[modlist]]);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

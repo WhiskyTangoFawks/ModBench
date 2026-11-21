@@ -184,6 +184,14 @@ export const A_NEW_LOOSE_FILE: Gesture = {
   },
 };
 
+export const NOTHING_WRITTEN: Gesture = {
+  name: 'a read of the mod order nothing wrote',
+  async make({ root, instance }) {
+    await instance.refresh([join(root, 'profiles', 'Default', 'modlist.txt')]);
+    return 0;
+  },
+};
+
 const gesturesIn = (view: ViewName, row: string): Record<'opening' | 'expanding' | 'searching', Gesture> => ({
   opening: { name: `opening the ${view} view`, opens: view, make: ({ views }) => views[view].open() },
   expanding: { name: `expanding one row of the ${view} view`, make: ({ views }) => views[view].expand(row) },

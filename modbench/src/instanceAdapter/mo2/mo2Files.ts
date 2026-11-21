@@ -199,8 +199,8 @@ export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   const walked = new Map<string, Walked>();
-  // A walk its stamps do not cover is walked each time, and answers the files it answered last while it walks the same.
-  const uncovered = new Map<string, ReturnType<typeof lastHanded<OriginFiles>>>();
+  // A walk answers the files it answered last while it walks the same: a stamp too fresh to trust walks a folder again.
+  const handed = new Map<string, ReturnType<typeof lastHanded<OriginFiles>>>();
   let named: ModFolders | undefined;
 
   const forgetUnnamed = (modFolders: ModFolders): void => {
@@ -208,16 +208,17 @@ export function originFilesReader(
     named = modFolders;
     const live = new Set(modFolders.all.flatMap(({ path }) => [modKey(false, path), modKey(true, path)]));
     for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) {
+      handed.delete(key);
       walked.delete(key);
       context.watch.listed(key, undefined);
     }
   };
 
-  const walkedAgain = (key: string, files: OriginFiles): OriginFiles => {
-    const handed = uncovered.get(key) ?? lastHanded<OriginFiles>();
-    uncovered.set(key, handed);
+  const steadied = (key: string, files: OriginFiles): OriginFiles => {
+    const hand = handed.get(key) ?? lastHanded<OriginFiles>();
+    handed.set(key, hand);
     const { origin, folder, notes, files: own, folders, ...rest } = files;
-    return handed(files, [
+    return hand(files, [
       origin, folder, notes.length, ...notes, own.length, ...own.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest),
     ]);
   };
@@ -226,11 +227,11 @@ export function originFilesReader(
     const before = walked.get(key);
     if (before !== undefined && await listingsStill(before)) return before.files;
     const done = await walk();
-    const files = filesOf(done);
+    const files = steadied(key, filesOf(done));
     context.watch.listed(key, { folders: [done.root, ...files.folders.map(({ path }) => path)], files: files.files.map(({ path }) => path) });
     if (done.stampsCover) walked.set(key, { listings: done.listings, files });
     else walked.delete(key);
-    return done.stampsCover ? files : walkedAgain(key, files);
+    return files;
   }
 
   return async (origin, rootOnly, modFolders) => {

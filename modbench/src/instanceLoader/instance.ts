@@ -368,7 +368,7 @@ export class Instance implements Subscription {
     return this.current;
   }
 
-  /** Rises once per landed recompute. A failed read leaves it where it was. */
+  /** Rises once per recompute that lands a change. A failed read, and one that finds nothing new, leave it where it was. */
   get sequence(): number {
     return this.seq;
   }
@@ -574,13 +574,19 @@ export class Instance implements Subscription {
     }
     const before = this.current;
     const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
+    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
+    const changed = (fact: keyof InstanceValue): boolean => next[fact] !== before[fact];
+    // A read that finds nothing new is no change (ADR-0029): the value, its sequence and its subscribers stay as they were.
+    if (!tellsEvery && reread.named.length === 0 && !Object.keys(next).filter(isFactOf(next)).some(changed)) {
+      this.setLate(this.heardSinceRun());
+      return { settled: Promise.resolve() };
+    }
     this.current = next;
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
-    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
+    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some(changed));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 

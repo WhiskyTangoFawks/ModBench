@@ -1817,14 +1817,16 @@ describe('the MO2 Instance adapter', () => {
           expect(second).not.toBe(first);
         });
 
-        it('walks again a folder changed within the settle window, as its stamp may not change for a write that follows', async () => {
+        it('walks again a folder changed within the settle window, as its stamp may not change for a write that follows, and answers the files it answered while it walks the same', async () => {
           await mkdir(join(folder(), 'Textures'), { recursive: true });
           await writeFile(join(folder(), 'Textures', 'a.dds'), '');
 
           const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const walked = callsOn(readdir, join(folder(), 'Textures'));
           const second = await source.originFiles(mod('Harder VATS'), 'list');
 
-          expect(second).not.toBe(first);
+          expect(callsOn(readdir, join(folder(), 'Textures'))).toBeGreaterThan(walked);
+          expect(second).toBe(first);
         });
 
         it('does not keep a walk that met a folder removed mid-read, though the stamp of the folder above it did not change', async () => {

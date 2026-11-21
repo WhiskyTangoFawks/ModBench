@@ -861,6 +861,19 @@ describe('Instance — a value that survives a bad read', () => {
     expect(reads).toEqual([['/instance/mods/A/A.esp']]);
   });
 
+  it('lands nothing for a read that finds nothing new: the value and its sequence hold, and no subscriber is told', async () => {
+    const { instance } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
+    await instance.refresh();
+    const before = instance.value;
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); });
+
+    await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+
+    expect(instance.value).toBe(before);
+    expect({ sequence: instance.sequence, told }).toEqual({ sequence: 1, told: [] });
+  });
+
   it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {
     const { instance } = loader();
     const heard: number[] = [];
