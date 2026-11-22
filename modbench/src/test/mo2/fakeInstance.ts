@@ -1,4 +1,5 @@
-import { toldOf, type InstanceSubscriber, type InstanceValue } from '../../instanceLoader/instance';
+import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
+import { toldOf } from '../../instanceLoader/told';
 import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 
 /** The double every provider's row contract needs: `.value` plus `.subscribe`, structurally

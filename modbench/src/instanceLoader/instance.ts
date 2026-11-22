@@ -29,7 +29,8 @@ export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, Upg
 export type { PapyrusScript } from './papyrusScripts';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
-import { filesChanged, type FilesChanged } from './filesChanged';
+import type { FilesChanged } from './filesChanged';
+import { toldOf } from './told';
 import { present } from '../ports/present';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
@@ -203,13 +204,6 @@ interface Subscribed {
 
 const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
 
-/** `reread`, told with `value` to a subscriber that was told `before` last and reads `concerns`, or every fact. */
-export function toldOf(before: InstanceValue | undefined, value: InstanceValue, reread: Reread, concerns: readonly (keyof InstanceValue)[] | undefined): Told {
-  const reads: Partial<Record<keyof InstanceValue, true>> = {};
-  for (const fact of concerns ?? Object.keys(value).filter(isFactOf(value))) reads[fact] = true;
-  let changed: FilesChanged | undefined;
-  return { ...reread, before, changed: () => (changed ??= filesChanged(before, value, reads)) };
-}
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
