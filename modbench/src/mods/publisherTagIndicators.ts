@@ -9,7 +9,7 @@ import { fileRowUri } from './modFiles';
 import {
   IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorOf, separatorRowUri,
 } from './modIndicators';
-import { touchedIn, type Owned, type Row } from './originsTouched';
+import { touchedIn, type OriginsChange, type Owned, type Row } from './originsTouched';
 import { TOUCHING_READ } from '../instanceLoader/filesChanged';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
@@ -92,8 +92,8 @@ export class PublisherTagDecorations extends OpenableRowDecorations<Carried, key
   }
 
   // A separator carries beneath it what each mod it holds carries.
-  protected * ownedAgain(value: CarriersValue, touched: 'every' | readonly FileOrigin[]): Iterable<Owned<Carried>> {
-    const origins = touchedIn(value, touched);
+  protected * ownedAgain(value: CarriersValue, change: OriginsChange): Iterable<Owned<Carried>> {
+    const origins = touchedIn(value, change);
     for (const origin of origins) yield ownedBy(value, origin);
     const mods = origins.flatMap((origin) => (origin.kind === 'mod' ? [origin.name] : []));
     const separators = new Set(mods.flatMap((name) => separatorOf(value.modGroups, name) ?? []));

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventEmitter } from '../../test/vscodeMock';
+import { EventEmitter, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ EventEmitter }));
 
-import { drawn, holdingRedraws, RedrawEmitter, undrawn } from '../heldRedraw';
+import { DecorationRedrawEmitter, drawn, holdingRedraws, RedrawEmitter, undrawn } from '../heldRedraw';
 
 const watched = <E>(emitter: RedrawEmitter<E>) => {
   const fired: E[] = [];
@@ -67,6 +67,22 @@ describe('a view\'s redraw while a gesture writes (common.md, A gesture that wri
     await expect(holdingRedraws(() => { emitter.fire('a'); throw new Error('half written'); })).rejects.toThrow('half written');
 
     expect(fired).toEqual(['a']);
+  });
+
+  it('asks for every decoration asked while held in one event, each file once', async () => {
+    const emitter = new DecorationRedrawEmitter();
+    const fired: unknown[] = [];
+    emitter.event((uris) => { fired.push(uris); });
+    const [a, b] = [Uri.file('/a'), Uri.file('/b')];
+
+    await holdingRedraws(() => {
+      emitter.fire([a]);
+      emitter.fire(b);
+      emitter.fire([Uri.file('/a'), b]);
+      return Promise.resolve();
+    });
+
+    expect(fired).toEqual([[a, b]]);
   });
 
   it('runs the newest draw a view asked while held, once, and none it took back', async () => {

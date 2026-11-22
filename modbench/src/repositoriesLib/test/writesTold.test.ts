@@ -5,11 +5,11 @@ const told: (readonly string[])[] = [];
 
 afterEach(() => {
   told.length = 0;
-  writesToldTo({ told: () => Promise.resolve() });
+  writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
 });
 
 const loaderTold = (answer: () => Promise<void> = () => Promise.resolve()): void => {
-  writesToldTo({ told: (paths) => { told.push(paths); return answer(); } });
+  writesToldTo({ told: async (paths) => { told.push(paths); await answer(); return { subscribed: Promise.resolve() }; } });
 };
 
 describe('a write the loader is told of', () => {

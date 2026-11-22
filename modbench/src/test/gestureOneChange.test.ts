@@ -30,7 +30,7 @@ let instance: Instance | undefined;
 
 afterEach(async () => {
   instance?.dispose();
-  writesToldTo({ told: () => Promise.resolve() });
+  writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
   if (root !== undefined) await rm(root, { recursive: true, force: true });
 });
 
@@ -64,7 +64,7 @@ async function wired() {
 
 const trash = (path: string) => toldAfter([path], () => rm(path, { recursive: true, force: true }));
 
-describe('a mod gesture lands its writes as it writes them, and mod sync, waiting for its end, writes nothing', () => {
+describe('a mod gesture\'s writes land, and mod sync, waiting for its end, writes nothing', () => {
   it('lands a new empty mod\'s folder and its line', async () => {
     const { commands, gesture, landed, modSync, syncWrote } = await wired();
 

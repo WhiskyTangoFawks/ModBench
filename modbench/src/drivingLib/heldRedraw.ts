@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
-// common.md, A gesture that writes, story 1: nothing in a view changes until the gesture's read lands, while the read model
-// stays current under it.
+// common.md, A gesture that writes, story 1.
 let writing = 0;
 const held = new Map<object, () => void>();
 
@@ -55,5 +54,31 @@ export class RedrawEmitter<E> implements vscode.Disposable {
     this.rows = [];
     if (whole !== undefined) this.emitter.fire(whole.row);
     else for (const row of rows) this.emitter.fire(row);
+  }
+}
+
+/** A decoration provider's change event, which `drawn` holds: every file asked while held, each once, in one event. */
+export class DecorationRedrawEmitter implements vscode.Disposable {
+  private readonly emitter = new vscode.EventEmitter<vscode.Uri[] | undefined>();
+  readonly event = this.emitter.event;
+  private whole = false;
+  private readonly uris = new Map<string, vscode.Uri>();
+
+  fire(uris: vscode.Uri | vscode.Uri[] | undefined): void {
+    if (uris === undefined) this.whole = true;
+    else for (const uri of [uris].flat()) this.uris.set(uri.toString(), uri);
+    drawn(this, () => { this.release(); });
+  }
+
+  dispose(): void {
+    undrawn(this);
+    this.emitter.dispose();
+  }
+
+  private release(): void {
+    const uris = this.whole ? undefined : [...this.uris.values()];
+    this.whole = false;
+    this.uris.clear();
+    this.emitter.fire(uris);
   }
 }

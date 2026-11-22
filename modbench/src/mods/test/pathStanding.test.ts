@@ -87,10 +87,11 @@ describe('what a change tells the path problems (ADR-0029, Consequences, bullet 
     hear?.(after);
     return changes[1];
   };
-  const before = instanceValueFixture({ filesByMod: new Map([['Mod', [file('a.dds')]]]) });
-  const gained = { ...before, filesByMod: new Map([['Mod', [file('a.dds'), file('B.dds')]]]) };
+  const kept = file('a.dds');
+  const before = instanceValueFixture({ filesByMod: new Map([['Mod', [kept]]]) });
+  const gained = { ...before, filesByMod: new Map([['Mod', [kept, file('B.dds')]]]) };
 
-  it('tells the mod that gains a file, with the files it holds and held', () => {
-    expect(told(before, gained)).toEqual([{ origin: modOrigin('Mod'), files: [file('a.dds'), file('a.dds'), file('B.dds')] }]);
+  it('tells the mod that gains a file, with the file it gained', () => {
+    expect(told(before, gained)).toEqual([{ origin: modOrigin('Mod'), files: [file('B.dds')], gained: [file('B.dds')] }]);
   });
 });

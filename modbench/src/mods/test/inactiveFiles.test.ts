@@ -18,7 +18,7 @@ import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { fileRowUri } from '../modFiles';
 import { GREY_INACTIVE_FILES_SETTING, InactiveFileDecorationProvider } from '../inactiveFiles';
-import { file, folder, indexedValueOf, mod } from './indexedValue';
+import { file, folder, indexedValueOf, indexedValues, mod } from './indexedValue';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const settingOn = (on: boolean | undefined) => ({
@@ -148,6 +148,19 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
 
     expect(fired).toHaveBeenCalledWith(undefined);
     expect(decorations.provideFileDecoration(uri)).toEqual(GREY);
+  });
+
+  it('greys another mod\'s copy once a mod gains the file that wins over it, and an excluded folder a mod gains', () => {
+    const next = indexedValues([mod('Winner'), mod('Loser')]);
+    const losing = [file('Loser', 'a.dds')];
+    const instance = new FakeInstance(next({ Winner: { files: [] }, Loser: { files: losing } }));
+    const decorations = decorationsOver(instance);
+    const before = [decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds')), decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/x'))];
+
+    instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')], folders: [folder('Winner', 'x', true)] }, Loser: { files: losing } }));
+
+    expect([...before, decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds')), decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/x'))])
+      .toEqual([undefined, undefined, GREY, GREY]);
   });
 
   it('asks VS Code to decorate again when its setting changes, and only then', async () => {

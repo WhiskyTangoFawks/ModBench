@@ -80,7 +80,7 @@ describe('plugin sync on the instance', () => {
 
     await hears();
 
-    expect(refresh.mock.calls).toEqual([[]]);
+    expect(refresh.mock.calls).toEqual([[undefined]]);
   });
 
   it('reads back what its own run wrote when a later run, overlapping it, wrote nothing', async () => {

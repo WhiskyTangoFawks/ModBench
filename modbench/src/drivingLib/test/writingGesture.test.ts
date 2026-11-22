@@ -316,8 +316,8 @@ describe('handingOneChange', () => {
 
   it('hands the loader each write as it writes, and reads back once it ends only the files its writes named (ADR-0029, Consequences, bullet 1)', async () => {
     const steps: string[] = [];
-    writesToldTo({ told: (paths) => { steps.push(`told ${paths.join()}`); return Promise.resolve(); } });
-    onTestFinished(() => { writesToldTo({ told: () => Promise.resolve() }); });
+    writesToldTo({ told: (paths) => { steps.push(`told ${paths.join()}`); return Promise.resolve({ subscribed: Promise.resolve() }); } });
+    onTestFinished(() => { writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) }); });
     const refresh = vi.fn((named?: readonly string[]) => { steps.push(`read ${named?.join() ?? 'the disk'}`); return Promise.resolve(); });
 
     await handingOneChange({ refresh }, async () => {

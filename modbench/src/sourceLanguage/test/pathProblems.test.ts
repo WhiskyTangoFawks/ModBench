@@ -10,7 +10,10 @@ import type { PluginFilePaths } from '../../client';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
-const changedIn = (name: string, relativePath: string): FilesChanged => [{ origin: { kind: 'mod', name }, files: [fileIn(`/mods/${name}`, relativePath)] }];
+const changedIn = (name: string, relativePath: string): FilesChanged => {
+  const files = [fileIn(`/mods/${name}`, relativePath)];
+  return [{ origin: { kind: 'mod', name }, files, gained: files }];
+};
 
 const RETRY_AFTER_MS = 1000;
 const HOLDER = '000800:Names.esp';

@@ -25,7 +25,7 @@ import { blueprintLoadsLastIn } from '../tables/gamePaths';
 import { activeViewOrder, viewOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { fileAt, filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { filesChanged, TOUCHING_READ } from '../instanceLoader/filesChanged';
-import { changedKeys } from '../ports/lastBuilt';
+import { changedKeys, sameInputs } from '../ports/lastBuilt';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
@@ -162,8 +162,9 @@ export class PluginsTreeProvider
   private rowsBlueprints = 0;
   // A read failed since the last value landed, so the next one draws the message line again.
   private readFailed = false;
-  // Where the last judgement of the sorting rules to land read each file's bytes, so a file rewritten there judges again.
-  private readAtOf?: { readonly reads: readonly unknown[]; readonly at: ReadonlySet<string> };
+  // Where the last judgement of the sorting rules to land read each file's bytes, so a file rewritten there judges again: kept
+  // while those reads and what places them are the same.
+  private readAtOf?: { readonly from: readonly unknown[]; readonly at: ReadonlySet<string> };
 
   /** The view's order of the active plugins, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
   readonly viewOrder = {
@@ -237,7 +238,10 @@ export class PluginsTreeProvider
 
   private readAt(): ReadonlySet<string> {
     const reads = this.facts.judgedReads();
-    if (this.readAtOf?.reads !== reads) this.readAtOf = { reads, at: new Set(reads.flatMap(({ path }) => fileAt(this.instanceValue, path) ?? []).map(fileKey)) };
+    const from = [reads, this.instanceValue.files, this.instanceValue.dataFolderFiles];
+    if (this.readAtOf === undefined || !sameInputs(this.readAtOf.from, from)) {
+      this.readAtOf = { from, at: new Set(reads.flatMap(({ path }) => fileAt(this.instanceValue, path) ?? []).map(fileKey)) };
+    }
     return this.readAtOf.at;
   }
 

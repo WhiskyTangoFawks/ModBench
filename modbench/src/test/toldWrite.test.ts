@@ -11,7 +11,8 @@ import { cp, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Instance } from '../instanceLoader/instance';
-import { writesToldTo } from '../repositoriesLib/writesTold';
+import { diskCheckedBy, writesToldTo } from '../repositoriesLib/writesTold';
+import { ambientWrites } from '../instanceLoader/ambientWrites';
 import { handingOneChange } from '../drivingLib/writingGesture';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeWorkspace } from './fakeWorkspace';
@@ -24,7 +25,7 @@ let instance: Instance | undefined;
 
 afterEach(async () => {
   instance?.dispose();
-  writesToldTo({ told: () => Promise.resolve() });
+  writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
   if (root !== undefined) await rm(root, { recursive: true, force: true });
 });
 
@@ -38,6 +39,7 @@ async function wiredInstance() {
     medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
   });
   writesToldTo(instance);
+  diskCheckedBy(ambientWrites);
   await instance.refresh();
   const modlist = join(root, 'profiles', 'Default', 'modlist.txt');
   return { adapter, instance, modlist };
@@ -77,6 +79,19 @@ describe('a write over the real adapter', () => {
     await loader.refresh([modlist]);
 
     expect([heardAsItReturned, heard]).toEqual([[[modlist]], [[modlist]]]);
+  });
+
+  it('returns from a gesture once the subscribers of the values its told writes landed have settled (ADR-0029, Consequences, bullet 1)', async () => {
+    const { adapter, instance: loader } = await wiredInstance();
+    let derived = false;
+    loader.subscribe(async () => {
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+      derived = true;
+    });
+
+    await handingOneChange(loader, () => adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]));
+
+    expect(derived).toBe(true);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

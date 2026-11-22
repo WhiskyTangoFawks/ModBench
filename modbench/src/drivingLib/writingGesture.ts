@@ -44,26 +44,35 @@ async function releaseWaiting(): Promise<void> {
 }
 
 /** Runs `work`, whose writes each hand the loader what they wrote as they write it (ADR-0029, Consequences, bullet 1). Once
- *  the outermost change ends, it reads back what they named but could not hand, or the disk. */
+ *  the outermost change ends, it reads back what they named but could not hand, and waits for their subscribers. */
 export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, work: (written: WrittenFiles) => Promise<T>): Promise<T> {
   const written = new WrittenFiles();
   changesRunning++;
+  const outermost = changesRunning === 1;
   try {
     return await holdingRedraws(async () => {
       let answer: T;
       try {
         answer = await collectingWrites(written, () => work(written));
       } catch (err) {
-        if (changesRunning === 1) await refreshWritten(instance, written).catch(() => undefined);
+        if (outermost) await readBack(instance, written).catch(() => undefined);
         throw err;
       }
-      if (changesRunning === 1) await refreshWritten(instance, written);
+      if (outermost) await readBack(instance, written);
       return answer;
     });
   } finally {
     changesRunning--;
     if (changesRunning === 0) void releaseWaiting();
   }
+}
+
+// What the writes named but could not hand, or the disk when one could not name them; then the subscribers each read woke.
+async function readBack(instance: Pick<Instance, 'refresh'>, written: WrittenFiles): Promise<void> {
+  const { named } = written;
+  if (named === undefined) await instance.refresh();
+  else if (named.length > 0) await instance.refresh(named);
+  await written.subscribed();
 }
 
 /** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is given. */
@@ -88,9 +97,8 @@ export async function runUnderProgress<T>(
 }
 
 /** A write that told the Instance loader of each file shows nothing more. */
-export async function refreshWritten(instance: Pick<Instance, 'refresh'>, { named }: WrittenFiles): Promise<void> {
-  if (named === undefined) await instance.refresh();
-  else if (named.length > 0) await instance.refresh(named);
+export async function refreshWritten(instance: Pick<Instance, 'refresh'>, written: WrittenFiles): Promise<void> {
+  if (written.named?.length !== 0) await instance.refresh(written.named);
 }
 
 interface ManagerSurface {

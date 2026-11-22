@@ -18,7 +18,7 @@ let instance: Instance | undefined;
 
 afterEach(async () => {
   instance?.dispose();
-  writesToldTo({ told: () => Promise.resolve() });
+  writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
   await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
 });
 

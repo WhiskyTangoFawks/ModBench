@@ -42,11 +42,14 @@ describe('a new loose file in one mod', () => {
 });
 
 describe('a change shows in the views at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
-  it('a new loose file in one mod tells neither the symbols nor deploy\'s problems, whose files it does not touch', async () => {
-    const small = await costOf(3, A_NEW_LOOSE_FILE);
-    const large = await costOf(60, A_NEW_LOOSE_FILE);
+  it.each([
+    ['a new loose file in one mod tells neither, whose files it does not touch', A_NEW_LOOSE_FILE, 0],
+    ['a check of the disk tells each once', { name: 'a check of the disk', make: async ({ instance }) => { await instance.refresh(); return 0; } } satisfies Gesture, 1],
+  ])('the symbols and deploy\'s problems: %s', async (_case, change, told) => {
+    const small = await costOf(3, change);
+    const large = await costOf(60, change);
 
-    expect([small.told, large.told]).toEqual([{ symbols: 0, deployProblems: 0 }, { symbols: 0, deployProblems: 0 }]);
+    expect([small.told, large.told]).toEqual([{ symbols: told, deployProblems: told }, { symbols: told, deployProblems: told }]);
   });
 
   it('a new loose file in one mod asks the Mods and Plugins views the same, and the conflict table of another mod nothing', async () => {
@@ -63,6 +66,17 @@ describe('a change shows in the views at the rows it touches, on a small and a l
     const large = await costOf(60, A_FILE_A_RULE_READS_REWRITTEN);
 
     expect([small.viewsIn.Plugins > 0, large.viewsIn.Plugins]).toEqual([true, small.viewsIn.Plugins]);
+  });
+});
+
+describe('a gesture into one mod costs the same whatever that mod holds (ADR-0029, Consequences, bullet 5)', () => {
+  const into = (files: number): Gesture => ({ ...A_GESTURE_WRITING_A_LOOSE_FILE, writtenModFiles: files });
+
+  it.each(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling', 'lookups'] as const)('at the %s layer', async (layer) => {
+    const small = await costOf(3, into(3));
+    const large = await costOf(3, into(300));
+
+    expect(large[layer]).toBe(small[layer]);
   });
 });
 

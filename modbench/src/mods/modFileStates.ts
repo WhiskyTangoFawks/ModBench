@@ -1,5 +1,5 @@
 import type { Covering, FileOrigin, InstanceValue, Mod, OriginFile, OriginFolder, PublisherTag } from '../instanceLoader/instance';
-import { copyStandingOf, fileOrderConflictOf, foldPath, modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { copyStandingOf, fileOrderConflictOf, foldPath, modOrigin, sameOrigin, type CopyStanding } from '../instanceLoader/fileConflictIndex';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.
  *  @public Read by packageJson.test, which holds package.json to it. */
@@ -19,18 +19,19 @@ export type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 export type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'filesByMod' | 'stackedCopies' | 'archiveContents'>;
 
-// Each path a mod may hold a copy at: each of its files, and each file an archive of its holds.
-const pathsOf = (value: Pick<InstanceValue, 'archiveContents'>, files: readonly OriginFile[]): string[] => files.flatMap(({ relativePath, sourcePath }) => {
+/** Each path a mod may hold a copy at: each of its files, and each file an archive of its holds. */
+export const copyPathsOf = (value: Pick<InstanceValue, 'archiveContents'>, files: readonly OriginFile[]): string[] => files.flatMap(({ relativePath, sourcePath }) => {
   const read = value.archiveContents.get(sourcePath);
   return [relativePath, ...read?.kind === 'read' ? read.answer : []];
 });
 
 export function indicatorsOf(value: Pick<InstanceValue, 'stackedCopies' | 'archiveContents'>, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
-  const holds: Record<ModIndicator, boolean> = {
-    ...copyStandingOf(value.stackedCopies, modOrigin(name), pathsOf(value, files)),
-    containsExcludedFiles: files.some((file) => file.excluded),
-    updateAvailable: updateAvailable === true,
-  };
+  return indicatorsFrom(copyStandingOf(value.stackedCopies, modOrigin(name), copyPathsOf(value, files)), files.some((file) => file.excluded), updateAvailable === true);
+}
+
+/** The indicators a mod's copy standing, its excluded files and its update give it, in mods.md's order. */
+export function indicatorsFrom(standing: CopyStanding, containsExcludedFiles: boolean, updateAvailable: boolean): ModIndicator[] {
+  const holds: Record<ModIndicator, boolean> = { ...standing, containsExcludedFiles, updateAvailable };
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }
 

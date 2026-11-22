@@ -68,7 +68,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   private refreshing: Promise<unknown> = Promise.resolve();
   // What the last judgement of the sorting rules to land read of files.
   private landedReads: JudgingReads = { reads: [], judges: () => false };
-  // What judging the last order asked of against the last rules reads, which depend on nothing else.
+  // The reads of the last order and rules judged, kept while both are the same objects: the reads depend on nothing else.
   private judging?: { readonly order: readonly PluginAddress[]; readonly entries: readonly LootEntry[]; readonly reads: JudgingReads };
   // The last `rejudge` asked.
   private rejudging: Promise<unknown> = Promise.resolve();
