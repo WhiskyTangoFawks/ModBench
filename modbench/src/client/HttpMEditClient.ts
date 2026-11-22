@@ -1041,7 +1041,10 @@ class HttpMEditClient implements MEditClient {
       { token, absent: { status: 204, answers: null } });
   }
 
-  getPluginsIndexing(token?: ReadCancellation): Promise<IndexOfPlugin[] | ReadFailed> {
+  getPluginsIndexing(plugins?: readonly PluginAddress[], token?: ReadCancellation): Promise<IndexOfPlugin[] | ReadFailed> {
+    if (plugins) {
+      return this.read('POST /plugins/indexing', (api, signal) => api.POST('/plugins/indexing', { body: { plugins: [...plugins] }, signal }), (data) => data ?? [], { token });
+    }
     return this.read('getPluginsIndexing', (api, signal) => api.GET('/plugins/indexing', { signal }), (data) => data ?? [], { token });
   }
 

@@ -28,11 +28,13 @@ export interface PluginFactsFeedDeps {
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
-  publishChangedOutside: (warnings: readonly PluginProblem[]) => void;
+  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
+  publishChangedOutside: (warnings: readonly PluginProblem[], named?: NamedPlugins) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The Plugin source unreadable status's other surface, the Problems panel. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
+  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
+  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
@@ -58,6 +60,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // Each `refresh` reads after the one before it answered, so an answer for a plugin never lands over a newer one.
   private refreshing: Promise<unknown> = Promise.resolve();
+  // The last `rejudge` asked.
+  private rejudging: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -122,10 +126,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     return { held: plugins.length, active: active.length, rowsGone };
   }
 
-  private async readChangedOutside(): Promise<void> {
-    const indexing = await this.deps.client.getPluginsIndexing();
-    if (!isReadFailed(indexing)) this.facts.changedOutsideAre(indexing.filter(({ changedOutside }) => changedOutside).map(({ name, origin }) => ({ name, origin })));
-    this.deps.publishChangedOutside(this.facts.problems().changedOutside);
+  private async readChangedOutside(named?: NamedPlugins): Promise<void> {
+    const indexing = await this.deps.client.getPluginsIndexing(named);
+    if (!isReadFailed(indexing)) this.facts.changedOutsideAre(indexing.filter(({ changedOutside }) => changedOutside).map(({ name, origin }) => ({ name, origin })), named);
+    this.deps.publishChangedOutside(this.facts.problemsOf(named).changedOutside, named);
   }
 
   private publishSorting(): void {
@@ -148,7 +152,9 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   /** Judges the order the last reconcile judged again. Before that reconcile there is nothing to judge. */
   async rejudge(): Promise<void> {
-    await this.rejudgeAnnouncing([]);
+    const rejudging = this.rejudgeAnnouncing([]);
+    this.rejudging = rejudging.catch(() => undefined);
+    await rejudging;
   }
 
   private async rejudgeAnnouncing(announced: NamedPlugins): Promise<void> {
@@ -179,16 +185,16 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (generation !== this.generation) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const sortingChanged = this.facts.refreshed(plugins, named);
-    this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    await this.readChangedOutside();
+    this.deps.publishSourceUnreadable(this.facts.problemsOf(named).sourceUnreadable, named);
+    await this.readChangedOutside(named);
     if (generation !== this.generation) return;
     if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudgeAnnouncing(named);
     else this.changed.fire(named);
   }
 
-  /** Settles once every refresh asked so far has. */
+  /** Settles once every refresh asked so far has, and the last judging again. */
   settled(): Promise<unknown> {
-    return this.refreshing;
+    return Promise.all([this.refreshing, this.rejudging]);
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */

@@ -42,7 +42,7 @@ export interface Cost {
   readonly derived: number;
   /** The subscribers called. */
   readonly subscribers: number;
-  /** The calls to mEdit, until the gesture settles. */
+  /** The calls to mEdit, and each entry their answers hold, until the gesture settles. */
   readonly mEdit: number;
   /** The rows the views are asked for, and the decorations each row is asked for. */
   readonly views: number;
@@ -69,6 +69,23 @@ async function syntheticInstance(mods: number): Promise<string> {
   const long = new Date(Date.now() - 3_600_000);
   await Promise.all([root, ...(await readdir(root, { recursive: true })).map((path) => join(root, path))].map((path) => utimes(path, long, long)));
   return root;
+}
+
+// The client, and how many entries its answers have held so far.
+function answersCounted(client: InMemoryMEditClient): { counted: InMemoryMEditClient; answered: () => number } {
+  let answered = 0;
+  const counted = new Proxy(client, {
+    get(target, key) {
+      const held: unknown = Reflect.get(target, key, target);
+      if (typeof held !== 'function') return held;
+      return (...args: unknown[]): unknown => {
+        const answer: unknown = Reflect.apply(held, target, args);
+        if (answer instanceof Promise) void answer.then((value: unknown) => { if (Array.isArray(value)) answered += value.length; }, () => undefined);
+        return answer;
+      };
+    },
+  });
+  return { counted, answered: () => answered };
 }
 
 const newObjects = (known: ReadonlySet<object>, ...roots: unknown[]): number =>
@@ -261,7 +278,8 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
   client.setQueryAnswer('getDiagnoses', []);
-  const instance = new Instance({ adapter, gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: quiet, medit: client, workspace: fakeWorkspace() });
+  const { counted, answered } = answersCounted(client);
+  const instance = new Instance({ adapter, gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: quiet, medit: counted, workspace: fakeWorkspace() });
   const landings: number[] = [];
   const landing: InstanceSubscriber = () => { landings.push(fileSystemCalls.count); };
   const registering = vi.spyOn(vscode.window, 'registerFileDecorationProvider');
@@ -279,8 +297,8 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const conflictTable = registerConflictTable(instance, () => Promise.resolve([]), vscode.Uri.file(root), () => [], recordingReporter(), settings);
   const table = conflictTableOf(editors.mock.calls, modName(1));
   editors.mockRestore();
-  const records = new RecordBrowser(client);
-  const pluginsTree = pluginsTreeOver(instance, { client, records });
+  const records = new RecordBrowser(counted);
+  const pluginsTree = pluginsTreeOver(instance, { client: counted, records });
   const recordDecorations = new RecordDecorationProvider(records, () => pluginsTree.lockedRowUris());
   const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsTree, recordDecorations];
   const host = viewHost({ Mods: modsTree, Plugins: pluginsTree }, [
@@ -289,7 +307,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   ]);
   registering.mockRestore();
   const modSyncing = modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: quiet });
-  const pluginSyncing = pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter, client), channel: quiet });
+  const pluginSyncing = pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter, counted), channel: quiet });
   let subscribers = 0;
   const outcomes = instance.onListenerOutcome(({ listener, during }) => { if (during === 'value' && listener !== landing) subscribers++; });
   const indexChanges = client.onDidChange((change) => { pluginsTree.indexChanged(change); });
@@ -311,7 +329,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     table.posted.splice(0);
     subscribers = 0;
     const start = fileSystemCalls.count;
-    const asked = client.calls.length;
+    const asked = client.calls.length + answered();
     const landed = landings.length;
 
     const shown = await gesture.make({ root, instance, views: host.views, client });
@@ -320,7 +338,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     const viewsIn = { ...host.count(), Conflicts: table.posted.length };
     const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
     return {
-      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length - asked,
+      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length + answered() - asked,
       views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown,
     };
   } finally {

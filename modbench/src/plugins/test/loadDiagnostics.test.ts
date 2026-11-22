@@ -51,6 +51,17 @@ describe('publishPluginProblems', () => {
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
   });
 
+  it('replaces only the diagnostics of the plugins named, keeping the others\'', () => {
+    const collection = new FakeDiagnosticCollection();
+    const files = pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp', 'M/B.esp': '/i/mods/M/B.esp' });
+    publishPluginProblems(collection, files, [report('A.esp', 'M', 'old'), report('B.esp', 'M', 'old')], DiagnosticSeverity.Warning);
+
+    publishPluginProblems(collection, files, [report('A.esp', 'M', 'new')], DiagnosticSeverity.Warning, undefined, [{ name: 'A.esp', origin: 'M' }]);
+
+    expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path, [diagnostic]]) => [path, diagnostic?.message]).sort())
+      .toEqual([['/i/mods/M/A.esp', 'new'], ['/i/mods/M/B.esp', 'old']]);
+  });
+
   it('gives each plugin\'s diagnoses the code it is given for that plugin', () => {
     const collection = new FakeDiagnosticCollection();
 

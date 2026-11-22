@@ -432,6 +432,15 @@ describe('PluginFacts — an answer for named plugins changes only theirs (ADR-0
     expect(facts.readFailureMessage()).toBe('Showing the last good read: "B.esp" (SomeMod): B.esp/X.json: bad');
   });
 
+  it('keeps the order of the later read failures through an answer for a named plugin', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([laterFailing('A.esp'), laterFailing('B.esp')]);
+
+    facts.refreshed([held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Y.json', message: 'worse' }] })], [A]);
+
+    expect(facts.readFailureMessage()).toBe('Showing the last good read: "A.esp" (SomeMod): A.esp/Y.json: worse; "B.esp" (SomeMod): B.esp/X.json: bad');
+  });
+
   it('drops the unreadable source of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
     const facts = new PluginFacts();
     facts.refreshed([sourceGone('A.esp'), sourceGone('B.esp')]);
@@ -439,6 +448,15 @@ describe('PluginFacts — an answer for named plugins changes only theirs (ADR-0
     facts.refreshed([], [A]);
 
     expect(facts.problems().sourceUnreadable.map(({ plugin }) => plugin)).toEqual(['B.esp']);
+  });
+
+  it('drops the changed outside standing of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
+    const facts = new PluginFacts();
+    facts.changedOutsideAre([A, B]);
+
+    facts.changedOutsideAre([], [A]);
+
+    expect(facts.problems().changedOutside.map(({ plugin }) => plugin)).toEqual(['B.esp']);
   });
 
   it('takes the masters of a named plugin and keeps the others\'', () => {

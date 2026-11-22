@@ -276,9 +276,11 @@ internal sealed class Indexer : IDisposable
     }
 
     /// <summary>Each plugin of the load order held, by what the reconcile has done with it.</summary>
-    public IReadOnlyList<IndexOfPlugin> IndexOfPlugins()
+    public IReadOnlyList<IndexOfPlugin> IndexOfPlugins(IReadOnlyCollection<PluginAddress>? named)
     {
-        var plugins = _holder.Held?.Snapshot.Plugins ?? throw new NoLoadOrderException();
+        var held = _holder.Held?.Snapshot.Plugins ?? throw new NoLoadOrderException();
+        var asked = named is null ? null : new HashSet<PluginAddress>(named, PluginAddress.Comparer);
+        var plugins = held.Where(plugin => asked?.Contains(plugin.Key) ?? true).ToList();
         lock (_lock)
         {
             if (_scope is not { } scope) return [.. plugins.Select(plugin => new IndexOfPlugin(plugin.Name, plugin.Origin, IndexOfPluginState.Pending))];

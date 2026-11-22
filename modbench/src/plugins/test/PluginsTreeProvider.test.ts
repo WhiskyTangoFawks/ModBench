@@ -4,6 +4,8 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
+import { fileIn } from '../../test/fakeInstanceAdapter';
+import type { OriginFile } from '../../instanceAdapter/instanceAdapter';
 import {
   type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type InteriorCellBlock, type RecordSummary,
   type CellSummary, type ChildRecordSummary,
@@ -269,6 +271,19 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(fired).toHaveLength(1);
     instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     expect(tree.viewMessage()).toBeUndefined();
+  });
+
+  it('says the message line again once a read lands after a failed one, though it finds nothing new', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
+    const { tree } = makeTree([], { instance });
+    await tree.getChildren();
+    instance.fail('EACCES plugins.txt');
+    const fired: unknown[] = [];
+    tree.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.publish(instance.value);
+
+    expect([tree.viewMessage(), fired]).toEqual([undefined, [undefined]]);
   });
 
   it('says the later read that failed on the message line, and not once the next read answers', async () => {
@@ -1301,6 +1316,23 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     });
 
     await vi.waitFor(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
+  });
+
+  it('judges the last reconcile\'s order again when only the files present change', async () => {
+    const needsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n' } } as const;
+    const listed = (files: [string, OriginFile][]) => ({
+      ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh,
+      dataFolderPlugins: { kind: 'listed', names: new Set<string>() } as const, dataFolderFiles: { kind: 'listed', files: new Map(files) } as const,
+    });
+    const instance = new FakeInstance(listed([]));
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.at(-1)?.length;
+
+    instance.publish(listed([['meshes/x.nif', fileIn('/game/Data', 'Meshes/x.nif')]]));
+
+    await vi.waitFor(() => expect([before, errors.at(-1)]).toEqual([1, []]));
   });
 
   it('puts no rows over a record filter that matched nothing', async () => {
