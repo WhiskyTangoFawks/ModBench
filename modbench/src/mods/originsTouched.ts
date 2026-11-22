@@ -19,7 +19,7 @@ export type OriginsChange = 'every' | {
 
 /** The change a new value makes: each origin whose own files changed, and each that provides a path they gained or lost.
  *  Anything while `filesChanged` says anything changed. */
-export function changeOf<K extends keyof InstanceValue>(
+function changeOf<K extends keyof InstanceValue>(
   before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>,
 ): OriginsChange {
   const own = filesChanged(before, after, reads);
