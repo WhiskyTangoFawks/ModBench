@@ -46,7 +46,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it. A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, which GET /plugins and GET /plugins/indexing then say of each plugin; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
+        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it. A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, which GET /plugins/indexing then says of each plugin; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
         post: operations["SignalChange"];
         delete?: never;
         options?: never;
@@ -399,7 +399,8 @@ export interface paths {
         /** @description Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it with the reason: GET /plugins lists only the plugins opened. */
         get: operations["GetPluginsIndexing"];
         put?: never;
-        post?: never;
+        /** @description GET /plugins/indexing for only the plugins named, each by name and origin: a cost that follows the plugins named. */
+        post: operations["GetNamedPluginsIndexing"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1910,6 +1911,9 @@ export interface components {
             formKey?: string | null;
             editorId?: string | null;
         };
+        NamedPluginsRequest: {
+            plugins: components["schemas"]["PluginAddress"][];
+        };
         NamedScript: {
             formKey: string;
             fieldPath: string;
@@ -1965,9 +1969,6 @@ export interface components {
             plugin: string;
             origin: string;
             text: string;
-        };
-        PluginFactsRequest: {
-            plugins: components["schemas"]["PluginAddress"][];
         };
         /** @enum {string} */
         PluginFileFlagRefusal: "None" | "NotAPlugin" | "UnknownFlag" | "FormIdOutsideFlagLimit";
@@ -3294,7 +3295,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PluginFactsRequest"];
+                "application/json": components["schemas"]["NamedPluginsRequest"];
             };
         };
         responses: {
@@ -3343,6 +3344,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IndexOfPlugin"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetNamedPluginsIndexing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamedPluginsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexOfPlugin"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

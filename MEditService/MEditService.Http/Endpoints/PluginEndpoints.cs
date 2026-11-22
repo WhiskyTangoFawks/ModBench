@@ -20,7 +20,7 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginResponse>>()
             .ProducesProblem(503);
 
-        app.MapPost("/plugins/facts", (PluginFactsRequest request, IQueries svc, CancellationToken cancel) =>
+        app.MapPost("/plugins/facts", (NamedPluginsRequest request, IQueries svc, CancellationToken cancel) =>
             request.Plugins is not { } plugins || plugins.Any(Unnamed)
                 ? EndpointMapping.BadRequest("Name the plugins, each with a name and an origin.")
                 : EndpointMapping.Ok(svc.GetPlugins(plugins, cancel)))
@@ -32,11 +32,22 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/indexing", (IQueries svc) =>
-            EndpointMapping.Ok(svc.GetPluginsIndexing()))
+            EndpointMapping.Ok(svc.GetPluginsIndexing(null)))
             .WithName("GetPluginsIndexing")
             .WithTags(Tag)
             .WithDescription("Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it with the reason: GET /plugins lists only the plugins opened.")
             .Produces<IReadOnlyList<IndexOfPlugin>>()
+            .ProducesProblem(503);
+
+        app.MapPost("/plugins/indexing", (NamedPluginsRequest request, IQueries svc) =>
+            request.Plugins is not { } plugins || plugins.Any(Unnamed)
+                ? EndpointMapping.BadRequest("Name the plugins, each with a name and an origin.")
+                : EndpointMapping.Ok(svc.GetPluginsIndexing(plugins)))
+            .WithName("GetNamedPluginsIndexing")
+            .WithTags(Tag)
+            .WithDescription("GET /plugins/indexing for only the plugins named, each by name and origin: a cost that follows the plugins named.")
+            .Produces<IReadOnlyList<IndexOfPlugin>>()
+            .ProducesProblem(400)
             .ProducesProblem(503);
 
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
@@ -555,7 +566,7 @@ internal sealed record MoveLastWrittenRequest(string Origin, string Name, string
 
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
 
-internal sealed record PluginFactsRequest(IReadOnlyList<PluginAddress> Plugins);
+internal sealed record NamedPluginsRequest(IReadOnlyList<PluginAddress> Plugins);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

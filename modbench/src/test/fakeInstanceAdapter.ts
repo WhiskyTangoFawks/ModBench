@@ -455,6 +455,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     dataFileChecksum: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.checksum }),
     dataFileVersion: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.version }),
     dataFileReadable: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.readable === true }),
+    dataFilesTrusted: (read) => read(),
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
       return write({ verb: 'changeModOrder', profile, changes }, () => {

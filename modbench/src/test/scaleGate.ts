@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { Instance, type InstanceSubscriber } from '../instanceLoader/instance';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture, recordTypeCountFixture } from '../client/test/fixtures';
-import { holdsLoadOrder } from '../client/test/says';
+import { changeNamesPlugin, holdsLoadOrder } from '../client/test/says';
 import { ModListProvider } from '../mods/ModListProvider';
 import { OpenRows } from '../mods/openRows';
 import { registerModDecorations } from '../mods/modDecorations';
@@ -17,7 +17,7 @@ import { registerConflictTable } from '../mods/conflictTableEditor';
 import { modSyncOn } from '../mods/modSync';
 import { pluginSyncOn } from '../plugins/pluginSync';
 import { modSyncOver } from '../modCommands/modCommands';
-import { pluginSyncOver } from '../pluginCommands/plugins';
+import { fileReadsOver, pluginSyncOver } from '../pluginCommands/plugins';
 import { pluginsTreeOver } from '../plugins/test/pluginsTreeOver';
 import { RecordBrowser } from '../plugins/RecordBrowser';
 import { RecordDecorationProvider } from '../plugins/RecordDecorationProvider';
@@ -38,25 +38,28 @@ import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
 export interface Cost {
   /** The file system calls from the gesture until its value lands, or until it settles when none lands; its own writes too. */
   readonly read: number;
-  /** The objects the value holds that the value before it did not. */
+  /** The objects the value and the Plugins view's facts hold that they did not before. */
   readonly derived: number;
   /** The subscribers called. */
   readonly subscribers: number;
-  /** The calls to mEdit, until the gesture settles. */
+  /** The calls to mEdit, and each entry their answers hold, until the gesture settles. */
   readonly mEdit: number;
   /** The rows the views are asked for, and the decorations each row is asked for. */
   readonly views: number;
+  /** The file system calls from the value landing until the gesture settles: what follows it reads. */
+  readonly settling: number;
 }
 
 const quiet = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const modName = (n: number): string => `Mod ${String(n).padStart(3, '0')}`;
 
-async function syntheticInstance(mods: number): Promise<string> {
+async function syntheticInstance(mods: number, userlist = ''): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'scale-gate-'));
   const names = Array.from({ length: mods }, (_, n) => modName(n));
   await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
   await mkdir(join(root, 'overwrite'));
   await mkdir(join(root, 'Game', 'Data'), { recursive: true });
+  await writeFile(join(root, 'userlist.yaml'), userlist);
   await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n');
   await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), names.reduceRight((text, name) => setEnabledInText(insertModAtWinningEnd(text, name), name, true), ''));
   await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), pluginsTextOf(names.map((name) => ({ name: `${name}.esp`, enabled: true }))));
@@ -71,7 +74,25 @@ async function syntheticInstance(mods: number): Promise<string> {
   return root;
 }
 
-const newObjects = (known: ReadonlySet<object>, after: unknown): number => [...reachableObjects(after)].filter((object) => !known.has(object)).length;
+// The client, and how many entries its answers have held so far.
+function answersCounted(client: InMemoryMEditClient): { counted: InMemoryMEditClient; answered: () => number } {
+  let answered = 0;
+  const counted = new Proxy(client, {
+    get(target, key) {
+      const held: unknown = Reflect.get(target, key, target);
+      if (typeof held !== 'function') return held;
+      return (...args: unknown[]): unknown => {
+        const answer: unknown = Reflect.apply(held, target, args);
+        if (answer instanceof Promise) void answer.then((value: unknown) => { if (Array.isArray(value)) answered += value.length; }, () => undefined);
+        return answer;
+      };
+    },
+  });
+  return { counted, answered: () => answered };
+}
+
+const newObjects = (known: ReadonlySet<object>, ...roots: unknown[]): number =>
+  new Set(roots.flatMap((root) => [...reachableObjects(root)]).filter((object) => !known.has(object))).size;
 
 type Tree = Pick<vscode.TreeDataProvider<unknown>, 'getChildren' | 'getTreeItem'> & {
   readonly onDidChangeTreeData: vscode.Event<unknown>;
@@ -202,7 +223,9 @@ export interface Gesture {
   readonly name: string;
   /** The view the gesture opens, closed until it does. */
   readonly opens?: ViewName;
-  make(at: { root: string; instance: Pick<Instance, 'refresh'>; views: Readonly<Record<ViewName, View>> }): Promise<number>;
+  /** The instance's own sorting rules. */
+  readonly userlist?: string;
+  make(at: { root: string; instance: Pick<Instance, 'refresh'>; views: Readonly<Record<ViewName, View>>; client: InMemoryMEditClient }): Promise<number>;
 }
 
 export const A_NEW_LOOSE_FILE: Gesture = {
@@ -212,6 +235,32 @@ export const A_NEW_LOOSE_FILE: Gesture = {
     await writeFile(file, 'changed');
     await instance.refresh([file]);
     return 0;
+  },
+};
+
+export const A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE: Gesture = {
+  ...A_NEW_LOOSE_FILE,
+  name: 'a new loose file in one mod, under a rule on every plugin that reads another file',
+  userlist: "plugins:\n  - name: 'Mod \\d+\\.esp'\n    msg:\n      - type: warn\n        content: 'It needs its mesh.'\n        condition: 'not file(\"Meshes/x.nif\")'\n",
+};
+
+export const A_FILE_A_RULE_READS_REWRITTEN: Gesture = {
+  name: 'a file a rule reads rewritten in place, under a rule that checksums every plugin',
+  userlist: "plugins:\n  - name: 'Mod \\d+\\.esp'\n    dirty: [{crc: 0xDEADBEEF, util: x}]\n"
+    + "  - name: 'Mod 000.esp'\n    msg: [{type: warn, content: 'Its texture changed.', condition: 'checksum(\"textures/Mod 000/a.dds\", 5E75228B)'}]\n",
+  async make({ root, instance }) {
+    const file = join(root, 'mods', modName(0), 'textures', modName(0), 'a.dds');
+    await writeFile(file, 'rewritten');
+    await instance.refresh([file]);
+    return 0;
+  },
+};
+
+export const A_RECORD_WRITTEN: Gesture = {
+  name: 'a record written into one plugin, which mEdit says changed',
+  make({ client }) {
+    changeNamesPlugin(client, { name: `${modName(0)}.esp`, origin: modName(0) });
+    return Promise.resolve(0);
   },
 };
 
@@ -247,12 +296,13 @@ export const IN_PLUGINS = gesturesIn('Plugins', `${modName(0)}.esp`);
 export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   readonly shown: number; readonly derivedIn: Readonly<Record<string, number>>; readonly viewsIn: Readonly<Shown>;
 }> {
-  const root = await syntheticInstance(mods);
+  const root = await syntheticInstance(mods, gesture.userlist);
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
   client.setQueryAnswer('getDiagnoses', []);
-  const instance = new Instance({ adapter, gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: quiet, medit: client, workspace: fakeWorkspace() });
+  const { counted, answered } = answersCounted(client);
+  const instance = new Instance({ adapter, gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: quiet, medit: counted, workspace: fakeWorkspace() });
   const landings: number[] = [];
   const landing: InstanceSubscriber = () => { landings.push(fileSystemCalls.count); };
   const registering = vi.spyOn(vscode.window, 'registerFileDecorationProvider');
@@ -270,8 +320,8 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const conflictTable = registerConflictTable(instance, () => Promise.resolve([]), vscode.Uri.file(root), () => [], recordingReporter(), settings);
   const table = conflictTableOf(editors.mock.calls, modName(1));
   editors.mockRestore();
-  const records = new RecordBrowser(client);
-  const pluginsTree = pluginsTreeOver(instance, { client, records });
+  const records = new RecordBrowser(counted);
+  const pluginsTree = pluginsTreeOver(instance, { client: counted, records, fileReads: fileReadsOver(adapter, () => instance.value.files) });
   const recordDecorations = new RecordDecorationProvider(records, () => pluginsTree.lockedRowUris());
   const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsTree, recordDecorations];
   const host = viewHost({ Mods: modsTree, Plugins: pluginsTree }, [
@@ -280,10 +330,14 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   ]);
   registering.mockRestore();
   const modSyncing = modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: quiet });
-  const pluginSyncing = pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter, client), channel: quiet });
+  const pluginSyncing = pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter, counted), channel: quiet });
   let subscribers = 0;
   const outcomes = instance.onListenerOutcome(({ listener, during }) => { if (during === 'value' && listener !== landing) subscribers++; });
-  const settled = () => Promise.all([modSyncing.modSync.settled(), pluginSyncing.pluginSync.settled(), host.settled()]);
+  const indexChanges = client.onDidChange((change) => { pluginsTree.indexChanged(change); });
+  const settled = async () => {
+    await Promise.all([modSyncing.modSync.settled(), pluginSyncing.pluginSync.settled(), pluginsTree.facts.settled()]);
+    await host.settled();
+  };
   try {
     await instance.refresh();
     const { plugins } = instance.value;
@@ -293,26 +347,25 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     await pluginsTree.facts.reconciled([]);
     for (const [name, view] of Object.entries(host.views)) if (name !== gesture.opens) await view.open();
     await settled();
-    const before = instance.value;
+    const known = reachableObjects([instance.value, pluginsTree.facts.rows]);
     host.count();
     table.posted.splice(0);
     subscribers = 0;
     const start = fileSystemCalls.count;
-    const asked = client.calls.length;
+    const asked = client.calls.length + answered();
     const landed = landings.length;
 
-    const shown = await gesture.make({ root, instance, views: host.views });
+    const shown = await gesture.make({ root, instance, views: host.views, client });
     await settled();
 
     const viewsIn = { ...host.count(), Conflicts: table.posted.length };
-    const known = reachableObjects(before);
     const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
     return {
-      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value), derivedIn, subscribers, mEdit: client.calls.length - asked,
-      views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown,
+      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length + answered() - asked,
+      views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown, settling: landings[landed] === undefined ? 0 : fileSystemCalls.count - landings[landed],
     };
   } finally {
-    for (const disposable of [modSyncing, pluginSyncing, outcomes, host, ...owned, instance]) disposable.dispose();
+    for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });
   }
 }

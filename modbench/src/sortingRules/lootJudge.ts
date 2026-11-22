@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
+import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, isOneOf, pathsOf, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
 import { DEFAULT_GROUP, type CleaningData, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
@@ -236,16 +236,17 @@ export function judgeLoot(
   return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts, loadedWithNoLine)), ...judgeGroups(order, rules, partitionOf, loadedWithNoLine)];
 }
 
-/** The file reads `judgeLoot` needs of `order`: those of every condition on a rule of a plugin in it, and the
- *  checksum of each plugin that has cleaning data. */
-export function readsNamed(order: readonly PluginRef[], entries: readonly LootEntry[]): FileRead[] {
-  const reads = order.flatMap(({ filename }): FileRead[] => {
+/** What judging `order` against `entries` reads: each read its conditions and cleaning data need, and whether it reads a
+ *  file, relative to the Data folder, by presence, bytes or version. */
+export function judgingReads(order: readonly PluginRef[], entries: readonly LootEntry[]): { reads: FileRead[]; judges: (path: string) => boolean } {
+  const reads: FileRead[] = [];
+  const paths: string[] = [];
+  for (const { filename } of order) {
     const matching = entries.filter((entry) => entry.matches(filename));
-    const guarded = matching.flatMap(({ req, inc, after, msg, dirty }) => [...req, ...inc, ...after, ...msg, ...dirty]);
-    return [
-      ...guarded.flatMap(({ condition }) => (condition === undefined ? [] : readsOf(condition))),
-      ...matching.some(({ dirty }) => dirty.length > 0) ? [{ kind: 'checksum' as const, path: filename }] : [],
-    ];
-  });
-  return distinctReads(reads);
+    const conditions = matching.flatMap(({ req, inc, after, msg, dirty }) => [...req, ...inc, ...after, ...msg, ...dirty]).flatMap(({ condition }) => condition ?? []);
+    const cleaning = matching.some(({ dirty }) => dirty.length > 0) ? [filename] : [];
+    reads.push(...conditions.flatMap(readsOf), ...cleaning.map((path) => ({ kind: 'checksum' as const, path })));
+    paths.push(...matching.flatMap(({ req, inc }) => [...req, ...inc].map(({ name }) => name)), ...conditions.flatMap(pathsOf), ...cleaning);
+  }
+  return { reads: distinctReads(reads), judges: isOneOf(paths) };
 }

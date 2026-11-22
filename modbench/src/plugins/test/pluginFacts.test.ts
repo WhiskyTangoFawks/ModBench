@@ -419,6 +419,89 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
   });
 });
 
+describe('PluginFacts — an answer for named plugins changes only theirs (ADR-0029, Consequences, bullet 5)', () => {
+  const laterFailing = (name: string) => held({ name, laterReadFailure: [{ sourceRelativePath: `${name}/X.json`, message: 'bad' }] });
+  const sourceGone = (name: string) => held({ name, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: false } });
+
+  it('drops the later read failure of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([laterFailing('A.esp'), laterFailing('B.esp')]);
+
+    facts.refreshed([], [A]);
+
+    expect(facts.readFailureMessage()).toBe('Showing the last good read: "B.esp" (SomeMod): B.esp/X.json: bad');
+  });
+
+  it('keeps the order of the later read failures through an answer for a named plugin', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([laterFailing('A.esp'), laterFailing('B.esp')]);
+
+    facts.refreshed([held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Y.json', message: 'worse' }] })], [A]);
+
+    expect(facts.readFailureMessage()).toBe('Showing the last good read: "A.esp" (SomeMod): A.esp/Y.json: worse; "B.esp" (SomeMod): B.esp/X.json: bad');
+  });
+
+  it('drops the unreadable source of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([sourceGone('A.esp'), sourceGone('B.esp')]);
+
+    facts.refreshed([], [A]);
+
+    expect(facts.problems().sourceUnreadable.map(({ plugin }) => plugin)).toEqual(['B.esp']);
+  });
+
+  it('drops the changed outside standing of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
+    const facts = new PluginFacts();
+    facts.changedOutsideAre([A, B]);
+
+    facts.changedOutsideAre([], [A]);
+
+    expect(facts.problems().changedOutside.map(({ plugin }) => plugin)).toEqual(['B.esp']);
+  });
+
+  it('takes the masters of a named plugin and keeps the others\'', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([held({ masters: ['X.esm'] }), held({ name: 'B.esp', masters: ['Y.esm'] })]);
+
+    facts.refreshed([held({ masters: ['Z.esm'] })], [A]);
+
+    expect([facts.mastersOf(A), facts.mastersOf(B)]).toEqual([['Z.esm'], ['Y.esm']]);
+  });
+
+  it('says no record matches once the last plugin with matches has none', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([held({ hasMatchingRecords: true }), held({ name: 'B.esp', hasMatchingRecords: false })]);
+
+    facts.refreshed([held({ hasMatchingRecords: false })], [A]);
+
+    expect(facts.noRecordMatchMessage('weapon')).toBe('No records match weapon.');
+  });
+
+  it.each([
+    ['its masters change', [held({ masters: ['X.esm'] })], true],
+    ['mEdit\'s answer leaves it out', [], true],
+    ['only its matches change', [held({ hasMatchingRecords: false })], false],
+  ])('says what the sorting rules judge changed when %s: %s', (_label, answer, changed) => {
+    const facts = new PluginFacts();
+    facts.refreshed([held(), held({ name: 'B.esp' })]);
+
+    expect(facts.refreshed(answer, [A])).toBe(changed);
+  });
+
+  it('judges a rule\'s condition on an inactive named plugin by its new answer', () => {
+    const C = { name: 'C.esp', origin: 'SomeMod' };
+    const loot = masterlistOf("plugins:\n  - name: 'A.esp'\n    after: [{name: B.esp, condition: 'is_master(\"C.esp\")'}]\n");
+    const facts = new PluginFacts();
+    facts.reconciled([held(), held({ name: 'B.esp' }), held({ name: 'C.esp' })], [], [A, B], [A, B], loot);
+    const brokenBefore = facts.brokenRules().map(({ rule }) => rule);
+
+    facts.refreshed([held({ name: 'C.esp', isMaster: true })], [C]);
+    facts.rejudged(loot);
+
+    expect([brokenBefore, facts.brokenRules().map(({ rule }) => rule)]).toEqual([[], ['loadAfter']]);
+  });
+});
+
 const heldElsewhere = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
 const failedIndex = { kind: 'failed', message: 'the record index threw' } as const;
 const B = { name: 'B.esp', origin: 'SomeMod' };

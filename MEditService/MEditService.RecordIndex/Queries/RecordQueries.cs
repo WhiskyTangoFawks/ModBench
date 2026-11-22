@@ -579,8 +579,8 @@ internal sealed class RecordQueries(
             return Dependants.Of(plugin, _loadOrder.Require(), opened);
         });
 
-    public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing() =>
-        _answer.Of(() => (IReadOnlyList<IndexOfPlugin>)[.. _index.IndexOfPlugins().Select(plugin => plugin with { ChangedOutside = _changedOutside.Holds(new PluginAddress(plugin.Name, plugin.Origin)) })]);
+    public Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing(IReadOnlyCollection<PluginAddress>? plugins) =>
+        _answer.Of(() => (IReadOnlyList<IndexOfPlugin>)[.. _index.IndexOfPlugins(plugins).Select(plugin => plugin with { ChangedOutside = _changedOutside.Holds(new PluginAddress(plugin.Name, plugin.Origin)) })]);
 
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
         _answer.Of(() => _index.IndexedState(plugin));

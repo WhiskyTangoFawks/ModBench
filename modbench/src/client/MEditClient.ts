@@ -431,7 +431,7 @@ export interface MEditClient {
   clearFilter(): Promise<string | null>;
   getActiveFilter(token?: ReadCancellation): Promise<RecordFilter | null | ReadFailed>;
   /** Every plugin of the load order held, and whether the record index holds its rows yet, or failed to read it. */
-  getPluginsIndexing(token?: ReadCancellation): Promise<IndexOfPlugin[] | ReadFailed>;
+  getPluginsIndexing(plugins?: readonly PluginAddress[], token?: ReadCancellation): Promise<IndexOfPlugin[] | ReadFailed>;
   /** Null when mEdit did not clear the filter. */
   getFilterCleared(token?: ReadCancellation): Promise<FilterCleared | null | ReadFailed>;
 

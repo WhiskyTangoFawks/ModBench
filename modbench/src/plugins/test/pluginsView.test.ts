@@ -171,7 +171,7 @@ function pluginsView(
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
     instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
-    pluginSync, modStatuses: NO_MOD_STATUSES, fileReads: { checksum: () => Promise.resolve({ kind: 'read', value: undefined }), version: () => Promise.resolve({ kind: 'read', value: undefined }), readable: () => Promise.resolve({ kind: 'read', value: false }) },
+    pluginSync, modStatuses: NO_MOD_STATUSES, fileReads: { checksum: () => Promise.resolve({ kind: 'read', value: undefined }), version: () => Promise.resolve({ kind: 'read', value: undefined }), readable: () => Promise.resolve({ kind: 'read', value: false }), trusting: (read) => read() },
     channel: silentChannel,
     log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },

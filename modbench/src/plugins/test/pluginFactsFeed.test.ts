@@ -10,6 +10,7 @@ vi.mock('vscode', () => ({ EventEmitter }));
 import { PluginFactsFeed, type PluginFactsFeedDeps } from '../pluginFactsFeed';
 import { rulesReader, type SortingRuleFiles } from '../../sortingRules/lootMetadata';
 import { holdsLoadOrder, holdsNoLoadOrder } from '../../client/test/says';
+import type { NamedPlugins } from '../pluginAddress';
 
 const USERLIST = '/instance/userlist.yaml';
 const filesWith = (masterlist: string, userlist = ''): SortingRuleFiles => ({
@@ -55,7 +56,7 @@ interface FeedOptions {
   readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   readonly rules?: () => ReturnType<PluginFactsFeedDeps['rules']>;
   readonly present?: readonly string[];
-  readonly asked?: (reads: unknown) => void;
+  readonly asked?: (reads: unknown, trusted: boolean) => void;
   readonly gates?: readonly Promise<undefined>[];
   readonly holdsALoadOrder?: boolean;
 }
@@ -69,6 +70,8 @@ function feedOver({
   if (holdsALoadOrder) holdsLoadOrder(client);
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
+  const changedOutsideOf = watched<NamedPlugins>();
+  const sourceUnreadableOf = watched<NamedPlugins>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
   const sortingErrors = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const sortingWarnings = watched<readonly { plugin: string; origin: string; text: string }[]>();
@@ -77,23 +80,23 @@ function feedOver({
   let calls = 0;
   const feed = new PluginFactsFeed({
     client, shownPlugins, activePlugins, rules, lines: activePlugins,
-    fileFacts: async (reads) => {
-      asked?.(reads);
+    fileFacts: async (reads, trusted) => {
+      asked?.(reads, trusted);
       await gates[calls++];
       return { files: () => ({ names: present, complete: true }), isPresent: (path) => (present.includes(path) ? 'present' : 'absent'), answer: () => ({ kind: 'read', value: undefined }) };
     },
     publishSortingInfo: sortingInfo.push,
     publishRuleFiles: ruleFiles.push,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,
-    publishChangedOutside: changedOutside.push,
+    publishChangedOutside: (warnings, named) => { changedOutside.push(warnings); changedOutsideOf.push(named); },
     publishFailedToRead: () => undefined,
-    publishSourceUnreadable: sourceUnreadable.push,
+    publishSourceUnreadable: (warnings, named) => { sourceUnreadable.push(warnings); sourceUnreadableOf.push(named); },
     publishSortingErrors: sortingErrors.push,
     publishSortingWarnings: sortingWarnings.push,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
-  return { feed, client, diagnoses, changedOutside, sourceUnreadable, sortingErrors, sortingWarnings, sortingInfo, ruleFiles, changes };
+  return { feed, client, diagnoses, changedOutside, changedOutsideOf, sourceUnreadable, sourceUnreadableOf, sortingErrors, sortingWarnings, sortingInfo, ruleFiles, changes };
 }
 
 async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
@@ -313,6 +316,34 @@ describe('PluginFactsFeed', () => {
       await feed.refresh([A]);
 
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
+    });
+
+    it('judges again from the reads it kept, trusting them, and checks each file at a reconcile', async () => {
+      const asked = vi.fn();
+      const { feed, client } = feedOver({ activePlugins: () => [A], asked });
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+
+      await feed.rejudge();
+
+      expect(asked.mock.calls.map(([, trusted]: unknown[]) => trusted)).toEqual([false, true]);
+    });
+
+    it('reads and publishes again only the changed outside standing and unreadable source of the plugins named', async () => {
+      const { feed, client, changedOutside, changedOutsideOf, sourceUnreadable, sourceUnreadableOf } = feedOver({ shownPlugins: () => [A, B] });
+      const unreadable = { pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } };
+      client.setQueryAnswer('getPlugins', [held(unreadable), held({ name: 'B.esp', ...unreadable })]);
+      client.setQueryAnswer('getPluginsIndexing', [A, B].map((plugin) => ({ ...plugin, state: 'Indexed' as const, changedOutside: true })));
+      await feed.reconciled([]);
+      client.calls.length = 0;
+
+      await feed.refresh([A]);
+
+      const names = (problems: readonly { plugin: string }[] | undefined) => problems?.map(({ plugin }) => plugin);
+      expect([
+        client.calls.filter(({ method }) => method === 'getPluginsIndexing').map(({ args }) => args),
+        names(changedOutside.items.at(-1)), changedOutsideOf.items.at(-1), names(sourceUnreadable.items.at(-1)), sourceUnreadableOf.items.at(-1),
+      ]).toEqual([[[[A]]], ['A.esp'], [A], ['A.esp'], [A]]);
     });
 
     it('asks again only for the plugins named, and keeps what it holds of the others', async () => {

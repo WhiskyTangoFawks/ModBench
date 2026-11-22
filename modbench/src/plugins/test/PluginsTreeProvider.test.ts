@@ -3,6 +3,9 @@ import type { LastModStatuses, PluginsDrop } from '../../pluginCommands/plugins'
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
+import { fileIn } from '../../test/fakeInstanceAdapter';
+import type { OriginFile } from '../../instanceAdapter/instanceAdapter';
 import {
   type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type InteriorCellBlock, type RecordSummary,
   type CellSummary, type ChildRecordSummary,
@@ -270,6 +273,19 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
+  it('says the message line again once a read lands after a failed one, though it finds nothing new', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
+    const { tree } = makeTree([], { instance });
+    await tree.getChildren();
+    instance.fail('EACCES plugins.txt');
+    const fired: unknown[] = [];
+    tree.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.publish(instance.value);
+
+    expect([tree.viewMessage(), fired]).toEqual([undefined, [undefined]]);
+  });
+
   it('says the later read that failed on the message line, and not once the next read answers', async () => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
     await h.tree.getChildren();
@@ -413,7 +429,7 @@ describe('PluginsTreeProvider — name filter', () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
     const [held] = expectInstancesOf(await tree.getChildren(), PluginNode);
-    await instance.refresh();
+    instance.publish({ ...instance.value, plugins: [...instance.value.plugins] });
 
     const shown = tree.shownRow(expectInstanceOf(held, PluginNode));
 
@@ -1302,6 +1318,61 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     await vi.waitFor(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
   });
 
+  const needsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n' } } as const;
+
+  it.each([
+    ['a file a rule reads', 'Meshes/X.nif', 1],
+    ['a file no rule reads', 'Textures/y.dds', 0],
+  ])('judges the last reconcile\'s order again when a mod gains %s, and only then', async (_file, path, judgedAgain) => {
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh });
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.length;
+
+    instance.publish({ ...instance.value, filesByMod: new Map([['SomeMod', [fileIn('/mods/SomeMod', path)]]]) }, { named: [`/mods/SomeMod/${path}`], disk: false });
+    await h.tree.facts.settled();
+
+    expect(errors.length - before).toBe(judgedAgain);
+  });
+
+  it.each([
+    ['a file a rule reads the bytes of', '/mods/SomeMod/Meshes/x.nif', 1],
+    ['a game file a rule reads the bytes of', '/game/Data/Meshes/z.nif', 1],
+    ['a file no rule reads', '/mods/SomeMod/Meshes/y.nif', 0],
+  ])('judges the last reconcile\'s order again when %s is rewritten in place, and only then', async (_file, path, judgedAgain) => {
+    const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF) or checksum(\"Meshes/z.nif\", DEADBEEF)'}]\n" } } as const;
+    const files = new FileConflictLookup();
+    for (const mesh of ['Meshes/x.nif', 'Meshes/y.nif']) files.set({ relativePath: mesh, winner: `/mods/SomeMod/${mesh}`, winnerOrigin: { kind: 'mod', name: 'SomeMod' }, providers: [{ kind: 'mod', name: 'SomeMod' }] });
+    const dataFolderFiles = { kind: 'listed', files: new Map([['meshes/z.nif', fileIn('/game/Data', 'Meshes/z.nif')]]) } as const;
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: checksumsMesh, files, dataFolderFiles });
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.length;
+
+    await instance.refresh([path]);
+    await h.tree.facts.settled();
+
+    expect(errors.length - before).toBe(judgedAgain);
+  });
+
+  it('judges the last reconcile\'s order again when only the files present change', async () => {
+    const listed = (files: [string, OriginFile][]) => ({
+      ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh,
+      dataFolderPlugins: { kind: 'listed', names: new Set<string>() } as const, dataFolderFiles: { kind: 'listed', files: new Map(files) } as const,
+    });
+    const instance = new FakeInstance(listed([]));
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.at(-1)?.length;
+
+    instance.publish(listed([['meshes/x.nif', fileIn('/game/Data', 'Meshes/x.nif')]]));
+
+    await vi.waitFor(() => expect([before, errors.at(-1)]).toEqual([1, []]));
+  });
+
   it('puts no rows over a record filter that matched nothing', async () => {
     const instance = new FakeInstance(valueOf([A_ROW()]));
     const h = makeTree([], { instance });
@@ -1475,9 +1546,19 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const fired: unknown[] = [];
     tree.onDidChangeTreeData((e) => fired.push(e));
 
-    instance.publish(instance.value);
+    instance.publish({ ...instance.value, plugins: [...instance.value.plugins] });
 
     expect(fired).toEqual([undefined]);
+  });
+
+  it('draws no row again when only the files present change', () => {
+    const { tree, instance } = makeTree([A_ROW()]);
+    const fired: unknown[] = [];
+    tree.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.publish({ ...instance.value, files: new FileConflictLookup(), dataFolderFiles: { kind: 'unresolved' } });
+
+    expect(fired).toEqual([]);
   });
 });
 

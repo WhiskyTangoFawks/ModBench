@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { leveledLog } from '../../test/leveledLog';
 import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
+import type { PluginAddress } from '../../wire/pluginAddress';
 import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import { answerOf as read, isReadFailed } from '../../wire/readFailed';
@@ -964,19 +965,22 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   });
 });
 
-describe('HttpMEditClient — getPlugins', () => {
+describe.each([
+  ['getPlugins', (c: MEditClient, asked?: readonly PluginAddress[]) => c.getPlugins(asked), '/plugins/facts', '/plugins'],
+  ['getPluginsIndexing', (c: MEditClient, asked?: readonly PluginAddress[]) => c.getPluginsIndexing(asked), '/plugins/indexing', '/plugins/indexing'],
+] as const)('HttpMEditClient — %s', (_read, asking, namedPath, everyPath) => {
   it('asks for only the plugins named, each by name and origin', async () => {
     const asked = [{ name: 'Shared.esp', origin: 'ModB' }];
-    const { result, request } = await exchange((c) => c.getPlugins(asked), () => Promise.resolve(jsonResponse(200, [])));
+    const { result, request } = await exchange((c) => asking(c, asked), () => Promise.resolve(jsonResponse(200, [])));
 
     expect(result).toEqual([]);
-    expect([request.method, new URL(request.url).pathname, await request.json()]).toEqual(['POST', '/plugins/facts', { plugins: asked }]);
+    expect([request.method, new URL(request.url).pathname, await request.json()]).toEqual(['POST', namedPath, { plugins: asked }]);
   });
 
   it('asks for every plugin when none are named', async () => {
-    const { request } = await exchange((c) => c.getPlugins(), () => Promise.resolve(jsonResponse(200, [])));
+    const { request } = await exchange((c) => asking(c), () => Promise.resolve(jsonResponse(200, [])));
 
-    expect([request.method, new URL(request.url).pathname]).toEqual(['GET', '/plugins']);
+    expect([request.method, new URL(request.url).pathname]).toEqual(['GET', everyPath]);
   });
 });
 

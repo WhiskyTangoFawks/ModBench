@@ -248,13 +248,14 @@ async function syncPlugins(adapter: InstanceAdapter, masters: PluginMasters): Pr
 export type PluginSyncRun = () => Promise<PluginSyncResult>;
 
 /** The Instance adapter's file reads, each at the file mod order provides, else the game folder's. */
-export function fileReadsOver(adapter: Pick<InstanceAdapter, 'dataFileChecksum' | 'dataFileVersion' | 'dataFileReadable'>, winners: () => { get: (path: string) => { winner: string } | undefined }): FileReads {
+export function fileReadsOver(adapter: Pick<InstanceAdapter, 'dataFileChecksum' | 'dataFileVersion' | 'dataFileReadable' | 'dataFilesTrusted'>, winners: () => { get: (path: string) => { winner: string } | undefined }): FileReads {
   const forward = (path: string): string => path.replace(/\\/g, '/');
   const winnerOf = (path: string): string | undefined => winners().get(path)?.winner;
   return {
     checksum: (path) => adapter.dataFileChecksum(forward(path), winnerOf(forward(path))),
     version: (path, field) => adapter.dataFileVersion(forward(path), winnerOf(forward(path)), field),
     readable: (path) => adapter.dataFileReadable(forward(path), winnerOf(forward(path))),
+    trusting: (read) => adapter.dataFilesTrusted(read),
   };
 }
 
