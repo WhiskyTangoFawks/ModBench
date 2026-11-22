@@ -56,7 +56,7 @@ interface FeedOptions {
   readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   readonly rules?: () => ReturnType<PluginFactsFeedDeps['rules']>;
   readonly present?: readonly string[];
-  readonly asked?: (reads: unknown) => void;
+  readonly asked?: (reads: unknown, trusted: boolean) => void;
   readonly gates?: readonly Promise<undefined>[];
   readonly holdsALoadOrder?: boolean;
 }
@@ -80,8 +80,8 @@ function feedOver({
   let calls = 0;
   const feed = new PluginFactsFeed({
     client, shownPlugins, activePlugins, rules, lines: activePlugins,
-    fileFacts: async (reads) => {
-      asked?.(reads);
+    fileFacts: async (reads, trusted) => {
+      asked?.(reads, trusted);
       await gates[calls++];
       return { files: () => ({ names: present, complete: true }), isPresent: (path) => (present.includes(path) ? 'present' : 'absent'), answer: () => ({ kind: 'read', value: undefined }) };
     },
@@ -316,6 +316,17 @@ describe('PluginFactsFeed', () => {
       await feed.refresh([A]);
 
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
+    });
+
+    it('judges again from the reads it kept, trusting them, and checks each file at a reconcile', async () => {
+      const asked = vi.fn();
+      const { feed, client } = feedOver({ activePlugins: () => [A], asked });
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+
+      await feed.rejudge();
+
+      expect(asked.mock.calls.map(([, trusted]: unknown[]) => trusted)).toEqual([false, true]);
     });
 
     it('reads and publishes again only the changed outside standing and unreadable source of the plugins named', async () => {

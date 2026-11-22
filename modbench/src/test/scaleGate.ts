@@ -17,7 +17,7 @@ import { registerConflictTable } from '../mods/conflictTableEditor';
 import { modSyncOn } from '../mods/modSync';
 import { pluginSyncOn } from '../plugins/pluginSync';
 import { modSyncOver } from '../modCommands/modCommands';
-import { pluginSyncOver } from '../pluginCommands/plugins';
+import { fileReadsOver, pluginSyncOver } from '../pluginCommands/plugins';
 import { pluginsTreeOver } from '../plugins/test/pluginsTreeOver';
 import { RecordBrowser } from '../plugins/RecordBrowser';
 import { RecordDecorationProvider } from '../plugins/RecordDecorationProvider';
@@ -46,6 +46,8 @@ export interface Cost {
   readonly mEdit: number;
   /** The rows the views are asked for, and the decorations each row is asked for. */
   readonly views: number;
+  /** The file system calls from the value landing until the gesture settles: what follows it reads. */
+  readonly settling: number;
 }
 
 const quiet = { info: () => undefined, warn: () => undefined, error: () => undefined };
@@ -242,6 +244,18 @@ export const A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE: Gesture = {
   userlist: "plugins:\n  - name: 'Mod \\d+\\.esp'\n    msg:\n      - type: warn\n        content: 'It needs its mesh.'\n        condition: 'not file(\"Meshes/x.nif\")'\n",
 };
 
+export const A_FILE_A_RULE_READS_REWRITTEN: Gesture = {
+  name: 'a file a rule reads rewritten in place, under a rule that checksums every plugin',
+  userlist: "plugins:\n  - name: 'Mod \\d+\\.esp'\n    dirty: [{crc: 0xDEADBEEF, util: x}]\n"
+    + "  - name: 'Mod 000.esp'\n    msg: [{type: warn, content: 'Its texture changed.', condition: 'checksum(\"textures/Mod 000/a.dds\", 5E75228B)'}]\n",
+  async make({ root, instance }) {
+    const file = join(root, 'mods', modName(0), 'textures', modName(0), 'a.dds');
+    await writeFile(file, 'rewritten');
+    await instance.refresh([file]);
+    return 0;
+  },
+};
+
 export const A_RECORD_WRITTEN: Gesture = {
   name: 'a record written into one plugin, which mEdit says changed',
   make({ client }) {
@@ -307,7 +321,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const table = conflictTableOf(editors.mock.calls, modName(1));
   editors.mockRestore();
   const records = new RecordBrowser(counted);
-  const pluginsTree = pluginsTreeOver(instance, { client: counted, records });
+  const pluginsTree = pluginsTreeOver(instance, { client: counted, records, fileReads: fileReadsOver(adapter, () => instance.value.files) });
   const recordDecorations = new RecordDecorationProvider(records, () => pluginsTree.lockedRowUris());
   const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsTree, recordDecorations];
   const host = viewHost({ Mods: modsTree, Plugins: pluginsTree }, [
@@ -348,7 +362,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
     return {
       read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length + answered() - asked,
-      views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown,
+      views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown, settling: landings[landed] === undefined ? 0 : fileSystemCalls.count - landings[landed],
     };
   } finally {
     for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...owned, instance]) disposable.dispose();

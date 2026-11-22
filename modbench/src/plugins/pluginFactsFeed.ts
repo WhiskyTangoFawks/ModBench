@@ -6,7 +6,7 @@ import type { NamedPlugins } from './pluginAddress';
 import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
-import { filesJudged, readsNamed } from '../sortingRules/lootJudge';
+import { judgingReads } from '../sortingRules/lootJudge';
 import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
@@ -24,7 +24,8 @@ export interface PluginFactsFeedDeps {
   /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
   rules: () => ReadRules;
   /** What the instance says of the files the reads name: the Data folder, and the Instance adapter's reads. */
-  fileFacts: (reads: readonly FileRead[]) => Promise<FileFacts>;
+  /** `trusted`: answering from what was read before, as `FileReads.trusting` does. */
+  fileFacts: (reads: readonly FileRead[], trusted: boolean) => Promise<FileFacts>;
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
@@ -114,10 +115,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const active = this.deps.activePlugins();
-    const loot = await this.lootRules(active);
+    const { loot, judges } = await this.lootRules(active, false);
     if (generation !== this.generation) return undefined;
     const rowsGone = this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
-    this.judgedFiles = filesJudged(refsOf(active), loot.entries);
+    this.judgedFiles = judges;
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
@@ -146,12 +147,14 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishRuleFiles(ruleFileDiagnostics(files, problems, this.facts.brokenRules()));
   }
 
-  // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing.
-  private async lootRules(active: readonly PluginAddress[]): Promise<LootInput> {
+  // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing. A judging
+  // again trusts what was read before; a reconcile checks each file, the ones no change names among them.
+  private async lootRules(active: readonly PluginAddress[], trusted: boolean): Promise<{ loot: LootInput; judges: (path: string) => boolean }> {
     for (;;) {
       const read = this.deps.rules();
-      const files = await this.deps.fileFacts(readsNamed(refsOf(active), read.entries));
-      if (read === this.deps.rules()) return { entries: read.entries, groups: read.groups, files };
+      const { reads, judges } = judgingReads(refsOf(active), read.entries);
+      const files = await this.deps.fileFacts(reads, trusted);
+      if (read === this.deps.rules()) return { loot: { entries: read.entries, groups: read.groups, files }, judges };
     }
   }
 
@@ -171,10 +174,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
-    const loot = await this.lootRules(judged);
+    const { loot, judges } = await this.lootRules(judged, true);
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
     const altered = this.facts.rejudged(loot);
-    this.judgedFiles = filesJudged(refsOf(judged), loot.entries);
+    this.judgedFiles = judges;
     this.publishSorting();
     this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }

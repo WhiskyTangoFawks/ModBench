@@ -37,6 +37,8 @@ export interface FileReads {
   checksum: (path: string) => Promise<FileAnswer<number | undefined>>;
   version: (path: string, field: 'file' | 'product') => Promise<FileAnswer<string | undefined>>;
   readable: (path: string) => Promise<FileAnswer<boolean>>;
+  /** Runs `read` answering from what was read before: a file is read again only where a change named it or the disk was checked. */
+  trusting: <T>(read: () => Promise<T>) => Promise<T>;
 }
 
 const readKey = ({ kind, path }: FileRead): string => `${kind}\0${path}`;
@@ -46,7 +48,7 @@ export function distinctReads(reads: readonly FileRead[]): FileRead[] {
   return reads.filter((read, at) => reads.findIndex((other) => readKey(other) === readKey(read)) === at);
 }
 
-function performed({ kind, path }: FileRead, reads: FileReads): Promise<FileAnswer<ReadValue>> {
+function performed({ kind, path }: FileRead, reads: Omit<FileReads, 'trusting'>): Promise<FileAnswer<ReadValue>> {
   switch (kind) {
     case 'checksum': return reads.checksum(path);
     case 'version': return reads.version(path, 'file');
@@ -58,7 +60,7 @@ function performed({ kind, path }: FileRead, reads: FileReads): Promise<FileAnsw
 /** The answers to `reads`, so that a condition is evaluated in one pass. A read that was not asked for is unreadable
  *  when a condition reaches it. */
 export async function readFileFacts(
-  reads: readonly FileRead[], source: FileReads, instance: Pick<ConditionFacts, 'files' | 'isPresent'>,
+  reads: readonly FileRead[], source: Omit<FileReads, 'trusting'>, instance: Pick<ConditionFacts, 'files' | 'isPresent'>,
 ): Promise<FileFacts> {
   const answers = new Map(await Promise.all(reads.map(async (read): Promise<[string, FileAnswer<ReadValue>]> =>
     [readKey(read), await performed(read, source)])));
@@ -329,40 +331,37 @@ export function evaluateCondition(condition: string, facts: ConditionFacts): Eva
   return parsed.kind === 'parsed' ? valueOf(parsed.node, facts) : parsed;
 }
 
-function readsIn(node: Node): FileRead[] {
+// Each function that reads the file its first argument names, by presence, bytes or version, with the reads of its bytes or
+// version it needs.
+const FILE_FUNCTIONS: ReadonlyMap<string, (path: string) => FileRead[]> = new Map<string, (path: string) => FileRead[]>([
+  ['file', (path) => (leavesData(path) && !REGEX_PATH.test(path) ? [{ kind: 'readable', path }] : [])],
+  ['many', () => []],
+  ['is_master', () => []],
+  ['readable', (path) => [{ kind: 'readable', path }]],
+  ['checksum', (path) => [{ kind: 'checksum', path }]],
+  ['version', (path) => (PLUGIN.test(path) ? [] : [{ kind: 'version', path }])],
+  ['product_version', (path) => [{ kind: 'productVersion', path }]],
+]);
+
+// Each call in `node` that reads a file, with the path it names.
+function filesIn(node: Node): { name: string; path: string }[] {
   switch (node.kind) {
-    case 'not': return readsIn(node.operand);
+    case 'not': return filesIn(node.operand);
     case 'and':
-    case 'or': return [...readsIn(node.left), ...readsIn(node.right)];
-    case 'call': break;
-  }
-  const path = node.args[0]?.kind === 'string' ? node.args[0].text : undefined;
-  if (path === undefined) return [];
-  switch (node.name) {
-    case 'file': return leavesData(path) && !REGEX_PATH.test(path) ? [{ kind: 'readable', path }] : [];
-    case 'readable': return [{ kind: 'readable', path }];
-    case 'checksum': return [{ kind: 'checksum', path }];
-    case 'version': return PLUGIN.test(path) ? [] : [{ kind: 'version', path }];
-    case 'product_version': return [{ kind: 'productVersion', path }];
-    default: return [];
+    case 'or': return [...filesIn(node.left), ...filesIn(node.right)];
+    case 'call': {
+      const path = node.args[0]?.kind === 'string' ? node.args[0].text : undefined;
+      return path !== undefined && FILE_FUNCTIONS.has(node.name) ? [{ name: node.name, path }] : [];
+    }
   }
 }
 
-const FILE_FUNCTIONS = new Set(['file', 'many', 'readable', 'checksum', 'version', 'product_version']);
-
-function pathsIn(node: Node): string[] {
-  switch (node.kind) {
-    case 'not': return pathsIn(node.operand);
-    case 'and':
-    case 'or': return [...pathsIn(node.left), ...pathsIn(node.right)];
-    case 'call': return FILE_FUNCTIONS.has(node.name) && node.args[0]?.kind === 'string' ? [node.args[0].text] : [];
-  }
-}
+const readsIn = (node: Node): FileRead[] => filesIn(node).flatMap(({ name, path }) => FILE_FUNCTIONS.get(name)?.(path) ?? []);
 
 /** The paths of the files `condition` reads, by presence, bytes or version; a path may hold a regular expression. */
 export function pathsOf(condition: string): string[] {
   const parsed = parse(condition);
-  return parsed.kind === 'parsed' ? pathsIn(parsed.node) : [];
+  return parsed.kind === 'parsed' ? filesIn(parsed.node).map(({ path }) => path) : [];
 }
 
 /** Whether a path relative to the Data folder is one of `paths`, as a condition matches a file. */

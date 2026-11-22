@@ -1330,7 +1330,28 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     await reconcile(h, [held('A.esp')]);
     const before = errors.length;
 
-    instance.publish({ ...instance.value, filesByMod: new Map([['SomeMod', [fileIn('/mods/SomeMod', path)]]]) });
+    instance.publish({ ...instance.value, filesByMod: new Map([['SomeMod', [fileIn('/mods/SomeMod', path)]]]) }, { named: [`/mods/SomeMod/${path}`], disk: false });
+    await h.tree.facts.settled();
+
+    expect(errors.length - before).toBe(judgedAgain);
+  });
+
+  it.each([
+    ['a file a rule reads the bytes of', '/mods/SomeMod/Meshes/x.nif', 1],
+    ['a game file a rule reads the bytes of', '/game/Data/Meshes/z.nif', 1],
+    ['a file no rule reads', '/mods/SomeMod/Meshes/y.nif', 0],
+  ])('judges the last reconcile\'s order again when %s is rewritten in place, and only then', async (_file, path, judgedAgain) => {
+    const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF) or checksum(\"Meshes/z.nif\", DEADBEEF)'}]\n" } } as const;
+    const files = new FileConflictLookup();
+    for (const mesh of ['Meshes/x.nif', 'Meshes/y.nif']) files.set({ relativePath: mesh, winner: `/mods/SomeMod/${mesh}`, winnerOrigin: { kind: 'mod', name: 'SomeMod' }, providers: [{ kind: 'mod', name: 'SomeMod' }] });
+    const dataFolderFiles = { kind: 'listed', files: new Map([['meshes/z.nif', fileIn('/game/Data', 'Meshes/z.nif')]]) } as const;
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: checksumsMesh, files, dataFolderFiles });
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.length;
+
+    await instance.refresh([path]);
     await h.tree.facts.settled();
 
     expect(errors.length - before).toBe(judgedAgain);

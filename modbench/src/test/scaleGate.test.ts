@@ -13,13 +13,14 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
+import { A_FILE_A_RULE_READS_REWRITTEN, A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
     ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
     { change: A_NEW_LOOSE_FILE, layer: 'derived' },
     ...(['read', 'derived', 'subscribers', 'mEdit', 'views'] as const).flatMap((layer) => [A_RECORD_WRITTEN, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE].map((change) => ({ change, layer }))),
+    ...(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling'] as const).map((layer) => ({ change: A_FILE_A_RULE_READS_REWRITTEN, layer })),
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
     { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
@@ -46,6 +47,13 @@ describe('a change shows in the views at the rows it touches, on a small and a l
     expect(large.viewsIn.Mods).toBe(small.viewsIn.Mods);
     expect(large.viewsIn.Plugins).toBe(small.viewsIn.Plugins);
     expect([small.viewsIn.Conflicts, large.viewsIn.Conflicts]).toEqual([0, 0]);
+  });
+
+  it('a file a rule reads, rewritten in place, draws again the row of the plugin the rule judges, the same on both', async () => {
+    const small = await costOf(3, A_FILE_A_RULE_READS_REWRITTEN);
+    const large = await costOf(60, A_FILE_A_RULE_READS_REWRITTEN);
+
+    expect([small.viewsIn.Plugins > 0, large.viewsIn.Plugins]).toEqual([true, small.viewsIn.Plugins]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConditionFacts, FileRead } from '../lootConditions';
-import { filesJudged, judgeLoot, readsNamed, type LootPartition } from '../lootJudge';
+import { judgeLoot, judgingReads, type LootPartition } from '../lootJudge';
 import { rulesReader, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
@@ -378,7 +378,7 @@ plugins:
   });
 });
 
-describe('readsNamed: the file reads the conditions of the plugins in the order need', () => {
+describe('judgingReads: the file reads the conditions of the plugins in the order need', () => {
   const entries = rules({ masterlist: text(`plugins:
   - name: A.esp
     req: [{name: X.esp, condition: 'readable("../G.exe") and version("../G.exe", >=, "1")'}]
@@ -389,7 +389,7 @@ describe('readsNamed: the file reads the conditions of the plugins in the order 
 `) }).entries;
 
   it('names each read of a condition on a rule of a plugin in the order once, and the checksum of a plugin with cleaning data', () => {
-    expect(readsNamed([at('A.esp')], entries)).toEqual([
+    expect(judgingReads([at('A.esp')], entries).reads).toEqual([
       { kind: 'readable', path: '../G.exe' },
       { kind: 'version', path: '../G.exe' },
       { kind: 'checksum', path: 'a.swf' },
@@ -398,15 +398,15 @@ describe('readsNamed: the file reads the conditions of the plugins in the order 
   });
 
   it('names none for the rules of a plugin outside the order', () => {
-    expect(readsNamed([at('B.esp')], entries)).toEqual([]);
+    expect(judgingReads([at('B.esp')], entries).reads).toEqual([]);
   });
 });
 
-describe('filesJudged: whether judging the plugins in the order reads a file (ADR-0029, Consequences, bullet 5)', () => {
-  const judges = filesJudged([at('A.esp')], rules({ masterlist: text(`plugins:
+describe('judgingReads: whether judging the plugins in the order reads a file (ADR-0029, Consequences, bullet 5)', () => {
+  const { judges } = judgingReads([at('A.esp')], rules({ masterlist: text(`plugins:
   - name: A.esp
     req: [Textures/Needed.dds]
-    msg: [{type: say, content: m, condition: 'file("Meshes/x.nif") or many("Bashed Patch.*\\.esp")'}]
+    msg: [{type: say, content: m, condition: 'file("Meshes/x.nif") or many("Bashed Patch.*\\.esp") or is_master("Some.esm")'}]
     dirty: [{crc: 0x1, util: u}]
   - name: Other.esp
     msg: [{type: say, content: m, condition: 'file("other.nif")'}]
@@ -417,6 +417,7 @@ describe('filesJudged: whether judging the plugins in the order reads a file (AD
     ['a file a condition names, in another case', 'MESHES/X.NIF', true],
     ['a file a condition\'s regular expression matches', 'Bashed Patch, 0.esp', true],
     ['the plugin its cleaning data checksums', 'A.esp', true],
+    ['a plugin a condition asks is a master', 'Some.esm', true],
     ['a file only the rules of a plugin outside the order read', 'other.nif', false],
     ['a file no rule names', 'Textures/y.dds', false],
   ])('says %s', (_what, path, read) => {

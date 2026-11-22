@@ -53,6 +53,9 @@ const TREE_READS = {
 
 type TreeInstance = InstanceOf<keyof typeof TREE_READS | 'entryKey'>;
 
+// A file as a change names it and a read reads it, whatever its case and separators.
+const fileKey = (path: string): string => path.toLowerCase().replaceAll('\\', '/');
+
 const isTreeRead = (fact: string): fact is keyof typeof TREE_READS => fact in TREE_READS;
 
 // The files present answer the sorting rules' file conditions alone, so a change to them draws no row.
@@ -157,6 +160,8 @@ export class PluginsTreeProvider
   private rowsBlueprints = 0;
   // A read failed since the last value landed, so the next one draws the message line again.
   private readFailed = false;
+  // Where the last judgement of the sorting rules read each file's bytes, so a file rewritten there judges again.
+  private readAt = new Set<string>();
 
   /** The view's order of the active plugins, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
   readonly viewOrder = {
@@ -186,26 +191,31 @@ export class PluginsTreeProvider
       publishSortingInfo: options.publishSortingInfo,
       publishRuleFiles: options.publishRuleFiles,
       rules: () => this.rules,
-      fileFacts: (reads) => readFileFacts(reads, options.fileReads, {
-        files: () => filesPresent(this.instanceValue),
-        isPresent: (path) => filePresence(this.instanceValue, path),
-      }),
+      fileFacts: (reads, trusted) => {
+        this.readAt = new Set(reads.flatMap(({ path }) => this.pathOf(path) ?? []).map(fileKey));
+        const read = () => readFileFacts(reads, options.fileReads, {
+          files: () => filesPresent(this.instanceValue),
+          isPresent: (path) => filePresence(this.instanceValue, path),
+        });
+        return trusted ? options.fileReads.trusting(read) : read();
+      },
     });
     this.instanceValue = options.instance.value;
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
     this.firstRead = firstReadOf(options.instance);
-    this.subscriptions.push(this.firstRead, options.instance.subscribe(() => {
+    this.subscriptions.push(this.firstRead, options.instance.subscribe((_value, _sequence, reread) => {
       const before = this.instanceValue;
       const recovered = this.readFailed;
       this.instanceValue = options.instance.value;
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
-      if (rules !== this.rules || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
+      const rewritten = reread.disk || reread.named.some((path) => this.readAt.has(fileKey(path)));
+      if (rules !== this.rules || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       this.rules = rules;
       if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
       else if (!recovered) return;
       this._onDidChangeTreeData.fire(undefined);
-    }, TREE_READS), options.instance.onReadFailure(() => {
+    }, TREE_READS, (path) => this.readAt.has(fileKey(path))), options.instance.onReadFailure(() => {
       this.readFailed = true;
       this.render();
     }), options.instance.onRedraw(() => this.render()));
@@ -222,6 +232,13 @@ export class PluginsTreeProvider
         this.redrawRowsOf(named);
       }),
     );
+  }
+
+  // Where a read of a path relative to the Data folder reads: the file mod order provides, else the game folder's. A path that
+  // leaves the Data folder is read again at each reconcile.
+  private pathOf(path: string): string | undefined {
+    const { files, dataFolderFiles } = this.instanceValue;
+    return files.get(path)?.winner ?? (dataFolderFiles.kind === 'listed' ? dataFolderFiles.files.get(path.toLowerCase().replaceAll('\\', '/'))?.path : undefined);
   }
 
   // Whether the files present changed where the last judgement of the sorting rules read them. The game's Data folder
