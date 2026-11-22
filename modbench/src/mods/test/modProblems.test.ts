@@ -18,7 +18,7 @@ function over(initial: readonly ModStatus[], plugins: InstanceValue['plugins'] =
   let held = new Map(initial.map((one) => [one.mod, one]));
   const lastGood = new Map(initial.map((one) => [one.mod, one]));
   let changed = (): void => undefined;
-  const statuses = { current: () => Promise.resolve(held), of: (mod: string) => lastGood.get(mod), onDidChange: (listener: () => void) => { changed = listener; return { dispose: () => undefined }; } };
+  const statuses = { current: () => Promise.resolve(held), of: (mod: string) => lastGood.get(mod), onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = () => { listener('every'); }; return { dispose: () => undefined }; } };
   const instance = new FakeInstance(instanceValueFixture({ plugins, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: OTHER }] }));
   const collection = new FakeDiagnosticCollection();
   new ModProblems(collection, instance, statuses);

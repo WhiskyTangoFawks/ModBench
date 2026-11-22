@@ -907,3 +907,51 @@ describe('separators that share a prefix', () => {
     expect(rowsOf(await provider.getChildren())).toEqual(['mod Lone', 'runtimeOutput Overwrite']);
   });
 });
+
+describe('what a change asks the Mods view for again (common.md, A view, story 13)', () => {
+  const idsOf = (fired: readonly (ModlistNode | undefined)[]) => fired.map((row) => row?.id);
+  const listed = { A: { files: [file('A', 'a.dds')] }, B: { files: [file('B', 'b.dds')] } };
+
+  it('asks again for the row of the mod whose files changed alone', async () => {
+    const before = await indexedValueOf([mod('A'), mod('B')], listed);
+    const { files, filesByMod, foldersByMod, stackedCopies } = await indexedValueOf([mod('A'), mod('B')], { ...listed, A: { files: [...listed.A.files, file('A', 'new.dds')] } });
+    const instance = new FakeInstance(before);
+    const provider = makeProvider([], { instance });
+    await provider.getChildren();
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((row) => fired.push(row));
+
+    instance.publish({ ...before, files, filesByMod, foldersByMod, stackedCopies });
+
+    expect(idsOf(fired)).toEqual(['mod:A']);
+  });
+
+  it('asks again for the row of the mod whose status changed alone', async () => {
+    let changed: ((mods: 'every' | ReadonlySet<string>) => void) | undefined;
+    const statuses = { ...NO_MOD_STATUSES, onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = listener; return { dispose: () => undefined }; } };
+    const instance = new FakeInstance(await indexedValueOf([mod('A'), mod('B')], listed));
+    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
+    await provider.getChildren();
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((row) => fired.push(row));
+
+    changed?.(new Set(['B']));
+
+    expect(idsOf(fired)).toEqual(['mod:B']);
+  });
+
+  it('draws the tree again when the status of a mod the filter hides changes, so its badge counts it', async () => {
+    let changed: ((mods: 'every' | ReadonlySet<string>) => void) | undefined;
+    const statuses = { ...NO_MOD_STATUSES, onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = listener; return { dispose: () => undefined }; } };
+    const instance = new FakeInstance(await indexedValueOf([mod('A'), mod('B')], listed));
+    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
+    provider.setFilter('a.dds', true);
+    await provider.getChildren();
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((row) => fired.push(row));
+
+    changed?.(new Set(['B']));
+
+    expect(fired).toEqual([undefined]);
+  });
+});

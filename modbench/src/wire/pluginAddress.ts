@@ -13,6 +13,10 @@ export type StampedFile = components['schemas']['StampedFile'];
 export const DATA_DIRECTORY_ORIGIN = 'Data/';
 export const OVERWRITE_ORIGIN = 'overwrite/';
 
+/** The origin a plugin address names: a mod by its name, Overwrite as `OVERWRITE_ORIGIN`. */
+export const originAddressOf = (origin: { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' }): string =>
+  (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
+
 /** A plugin's file name as the game compares it. */
 export const pluginNameKey = (name: string): string => name.toLowerCase();
 

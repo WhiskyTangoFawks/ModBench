@@ -8,7 +8,8 @@ vi.mock('vscode', async () => {
   const { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri } = await import('./vscodeMock');
   return {
     ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
-    window: { registerFileDecorationProvider: () => ({ dispose: () => undefined }) },
+    window: { registerFileDecorationProvider: () => ({ dispose: () => undefined }), registerCustomEditorProvider: () => ({ dispose: () => undefined }) },
+    commands: { registerCommand: () => ({ dispose: () => undefined }) },
   };
 });
 
@@ -33,6 +34,16 @@ describe('a new loose file in one mod', () => {
     const { derivedIn } = await costOf(3, A_NEW_LOOSE_FILE);
 
     expect(Object.keys(derivedIn).filter((fact) => (derivedIn[fact] ?? 0) > 0)).toEqual(['files', 'filesByMod', 'stackedCopies']);
+  });
+});
+
+describe('a change shows in the views at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
+  it('a new loose file in one mod asks the Mods view the same, and the conflict table of another mod nothing', async () => {
+    const small = await costOf(3, A_NEW_LOOSE_FILE);
+    const large = await costOf(60, A_NEW_LOOSE_FILE);
+
+    expect(large.viewsIn.Mods).toBe(small.viewsIn.Mods);
+    expect([small.viewsIn.Conflicts, large.viewsIn.Conflicts]).toEqual([0, 0]);
   });
 });
 

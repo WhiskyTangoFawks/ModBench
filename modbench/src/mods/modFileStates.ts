@@ -17,11 +17,17 @@ export const MOD_INDICATORS = [
 
 export type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
-export type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'filesByMod' | 'stackedCopies'>;
+export type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'filesByMod' | 'stackedCopies' | 'archiveContents'>;
 
-export function indicatorsOf(value: Pick<InstanceValue, 'stackedCopies'>, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
+// Each path a mod may hold a copy at: each of its files, and each file an archive of its holds.
+const pathsOf = (value: Pick<InstanceValue, 'archiveContents'>, files: readonly OriginFile[]): string[] => files.flatMap(({ relativePath, sourcePath }) => {
+  const read = value.archiveContents.get(sourcePath);
+  return [relativePath, ...read?.kind === 'read' ? read.answer : []];
+});
+
+export function indicatorsOf(value: Pick<InstanceValue, 'stackedCopies' | 'archiveContents'>, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
   const holds: Record<ModIndicator, boolean> = {
-    ...copyStandingOf(value.stackedCopies, modOrigin(name)),
+    ...copyStandingOf(value.stackedCopies, modOrigin(name), pathsOf(value, files)),
     containsExcludedFiles: files.some((file) => file.excluded),
     updateAvailable: updateAvailable === true,
   };

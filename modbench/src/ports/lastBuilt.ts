@@ -1,3 +1,7 @@
+/** The keys whose entries are other objects in the two maps, or that one map alone holds. */
+export const changedKeys = <V>(now: ReadonlyMap<string, V>, before: ReadonlyMap<string, V>): string[] =>
+  (now === before ? [] : [...new Set([...now.keys(), ...before.keys()])].filter((key) => now.get(key) !== before.get(key)));
+
 export const sameInputs = (a: readonly unknown[], b: readonly unknown[]): boolean => a.length === b.length && a.every((input, at) => Object.is(input, b[at]));
 
 /** `build`, answering what it built last while each input is the one it built from: an object by identity, a primitive by

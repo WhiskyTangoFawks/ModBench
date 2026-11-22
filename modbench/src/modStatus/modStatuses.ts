@@ -3,6 +3,7 @@
 import { basename } from 'node:path';
 import type { EntryRef, GameFolder, InstanceAdapter, ModFolder, Reread } from '../instanceAdapter/instanceAdapter';
 import { pathKey } from '../repositoriesLib/stampedReads';
+import { changedKeys } from '../ports/lastBuilt';
 import {
   buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packageFilesOf, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
 } from '../manifestAdapter/manifestAdapter';
@@ -73,9 +74,6 @@ function modsHolding(value: StatusSource, mods: readonly ModPlaced[]): ReadonlyM
   }
   return holding;
 }
-
-const changedKeys = <V>(now: ReadonlyMap<string, V>, before: ReadonlyMap<string, V>): string[] =>
-  (now === before ? [] : [...new Set([...now.keys(), ...before.keys()])].filter((key) => now.get(key) !== before.get(key)));
 
 const separator = (): string => (process.platform === 'win32' ? '\\' : '/');
 
@@ -185,7 +183,11 @@ type Touched = 'every' | ReadonlySet<string>;
 
 const bothTouched = (one: Touched, other: Touched): Touched => (one === 'every' || other === 'every' ? 'every' : new Set([...one, ...other]));
 
-const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening => {
+// The mods whose statuses read otherwise in the two.
+const statusesChanged = (before: ReadonlyMap<string, ModStatus>, after: ReadonlyMap<string, ModStatus>): Set<string> =>
+  new Set([...before.keys(), ...after.keys()].filter((mod) => before.get(mod) !== after.get(mod) && JSON.stringify(before.get(mod)) !== JSON.stringify(after.get(mod))));
+
+const listenedBy = <L>(listeners: Set<L>, listener: L): Listening => {
   listeners.add(listener);
   return { dispose: () => { listeners.delete(listener); } };
 };
@@ -210,7 +212,7 @@ export class ModStatuses {
   private finished = 0;
   private failure: Error | undefined;
   private readonly finishedRun: (() => void)[] = [];
-  private readonly changed = new Set<() => void>();
+  private readonly changed = new Set<(mods: 'every' | ReadonlySet<string>) => void>();
   private readonly messageChanged = new Set<() => void>();
 
   constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>, private readonly log: (line: string) => void, private readonly hashEntries: HashEntries) {}
@@ -252,7 +254,8 @@ export class ModStatuses {
     return this.shown.get(mod);
   }
 
-  onDidChange(listener: () => void): Listening {
+  /** Calls `listener` with the mods whose statuses changed, or `'every'`. */
+  onDidChange(listener: (mods: 'every' | ReadonlySet<string>) => void): Listening {
     return listenedBy(this.changed, listener);
   }
 
@@ -328,7 +331,7 @@ export class ModStatuses {
     if (held === undefined) {
       this.derived = new Map(listed.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
       this.failedLast = true;
-      for (const listener of this.changed) listener();
+      for (const listener of this.changed) listener('every');
       return;
     }
     const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), (held.files.get(mod.folder) ?? []).filter((path) => !isManifestPath(path)), value)));
@@ -397,12 +400,15 @@ export class ModStatuses {
   }
 
   private hold(derived: ReadonlyMap<string, ModStatus>, heldChanged: boolean): void {
-    const before = JSON.stringify([...this.derived]);
+    const changed = statusesChanged(this.derived, derived);
     this.derived = derived;
-    if (JSON.stringify([...derived]) === before) {
-      if (heldChanged) for (const listener of this.changed) listener();
-      return;
-    }
+    if (changed.size > 0) this.show(derived);
+    if (changed.size > 0 || heldChanged) for (const listener of this.changed) listener(heldChanged ? 'every' : changed);
+    if (changed.size > 0) for (const listener of this.messageChanged) listener();
+  }
+
+  // A status read stands for the mod's last good one; one that could not be read is told once.
+  private show(derived: ReadonlyMap<string, ModStatus>): void {
     for (const mod of [...this.shown.keys(), ...this.unreadable.keys()].filter((held) => !derived.has(held))) {
       this.shown.delete(mod);
       this.unreadable.delete(mod);
@@ -416,6 +422,5 @@ export class ModStatuses {
       if (this.unreadable.get(status.mod) !== status.unreadable) this.log(`[modList] The status of "${status.mod}" could not be read: ${status.unreadable}`);
       this.unreadable.set(status.mod, status.unreadable);
     }
-    for (const listener of [...this.changed, ...this.messageChanged]) listener();
   }
 }

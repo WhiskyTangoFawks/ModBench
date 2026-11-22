@@ -24,7 +24,7 @@ const mod = (name: string) => ({ ...unversioned(name), version: '1.0' });
 
 function providerOver(statuses: readonly ModStatus[], holdsRepository = true, over: Partial<InstanceValue> = {}) {
   const byMod = new Map(statuses.map((held) => [held.mod, held]));
-  const changed = new EventEmitter<void>();
+  const changed = new EventEmitter<'every' | ReadonlySet<string>>();
   const value = instanceValueFixture({
     holdsRepository,
     mods: [mod('ModA'), mod('ModB'), mod('ModC')],
@@ -74,7 +74,7 @@ describe('a mod row says its status against its manifest after its version (mods
     provider.onDidChangeTreeData(fired);
 
     byMod.set('ModA', status('ModA', { noManifest: true }));
-    changed.fire();
+    changed.fire('every');
 
     expect([fired.mock.calls.length, (await row(provider, 'ModA')).description]).toEqual([1, '1.0 · no manifest']);
   });

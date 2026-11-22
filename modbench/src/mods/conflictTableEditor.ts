@@ -10,7 +10,9 @@ import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
   CONFLICT_CELL_VALUES, CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
-import { originLabel } from '../instanceLoader/fileConflictIndex';
+import { modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { originsTouched } from './originsTouched';
+import { TOUCHING_READ } from '../instanceLoader/filesChanged';
 import { CONFLICT_TABLE_READS, conflictPaths, conflictTable } from './conflictTable';
 import type { FileCopies, FileToCompare } from './sameCopies';
 import { copiesToRead } from './copiesToRead';
@@ -34,7 +36,10 @@ const conflictTableUri = (mod: string): vscode.Uri =>
 
 const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(1, -SUFFIX.length));
 
-type TableInstance = Pick<InstanceOf<keyof typeof CONFLICT_TABLE_READS>, 'value' | 'sequence' | 'subscribe'>;
+// The table reads its mod's copies, and an origin's change reaches them only where it touches the mod.
+const TABLE_FOLLOWS = { ...CONFLICT_TABLE_READS, ...TOUCHING_READ } as const;
+
+type TableInstance = Pick<InstanceOf<keyof typeof TABLE_FOLLOWS>, 'value' | 'sequence' | 'subscribe'>;
 
 type CopiesOf = (files: readonly FileToCompare[]) => Promise<FileCopies[]>;
 
@@ -91,7 +96,13 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         else post(lastGood, lastGoodReadMessage([reason]));
       }
     };
-    const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }), CONFLICT_TABLE_READS, (path) => read.has(pathKey(path)));
+    let shown = this.instance.value;
+    const subscription = this.instance.subscribe((value, sequence, { named, disk }) => {
+      const touched = originsTouched(shown, value, TABLE_FOLLOWS);
+      shown = value;
+      const readAgain = disk || named.some((path) => read.has(pathKey(path)));
+      if (touched === 'every' || readAgain || touched.some((origin) => sameOrigin(origin, modOrigin(mod)))) void show({ value, sequence });
+    }, TABLE_FOLLOWS, (path) => read.has(pathKey(path)));
     const setting = onSettingChange(this.settings.onDidChangeConfiguration, CELL_VALUE_SETTING, () => { void show(this.instance); });
     panel.onDidDispose(() => {
       subscription.dispose();
