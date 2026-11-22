@@ -1318,8 +1318,25 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     await vi.waitFor(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
   });
 
+  const needsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n' } } as const;
+
+  it.each([
+    ['a file a rule reads', 'Meshes/X.nif', 1],
+    ['a file no rule reads', 'Textures/y.dds', 0],
+  ])('judges the last reconcile\'s order again when a mod gains %s, and only then', async (_file, path, judgedAgain) => {
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh });
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.length;
+
+    instance.publish({ ...instance.value, filesByMod: new Map([['SomeMod', [fileIn('/mods/SomeMod', path)]]]) });
+    await h.tree.facts.settled();
+
+    expect(errors.length - before).toBe(judgedAgain);
+  });
+
   it('judges the last reconcile\'s order again when only the files present change', async () => {
-    const needsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n' } } as const;
     const listed = (files: [string, OriginFile][]) => ({
       ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh,
       dataFolderPlugins: { kind: 'listed', names: new Set<string>() } as const, dataFolderFiles: { kind: 'listed', files: new Map(files) } as const,

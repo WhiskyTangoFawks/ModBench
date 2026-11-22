@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
+import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, isOneOf, pathsOf, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
 import { DEFAULT_GROUP, type CleaningData, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
@@ -236,12 +236,29 @@ export function judgeLoot(
   return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts, loadedWithNoLine)), ...judgeGroups(order, rules, partitionOf, loadedWithNoLine)];
 }
 
+// The entries a plugin matches, and each of their parts a condition may guard.
+function entriesOf(filename: string, entries: readonly LootEntry[]): { matching: LootEntry[]; guarded: { condition?: string }[] } {
+  const matching = entries.filter((entry) => entry.matches(filename));
+  return { matching, guarded: matching.flatMap(({ req, inc, after, msg, dirty }) => [...req, ...inc, ...after, ...msg, ...dirty]) };
+}
+
+/** Whether judging `order` against `entries` reads a file, relative to the Data folder: its presence, bytes or version. */
+export function filesJudged(order: readonly PluginRef[], entries: readonly LootEntry[]): (path: string) => boolean {
+  return isOneOf(order.flatMap(({ filename }) => {
+    const { matching, guarded } = entriesOf(filename, entries);
+    return [
+      ...matching.flatMap(({ req, inc }) => [...req, ...inc].map(({ name }) => name)),
+      ...guarded.flatMap(({ condition }) => (condition === undefined ? [] : pathsOf(condition))),
+      ...matching.some(({ dirty }) => dirty.length > 0) ? [filename] : [],
+    ];
+  }));
+}
+
 /** The file reads `judgeLoot` needs of `order`: those of every condition on a rule of a plugin in it, and the
  *  checksum of each plugin that has cleaning data. */
 export function readsNamed(order: readonly PluginRef[], entries: readonly LootEntry[]): FileRead[] {
   const reads = order.flatMap(({ filename }): FileRead[] => {
-    const matching = entries.filter((entry) => entry.matches(filename));
-    const guarded = matching.flatMap(({ req, inc, after, msg, dirty }) => [...req, ...inc, ...after, ...msg, ...dirty]);
+    const { matching, guarded } = entriesOf(filename, entries);
     return [
       ...guarded.flatMap(({ condition }) => (condition === undefined ? [] : readsOf(condition))),
       ...matching.some(({ dirty }) => dirty.length > 0) ? [{ kind: 'checksum' as const, path: filename }] : [],

@@ -348,6 +348,33 @@ function readsIn(node: Node): FileRead[] {
   }
 }
 
+const FILE_FUNCTIONS = new Set(['file', 'many', 'readable', 'checksum', 'version', 'product_version']);
+
+function pathsIn(node: Node): string[] {
+  switch (node.kind) {
+    case 'not': return pathsIn(node.operand);
+    case 'and':
+    case 'or': return [...pathsIn(node.left), ...pathsIn(node.right)];
+    case 'call': return FILE_FUNCTIONS.has(node.name) && node.args[0]?.kind === 'string' ? [node.args[0].text] : [];
+  }
+}
+
+/** The paths of the files `condition` reads, by presence, bytes or version; a path may hold a regular expression. */
+export function pathsOf(condition: string): string[] {
+  const parsed = parse(condition);
+  return parsed.kind === 'parsed' ? pathsIn(parsed.node) : [];
+}
+
+/** Whether a path relative to the Data folder is one of `paths`, as a condition matches a file. */
+export function isOneOf(paths: readonly string[]): (path: string) => boolean {
+  const exact = new Set(paths.filter((path) => !REGEX_PATH.test(path)).map(fold));
+  const patterns = [...new Set(paths.filter((path) => REGEX_PATH.test(path)))];
+  return (path) => exact.has(fold(path)) || patterns.some((pattern) => {
+    const matched = matching([path], pattern);
+    return 'found' in matched && matched.found.length > 0;
+  });
+}
+
 /** The file reads `condition` needs, each once. None for a condition that does not parse. */
 export function readsOf(condition: string): FileRead[] {
   const parsed = parse(condition);

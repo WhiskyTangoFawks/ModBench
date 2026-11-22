@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConditionFacts, FileRead } from '../lootConditions';
-import { judgeLoot, readsNamed, type LootPartition } from '../lootJudge';
+import { filesJudged, judgeLoot, readsNamed, type LootPartition } from '../lootJudge';
 import { rulesReader, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
@@ -399,5 +399,27 @@ describe('readsNamed: the file reads the conditions of the plugins in the order 
 
   it('names none for the rules of a plugin outside the order', () => {
     expect(readsNamed([at('B.esp')], entries)).toEqual([]);
+  });
+});
+
+describe('filesJudged: whether judging the plugins in the order reads a file (ADR-0029, Consequences, bullet 5)', () => {
+  const judges = filesJudged([at('A.esp')], rules({ masterlist: text(`plugins:
+  - name: A.esp
+    req: [Textures/Needed.dds]
+    msg: [{type: say, content: m, condition: 'file("Meshes/x.nif") or many("Bashed Patch.*\\.esp")'}]
+    dirty: [{crc: 0x1, util: u}]
+  - name: Other.esp
+    msg: [{type: say, content: m, condition: 'file("other.nif")'}]
+`) }).entries);
+
+  it.each([
+    ['a file a requirement names', 'textures/needed.dds', true],
+    ['a file a condition names, in another case', 'MESHES/X.NIF', true],
+    ['a file a condition\'s regular expression matches', 'Bashed Patch, 0.esp', true],
+    ['the plugin its cleaning data checksums', 'A.esp', true],
+    ['a file only the rules of a plugin outside the order read', 'other.nif', false],
+    ['a file no rule names', 'Textures/y.dds', false],
+  ])('says %s', (_what, path, read) => {
+    expect(judges(path)).toBe(read);
   });
 });

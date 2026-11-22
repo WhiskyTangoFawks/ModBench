@@ -23,6 +23,7 @@ import type { NamedPlugins } from './pluginAddress';
 import { blueprintLoadsLastIn } from '../tables/gamePaths';
 import { activeViewOrder, viewOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { filePresence, filesPresent } from '../instanceLoader/filePresence';
+import { filesChanged, TOUCHING_READ } from '../instanceLoader/filesChanged';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
@@ -46,21 +47,18 @@ export type RecordBrowserFacet = Pick<
 >;
 
 const TREE_READS = {
-  ...MESSAGE_READS, plugins: true, pluginsLoadedWithNoLine: true, sortingRuleFiles: true, blueprintLoadsLast: true, dataFolderPlugins: true, dataFolderFiles: true,
-  files: true, listedSourceMods: true, gameFolder: true, holdsRepository: true, mods: true,
+  ...MESSAGE_READS, ...TOUCHING_READ, plugins: true, pluginsLoadedWithNoLine: true, sortingRuleFiles: true, blueprintLoadsLast: true, dataFolderPlugins: true,
+  dataFolderFiles: true, listedSourceMods: true, gameFolder: true, holdsRepository: true, mods: true,
 } as const;
 
 type TreeInstance = InstanceOf<keyof typeof TREE_READS | 'entryKey'>;
 
-// The files present answer the sorting rules' file conditions alone, so a change to them judges the rules again and draws no row.
-const PRESENCE_READS: readonly (keyof typeof TREE_READS)[] = ['files', 'dataFolderFiles'];
-
 const isTreeRead = (fact: string): fact is keyof typeof TREE_READS => fact in TREE_READS;
 
-const changedIn = (before: TreeInstance['value'], after: TreeInstance['value'], facts: readonly (keyof typeof TREE_READS)[]): boolean =>
-  facts.some((fact) => before[fact] !== after[fact]);
+// The files present answer the sorting rules' file conditions alone, so a change to them draws no row.
+const ROW_READS = Object.keys(TREE_READS).filter(isTreeRead).filter((fact) => !(fact in TOUCHING_READ) && fact !== 'dataFolderFiles');
 
-const ROW_READS = Object.keys(TREE_READS).filter(isTreeRead).filter((fact) => !PRESENCE_READS.includes(fact));
+const rowsChanged = (before: TreeInstance['value'], after: TreeInstance['value']): boolean => ROW_READS.some((fact) => before[fact] !== after[fact]);
 
 interface PluginsTreeProviderOptions {
   fileReads: FileReads;
@@ -202,9 +200,9 @@ export class PluginsTreeProvider
       this.instanceValue = options.instance.value;
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
-      if (rules !== this.rules || changedIn(before, this.instanceValue, PRESENCE_READS)) void this.facts.rejudge();
+      if (rules !== this.rules || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       this.rules = rules;
-      if (changedIn(before, this.instanceValue, ROW_READS)) this.cache = undefined;
+      if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
       else if (!recovered) return;
       this._onDidChangeTreeData.fire(undefined);
     }, TREE_READS), options.instance.onReadFailure(() => {
@@ -224,6 +222,14 @@ export class PluginsTreeProvider
         this.redrawRowsOf(named);
       }),
     );
+  }
+
+  // Whether the files present changed where the last judgement of the sorting rules read them. The game's Data folder
+  // is listed whole, so a change to it is one anywhere.
+  private judgedFilesChanged(before: TreeInstance['value'], after: TreeInstance['value']): boolean {
+    if (before.dataFolderFiles !== after.dataFolderFiles) return true;
+    const changed = filesChanged<keyof typeof TOUCHING_READ>(before, after, TOUCHING_READ);
+    return changed === 'every' || changed.some(({ files }) => files.some(({ includedPath }) => this.facts.judgesFile(includedPath)));
   }
 
   dispose(): void {

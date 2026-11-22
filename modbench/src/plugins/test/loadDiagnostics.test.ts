@@ -62,6 +62,15 @@ describe('publishPluginProblems', () => {
       .toEqual([['/i/mods/M/A.esp', 'new'], ['/i/mods/M/B.esp', 'old']]);
   });
 
+  it('replaces the diagnostics of a plugin named where they were set, though it has no file now', () => {
+    const collection = new FakeDiagnosticCollection();
+    publishPluginProblems(collection, pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp' }), [report('A.esp', 'M', 'old')], DiagnosticSeverity.Warning);
+
+    publishPluginProblems(collection, pluginFilesFrom({}), [], DiagnosticSeverity.Warning, undefined, [{ name: 'A.esp', origin: 'M' }]);
+
+    expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)).toEqual([]);
+  });
+
   it('gives each plugin\'s diagnoses the code it is given for that plugin', () => {
     const collection = new FakeDiagnosticCollection();
 

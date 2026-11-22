@@ -51,12 +51,13 @@ export interface Cost {
 const quiet = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const modName = (n: number): string => `Mod ${String(n).padStart(3, '0')}`;
 
-async function syntheticInstance(mods: number): Promise<string> {
+async function syntheticInstance(mods: number, userlist = ''): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'scale-gate-'));
   const names = Array.from({ length: mods }, (_, n) => modName(n));
   await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
   await mkdir(join(root, 'overwrite'));
   await mkdir(join(root, 'Game', 'Data'), { recursive: true });
+  await writeFile(join(root, 'userlist.yaml'), userlist);
   await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n');
   await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), names.reduceRight((text, name) => setEnabledInText(insertModAtWinningEnd(text, name), name, true), ''));
   await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), pluginsTextOf(names.map((name) => ({ name: `${name}.esp`, enabled: true }))));
@@ -220,6 +221,8 @@ export interface Gesture {
   readonly name: string;
   /** The view the gesture opens, closed until it does. */
   readonly opens?: ViewName;
+  /** The instance's own sorting rules. */
+  readonly userlist?: string;
   make(at: { root: string; instance: Pick<Instance, 'refresh'>; views: Readonly<Record<ViewName, View>>; client: InMemoryMEditClient }): Promise<number>;
 }
 
@@ -231,6 +234,12 @@ export const A_NEW_LOOSE_FILE: Gesture = {
     await instance.refresh([file]);
     return 0;
   },
+};
+
+export const A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE: Gesture = {
+  ...A_NEW_LOOSE_FILE,
+  name: 'a new loose file in one mod, under a rule on every plugin that reads another file',
+  userlist: "plugins:\n  - name: 'Mod \\d+\\.esp'\n    msg:\n      - type: warn\n        content: 'It needs its mesh.'\n        condition: 'not file(\"Meshes/x.nif\")'\n",
 };
 
 export const A_RECORD_WRITTEN: Gesture = {
@@ -273,7 +282,7 @@ export const IN_PLUGINS = gesturesIn('Plugins', `${modName(0)}.esp`);
 export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   readonly shown: number; readonly derivedIn: Readonly<Record<string, number>>; readonly viewsIn: Readonly<Shown>;
 }> {
-  const root = await syntheticInstance(mods);
+  const root = await syntheticInstance(mods, gesture.userlist);
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });

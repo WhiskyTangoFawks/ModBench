@@ -13,13 +13,13 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { A_NEW_LOOSE_FILE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
+import { A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
     ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
     { change: A_NEW_LOOSE_FILE, layer: 'derived' },
-    ...(['read', 'derived', 'subscribers', 'mEdit', 'views'] as const).map((layer) => ({ change: A_RECORD_WRITTEN, layer })),
+    ...(['read', 'derived', 'subscribers', 'mEdit', 'views'] as const).flatMap((layer) => [A_RECORD_WRITTEN, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE].map((change) => ({ change, layer }))),
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
     { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
