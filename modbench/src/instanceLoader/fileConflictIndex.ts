@@ -81,7 +81,7 @@ export class FileConflictLookup<E extends { readonly relativePath: string } = Co
   }
 
   /** This lookup, with each folded path `changes` names holding the entry it gives, or none where it gives none: itself while
- *  every path already does. */
+   *  every path already does. */
   changed(changes: ReadonlyMap<string, E | undefined>): FileConflictLookup<E> {
     const real = [...changes].filter(([folded, entry]) => this.byFoldedPath.get(folded) !== entry);
     if (real.length === 0) return this;
@@ -278,6 +278,7 @@ const NO_FOLDERS: readonly OriginFolder[] = [];
 export function sliceReusing(keeps: (file: OriginFile) => boolean): (...index: Parameters<typeof buildFileConflictIndex>) => FileConflictSlice {
   const index = indexReusing();
   const taken = new WeakMap<readonly OriginFile[], readonly OriginFile[]>();
+  const slicedListings = new WeakMap<OriginFiles, OriginFiles>();
   let last = new Map<string, readonly OriginFile[]>();
   let slice: FileConflictSlice | undefined;
   return (entries, overwrite, modFiles) => {
@@ -293,7 +294,15 @@ export function sliceReusing(keeps: (file: OriginFile) => boolean): (...index: P
       now.set(originKey(origin), kept);
       return kept;
     };
-    const sliced = new Map([...modFiles].map(([name, listing]) => [name, { ...listing, files: take(modOrigin(name), listing.files), folders: NO_FOLDERS }]));
+    const sliceOf = (name: string, listing: OriginFiles): OriginFiles => {
+      const files = take(modOrigin(name), listing.files);
+      const held = slicedListings.get(listing);
+      if (held?.files === files) return held;
+      const sliced = { ...listing, files, folders: NO_FOLDERS };
+      slicedListings.set(listing, sliced);
+      return sliced;
+    };
+    const sliced = new Map([...modFiles].map(([name, listing]) => [name, sliceOf(name, listing)]));
     const keptOverwrite = take(RUNTIME_OUTPUT, overwrite);
     const next = { index: index(entries, keptOverwrite, sliced), overwrite: keptOverwrite };
     last = now;
@@ -467,7 +476,6 @@ function stackOf(winningFirst: readonly OriginProvides[], isLoose: ArchiveRule, 
 
 type StackSources = Pick<FileConflictIndex, 'winningFirst' | 'files'>;
 
-
 function archivedAgain(was: FileConflictLookup<StackedFile>, archives: Reordered<LoadedArchive>, paths: Iterable<string>, gameRelease: string): FileConflictLookup<StackedFile> {
   return updated(was, paths, (folded, before) => {
     const joined = [...archives.changed].flatMap((key) => {
@@ -580,6 +588,7 @@ export function gameFolderArchivedOf(loaded: readonly { readonly archive: string
 export function stackReusing(): (index: StackSources, loaded: readonly LoadedArchive[], gameRelease: string) => StackedCopies {
   let last: Stacked | undefined;
   return (index, loaded, gameRelease) => {
+    if (last?.gameRelease === gameRelease && last.winningFirst === index.winningFirst && last.loaded === loaded) return last.stack;
     const { archived, stack } = last?.gameRelease === gameRelease ? restacked(last, index, loaded) : stackedAfresh(index.winningFirst, loaded, gameRelease);
     last = { winningFirst: index.winningFirst, loaded, gameRelease, archived, stack };
     return stack;

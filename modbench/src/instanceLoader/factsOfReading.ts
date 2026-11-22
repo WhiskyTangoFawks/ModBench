@@ -147,8 +147,9 @@ export class FactsOfReading {
   private readonly snapshot = lastBuilt(snapshotOf);
   private readonly downloadedFiles = lastBuilt(downloadedFilesOf);
   private readonly stamped = snapshotStamper();
-  private readonly linkTargets = lastBuilt((index: FileConflictIndex, overwrite: readonly OriginFile[]): ReadonlySet<string> =>
-    new Set([...[...index.filesByMod.values()].flat(), ...overwrite].flatMap(({ path, sourcePath }) => (sourcePath === path ? [] : [sourcePath]))));
+  private readonly linked = sliceReusing(({ path, sourcePath }) => sourcePath !== path);
+  private readonly linkTargets = lastBuilt((filesByMod: FileConflictIndex['filesByMod'], overwrite: readonly OriginFile[]): ReadonlySet<string> =>
+    new Set([...[...filesByMod.values()].flat(), ...overwrite].map(({ sourcePath }) => sourcePath)));
   private readonly modKey = (name: string): string => this.entryKey({ kind: 'mod', name });
   // The source mods each reading made: a reading keeps those of the reading its value landed from while the two read the same.
   private readonly sourceModsRead = new WeakMap<InstanceReading, SourceMods>();
@@ -166,7 +167,8 @@ export class FactsOfReading {
     this.sourceModsRead.set(reading, sourceMods);
     told.sourceMods(sourceMods);
     const index = this.index(entries, runtimeOutput.files, reading.modFiles);
-    const linkTargets = this.linkTargets(index, runtimeOutput.files);
+    const links = this.linked(entries, runtimeOutput.files, reading.modFiles);
+    const linkTargets = this.linkTargets(links.index.filesByMod, links.overwrite);
     // No watch follows the target of a link, so its stamp is taken afresh at each read.
     const stampOf = (path: string) => (linkTargets.has(path) ? this.adapter.fileStamp(path) : trustingKept(() => this.adapter.fileStamp(path)));
     const roots = this.rootPlugins(entries, runtimeOutput.files, reading.modFiles);
