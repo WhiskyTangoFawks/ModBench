@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FileConflictLookup } from '../fileConflictIndex';
-import { filePresence, filesPresent } from '../filePresence';
+import { fileAt, filePresence, filesPresent } from '../filePresence';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const files = new FileConflictLookup();
@@ -76,5 +76,24 @@ describe('filesPresent: every file the game finds in its Data folder', () => {
     const listing = filesPresent({ ...value, dataFolderFiles: { kind: 'unreadable', reason: 'EACCES' } });
 
     expect([listing.complete, listing.names.includes('F4SE/Plugins/x.dll')]).toEqual([false, true]);
+  });
+});
+
+describe('fileAt: where the game reads a path relative to the Data folder', () => {
+  const winners = new FileConflictLookup();
+  winners.set({ relativePath: 'Meshes/a.nif', winner: '/mods/M/Meshes/a.nif', winnerOrigin: { kind: 'mod', name: 'M' }, providers: [{ kind: 'mod', name: 'M' }] });
+  const listed = { kind: 'listed', files: new Map([['meshes/b.nif', { relativePath: 'Meshes/B.nif', path: '/game/Data/Meshes/B.nif' }]]) } as const;
+
+  it.each([
+    ['a file a mod provides: its winning copy, with either slash', 'Meshes\\A.nif', '/mods/M/Meshes/a.nif'],
+    ['a file only the Data folder holds: its own copy, in any case', 'meshes/b.NIF', '/game/Data/Meshes/B.nif'],
+    ['a file neither holds: none', 'Meshes/none.nif', null],
+    ['a path that leaves the Data folder: the adapter\'s to find', '../Game.exe', undefined],
+  ])('answers, for %s', (_what, path, at) => {
+    expect(fileAt({ files: winners, dataFolderFiles: listed }, path)).toBe(at);
+  });
+
+  it('leaves a file no mod provides to the adapter while the Data folder cannot be listed', () => {
+    expect(fileAt({ files: winners, dataFolderFiles: { kind: 'unresolved' } }, 'Meshes/none.nif')).toBeUndefined();
   });
 });

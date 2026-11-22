@@ -1,6 +1,7 @@
 // mods.md, Indicators: a badge and a colour on a mod's row for each status that holds.
 
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
 import type { FileOrigin, InstanceValue, InstanceView, ModGroups } from '../instanceLoader/instance';
 import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
 import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type Owned, type Row } from './originsTouched';
@@ -43,7 +44,7 @@ const PARTS = ['badge', 'colour'] as const;
 
 /** One indicator's decoration on each row that carries it, its colour on the rows `coloured` takes. */
 export class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
-  private readonly changed = new vscode.EventEmitter<vscode.Uri[] | undefined>();
+  private readonly changed = new RedrawEmitter<vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
   private readonly subscription: vscode.Disposable;
 

@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
 
 /** Colour only, no badge: Show excluded is additive, so excluded rows sit alongside included ones
  *  and this tint is the only cue telling them apart — the reference tool draws none. */
 export class ExcludedDownloadedFileDecorationProvider implements vscode.FileDecorationProvider {
-  private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri[] | undefined>();
+  private readonly _onDidChangeFileDecorations = new RedrawEmitter<vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
 
   constructor(

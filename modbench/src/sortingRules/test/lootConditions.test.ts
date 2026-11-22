@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateCondition, readFileFacts, readsOf, type ConditionFacts, type FileAnswer, type FileRead } from '../lootConditions';
+import { evaluateCondition, pathsOf, readFileFacts, readsOf, type ConditionFacts, type FileAnswer, type FileRead } from '../lootConditions';
 
 interface World {
   files?: string[];
@@ -219,4 +219,25 @@ describe('readsOf: the file reads a condition needs', () => {
     expect(readsOf('active("a.esp") and file("b.nif") and is_master("c.esm") and version("d.esp", >=, "1") and many("e.*")')).toEqual([]);
   });
 
+});
+
+describe('pathsOf: the file of each condition function Modbench evaluates that reads one (ADR-0029, Consequences, bullet 5)', () => {
+  // Every condition function LOOT's metadata syntax has; one Modbench does not evaluate reads nothing.
+  it.each([
+    'file("a.esp")', 'file_size("a.esp", 1)', 'readable("a.esp")', 'is_executable("a.exe")', 'active("a.esp")', 'many("a.*\\.esp")',
+    'many_active("a.*\\.esp")', 'is_master("a.esp")', 'checksum("a.esp", DEADBEEF)', 'version("a.dll", ==, "1")', 'product_version("a.exe", ==, "1")',
+    'filename_version("a (\\d+).esp", "1", ==)', 'description_contains("a.esp", "x")',
+  ])('names the file of %s exactly when evaluating it reads one', (condition) => {
+    const read: string[] = [];
+    const facts: ConditionFacts = {
+      files: () => { read.push('files'); return { names: [], complete: true }; },
+      isPresent: () => { read.push('isPresent'); return 'present'; },
+      answer: () => { read.push('answer'); return { kind: 'read', value: undefined }; },
+      activePlugins: () => [], isMaster: () => true, description: () => '',
+    };
+
+    evaluateCondition(condition, facts);
+
+    expect(pathsOf(condition).length > 0).toBe(read.length > 0);
+  });
 });

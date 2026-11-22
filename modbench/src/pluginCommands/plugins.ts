@@ -19,7 +19,7 @@ import type {
 } from '../instanceAdapter/instanceAdapter';
 import { masterExtensionsOf } from '../tables/gamePaths';
 import { pluginsNotRestored } from './pluginsNotRestored';
-import type { FileReads } from '../sortingRules/lootConditions';
+import type { FileAnswer, FileReads } from '../sortingRules/lootConditions';
 import { isReadFailed } from '../wire/readFailed';
 
 interface Decision<T> {
@@ -247,14 +247,21 @@ async function syncPlugins(adapter: InstanceAdapter, masters: PluginMasters): Pr
 /** Plugin sync over the active profile. */
 export type PluginSyncRun = () => Promise<PluginSyncResult>;
 
-/** The Instance adapter's file reads, each at the file mod order provides, else the game folder's. */
-export function fileReadsOver(adapter: Pick<InstanceAdapter, 'dataFileChecksum' | 'dataFileVersion' | 'dataFileReadable' | 'dataFilesTrusted'>, winners: () => { get: (path: string) => { winner: string } | undefined }): FileReads {
-  const forward = (path: string): string => path.replace(/\\/g, '/');
-  const winnerOf = (path: string): string | undefined => winners().get(path)?.winner;
+/** The Instance adapter's file reads, each at the path `placed` gives: null is a file nothing holds, and undefined leaves the
+ *  adapter to find it in the game folder. */
+export function fileReadsOver(
+  adapter: Pick<InstanceAdapter, 'dataFileChecksum' | 'dataFileVersion' | 'dataFileReadable' | 'dataFilesTrusted'>,
+  placed: (path: string) => string | null | undefined,
+): FileReads {
+  const at = <T>(path: string, none: T, read: (forward: string, winner: string | undefined) => Promise<FileAnswer<T>>): Promise<FileAnswer<T>> => {
+    const forward = path.replace(/\\/g, '/');
+    const where = placed(forward);
+    return where === null ? Promise.resolve({ kind: 'read', value: none }) : read(forward, where);
+  };
   return {
-    checksum: (path) => adapter.dataFileChecksum(forward(path), winnerOf(forward(path))),
-    version: (path, field) => adapter.dataFileVersion(forward(path), winnerOf(forward(path)), field),
-    readable: (path) => adapter.dataFileReadable(forward(path), winnerOf(forward(path))),
+    checksum: (path) => at<number | undefined>(path, undefined, (forward, winner) => adapter.dataFileChecksum(forward, winner)),
+    version: (path, field) => at<string | undefined>(path, undefined, (forward, winner) => adapter.dataFileVersion(forward, winner, field)),
+    readable: (path) => at(path, false, (forward, winner) => adapter.dataFileReadable(forward, winner)),
     trusting: (read) => adapter.dataFilesTrusted(read),
   };
 }

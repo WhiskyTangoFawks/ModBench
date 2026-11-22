@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type {
   RecordSummary,
@@ -260,7 +261,7 @@ type RecordBrowserClient = Pick<
 >;
 
 export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<RecordBrowserNode | undefined | null>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<RecordBrowserNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private readonly _onDidReadRecords = new vscode.EventEmitter<readonly vscode.Uri[]>();
   /** The record rows a read from mEdit just answered, by resource URI. */

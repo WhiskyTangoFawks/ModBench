@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Instance } from '../instanceLoader/instance';
 import { writesToldTo } from '../repositoriesLib/writesTold';
+import { handingOneChange } from '../drivingLib/writingGesture';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeWorkspace } from './fakeWorkspace';
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
@@ -61,6 +62,21 @@ describe('a write over the real adapter', () => {
     await loader.refresh([modlist]);
 
     expect(heard).toEqual([[modlist]]);
+  });
+
+  it('is held by the loader as it returns inside a gesture, and the gesture\'s end and the watch\'s echo of it are no change (ADR-0029, Consequences, bullets 1 and 2)', async () => {
+    const { adapter, instance: loader, modlist } = await wiredInstance();
+    const heard: (readonly string[])[] = [];
+    loader.subscribe((_value, _sequence, { named }) => { heard.push(named); });
+    let heardAsItReturned: (readonly string[])[] = [];
+
+    await handingOneChange(loader, async () => {
+      await adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]);
+      heardAsItReturned = [...heard];
+    });
+    await loader.refresh([modlist]);
+
+    expect([heardAsItReturned, heard]).toEqual([[[modlist]], [[modlist]]]);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

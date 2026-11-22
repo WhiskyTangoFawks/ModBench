@@ -22,6 +22,7 @@ import { OpenRows } from '../openRows';
 import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
+import { handingOneChange } from '../../drivingLib/writingGesture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -199,6 +200,22 @@ describe('what the view says of itself', () => {
 
     expect(provider.description()).toBeUndefined();
     expect(provider.viewMessage()).toBeUndefined();
+  });
+
+  it('holds its redraw while a gesture writes, and draws once the gesture ends (common.md, A gesture that writes, story 1)', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+    let firedWhileWriting = -1;
+
+    await handingOneChange(instance, () => {
+      instance.publish(valueOf([mod('A'), mod('B')]));
+      firedWhileWriting = fired.length;
+      return Promise.resolve();
+    });
+
+    expect([firedWhileWriting, fired.length]).toEqual([0, 1]);
   });
 
   it('draws the tree again when the instance redraws', () => {

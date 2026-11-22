@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { tagsHeldAt } from './tagsHeldAt';
@@ -196,7 +197,7 @@ export class ModListProvider
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
 
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<ModlistNode | undefined>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<ModlistNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private modGroups?: ModGroups;

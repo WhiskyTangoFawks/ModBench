@@ -33,6 +33,12 @@ import { FakeCancellationToken } from './vscodeMock';
 import { present } from '../ports/present';
 import { insertModAtWinningEnd, setEnabledInText } from '../instanceAdapter/mo2/codecs/modlistText';
 import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
+import { handingOneChange } from '../drivingLib/writingGesture';
+import { fileAt } from '../instanceLoader/filePresence';
+import { toldAfter, writesToldTo } from '../repositoriesLib/writesTold';
+import { heardChanges } from '../symbols/heardChanges';
+import { SCRIPTS_READ } from '../symbols/scriptLanguage';
+import { registerDeployCommands } from '../toolbox/deployGesture';
 
 /** The work a gesture causes at each layer. */
 export interface Cost {
@@ -256,6 +262,15 @@ export const A_FILE_A_RULE_READS_REWRITTEN: Gesture = {
   },
 };
 
+export const A_GESTURE_WRITING_A_LOOSE_FILE: Gesture = {
+  name: 'a gesture that writes one loose file into one mod',
+  async make({ root, instance }) {
+    const file = join(root, 'mods', modName(0), 'textures', modName(0), 'written.dds');
+    await handingOneChange(instance, () => toldAfter([file], () => writeFile(file, 'written')));
+    return 0;
+  },
+};
+
 export const A_RECORD_WRITTEN: Gesture = {
   name: 'a record written into one plugin, which mEdit says changed',
   make({ client }) {
@@ -295,6 +310,8 @@ export const IN_PLUGINS = gesturesIn('Plugins', `${modName(0)}.esp`);
  *  it did not, on a synthetic instance of `mods` mods. */
 export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   readonly shown: number; readonly derivedIn: Readonly<Record<string, number>>; readonly viewsIn: Readonly<Shown>;
+  /** The times the symbols were told of a change, and deploy's problems read the deployment folder. */
+  readonly told: { readonly symbols: number; readonly deployProblems: number };
 }> {
   const root = await syntheticInstance(mods, gesture.userlist);
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
@@ -321,7 +338,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const table = conflictTableOf(editors.mock.calls, modName(1));
   editors.mockRestore();
   const records = new RecordBrowser(counted);
-  const pluginsTree = pluginsTreeOver(instance, { client: counted, records, fileReads: fileReadsOver(adapter, () => instance.value.files) });
+  const pluginsTree = pluginsTreeOver(instance, { client: counted, records, fileReads: fileReadsOver(adapter, (path) => fileAt(instance.value, path)) });
   const recordDecorations = new RecordDecorationProvider(records, () => pluginsTree.lockedRowUris());
   const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsTree, recordDecorations];
   const host = viewHost({ Mods: modsTree, Plugins: pluginsTree }, [
@@ -334,6 +351,17 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   let subscribers = 0;
   const outcomes = instance.onListenerOutcome(({ listener, during }) => { if (during === 'value' && listener !== landing) subscribers++; });
   const indexChanges = client.onDidChange((change) => { pluginsTree.indexChanged(change); });
+  const told = { symbols: 0, deployProblems: 0 };
+  const symbols = heardChanges({ asker: { forget: () => undefined, onPluginChanged: () => () => undefined }, instance, facts: SCRIPTS_READ }, () => { told.symbols++; });
+  const notAsked = () => Promise.reject(new Error('the gate asks no deploy'));
+  const deployment = registerDeployCommands({
+    commands: {
+      deploy: notAsked, purge: notAsked, moveToOverwrite: notAsked,
+      unmanaged: () => { told.deployProblems++; return Promise.resolve({ applied: true, folder: join(root, 'Game', 'Data'), unmanaged: [] }); },
+    },
+    instance, reporterFor: () => recordingReporter(),
+  });
+  writesToldTo(instance);
   const settled = async () => {
     await Promise.all([modSyncing.modSync.settled(), pluginSyncing.pluginSync.settled(), pluginsTree.facts.settled()]);
     await host.settled();
@@ -351,6 +379,8 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     host.count();
     table.posted.splice(0);
     subscribers = 0;
+    told.symbols = 0;
+    told.deployProblems = 0;
     const start = fileSystemCalls.count;
     const asked = client.calls.length + answered();
     const landed = landings.length;
@@ -363,9 +393,12 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     return {
       read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length + answered() - asked,
       views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown, settling: landings[landed] === undefined ? 0 : fileSystemCalls.count - landings[landed],
+      told: { ...told },
     };
   } finally {
-    for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...owned, instance]) disposable.dispose();
+    writesToldTo({ told: () => Promise.resolve() });
+    symbols();
+    for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...deployment, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });
   }
 }

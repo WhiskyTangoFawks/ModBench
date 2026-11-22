@@ -7,6 +7,9 @@ import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableP
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
 import { judgingReads } from '../sortingRules/lootJudge';
+import type { LootEntry } from '../sortingRules/lootMetadata';
+
+type JudgingReads = ReturnType<typeof judgingReads>;
 import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
@@ -63,8 +66,10 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // Each `refresh` reads after the one before it answered, so an answer for a plugin never lands over a newer one.
   private refreshing: Promise<unknown> = Promise.resolve();
-  // Whether the last judgement of the sorting rules read a file.
-  private judgedFiles: (path: string) => boolean = () => false;
+  // What the last judgement of the sorting rules to land read of files.
+  private landedReads: JudgingReads = { reads: [], judges: () => false };
+  // What judging the last order asked of against the last rules reads, which depend on nothing else.
+  private judging?: { readonly order: readonly PluginAddress[]; readonly entries: readonly LootEntry[]; readonly reads: JudgingReads };
   // The last `rejudge` asked.
   private rejudging: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
@@ -115,10 +120,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const active = this.deps.activePlugins();
-    const { loot, judges } = await this.lootRules(active, false);
+    const { loot, reads } = await this.lootRules(active, false);
     if (generation !== this.generation) return undefined;
     const rowsGone = this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
-    this.judgedFiles = judges;
+    this.landedReads = reads;
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
@@ -149,18 +154,28 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing. A judging
   // again trusts what was read before; a reconcile checks each file, the ones no change names among them.
-  private async lootRules(active: readonly PluginAddress[], trusted: boolean): Promise<{ loot: LootInput; judges: (path: string) => boolean }> {
+  private async lootRules(active: readonly PluginAddress[], trusted: boolean): Promise<{ loot: LootInput; reads: JudgingReads }> {
     for (;;) {
       const read = this.deps.rules();
-      const { reads, judges } = judgingReads(refsOf(active), read.entries);
-      const files = await this.deps.fileFacts(reads, trusted);
-      if (read === this.deps.rules()) return { loot: { entries: read.entries, groups: read.groups, files }, judges };
+      const reads = this.readsOf(active, read.entries);
+      const files = await this.deps.fileFacts(reads.reads, trusted);
+      if (read === this.deps.rules()) return { loot: { entries: read.entries, groups: read.groups, files }, reads };
     }
   }
 
-  /** Whether the last judgement of the sorting rules read a file, relative to the Data folder: its presence, bytes or version. */
+  private readsOf(order: readonly PluginAddress[], entries: readonly LootEntry[]): JudgingReads {
+    if (this.judging?.order !== order || this.judging.entries !== entries) this.judging = { order, entries, reads: judgingReads(refsOf(order), entries) };
+    return this.judging.reads;
+  }
+
+  /** Whether the last judgement of the sorting rules to land read a file, relative to the Data folder: its presence, bytes or version. */
   judgesFile(path: string): boolean {
-    return this.judgedFiles(path);
+    return this.landedReads.judges(path);
+  }
+
+  /** The reads of files' bytes the last judgement of the sorting rules to land made. */
+  judgedReads(): readonly FileRead[] {
+    return this.landedReads.reads;
   }
 
   /** Judges the order the last reconcile judged again. Before that reconcile there is nothing to judge. */
@@ -174,10 +189,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
-    const { loot, judges } = await this.lootRules(judged, true);
+    const { loot, reads } = await this.lootRules(judged, true);
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
     const altered = this.facts.rejudged(loot);
-    this.judgedFiles = judges;
+    this.landedReads = reads;
     this.publishSorting();
     this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }

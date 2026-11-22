@@ -64,18 +64,18 @@ async function wired() {
 
 const trash = (path: string) => toldAfter([path], () => rm(path, { recursive: true, force: true }));
 
-describe('a mod gesture hands its change as one change', () => {
-  it('lands a new empty mod\'s folder and its line as one value, and mod sync writes nothing', async () => {
+describe('a mod gesture lands its writes as it writes them, and mod sync, waiting for its end, writes nothing', () => {
+  it('lands a new empty mod\'s folder and its line', async () => {
     const { commands, gesture, landed, modSync, syncWrote } = await wired();
 
     await gesture('modbench.mod.createEmpty', () => commands.createEmptyMod(MOD));
     await modSync.settled();
 
-    expect(landed).toEqual([{ listed: true, folder: true, renamed: false }]);
+    expect(landed.at(-1)).toEqual({ listed: true, folder: true, renamed: false });
     expect(syncWrote).toEqual([]);
   });
 
-  it('lands an uninstalled mod\'s folder removal and its line removal as one value, and mod sync writes nothing', async () => {
+  it('lands an uninstalled mod\'s folder removal and its line removal', async () => {
     const { commands, gesture, landed, modSync, syncWrote } = await wired();
     await gesture('modbench.mod.createEmpty', () => commands.createEmptyMod(MOD));
     await modSync.settled();
@@ -84,11 +84,11 @@ describe('a mod gesture hands its change as one change', () => {
     await gesture('modbench.mod.uninstall', () => commands.uninstallMods([MOD], trash));
     await modSync.settled();
 
-    expect(landed).toEqual([{ listed: false, folder: false, renamed: false }]);
+    expect(landed.at(-1)).toEqual({ listed: false, folder: false, renamed: false });
     expect(syncWrote).toEqual([]);
   });
 
-  it('lands a rename whose git follow wrote unnamed files as one value, and mod sync writes nothing', async () => {
+  it('lands a rename whose git follow wrote unnamed files', async () => {
     const { adapter, commands, gesture, landed, modSync, syncWrote } = await wired();
     await gesture('modbench.mod.createEmpty', () => commands.createEmptyMod(MOD));
     await modSync.settled();
@@ -100,7 +100,7 @@ describe('a mod gesture hands its change as one change', () => {
     await gesture('modbench.mod.rename', () => renames.renameMod(editing, MOD, RENAMED));
     await modSync.settled();
 
-    expect(landed).toEqual([{ listed: false, folder: false, renamed: true }]);
+    expect(landed.at(-1)).toEqual({ listed: false, folder: false, renamed: true });
     expect(syncWrote).toEqual([]);
   });
 });
