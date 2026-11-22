@@ -633,14 +633,15 @@ export class Instance implements Subscription {
   private async read(run: Run): Promise<InstanceValue> {
     const { named, disk, tellsUnheard } = run;
     const { adapter, log } = this.options;
-    const reading = await adapter.reading({ named: [...named], disk }, this.landedFrom);
+    const { landedFrom } = this;
+    const reading = await adapter.reading({ named: [...named], disk }, landedFrom);
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
     run.reading = reading;
     return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
       sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },
       archiveSources: (sources) => { this.tellArchivesNothingHolds(sources); },
       archiveContents: (reads) => { this.tellOnce('archiveContents', unreadableArchiveLines(reads), 'warn'); },
-    });
+    }, landedFrom);
   }
 
 }

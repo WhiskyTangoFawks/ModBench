@@ -2,12 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, foldPath, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry, type FileConflictIndex, type LoadedArchive,
+  buildFileConflictIndex, foldPath, indexReusing, modOrigin, sliceReusing, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry, type FileConflictIndex, type LoadedArchive,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { fileIn } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
+import { reachableObjects } from '../../test/reachableObjects';
 
 const modPath = (name: string, relativePath: string): string => `/mods/${name}/${relativePath}`;
 
@@ -232,17 +233,6 @@ describe('a lookup changed from the one before it', () => {
     for (const entry of entries) lookup.set(entry);
     return lookup;
   };
-  const objectsIn = (value: unknown): number => {
-    const seen = new Set<unknown>();
-    const toVisit = [value];
-    for (let next = toVisit.pop(); next !== undefined || toVisit.length > 0; next = toVisit.pop()) {
-      if (typeof next !== 'object' || next === null || seen.has(next)) continue;
-      seen.add(next);
-      const children: unknown[] = next instanceof Map ? [...next.values()] : Object.values(next);
-      toVisit.push(...children);
-    }
-    return seen.size;
-  };
   const pathsUpTo = (count: number): string[] => Array.from({ length: count }, (_, at) => `meshes/${at}.nif`);
 
   it('holds what a lookup built afresh holds, and leaves the one before it as it was', () => {
@@ -263,7 +253,13 @@ describe('a lookup changed from the one before it', () => {
     const paths = pathsUpTo(2000);
     const emptied = lookupOf(paths.map((path) => entryAt(path))).changed(new Map(paths.map((path) => [path, undefined])));
 
-    expect(objectsIn(emptied)).toBe(objectsIn(new FileConflictLookup()));
+    expect(reachableObjects(emptied).size).toBe(reachableObjects(new FileConflictLookup()).size);
+  });
+
+  it('answers itself for a change that leaves every path as it holds it', () => {
+    const was = lookupOf(pathsUpTo(2000).map((path) => entryAt(path)));
+
+    expect(was.changed(new Map([['meshes/absent.nif', undefined], ['meshes/7.nif', was.get('meshes/7.nif')]]))).toBe(was);
   });
 
   it('copies no more entries for a change to one path however many paths it holds', () => {
@@ -274,6 +270,26 @@ describe('a lookup changed from the one before it', () => {
     sets.mockRestore();
 
     expect(copied).toBeLessThan(100);
+  });
+});
+
+describe('a slice of the index', () => {
+  const ESP = ({ relativePath }: OriginFile): boolean => relativePath.endsWith('.esp');
+
+  it('stays the object it was while the files it takes do, whatever else a listing changed', () => {
+    const slice = sliceReusing(ESP);
+    const was = listing('A', ['a.esp', 'a.nif']);
+    const first = slice([mod('A')], [], new Map([['A', was]]));
+
+    expect(slice([mod('A')], [], new Map([['A', { ...was, files: [...was.files, fileIn('/mods/A', 'b.nif')] }]]))).toBe(first);
+  });
+
+  it('indexes a file it takes once a listing gains one', () => {
+    const slice = sliceReusing(ESP);
+    const was = listing('A', ['a.esp']);
+    slice([mod('A')], [], new Map([['A', was]]));
+
+    expect(slice([mod('A')], [], new Map([['A', { ...was, files: [...was.files, fileIn('/mods/A', 'b.esp')] }]])).index.files.get('b.esp')?.winnerOrigin).toEqual(modOrigin('A'));
   });
 });
 
@@ -363,7 +379,7 @@ describe('the copies of each file, stacked as the game stacks them', () => {
   const archived = (name: string, archiveName: string) =>
     ({ origin: modOrigin(name), at: { kind: 'archived', gameRelease: 'Fallout4', archive: modPath(name, archiveName), file: FILE } });
   const stacked = (filesByMod: Record<string, string[]>, archives: ReturnType<typeof archive>[]) =>
-    stackCopies(indexOver(Object.keys(filesByMod).map((name) => mod(name)), filesByMod), archives, 'Fallout4');
+    stackReusing()(indexOver(Object.keys(filesByMod).map((name) => mod(name)), filesByMod), archives, 'Fallout4');
 
   it('puts every loose copy above every archived copy, whatever the mod order', () => {
     const stack = stacked({ A: ['A.ba2'], B: [FILE] }, [archive('A', 'A.ba2', [FILE])]);
@@ -418,7 +434,7 @@ describe('the copies of each file, stacked as the game stacks them', () => {
   });
 
   it('keeps Overwrite\'s copy apart from the copy of a mod named overwrite (ADR-0012)', () => {
-    const stack = stackCopies(indexOver([mod('overwrite')], { overwrite: [FILE] }, [fileIn('/overwrite', FILE)]), [], 'Fallout4');
+    const stack = stackReusing()(indexOver([mod('overwrite')], { overwrite: [FILE] }, [fileIn('/overwrite', FILE)]), [], 'Fallout4');
 
     expect(stack.get(FILE)?.copies.map(({ at }) => at)).toEqual([
       { kind: 'loose', path: `/overwrite/${FILE}` }, { kind: 'loose', path: modPath('overwrite', FILE) },
@@ -434,7 +450,7 @@ describe('the copies of each file, stacked as the game stacks them', () => {
   });
   const withFiles = (name: string, paths: string[]) => (was: Stacking): Stacking => ({ ...was, modFiles: new Map(was.modFiles).set(name, listing(name, paths)) });
   const withLoaded = (...loaded: LoadedArchive[]) => (was: Stacking): Stacking => ({ ...was, loaded });
-  const stackWith = (index: typeof buildFileConflictIndex, stack: typeof stackCopies, { entries, overwrite, modFiles, loaded }: Stacking) =>
+  const stackWith = (index: typeof buildFileConflictIndex, stack: ReturnType<typeof stackReusing>, { entries, overwrite, modFiles, loaded }: Stacking) =>
     stack(index(entries, overwrite, modFiles), loaded, 'Fallout4');
 
   it.each<[string, (was: Stacking) => Stacking]>([
@@ -456,7 +472,7 @@ describe('the copies of each file, stacked as the game stacks them', () => {
     stackWith(index, stack, was);
     const now = change(was);
 
-    expect([...stackWith(index, stack, now)].sort(byPath)).toEqual([...stackWith(buildFileConflictIndex, stackCopies, now)].sort(byPath));
+    expect([...stackWith(index, stack, now)].sort(byPath)).toEqual([...stackWith(buildFileConflictIndex, stackReusing(), now)].sort(byPath));
   });
 
   it('keeps the copies of each file a change leaves as they were the objects they were', () => {
@@ -484,7 +500,7 @@ describe('how an origin\'s copies stand against the others\' (mods.md, Indicator
   it('is Redundant for a mod whose loaded archive loses every file it holds', () => {
     const FILE = 'meshes/shared.nif';
     const index = indexOver([mod('A'), mod('B')], { A: ['A.ba2', FILE], B: ['B.ba2'] });
-    const stack = stackCopies(index, [{ origin: modOrigin('B'), archive: modPath('B', 'B.ba2'), files: [FILE] }], 'Fallout4');
+    const stack = stackReusing()(index, [{ origin: modOrigin('B'), archive: modPath('B', 'B.ba2'), files: [FILE] }], 'Fallout4');
 
     expect([copyStandingOf(stack, modOrigin('A')).redundant, copyStandingOf(stack, modOrigin('B')).redundant]).toEqual([false, true]);
   });
@@ -492,7 +508,7 @@ describe('how an origin\'s copies stand against the others\' (mods.md, Indicator
   it('is Redundant for a mod whose every other file loses, an archive the game does not load keeping it from nothing', () => {
     const FILE = 'meshes/shared.nif';
     const index = indexOver([mod('A'), mod('B')], { A: ['A.ba2', FILE], B: [FILE, 'B.ba2'] });
-    const stack = stackCopies(index, [], 'Fallout4');
+    const stack = stackReusing()(index, [], 'Fallout4');
 
     expect([copyStandingOf(stack, modOrigin('A')).redundant, copyStandingOf(stack, modOrigin('B')).redundant]).toEqual([false, true]);
   });

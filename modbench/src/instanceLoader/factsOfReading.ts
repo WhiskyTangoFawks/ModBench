@@ -1,8 +1,8 @@
 // The instance value's facts, each built again only when a fact it is built from is another object.
 
-import { lastBuilt } from '../ports/lastBuilt';
+import { asLanded, lastBuilt } from '../ports/lastBuilt';
 import {
-  foldPath, gameFolderArchivedOf, indexReusing, stackReusing, type FileConflictIndex, type FileWinners, type GameFolderArchived, type StackedCopies,
+  foldPath, gameFolderArchivedOf, indexReusing, sliceReusing, stackReusing, type FileConflictIndex, type FileWinners, type GameFolderArchived, type LoadedArchive,
 } from './fileConflictIndex';
 import {
   archivesGameLoads, archivesInLoadOrder, buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, snapshotStamper, type ArchiveSources,
@@ -11,7 +11,8 @@ import {
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { modNamesOf } from './modName';
 import { buildDownloadedFileRows, modsByInstallationFileName } from './downloadedFileRows';
-import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
+import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame, papyrusScriptAt, pluginCompanionRule } from '../tables/gamePaths';
+import { isPluginAtRoot } from '../tables/pluginFile';
 import {
   fileInFolder, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type GameFolder, type InstanceAdapter, type InstanceReading, type ModFolders,
   type ModlistEntry, type ModMeta, type OriginFile,
@@ -99,8 +100,20 @@ const gameFolderArchivedIn = (archives: ReturnType<typeof archivesToReadOf>, con
     return { archive, ...archives.gameArchives.has(archive) && read?.kind === 'read' && { gameFolderFiles: read.answer } };
   }), gameRelease);
 
-const papyrusScriptsIn = (files: FileWinners, dataFolderFiles: DataFolderFiles, gameRelease: string, stackedCopies: StackedCopies, gameFolderArchived: GameFolderArchived) =>
-  papyrusScriptsOf(files, dataFolderFiles, gameRelease, archivedPathsOf({ stackedCopies, gameFolderArchived }));
+const papyrusScriptsIn = (files: FileWinners, dataFolderFiles: DataFolderFiles, gameRelease: string, loaded: readonly LoadedArchive[], gameFolderArchived: GameFolderArchived) =>
+  papyrusScriptsOf(files, dataFolderFiles, gameRelease, archivedPathsOf({ loaded, gameFolderArchived }));
+
+// What each archive the game loads holds, nothing known of one that cannot be read.
+const loadedArchivesOf = (loaded: Loaded, contents: ReadonlyMap<string, ArchiveRead>): LoadedArchive[] => loaded.map(({ winner, winnerOrigin }) => {
+  const read = contents.get(winner);
+  return { origin: winnerOrigin, archive: winner, files: read?.kind === 'read' ? read.answer : undefined };
+});
+
+// The archives and strings files the game loads beside a plugin.
+const archiveOrStringsIn = (gameRelease: string) => {
+  const rule = pluginCompanionRule(gameRelease);
+  return ({ relativePath }: OriginFile): boolean => rule !== undefined && (rule.isArchive(relativePath) || rule.isStringsFile(relativePath));
+};
 
 const noLineOf = (gameRelease: string, creationClub: readonly string[], inData: DataFolderPlugins, plugins: Rows, gameFolder: GameFolder) =>
   pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), inData, plugins, gameFolder);
@@ -113,6 +126,9 @@ const snapshotOf = (
 /** Builds the instance value from each reading. */
 export class FactsOfReading {
   private readonly index = indexReusing();
+  private readonly rootPlugins = sliceReusing(({ relativePath }) => isPluginAtRoot(relativePath));
+  private readonly archivesAndStrings = lastBuilt((gameRelease: string) => sliceReusing(archiveOrStringsIn(gameRelease)));
+  private readonly scripts = lastBuilt((gameRelease: string) => sliceReusing(({ relativePath }) => papyrusScriptAt(gameRelease, relativePath) !== undefined));
   private readonly stack = stackReusing();
   private readonly plugins = lastBuilt(buildLoadOrderRows);
   private readonly noLine = lastBuilt(noLineOf);
@@ -125,11 +141,7 @@ export class FactsOfReading {
   private readonly loaded = lastBuilt((sources: ArchiveSources, active: ReturnType<typeof archivesToReadOf>['active']) =>
     archivesGameLoads(sources.gameRelease, sources.listed, active, sources.files));
   private readonly loadsArchive = lastBuilt(loadsArchiveOf);
-  private readonly stackedCopies = lastBuilt((index: FileConflictIndex, loaded: Loaded, contents: ReadonlyMap<string, ArchiveRead>, gameRelease: string) =>
-    this.stack(index, loaded.map(({ winner, winnerOrigin }) => {
-      const read = contents.get(winner);
-      return { origin: winnerOrigin, archive: winner, files: read?.kind === 'read' ? read.answer : undefined };
-    }), gameRelease));
+  private readonly loadedArchives = lastBuilt(loadedArchivesOf);
   private readonly gameFolderArchived = lastBuilt(gameFolderArchivedIn);
   private readonly papyrusScripts = lastBuilt(papyrusScriptsIn);
   private readonly snapshot = lastBuilt(snapshotOf);
@@ -138,31 +150,38 @@ export class FactsOfReading {
   private readonly linkTargets = lastBuilt((index: FileConflictIndex, overwrite: readonly OriginFile[]): ReadonlySet<string> =>
     new Set([...[...index.filesByMod.values()].flat(), ...overwrite].flatMap(({ path, sourcePath }) => (sourcePath === path ? [] : [sourcePath]))));
   private readonly modKey = (name: string): string => this.entryKey({ kind: 'mod', name });
+  // The source mods each reading made: a reading keeps those of the reading its value landed from while the two read the same.
+  private readonly sourceModsRead = new WeakMap<InstanceReading, SourceMods>();
 
   constructor(
     private readonly adapter: Pick<InstanceAdapter, 'names' | 'publisherTags' | 'ownPath' | 'fileStamp'>, private readonly entryKey: InstanceValue['entryKey'],
     private readonly archives: ArchiveContentsHeld, private readonly flagged: FlaggedHashesHeld,
   ) {}
 
-  /** The value `reading` makes, with the workspace's Data folder: the game folder's when the workspace holds it. */
-  async of(reading: InstanceReading, dataFolder: string | undefined, told: FactsTold): Promise<InstanceValue> {
+  /** The value `reading` makes, with the workspace's Data folder: the game folder's when the workspace holds it. `landedFrom` is
+   *  the reading the value last landed from. */
+  async of(reading: InstanceReading, dataFolder: string | undefined, told: FactsTold, landedFrom?: InstanceReading): Promise<InstanceValue> {
     const { mods: entries, gameRelease, gameFolder, dataFolderPlugins, modFolders, runtimeOutput, downloadedFiles, trustingKept } = reading;
-    const sourceMods = await trustingKept(() => sourceModsOf(modFolders?.all, reading.sourceModFolders, this.modKey));
+    const sourceMods = asLanded(await trustingKept(() => sourceModsOf(modFolders?.all, reading.sourceModFolders, this.modKey)), landedFrom && this.sourceModsRead.get(landedFrom));
+    this.sourceModsRead.set(reading, sourceMods);
     told.sourceMods(sourceMods);
     const index = this.index(entries, runtimeOutput.files, reading.modFiles);
     const linkTargets = this.linkTargets(index, runtimeOutput.files);
     // No watch follows the target of a link, so its stamp is taken afresh at each read.
     const stampOf = (path: string) => (linkTargets.has(path) ? this.adapter.fileStamp(path) : trustingKept(() => this.adapter.fileStamp(path)));
-    const plugins = this.plugins(reading.pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
+    const roots = this.rootPlugins(entries, runtimeOutput.files, reading.modFiles);
+    const plugins = this.plugins(reading.pluginOrder, roots.index, roots.overwrite, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = this.noLine(gameRelease, reading.creationClubList, dataFolderPlugins, plugins, gameFolder);
     const paths = this.paths(runtimeOutput.folder, downloadedFiles.kind === 'listed' ? downloadedFiles.downloadsDir : undefined, entries, modFolders, sourceMods);
-    const archiveSources = this.archiveSources(gameRelease, reading.archiveList, reading.dataFolderArchives, index, runtimeOutput.files);
+    const archived = this.archivesAndStrings(gameRelease)(entries, runtimeOutput.files, reading.modFiles);
+    const archiveSources = this.archiveSources(gameRelease, reading.archiveList, reading.dataFolderArchives, archived.index, archived.overwrite);
     told.archiveSources(archiveSources);
     const toRead = this.archivesToRead(archiveSources, plugins, pluginsLoadedWithNoLine, dataFolder);
     const archiveContents = await this.archives.read(gameRelease, toRead.toRead, stampOf);
     told.archiveContents(archiveContents);
     const loaded = this.loaded(archiveSources, toRead.active);
-    const stackedCopies = this.stackedCopies(index, loaded, archiveContents, gameRelease);
+    const loadedArchives = this.loadedArchives(loaded, archiveContents);
+    const stackedCopies = this.stack(index, loadedArchives, gameRelease);
     const gameFolderArchived = this.gameFolderArchived(toRead, archiveContents, gameRelease);
     const flaggedHashes = await this.flagged.read(gameRelease, await trustingKept(() => flaggedPluginsIn(reading.holdsRepository ? entries.flatMap((entry) => {
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry)?.path : undefined;
@@ -187,7 +206,9 @@ export class FactsOfReading {
       stackedCopies,
       gameFolderArchived,
       gameFolderInWorkspace: dataFolder !== undefined,
-      papyrusScripts: this.papyrusScripts(index.files, reading.dataFolderFiles, gameRelease, stackedCopies, gameFolderArchived),
+      papyrusScripts: this.papyrusScripts(
+        this.scripts(gameRelease)(entries, runtimeOutput.files, reading.modFiles).index.files, reading.dataFolderFiles, gameRelease, loadedArchives, gameFolderArchived,
+      ),
       plugins,
       downloadedFiles: this.downloadedFiles(downloadedFiles, this.installedInto(reading.folderMeta), entries, paths.sourceDirs),
       activeProfile: reading.profile,

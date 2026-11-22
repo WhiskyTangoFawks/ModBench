@@ -1158,6 +1158,17 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
   });
 
+  it('keeps the paths it landed while another instance reads other source mods (ADR-0029)', async () => {
+    const { instance } = loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Radfall: '/source/Radfall' }) });
+    await instance.refresh();
+    const landed = instance.value.paths;
+    await loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Other: '/source/Other' }) }).instance.refresh();
+
+    await instance.refresh();
+
+    expect(instance.value.paths).toBe(landed);
+  });
+
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
     const names = { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' };
     const { instance } = loader({}, (adapter) => ({ ...adapter, names }));

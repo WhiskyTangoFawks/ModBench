@@ -80,12 +80,14 @@ export class FileConflictLookup<E extends { readonly relativePath: string } = Co
     return this.byFoldedPath.get(foldPath(relativePath));
   }
 
-  /** This lookup, with each folded path `changes` names holding the entry it gives, or none where it gives none. */
+  /** This lookup, with each folded path `changes` names holding the entry it gives, or none where it gives none: itself while
+ *  every path already does. */
   changed(changes: ReadonlyMap<string, E | undefined>): FileConflictLookup<E> {
-    if (changes.size === 0) return this;
+    const real = [...changes].filter(([folded, entry]) => this.byFoldedPath.get(folded) !== entry);
+    if (real.length === 0) return this;
     const next = new FileConflictLookup<E>();
     next.byFoldedPath = this.byFoldedPath.fork();
-    for (const [folded, entry] of changes) next.byFoldedPath.put(folded, entry);
+    for (const [folded, entry] of real) next.byFoldedPath.put(folded, entry);
     return next;
   }
 
@@ -263,6 +265,43 @@ export function indexReusing(): typeof buildFileConflictIndex {
   };
 }
 
+/** The index of the files `keeps` takes, and Overwrite's of them. */
+export interface FileConflictSlice {
+  readonly index: FileConflictIndex;
+  readonly overwrite: readonly OriginFile[];
+}
+
+const NO_FOLDERS: readonly OriginFolder[] = [];
+
+/** `indexReusing` over the files `keeps` takes from each listing: the slice keeps its identity while those files do, whatever
+ *  else a listing changed. */
+export function sliceReusing(keeps: (file: OriginFile) => boolean): (...index: Parameters<typeof buildFileConflictIndex>) => FileConflictSlice {
+  const index = indexReusing();
+  const taken = new WeakMap<readonly OriginFile[], readonly OriginFile[]>();
+  let last = new Map<string, readonly OriginFile[]>();
+  let slice: FileConflictSlice | undefined;
+  return (entries, overwrite, modFiles) => {
+    const now = new Map<string, readonly OriginFile[]>();
+    const take = (origin: FileOrigin, files: readonly OriginFile[]): readonly OriginFile[] => {
+      const prior = last.get(originKey(origin));
+      let kept = taken.get(files);
+      if (kept === undefined) {
+        const fresh = files.filter(keeps);
+        kept = prior !== undefined && sameInputs(prior, fresh) ? prior : fresh;
+        taken.set(files, kept);
+      }
+      now.set(originKey(origin), kept);
+      return kept;
+    };
+    const sliced = new Map([...modFiles].map(([name, listing]) => [name, { ...listing, files: take(modOrigin(name), listing.files), folders: NO_FOLDERS }]));
+    const keptOverwrite = take(RUNTIME_OUTPUT, overwrite);
+    const next = { index: index(entries, keptOverwrite, sliced), overwrite: keptOverwrite };
+    last = now;
+    if (slice?.index !== next.index || slice.overwrite !== next.overwrite) slice = next;
+    return slice;
+  };
+}
+
 /** A file in an archive, by its forward-slash path there, and the release whose format the archive is read as. */
 export interface ArchivedFileAddress {
   readonly gameRelease: string;
@@ -428,11 +467,6 @@ function stackOf(winningFirst: readonly OriginProvides[], isLoose: ArchiveRule, 
 
 type StackSources = Pick<FileConflictIndex, 'winningFirst' | 'files'>;
 
-/** Each file a mod or Overwrite provides, loose or in an archive in `loaded` (in load order), as the game stacks its
- *  copies. An archive is the files it holds: one not loaded gives none, one unreadable stays a file. */
-export function stackCopies(index: StackSources, loaded: readonly LoadedArchive[], gameRelease: string): StackedCopies {
-  return stackOf(index.winningFirst, looseIn(loaded, gameRelease), archivedCopiesOf(loaded, gameRelease));
-}
 
 function archivedAgain(was: FileConflictLookup<StackedFile>, archives: Reordered<LoadedArchive>, paths: Iterable<string>, gameRelease: string): FileConflictLookup<StackedFile> {
   return updated(was, paths, (folded, before) => {
@@ -541,8 +575,9 @@ export function gameFolderArchivedOf(loaded: readonly { readonly archive: string
   return { copies, loadRank: new Map(loaded.map(({ archive }, rank) => [archive, rank])) };
 }
 
-/** `stackCopies`, from the stack it built last: a change costs the paths of the origins and the archives it changed. */
-export function stackReusing(): typeof stackCopies {
+/** Each file mods or Overwrite provide, loose or in an archive `loaded` holds (in load order), as the game stacks its copies:
+ *  an unloaded archive gives none, an unreadable one stays a file. A change costs the paths it changed. */
+export function stackReusing(): (index: StackSources, loaded: readonly LoadedArchive[], gameRelease: string) => StackedCopies {
   let last: Stacked | undefined;
   return (index, loaded, gameRelease) => {
     const { archived, stack } = last?.gameRelease === gameRelease ? restacked(last, index, loaded) : stackedAfresh(index.winningFirst, loaded, gameRelease);

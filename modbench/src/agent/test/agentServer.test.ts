@@ -36,7 +36,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import {
-  buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackCopies, type ConflictEntry,
+  buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackReusing, type ConflictEntry,
 } from '../../instanceLoader/fileConflictIndex';
 import type { MEditClient } from '../../client/MEditClient';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
@@ -871,7 +871,7 @@ const CONFLICTED = instanceValueFixture({
   overwriteFiles: CONFLICTED_OVERWRITE,
   filesByMod: CONFLICTED_INDEX.filesByMod,
   files: CONFLICTED_INDEX.files,
-  stackedCopies: stackCopies(CONFLICTED_INDEX, [], 'Fallout4'),
+  stackedCopies: stackReusing()(CONFLICTED_INDEX, [], 'Fallout4'),
 });
 
 describe('the agent server, reading file order conflicts', () => {
@@ -880,7 +880,7 @@ describe('the agent server, reading file order conflicts', () => {
     const index = buildFileConflictIndex(mods, [], new Map(Object.entries({
       Big: Array.from({ length: 1000 }, (_, n) => `meshes/${'deep/'.repeat(10)}${n}.nif`), A: ['a.esp'],
     }).map(([name, paths]) => [name, { origin: name, folder: '/m', files: paths.map((path) => fileIn('/m', path)), folders: [], notes: [] }])));
-    const value = instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackCopies(index, [], 'Fallout4') });
+    const value = instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackReusing()(index, [], 'Fallout4') });
     const filtering = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name, or whose separator\'s name, holds it.';
     const narrow = `mods narrows the read to the mods you name. ${filtering}`;
     const big = { kind: 'mod', mod: 'Big', wins: 0, loses: 0, files: 1000 };
@@ -918,7 +918,7 @@ describe('the agent server, reading file order conflicts', () => {
   it('keeps, under the filter, every file of a mod whose separator\'s name holds it', async () => {
     const mods: ModlistEntry[] = [{ kind: 'mod', name: 'Pebbles', enabled: true }, { kind: 'separator', name: 'Rocks', enabled: true }];
     const index = buildFileConflictIndex(mods, [], new Map([['Pebbles', { origin: 'Pebbles', folder: '/m', files: [fileIn('/m', 'meshes/p.nif')], folders: [], notes: [] }]]));
-    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackCopies(index, [], 'Fallout4') })));
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackReusing()(index, [], 'Fallout4') })));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Pebbles' }], filter: 'ROCK' })).toMatchObject([{ mod: 'Pebbles', files: [{ file: 'meshes/p.nif' }] }]);
   });
@@ -936,7 +936,7 @@ describe('the agent server, reading file order conflicts', () => {
   it('reads an archived copy as the game stacks it, below every loose copy, with its contents on its loss', async () => {
     const value = instanceValueFixture({
       ...CONFLICTED,
-      stackedCopies: stackCopies(CONFLICTED_INDEX, [{ origin: modOrigin('A'), archive: '/m/A.ba2', files: ['readme.txt'] }], 'Fallout4'),
+      stackedCopies: stackReusing()(CONFLICTED_INDEX, [{ origin: modOrigin('A'), archive: '/m/A.ba2', files: ['readme.txt'] }], 'Fallout4'),
     });
     const { client } = await clientOf(new FakeInstance(value));
 
@@ -954,7 +954,7 @@ describe('the agent server, reading file order conflicts', () => {
     const index = buildFileConflictIndex(mods, [], new Map([['Armour', { origin: 'Armour', folder: '/m/Armour', files: [archive, broken], folders: [], notes: [] }]]));
     const value = instanceValueFixture({
       mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod,
-      stackedCopies: stackCopies(index, [{ origin: modOrigin('Armour'), archive: archive.sourcePath, files: inside }], 'Fallout4'),
+      stackedCopies: stackReusing()(index, [{ origin: modOrigin('Armour'), archive: archive.sourcePath, files: inside }], 'Fallout4'),
       archiveContents: new Map<string, ArchiveRead>([
         [archive.sourcePath, { kind: 'read', answer: inside }],
         [broken.sourcePath, { kind: 'unreadable', reason: 'bad header' }],
