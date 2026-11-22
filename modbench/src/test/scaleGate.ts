@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Instance, type InstanceSubscriber, type InstanceValue } from '../instanceLoader/instance';
+import { Instance, type InstanceSubscriber } from '../instanceLoader/instance';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture, recordTypeCountFixture } from '../client/test/fixtures';
 import { holdsLoadOrder } from '../client/test/says';
@@ -83,10 +83,7 @@ function reachableObjects(value: unknown): Set<object> {
   return seen;
 }
 
-const newObjects = (before: InstanceValue, after: InstanceValue): number => {
-  const known = reachableObjects(before);
-  return [...reachableObjects(after)].filter((object) => !known.has(object)).length;
-};
+const newObjects = (known: ReadonlySet<object>, after: unknown): number => [...reachableObjects(after)].filter((object) => !known.has(object)).length;
 
 type Tree = Pick<vscode.TreeDataProvider<unknown>, 'getChildren' | 'getTreeItem'> & {
   readonly onDidChangeTreeData: vscode.Event<unknown>;
@@ -214,8 +211,9 @@ const gesturesIn = (view: ViewName, row: string): Record<'opening' | 'expanding'
 export const IN_MODS = gesturesIn('Mods', modName(0));
 export const IN_PLUGINS = gesturesIn('Plugins', `${modName(0)}.esp`);
 
-/** What `gesture` costs at each layer, and the rows it shows, on a synthetic instance of `mods` mods. */
-export async function costOf(mods: number, gesture: Gesture): Promise<Cost & { readonly shown: number }> {
+/** What `gesture` costs at each layer, the rows it shows, and the objects each fact of the value holds that the value before
+ *  it did not, on a synthetic instance of `mods` mods. */
+export async function costOf(mods: number, gesture: Gesture): Promise<Cost & { readonly shown: number; readonly derivedIn: Readonly<Record<string, number>> }> {
   const root = await syntheticInstance(mods);
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
   const client = new InMemoryMEditClient();
@@ -261,7 +259,12 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & { r
     const shown = await gesture.make({ root, instance, views: host.views });
     await settled();
 
-    return { read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(before, instance.value), subscribers, mEdit: client.calls.length - asked, views: host.count(), shown };
+    const known = reachableObjects(before);
+    const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
+    return {
+      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value), derivedIn, subscribers, mEdit: client.calls.length - asked,
+      views: host.count(), shown,
+    };
   } finally {
     for (const disposable of [modSyncing, pluginSyncing, outcomes, host, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });

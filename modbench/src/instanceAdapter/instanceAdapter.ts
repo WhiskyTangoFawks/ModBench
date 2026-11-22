@@ -973,7 +973,8 @@ export interface OriginProvides {
   readonly files: readonly OriginFile[];
 }
 
-const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
+/** An origin with its files that nothing excludes. */
+export const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
   ({ origin, files: files.filter((file) => !file.excluded) });
 
 /** The origins the game gets a file from, winning-first, as Symbol names ranks them, each with the files nothing excludes. */

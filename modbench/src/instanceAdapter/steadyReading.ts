@@ -139,18 +139,37 @@ const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: Or
 
 const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
 
+// Its files and folders are compared by identity, once each is steadied.
 const originFilesParts = ({ origin, folder, notes, files, folders, ...rest }: OriginFiles): unknown[] =>
-  [origin, folder, notes.length, ...notes, files.length, ...files.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest)];
+  [origin, folder, notes.length, ...notes, files, folders, ...noneLeft(rest)];
 
 const as = <T extends object | undefined>(fact: T, parts: readonly unknown[], landed: T | undefined): T => asLanded(readAs(fact, parts), landed);
 
+// Each item as the one at its path in `landed` while the two read the same, and `landed` while every item is.
+function itemsAsLanded<T extends OriginFolder>(items: readonly T[], landed: readonly T[] | undefined, partsOf: (item: T) => unknown[]): readonly T[] {
+  const held = new Map((landed ?? []).map((item) => [item.path, item]));
+  const steady = items.map((item) => as(item, partsOf(item), held.get(item.path)));
+  return landed !== undefined && sameInputs(landed, steady) ? landed : steady;
+}
+
 // A walk its stamps covered answers the object it answered, so only a walk made again is compared, and only with what landed.
-const filesAsLanded = (files: OriginFiles, landed: OriginFiles | undefined): OriginFiles =>
-  (landed === files ? landed : as(files, originFilesParts(files), landed));
+function filesAsLanded(files: OriginFiles, landed: OriginFiles | undefined): OriginFiles {
+  if (landed === files) return landed;
+  const steady = { ...files, files: itemsAsLanded(files.files, landed?.files, fileParts), folders: itemsAsLanded(files.folders, landed?.folders, folderParts) };
+  return as(steady, originFilesParts(steady), landed);
+}
 
 function modFilesAsLanded(modFiles: ReadonlyMap<string, OriginFiles>, landed: ReadonlyMap<string, OriginFiles> | undefined): ReadonlyMap<string, OriginFiles> {
-  const steady = new Map([...modFiles].map(([name, files]) => [name, filesAsLanded(files, landed?.get(name))] as const));
-  return landed !== undefined && sameInputs([...landed].flat(), [...steady].flat()) ? landed : steady;
+  const steady = new Map<string, OriginFiles>();
+  const landedNames = [...landed?.keys() ?? []];
+  let same = landed?.size === modFiles.size;
+  for (const [name, files] of modFiles) {
+    const held = landed?.get(name);
+    const kept = filesAsLanded(files, held);
+    same &&= kept === held && landedNames[steady.size] === name;
+    steady.set(name, kept);
+  }
+  return same && landed !== undefined ? landed : steady;
 }
 
 function modlistEntryParts(entry: ModlistEntry): unknown[] {
@@ -164,8 +183,8 @@ function modlistEntryParts(entry: ModlistEntry): unknown[] {
 
 const pluginEntryParts = ({ name, enabled, ...rest }: PluginEntry): unknown[] => [name, enabled, ...noneLeft(rest)];
 
-/** Each fact of a reading, or the object `landed` holds while both were read as the same (ADR-0029). `landed` is the reading
- *  the caller's value last landed from. */
+/** `read`, each of its facts swapped for `landed`'s object where the two read the same, so a fact nothing changed keeps
+ *  its identity (ADR-0029). `landed` is the reading the caller's value last landed from. */
 export function steadied(read: ReadFacts, landed?: ReadFacts): ReadFacts {
   const was: Partial<ReadFacts> = landed ?? {};
   return {

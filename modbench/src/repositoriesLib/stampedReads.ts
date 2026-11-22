@@ -123,8 +123,8 @@ async function forgetChanged<T>(
   return changed.flat();
 }
 
-/** Runs `read` trusting what is kept, once what `named` touches, or all when `disk`, is forgotten where it may have changed.
- *  Answers the changes `named` missed, what it found, and each file found as `before` holds it. */
+/** Forgets each kept answer that `named` touches, or any when `disk`, that may have changed, then runs `read` trusting the
+ *  rest. Answers its answer, each changed path `named` missed, the contents it found, and those `before` holds the same. */
 export async function readTrustingKept<T>(
   named: readonly string[], disk: boolean, read: () => Promise<T>, before?: ReadonlyMap<string, unknown>,
 ): Promise<{ answer: T; unheard: string[]; found: ReadonlyMap<string, unknown>; unchanged: ReadonlySet<string> }> {
