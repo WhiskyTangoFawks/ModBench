@@ -43,6 +43,9 @@ try
         ContentRootPath = AppContext.BaseDirectory,
     });
 
+    // Kestrel's default 30 MB body limit guards a public server; a script's patch of thousands of records exceeds it.
+    builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = null);
+
     builder.Host
         .UseSerilog((ctx, services, cfg) => cfg
             .ReadFrom.Configuration(ctx.Configuration)
