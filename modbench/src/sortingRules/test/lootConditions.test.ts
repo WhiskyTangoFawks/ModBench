@@ -221,8 +221,7 @@ describe('readsOf: the file reads a condition needs', () => {
 
 });
 
-describe('pathsOf: the file of each condition function Modbench evaluates that reads one (ADR-0029, Consequences, bullet 5)', () => {
-  // Every condition function LOOT's metadata syntax has; one Modbench does not evaluate reads nothing.
+describe('pathsOf: the file of each of LOOT\'s condition functions that reads one as Modbench evaluates it (ADR-0029, Consequences, bullet 5)', () => {
   it.each([
     'file("a.esp")', 'file_size("a.esp", 1)', 'readable("a.esp")', 'is_executable("a.exe")', 'active("a.esp")', 'many("a.*\\.esp")',
     'many_active("a.*\\.esp")', 'is_master("a.esp")', 'checksum("a.esp", DEADBEEF)', 'version("a.dll", ==, "1")', 'product_version("a.exe", ==, "1")',
