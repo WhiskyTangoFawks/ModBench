@@ -39,6 +39,7 @@ internal static class PluginLoadFlags
             if (MayLimitFormIds(Path.GetFileName(path), set, load) && refusalOfFlaggedCopy(temp) is { } refusal)
                 throw new PluginFailureException(new PluginFailure.FormIdOutsideFlagLimit(refusal));
             File.Move(temp, path, overwrite: true);
+            WrittenFiles.Name(path);
         }
         finally
         {

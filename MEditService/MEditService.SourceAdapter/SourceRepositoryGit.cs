@@ -147,7 +147,7 @@ internal abstract class SourceRepositoryGit
     }
 
     // Read off the file system, not by running git: every read of a compiled plugin asks this.
-    private static string? WorkTreeAbove(string sourceFolder)
+    internal static string? WorkTreeAbove(string sourceFolder)
     {
         for (var folder = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceFolder))); folder is not null; folder = Path.GetDirectoryName(folder))
         {
@@ -195,7 +195,7 @@ internal abstract class SourceRepositoryGit
     }
 
     // A submodule git checks out holds a .git file naming its git directory, as gitrepository-layout(5) has it.
-    private static string GitDirOf(string workTree)
+    internal static string GitDirOf(string workTree)
     {
         const string GitFile = "gitdir: ";
         var dotGit = Path.Combine(workTree, ".git");

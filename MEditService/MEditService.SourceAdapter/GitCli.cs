@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using MEditService.RepositoriesLib;
 using Serilog;
 
 namespace MEditService.SourceAdapter;
@@ -33,7 +34,10 @@ internal static class GitCli
     internal static void UpdateSubmodule(string folder, IEnumerable<(string Key, string Value)> settings, CancellationToken cancel)
     {
         var path = Path.TrimEndingDirectorySeparator(folder);
-        var parent = Directory.CreateDirectory(Path.GetDirectoryName(path) ?? path).FullName;
+        var parentPath = Path.GetDirectoryName(path) ?? path;
+        WrittenFiles.CreateDirectory(parentPath);
+        var parent = Path.GetFullPath(parentPath);
+        WrittenFiles.Name([path, .. SourceRepositoryGit.WorkTreeAbove(path) is { } superproject ? [SourceRepositoryGit.GitDirOf(superproject)] : Array.Empty<string>()]);
         string[] args = [.. settings.SelectMany(setting => new[] { "-c", $"{setting.Key}={setting.Value}" }), "submodule", "update", "-q", "--init", "--", Path.GetFileName(path)];
         var psi = StartInfo(args, parent);
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
@@ -53,6 +57,7 @@ internal static class GitCli
     /// <summary>As <see cref="Run"/>, with <paramref name="input"/> on git's stdin.</summary>
     internal static void RunFed(string gitDir, string workTree, string at, string input, params string[] args)
     {
+        NameWrites(gitDir, workTree, args);
         var (exitCode, _, stderr) = Execute(StartInfo(gitDir, workTree, at, args), at, CancellationToken.None, input);
         if (exitCode != 0) throw Failed(args[0], args, exitCode, stderr);
     }
@@ -107,8 +112,11 @@ internal static class GitCli
         return psi;
     }
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string at, string[] args) =>
-        Execute(StartInfo(gitDir, workTree, at, args), at, CancellationToken.None);
+    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string at, string[] args)
+    {
+        NameWrites(gitDir, workTree, args);
+        return Execute(StartInfo(gitDir, workTree, at, args), at, CancellationToken.None);
+    }
 
     private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string at, CancellationToken cancel, string input = "")
     {
@@ -128,6 +136,32 @@ internal static class GitCli
 
         process.WaitForExit();
         return (process.ExitCode, stdout, stderr);
+    }
+
+    private static readonly HashSet<string> Reads =
+        ["status", "rev-parse", "ls-files", "ls-tree", "cat-file", "for-each-ref", "log", "diff", "show", "rev-list", "grep", "check-ignore", "check-attr"];
+
+    private static readonly HashSet<string> ReadingArguments = ["--get", "--get-all", "--get-regexp", "--list", "--show-current", "--contains", "get-url"];
+
+    private static readonly HashSet<string> WorkTreeWrites = ["checkout", "switch", "restore", "merge", "rebase", "stash", "clean", "pull"];
+
+    private static readonly HashSet<string> WorkTreeResets = ["--hard", "--merge", "--keep"];
+
+    // What a subcommand writes: nothing for a read, the git directory, and the work tree as well for one that writes it.
+    private static void NameWrites(string gitDir, string workTree, string[] args)
+    {
+        var subcommand = args[0];
+        var rest = args[1..];
+        var operands = rest.Count(arg => !arg.StartsWith('-'));
+        var reads = Reads.Contains(subcommand) || rest.Any(ReadingArguments.Contains)
+            || subcommand is "remote" or "branch" && operands == 0
+            || subcommand == "symbolic-ref" && operands < 2 && !rest.Any(arg => arg is "-d" or "--delete");
+        if (reads) return;
+        var writesTheWorkTree = WorkTreeWrites.Contains(subcommand)
+            || subcommand == "reset" && rest.Any(WorkTreeResets.Contains)
+            || subcommand == "rm" && !rest.Contains("--cached")
+            || subcommand == "read-tree" && rest.Contains("-u");
+        WrittenFiles.Name(writesTheWorkTree ? [gitDir, workTree] : [gitDir]);
     }
 
     // Starting git throws Win32Exception both for a git that cannot run and for a working directory

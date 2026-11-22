@@ -5,7 +5,7 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands;
 
 /// <summary>Applied or refusal, per mod (ADR-0019), never the status of the call.</summary>
-public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<BuildRefused> Refused)
+public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<BuildRefused> Refused, IReadOnlyList<string> Written)
     : ISelectionAnswer<BuildRefused>;
 
 /// <summary>A mod whose step ran: what it compiled and refused, what stopped it, each file it made (its manifest records them,

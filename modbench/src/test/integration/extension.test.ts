@@ -361,8 +361,8 @@ function createMockBackend(): http.Server {
     if (method === 'POST' && url === '/plugins/move-last-written') {
       req.on('data', () => {});
       req.on('end', () => {
-        res.writeHead(204);
-        res.end();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ written: [] }));
       });
       return;
     }
@@ -374,9 +374,10 @@ function createMockBackend(): http.Server {
         if (!isRecord(asked) || typeof asked.name !== 'string' || typeof asked.origin !== 'string' || typeof asked.folder !== 'string') {
           throw new Error(`expected a create body naming a plugin, its origin and its folder, got: ${body}`);
         }
-        writeFileSync(path.join(asked.folder, asked.name), '');
+        const written = path.join(asked.folder, asked.name);
+        writeFileSync(written, '');
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ name: asked.name, origin: asked.origin }));
+        res.end(JSON.stringify({ plugin: { name: asked.name, origin: asked.origin }, written: [written] }));
       });
       return;
     }

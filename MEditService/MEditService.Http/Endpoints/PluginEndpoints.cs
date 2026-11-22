@@ -225,8 +225,8 @@ internal static class PluginEndpoints
             .WithDescription(
                 "Writes an empty plugin (a header flagged as given, no records and no " +
                 "masters) into the given folder, in the release of the held load order. Changes " +
-                "nothing else: no init, no load order change and no plugins.txt line.")
-            .Produces<PluginAddress>()
+                "nothing else: no init, no load order change and no plugins.txt line. Answers the plugin, and each file it wrote.")
+            .Produces<PluginCreated>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -318,9 +318,10 @@ internal static class PluginEndpoints
         app.MapPost("/plugins/move-last-written", MoveLastWritten)
             .WithName("MoveLastWritten")
             .WithDescription(
-                "Moves what Modbench last wrote for a plugin to the plugin's new name, once the source rename is applied and saved.")
+                "Moves what Modbench last wrote for a plugin to the plugin's new name, once the source rename is applied and saved. " +
+                "Answers each file it wrote.")
             .WithTags(Tag)
-            .Produces(204)
+            .Produces<FilesWritten>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)

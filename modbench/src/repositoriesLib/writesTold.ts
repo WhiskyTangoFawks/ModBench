@@ -8,9 +8,11 @@ let diskCheckSink: WriteSink | undefined;
 /** Hands every write of the repositories the loader it tells; the composition root calls it once. */
 export const writesToldTo = (to: WritesTold): void => { loader = to; };
 
-/** Hands every write that cannot name its files the sink of the command running it, so that command checks the disk; the
- *  composition root calls it once. */
+/** Hands every write the loader is not told of the sink of the command running it, which reads what the write names, or
+ *  checks the disk; the composition root calls it once. */
 export const diskCheckedBy = (to: WriteSink): void => { diskCheckSink = to; };
+
+export const nameWrites = (paths: readonly string[]): void => diskCheckSink?.name(paths);
 
 export const leaveWritesUnnamed = (): void => diskCheckSink?.leaveUnnamed();
 

@@ -248,6 +248,15 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     [Fact]
+    public void MoveLastWritten_NamesTheRepositoryWhoseRefsItMoved()
+    {
+        var result = Moving.MoveLastWritten(Old, Old.Name, "New.esp");
+
+        Assert.Null(result.Refusal);
+        Assert.Equal([Path.Combine(_sourceMod, ".git")], result.Written);
+    }
+
+    [Fact]
     public void MoveLastWritten_WhenGitRefusesTheRefUpdate_RefusesIt()
     {
         GitHooks.RefuseRefUpdates(_sourceMod);

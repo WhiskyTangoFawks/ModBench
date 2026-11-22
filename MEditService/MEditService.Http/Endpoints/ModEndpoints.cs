@@ -18,7 +18,7 @@ internal static class ModEndpoints
             .WithDescription(
                 "Runs one built-in step of each source mod's build file: a decompile of plugins in its source folder into their plugin " +
                 "source, a compile of plugins into its folder, a copy of files or folders from its source folder into its folder, or a " +
-                "pack of loose files of its folder into archives, which takes them out of the folder. A file written under an excluded " +
+                "pack of loose files of its folder into archives, answering each loose file it packed. A file written under an excluded " +
                 "path is written under the exclusion mark. A mod is refused before it writes, or lands naming what failed when a read " +
                 "or write stopped it part way, and each file it made with whether the source vouches for it. " +
                 "Progress is the build-progress notification.")
@@ -56,8 +56,9 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Once a source folder has moved, what git holds of it follows: each entry the instance " +
-                "repository's index holds under it, the refs naming what Modbench last wrote there, and a submodule's work tree.")
-            .Produces(204)
+                "repository's index holds under it, the refs naming what Modbench last wrote there, and a submodule's work tree. " +
+                "Answers each file it wrote.")
+            .Produces<FilesWritten>()
             .ProducesProblem(400)
             .ProducesProblem(500);
 
