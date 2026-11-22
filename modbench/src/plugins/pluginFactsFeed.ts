@@ -186,6 +186,11 @@ export class PluginFactsFeed implements vscode.Disposable {
     else this.changed.fire(named);
   }
 
+  /** Settles once every refresh asked so far has. */
+  settled(): Promise<unknown> {
+    return this.refreshing;
+  }
+
   /** The record filter changed, so the last answer belongs to another filter. */
   forgetMatches(): void {
     this.facts.forgetMatches();

@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { Instance, type InstanceSubscriber } from '../instanceLoader/instance';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture, recordTypeCountFixture } from '../client/test/fixtures';
-import { holdsLoadOrder } from '../client/test/says';
+import { changeNamesPlugin, holdsLoadOrder } from '../client/test/says';
 import { ModListProvider } from '../mods/ModListProvider';
 import { OpenRows } from '../mods/openRows';
 import { registerModDecorations } from '../mods/modDecorations';
@@ -38,7 +38,7 @@ import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
 export interface Cost {
   /** The file system calls from the gesture until its value lands, or until it settles when none lands; its own writes too. */
   readonly read: number;
-  /** The objects the value holds that the value before it did not. */
+  /** The objects the value and the Plugins view's facts hold that they did not before. */
   readonly derived: number;
   /** The subscribers called. */
   readonly subscribers: number;
@@ -71,7 +71,8 @@ async function syntheticInstance(mods: number): Promise<string> {
   return root;
 }
 
-const newObjects = (known: ReadonlySet<object>, after: unknown): number => [...reachableObjects(after)].filter((object) => !known.has(object)).length;
+const newObjects = (known: ReadonlySet<object>, ...roots: unknown[]): number =>
+  new Set(roots.flatMap((root) => [...reachableObjects(root)]).filter((object) => !known.has(object))).size;
 
 type Tree = Pick<vscode.TreeDataProvider<unknown>, 'getChildren' | 'getTreeItem'> & {
   readonly onDidChangeTreeData: vscode.Event<unknown>;
@@ -202,7 +203,7 @@ export interface Gesture {
   readonly name: string;
   /** The view the gesture opens, closed until it does. */
   readonly opens?: ViewName;
-  make(at: { root: string; instance: Pick<Instance, 'refresh'>; views: Readonly<Record<ViewName, View>> }): Promise<number>;
+  make(at: { root: string; instance: Pick<Instance, 'refresh'>; views: Readonly<Record<ViewName, View>>; client: InMemoryMEditClient }): Promise<number>;
 }
 
 export const A_NEW_LOOSE_FILE: Gesture = {
@@ -212,6 +213,14 @@ export const A_NEW_LOOSE_FILE: Gesture = {
     await writeFile(file, 'changed');
     await instance.refresh([file]);
     return 0;
+  },
+};
+
+export const A_RECORD_WRITTEN: Gesture = {
+  name: 'a record written into one plugin, which mEdit says changed',
+  make({ client }) {
+    changeNamesPlugin(client, { name: `${modName(0)}.esp`, origin: modName(0) });
+    return Promise.resolve(0);
   },
 };
 
@@ -283,7 +292,11 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const pluginSyncing = pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter, client), channel: quiet });
   let subscribers = 0;
   const outcomes = instance.onListenerOutcome(({ listener, during }) => { if (during === 'value' && listener !== landing) subscribers++; });
-  const settled = () => Promise.all([modSyncing.modSync.settled(), pluginSyncing.pluginSync.settled(), host.settled()]);
+  const indexChanges = client.onDidChange((change) => { pluginsTree.indexChanged(change); });
+  const settled = async () => {
+    await Promise.all([modSyncing.modSync.settled(), pluginSyncing.pluginSync.settled(), pluginsTree.facts.settled()]);
+    await host.settled();
+  };
   try {
     await instance.refresh();
     const { plugins } = instance.value;
@@ -293,7 +306,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     await pluginsTree.facts.reconciled([]);
     for (const [name, view] of Object.entries(host.views)) if (name !== gesture.opens) await view.open();
     await settled();
-    const before = instance.value;
+    const known = reachableObjects([instance.value, pluginsTree.facts.rows]);
     host.count();
     table.posted.splice(0);
     subscribers = 0;
@@ -301,18 +314,17 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     const asked = client.calls.length;
     const landed = landings.length;
 
-    const shown = await gesture.make({ root, instance, views: host.views });
+    const shown = await gesture.make({ root, instance, views: host.views, client });
     await settled();
 
     const viewsIn = { ...host.count(), Conflicts: table.posted.length };
-    const known = reachableObjects(before);
     const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
     return {
-      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value), derivedIn, subscribers, mEdit: client.calls.length - asked,
+      read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length - asked,
       views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown,
     };
   } finally {
-    for (const disposable of [modSyncing, pluginSyncing, outcomes, host, ...owned, instance]) disposable.dispose();
+    for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });
   }
 }

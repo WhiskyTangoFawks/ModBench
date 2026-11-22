@@ -51,6 +51,14 @@ const TREE_READS = {
 
 type TreeInstance = InstanceOf<keyof typeof TREE_READS | 'entryKey'>;
 
+// The files present answer the sorting rules' file conditions alone, so a change to them draws no row again.
+const PRESENCE_READS: readonly string[] = ['files', 'dataFolderFiles'];
+
+const isTreeRead = (fact: string): fact is keyof typeof TREE_READS => fact in TREE_READS;
+
+const rowsChanged = (before: TreeInstance['value'], after: TreeInstance['value']): boolean =>
+  Object.keys(TREE_READS).filter(isTreeRead).some((fact) => !PRESENCE_READS.includes(fact) && before[fact] !== after[fact]);
+
 interface PluginsTreeProviderOptions {
   fileReads: FileReads;
   /** Name, origin, line, enabled and winning for every plugin: the row input. */
@@ -144,7 +152,7 @@ export class PluginsTreeProvider
   // A new Instance value clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
   private lastBuildHadNoRows = false;
-  private rowsBlueprints = '';
+  private rowsBlueprints = 0;
 
   /** The view's order of the active plugins, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
   readonly viewOrder = {
@@ -183,7 +191,9 @@ export class PluginsTreeProvider
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe(() => {
+      const before = this.instanceValue;
       this.instanceValue = options.instance.value;
+      if (!rowsChanged(before, this.instanceValue)) return;
       this.cache = undefined;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
       if (rules !== this.rules) {

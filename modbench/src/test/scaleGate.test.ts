@@ -13,12 +13,13 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
+import { A_NEW_LOOSE_FILE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
     ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
     { change: A_NEW_LOOSE_FILE, layer: 'derived' },
+    ...(['read', 'derived', 'subscribers', 'mEdit', 'views'] as const).map((layer) => ({ change: A_RECORD_WRITTEN, layer })),
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
     { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
@@ -38,11 +39,12 @@ describe('a new loose file in one mod', () => {
 });
 
 describe('a change shows in the views at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
-  it('a new loose file in one mod asks the Mods view the same, and the conflict table of another mod nothing', async () => {
+  it('a new loose file in one mod asks the Mods and Plugins views the same, and the conflict table of another mod nothing', async () => {
     const small = await costOf(3, A_NEW_LOOSE_FILE);
     const large = await costOf(60, A_NEW_LOOSE_FILE);
 
     expect(large.viewsIn.Mods).toBe(small.viewsIn.Mods);
+    expect(large.viewsIn.Plugins).toBe(small.viewsIn.Plugins);
     expect([small.viewsIn.Conflicts, large.viewsIn.Conflicts]).toEqual([0, 0]);
   });
 });

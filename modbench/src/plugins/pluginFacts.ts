@@ -4,7 +4,7 @@ import { offeredMoves, type OfferedMove } from '../pluginCommands/pluginOrder';
 import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
-import { exactPluginAddressKey, OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, OVERWRITE_ORIGIN, samePluginAddress } from '../wire/pluginAddress';
 import { joinedReasons, lastGoodReadMessage, pluginReason } from '../wire/reasons';
 import { messageLine } from '../drivingLib/messageLine';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
@@ -75,7 +75,18 @@ interface PluginRead {
   parseFailure: boolean;
   description: string;
   rowsStand: boolean;
+  matches: boolean;
 }
+
+const readOf = (p: PluginMetadata): PluginRead => ({
+  readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
+  sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
+  masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint, description: p.description ?? '',
+  rowsStand: p.rowsFrom != null, matches: p.hasMatchingRecords,
+});
+
+// What the sorting rules judge of a plugin.
+const judged = (read: PluginRead | undefined): string | undefined => read && JSON.stringify([read.masters, read.master, read.blueprint, read.description]);
 
 // plugins.md, A row, Plugin: each status's words and tooltip line.
 const notRestored = (mod: string | undefined): PluginStatus | undefined => mod === undefined ? undefined
@@ -126,8 +137,7 @@ export class PluginFacts {
   private rowsStoodAtLastReconcile = new ByPluginAddress<true>();
   private answers = new Map<string, PluginMetadata>();
   private reads = new ByPluginAddress<PluginRead>();
-  private blueprints = '';
-  private judgedFacts = '';
+  private blueprints = 0;
   private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
@@ -136,8 +146,10 @@ export class PluginFacts {
   private offered: OfferedMove[] = [];
   private judgedActiveOrder?: readonly PluginAddress[];
   private lineOrder: readonly PluginAddress[] = [];
-  private sourceUnreadableProblems: readonly SourceUnreadableProblem[] = [];
-  private matches?: ByPluginAddress<boolean>;
+  private sourceUnreadableProblems = new ByPluginAddress<SourceUnreadableProblem>();
+  // The plugins with a record the filter matches, by exact address key.
+  private matching = new Set<string>();
+  private matchesForgotten = false;
   private diagnosisTexts = new ByPluginAddress<string[]>();
   private diagnosisReports: PluginDiagnosisReport[] = [];
   private changed = new ByPluginAddress<true>();
@@ -151,8 +163,7 @@ export class PluginFacts {
   private reachableFailures = new ByPluginAddress<PluginLoadFailure>();
   private expansionOverride?: ExpansionOverride;
   private indexFailure?: string;
-  private noMatchAnywhere = false;
-  private laterFailures = new Map<string, string>();
+  private laterFailures = new ByPluginAddress<string>();
   private readonly factsRead: FactsRead = { what: "mEdit's facts about each plugin", answered: false };
   private readonly scanRead: FactsRead = { what: 'the malformed-plugin scan', answered: false };
 
@@ -227,7 +238,7 @@ export class PluginFacts {
   }
 
   /** Which plugins are blueprint plugins, as one value that changes when they do. */
-  blueprintPlugins(): string {
+  blueprintPlugins(): number {
     return this.blueprints;
   }
 
@@ -240,47 +251,47 @@ export class PluginFacts {
    *  judged them. `asked` is the plugins the answer covers. Whether what the sorting rules judge changed. */
   refreshed(plugins: readonly PluginMetadata[], asked?: NamedPlugins): boolean {
     answered(this.factsRead);
-    if (asked === undefined) this.answers.clear();
-    else {
-      const answeredKeys = new Set(plugins.map(exactPluginAddressKey));
-      for (const plugin of asked) if (!answeredKeys.has(exactPluginAddressKey(plugin))) this.answers.delete(exactPluginAddressKey(plugin));
-    }
+    this.matchesForgotten = false;
+    const named = new Map([...asked ?? this.answers.values(), ...plugins].map((address) => [exactPluginAddressKey(address), address] as const));
+    for (const key of named.keys()) this.answers.delete(key);
     for (const p of plugins) this.answers.set(exactPluginAddressKey(p), p);
-    return this.derive([...this.answers.values()]);
+    return [...named.values()].map((address) => this.derive(address)).some(Boolean);
   }
 
-  private derive(plugins: readonly PluginMetadata[]): boolean {
-    const reads = new ByPluginAddress<PluginRead>();
-    const readOf = new Map<string, PluginRead[]>();
-    const matches = new ByPluginAddress<boolean>();
-    for (const p of plugins) {
-      const read: PluginRead = {
-        readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
-        sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
-        masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint, description: p.description ?? '',
-        rowsStand: p.rowsFrom != null,
-      };
-      reads.set(p, read);
-      readOf.set(p.name.toLowerCase(), [...readOf.get(p.name.toLowerCase()) ?? [], read]);
-      matches.set(p, p.hasMatchingRecords);
-    }
-    this.reads = reads;
-    this.blueprints = plugins.filter((p) => p.isBlueprint).map(pluginAddressKey).sort().join('\n');
-    this.readsByFilename = readOf;
-    this.sourceUnreadableProblems = plugins.flatMap((p) => p.pluginSourceUnreadable == null ? [] : [{
+  // The plugin's read, and its part of each join over every read. Whether what the sorting rules judge of it changed.
+  private derive(address: PluginAddress): boolean {
+    const was = this.reads.get(address);
+    const p = this.answers.get(exactPluginAddressKey(address));
+    const read = p && readOf(p);
+    this.forget(address, was);
+    if (p !== undefined && read !== undefined) this.file(p, read);
+    if ((was?.blueprint === true) !== (read?.blueprint === true)) this.blueprints++;
+    return judged(was) !== judged(read);
+  }
+
+  private forget(address: PluginAddress, was: PluginRead | undefined): void {
+    const filename = address.name.toLowerCase();
+    const sameName = (this.readsByFilename.get(filename) ?? []).filter((other) => other !== was);
+    if (sameName.length === 0) this.readsByFilename.delete(filename);
+    else this.readsByFilename.set(filename, sameName);
+    this.reads.delete(address);
+    this.sourceUnreadableProblems.delete(address);
+    this.laterFailures.delete(address);
+    this.matching.delete(exactPluginAddressKey(address));
+  }
+
+  private file(p: PluginMetadata, read: PluginRead): void {
+    const filename = p.name.toLowerCase();
+    this.readsByFilename.set(filename, [...this.readsByFilename.get(filename) ?? [], read]);
+    this.reads.set(p, read);
+    if (read.matches) this.matching.add(exactPluginAddressKey(p));
+    if (p.pluginSourceUnreadable != null) this.sourceUnreadableProblems.set(p, {
       plugin: p.name, origin: p.origin, text: `Plugin source unreadable: ${p.pluginSourceUnreadable.reason}`,
       decompileRepairs: p.pluginSourceUnreadable.decompileRepairs,
-    }]);
-    this.matches = matches;
-    this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
-      pluginAddressKey(p),
-      pluginReason(p, joinedReasons(p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`))),
-    ] as const]));
-    this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
-    const judged = JSON.stringify(plugins.map((p) => [pluginAddressKey(p), p.masters, p.isMaster, p.isBlueprint, p.description]));
-    const sortingChanged = judged !== this.judgedFacts;
-    this.judgedFacts = judged;
-    return sortingChanged;
+    });
+    if (p.laterReadFailure != null) {
+      this.laterFailures.set(p, pluginReason(p, joinedReasons(p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`))));
+    }
   }
 
   /** The plugins mEdit says changed outside Modbench, as its read of every plugin's index state says, replacing the last. */
@@ -406,7 +417,7 @@ export class PluginFacts {
 
   /** The record filter changed, so the last answer belongs to another filter. */
   forgetMatches(): void {
-    this.matches = undefined;
+    this.matchesForgotten = true;
   }
 
   private isHeld(address: PluginAddress): boolean {
@@ -452,13 +463,14 @@ export class PluginFacts {
 
   /** A record filter matching nothing (common.md, States 5). */
   noRecordMatchMessage(recordFilterSource: string): string | undefined {
-    return this.matches !== undefined && this.noMatchAnywhere ? `No records match ${recordFilterSource}.` : undefined;
+    const noMatchAnywhere = !this.matchesForgotten && this.answers.size > 0 && this.matching.size === 0;
+    return noMatchAnywhere ? `No records match ${recordFilterSource}.` : undefined;
   }
 
   /** Whether a record filter in force leaves the plugin with nothing; false while mEdit has not
    *  answered. `hasMatchingRecords` only ever answers false while a filter is active. */
   hiddenByRecordFilter(address: PluginAddress): boolean {
-    return this.matches?.get(address) === false;
+    return !this.matchesForgotten && this.reads.get(address)?.matches === false;
   }
 
   private statuses(address: PluginAddress): PluginStatus[] {
@@ -538,7 +550,7 @@ export class PluginFacts {
   } {
     return {
       malformed: this.diagnosisReports,
-      sourceUnreadable: this.sourceUnreadableProblems,
+      sourceUnreadable: this.sourceUnreadableProblems.values(),
       sortingErrors: this.sortingProblems('error'),
       sortingWarnings: this.sortingProblems('warning'),
       sortingInfo: this.sortingProblems('info'),

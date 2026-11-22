@@ -3,6 +3,7 @@ import type { LastModStatuses, PluginsDrop } from '../../pluginCommands/plugins'
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import {
   type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type InteriorCellBlock, type RecordSummary,
   type CellSummary, type ChildRecordSummary,
@@ -413,7 +414,7 @@ describe('PluginsTreeProvider — name filter', () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
     const [held] = expectInstancesOf(await tree.getChildren(), PluginNode);
-    await instance.refresh();
+    instance.publish({ ...instance.value, plugins: [...instance.value.plugins] });
 
     const shown = tree.shownRow(expectInstanceOf(held, PluginNode));
 
@@ -1475,9 +1476,19 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const fired: unknown[] = [];
     tree.onDidChangeTreeData((e) => fired.push(e));
 
-    instance.publish(instance.value);
+    instance.publish({ ...instance.value, plugins: [...instance.value.plugins] });
 
     expect(fired).toEqual([undefined]);
+  });
+
+  it('draws no row again when only the files present change', () => {
+    const { tree, instance } = makeTree([A_ROW()]);
+    const fired: unknown[] = [];
+    tree.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.publish({ ...instance.value, files: new FileConflictLookup(), dataFolderFiles: { kind: 'unresolved' } });
+
+    expect(fired).toEqual([]);
   });
 });
 

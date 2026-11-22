@@ -20,6 +20,10 @@ export class ByPluginAddress<T> {
     return this.bySpelling.get(exactPluginAddressKey(plugin));
   }
 
+  delete(plugin: PluginAddress): void {
+    this.bySpelling.delete(exactPluginAddressKey(plugin));
+  }
+
   has(plugin: PluginAddress): boolean {
     return this.bySpelling.has(exactPluginAddressKey(plugin));
   }
