@@ -137,6 +137,33 @@ public sealed class SpawnedBackendTests
         }
     }
 
+    [Fact]
+    public async Task ARequestOverKestrelsDefaultBodyLimit_IsReadToTheEnd_ARealProcessSinceTheTestServerSetsNoLimit()
+    {
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
+        var lines = new List<string>();
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
+        try
+        {
+            var listening = "Now listening on: ";
+            Assert.True(await WaitForLineAsync(lines, l => l.Contains(listening, StringComparison.Ordinal), TimeSpan.FromSeconds(15)),
+                $"backend never reported listening; captured output:\n{string.Join('\n', Snapshot(lines))}");
+            var url = Snapshot(lines).First(l => l.Contains(listening, StringComparison.Ordinal));
+            url = url[(url.IndexOf(listening, StringComparison.Ordinal) + listening.Length)..];
+            using var overTheLimit = new StringContent(
+                $$"""{"records": [{"text": "{{new string('x', 31_000_000)}}"}]}""", System.Text.Encoding.UTF8, "application/json");
+
+            using var client = new HttpClient();
+            using var answered = await client.PostAsync(new Uri($"{url}/plugins/make-patch"), overTheLimit);
+
+            Assert.Equal(HttpStatusCode.BadRequest, answered.StatusCode);
+        }
+        finally
+        {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+    }
+
     private static readonly string[] AskedToExitWithItsStdin =
         ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"];
 
