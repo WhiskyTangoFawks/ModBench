@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, ModGroups } from '../instanceLoader/instance';
 import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
-import { originsTouched, type Touching } from './originsTouched';
+import { modEntryOf, RowsByOwner, rowsFollowing, TOUCHING_READ, touchedIn, type Owned, type Row, type Touching } from './originsTouched';
 import { onSettingChange } from '../drivingLib/setting';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
@@ -76,52 +76,6 @@ export class IndicatorDecorationProvider implements vscode.FileDecorationProvide
   }
 }
 
-/** A row VS Code asks a decoration of, and what it carries. */
-export interface Row<D> {
-  readonly uri: vscode.Uri;
-  readonly carried: D;
-}
-
-/** The rows the origin or separator that `owner` names gives. */
-export type Owned<D> = readonly [owner: string, rows: ReadonlyMap<string, Row<D>>];
-
-/** Rows kept by the origin or separator that gives them, so a new value derives again the rows of the owners it touches. */
-export class RowsByOwner<D> {
-  private readonly rows = new Map<string, Row<D>>();
-  private readonly byOwner = new Map<string, ReadonlyMap<string, Row<D>>>();
-
-  constructor(private readonly same: (a: D, b: D) => boolean) {}
-
-  get(key: string): D | undefined {
-    return this.rows.get(key)?.carried;
-  }
-
-  /** Holds the rows each owner gives, in place of those it gave, and answers each row whose decoration changed. */
-  hold(owned: Iterable<Owned<D>>): vscode.Uri[] {
-    const changed: vscode.Uri[] = [];
-    for (const [owner, now] of owned) {
-      const was = this.byOwner.get(owner) ?? new Map<string, Row<D>>();
-      for (const [key, row] of was) {
-        if (now.has(key)) continue;
-        this.rows.delete(key);
-        changed.push(row.uri);
-      }
-      for (const [key, row] of now) {
-        const prior = was.get(key);
-        this.rows.set(key, row);
-        if (prior === undefined || !this.same(prior.carried, row.carried)) changed.push(row.uri);
-      }
-      this.byOwner.set(owner, now);
-    }
-    return changed;
-  }
-
-  clear(): void {
-    this.rows.clear();
-    this.byOwner.clear();
-  }
-}
-
 const rowsOf = <D>(...rows: readonly Row<D>[]): ReadonlyMap<string, Row<D>> => new Map(rows.map((row) => [row.uri.toString(), row]));
 
 const separatorsHolding = new WeakMap<ModGroups, ReadonlyMap<string, string>>();
@@ -136,36 +90,19 @@ export function separatorOf(groups: ModGroups, mod: string): string | undefined 
   return held.get(mod);
 }
 
-/** The origins a value touches among those `value` lists: a mod by its entry, Overwrite as it is. */
-export const touchedIn = (value: Pick<InstanceValue, 'mods'>, touched: 'every' | readonly FileOrigin[]): readonly FileOrigin[] => (touched !== 'every' ? touched
-  : [...value.mods.flatMap((entry): FileOrigin[] => (entry.kind === 'mod' ? [{ kind: 'mod', name: entry.name }] : [])), { kind: 'runtimeOutput' }]);
-
 /** VS Code never asks a decoration provider again on its own, so each fires for the rows a new instance value touches
  *  (ADR-0003), and for every row on a setting change or a row opened or closed. */
 export abstract class OpenableRowDecorations<D, K extends keyof InstanceValue> implements vscode.Disposable {
   abstract readonly providers: readonly IndicatorDecorationProvider[];
   protected readonly rows: RowsByOwner<D>;
-  private held: Pick<InstanceValue, K | keyof Touching> | undefined;
-  private readonly subscriptions: vscode.Disposable[];
+  private readonly held: () => RowsByOwner<D>;
+  private readonly subscriptions: { dispose(): unknown }[];
 
-  constructor(
-    private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
-    private readonly openRows: OpenRows,
-    concerns: Readonly<Record<K | keyof Touching, true>>,
-    same: (a: D, b: D) => boolean,
-  ) {
+  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly openRows: OpenRows, concerns: Readonly<Record<K | keyof Touching, true>>, same: (a: D, b: D) => boolean) {
     this.rows = new RowsByOwner(same);
-    this.subscriptions = [
-      instance.subscribe((value) => {
-        const touched = originsTouched(this.held, value, concerns);
-        if (touched === 'every') this.rows.clear();
-        this.held = value;
-        const changed = this.rows.hold(this.ownedAgain(value, touched));
-        if (touched === 'every') this.refresh();
-        else if (changed.length > 0) this.refresh(changed);
-      }, concerns),
-      openRows.onDidChange(() => { this.refresh(); }),
-    ];
+    const following = rowsFollowing(instance, concerns, this.rows, (value, touched) => this.ownedAgain(value, touched), (uris) => { this.refresh(uris); });
+    this.held = following.held;
+    this.subscriptions = [following.subscription, openRows.onDidChange(() => { this.refresh(); })];
   }
 
   /** The rows each owner a value touches gives: the origins first, then each separator that holds one, from the rows held. */
@@ -177,11 +114,7 @@ export abstract class OpenableRowDecorations<D, K extends keyof InstanceValue> i
   }
 
   protected carried(key: string): D | undefined {
-    if (this.held === undefined) {
-      this.held = this.instance.value;
-      this.rows.hold(this.ownedAgain(this.instance.value, 'every'));
-    }
-    return this.rows.get(key);
+    return this.held().get(key);
   }
 
   protected isOpen(key: string): boolean {
@@ -195,9 +128,7 @@ export abstract class OpenableRowDecorations<D, K extends keyof InstanceValue> i
 
 const sameIds = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((id, at) => id === b[at]);
 
-const INDICATORS_READ = {
-  mods: true, modGroups: true, filesByMod: true, foldersByMod: true, files: true, stackedCopies: true, archiveContents: true, loadsArchive: true,
-} as const;
+const INDICATORS_READ = { ...TOUCHING_READ, mods: true, modGroups: true } as const;
 
 export class ModIndicatorDecorations extends OpenableRowDecorations<readonly ModIndicator[], keyof typeof INDICATORS_READ> {
   readonly providers: readonly IndicatorDecorationProvider[];
@@ -214,9 +145,8 @@ export class ModIndicatorDecorations extends OpenableRowDecorations<readonly Mod
   // A disabled mod carries none. A separator carries each indicator a mod it holds carries.
   protected * ownedAgain(value: IndicatorsValue, touched: 'every' | readonly FileOrigin[]): Iterable<Owned<readonly ModIndicator[]>> {
     const mods = touchedIn(value, touched).flatMap((origin) => (origin.kind === 'mod' ? [origin.name] : []));
-    const entries = new Map(value.mods.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, entry] as const] : [])));
     for (const name of mods) {
-      const entry = entries.get(name);
+      const entry = modEntryOf(value.mods, name);
       const uri = modRowUri(name);
       yield [`mod/${name}`, entry?.enabled === true ? rowsOf({ uri, carried: indicatorsOf(value, entry, value.filesByMod.get(name) ?? []) }) : new Map()];
     }

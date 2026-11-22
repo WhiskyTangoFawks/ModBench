@@ -4,7 +4,7 @@ import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } f
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { originsTouched } from './originsTouched';
+import { modEntryOf, originsTouched } from './originsTouched';
 import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { gameFolderFileOver, unreadableArchiveReason } from './modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -231,9 +231,9 @@ export class ModListProvider
     this.statuses = options.statuses;
     this.open = options.open;
     this.reporter = options.reporter;
+    // The badge counts a mod the filter hides too, so a status with no row to fire draws the tree again.
     this.statusSubscription = options.statuses.onDidChange((mods) => {
-      if (mods === 'every') this.render();
-      else for (const name of mods) this.fireRow(rowIdentity('mod', name));
+      if (mods === 'every' || ![...mods].every((name) => this.fireRow(rowIdentity('mod', name)))) this.render();
     });
     this.openSubscription = options.open.onDidChange(() => {
       const before = this.marks;
@@ -386,11 +386,13 @@ export class ModListProvider
     }
   }
 
-  private fireRow(id: string): void {
+  // Whether the tree shows the row, which it then asks again for.
+  private fireRow(id: string): boolean {
     const row = id === 'runtimeOutput' ? this.overwriteNode()
       : id.startsWith('mod:') ? this.rowFor(modOrigin(id.slice('mod:'.length)))
         : this.separatorRowNamed(id.slice('separator:'.length));
     if (row) this._onDidChangeTreeData.fire(row);
+    return row !== undefined;
   }
 
   private marked(): ReadonlySet<string> {
@@ -558,7 +560,7 @@ export class ModListProvider
   /** The row the tree shows for an origin, or undefined when it shows none. */
   rowFor(origin: FileOrigin): ModNode | OverwriteNode | undefined {
     if (origin.kind !== 'mod') return this.overwriteNode();
-    const mod = this.instanceValue.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === origin.name);
+    const mod = modEntryOf(this.instanceValue.mods, origin.name);
     return mod && this.showsMod(mod) ? this.modNode(mod) : undefined;
   }
 

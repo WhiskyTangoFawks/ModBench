@@ -37,19 +37,13 @@ describe('a new loose file in one mod', () => {
   });
 });
 
-describe('a change shows in the Mods view at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
-  it('a new loose file in one mod', async () => {
+describe('a change shows in the views at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
+  it('a new loose file in one mod asks the Mods view the same, and the conflict table of another mod nothing', async () => {
     const small = await costOf(3, A_NEW_LOOSE_FILE);
     const large = await costOf(60, A_NEW_LOOSE_FILE);
 
     expect(large.viewsIn.Mods).toBe(small.viewsIn.Mods);
-  });
-
-  it('a new loose file in one mod, at the conflict table of another', async () => {
-    const small = await costOf(3, A_NEW_LOOSE_FILE);
-    const large = await costOf(60, A_NEW_LOOSE_FILE);
-
-    expect(large.viewsIn.Conflicts).toBe(small.viewsIn.Conflicts);
+    expect([small.viewsIn.Conflicts, large.viewsIn.Conflicts]).toEqual([0, 0]);
   });
 });
 

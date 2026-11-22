@@ -8,8 +8,8 @@ import { pathTagsOf } from './modFileStates';
 import { fileRowUri } from './modFiles';
 import {
   IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorOf, separatorRowUri,
-  touchedIn, type Owned, type Row,
 } from './modIndicators';
+import { TOUCHING_READ, touchedIn, type Owned, type Row } from './originsTouched';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -55,10 +55,7 @@ class CarriersRead {
   }
 }
 
-const CARRIERS_READ = {
-  publisherConfiguration: true, mods: true, foldersByMod: true, filesByMod: true, paths: true, overwriteFiles: true, overwriteFolders: true, modGroups: true,
-  files: true, stackedCopies: true, archiveContents: true, loadsArchive: true,
-} as const;
+const CARRIERS_READ = { ...TOUCHING_READ, publisherConfiguration: true, mods: true, paths: true, modGroups: true } as const;
 
 type CarriersValue = Pick<InstanceValue, keyof typeof CARRIERS_READ>;
 

@@ -4,8 +4,7 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
 import { originKey } from '../instanceLoader/fileConflictIndex';
-import { originsTouched } from './originsTouched';
-import { RowsByOwner, touchedIn, type Owned, type Row } from './modIndicators';
+import { modEntryOf, RowsByOwner, rowsFollowing, TOUCHING_READ, touchedIn, type Owned, type Row } from './originsTouched';
 import { fileRowUri } from './modFiles';
 import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from './modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
@@ -15,10 +14,7 @@ import type { WorkspaceSettings } from './workspaceSettings';
  *  @public Read by packageJson.test, which holds package.json to it. */
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
-const FILES_READ = {
-  mods: true, files: true, filesByMod: true, foldersByMod: true, overwriteFiles: true, overwriteFolders: true, archiveContents: true, loadsArchive: true,
-  stackedCopies: true, dataFolderFiles: true,
-} as const;
+const FILES_READ = { ...TOUCHING_READ, mods: true, dataFolderFiles: true } as const;
 type FilesValue = Pick<InstanceValue, keyof typeof FILES_READ>;
 
 // A row the game does not get the file or folder of, or the row of an archive whose files it does not get: each row below
@@ -30,12 +26,12 @@ interface Inactive {
 
 const sameInactive = (a: Inactive, b: Inactive): boolean => a.inactive === b.inactive && a.archive === b.archive;
 
-const listedFor = (value: FilesValue, origin: FileOrigin, enabledMods: ReadonlySet<string>) => (origin.kind === 'mod'
-  ? { enabled: enabledMods.has(origin.name), files: value.filesByMod.get(origin.name) ?? [], folders: value.foldersByMod.get(origin.name) ?? [] }
+const listedFor = (value: FilesValue, origin: FileOrigin) => (origin.kind === 'mod'
+  ? { enabled: modEntryOf(value.mods, origin.name)?.enabled === true, files: value.filesByMod.get(origin.name) ?? [], folders: value.foldersByMod.get(origin.name) ?? [] }
   : { enabled: true, files: value.overwriteFiles, folders: value.overwriteFolders });
 
 // A folder never loses: the game merges folders.
-function ownedBy(value: FilesValue, origin: FileOrigin, enabledMods: ReadonlySet<string>): Owned<Inactive> {
+function ownedBy(value: FilesValue, origin: FileOrigin): Owned<Inactive> {
   const rows = new Map<string, Row<Inactive>>();
   const mark = (uri: vscode.Uri, mark: keyof Inactive) => {
     const key = uri.toString();
@@ -46,7 +42,7 @@ function ownedBy(value: FilesValue, origin: FileOrigin, enabledMods: ReadonlySet
     mark(fileRowUri(origin, entry.relativePath), 'inactive');
     mark(vscode.Uri.file(entry.path), 'inactive');
   };
-  const { enabled, files, folders } = listedFor(value, origin, enabledMods);
+  const { enabled, files, folders } = listedFor(value, origin);
   for (const folder of folders) add(folder, isNotDeployed(enabled, folder));
   for (const file of files) {
     add(file, isFileNotGotten(value, origin, enabled, file));
@@ -59,53 +55,41 @@ function ownedBy(value: FilesValue, origin: FileOrigin, enabledMods: ReadonlySet
   return [originKey(origin), rows];
 }
 
-const ownedIn = (value: FilesValue, touched: 'every' | readonly FileOrigin[]): Owned<Inactive>[] => {
-  const enabledMods = new Set(value.mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : [])));
-  return touchedIn(value, touched).map((origin) => ownedBy(value, origin, enabledMods));
-};
+const ownedIn = (value: FilesValue, touched: 'every' | readonly FileOrigin[]): Owned<Inactive>[] => touchedIn(value, touched).map((origin) => ownedBy(value, origin));
 
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new instance value (ADR-0003), for
  *  the rows of the origins it touches, and on every change to its setting. */
 export class InactiveFileDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
-  private readonly rows = new RowsByOwner<Inactive>(sameInactive);
-  private held: FilesValue | undefined;
-  private readonly subscriptions: readonly vscode.Disposable[];
+  private readonly held: () => RowsByOwner<Inactive>;
+  private readonly subscriptions: readonly { dispose(): unknown }[];
 
-  constructor(private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: WorkspaceSettings) {
+  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: WorkspaceSettings) {
+    const following = rowsFollowing(instance, FILES_READ, new RowsByOwner(sameInactive), ownedIn, (uris) => { this.changed.fire(uris); });
+    this.held = following.held;
     this.subscriptions = [
-      instance.subscribe((value) => {
-        const touched = originsTouched(this.held, value, FILES_READ);
-        if (touched === 'every') this.rows.clear();
-        this.held = value;
-        const changed = this.rows.hold(ownedIn(value, touched));
-        if (touched === 'every') this.changed.fire(undefined);
-        else if (changed.length > 0) this.changed.fire(changed);
-      }, FILES_READ),
+      following.subscription,
       onSettingChange(setting.onDidChangeConfiguration, GREY_INACTIVE_FILES_SETTING, () => { this.changed.fire(undefined); }),
     ];
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     if (this.setting.getConfiguration().get(GREY_INACTIVE_FILES_SETTING) === false) return undefined;
-    if (this.held === undefined) {
-      this.held = this.instance.value;
-      this.rows.hold(ownedIn(this.held, 'every'));
-    }
+    const rows = this.held();
     const row = uri.toString();
-    return this.rows.get(row)?.inactive === true || this.isUnderArchive(row) ? { color: new vscode.ThemeColor('disabledForeground') } : undefined;
-  }
-
-  private isUnderArchive(uri: string): boolean {
-    for (let end = uri.lastIndexOf('/'); end > 0; end = uri.lastIndexOf('/', end - 1)) {
-      if (this.rows.get(uri.slice(0, end))?.archive === true) return true;
-    }
-    return false;
+    return rows.get(row)?.inactive === true || isUnderArchive(rows, row) ? { color: new vscode.ThemeColor('disabledForeground') } : undefined;
   }
 
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
     this.changed.dispose();
   }
+}
+
+function isUnderArchive(rows: RowsByOwner<Inactive>, uri: string): boolean {
+  for (let end = uri.lastIndexOf('/'); end > 0; end = uri.lastIndexOf('/', end - 1)) {
+    if (rows.get(uri.slice(0, end))?.archive === true) return true;
+  }
+  return false;
 }

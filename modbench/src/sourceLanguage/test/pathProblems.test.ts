@@ -8,6 +8,8 @@ import type { PluginFilePaths } from '../../client';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
+type StandingChanged = Parameters<Parameters<PathStanding['subscribe']>[0]>[0];
+
 const RETRY_AFTER_MS = 1000;
 const HOLDER = '000800:Names.esp';
 const PLUGIN = { name: 'Names.esp', origin: 'NamingMod' };
@@ -29,10 +31,10 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
   const published: ProblemsByFile[] = [];
   const reporter = recordingReporter();
   const status: (string | undefined)[] = [];
-  const listeners = new Set<() => void>();
+  const listeners = new Set<(changed: StandingChanged) => void>();
   const paths: PathStanding = {
-    judged: () => true, holds: () => false,
-    subscribe: (listener: () => void) => { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
+    judged: () => true, holds: () => false, triedPaths: (dataPath) => [dataPath.toLowerCase()],
+    subscribe: (listener) => { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
     ...standing,
   };
   feedPathProblems({
@@ -41,7 +43,8 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
   });
   const latest = () => published[published.length - 1] ?? new Map();
   const settled = async (count: number) => { await vi.waitFor(() => { expect(published.length).toBeGreaterThanOrEqual(count); }); return latest(); };
-  return { client, reporter, published, status, latest, settled, instanceChanged: () => { for (const listener of listeners) listener(); } };
+  const instanceChanged = (changed: StandingChanged = 'every'): void => { for (const listener of listeners) listener(changed); };
+  return { client, reporter, published, status, latest, settled, instanceChanged };
 }
 
 const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args.slice(0, 1));
@@ -82,6 +85,19 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await vi.waitFor(() => { expect(published.length).toBe(2); });
 
     expect([published[1], asked(client)]).toEqual([new Map(), [[undefined]]]);
+  });
+
+  it('judges again only the paths a change may answer otherwise', async () => {
+    const judged: string[] = [];
+    const other = named('Textures/Other.dds', { sourceRelativePath: 'Other.esp/Set.json' });
+    const { settled, instanceChanged, published } = feed([answerFor(), answerFor(OTHER, [other])], { holds: (_plugin, path) => { judged.push(path); return false; } });
+    await settled(1);
+    judged.splice(0);
+
+    instanceChanged({ origins: new Set(), paths: new Set(['textures/other.dds']) });
+    await vi.waitFor(() => { expect(published.length).toBe(2); });
+
+    expect(judged).toEqual(['Textures/Other.dds']);
   });
 
   it('asks for the whole set at the start, and for the plugin only that a notification names', async () => {
@@ -169,7 +185,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const published: ProblemsByFile[] = [];
     feedPathProblems({
       client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: () => Promise.resolve(text), reporter: recordingReporter(),
-      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      paths: { judged: () => true, holds: () => false, triedPaths: () => [], subscribe: () => ({ dispose: () => undefined }) },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
@@ -190,7 +206,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const { settled } = feedPathProblems({
       client, ask: problemsAsker(client), sourceFiles: sourceFolders, reporter: recordingReporter(),
       readText: () => texts.shift() ?? Promise.resolve(TEXT),
-      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      paths: { judged: () => true, holds: () => false, triedPaths: () => [], subscribe: () => ({ dispose: () => undefined }) },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
     await settled();
@@ -232,16 +248,16 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const reads: string[] = [];
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
-    const listeners = new Set<() => void>();
+    const listeners = new Set<(changed: StandingChanged) => void>();
     const published: ProblemsByFile[] = [];
     feedPathProblems({
       client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),
-      paths: { judged: () => true, holds: () => false, subscribe: (listener) => { listeners.add(listener); return { dispose: () => undefined }; } },
+      paths: { judged: () => true, holds: () => false, triedPaths: () => [], subscribe: (listener) => { listeners.add(listener); return { dispose: () => undefined }; } },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
 
-    for (const listener of listeners) listener();
+    for (const listener of listeners) listener('every');
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
 
     expect(reads).toEqual([FILE]);
@@ -266,7 +282,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const published: ProblemsByFile[] = [];
     feedPathProblems({
       client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),
-      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      paths: { judged: () => true, holds: () => false, triedPaths: () => [], subscribe: () => ({ dispose: () => undefined }) },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
