@@ -39,14 +39,14 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}, r
     subscribe: (listener) => { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
     ...standing,
   };
-  feedPathProblems({
+  const fed = feedPathProblems({
     client, ask: problemsAsker(client, RETRY_AFTER_MS), sourceFiles: sourceFolders, readText, reporter, paths,
     publish: (problems) => published.push(problems), languageStatus: (text) => status.push(text),
   });
   const latest = () => published[published.length - 1] ?? new Map();
   const settled = async (count: number) => { await vi.waitFor(() => { expect(published.length).toBeGreaterThanOrEqual(count); }); return latest(); };
   const instanceChanged = (changed: FilesChanged = 'every'): void => { for (const listener of listeners) listener(changed); };
-  return { client, reporter, published, status, latest, settled, instanceChanged };
+  return { client, reporter, published, status, latest, settled, instanceChanged, idle: fed.settled };
 }
 
 const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args.slice(0, 1));
@@ -119,7 +119,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     let held = true;
     let release: (text: string) => void = () => undefined;
     const stalled = new Promise<string>((resolve) => { release = resolve; });
-    const { settled, instanceChanged, published } = feed([answerFor()], { holds: () => held }, () => stalled);
+    const { settled, instanceChanged, published, idle } = feed([answerFor()], { holds: () => held }, () => stalled);
     await settled(1);
     held = false;
     instanceChanged(changedIn(PLUGIN.origin, 'a.nif'));
@@ -127,7 +127,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     instanceChanged(changedIn(PLUGIN.origin, 'a.nif'));
     await vi.waitFor(() => { expect(published.length).toBe(2); });
     release(TEXT);
-    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await idle();
 
     instanceChanged(changedIn('Elsewhere', 'b.nif'));
     await vi.waitFor(() => { expect(published.length).toBe(3); });

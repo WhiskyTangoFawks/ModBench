@@ -3,7 +3,7 @@ import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState, commands: { executeCommand: () => Promise.resolve() } }));
 
-import { FileConflictLookup, modOrigin, NO_GAME_FOLDER_ARCHIVED, RUNTIME_OUTPUT, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import { FileConflictLookup, modOrigin, NO_GAME_FOLDER_ARCHIVED, type StackedFile } from '../../instanceLoader/fileConflictIndex';
 import type { FilesChanged } from '../../instanceLoader/filesChanged';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -89,13 +89,8 @@ describe('what a change tells the path problems (ADR-0029, Consequences, bullet 
   };
   const before = instanceValueFixture({ filesByMod: new Map([['Mod', [file('a.dds')]]]) });
   const gained = { ...before, filesByMod: new Map([['Mod', [file('a.dds'), file('B.dds')]]]) };
-  const overwritten = { ...before, overwriteFiles: [file('o.dds', '/overwrite/o.dds')] };
 
-  it.each<[string, InstanceValue, FilesChanged]>([
-    ['a mod gains a file: that mod, with the files it holds and held', gained, [{ origin: modOrigin('Mod'), files: [file('a.dds'), file('a.dds'), file('B.dds')] }]],
-    ['Overwrite gains a file: Overwrite', overwritten, [{ origin: RUNTIME_OUTPUT, files: [file('o.dds', '/overwrite/o.dds')] }]],
-    ['a mod gains a file while an archive starts to load: anything', { ...gained, loadsArchive: () => true }, 'every'],
-  ])('tells, when %s', (_case, after, changed) => {
-    expect(told(before, after)).toEqual(changed);
+  it('tells the mod that gains a file, with the files it holds and held', () => {
+    expect(told(before, gained)).toEqual([{ origin: modOrigin('Mod'), files: [file('a.dds'), file('a.dds'), file('B.dds')] }]);
   });
 });

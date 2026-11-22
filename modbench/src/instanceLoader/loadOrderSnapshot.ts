@@ -13,7 +13,7 @@ import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, originAddressOf, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 import { lastBuilt } from '../ports/lastBuilt';
 
 export type { DataFolderFiles, DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -152,7 +152,7 @@ function winningPlugins(files: FileWinners): Map<string, PluginFile> {
   const winners = [...files].filter((entry) => isRootLevel(entry.relativePath)).map((entry) => ({
     name: entry.relativePath,
     path: entry.winner,
-    origin: entry.winnerOrigin.kind === 'mod' ? entry.winnerOrigin.name : OVERWRITE_ORIGIN,
+    origin: originAddressOf(entry.winnerOrigin),
   }));
   return new Map(winners.map((winner) => [foldPath(winner.name), winner]));
 }

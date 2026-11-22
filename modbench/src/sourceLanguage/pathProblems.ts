@@ -4,7 +4,7 @@ import { askingOnChange } from '../drivingLib/problemsAsker';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
-import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
+import { originAddressOf, pluginAddressKey } from '../wire/pluginAddress';
 import type { FilesChanged } from '../instanceLoader/filesChanged';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, positionAt, askingWhenNotLate, settling, type Asked, type Feed } from './feedShape';
@@ -109,7 +109,7 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     return held;
   };
   const reaches = (changed: FilesChanged, answer: PluginFilePaths): boolean => changed === 'every' || changed.some(({ origin, files }) =>
-    (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN) === answer.plugin.origin || files.some(({ relativePath }) => triedBy(answer).has(relativePath.toLowerCase())));
+    originAddressOf(origin) === answer.plugin.origin || files.some(({ relativePath }) => triedBy(answer).has(relativePath.toLowerCase())));
   // A judgement a later change reached is stale before it ends, so it is not kept.
   let changes = 0;
   const reachedAt = new Map<string, number>();
