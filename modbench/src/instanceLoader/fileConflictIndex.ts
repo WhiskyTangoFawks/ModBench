@@ -2,7 +2,7 @@
 
 import { pluginCompanionRule } from '../tables/gamePaths';
 import {
-  filesWinningFirst, type FileOrigin, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type OriginProvides,
+  provides, type FileOrigin, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type OriginProvides,
 } from '../instanceAdapter/instanceAdapter';
 import { originsWinningFirst } from '../symbolNames/symbolNames';
 import { sameInputs } from '../ports/lastBuilt';
@@ -157,19 +157,16 @@ function mapKeeping<V>(entries: readonly (readonly [string, V])[], was: Map<stri
 
 const providedFrom = new WeakMap<OriginProvides, readonly OriginFile[]>();
 
-// `filesWinningFirst`, with `was`'s object for each origin whose files are the ones it was built from.
+// Overwrite, then each enabled mod in mod order, with the files nothing excludes: `was`'s object for an origin whose files
+// are the ones it was built from.
 function winningFirstOf(entries: readonly ModlistEntry[], overwrite: readonly OriginFile[], filesByMod: ReadonlyMap<string, readonly OriginFile[]>, was?: readonly OriginProvides[]): OriginProvides[] {
-  const filesOf = (origin: FileOrigin): readonly OriginFile[] => (origin.kind === 'mod' ? filesByMod.get(origin.name) ?? [] : overwrite);
-  const kept = new Map((was ?? []).flatMap((provided) => (providedFrom.get(provided) === filesOf(provided.origin) ? [[originKey(provided.origin), provided] as const] : [])));
-  const fresh = filesWinningFirst(
-    entries.filter((entry) => !kept.has(originKey(modOrigin(entry.name)))), kept.has(originKey(RUNTIME_OUTPUT)) ? [] : overwrite, (mod) => filesByMod.get(mod) ?? [],
-  );
-  const made = new Map(fresh.map((provided) => [originKey(provided.origin), provided]));
+  const kept = new Map((was ?? []).map((provided) => [originKey(provided.origin), provided]));
   return originsWinningFirst(entries).map((origin) => {
+    const files = origin.kind === 'mod' ? filesByMod.get(origin.name) ?? [] : overwrite;
     const prior = kept.get(originKey(origin));
-    if (prior !== undefined) return prior;
-    const provided = present(made.get(originKey(origin)), 'an origin\'s files');
-    providedFrom.set(provided, filesOf(origin));
+    if (prior !== undefined && providedFrom.get(prior) === files) return prior;
+    const provided = provides(origin, files);
+    providedFrom.set(provided, files);
     return provided;
   });
 }

@@ -1366,12 +1366,12 @@ describe('the MO2 Instance adapter', () => {
         expect(signals).toBe(1);
       });
 
-    it.each([
-      ['git keeps its hooks', '.git/hooks'],
-      ['core.hooksPath puts it', '.git/kept-hooks'],
-    ])('signals a change to the push check where %s, once a reading found the repository', async (_where, hooks) => {
+    it.each<[string, string, (repository: string) => void]>([
+      ['git keeps its hooks', '.git/hooks', () => undefined],
+      ['core.hooksPath puts it', '.git/kept-hooks', (repository) => { execFileSync('git', ['-C', repository, 'config', 'core.hooksPath', '.git/kept-hooks']); }],
+    ])('signals a change to the push check where %s, once a reading found the repository', async (_where, hooks, configure) => {
       execFileSync('git', ['init', '-q', root]);
-      execFileSync('git', ['-C', root, 'config', 'core.hooksPath', hooks]);
+      configure(root);
       const watched = managerOver(root);
       let signals = 0;
       watched.subscribe(() => { signals++; });

@@ -27,6 +27,14 @@ describe('a change costs the same on a small and a large instance', () => {
   });
 });
 
+describe('a change derives the same in the file conflict index and the stack of copies, on a small and a large instance', () => {
+  it('a new loose file in one mod', async () => {
+    const indexed = ({ derivedIn: { files, filesByMod, foldersByMod, stackedCopies } }: Awaited<ReturnType<typeof costOf>>) => ({ files, filesByMod, foldersByMod, stackedCopies });
+
+    expect(indexed(await costOf(60, A_NEW_LOOSE_FILE))).toEqual(indexed(await costOf(3, A_NEW_LOOSE_FILE)));
+  });
+});
+
 describe('a read that finds nothing new is no change', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>(
     [NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].flatMap((change) => (['derived', 'subscribers', 'mEdit', 'views'] as const).map((layer) => ({ change, layer }))),

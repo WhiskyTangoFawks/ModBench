@@ -418,6 +418,26 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(again.modFiles).toBe(landed.modFiles);
   });
 
+  it('hands the folders and each file of a mod a file was added to as the landed reading holds them', async () => {
+    const folder = join(instance, 'mods', 'Harder VATS');
+    await mkdir(join(folder, 'meshes'));
+    await writeFile(join(folder, 'meshes', 'a.nif'), '');
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    const listed = landed.modFiles.get('Harder VATS');
+    const added = join(folder, 'added.txt');
+    await writeFile(added, '');
+    await modifiedLater(folder);
+
+    const now = (await adapter.reading({ named: [added], disk: false }, landed)).modFiles.get('Harder VATS');
+
+    expect(now?.files.map((file) => file.relativePath)).toContain('added.txt');
+    expect(listed?.folders).not.toEqual([]);
+    expect(now?.folders).toBe(listed?.folders);
+    expect(now?.files.filter((file) => listed?.files.includes(file))).toHaveLength(listed?.files.length ?? -1);
+  });
+
   it('hands each mod\'s files as the landed reading holds them while another reading overlaps it', async () => {
     const adapter = managerOver(instance);
     const landed = await adapter.reading(CHECK_THE_DISK);
