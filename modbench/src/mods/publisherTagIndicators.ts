@@ -9,7 +9,8 @@ import { fileRowUri } from './modFiles';
 import {
   IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorOf, separatorRowUri,
 } from './modIndicators';
-import { TOUCHING_READ, touchedIn, type Owned, type Row } from './originsTouched';
+import { touchedIn, type Owned, type Row } from './originsTouched';
+import { TOUCHING_READ } from '../instanceLoader/filesChanged';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
 

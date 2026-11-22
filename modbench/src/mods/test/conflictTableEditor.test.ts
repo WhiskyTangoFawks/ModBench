@@ -313,6 +313,21 @@ describe('a mod\'s conflict table, open in a tab', () => {
     expect(copiesDouble.asked).toHaveLength(1);
   });
 
+  it('shows again once another mod gains a copy of a file its mod holds, though the change names no file it read', async () => {
+    const unchangedLow = { files: [file('Low', 'a.dds')] };
+    const before = await indexedValueOf([mod('High'), mod('Low')], { High: { files: [file('High', 'own.dds')] }, Low: unchangedLow });
+    const instance = new FakeInstance(before);
+    const panel = openTable(instance, 'Low');
+    const { files, filesByMod, foldersByMod, stackedCopies } = await indexedValueOf([mod('High'), mod('Low')], {
+      High: { files: [file('High', 'own.dds'), file('High', 'a.dds')] }, Low: unchangedLow,
+    });
+
+    instance.publish({ ...before, files, filesByMod, foldersByMod, stackedCopies }, { named: [], disk: false });
+    await posted(panel, 1);
+
+    expect(rowCounts(panel)).toEqual([1]);
+  });
+
   it('reads its copies again when a change names one of them, and for no change to another file', async () => {
     const held = (name: string) => ({ origin: { kind: 'mod' as const, name }, name: 'a.dds' });
     const instance = instanceOver(fakeInstanceAdapter(readingFixture({

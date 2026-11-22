@@ -4,7 +4,8 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
 import { originKey } from '../instanceLoader/fileConflictIndex';
-import { modEntryOf, RowsByOwner, rowsFollowing, TOUCHING_READ, touchedIn, type Owned, type Row } from './originsTouched';
+import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type Owned, type Row } from './originsTouched';
+import { TOUCHING_READ } from '../instanceLoader/filesChanged';
 import { fileRowUri } from './modFiles';
 import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from './modFileStates';
 import { onSettingChange } from '../drivingLib/setting';

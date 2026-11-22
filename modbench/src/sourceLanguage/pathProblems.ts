@@ -4,17 +4,14 @@ import { askingOnChange } from '../drivingLib/problemsAsker';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
+import type { FilesChanged } from '../instanceLoader/filesChanged';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, positionAt, askingWhenNotLate, settling, type Asked, type Feed } from './feedShape';
 import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
 import { joinedReasons, lastGoodReadMessage, pluginReason, quotedPluginName } from '../wire/reasons';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
-
-// What a new value changed of what the instance says of files: the origins whose files changed, and each path, folded, they
-// hold or held; or anything.
-type StandingChanged = 'every' | { readonly origins: ReadonlySet<string>; readonly paths: ReadonlySet<string> };
 
 /** What the instance says of a file the plugin source names. */
 export interface PathStanding {
@@ -24,7 +21,7 @@ export interface PathStanding {
   holds: (plugin: PluginAddress, dataPath: string) => boolean;
   /** Each path, folded, the game tries for `dataPath`: `holds` answers by these alone, with its plugin's mod. */
   triedPaths: (dataPath: string) => readonly string[];
-  subscribe: (listener: (changed: StandingChanged) => void) => { dispose: () => unknown };
+  subscribe: (listener: (changed: FilesChanged) => void) => { dispose: () => unknown };
 }
 
 export interface PathProblemsDeps {
@@ -111,8 +108,8 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     }
     return held;
   };
-  const reaches = (changed: StandingChanged, answer: PluginFilePaths): boolean => changed === 'every'
-    || changed.origins.has(answer.plugin.origin) || [...changed.paths].some((path) => triedBy(answer).has(path));
+  const reaches = (changed: FilesChanged, answer: PluginFilePaths): boolean => changed === 'every' || changed.some(({ origin, files }) =>
+    (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN) === answer.plugin.origin || files.some(({ relativePath }) => triedBy(answer).has(relativePath.toLowerCase())));
   // A judgement a later change reached is stale before it ends, so it is not kept.
   let changes = 0;
   const reachedAt = new Map<string, number>();
@@ -124,10 +121,14 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
       const problems = await problemsOf(entry, deps);
       if ((reachedAt.get(key) ?? 0) <= started) judgedOf.set(key, { answer: entry.answer, problems });
     }));
-    for (const key of judgedOf.keys()) if (!held.has(key)) judgedOf.delete(key);
+    for (const key of [...judgedOf.keys(), ...reachedAt.keys()]) {
+      if (held.has(key)) continue;
+      judgedOf.delete(key);
+      reachedAt.delete(key);
+    }
     if (mine === shown) publish(merged([...judgedOf.values()].map(({ problems }) => problems)));
   });
-  const forget = (changed: StandingChanged): void => {
+  const forget = (changed: FilesChanged): void => {
     changes += 1;
     for (const [key, { answer }] of held) {
       if (!reaches(changed, answer)) continue;

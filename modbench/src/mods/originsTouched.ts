@@ -1,51 +1,23 @@
 // common.md, A view, story 13: a new value asks again for the rows of the origins it touches alone.
 
 import type * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, InstanceView, Mod } from '../instanceLoader/instance';
 import { modOrigin, originKey, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { changedKeys } from '../ports/lastBuilt';
-
-const BY_ORIGIN: readonly (keyof InstanceValue)[] = ['filesByMod', 'foldersByMod', 'overwriteFiles', 'overwriteFolders', 'files', 'stackedCopies'];
-
-/** What an origin's rows show of its files: the archives and what each holds reach them through the stack. */
-export type Touching = Pick<InstanceValue, 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders' | 'files' | 'stackedCopies' | 'archiveContents' | 'loadsArchive'>;
-
-/** The facts every origin's rows follow. */
-export const TOUCHING_READ = {
-  filesByMod: true, foldersByMod: true, overwriteFiles: true, overwriteFolders: true, files: true, stackedCopies: true, archiveContents: true, loadsArchive: true,
-} as const satisfies Record<keyof Touching, true>;
-
-// Whether a fact no origin's rows are keyed by changed: the archives, or another fact `reads` names.
-function changedBeyond<K extends keyof InstanceValue>(before: Pick<InstanceValue, K> & Touching, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>): boolean {
-  const isRead = (fact: string): fact is K => fact in reads;
-  return before.archiveContents !== after.archiveContents || before.loadsArchive !== after.loadsArchive
-    || Object.keys(reads).filter(isRead).some((fact) => !BY_ORIGIN.includes(fact) && before[fact] !== after[fact]);
-}
-
-// Each origin whose own files or folders changed, with the files it holds and held.
-function ownChanged(before: Touching, after: Touching): [FileOrigin, OriginFile[]][] {
-  const mods = [...new Set([...changedKeys(after.filesByMod, before.filesByMod), ...changedKeys(after.foldersByMod, before.foldersByMod)])];
-  const overwrite = before.overwriteFiles !== after.overwriteFiles || before.overwriteFolders !== after.overwriteFolders;
-  return [
-    ...mods.map((name): [FileOrigin, OriginFile[]] => [modOrigin(name), [...before.filesByMod.get(name) ?? [], ...after.filesByMod.get(name) ?? []]]),
-    ...overwrite ? [[RUNTIME_OUTPUT, [...before.overwriteFiles, ...after.overwriteFiles]] satisfies [FileOrigin, OriginFile[]]] : [],
-  ];
-}
+import { filesChanged, type Touching } from '../instanceLoader/filesChanged';
 
 // Each origin with a copy of the path, loose or archived.
 const providersAt = (value: Touching, path: string): FileOrigin[] =>
   [...value.files.get(path)?.providers ?? [], ...(value.stackedCopies.get(path)?.copies ?? []).map(({ origin }) => origin)];
 
-/** The origins whose rows a new value changes: each whose own files or folders changed, Overwrite among them, and each
- *  that provides a path they hold or held. Every origin's while the archives or another fact `reads` names changed. */
+/** The origins whose rows a new value changes: each whose own files changed, and each that provides a path they hold or
+ *  held. Every origin's while `filesChanged` says anything changed. */
 export function originsTouched<K extends keyof InstanceValue>(
   before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>,
 ): 'every' | readonly FileOrigin[] {
-  if (before === undefined || changedBeyond(before, after, reads)) return 'every';
-  const own = ownChanged(before, after);
-  if (own.length === 0) return before.files === after.files && before.stackedCopies === after.stackedCopies ? [] : 'every';
-  const touched = new Map(own.map(([origin]) => [originKey(origin), origin]));
-  const paths = new Set(own.flatMap(([, files]) => files.map(({ relativePath }) => relativePath)));
+  const own = filesChanged(before, after, reads);
+  if (own === 'every' || before === undefined) return 'every';
+  const touched = new Map(own.map(({ origin }) => [originKey(origin), origin]));
+  const paths = new Set(own.flatMap(({ files }) => files.map(({ relativePath }) => relativePath)));
   for (const path of paths) for (const origin of [before, after].flatMap((value) => providersAt(value, path))) touched.set(originKey(origin), origin);
   return [...touched.values()];
 }

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { feedPathProblems, type PathStanding } from '../pathProblems';
+import type { FilesChanged } from '../../instanceLoader/filesChanged';
+import { fileIn } from '../../test/fakeInstanceAdapter';
 import type { ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -8,7 +10,7 @@ import type { PluginFilePaths } from '../../client';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
-type StandingChanged = Parameters<Parameters<PathStanding['subscribe']>[0]>[0];
+const changedIn = (name: string, relativePath: string): FilesChanged => [{ origin: { kind: 'mod', name }, files: [fileIn(`/mods/${name}`, relativePath)] }];
 
 const RETRY_AFTER_MS = 1000;
 const HOLDER = '000800:Names.esp';
@@ -25,25 +27,25 @@ const answerFor = (plugin = PLUGIN, paths = [named()], over: Partial<PluginFileP
 
 const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 
-function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
+function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}, readText = () => Promise.resolve(TEXT)) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getPluginFilePaths', answer);
   const published: ProblemsByFile[] = [];
   const reporter = recordingReporter();
   const status: (string | undefined)[] = [];
-  const listeners = new Set<(changed: StandingChanged) => void>();
+  const listeners = new Set<(changed: FilesChanged) => void>();
   const paths: PathStanding = {
     judged: () => true, holds: () => false, triedPaths: (dataPath) => [dataPath.toLowerCase()],
     subscribe: (listener) => { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
     ...standing,
   };
   feedPathProblems({
-    client, ask: problemsAsker(client, RETRY_AFTER_MS), sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter, paths,
+    client, ask: problemsAsker(client, RETRY_AFTER_MS), sourceFiles: sourceFolders, readText, reporter, paths,
     publish: (problems) => published.push(problems), languageStatus: (text) => status.push(text),
   });
   const latest = () => published[published.length - 1] ?? new Map();
   const settled = async (count: number) => { await vi.waitFor(() => { expect(published.length).toBeGreaterThanOrEqual(count); }); return latest(); };
-  const instanceChanged = (changed: StandingChanged = 'every'): void => { for (const listener of listeners) listener(changed); };
+  const instanceChanged = (changed: FilesChanged = 'every'): void => { for (const listener of listeners) listener(changed); };
   return { client, reporter, published, status, latest, settled, instanceChanged };
 }
 
@@ -94,10 +96,43 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await settled(1);
     judged.splice(0);
 
-    instanceChanged({ origins: new Set(), paths: new Set(['textures/other.dds']) });
+    instanceChanged(changedIn('Elsewhere', 'Textures/Other.dds'));
     await vi.waitFor(() => { expect(published.length).toBe(2); });
 
     expect(judged).toEqual(['Textures/Other.dds']);
+  });
+
+  it('judges again every path of a plugin whose own mod a change names', async () => {
+    const judged: string[] = [];
+    const other = named('Textures/Other.dds', { sourceRelativePath: 'Other.esp/Set.json' });
+    const { settled, instanceChanged, published } = feed([answerFor(), answerFor(OTHER, [other])], { holds: (_plugin, path) => { judged.push(path); return false; } });
+    await settled(1);
+    judged.splice(0);
+
+    instanceChanged(changedIn(PLUGIN.origin, 'Meshes/Unnamed.nif'));
+    await vi.waitFor(() => { expect(published.length).toBe(2); });
+
+    expect(judged).toEqual([DATA_PATH]);
+  });
+
+  it('keeps no judgement a later change reached before it ended', async () => {
+    let held = true;
+    let release: (text: string) => void = () => undefined;
+    const stalled = new Promise<string>((resolve) => { release = resolve; });
+    const { settled, instanceChanged, published } = feed([answerFor()], { holds: () => held }, () => stalled);
+    await settled(1);
+    held = false;
+    instanceChanged(changedIn(PLUGIN.origin, 'a.nif'));
+    held = true;
+    instanceChanged(changedIn(PLUGIN.origin, 'a.nif'));
+    await vi.waitFor(() => { expect(published.length).toBe(2); });
+    release(TEXT);
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    instanceChanged(changedIn('Elsewhere', 'b.nif'));
+    await vi.waitFor(() => { expect(published.length).toBe(3); });
+
+    expect(published[2]).toEqual(new Map());
   });
 
   it('asks for the whole set at the start, and for the plugin only that a notification names', async () => {
@@ -248,7 +283,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const reads: string[] = [];
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
-    const listeners = new Set<(changed: StandingChanged) => void>();
+    const listeners = new Set<(changed: FilesChanged) => void>();
     const published: ProblemsByFile[] = [];
     feedPathProblems({
       client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),

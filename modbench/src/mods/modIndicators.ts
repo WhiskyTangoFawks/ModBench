@@ -3,7 +3,8 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, ModGroups } from '../instanceLoader/instance';
 import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
-import { modEntryOf, RowsByOwner, rowsFollowing, TOUCHING_READ, touchedIn, type Owned, type Row, type Touching } from './originsTouched';
+import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type Owned, type Row } from './originsTouched';
+import { TOUCHING_READ, type Touching } from '../instanceLoader/filesChanged';
 import { onSettingChange } from '../drivingLib/setting';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';

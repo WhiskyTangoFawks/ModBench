@@ -11,7 +11,8 @@ import {
   CONFLICT_CELL_VALUES, CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
 import { modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
-import { originsTouched, TOUCHING_READ } from './originsTouched';
+import { originsTouched } from './originsTouched';
+import { TOUCHING_READ } from '../instanceLoader/filesChanged';
 import { CONFLICT_TABLE_READS, conflictPaths, conflictTable } from './conflictTable';
 import type { FileCopies, FileToCompare } from './sameCopies';
 import { copiesToRead } from './copiesToRead';
