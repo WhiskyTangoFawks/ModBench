@@ -72,7 +72,7 @@ describe('a change shows in the views at the rows it touches, on a small and a l
 describe('a gesture into one mod costs the same whatever that mod holds (ADR-0029, Consequences, bullet 5)', () => {
   const into = (files: number): Gesture => ({ ...A_GESTURE_WRITING_A_LOOSE_FILE, writtenModFiles: files });
 
-  it.each(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling', 'lookups'] as const)('at the %s layer', async (layer) => {
+  it.each(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling', 'lookups', 'rows'] as const)('at the %s layer', async (layer) => {
     const small = await costOf(3, into(3));
     const large = await costOf(3, into(300));
 

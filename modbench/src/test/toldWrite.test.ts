@@ -83,15 +83,25 @@ describe('a write over the real adapter', () => {
 
   it('returns from a gesture once the subscribers of the values its told writes landed have settled (ADR-0029, Consequences, bullet 1)', async () => {
     const { adapter, instance: loader } = await wiredInstance();
-    let derived = false;
+    let release = (): void => undefined;
+    let entered = (): void => undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const deriving = new Promise<void>((resolve) => { entered = resolve; });
     loader.subscribe(async () => {
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      derived = true;
+      entered();
+      await held;
     });
+    let returned = false;
 
-    await handingOneChange(loader, () => adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]));
+    const gesture = handingOneChange(loader, () => adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]))
+      .then(() => { returned = true; });
+    await deriving;
+    await loader.refresh([]);
+    const returnedWhileDeriving = returned;
+    release();
+    await gesture;
 
-    expect(derived).toBe(true);
+    expect([returnedWhileDeriving, returned]).toEqual([false, true]);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

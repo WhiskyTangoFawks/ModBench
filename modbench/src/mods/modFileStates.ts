@@ -76,10 +76,13 @@ export function archivedFilesOf(value: ArchiveValue, origin: FileOrigin, enabled
   const contents = value.archiveContents.get(file.sourcePath);
   if (contents?.kind !== 'read') return [];
   const loaded = archiveGotten(value, origin, enabled, file);
-  return contents.answer.map((path) => {
-    const winner = value.stackedCopies.get(path)?.copies[0];
-    const over = gameFolderFileOver(value, path);
-    const winsEntry = winner !== undefined && over === undefined && sameOrigin(winner.origin, origin) && winner.at.kind === 'archived' && winner.at.archive === file.sourcePath;
-    return { path, gotten: loaded && winsEntry, gameFolderFile: over ?? null };
-  });
+  return contents.answer.map((path) => archivedFileOf(value, origin, file, path, loaded));
+}
+
+/** The standing of the file at `path` in `archive`, an archive of `origin` the game gets when `loaded` says so. */
+export function archivedFileOf(value: ArchiveValue, origin: FileOrigin, archive: OriginFile, path: string, loaded: boolean): ArchivedFileStanding {
+  const winner = value.stackedCopies.get(path)?.copies[0];
+  const over = gameFolderFileOver(value, path);
+  const winsEntry = winner !== undefined && over === undefined && sameOrigin(winner.origin, origin) && winner.at.kind === 'archived' && winner.at.archive === archive.sourcePath;
+  return { path, gotten: loaded && winsEntry, gameFolderFile: over ?? null };
 }

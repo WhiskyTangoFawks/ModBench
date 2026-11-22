@@ -150,6 +150,23 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
     expect(decorations.provideFileDecoration(uri)).toEqual(GREY);
   });
 
+  it('greys the file in a mod\'s archive once another mod gains a loose copy that wins over it, and not once that copy is lost', () => {
+    const archive = file('A', 'A - Main.ba2');
+    const next = indexedValues([mod('A'), mod('B')], [{ origin: modOrigin('A'), archive: archive.sourcePath, files: ['textures/x.dds'] }]);
+    const archiveFiles = { A: { files: [archive] } };
+    const instance = new FakeInstance(next({ ...archiveFiles, B: { files: [] } }));
+    const decorations = decorationsOver(instance);
+    const archived = () => decorations.provideFileDecoration(fileRowUri(modOrigin('A'), 'A - Main.ba2/textures/x.dds'));
+    const greyed = [archived()];
+
+    instance.publish(next({ ...archiveFiles, B: { files: [file('B', 'textures/x.dds')] } }));
+    greyed.push(archived());
+    instance.publish(next({ ...archiveFiles, B: { files: [] } }));
+    greyed.push(archived());
+
+    expect(greyed).toEqual([undefined, GREY, undefined]);
+  });
+
   it('greys another mod\'s copy once a mod gains the file that wins over it, and an excluded folder a mod gains', () => {
     const next = indexedValues([mod('Winner'), mod('Loser')]);
     const losing = [file('Loser', 'a.dds')];

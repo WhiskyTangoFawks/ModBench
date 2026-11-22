@@ -1,7 +1,7 @@
 // ADR-0029, Consequences, bullet 5: what derives from an origin's files updates from the origins whose files changed.
 
 import type { FileOrigin, OriginFile } from '../instanceAdapter/instanceAdapter';
-import { modOrigin, RUNTIME_OUTPUT } from './fileConflictIndex';
+import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from './fileConflictIndex';
 import { changedKeys } from '../ports/lastBuilt';
 import { differing } from './reordered';
 import type { InstanceValue } from './instance';
@@ -33,10 +33,17 @@ function changedBeyond<K extends keyof InstanceValue>(before: Pick<InstanceValue
     || Object.keys(reads).filter(isRead).some((fact) => !BY_ORIGIN.includes(fact) && before[fact] !== after[fact]);
 }
 
+// Each subscriber asks of the same two lists, so the answer is kept by the list it reached.
+const ownChanges = new WeakMap<readonly OriginFile[], { readonly was: readonly OriginFile[]; readonly change: OwnFilesChanged }>();
+
 function ownChanged(origin: FileOrigin, was: readonly OriginFile[], now: readonly OriginFile[]): OwnFilesChanged {
+  const kept = ownChanges.get(now);
+  if (kept?.was === was && sameOrigin(kept.change.origin, origin)) return kept.change;
   const files = differing(was, now);
   const held = new Set(was);
-  return { origin, files, gained: files.filter((file) => !held.has(file)) };
+  const change = { origin, files, gained: files.filter((file) => !held.has(file)) };
+  ownChanges.set(now, { was, change });
+  return change;
 }
 
 /** What a new value changed of the origins' files. Anything while the archives or another fact `reads` names changed, or

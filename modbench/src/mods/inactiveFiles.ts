@@ -7,12 +7,12 @@ import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder 
 import { foldPath, originKey, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type OriginsChange, type Owned, type Row } from './originsTouched';
 import { TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
-
-type OwnChange = Exclude<FilesChanged, 'every'>[number];
 import { fileRowUri } from './modFiles';
-import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from './modFileStates';
+import { archiveGotten, archivedFileOf, archivedFilesOf, isFileNotGotten, isNotDeployed, type ArchivedFileStanding } from './modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
+
+type OwnChange = Exclude<FilesChanged, 'every'>[number];
 
 /** The setting that switches the grey, on by default (mods.md, Indicators).
  *  @public Read by packageJson.test, which holds package.json to it. */
@@ -54,20 +54,49 @@ function folderRows(value: FilesValue, origin: FileOrigin): Owned<Inactive> {
   return [`${originKey(origin)}\0folders`, rows];
 }
 
-// The rows of the origin's file at the path: the file's own, and its archive's and the archive's files'.
-function fileRows(value: FilesValue, origin: FileOrigin, relativePath: string, file: OriginFile | undefined): Owned<Inactive> {
+// The rows of the origin's file at the path: the file's own, and of an archive, each file it holds, under its own owner.
+function * fileRows(value: FilesValue, origin: FileOrigin, relativePath: string, file: OriginFile | undefined): Iterable<Owned<Inactive>> {
   const rows: Rows = new Map();
-  if (file !== undefined) {
-    const { enabled } = listedFor(value, origin);
-    if (isFileNotGotten(value, origin, enabled, file)) markInactive(rows, origin, file);
-    if (value.archiveContents.has(file.sourcePath)) {
-      if (!archiveGotten(value, origin, enabled, file)) mark(rows, fileRowUri(origin, file.relativePath), 'archive');
-      for (const { path, gotten } of archivedFilesOf(value, origin, enabled, file)) {
-        if (!gotten) mark(rows, fileRowUri(origin, `${file.relativePath}/${path}`), 'inactive');
-      }
-    }
+  const { enabled } = listedFor(value, origin);
+  if (file !== undefined && isFileNotGotten(value, origin, enabled, file)) markInactive(rows, origin, file);
+  const archive = file !== undefined && value.archiveContents.has(file.sourcePath);
+  if (archive && !archiveGotten(value, origin, enabled, file)) mark(rows, fileRowUri(origin, file.relativePath), 'archive');
+  yield [`${originKey(origin)}\0${relativePath}`, rows];
+  if (archive) for (const standing of archivedFilesOf(value, origin, enabled, file)) yield archivedRows(origin, file, standing);
+}
+
+function archivedRows(origin: FileOrigin, archive: OriginFile, { path, gotten }: ArchivedFileStanding): Owned<Inactive> {
+  const rows: Rows = new Map();
+  if (!gotten) mark(rows, fileRowUri(origin, `${archive.relativePath}/${path}`), 'inactive');
+  return [`${originKey(origin)}\0${archive.relativePath}\0${path}`, rows];
+}
+
+// Each origin's archives by the path they are read from, kept while what the archives hold is the same.
+const archivesHeld = new WeakMap<FilesValue['archiveContents'], Map<string, ReadonlyMap<string, OriginFile>>>();
+
+function archiveOf(value: FilesValue, origin: FileOrigin, sourcePath: string): OriginFile | undefined {
+  let byOrigin = archivesHeld.get(value.archiveContents);
+  if (byOrigin === undefined) {
+    byOrigin = new Map();
+    archivesHeld.set(value.archiveContents, byOrigin);
   }
-  return [`${originKey(origin)}\0${relativePath}`, rows];
+  let archives = byOrigin.get(originKey(origin));
+  if (archives === undefined) {
+    archives = new Map(listedFor(value, origin).files.flatMap((file) => (value.archiveContents.has(file.sourcePath) ? [[file.sourcePath, file] as const] : [])));
+    byOrigin.set(originKey(origin), archives);
+  }
+  return archives.get(sourcePath);
+}
+
+// The rows of each file the origin's archives hold at the path.
+function * archivedAt(value: FilesValue, origin: FileOrigin, path: string): Iterable<Owned<Inactive>> {
+  for (const { origin: holder, at } of value.stackedCopies.get(path)?.copies ?? []) {
+    if (at.kind !== 'archived' || !sameOrigin(holder, origin)) continue;
+    const archive = archiveOf(value, origin, at.archive);
+    if (archive === undefined) continue;
+    const loaded = archiveGotten(value, origin, listedFor(value, origin).enabled, archive);
+    yield archivedRows(origin, archive, archivedFileOf(value, origin, archive, at.file, loaded));
+  }
 }
 
 const byPath = new WeakMap<readonly OriginFile[], ReadonlyMap<string, OriginFile>>();
@@ -91,28 +120,27 @@ function * ownRows(value: FilesValue, { origin, files, gained }: OwnChange, done
     const isGained = gainedFiles.has(file);
     if (!isGained && gainedAt.has(file.relativePath)) continue;
     done.add(foldPath(file.relativePath));
-    yield fileRows(value, origin, file.relativePath, isGained ? file : undefined);
+    yield * fileRows(value, origin, file.relativePath, isGained ? file : undefined);
   }
 }
 
-// The rows a change derives again: of each origin it touches, each file it gained or lost, its folders, and its file at
-// each path whose copies changed. Every origin's every row while anything changed.
+// The rows a change derives again: of each origin it touches, each file it gained or lost, its folders, and at each path
+// whose copies changed, its file and its archives' files. Every row while anything changed.
 function * ownedIn(value: FilesValue, change: OriginsChange): Iterable<Owned<Inactive>> {
   for (const origin of touchedIn(value, change)) {
     const { files } = listedFor(value, origin);
     if (change === 'every') {
       yield folderRows(value, origin);
-      yield * files.map((file) => fileRows(value, origin, file.relativePath, file));
+      yield * files.flatMap((file) => [...fileRows(value, origin, file.relativePath, file)]);
       continue;
     }
     const own = change.own.find((changed) => sameOrigin(changed.origin, origin));
     const done = new Set<string>();
     if (own !== undefined) yield * ownRows(value, own, done);
     for (const path of change.paths) {
-      const folded = foldPath(path);
-      if (done.has(folded)) continue;
-      const file = fileAtPath(files, folded);
-      if (file !== undefined) yield fileRows(value, origin, file.relativePath, file);
+      yield * archivedAt(value, origin, path);
+      const file = done.has(foldPath(path)) ? undefined : fileAtPath(files, foldPath(path));
+      if (file !== undefined) yield * fileRows(value, origin, file.relativePath, file);
     }
   }
 }

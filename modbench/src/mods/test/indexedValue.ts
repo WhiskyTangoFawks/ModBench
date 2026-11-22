@@ -44,12 +44,15 @@ export function indexedValueOf(
 
 /** Instance values over `mods`, each built from the one before as the Instance loader builds the next: a file that reads the
  *  same keeps its object, and so does every part the change leaves as it was. */
-export function indexedValues(mods: ModlistEntry[]): (listings: Record<string, { files: OriginFile[]; folders?: OriginFolder[] }>) => InstanceValue {
+export function indexedValues(mods: ModlistEntry[], loaded: readonly LoadedArchive[] = []): (listings: Record<string, { files: OriginFile[]; folders?: OriginFolder[] }>) => InstanceValue {
   const index = indexReusing();
   const stack = stackReusing();
-  const loaded: readonly LoadedArchive[] = [];
   const overwrite: OriginFile[] = [];
-  let held = instanceValueFixture({ mods });
+  const loads = new Set(loaded.map(({ archive }) => archive.slice(archive.lastIndexOf('/') + 1)));
+  let held = instanceValueFixture({
+    mods, loadsArchive: (name) => loads.has(name),
+    archiveContents: new Map(loaded.flatMap(({ archive, files }) => (files === undefined ? [] : [[archive, { kind: 'read', answer: files }] as const]))),
+  });
   return (listings) => {
     const modFiles = new Map(mods.flatMap((entry) => {
       const listing = entry.kind === 'mod' ? listings[entry.name] : undefined;
