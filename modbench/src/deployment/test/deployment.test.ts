@@ -893,20 +893,49 @@ describe('the files in the deployment folder deploy does not manage', () => {
     expect([finished, await read]).toEqual([['deploy', 'read'], []]);
   });
 
-  it('leaves the files it writes unnamed when it deploys or purges, and not when it only reads', async () => {
-    const leaveWritesUnnamed = vi.fn();
-    const deployment = hardlinkDeployment(storage, place, leaveWritesUnnamed);
-
-    await deployment.unmanaged(folder);
-    expect(leaveWritesUnnamed).not.toHaveBeenCalled();
-    await deployment.deploy(folder, [], order);
-    await deployment.purge(folder);
-
-    expect(leaveWritesUnnamed).toHaveBeenCalledTimes(2);
-  });
-
   it('names none in an empty folder', async () => {
     expect((await deploy([])).unmanaged).toEqual([]);
+  });
+});
+
+describe('a deploy and a purge, which name the files they write', () => {
+  let named: string[];
+  let deployment: ReturnType<typeof hardlinkDeployment>;
+  const pluginsTxt = (): string => join(root, 'local', 'plugins.txt');
+  const naming = async (write: () => Promise<unknown>): Promise<string[]> => {
+    named = [];
+    await write();
+    return named.sort();
+  };
+
+  beforeEach(() => {
+    place = () => Promise.resolve({ folder: join(root, 'local') });
+    deployment = hardlinkDeployment(storage, place, (paths) => { named.push(...paths); });
+  });
+
+  it('as each path a deploy links, each folder it makes, and plugins.txt', async () => {
+    const file = await modFile('Mod', 'Root/x/y/b.dll');
+
+    expect(await naming(() => deployment.deploy(folder, [file], order)))
+      .toEqual([join(folder, 'x'), join(folder, 'x', 'y'), join(folder, 'x', 'y', 'b.dll'), pluginsTxt()].sort());
+  });
+
+  it('as each path a later deploy relinks, removes and links', async () => {
+    await deployment.deploy(folder, [await modFile('Mod', 'a.esp'), await modFile('Mod', 'b.esp')], order);
+    const files = [await modFile('Upper', 'a.esp'), await modFile('Mod', 'c.esp')];
+
+    expect(await naming(() => deployment.deploy(folder, files, order)))
+      .toEqual([join(folder, 'Data', 'a.esp'), join(folder, 'Data', 'b.esp'), join(folder, 'Data', 'c.esp'), pluginsTxt()].sort());
+  });
+
+  it('as each path a purge removes, each folder deploy made, and plugins.txt', async () => {
+    await deployment.deploy(folder, [await modFile('Mod', 'Root/x/b.dll')], order);
+
+    expect(await naming(() => deployment.purge(folder))).toEqual([join(folder, 'x'), join(folder, 'x', 'b.dll'), pluginsTxt()].sort());
+  });
+
+  it('as nothing when it only reads', async () => {
+    expect(await naming(() => deployment.unmanaged(folder))).toEqual([]);
   });
 });
 

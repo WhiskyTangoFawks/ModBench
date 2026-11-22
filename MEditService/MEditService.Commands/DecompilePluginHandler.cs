@@ -30,13 +30,13 @@ public sealed class DecompilePluginHandler
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new SelectionRefusal<DecompileRefusal>(DecompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
-        var decompiled = await ItemWrite.OverAsync(
-            _source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin => DecompileOneAsync(loadOrder, plugin, force));
+        var (decompiled, written) = await WrittenFiles.Of(() => ItemWrite.OverAsync(
+            _source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin => DecompileOneAsync(loadOrder, plugin, force)));
         await _held.ReadBackSource(decompiled.Landed.Select(landed => landed.Item), cancel);
         return decompiled.ToAnswer(
             landed => landed.Item,
             refused => new DecompileRefused(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new DecompileResult(applied, refused));
+            (applied, refused) => new DecompileResult(applied, refused, written));
     }
 
     private async Task<ItemAnswer<DecompileRefusal, NoOutcome>> DecompileOneAsync(

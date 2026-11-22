@@ -75,6 +75,39 @@ describe('the instance repository\'s reads', () => {
     expect([(await readTrustingKept(heard, false, reads.head)).answer, held.statusRuns()]).toEqual(['two', 2]);
   });
 
+  it('has VS Code\'s git run its status in a reading that names the .git a write of Modbench\'s wrote, and tells nothing of that run', async () => {
+    const held = hostGitHolding(folder, { head: 'one' });
+    const reads = repositoryReads(folder, held.host);
+    const heard = hearing(reads);
+    await readTrustingKept([], true, reads.head);
+    held.head = 'two';
+
+    const read = await readTrustingKept([join(folder, '.git')], false, reads.head);
+
+    expect([read.answer, held.statusRuns(), heard]).toEqual(['two', 2, []]);
+  });
+
+  it('has VS Code\'s git run its status in a reading a write of Modbench\'s names, though VS Code\'s git told of a change before it', async () => {
+    const held = hostGitHolding(folder, { head: 'one' });
+    const reads = repositoryReads(folder, held.host);
+    hearing(reads);
+    await readTrustingKept([], true, reads.head);
+    held.changed();
+    held.head = 'two';
+
+    expect((await readTrustingKept([join(folder, '.git')], false, reads.head)).answer).toBe('two');
+  });
+
+  it('runs no status of its own in a reading the watch names for a write to the index', async () => {
+    const held = hostGitHolding(folder, { head: 'one' });
+    const reads = repositoryReads(folder, held.host);
+    await readTrustingKept([], true, reads.head);
+
+    await readTrustingKept([join(folder, '.git', 'index')], false, reads.head);
+
+    expect(held.statusRuns()).toBe(1);
+  });
+
   it('follows the instance\'s repository VS Code\'s git opens once Modbench listens', async () => {
     const held = hostGitHolding(folder, { open: false });
     const reads = repositoryReads(folder, held.host);
@@ -83,7 +116,7 @@ describe('the instance repository\'s reads', () => {
     held.open();
     held.changed();
 
-    expect(heard).toEqual([join(folder, '.git'), join(folder, '.git')]);
+    expect(heard).toEqual([join(folder, '.git', 'HEAD'), join(folder, '.git', 'HEAD')]);
   });
 
   it('hears nothing of a repository VS Code\'s git opens elsewhere', async () => {
@@ -185,14 +218,14 @@ describe('the MO2 reading of an instance repository', () => {
       expect([runs, held.configAsked.sort()]).toEqual([PUSH_CHECK_READS, ['filter.modbench-settings-tokens.clean', FILTER]]);
     });
 
-    it('lists only the instance root again in the reading named the change VS Code\'s git says it made', async () => {
+    it('lists nothing again in the reading named the change VS Code\'s git says it made', async () => {
       const adapter = await setUpOver(held.host);
       const heard = await heardOf(adapter);
       vi.mocked(readdir).mockClear();
 
       await adapter.reading({ named: heard, disk: false });
 
-      expect(vi.mocked(readdir).mock.calls.map(([folder]) => folder)).toEqual([instance, instance]);
+      expect(vi.mocked(readdir).mock.calls.map(([folder]) => folder)).toEqual([]);
     });
 
     it('runs every git read again at a check of the disk', async () => {

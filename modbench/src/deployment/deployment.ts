@@ -8,6 +8,7 @@ import { fold, foldedPathsBelow } from './foldedPaths';
 import { PLUGINS_FILE_NAME, pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import { ASIDE, changeAll, fileIdAt, fileIdOf, recoveryIn, removedIfEmpty, type Link, type Step } from './changes';
 import { errorMessage } from '../ports/errorMessage';
+import type { WriteSink } from '../ports/writeSink';
 import { pluginsTxtChange, pluginsTxtPurge } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
 import { recordIn, type DeploymentRecord, type Recorded, type Written, type WrittenPluginsTxt } from './record';
@@ -199,6 +200,8 @@ const asWritten = ({ path, fileId }: Written): Written => ({ path, fileId });
 
 interface PluginsPart {
   readonly steps: Step[];
+  /** The plugins.txt deploy writes, and whose folder it tidies. */
+  readonly written: readonly string[];
   readonly recordChanged: boolean;
   /** What the record holds of plugins.txt while the deploy changes it, so a deploy killed there is recovered. */
   recordBefore(): WrittenPluginsTxt | undefined;
@@ -210,12 +213,13 @@ interface PluginsPart {
 async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
   const where = await place(release, folder);
   if ('why' in where) {
-    return { steps: [], recordChanged: false, recordBefore: () => previous, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
+    return { steps: [], written: [], recordChanged: false, recordBefore: () => previous, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
   }
   const path = join(where.folder, PLUGINS_FILE_NAME);
   const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
   return {
     steps: change.step === undefined ? [] : [change.step],
+    written: [path],
     recordChanged: change.recordChanged,
     recordBefore: () => (previous?.path === path ? previous : { path, fileId: '', renamed: [] }),
     recordAfter: () => change.written(),
@@ -245,8 +249,11 @@ async function restoredRecord(record: DeploymentRecord, folder: string, recorded
   return err instanceof Error ? err : new Error(errorMessage(err));
 }
 
+const writtenIn = (folder: string, paths: readonly string[], pluginsTxt: readonly string[]): string[] =>
+  [...paths.map((path) => join(folder, path)), ...pluginsTxt];
+
 async function deployTo(
-  record: DeploymentRecord, place: PluginsTxtPlace, folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder,
+  record: DeploymentRecord, place: PluginsTxtPlace, folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder, name: WriteSink['name'],
 ): Promise<Deployed> {
   const { wanted, lost } = await linksOnTheFolderVolume(folder, files);
   const recorded = await record.of(folder);
@@ -256,7 +263,9 @@ async function deployTo(
   const setAside = [...removals, ...replaced].map(asWritten);
   const unmanaged = await unmanagedIn(folder, [...after, ...setAside]);
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
-  const folders = [...new Set([...recorded.folders, ...await foldersToMake(folder, [...relinks, ...links].map(({ path }) => path))])];
+  const made = await foldersToMake(folder, [...relinks, ...links].map(({ path }) => path));
+  const folders = [...new Set([...recorded.folders, ...made])];
+  name(writtenIn(folder, [...[...removals, ...relinks, ...links].map(({ path }) => path), ...made], part.written));
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();
     return record.write(folder, { files, folders, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
@@ -310,9 +319,13 @@ async function unmanagedLeft(folder: string, unfinished: string[]): Promise<stri
   }
 }
 
-async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purged> {
+const purgeWrites = (folder: string, removals: readonly Written[], { folders, pluginsTxt }: Recorded): string[] =>
+  writtenIn(folder, [...removals.map(({ path }) => path), ...folders], pluginsTxt === undefined ? [] : [pluginsTxt.path]);
+
+async function purgeFrom(record: DeploymentRecord, folder: string, name: WriteSink['name']): Promise<Purged> {
   const recorded = await record.of(folder);
   const removals = [...(await stillWritten(folder, recorded.files)).values()];
+  name(purgeWrites(folder, removals, recorded));
   const plugins = recorded.pluginsTxt === undefined ? undefined : await pluginsTxtPurge(recorded.pluginsTxt);
   const steps = plugins?.step === undefined ? [] : [plugins.step];
   const unfinished: string[] = [];
@@ -346,7 +359,7 @@ async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purg
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of
  *  the instance's own that no deployment folder holds. */
-export function hardlinkDeployment(storage: string, place: PluginsTxtPlace, leaveWritesUnnamed: () => void): Deployment {
+export function hardlinkDeployment(storage: string, place: PluginsTxtPlace, name: WriteSink['name']): Deployment {
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {
@@ -356,14 +369,12 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace, leav
       return run;
     },
     purge(folder) {
-      leaveWritesUnnamed();
-      const run = last.then(() => purgeFrom(record, folder));
+      const run = last.then(() => purgeFrom(record, folder, name));
       last = run.catch(() => undefined);
       return run;
     },
     deploy(folder, files, plugins) {
-      leaveWritesUnnamed();
-      const run = last.then(() => deployTo(record, place, folder, files, plugins));
+      const run = last.then(() => deployTo(record, place, folder, files, plugins, name));
       last = run.catch(() => undefined);
       return run;
     },

@@ -57,13 +57,14 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 
     [Fact]
-    public async Task MovingWhatWasLastWritten_Is204()
+    public async Task MovingWhatWasLastWritten_Is200_NamingTheRepositoryItWrote()
     {
         await CompiledPlugin();
 
         var response = await MoveLastWritten(Plugin, Origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([Path.Combine(ModFolder, ".git")], (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("written").EnumerateArray().Select(path => path.GetString()));
     }
 
     [Fact]

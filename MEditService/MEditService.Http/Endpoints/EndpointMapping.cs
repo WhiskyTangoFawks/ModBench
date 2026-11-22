@@ -258,7 +258,7 @@ internal static class EndpointMapping
         return Refusal(refused);
     }
 
-    internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, Answer<PluginAddress, PluginCreateRefused> answer)
+    internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, Answer<PluginCreated, PluginCreateRefused> answer)
     {
         if (answer.Holds(out var created, out var refused)) return Results.Ok(created);
 
@@ -300,23 +300,15 @@ internal static class EndpointMapping
 
     internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, MoveLastWrittenResult result)
     {
-        if (result.Refusal is not { } refusal) return Results.NoContent();
+        if (result.Refusal is not { } refusal) return Results.Ok(new FilesWritten(result.Written));
 
         LogRefusal(logger, gesture, refusal, result.Message, plugin);
         return Refusal(refusal, result.Message);
     }
 
-    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, Answer<SourceChanges, SourceFolderMoveRefused> answer)
+    internal static IResult Answered<T>(string gesture, ILogger logger, string sourceFolder, Answer<T, SourceFolderMoveRefused> answer)
     {
-        if (answer.Holds(out var changes, out var refused)) return Results.Ok(changes);
-
-        LogRefusal(logger, gesture, refused.Refusal, refused.Message, sourceFolder);
-        return Refusal(refused);
-    }
-
-    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, SourceFolderMoveRefused? refused)
-    {
-        if (refused is null) return Results.NoContent();
+        if (answer.Holds(out var answered, out var refused)) return Results.Ok(answered);
 
         LogRefusal(logger, gesture, refused.Refusal, refused.Message, sourceFolder);
         return Refusal(refused);

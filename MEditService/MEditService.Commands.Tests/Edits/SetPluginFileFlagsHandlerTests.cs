@@ -35,6 +35,7 @@ public sealed class SetPluginFileFlagsHandlerTests : IDisposable
         var result = await TestEditService.SetPluginFileFlagsHandler().Set([Small(exceeds), Small(fits)], GameRelease.Fallout4);
 
         Assert.Equal([fits], result.Applied.Select(set => set.Path));
+        Assert.Equal([fits], result.Written);
         var refused = Assert.Single(result.Refused);
         Assert.Equal((exceeds, PluginFileFlagRefusal.FormIdOutsideFlagLimit), (refused.Item, refused.Refusal));
         Assert.Contains("light range", refused.Message);

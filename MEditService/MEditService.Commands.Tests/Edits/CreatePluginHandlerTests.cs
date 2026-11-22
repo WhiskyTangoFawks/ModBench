@@ -28,7 +28,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     private string ModFolder(string name) => Directory.CreateDirectory(Path.Combine(_data.DataFolder, name)).FullName;
 
-    private Task<Answer<PluginAddress, PluginCreateRefused>> Create(string name, string folder, string origin) =>
+    private Task<Answer<PluginCreated, PluginCreateRefused>> Create(string name, string folder, string origin) =>
         Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == LoadOrderEntry.OverwriteOrigin ? null : folder, []);
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("NewPlugin.esp", folder, "StateMod");
 
-        result.Created();
+        Assert.Equal([Path.Combine(folder, "NewPlugin.esp")], result.Created().Written);
         Assert.True(File.Exists(Path.Combine(folder, "NewPlugin.esp")));
     }
 
@@ -89,7 +89,9 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("Second.esp", folder, "SourceMod");
 
-        result.Created();
+        var written = result.Created().Written;
+        WrittenPaths.Cover(written, Path.Combine(folder, "Second.esp"), Path.Combine(folder, ".git"), Path.Combine(folder, "plugin-source", "Second.esp"));
+        WrittenPaths.Within(written, folder);
         Assert.Equal(firstBefore, SourceModTree.Records(folder, first));
         Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "SourceMod", folder)));
         Assert.Equal(headBefore, Head(folder));

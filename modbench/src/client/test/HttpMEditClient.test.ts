@@ -8,6 +8,7 @@ import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import { answerOf as read, isReadFailed } from '../../wire/readFailed';
 import { answered } from './healthAnswer';
+import { diskCheckedBy } from '../../repositoriesLib/writesTold';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -22,9 +23,9 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Partial<Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log' | 'leaveWritesUnnamed'>> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Partial<Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log'>> = {},
 ) {
-  return createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+  return createMEditClient({ listenerThrows: IGNORED_THROWS,
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(answered(health === 'up')),
@@ -225,6 +226,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const fileRecord = { formKey: sharedKey, plugin: 'Shared.esp', origin: 'ModA' };
   const sourcePath = '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
   const same = <T>(answer: T) => ({ answer, reads: answer });
+  const WRITTEN = ['/mods/ModA/New.esp', '/source/ModA/.git'];
   const createdRecord = { formKey: '000900:MyPatch.esp', ...changes };
   const formKeyEdit: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' };
 
@@ -240,7 +242,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [keptChanges, goneChanges], refused: [{ item: nonCompiledPlugin, refusal: 'PluginNotCompiledPlugin', message: 'Other.esp is not a compiled plugin.' }] },
       reads: { applied: [keptChanges, goneChanges], refused: [{ item: nonCompiledPlugin, reason: 'Other.esp is not a compiled plugin.' }] },
       path: '/records/delete-changes', body: { records: [kept, nonCompiledPlugin, gone] } },
-    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA', ['Small']), ...same({ ...newPlugin, path: '/mods/ModA/New.esp' }),
+    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA', ['Small']), answer: { plugin: newPlugin, written: WRITTEN }, reads: newPlugin,
       path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA', sourceFolder: '/source/ModA', flags: ['Small'] } },
     { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp', { namedByFileName: false, sourceFiles: [{ from: 'Old.esp', to: 'New.esp' }] }),
       ...same({ treeName: 'Old.esp', ...editChanges }),
@@ -257,7 +259,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
       path: '/records/compare', body: { copies } },
     { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA'), modToVersionInGit('ModC')]),
-      answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'CommitFailed', message: 'ModC was not initialized.' }] },
+      answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'CommitFailed', message: 'ModC was not initialized.' }], written: WRITTEN },
       reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC was not initialized.', refusal: 'CommitFailed' }] },
       path: '/version-in-git', body: { mods: [modToVersionInGit('ModA'), modToVersionInGit('ModC')] } },
     { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
@@ -268,6 +270,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
           failure: 'The build stopped at its copy.', made: [{ path: 'a.nif', vouchedFor: true }], packed: ['a.dds'], replaced: [], ignored: ['b.mem'],
         }],
         refused: [{ item: 'ModC', refusal: 'ArchiveFileNotInFolder', message: "'ModC.ba2' takes 'a.dds', which its folder does not hold." }],
+        written: WRITTEN,
       },
       reads: {
         landed: [{
@@ -279,11 +282,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
-      answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
+      answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }], written: WRITTEN },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.', refusal: 'NotInSourceMod' }] },
       path: '/plugins/decompile', body: { plugins: [first, second], force: true } },
     { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], false),
-      answer: { applied: [first], refused: [{ item: second, refusal: 'NotMalformed', message: 'Second.esp is not malformed.' }] },
+      answer: { applied: [first], refused: [{ item: second, refusal: 'NotMalformed', message: 'Second.esp is not malformed.' }], written: WRITTEN },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not malformed.', refusal: 'NotMalformed' }] },
       path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], force: false } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
@@ -293,6 +296,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
       reads: { applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
       path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...formKeyEdit } } },
+    { name: 'moveLastWritten', verb: (c) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
+      answer: { written: WRITTEN }, reads: { moved: true },
+      path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'followSourceFolderMove', verb: (c) => c.followSourceFolderMove('/source/Old', '/source/New'),
+      answer: { written: WRITTEN }, reads: { followed: true }, path: '/source-folders/follow-move', body: { sourceFolder: '/source/Old', movedTo: '/source/New' } },
     { name: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
       ...same([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]),
       path: '/names/resolve', body: { names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] } },
@@ -315,33 +323,35 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     'getCopyChanges', 'getComparison with the document text', 'getRecordsComparison', 'getEditChanges', 'getEditChanges of the FormID', 'resolveNames',
   ];
 
-  it.each(posts)('$name leaves the files it writes unnamed unless it only answers changes', async ({ name, verb, answer }) => {
-    const leaveWritesUnnamed = vi.fn();
-    const fetch = vi.fn(() => answers(200, answer)());
+  const naming = async (write: () => Promise<unknown>): Promise<{ named: string[]; unnamed: number }> => {
+    const named: string[] = [];
+    let unnamed = 0;
+    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { unnamed++; } });
+    await write();
+    return { named, unnamed };
+  };
 
-    await verb(makeClient(fetch, { leaveWritesUnnamed }));
+  it.each(posts)('$name names the files mEdit answers it wrote, unless it only answers changes', async ({ name, verb, answer }) => {
+    const client = makeClient(() => answers(200, answer)());
 
-    expect(leaveWritesUnnamed).toHaveBeenCalledTimes(answeringChangesOnly.includes(name) ? 0 : 1);
+    expect(await naming(() => verb(client))).toEqual({ named: answeringChangesOnly.includes(name) ? [] : WRITTEN, unnamed: 0 });
+  });
+
+  const writing = [
+    { name: 'createPlugin', verb: (c: MEditClient) => c.createPlugin({ name: 'New.esp', origin: 'ModA' }, '/mods/ModA', undefined, undefined), answer: { written: WRITTEN } },
+    { name: 'cloneSubmodules', verb: (c: MEditClient) => c.cloneSubmodules([{ folder: '/source/A', pin: 'abc' }]), answer: { applied: [], refused: [], written: WRITTEN } },
+    { name: 'setPluginFileFlags', verb: (c: MEditClient) => c.setPluginFileFlags('Fallout4', []), answer: { applied: [], refused: [], written: WRITTEN } },
+  ];
+
+  it.each(writing.slice(1))('$name names the files mEdit answers it wrote', async ({ verb, answer }) => {
+    expect(await naming(() => verb(makeClient(() => answers(200, answer)())))).toEqual({ named: WRITTEN, unnamed: 0 });
+  });
+
+  it.each(writing)('$name refused leaves the files it may have written unnamed', async ({ verb }) => {
+    expect(await naming(() => verb(makeClient(() => answers(500, { detail: 'git failed' })())))).toEqual({ named: [], unnamed: 1 });
   });
 
   it.each([
-    { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp') },
-    { name: 'followSourceFolderMove', verb: (c: MEditClient) => c.followSourceFolderMove('/source/Old', '/source/New') },
-    { name: 'cloneSubmodules', verb: (c: MEditClient) => c.cloneSubmodules([{ folder: '/source/A', pin: 'abc' }]) },
-    { name: 'setPluginFileFlags', verb: (c: MEditClient) => c.setPluginFileFlags('Fallout4', []) },
-  ])('$name leaves the files it writes unnamed', async ({ verb }) => {
-    const leaveWritesUnnamed = vi.fn();
-
-    await verb(makeClient(() => answers(204)(), { leaveWritesUnnamed }));
-
-    expect(leaveWritesUnnamed).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
-      reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
-    { name: 'followSourceFolderMove', verb: (c: MEditClient) => c.followSourceFolderMove('/source/Old', '/source/New'),
-      reads: { followed: true }, path: '/source-folders/follow-move', body: { sourceFolder: '/source/Old', movedTo: '/source/New' } },
     { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
       reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
   ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {
@@ -901,7 +911,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
   it('stays stopped after a crash, telling its exit once: a snapshot answers backendFailed', async () => {
     const children: EventEmitter[] = [];
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
@@ -936,7 +946,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ]);
     const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
     child.stdin.on('finish', () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); });
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
         pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(true)),
@@ -1021,7 +1031,7 @@ describe('HttpMEditClient — a read before mEdit has started', () => {
   it('fails as unreachable, and files the reason in the log alone', async () => {
     const log = leveledLog();
     const fetch = vi.fn();
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined, backendLog: fakeLogChannel(), fetch, log });
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(), fetch, log });
 
     await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
     expect(fetch).not.toHaveBeenCalled();
@@ -1058,7 +1068,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
       state.healthy = true;
       return { kill: vi.fn(), on: vi.fn(), stdin: new PassThrough(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
     });
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
         checkHealth: () => Promise.resolve(answered(state.healthy)),

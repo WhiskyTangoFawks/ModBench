@@ -113,8 +113,15 @@ public sealed class CreatePluginHandler
 
     /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is the
     /// mod's, null for Overwrite. <paramref name="flags"/> may be left out where one combination is offered.</summary>
-    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(
+    public async Task<Answer<PluginCreated, PluginCreateRefused>> CreatePlugin(
         PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
+    {
+        var (answer, written) = await WrittenFiles.Of(() => Created(plugin, folder, sourceFolder, flags, cancel));
+        return answer.Holds(out var created, out var refused) ? new PluginCreated(created, written) : refused;
+    }
+
+    private async Task<Answer<PluginAddress, PluginCreateRefused>> Created(
+        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags, CancellationToken cancel)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -142,3 +149,6 @@ public sealed class CreatePluginHandler
         };
     }
 }
+
+/// <summary>A plugin created, and each file the create wrote (ADR-0029).</summary>
+public sealed record PluginCreated(PluginAddress Plugin, IReadOnlyList<string> Written);

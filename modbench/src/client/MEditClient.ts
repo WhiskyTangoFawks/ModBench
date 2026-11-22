@@ -260,10 +260,10 @@ export type Submodule = components['schemas']['SubmoduleRequest'];
 
 /** Each submodule cloned, by the folder git checked it out in, with why its branch was left elsewhere, and each not cloned,
  *  by that folder, with why. */
-export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
+export type SubmodulesCloned = Omit<components['schemas']['CloneSubmodulesResult'], 'written'>;
 
 /** Each plugin file whose load flags were set, with the hash of what was written, and each not set, by its path. */
-export type PluginFilesFlagged = components['schemas']['SetPluginFileFlagsResult'];
+export type PluginFilesFlagged = Omit<components['schemas']['SetPluginFileFlagsResult'], 'written'>;
 
 /** A plugin file, by its absolute path, with each load flag to set (true) or clear (false). */
 export type PluginFileToFlag = components['schemas']['PluginFileFlagsToSet'];

@@ -13,7 +13,7 @@ public sealed record SourceFolderContents(
     string Path, SourceModIn In, IReadOnlyList<string> Assets, byte[] BuildFile, RootFile? Manifest = null, IReadOnlyList<string>? Ignored = null,
     RootFile? ModFolderManifest = null, bool ModFolderManifestInInit = false);
 
-public sealed record DecompileAndRepairResult(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileAndRepairRefused> Refused)
+public sealed record DecompileAndRepairResult(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileAndRepairRefused> Refused, IReadOnlyList<string> Written)
     : ISelectionAnswer<DecompileAndRepairRefused>;
 
 public sealed record DecompileAndRepairRefused(PluginAddress Item, DecompileAndRepairRefusal Refusal, string Message)

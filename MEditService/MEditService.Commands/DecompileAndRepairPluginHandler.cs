@@ -50,13 +50,13 @@ public sealed class DecompileAndRepairPluginHandler
         var repairedHere = targets.Where(target => target.Value is RepairTarget.Diagnosed).Select(target => target.Key).ToHashSet(PluginAddress.Comparer);
         var leftOutOfANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
         var heldByANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
-        var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
-            RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force));
+        var (repaired, written) = await WrittenFiles.Of(() => ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
+            RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force)));
         await _held.ReadBackSource([.. repaired.Landed.Select(landed => landed.Item.Plugin), .. heldByANewSourceFolder], cancel);
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
             refused => Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder),
-            (applied, refused) => new DecompileAndRepairResult(applied, refused));
+            (applied, refused) => new DecompileAndRepairResult(applied, refused, written));
     }
 
     private static DecompileAndRepairRefused Explained(

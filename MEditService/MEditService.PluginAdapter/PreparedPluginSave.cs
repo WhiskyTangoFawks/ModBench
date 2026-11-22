@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -43,11 +44,13 @@ public sealed class PreparedPluginSave : IDisposable
         foreach (var (tempStringsPath, finalStringsPath) in _stringsFiles)
         {
             if (leaves($"Strings/{Path.GetFileName(finalStringsPath)}")) continue;
-            Directory.CreateDirectory(Path.GetDirectoryName(finalStringsPath)
+            WrittenFiles.CreateDirectory(Path.GetDirectoryName(finalStringsPath)
                 ?? throw new InvalidOperationException($"Expected '{finalStringsPath}' to have a parent directory."));
             File.Move(tempStringsPath, finalStringsPath, overwrite: true);
+            WrittenFiles.Name(finalStringsPath);
         }
         File.Move(_tmpPath, _finalPath, overwrite: true);
+        WrittenFiles.Name(_finalPath);
     }
 
     /// <summary>The binary put in place over no file, its name compared without case, as a plugin with no strings is: null,
@@ -58,6 +61,7 @@ public sealed class PreparedPluginSave : IDisposable
         try
         {
             File.Move(_tmpPath, _finalPath, overwrite: false);
+            WrittenFiles.Name(_finalPath);
             return null;
         }
         catch (IOException) when (File.Exists(_finalPath))
@@ -81,6 +85,7 @@ public sealed class PreparedPluginSave : IDisposable
                 File.Move(Path.Combine(folder, held), Path.Combine(aside, held));
             }
             File.Move(_tmpPath, _finalPath, overwrite: false);
+            WrittenFiles.Name(_finalPath);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

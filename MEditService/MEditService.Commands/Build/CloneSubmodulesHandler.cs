@@ -7,7 +7,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>Cloned or not, per submodule (ADR-0019), never the status of the call.</summary>
-public sealed record CloneSubmodulesResult(IReadOnlyList<SubmoduleCloned> Applied, IReadOnlyList<SubmoduleNotCloned> Refused)
+public sealed record CloneSubmodulesResult(IReadOnlyList<SubmoduleCloned> Applied, IReadOnlyList<SubmoduleNotCloned> Refused, IReadOnlyList<string> Written)
     : ISelectionAnswer<SubmoduleNotCloned>;
 
 /// <summary>A submodule cloned, by the folder git checked it out in, and why its branch was left elsewhere.</summary>
@@ -47,12 +47,12 @@ public sealed class CloneSubmodulesHandler
     /// a clone made.</summary>
     public async Task<CloneSubmodulesResult> Clone(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
     {
-        var cloned = CloneEach(submodules, cancel);
-        var sourcing = cloned.Applied.ToDictionary(submodule => submodule.Folder, submodule => SourcedFrom(submodule.Folder));
+        var ((cloned, refused), written) = WrittenFiles.Of(() => CloneEach(submodules, cancel));
+        var sourcing = cloned.ToDictionary(submodule => submodule.Folder, submodule => SourcedFrom(submodule.Folder));
         foreach (var folder in sourcing.Where(sourced => sourced.Value.Count == 0).Select(sourced => sourced.Key))
             _held.Unread($"the load order names no plugin source in {folder}, so its plugins' rows are read from their binaries.");
         await _held.ReadBackSource(sourcing.Values.SelectMany(plugins => plugins), cancel);
-        return cloned;
+        return new CloneSubmodulesResult(cloned, refused, written);
     }
 
     private List<PluginAddress> SourcedFrom(string folder) =>
@@ -63,7 +63,7 @@ public sealed class CloneSubmodulesHandler
 
     private static string Unslashed(string folder) => folder.TrimEnd('/', '\\');
 
-    private CloneSubmodulesResult CloneEach(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
+    private (List<SubmoduleCloned> Cloned, List<SubmoduleNotCloned> Refused) CloneEach(IReadOnlyList<Submodule> submodules, CancellationToken cancel)
     {
         List<SubmoduleCloned> cloned = [];
         List<SubmoduleNotCloned> refused = [];
@@ -76,6 +76,6 @@ public sealed class CloneSubmodulesHandler
                     submodule.Folder, CloneRefusal.AtAnotherCommit, $"its submodule is at {head.Commit}, not at {submodule.Pin}, the commit the instance repository pins"));
             else cloned.Add(new SubmoduleCloned(submodule.Folder, head.LeftDetached));
         }
-        return new CloneSubmodulesResult(cloned, refused);
+        return (cloned, refused);
     }
 }
