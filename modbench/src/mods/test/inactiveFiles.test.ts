@@ -18,7 +18,7 @@ import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { fileRowUri } from '../modFiles';
 import { GREY_INACTIVE_FILES_SETTING, InactiveFileDecorationProvider } from '../inactiveFiles';
-import { file, folder, indexedValueOf, mod } from './indexedValue';
+import { file, folder, indexedValueOf, indexedValues, mod } from './indexedValue';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const settingOn = (on: boolean | undefined) => ({
@@ -148,6 +148,36 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
 
     expect(fired).toHaveBeenCalledWith(undefined);
     expect(decorations.provideFileDecoration(uri)).toEqual(GREY);
+  });
+
+  it('greys the file in a mod\'s archive once another mod gains a loose copy that wins over it, and not once that copy is lost', () => {
+    const archive = file('A', 'A - Main.ba2');
+    const next = indexedValues([mod('A'), mod('B')], [{ origin: modOrigin('A'), archive: archive.sourcePath, files: ['textures/x.dds'] }]);
+    const archiveFiles = { A: { files: [archive] } };
+    const instance = new FakeInstance(next({ ...archiveFiles, B: { files: [] } }));
+    const decorations = decorationsOver(instance);
+    const archived = () => decorations.provideFileDecoration(fileRowUri(modOrigin('A'), 'A - Main.ba2/textures/x.dds'));
+    const greyed = [archived()];
+
+    instance.publish(next({ ...archiveFiles, B: { files: [file('B', 'textures/x.dds')] } }));
+    greyed.push(archived());
+    instance.publish(next({ ...archiveFiles, B: { files: [] } }));
+    greyed.push(archived());
+
+    expect(greyed).toEqual([undefined, GREY, undefined]);
+  });
+
+  it('greys another mod\'s copy once a mod gains the file that wins over it, and an excluded folder a mod gains', () => {
+    const next = indexedValues([mod('Winner'), mod('Loser')]);
+    const losing = [file('Loser', 'a.dds')];
+    const instance = new FakeInstance(next({ Winner: { files: [] }, Loser: { files: losing } }));
+    const decorations = decorationsOver(instance);
+    const before = [decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds')), decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/x'))];
+
+    instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')], folders: [folder('Winner', 'x', true)] }, Loser: { files: losing } }));
+
+    expect([...before, decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds')), decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/x'))])
+      .toEqual([undefined, undefined, GREY, GREY]);
   });
 
   it('asks VS Code to decorate again when its setting changes, and only then', async () => {

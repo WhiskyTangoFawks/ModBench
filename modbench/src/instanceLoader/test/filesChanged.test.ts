@@ -8,13 +8,14 @@ import { fileIn } from '../../test/fakeInstanceAdapter';
 const file = (relativePath: string) => fileIn('/mods/Mod', relativePath);
 
 const READS_NAMING_NO_ARCHIVE = { filesByMod: true, foldersByMod: true, overwriteFiles: true, overwriteFolders: true, files: true, stackedCopies: true, mods: true } as const;
-const before = instanceValueFixture({ filesByMod: new Map([['Mod', [file('a.dds')]]]) });
-const gained = { ...before, filesByMod: new Map([['Mod', [file('a.dds'), file('B.dds')]]]) };
+const kept = file('a.dds');
+const before = instanceValueFixture({ filesByMod: new Map([['Mod', [kept]]]) });
+const gained = { ...before, filesByMod: new Map([['Mod', [kept, file('B.dds')]]]) };
 
 describe('what a new value changed of the origins\' files (ADR-0029, Consequences, bullet 5)', () => {
   it.each<[string, InstanceValue | undefined, InstanceValue, FilesChanged]>([
-    ['a mod gains a file: that mod, with the files it holds and held', before, gained, [{ origin: modOrigin('Mod'), files: [file('a.dds'), file('a.dds'), file('B.dds')] }]],
-    ['Overwrite gains a file: Overwrite', before, { ...before, overwriteFiles: [fileIn('/overwrite', 'o.dds')] }, [{ origin: RUNTIME_OUTPUT, files: [fileIn('/overwrite', 'o.dds')] }]],
+    ['a mod gains a file: that mod, with the file it gained alone', before, gained, [{ origin: modOrigin('Mod'), files: [file('B.dds')], gained: [file('B.dds')] }]],
+    ['Overwrite gains a file: Overwrite', before, { ...before, overwriteFiles: [fileIn('/overwrite', 'o.dds')] }, [{ origin: RUNTIME_OUTPUT, files: [fileIn('/overwrite', 'o.dds')], gained: [fileIn('/overwrite', 'o.dds')] }]],
     ['a mod gains a file while an archive starts to load, though the reader names no archive: anything', before, { ...gained, loadsArchive: () => true }, 'every'],
     ['a mod gains a file while a fact the reader reads changes: anything', before, { ...gained, mods: [] }, 'every'],
     ['the stack changes, and no origin\'s files: anything', before, { ...before, stackedCopies: new FileConflictLookup<StackedFile>() }, 'every'],

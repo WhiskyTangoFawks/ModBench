@@ -327,7 +327,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const naming = async (write: () => Promise<unknown>): Promise<{ named: string[]; unnamed: number }> => {
     const named: string[] = [];
     let unnamed = 0;
-    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { unnamed++; } });
+    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { unnamed++; }, settling: () => undefined });
     await write();
     return { named, unnamed };
   };

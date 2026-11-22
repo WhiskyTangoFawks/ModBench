@@ -8,6 +8,7 @@ export function collectingWrites<T>(sink: WriteSink, work: () => Promise<T>): Pr
   return running.run({
     name: (paths) => { sink.name(paths); outer?.name(paths); },
     leaveUnnamed: () => { sink.leaveUnnamed(); outer?.leaveUnnamed(); },
+    settling: (subscribed) => { sink.settling(subscribed); outer?.settling(subscribed); },
   }, work);
 }
 
@@ -20,4 +21,5 @@ export function isolatingWrites<T>(sink: WriteSink, work: () => Promise<T>): Pro
 export const ambientWrites: WriteSink = {
   name: (paths) => running.getStore()?.name(paths),
   leaveUnnamed: () => running.getStore()?.leaveUnnamed(),
+  settling: (subscribed) => running.getStore()?.settling(subscribed),
 };

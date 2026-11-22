@@ -5,22 +5,24 @@ vi.mock('node:fs/promises', async (importOriginal) => (await import('./fileSyste
 
 vi.mock('vscode', async () => {
   const { fakeVscodeModule } = await import('./mo2/fakeVscodeWatcher');
-  const { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri } = await import('./vscodeMock');
+  const { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri, FakeDiagnosticCollection } = await import('./vscodeMock');
   return {
     ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
     window: { registerFileDecorationProvider: () => ({ dispose: () => undefined }), registerCustomEditorProvider: () => ({ dispose: () => undefined }) },
     commands: { registerCommand: () => ({ dispose: () => undefined }) },
+    languages: { createDiagnosticCollection: () => new FakeDiagnosticCollection() },
+    tasks: { registerTaskProvider: () => ({ dispose: () => undefined }) },
   };
 });
 
-import { A_FILE_A_RULE_READS_REWRITTEN, A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
+import { A_FILE_A_RULE_READS_REWRITTEN, A_GESTURE_WRITING_A_LOOSE_FILE, A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
     ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
     { change: A_NEW_LOOSE_FILE, layer: 'derived' },
     ...(['read', 'derived', 'subscribers', 'mEdit', 'views'] as const).flatMap((layer) => [A_RECORD_WRITTEN, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE].map((change) => ({ change, layer }))),
-    ...(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling'] as const).map((layer) => ({ change: A_FILE_A_RULE_READS_REWRITTEN, layer })),
+    ...(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling'] as const).flatMap((layer) => [A_FILE_A_RULE_READS_REWRITTEN, A_GESTURE_WRITING_A_LOOSE_FILE].map((change) => ({ change, layer }))),
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
     { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
@@ -40,6 +42,16 @@ describe('a new loose file in one mod', () => {
 });
 
 describe('a change shows in the views at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
+  it.each([
+    ['a new loose file in one mod tells neither, whose files it does not touch', A_NEW_LOOSE_FILE, 0],
+    ['a check of the disk tells each once', { name: 'a check of the disk', make: async ({ instance }) => { await instance.refresh(); return 0; } } satisfies Gesture, 1],
+  ])('the symbols and deploy\'s problems: %s', async (_case, change, told) => {
+    const small = await costOf(3, change);
+    const large = await costOf(60, change);
+
+    expect([small.told, large.told]).toEqual([{ symbols: told, deployProblems: told }, { symbols: told, deployProblems: told }]);
+  });
+
   it('a new loose file in one mod asks the Mods and Plugins views the same, and the conflict table of another mod nothing', async () => {
     const small = await costOf(3, A_NEW_LOOSE_FILE);
     const large = await costOf(60, A_NEW_LOOSE_FILE);
@@ -54,6 +66,17 @@ describe('a change shows in the views at the rows it touches, on a small and a l
     const large = await costOf(60, A_FILE_A_RULE_READS_REWRITTEN);
 
     expect([small.viewsIn.Plugins > 0, large.viewsIn.Plugins]).toEqual([true, small.viewsIn.Plugins]);
+  });
+});
+
+describe('a gesture into one mod costs the same whatever that mod holds (ADR-0029, Consequences, bullet 5)', () => {
+  const into = (files: number): Gesture => ({ ...A_GESTURE_WRITING_A_LOOSE_FILE, writtenModFiles: files });
+
+  it.each(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling', 'lookups', 'rows'] as const)('at the %s layer', async (layer) => {
+    const small = await costOf(3, into(3));
+    const large = await costOf(3, into(300));
+
+    expect(large[layer]).toBe(small[layer]);
   });
 });
 

@@ -22,7 +22,7 @@ describe('a write through the adapter', () => {
     cpSync(join(__dirname, 'fixtures', 'order-instance'), root, { recursive: true });
     adapter = adapterOver(root);
     told = new Map();
-    writesToldTo({ told: (paths) => { for (const path of paths) told.set(path, existsSync(path)); return Promise.resolve(); } });
+    writesToldTo({ told: (paths) => { for (const path of paths) told.set(path, existsSync(path)); return Promise.resolve({ subscribed: Promise.resolve() }); } });
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -51,6 +51,7 @@ describe('a write through the adapter', () => {
     const lockedByLoader: string[] = [];
     writesToldTo({ told: async (paths) => {
       await Promise.all(paths.map((path) => withLock(path, () => { lockedByLoader.push(path); return Promise.resolve(); })));
+      return { subscribed: Promise.resolve() };
     } });
 
     await write(adapter);

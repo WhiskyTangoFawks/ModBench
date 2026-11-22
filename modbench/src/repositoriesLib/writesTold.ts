@@ -16,8 +16,12 @@ export const nameWrites = (paths: readonly string[]): void => diskCheckSink?.nam
 
 export const leaveWritesUnnamed = (): void => diskCheckSink?.leaveUnnamed();
 
-const tell = (paths: readonly string[]): Promise<void> =>
-  paths.length === 0 || loader === undefined ? Promise.resolve() : loader.told(paths);
+// The command running waits, before it ends, for the subscribers the write's read woke: they may hold the lock the write took.
+async function tell(paths: readonly string[]): Promise<void> {
+  if (paths.length === 0 || loader === undefined) return;
+  const { subscribed } = await loader.told(paths);
+  diskCheckSink?.settling(subscribed);
+}
 
 interface HeldBack { readonly paths: string[]; open: boolean }
 

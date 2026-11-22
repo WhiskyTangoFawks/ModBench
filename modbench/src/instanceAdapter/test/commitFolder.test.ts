@@ -12,7 +12,7 @@ import { hostGitHolding } from '../../test/hostGitDouble';
 let root: string;
 
 afterEach(async () => {
-  diskCheckedBy({ name: () => undefined, leaveUnnamed: () => undefined });
+  diskCheckedBy({ name: () => undefined, leaveUnnamed: () => undefined, settling: () => undefined });
   await rm(root, { recursive: true, force: true });
 });
 
@@ -48,7 +48,7 @@ describe('commitFolder', () => {
     reads.changed(() => undefined);
     await readTrustingKept([], true, reads.head);
     const named: string[] = [];
-    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { throw new Error('a write left its files unnamed'); } });
+    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { throw new Error('a write left its files unnamed'); }, settling: () => undefined });
 
     await commitFolder(root, join(root, 'mods', 'Mod [A]'), 'Init', (list) => list);
     held.head = git('rev-parse', 'HEAD');

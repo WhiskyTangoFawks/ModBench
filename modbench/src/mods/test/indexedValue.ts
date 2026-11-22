@@ -1,6 +1,6 @@
 import type { InstanceValue, Mod, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
-import { buildFileConflictIndex, stackReusing, type LoadedArchive } from '../../instanceLoader/fileConflictIndex';
+import { buildFileConflictIndex, indexReusing, stackReusing, type LoadedArchive } from '../../instanceLoader/fileConflictIndex';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 export const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
@@ -40,4 +40,26 @@ export function indexedValueOf(
     overwriteFiles: overwrite.files, overwriteFolders: overwrite.folders ?? [],
     archiveContents: new Map(loaded.flatMap(({ archive, files }) => (files === undefined ? [] : [[archive, { kind: 'read', answer: files }] as const]))),
   }));
+}
+
+/** Instance values over `mods`, each built from the one before as the Instance loader builds the next: a file that reads the
+ *  same keeps its object, and so does every part the change leaves as it was. */
+export function indexedValues(mods: ModlistEntry[], loaded: readonly LoadedArchive[] = []): (listings: Record<string, { files: OriginFile[]; folders?: OriginFolder[] }>) => InstanceValue {
+  const index = indexReusing();
+  const stack = stackReusing();
+  const overwrite: OriginFile[] = [];
+  const loads = new Set(loaded.map(({ archive }) => archive.slice(archive.lastIndexOf('/') + 1)));
+  let held = instanceValueFixture({
+    mods, loadsArchive: (name) => loads.has(name),
+    archiveContents: new Map(loaded.flatMap(({ archive, files }) => (files === undefined ? [] : [[archive, { kind: 'read', answer: files }] as const]))),
+  });
+  return (listings) => {
+    const modFiles = new Map(mods.flatMap((entry) => {
+      const listing = entry.kind === 'mod' ? listings[entry.name] : undefined;
+      return listing === undefined ? [] : [[entry.name, { origin: entry.name, folder: `/instance/${entry.name}`, files: listing.files, folders: listing.folders ?? NO_FOLDERS, notes: [] }] as const];
+    }));
+    const built = index(mods, overwrite, modFiles);
+    held = { ...held, files: built.files, filesByMod: built.filesByMod, foldersByMod: built.foldersByMod, stackedCopies: stack(built, loaded, 'Fallout4') };
+    return held;
+  };
 }

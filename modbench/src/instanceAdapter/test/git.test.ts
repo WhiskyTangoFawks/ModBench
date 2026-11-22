@@ -12,7 +12,7 @@ let named: string[];
 beforeEach(() => {
   unnamed = 0;
   named = [];
-  diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { unnamed++; } });
+  diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { unnamed++; }, settling: () => undefined });
 });
 
 afterEach(async () => {

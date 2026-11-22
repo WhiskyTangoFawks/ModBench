@@ -7,6 +7,8 @@ export interface Reordered<T> {
   readonly rank: ReadonlyMap<string, number>;
   /** Each key whose source changed, that one order holds alone, or that moved among the others. */
   readonly changed: ReadonlySet<string>;
+  /** Each key both orders hold that moved among the others. */
+  readonly moved: ReadonlySet<string>;
 }
 
 // The keys both orders hold outside a longest run they hold in the same order: moving those alone turns `was` into `now`.
@@ -40,17 +42,32 @@ export function reordered<T>(was: readonly T[], now: readonly T[], keyOf: (sourc
     const [then, current] = [before.get(key), after.get(key)];
     return then === undefined || current === undefined || !same(then, current);
   }));
-  for (const key of movedKeys([...before.keys()], [...after.keys()])) changed.add(key);
-  return { was: before, now: after, rank: new Map([...after.keys()].map((key, at) => [key, at])), changed };
+  const moved = new Set(movedKeys([...before.keys()], [...after.keys()]));
+  for (const key of moved) changed.add(key);
+  return { was: before, now: after, rank: new Map([...after.keys()].map((key, at) => [key, at])), changed, moved };
 }
 
 /** `sources` by their rank now. */
 export const inRank = <T>(sources: readonly T[], keyOf: (source: T) => string, { rank }: Pick<Reordered<unknown>, 'rank'>): T[] =>
   [...sources].sort((a, b) => (rank.get(keyOf(a)) ?? 0) - (rank.get(keyOf(b)) ?? 0));
 
-/** Each path a changed source holds now or held before. */
-export function pathsChanged<T>({ was, now, changed }: Reordered<T>, pathsIn: (source: T) => Iterable<string>): Set<string> {
+/** Each path a changed source holds now or held before; of a source that changed in its place, each `between` gives. */
+export function pathsChanged<T>(
+  { was, now, changed, moved }: Reordered<T>, pathsIn: (source: T) => Iterable<string>, between?: (was: T, now: T) => Iterable<string>,
+): Set<string> {
   const paths = new Set<string>();
-  for (const key of changed) for (const source of [was.get(key), now.get(key)]) if (source !== undefined) for (const path of pathsIn(source)) paths.add(path);
+  for (const key of changed) {
+    const [then, current] = [was.get(key), now.get(key)];
+    const inPlace = between !== undefined && then !== undefined && current !== undefined && !moved.has(key);
+    for (const path of inPlace ? between(then, current) : [then, current].flatMap((source) => (source === undefined ? [] : [...pathsIn(source)]))) paths.add(path);
+  }
   return paths;
+}
+
+/** Each item one list holds and the other does not, by identity: what a read that keeps each item that reads the same
+ *  gained or lost. */
+export function differing<T>(was: readonly T[], now: readonly T[]): T[] {
+  const kept = new Set(was);
+  const still = new Set(now);
+  return [...was.filter((item) => !still.has(item)), ...now.filter((item) => !kept.has(item))];
 }

@@ -114,6 +114,7 @@ function makeTree(
     loadedWithNoLine: readonly (string | PluginAddress)[];
     blueprintLoadsLast: boolean;
     reporter: RecordingReporter;
+    fileReads: ConstructorParameters<typeof PluginsTreeProvider>[0]['fileReads'];
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine, extra.blueprintLoadsLast));
@@ -125,6 +126,7 @@ function makeTree(
     ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
     ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
     ...(extra.publishSortingErrors && { publishSortingErrors: extra.publishSortingErrors }),
+    ...(extra.fileReads && { fileReads: extra.fileReads }),
   });
   return { tree, client, records, instance };
 }
@@ -1352,6 +1354,83 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     const before = errors.length;
 
     await instance.refresh([path]);
+    await h.tree.facts.settled();
+
+    expect(errors.length - before).toBe(judgedAgain);
+  });
+
+  it('judges again when the copy that wins a file the rules read is rewritten, after another mod came to win it', async () => {
+    const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF)'}]\n" } } as const;
+    const wonBy = (name: string) => {
+      const files = new FileConflictLookup();
+      files.set({ relativePath: 'Meshes/x.nif', winner: `/mods/${name}/Meshes/x.nif`, winnerOrigin: { kind: 'mod', name }, providers: [{ kind: 'mod', name }] });
+      return files;
+    };
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: checksumsMesh, files: wonBy('ModA') });
+    const h = makeTree([A_ROW()], { instance });
+    await reconcile(h, [held('A.esp')]);
+    await instance.refresh(['/mods/ModA/Meshes/other.nif']);
+    const rejudge = vi.spyOn(h.tree.facts, 'rejudge');
+    instance.publish({ ...instance.value, files: wonBy('ModB') }, { named: [], disk: false });
+    await h.tree.facts.settled();
+
+    await instance.refresh(['/mods/ModB/Meshes/x.nif']);
+    await h.tree.facts.settled();
+
+    expect(rejudge).toHaveBeenCalledTimes(2);
+  });
+
+  it('judges again when a file the last judgement to land read is rewritten, while a newer judgement still reads', async () => {
+    const rulesReading = (mesh: string) => ({
+      ...READ_SORTING_RULE_FILES,
+      userlist: { path: '/instance/userlist.yaml', kind: 'text', text: `plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum("${mesh}", DEADBEEF)'}]\n` },
+    }) as const;
+    const files = new FileConflictLookup();
+    for (const mesh of ['Meshes/x.nif', 'Meshes/y.nif']) files.set({ relativePath: mesh, winner: `/mods/SomeMod/${mesh}`, winnerOrigin: { kind: 'mod', name: 'SomeMod' }, providers: [{ kind: 'mod', name: 'SomeMod' }] });
+    let release = (): void => undefined;
+    let reached = (): void => undefined;
+    const stalled = new Promise<void>((resolve) => { release = resolve; });
+    const readingY = new Promise<void>((resolve) => { reached = resolve; });
+    const fileReads = {
+      checksum: async (path: string) => {
+        if (path === 'Meshes/y.nif') {
+          reached();
+          await stalled;
+        }
+        return { kind: 'read', value: undefined } as const;
+      },
+      version: () => Promise.resolve({ kind: 'read', value: undefined } as const),
+      readable: () => Promise.resolve({ kind: 'read', value: false } as const),
+      trusting: <T>(read: () => Promise<T>) => read(),
+    };
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: rulesReading('Meshes/x.nif'), files });
+    const h = makeTree([A_ROW()], { instance, fileReads });
+    await reconcile(h, [held('A.esp')]);
+    const rejudge = vi.spyOn(h.tree.facts, 'rejudge');
+
+    instance.publish({ ...instance.value, sortingRuleFiles: rulesReading('Meshes/y.nif') }, { named: [], disk: false });
+    await readingY;
+    await instance.refresh(['/mods/SomeMod/Meshes/x.nif']);
+    release();
+    await h.tree.facts.settled();
+
+    expect(rejudge).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['a file a rule reads', 'Meshes/x.nif', 1],
+    ['a file no rule reads', 'Meshes/other.nif', 0],
+  ])('judges the last reconcile\'s order again when the game\'s Data folder gains %s, and only then', async (_file, path, judgedAgain) => {
+    const instance = new FakeInstance({
+      ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh,
+      dataFolderPlugins: { kind: 'listed', names: new Set<string>() }, dataFolderFiles: { kind: 'listed', files: new Map() },
+    });
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+    const before = errors.length;
+
+    instance.publish({ ...instance.value, dataFolderFiles: { kind: 'listed', files: new Map([[path.toLowerCase(), fileIn('/game/Data', path)]]) } }, { named: [`/game/Data/${path}`], disk: false });
     await h.tree.facts.settled();
 
     expect(errors.length - before).toBe(judgedAgain);

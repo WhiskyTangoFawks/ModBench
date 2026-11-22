@@ -1,9 +1,11 @@
 // mods.md, Indicators: a badge and a colour on a mod's row for each status that holds.
 
 import * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, InstanceView, ModGroups } from '../instanceLoader/instance';
-import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
-import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type Owned, type Row } from './originsTouched';
+import { DecorationRedrawEmitter } from '../drivingLib/heldRedraw';
+import type { InstanceValue, InstanceView, Mod, ModGroups } from '../instanceLoader/instance';
+import { KeptCopyStanding, modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { copyPathsOf, indicatorsFrom, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
+import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type OriginsChange, type Owned, type Row } from './originsTouched';
 import { TOUCHING_READ, type Touching } from '../instanceLoader/filesChanged';
 import { onSettingChange } from '../drivingLib/setting';
 import type { OpenRows } from './openRows';
@@ -43,7 +45,7 @@ const PARTS = ['badge', 'colour'] as const;
 
 /** One indicator's decoration on each row that carries it, its colour on the rows `coloured` takes. */
 export class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
-  private readonly changed = new vscode.EventEmitter<vscode.Uri[] | undefined>();
+  private readonly changed = new DecorationRedrawEmitter();
   readonly onDidChangeFileDecorations = this.changed.event;
   private readonly subscription: vscode.Disposable;
 
@@ -101,13 +103,13 @@ export abstract class OpenableRowDecorations<D, K extends keyof InstanceValue> i
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly openRows: OpenRows, concerns: Readonly<Record<K | keyof Touching, true>>, same: (a: D, b: D) => boolean) {
     this.rows = new RowsByOwner(same);
-    const following = rowsFollowing(instance, concerns, this.rows, (value, touched) => this.ownedAgain(value, touched), (uris) => { this.refresh(uris); });
+    const following = rowsFollowing(instance, concerns, this.rows, (value, change) => this.ownedAgain(value, change), (uris) => { this.refresh(uris); });
     this.held = following.held;
     this.subscriptions = [following.subscription, openRows.onDidChange(() => { this.refresh(); })];
   }
 
   /** The rows each owner a value touches gives: the origins first, then each separator that holds one, from the rows held. */
-  protected abstract ownedAgain(value: Pick<InstanceValue, K | keyof Touching>, touched: 'every' | readonly FileOrigin[]): Iterable<Owned<D>>;
+  protected abstract ownedAgain(value: Pick<InstanceValue, K | keyof Touching>, change: OriginsChange): Iterable<Owned<D>>;
 
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
@@ -133,6 +135,9 @@ const INDICATORS_READ = { ...TOUCHING_READ, mods: true, modGroups: true } as con
 
 export class ModIndicatorDecorations extends OpenableRowDecorations<readonly ModIndicator[], keyof typeof INDICATORS_READ> {
   readonly providers: readonly IndicatorDecorationProvider[];
+  // Each enabled mod's copy standing, kept path by path, and how many excluded files it holds, so a change derives again
+  // only what it touched (ADR-0029, Consequences, bullet 5).
+  private readonly kept = new Map<string, { readonly standing: KeptCopyStanding; excluded: number }>();
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, open: OpenRows, settings: WorkspaceSettings) {
     super(instance, open, INDICATORS_READ, sameIds);
@@ -143,13 +148,32 @@ export class ModIndicatorDecorations extends OpenableRowDecorations<readonly Mod
     this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, (uri) => carried(uri)?.includes(indicator.id) === true, settings));
   }
 
+  private indicatorsAfter(value: IndicatorsValue, entry: Mod, change: OriginsChange): ModIndicator[] {
+    const origin = modOrigin(entry.name);
+    const held = change === 'every' ? undefined : this.kept.get(entry.name);
+    if (held === undefined || change === 'every') {
+      const files = value.filesByMod.get(entry.name) ?? [];
+      const whole = { standing: new KeptCopyStanding(origin), excluded: files.filter((file) => file.excluded).length };
+      this.kept.set(entry.name, whole);
+      return indicatorsFrom(whole.standing.update(value.stackedCopies, copyPathsOf(value, files)), whole.excluded > 0, entry.updateAvailable === true);
+    }
+    const own = change.own.find((changed) => sameOrigin(changed.origin, origin));
+    if (own !== undefined) {
+      const gained = new Set(own.gained);
+      held.excluded += own.files.filter((file) => file.excluded).reduce((sum, file) => sum + (gained.has(file) ? 1 : -1), 0);
+    }
+    return indicatorsFrom(held.standing.update(value.stackedCopies, change.paths), held.excluded > 0, entry.updateAvailable === true);
+  }
+
   // A disabled mod carries none. A separator carries each indicator a mod it holds carries.
-  protected * ownedAgain(value: IndicatorsValue, touched: 'every' | readonly FileOrigin[]): Iterable<Owned<readonly ModIndicator[]>> {
-    const mods = touchedIn(value, touched).flatMap((origin) => (origin.kind === 'mod' ? [origin.name] : []));
+  protected * ownedAgain(value: IndicatorsValue, change: OriginsChange): Iterable<Owned<readonly ModIndicator[]>> {
+    if (change === 'every') this.kept.clear();
+    const mods = touchedIn(value, change).flatMap((origin) => (origin.kind === 'mod' ? [origin.name] : []));
     for (const name of mods) {
       const entry = modEntryOf(value.mods, name);
       const uri = modRowUri(name);
-      yield [`mod/${name}`, entry?.enabled === true ? rowsOf({ uri, carried: indicatorsOf(value, entry, value.filesByMod.get(name) ?? []) }) : new Map()];
+      if (entry?.enabled !== true) this.kept.delete(name);
+      yield [`mod/${name}`, entry?.enabled === true ? rowsOf({ uri, carried: this.indicatorsAfter(value, entry, change) }) : new Map()];
     }
     const separators = new Set(mods.flatMap((name) => separatorOf(value.modGroups, name) ?? []));
     for (const { separator, mods: held } of value.modGroups.groups) {

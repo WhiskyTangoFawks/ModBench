@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DecorationRedrawEmitter } from '../drivingLib/heldRedraw';
 import type { RecordBrowser } from './RecordBrowser';
 import { parseRecordResourceUri, parseRowResourceUri } from './recordResourceUri';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
@@ -14,7 +15,7 @@ const ADDED = 'gitDecoration.addedResourceForeground';
  *  VS Code's Explorer draws a collapsed folder. VS Code keeps a decoration until its provider
  *  names the URI. */
 export class RecordDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
-  private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
+  private readonly _onDidChangeFileDecorations = new DecorationRedrawEmitter();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
   private readonly subscriptions: vscode.Disposable[];
   // The rows VS Code asked a decoration of, by plugin: the rows a change of that plugin's states beneath asks again.

@@ -9,6 +9,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
 import { UnshippableProblems } from '../unshippableProblems';
+import { holdingRedraws } from '../../drivingLib/heldRedraw';
 
 const SETTINGS = '/instance/compiler_settings.json';
 const FOLDER = '/instance/mods/ModA';
@@ -108,6 +109,20 @@ describe('a mod the published modlist has no way to ship (publishing.md, What sh
     await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toContain(`2 files of "ModB" have no way to ship, such as 'b.esp': ${REASON}.`); });
 
     expect(judgedMods).toEqual(['ModB', 'ModB']);
+  });
+
+  it('holds what a change shows while a gesture writes, and shows it once the gesture ends (common.md, A gesture that writes, story 1)', async () => {
+    const { collection, becomes } = over([status('ModA', { unpackaged: ['a.esp'] })], configuration());
+    await vi.waitFor(() => { expect(problemsOn(collection)).toHaveLength(1); });
+    let shownWhileWriting = -1;
+
+    await holdingRedraws(async () => {
+      becomes([status('ModA')]);
+      await new Promise((resolve) => { setTimeout(resolve, 10); });
+      shownWhileWriting = problemsOn(collection).length;
+    });
+
+    await vi.waitFor(() => { expect([shownWhileWriting, problemsOn(collection).length]).toEqual([1, 0]); });
   });
 
   it('follows the statuses, and clears when the instance holds no publisher', async () => {

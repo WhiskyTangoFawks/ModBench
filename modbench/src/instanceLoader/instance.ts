@@ -455,8 +455,9 @@ export class Instance implements Subscription {
 
   /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
    *  the writer's own caller, holding a lock the write took. */
-  told(wrote: readonly string[]): Promise<void> {
-    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }).valueLanded;
+  told(wrote: readonly string[]): Promise<{ readonly subscribed: Promise<void> }> {
+    const run = this.enqueue({ named: wrote, disk: false, tellsUnheard: false });
+    return run.valueLanded.then(() => ({ subscribed: run.settled }));
   }
 
   /** The value once the first read has landed: reads when none has, and holds the read it has. */

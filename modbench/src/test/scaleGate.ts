@@ -33,6 +33,13 @@ import { FakeCancellationToken } from './vscodeMock';
 import { present } from '../ports/present';
 import { insertModAtWinningEnd, setEnabledInText } from '../instanceAdapter/mo2/codecs/modlistText';
 import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
+import { handingOneChange } from '../drivingLib/writingGesture';
+import { fileAt } from '../instanceLoader/filePresence';
+import { FileConflictLookup } from '../instanceLoader/fileConflictIndex';
+import { toldAfter, writesToldTo } from '../repositoriesLib/writesTold';
+import { heardChanges } from '../symbols/heardChanges';
+import { SCRIPTS_READ } from '../symbols/scriptLanguage';
+import { registerDeployCommands } from '../toolbox/deployGesture';
 
 /** The work a gesture causes at each layer. */
 export interface Cost {
@@ -48,12 +55,18 @@ export interface Cost {
   readonly views: number;
   /** The file system calls from the value landing until the gesture settles: what follows it reads. */
   readonly settling: number;
+  /** The paths looked up in the file conflict index and the stack, until the gesture settles: a walk of what a change did
+   *  not touch shows here. */
+  readonly lookups: number;
+  /** The URIs made, each a row's or its file's, until the gesture settles: a row derived again that a change did not touch
+   *  shows here. */
+  readonly rows: number;
 }
 
 const quiet = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const modName = (n: number): string => `Mod ${String(n).padStart(3, '0')}`;
 
-async function syntheticInstance(mods: number, userlist = ''): Promise<string> {
+async function syntheticInstance(mods: number, userlist = '', writtenModFiles = 3): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'scale-gate-'));
   const names = Array.from({ length: mods }, (_, n) => modName(n));
   await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
@@ -66,7 +79,8 @@ async function syntheticInstance(mods: number, userlist = ''): Promise<string> {
   await Promise.all(names.map(async (name) => {
     await mkdir(join(root, 'mods', name, 'textures', name), { recursive: true });
     await writeFile(join(root, 'mods', name, `${name}.esp`), 'plugin');
-    await Promise.all(['a.dds', 'b.dds', 'c.dds'].map((file) => writeFile(join(root, 'mods', name, 'textures', name, file), file)));
+    const files = name === modName(0) ? Array.from({ length: writtenModFiles }, (_, at) => `${at}.dds`) : ['a.dds', 'b.dds', 'c.dds'];
+    await Promise.all(files.map((file) => writeFile(join(root, 'mods', name, 'textures', name, file), file)));
   }));
   // A modlist's files were written long before a gesture, each stamp old enough to trust.
   const long = new Date(Date.now() - 3_600_000);
@@ -225,6 +239,8 @@ export interface Gesture {
   readonly opens?: ViewName;
   /** The instance's own sorting rules. */
   readonly userlist?: string;
+  /** The files the first mod, the one a gesture writes into, holds; 3 when unsaid, as every other mod holds. */
+  readonly writtenModFiles?: number;
   make(at: { root: string; instance: Pick<Instance, 'refresh'>; views: Readonly<Record<ViewName, View>>; client: InMemoryMEditClient }): Promise<number>;
 }
 
@@ -252,6 +268,15 @@ export const A_FILE_A_RULE_READS_REWRITTEN: Gesture = {
     const file = join(root, 'mods', modName(0), 'textures', modName(0), 'a.dds');
     await writeFile(file, 'rewritten');
     await instance.refresh([file]);
+    return 0;
+  },
+};
+
+export const A_GESTURE_WRITING_A_LOOSE_FILE: Gesture = {
+  name: 'a gesture that writes one loose file into one mod',
+  async make({ root, instance }) {
+    const file = join(root, 'mods', modName(0), 'textures', modName(0), 'written.dds');
+    await handingOneChange(instance, () => toldAfter([file], () => writeFile(file, 'written')));
     return 0;
   },
 };
@@ -295,8 +320,10 @@ export const IN_PLUGINS = gesturesIn('Plugins', `${modName(0)}.esp`);
  *  it did not, on a synthetic instance of `mods` mods. */
 export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   readonly shown: number; readonly derivedIn: Readonly<Record<string, number>>; readonly viewsIn: Readonly<Shown>;
+  /** The times the symbols were told of a change, and deploy's problems read the deployment folder. */
+  readonly told: { readonly symbols: number; readonly deployProblems: number };
 }> {
-  const root = await syntheticInstance(mods, gesture.userlist);
+  const root = await syntheticInstance(mods, gesture.userlist, gesture.writtenModFiles);
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
@@ -321,7 +348,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const table = conflictTableOf(editors.mock.calls, modName(1));
   editors.mockRestore();
   const records = new RecordBrowser(counted);
-  const pluginsTree = pluginsTreeOver(instance, { client: counted, records, fileReads: fileReadsOver(adapter, () => instance.value.files) });
+  const pluginsTree = pluginsTreeOver(instance, { client: counted, records, fileReads: fileReadsOver(adapter, (path) => fileAt(instance.value, path)) });
   const recordDecorations = new RecordDecorationProvider(records, () => pluginsTree.lockedRowUris());
   const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsTree, recordDecorations];
   const host = viewHost({ Mods: modsTree, Plugins: pluginsTree }, [
@@ -334,6 +361,17 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   let subscribers = 0;
   const outcomes = instance.onListenerOutcome(({ listener, during }) => { if (during === 'value' && listener !== landing) subscribers++; });
   const indexChanges = client.onDidChange((change) => { pluginsTree.indexChanged(change); });
+  const told = { symbols: 0, deployProblems: 0 };
+  const symbols = heardChanges({ asker: { forget: () => undefined, onPluginChanged: () => () => undefined }, instance, facts: SCRIPTS_READ }, () => { told.symbols++; });
+  const notAsked = () => Promise.reject(new Error('the gate asks no deploy'));
+  const deployment = registerDeployCommands({
+    commands: {
+      deploy: notAsked, purge: notAsked, moveToOverwrite: notAsked,
+      unmanaged: () => { told.deployProblems++; return Promise.resolve({ applied: true, folder: join(root, 'Game', 'Data'), unmanaged: [] }); },
+    },
+    instance, reporterFor: () => recordingReporter(),
+  });
+  writesToldTo(instance);
   const settled = async () => {
     await Promise.all([modSyncing.modSync.settled(), pluginSyncing.pluginSync.settled(), pluginsTree.facts.settled()]);
     await host.settled();
@@ -351,6 +389,11 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     host.count();
     table.posted.splice(0);
     subscribers = 0;
+    told.symbols = 0;
+    told.deployProblems = 0;
+    const lookups = vi.spyOn(FileConflictLookup.prototype, 'get');
+    const madeFiles = vi.spyOn(vscode.Uri, 'file');
+    const madeFrom = vi.spyOn(vscode.Uri, 'from');
     const start = fileSystemCalls.count;
     const asked = client.calls.length + answered();
     const landed = landings.length;
@@ -358,14 +401,20 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     const shown = await gesture.make({ root, instance, views: host.views, client });
     await settled();
 
+    const looked = lookups.mock.calls.length;
+    const made = madeFiles.mock.calls.length + madeFrom.mock.calls.length;
+    for (const spy of [lookups, madeFiles, madeFrom]) spy.mockRestore();
     const viewsIn = { ...host.count(), Conflicts: table.posted.length };
     const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
     return {
       read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length + answered() - asked,
       views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown, settling: landings[landed] === undefined ? 0 : fileSystemCalls.count - landings[landed],
+      told: { ...told }, lookups: looked, rows: made,
     };
   } finally {
-    for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...owned, instance]) disposable.dispose();
+    writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
+    symbols();
+    for (const disposable of [modSyncing, pluginSyncing, outcomes, indexChanges, host, ...deployment, ...owned, instance]) disposable.dispose();
     await rm(root, { recursive: true, force: true });
   }
 }

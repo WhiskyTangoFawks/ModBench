@@ -19,7 +19,7 @@ import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { MOD_INDICATORS } from '../modFileStates';
 import { modOrigin, type LoadedArchive } from '../../instanceLoader/fileConflictIndex';
 import { indicatorSetting, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
-import { file, indexedValueOf, mod } from './indexedValue';
+import { file, indexedValueOf, indexedValues, mod } from './indexedValue';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
@@ -34,6 +34,24 @@ const decoratedOver = (instance: FakeInstance, settings: ReturnType<typeof setti
 };
 
 type Listings = Parameters<typeof indexedValueOf>[1];
+
+describe('the indicators a mod carries as a change reaches it, kept path by path (ADR-0029, Consequences, bullet 5)', () => {
+  it('carries Contains excluded files once the mod gains an excluded file, and drops it once the mod loses that file', () => {
+    const next = indexedValues([mod('A')]);
+    const kept = file('A', 'a.dds');
+    const instance = new FakeInstance(next({ A: { files: [kept] } }));
+    const decorations = decoratedOver(instance, settingsOf(allOn).settings);
+    const excluded = () => decorationsOn(decorations, modRowUri('A'))[MOD_INDICATORS.findIndex(({ id }) => id === 'containsExcludedFiles')] !== undefined;
+    const carried: boolean[] = [excluded()];
+
+    instance.publish(next({ A: { files: [kept, file('A', 'b.dds', true)] } }));
+    carried.push(excluded());
+    instance.publish(next({ A: { files: [kept] } }));
+    carried.push(excluded());
+
+    expect(carried).toEqual([false, true, false]);
+  });
+});
 
 describe('the indicators each mod carries (mods.md, Indicators)', () => {
   it.each<[string, ModlistEntry[], Listings, OriginFile[], string, ModIndicator[]]>([

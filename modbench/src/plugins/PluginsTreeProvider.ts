@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
 import type { Reporter } from '../ports/reporter';
 import type { PluginDiagnosisReport, PluginAddress, LoadOrderSnapshot } from '../client';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
@@ -22,8 +23,9 @@ import { isPluginAddress } from '../wire/messages';
 import type { NamedPlugins } from './pluginAddress';
 import { blueprintLoadsLastIn } from '../tables/gamePaths';
 import { activeViewOrder, viewOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
-import { filePresence, filesPresent } from '../instanceLoader/filePresence';
+import { fileAt, filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { filesChanged, TOUCHING_READ } from '../instanceLoader/filesChanged';
+import { changedKeys, sameInputs } from '../ports/lastBuilt';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
@@ -136,7 +138,7 @@ export class PluginsTreeProvider
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
 
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginsTreeNode | undefined | null>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<PluginsTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instance: TreeInstance;
@@ -160,8 +162,9 @@ export class PluginsTreeProvider
   private rowsBlueprints = 0;
   // A read failed since the last value landed, so the next one draws the message line again.
   private readFailed = false;
-  // Where the last judgement of the sorting rules read each file's bytes, so a file rewritten there judges again.
-  private readAt = new Set<string>();
+  // Where the last judgement of the sorting rules to land read each file's bytes, so a file rewritten there judges again: kept
+  // while those reads and what places them are the same.
+  private readAtOf?: { readonly from: readonly unknown[]; readonly at: ReadonlySet<string> };
 
   /** The view's order of the active plugins, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
   readonly viewOrder = {
@@ -192,7 +195,6 @@ export class PluginsTreeProvider
       publishRuleFiles: options.publishRuleFiles,
       rules: () => this.rules,
       fileFacts: (reads, trusted) => {
-        this.readAt = new Set(reads.flatMap(({ path }) => this.pathOf(path) ?? []).map(fileKey));
         const read = () => readFileFacts(reads, options.fileReads, {
           files: () => filesPresent(this.instanceValue),
           isPresent: (path) => filePresence(this.instanceValue, path),
@@ -209,13 +211,13 @@ export class PluginsTreeProvider
       this.instanceValue = options.instance.value;
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
-      const rewritten = reread.disk || reread.named.some((path) => this.readAt.has(fileKey(path)));
+      const rewritten = reread.disk || reread.named.some((path) => this.readAt().has(fileKey(path)));
       if (rules !== this.rules || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       this.rules = rules;
       if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
       else if (!recovered) return;
       this._onDidChangeTreeData.fire(undefined);
-    }, TREE_READS, (path) => this.readAt.has(fileKey(path))), options.instance.onReadFailure(() => {
+    }, TREE_READS, (path) => this.readAt().has(fileKey(path))), options.instance.onReadFailure(() => {
       this.readFailed = true;
       this.render();
     }), options.instance.onRedraw(() => this.render()));
@@ -234,17 +236,23 @@ export class PluginsTreeProvider
     );
   }
 
-  // Where a read of a path relative to the Data folder reads: the file mod order provides, else the game folder's. A path that
-  // leaves the Data folder is read again at each reconcile.
-  private pathOf(path: string): string | undefined {
-    const { files, dataFolderFiles } = this.instanceValue;
-    return files.get(path)?.winner ?? (dataFolderFiles.kind === 'listed' ? dataFolderFiles.files.get(path.toLowerCase().replaceAll('\\', '/'))?.path : undefined);
+  private readAt(): ReadonlySet<string> {
+    const reads = this.facts.judgedReads();
+    const from = [reads, this.instanceValue.files, this.instanceValue.dataFolderFiles];
+    if (this.readAtOf === undefined || !sameInputs(this.readAtOf.from, from)) {
+      this.readAtOf = { from, at: new Set(reads.flatMap(({ path }) => fileAt(this.instanceValue, path) ?? []).map(fileKey)) };
+    }
+    return this.readAtOf.at;
   }
 
-  // Whether the files present changed where the last judgement of the sorting rules read them. The game's Data folder
-  // is listed whole, so a change to it is one anywhere.
+  // Whether the files present changed where the last judgement of the sorting rules read them. A Data folder that is not
+  // listed on both sides changed anywhere.
   private judgedFilesChanged(before: TreeInstance['value'], after: TreeInstance['value']): boolean {
-    if (before.dataFolderFiles !== after.dataFolderFiles) return true;
+    const [was, now] = [before.dataFolderFiles, after.dataFolderFiles];
+    if (was !== now) {
+      if (was.kind !== 'listed' || now.kind !== 'listed') return true;
+      if (changedKeys(now.files, was.files).some((key) => this.facts.judgesFile((now.files.get(key) ?? was.files.get(key))?.relativePath ?? key))) return true;
+    }
     const changed = filesChanged<keyof typeof TOUCHING_READ>(before, after, TOUCHING_READ);
     return changed === 'every' || changed.some(({ files }) => files.some(({ includedPath }) => this.facts.judgesFile(includedPath)));
   }

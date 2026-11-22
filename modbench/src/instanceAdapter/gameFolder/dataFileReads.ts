@@ -6,7 +6,7 @@ import { errorMessage } from '../../ports/errorMessage';
 import type { FileAnswer } from '../../sortingRules/lootConditions';
 import type { GameFolder } from '../instanceAdapter';
 import { versionResourceOf } from './versionResource';
-import { stampKept, trustingKept } from '../files';
+import { keptUntilNamed, stampKept, trustingKept } from '../files';
 
 /** What LOOT's conditions read of a file by path relative to the Data folder (`../` leaves it). `winner` is where mod
  *  order provides it, else the game folder's, found in any case. A file not there answers `undefined`/`false`. */
@@ -46,6 +46,8 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
   // A whole file's checksum and a program's version are read again only once its stamp changed.
   const checksumAt = stampKept(async (at: string) => parseInt(await crc32Of(at), 16));
   const versionAt = stampKept(versionResourceOf);
+  // No stamp covers whether a file reads, so a trusted read keeps it until a change names the file.
+  const readableAt = keptUntilNamed((at: string) => access(at, constants.R_OK).then(() => true));
   const located = async (path: string, winner: string | undefined): Promise<{ at: string } | { why: string }> => {
     if (winner !== undefined) return { at: winner };
     const folder = await gameFolder();
@@ -75,7 +77,7 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
         return isAbsent(err) ? read(undefined) : unreadable(errorMessage(err));
       }
     },
-    dataFileReadable: (path, winner) => reading(path, winner, false, (at) => access(at, constants.R_OK).then(() => true)),
+    dataFileReadable: (path, winner) => reading(path, winner, false, readableAt),
     dataFilesTrusted: trustingKept,
   };
 }

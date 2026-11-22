@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dataFileReads, type DataFileReads } from '../dataFileReads';
+import { trustingKept } from '../../files';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
 import type { GameFolder } from '../../instanceAdapter';
 
@@ -39,6 +40,16 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
     await utimes(file, long, long);
 
     expect(await reads.dataFileChecksum('a.swf', undefined)).toEqual(read(crc32('some bytes')));
+  });
+
+  it('answers, inside a trusted read, whether a file is readable as it last read it, and outside one as it reads now', async () => {
+    const file = join(root, 'Game.exe');
+    await writeFile(file, 'game bytes');
+    await trustingKept(() => reads.dataFileReadable('../Game.exe', undefined));
+    await rm(file);
+
+    expect([await trustingKept(() => reads.dataFileReadable('../Game.exe', undefined)), await reads.dataFileReadable('../Game.exe', undefined)])
+      .toEqual([read(true), read(false)]);
   });
 
   it('finds the game folder\'s file in any case, in the folders and the name, as the game does', async () => {

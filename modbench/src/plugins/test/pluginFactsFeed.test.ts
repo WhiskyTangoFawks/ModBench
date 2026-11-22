@@ -318,6 +318,17 @@ describe('PluginFactsFeed', () => {
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
     });
 
+    it('judges the same order again by the same rules without walking the rules over the plugins again', async () => {
+      const asked = vi.fn();
+      const { feed, client } = feedOver({ activePlugins: () => [A], asked });
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+
+      await feed.rejudge();
+
+      expect(asked.mock.calls[1]?.[0]).toBe(asked.mock.calls[0]?.[0]);
+    });
+
     it('judges again from the reads it kept, trusting them, and checks each file at a reconcile', async () => {
       const asked = vi.fn();
       const { feed, client } = feedOver({ activePlugins: () => [A], asked });

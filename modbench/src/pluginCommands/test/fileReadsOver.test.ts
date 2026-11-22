@@ -1,23 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fileReadsOver } from '../plugins';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 
-describe('fileReadsOver: the Instance adapter\'s reads, at the file mod order provides', () => {
+describe('fileReadsOver: the Instance adapter\'s reads, at the path each is placed at', () => {
   const { adapter } = fakeInstanceAdapter(undefined, {
     dataFiles: new Map([
       ['/mods/M/Meshes/a.nif', { checksum: 7 }],
-      ['Meshes/A.nif', { checksum: 9 }],
       ['../Game.exe', { version: '1.2', readable: true }],
     ]),
   });
-  const winners = { get: (path: string) => (path.toLowerCase() === 'meshes/a.nif' ? { winner: '/mods/M/Meshes/a.nif' } : undefined) };
-  const reads = fileReadsOver(adapter, () => winners);
+  const places = new Map<string, string | null>([['Meshes/A.nif', '/mods/M/Meshes/a.nif'], ['Meshes/none.nif', null]]);
+  const reads = fileReadsOver(adapter, (path) => places.get(path));
 
-  it('reads the winner of a path a mod provides, in any case and with either slash', async () => {
+  it('reads the file at the path it is placed at, with either slash', async () => {
     expect(await reads.checksum('Meshes\\A.nif')).toEqual({ kind: 'read', value: 7 });
   });
 
-  it('reads a path no mod provides from the game folder', async () => {
+  it('answers a file nothing holds as not there, asking the adapter nothing', async () => {
+    const asked = vi.spyOn(adapter, 'dataFileChecksum');
+
+    expect([await reads.checksum('Meshes/none.nif'), await reads.version('Meshes/none.nif', 'file'), await reads.readable('Meshes/none.nif')])
+      .toEqual([{ kind: 'read', value: undefined }, { kind: 'read', value: undefined }, { kind: 'read', value: false }]);
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it('leaves the adapter to find a file it does not place in the game folder', async () => {
     expect([await reads.version('../Game.exe', 'file'), await reads.readable('../Game.exe')])
       .toEqual([{ kind: 'read', value: '1.2' }, { kind: 'read', value: true }]);
   });

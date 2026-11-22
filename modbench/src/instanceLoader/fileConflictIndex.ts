@@ -8,7 +8,7 @@ import { originsWinningFirst } from '../symbolNames/symbolNames';
 import { sameInputs } from '../ports/lastBuilt';
 import { present } from '../ports/present';
 import { PathTrie } from './pathTrie';
-import { inRank, pathsChanged, reordered, type Reordered } from './reordered';
+import { differing, inRank, pathsChanged, reordered, type Reordered } from './reordered';
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
@@ -193,7 +193,10 @@ interface OriginsChanged extends Reordered<OriginProvides> {
 
 function originsChanged(was: readonly OriginProvides[], now: readonly OriginProvides[]): OriginsChanged {
   const origins = reordered(was, now, ({ origin }) => originKey(origin), Object.is);
-  return { ...origins, paths: pathsChanged(origins, (provided) => foldedFilesOf(provided).keys()) };
+  return {
+    ...origins,
+    paths: pathsChanged(origins, (provided) => foldedFilesOf(provided).keys(), (then, current) => differing(then.files, current.files).map(({ relativePath }) => foldPath(relativePath))),
+  };
 }
 
 const fileAt = (now: ReadonlyMap<string, OriginProvides>, origin: FileOrigin, folded: string): OriginFile =>
@@ -384,18 +387,70 @@ function tallyCopy(copies: readonly StackedCopy[], place: number, { at }: Stacke
 /** Which of mods.md's loose and archive indicators `own` holds over `stack`, from the files at `paths`: every path it may
  *  hold a copy at, so the walk costs its own files alone. */
 export function copyStandingOf(stack: StackedCopies, own: FileOrigin, paths: Iterable<string>): CopyStanding {
+  return new KeptCopyStanding(own).update(stack, paths);
+}
+
+type Counted = Exclude<keyof CopyStanding, 'redundant'> | 'gets' | 'loses';
+
+const COUNTED: readonly Counted[] = [
+  'overwritesLooseFiles', 'overwrittenLooseFiles', 'overwritesArchiveWithLooseFiles', 'archiveOverwrittenByLooseFiles',
+  'overwritesAnotherArchiveFile', 'overwrittenByAnotherArchiveFile', 'gets', 'loses',
+];
+
+const flagOf = ({ standing, gets, loses }: Tally, key: Counted): boolean => (key === 'gets' ? gets : key === 'loses' ? loses : standing[key]);
+
+// What `own`'s copies at the path give its standing, or nothing where it holds none.
+function tallyAt(stack: StackedCopies, own: FileOrigin, path: string): Tally | undefined {
+  const copies = stack.get(path)?.copies ?? [];
+  const places = copies.flatMap((copy, place) => (sameOrigin(copy.origin, own) ? [place] : []));
+  if (places.length === 0) return undefined;
   const tally: Tally = { standing: { ...NO_STANDING }, gets: false, loses: false };
-  const walked = new Set<string>();
-  for (const path of paths) {
-    const folded = foldPath(path);
-    if (walked.has(folded)) continue;
-    walked.add(folded);
-    const copies = stack.get(path)?.copies ?? [];
-    copies.forEach((copy, place) => { if (sameOrigin(copy.origin, own)) tallyCopy(copies, place, copy, tally); });
+  for (const place of places) tallyCopy(copies, place, present(copies[place], 'a copy'), tally);
+  return tally;
+}
+
+/** `copyStandingOf` kept path by path, so a change tallies again only the paths it touched (ADR-0029, Consequences,
+ *  bullet 5). */
+export class KeptCopyStanding {
+  private readonly byPath = new Map<string, Tally>();
+  private readonly counts = new Map<Counted, number>();
+
+  constructor(private readonly own: FileOrigin) {}
+
+  /** The standing once the copies at `paths` are those `stack` holds. */
+  update(stack: StackedCopies, paths: Iterable<string>): CopyStanding {
+    for (const path of paths) {
+      const folded = foldPath(path);
+      const was = this.byPath.get(folded);
+      if (was !== undefined) this.count(was, -1);
+      const now = tallyAt(stack, this.own, path);
+      if (now === undefined) this.byPath.delete(folded);
+      else {
+        this.byPath.set(folded, now);
+        this.count(now, 1);
+      }
+    }
+    return this.standing();
   }
-  const { standing, gets, loses } = tally;
-  const redundant = loses && !gets;
-  return redundant ? { ...standing, ...Object.fromEntries(LOSING.map((id) => [id, false])), redundant } : { ...standing, redundant };
+
+  private count(tally: Tally, by: number): void {
+    for (const key of COUNTED) if (flagOf(tally, key)) this.counts.set(key, (this.counts.get(key) ?? 0) + by);
+  }
+
+  private holds(key: Counted): boolean {
+    return (this.counts.get(key) ?? 0) > 0;
+  }
+
+  private standing(): CopyStanding {
+    const standing: CopyStanding = {
+      overwritesLooseFiles: this.holds('overwritesLooseFiles'), overwrittenLooseFiles: this.holds('overwrittenLooseFiles'),
+      overwritesArchiveWithLooseFiles: this.holds('overwritesArchiveWithLooseFiles'), archiveOverwrittenByLooseFiles: this.holds('archiveOverwrittenByLooseFiles'),
+      overwritesAnotherArchiveFile: this.holds('overwritesAnotherArchiveFile'), overwrittenByAnotherArchiveFile: this.holds('overwrittenByAnotherArchiveFile'),
+      redundant: false,
+    };
+    const redundant = this.holds('loses') && !this.holds('gets');
+    return redundant ? { ...standing, ...Object.fromEntries(LOSING.map((id) => [id, false])), redundant } : standing;
+  }
 }
 
 /** An archive the game loads, at the path that wins its name, and what it holds: nothing known when it cannot be read. */
