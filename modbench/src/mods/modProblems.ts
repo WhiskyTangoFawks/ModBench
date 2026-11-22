@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { drawn, undrawn } from '../drivingLib/heldRedraw';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InstanceOf } from '../instanceLoader/instance';
 import type { ModStatuses } from '../modStatus/modStatuses';
@@ -17,14 +16,12 @@ export class ModProblems {
     private readonly instance: Pick<InstanceOf<keyof typeof PROBLEMS_READ>, 'value' | 'subscribe'>,
     private readonly statuses: Pick<ModStatuses, 'current' | 'of' | 'onDidChange'>,
   ) {
-    // common.md, A gesture that writes, story 1.
-    const shown = (): void => { drawn(this, () => { void this.show(); }); };
+    const shown = (): void => { void this.show(); };
     this.following = [instance.subscribe(shown, PROBLEMS_READ), statuses.onDidChange(shown)];
     void this.show();
   }
 
   dispose(): void {
-    undrawn(this);
     for (const following of this.following) following.dispose();
     this.collection.dispose();
   }

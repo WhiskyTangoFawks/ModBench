@@ -50,17 +50,15 @@ export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, w
   changesRunning++;
   const outermost = changesRunning === 1;
   try {
-    return await holdingRedraws(async () => {
-      let answer: T;
-      try {
-        answer = await collectingWrites(written, () => work(written));
-      } catch (err) {
-        if (outermost) await readBack(instance, written).catch(() => undefined);
-        throw err;
-      }
-      if (outermost) await readBack(instance, written);
-      return answer;
-    });
+    let answer: T;
+    try {
+      answer = await collectingWrites(written, () => work(written));
+    } catch (err) {
+      if (outermost) await readBack(instance, written).catch(() => undefined);
+      throw err;
+    }
+    if (outermost) await readBack(instance, written);
+    return answer;
   } finally {
     changesRunning--;
     if (changesRunning === 0) void releaseWaiting();
@@ -83,7 +81,7 @@ export async function runUnderProgress<T>(
   const handedBefore = readModel?.handed();
   progress.working();
   try {
-    return await holdingRedraws(async () => {
+    return await holdingRedraws(viewId, async () => {
       try {
         return await handingOneChange(instance, (written) => command(progress, written));
       } finally {

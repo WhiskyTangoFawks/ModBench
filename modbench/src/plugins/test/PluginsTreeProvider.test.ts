@@ -1342,6 +1342,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     ['a file a rule reads the bytes of', '/mods/SomeMod/Meshes/x.nif', 1],
     ['a game file a rule reads the bytes of', '/game/Data/Meshes/z.nif', 1],
     ['a file no rule reads', '/mods/SomeMod/Meshes/y.nif', 0],
+    ['a path a rule reads in another case, the same file on Windows alone', '/mods/SomeMod/MESHES/X.NIF', process.platform === 'win32' ? 1 : 0],
   ])('judges the last reconcile\'s order again when %s is rewritten in place, and only then', async (_file, path, judgedAgain) => {
     const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF) or checksum(\"Meshes/z.nif\", DEADBEEF)'}]\n" } } as const;
     const files = new FileConflictLookup();

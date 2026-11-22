@@ -27,7 +27,8 @@ import { sameCopies, type FileCopies } from '../sameCopies';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture } from '../../test/fakeInstanceAdapter';
 import { instanceOver } from '../../test/instanceOver';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { handingOneChange } from '../../drivingLib/writingGesture';
+import { holdingRedraws } from '../../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from '../gestureEntry';
 
 const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
 
@@ -314,18 +315,18 @@ describe('a mod\'s conflict table, open in a tab', () => {
     expect(copiesDouble.asked).toHaveLength(1);
   });
 
-  it('holds what a change shows while a gesture writes, and shows it once the gesture ends (common.md, A gesture that writes, story 1)', async () => {
+  it('shows a change at once while a gesture writes from a view (common.md, A view, stories 2 and 14)', async () => {
     const instance = new FakeInstance(await shared());
     const panel = openTable(instance, 'High');
     let askedWhileWriting = -1;
 
-    await handingOneChange(instance, async () => {
+    await holdingRedraws(MODS_KEY_ARGS.view, async () => {
       instance.publish(await indexedValueOf([mod('High')], { High: { files: [file('High', 'a.dds')] } }));
       askedWhileWriting = copiesDouble.asked.length;
     });
     await posted(panel, 1);
 
-    expect([askedWhileWriting, copiesDouble.asked.length]).toEqual([0, 1]);
+    expect(askedWhileWriting).toBe(1);
   });
 
   it('shows again once another mod gains a copy of a file its mod holds, though the change names no file it read', async () => {

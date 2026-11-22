@@ -79,7 +79,7 @@ describe('the instance read that signalled', () => {
     const signalling = subscribers.at(-1);
     let settled = false;
 
-    void Promise.resolve(signalling?.(instanceValueFixture(), 1, { named: [], disk: true })).then(() => { settled = true; });
+    void Promise.resolve(signalling?.(instanceValueFixture(), 1, { named: [], disk: true, before: undefined, changed: () => 'every' as const })).then(() => { settled = true; });
     await Promise.resolve();
     expect(settled).toBe(false);
 

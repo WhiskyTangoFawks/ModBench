@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { RedrawEmitter } from '../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from './gestureEntry';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { modEntryOf, originsTouched } from './originsTouched';
-import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups } from '../instanceLoader/instance';
+import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups, type Told } from '../instanceLoader/instance';
 import { gameFolderFileOver, unreadableArchiveReason } from './modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -197,7 +198,7 @@ export class ModListProvider
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
 
-  private readonly _onDidChangeTreeData = new RedrawEmitter<ModlistNode | undefined>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<ModlistNode | undefined>(MODS_KEY_ARGS.view);
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private modGroups?: ModGroups;
@@ -226,7 +227,7 @@ export class ModListProvider
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
-    this.instanceSubscription = options.instance.subscribe(() => { this.update(); }, TREE_READS);
+    this.instanceSubscription = options.instance.subscribe((_value, _sequence, told) => { this.update(told); }, TREE_READS);
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
     this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;
@@ -252,8 +253,8 @@ export class ModListProvider
   }
 
   // A filter shows a row by its files, so under one any change may show or hide a row.
-  private update(): void {
-    const touched = this.filterText === '' ? originsTouched(this.instanceValue, this.instance.value, TREE_READS) : 'every';
+  private update(told: Told<keyof typeof TREE_READS>): void {
+    const touched = this.filterText === '' ? originsTouched(this.instance.value, told) : 'every';
     if (touched === 'every') {
       this.invalidate();
       return;

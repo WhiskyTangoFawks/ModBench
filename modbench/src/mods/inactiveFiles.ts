@@ -2,9 +2,8 @@
 // in the Explorer.
 
 import * as vscode from 'vscode';
-import { DecorationRedrawEmitter } from '../drivingLib/heldRedraw';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
-import { foldPath, originKey, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { foldedFilesIn, foldPath, originKey, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type OriginsChange, type Owned, type Row } from './originsTouched';
 import { TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
 import { fileRowUri } from './modFiles';
@@ -99,17 +98,8 @@ function * archivedAt(value: FilesValue, origin: FileOrigin, path: string): Iter
   }
 }
 
-const byPath = new WeakMap<readonly OriginFile[], ReadonlyMap<string, OriginFile>>();
-
-// The origin's file at the folded path, from a lookup kept while its files are the same list.
-function fileAtPath(files: readonly OriginFile[], folded: string): OriginFile | undefined {
-  let lookup = byPath.get(files);
-  if (lookup === undefined) {
-    lookup = new Map(files.map((file) => [foldPath(file.relativePath), file]));
-    byPath.set(files, lookup);
-  }
-  return lookup.get(folded);
-}
+// The origin's file at the folded path, as the file conflict index takes it.
+const fileAtPath = (files: readonly OriginFile[], folded: string): OriginFile | undefined => foldedFilesIn(files).get(folded);
 
 // The rows of an origin's own change: its folders, and each file it gained or lost, whose folded path joins `done`.
 function * ownRows(value: FilesValue, { origin, files, gained }: OwnChange, done: Set<string>): Iterable<Owned<Inactive>> {
@@ -148,7 +138,7 @@ function * ownedIn(value: FilesValue, change: OriginsChange): Iterable<Owned<Ina
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new instance value (ADR-0003), for
  *  the rows of the origins it touches, and on every change to its setting. */
 export class InactiveFileDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
-  private readonly changed = new DecorationRedrawEmitter();
+  private readonly changed = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
   private readonly held: () => RowsByOwner<Inactive>;
   private readonly subscriptions: readonly { dispose(): unknown }[];

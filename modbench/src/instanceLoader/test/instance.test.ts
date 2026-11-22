@@ -489,7 +489,7 @@ describe('Instance — built by watching', () => {
   it('hands each subscriber what the value was read again for: the paths the events named, or the check of the disk', async () => {
     const { instance, fake } = loader();
     const landedFor: Reread[] = [];
-    instance.subscribe((_value, _sequence, landed) => { landedFor.push(landed); });
+    instance.subscribe((_value, _sequence, { named, disk }) => { landedFor.push({ named, disk }); });
 
     fakeClockLeavingSetImmediateReal();
     try {

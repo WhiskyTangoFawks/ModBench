@@ -2,7 +2,6 @@
 // address of its own, so preview, an open tab and restore-after-reload are VS Code's.
 
 import { lastGoodReadMessage } from '../wire/reasons';
-import { drawn, undrawn } from '../drivingLib/heldRedraw';
 import * as vscode from 'vscode';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 import type { InstanceOf } from '../instanceLoader/instance';
@@ -97,16 +96,14 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         else post(lastGood, lastGoodReadMessage([reason]));
       }
     };
-    let shown = this.instance.value;
-    const subscription = this.instance.subscribe((value, sequence, { named, disk }) => {
-      const touched = originsTouched(shown, value, TABLE_FOLLOWS);
-      shown = value;
+    const subscription = this.instance.subscribe((value, sequence, told) => {
+      const { named, disk } = told;
+      const touched = originsTouched(value, told);
       const readAgain = disk || named.some((path) => read.has(pathKey(path)));
-      if (touched === 'every' || readAgain || touched.some((origin) => sameOrigin(origin, modOrigin(mod)))) drawn(panel, () => { void show({ value, sequence }); });
+      if (touched === 'every' || readAgain || touched.some((origin) => sameOrigin(origin, modOrigin(mod)))) void show({ value, sequence });
     }, TABLE_FOLLOWS, (path) => read.has(pathKey(path)));
     const setting = onSettingChange(this.settings.onDidChangeConfiguration, CELL_VALUE_SETTING, () => { void show(this.instance); });
     panel.onDidDispose(() => {
-      undrawn(panel);
       subscription.dispose();
       setting.dispose();
     });

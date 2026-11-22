@@ -202,8 +202,6 @@ export class ModStatuses {
   private readonly unreadable = new Map<string, string>();
   private gitFailure: string | undefined;
   private waiting: { value: StatusSource; touched: Touched } | undefined;
-  // The value last handed, which a change is told against.
-  private handed: StatusSource | undefined;
   // A derivation failed, so the next derives every mod, those it would have derived among them.
   private failedLast = false;
   private indexed: { readonly from: readonly unknown[]; readonly folders: Folders } | undefined;
@@ -219,9 +217,8 @@ export class ModStatuses {
 
   /** Derives again from `value` the status of each mod `changed` touches, and every mod's without it; of the values handed
    *  while one derives, the latest alone derives next, the mods each touched. */
-  derive(value: StatusSource, changed?: Reread): void {
+  derive(value: StatusSource, changed?: Reread & { readonly before: StatusSource | undefined }): void {
     const touched = this.touchedBy(value, changed);
-    this.handed = value;
     this.waiting = { value, touched: this.waiting === undefined ? touched : bothTouched(this.waiting.touched, touched) };
     if (this.deriving) return;
     this.deriving = true;
@@ -285,8 +282,8 @@ export class ModStatuses {
 
   // A change touches every mod when it is a check of the disk, changes a fact of every mod, or names a file it reads that no one
   // mod holds.
-  private touchedBy(value: StatusSource, changed: Reread | undefined): Touched {
-    const { handed } = this;
+  private touchedBy(value: StatusSource, changed: (Reread & { readonly before: StatusSource | undefined }) | undefined): Touched {
+    const handed = changed?.before;
     if (changed === undefined || changed.disk || handed === undefined) return 'every';
     if (Object.keys(STATUS_READS).filter(isStatusFact).some((fact) => !BY_ENTRY.has(fact) && value[fact] !== handed[fact])) return 'every';
     return touchedAmong(value, handed, changed.named, this.foldersOf(value));

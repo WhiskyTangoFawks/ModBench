@@ -25,7 +25,7 @@ function instanceHolding(holdsRepository: boolean, repositorySetUp = false) {
         return { dispose: () => { disposed.push(true); } };
       },
     },
-    land: (held: boolean, setUp = false) => { for (const subscriber of subscribers) void subscriber(instanceValueFixture({ holdsRepository: held, repositorySetUp: setUp }), 1, { named: [], disk: true }); },
+    land: (held: boolean, setUp = false) => { for (const subscriber of subscribers) void subscriber(instanceValueFixture({ holdsRepository: held, repositorySetUp: setUp }), 1, { named: [], disk: true, before: undefined, changed: () => 'every' as const }); },
     disposed,
   };
 }

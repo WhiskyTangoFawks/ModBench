@@ -1,9 +1,9 @@
 // common.md, A view, story 13: a new value asks again for the rows of the origins it touches alone.
 
 import type * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, InstanceView, Mod } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, InstanceView, Mod, Told } from '../instanceLoader/instance';
 import { modOrigin, originKey, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { filesChanged, type FilesChanged, type Touching } from '../instanceLoader/filesChanged';
+import type { FilesChanged, Touching } from '../instanceLoader/filesChanged';
 
 // Each origin with a copy of the path, loose or archived.
 const providersAt = (value: Touching, path: string): FileOrigin[] =>
@@ -17,12 +17,9 @@ export type OriginsChange = 'every' | {
   readonly own: Exclude<FilesChanged, 'every'>;
 };
 
-// The change a new value makes: each origin whose own files changed, and each that provides a path they gained or lost.
-// Anything while `filesChanged` says anything changed.
-function changeOf<K extends keyof InstanceValue>(
-  before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>,
-): OriginsChange {
-  const own = filesChanged(before, after, reads);
+// The change a new value makes, from what the Instance told of the origins' files since `before`: each origin whose own files
+// changed, and each that provides a path they gained or lost.
+function changeOf(before: Touching | undefined, after: Touching, own: FilesChanged): OriginsChange {
   if (own === 'every' || before === undefined) return 'every';
   const touched = new Map(own.map(({ origin }) => [originKey(origin), origin]));
   const paths = new Set(own.flatMap(({ files }) => files.map(({ relativePath }) => relativePath)));
@@ -30,11 +27,9 @@ function changeOf<K extends keyof InstanceValue>(
   return { origins: [...touched.values()], paths, own };
 }
 
-/** The origins whose rows a new value changes, as `changeOf` tells them. */
-export function originsTouched<K extends keyof InstanceValue>(
-  before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>,
-): 'every' | readonly FileOrigin[] {
-  const change = changeOf(before, after, reads);
+/** The origins whose rows a told value changes, as `changeOf` tells them. */
+export function originsTouched(after: Touching, { before, changed }: Pick<Told<keyof Touching>, 'before' | 'changed'>): 'every' | readonly FileOrigin[] {
+  const change = changeOf(before, after, changed());
   return change === 'every' ? 'every' : change.origins;
 }
 
@@ -107,11 +102,11 @@ export function rowsFollowing<D, K extends keyof InstanceValue>(
   ownedAgain: (value: Pick<InstanceValue, K | keyof Touching>, change: OriginsChange) => Iterable<Owned<D>>,
   refresh: (uris?: vscode.Uri[]) => void,
 ): { readonly subscription: { dispose(): unknown }; readonly held: () => RowsByOwner<D> } {
-  let held: Pick<InstanceValue, K | keyof Touching> | undefined;
-  const subscription = instance.subscribe((value) => {
-    const change = changeOf(held, value, concerns);
+  let derived = false;
+  const subscription = instance.subscribe((value, _sequence, told) => {
+    const change = derived ? changeOf(told.before, value, told.changed()) : 'every';
     if (change === 'every') rows.clear();
-    held = value;
+    derived = true;
     const changed = rows.hold(ownedAgain(value, change));
     if (change === 'every') refresh();
     else if (changed.length > 0) refresh(changed);
@@ -119,8 +114,8 @@ export function rowsFollowing<D, K extends keyof InstanceValue>(
   return {
     subscription,
     held: () => {
-      if (held === undefined) {
-        held = instance.value;
+      if (!derived) {
+        derived = true;
         rows.hold(ownedAgain(instance.value, 'every'));
       }
       return rows;

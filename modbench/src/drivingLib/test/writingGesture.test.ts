@@ -329,14 +329,14 @@ describe('handingOneChange', () => {
     expect(steps).toEqual(['write', `told ${told}`, 'next write', `read ${noFile}`]);
   });
 
-  it('holds the views\' redraw until the read back of what its writes named has landed (common.md, A gesture that writes, story 1)', async () => {
-    const view = new RedrawEmitter<string | undefined>();
+  it('holds its view\'s redraw until the read back of what its writes named has landed (common.md, A gesture that writes, story 1)', async () => {
+    const view = new RedrawEmitter<string | undefined>('modbench.thing');
     const drawn: string[] = [];
     view.event((row) => { if (row !== undefined) drawn.push(row); });
     const refresh = vi.fn(() => { view.fire('read back'); return Promise.resolve(); });
     let drawnWhileWriting: string[] = [];
 
-    await handingOneChange({ refresh }, () => {
+    await runUnderProgress('modbench.thing', { refresh }, () => {
       view.fire('written');
       ambientWrites.name([noFile]);
       drawnWhileWriting = [...drawn];
@@ -344,6 +344,19 @@ describe('handingOneChange', () => {
     });
 
     expect([drawnWhileWriting, drawn]).toEqual([[], ['written', 'read back']]);
+  });
+
+  it('runs every write and ends though the read of each fails, leaving the failure to the loader (common.md, A gesture that writes, story 3)', async () => {
+    writesToldTo({ told: () => Promise.reject(new Error('read failed')) });
+    onTestFinished(() => { writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) }); });
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+    const written: string[] = [];
+
+    await handingOneChange({ refresh }, async () => {
+      for (const path of ['/mods/A/a.esp', '/mods/A/b.esp']) await toldAfter([path], () => { written.push(path); return Promise.resolve(); });
+    });
+
+    expect(written).toEqual(['/mods/A/a.esp', '/mods/A/b.esp']);
   });
 
   it('checks the disk once it ends when a write left its files unnamed', async () => {

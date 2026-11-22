@@ -10,6 +10,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
 import { ModProblems } from '../modProblems';
 import { holdingRedraws } from '../../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from '../gestureEntry';
 
 const packaged = status;
 const FOLDER = '/instance/mods/ModA';
@@ -39,18 +40,18 @@ describe('the Problems panel follows Mod status (instance-repository.md, Status,
     await vi.waitFor(() => { expect(messagesOn(collection, FOLDER)).toEqual([['No manifest.', DiagnosticSeverity.Warning]]); });
   });
 
-  it('holds what a change shows while a gesture writes, and shows it once the gesture ends (common.md, A gesture that writes, story 1)', async () => {
+  it('shows a change at once while a gesture writes from a view (common.md, A view, stories 2 and 14)', async () => {
     const { collection, becomes } = over([packaged('ModA', { noManifest: true })]);
     await vi.waitFor(() => { expect(collection.has(Uri.file(FOLDER))).toBe(true); });
     let shownWhileWriting = false;
 
-    await holdingRedraws(async () => {
+    await holdingRedraws(MODS_KEY_ARGS.view, async () => {
       becomes([packaged('ModA')]);
       await new Promise((resolve) => { setTimeout(resolve, 10); });
       shownWhileWriting = collection.has(Uri.file(FOLDER));
     });
 
-    await vi.waitFor(() => { expect([shownWhileWriting, collection.has(Uri.file(FOLDER))]).toEqual([true, false]); });
+    await vi.waitFor(() => { expect([shownWhileWriting, collection.has(Uri.file(FOLDER))]).toEqual([false, false]); });
   });
 
   it('clears a problem when the state stops holding', async () => {

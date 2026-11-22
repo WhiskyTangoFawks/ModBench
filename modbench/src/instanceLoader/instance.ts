@@ -29,6 +29,8 @@ export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, Upg
 export type { PapyrusScript } from './papyrusScripts';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
+import { filesChanged, type FilesChanged } from './filesChanged';
+import { present } from '../ports/present';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
 const SETTLE_MS = 200;
@@ -173,7 +175,17 @@ export interface InstanceValue {
 }
 
 /** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
-export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceValue> = (value: Pick<InstanceValue, K>, sequence: number, reread: Reread) => void | Promise<void>;
+export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceValue> = (value: Pick<InstanceValue, K>, sequence: number, told: Told<K>) => void | Promise<void>;
+
+/** What a subscriber is told with a value: what was read again, the value it was told last, and what changed of the
+ *  origins' files since, so nothing above the read model works it out (ADR-0029, Consequences, bullet 4). */
+export interface Told<K extends keyof InstanceValue = keyof InstanceValue> extends Reread {
+  /** The value the subscriber was told last; none at its first. */
+  readonly before: Pick<InstanceValue, K> | undefined;
+  /** Each origin whose own files changed since `before`, or anything. */
+  changed(): FilesChanged;
+}
+
 
 /** The facts a subscriber reads, each named as a key. */
 export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
@@ -185,9 +197,19 @@ interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
   readonly readsFile: ReadsFile | undefined;
+  // The value it was told last, or held when it subscribed, which the next change is told against.
+  told: InstanceValue;
 }
 
 const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
+
+/** `reread`, told with `value` to a subscriber that was told `before` last and reads `concerns`, or every fact. */
+export function toldOf(before: InstanceValue | undefined, value: InstanceValue, reread: Reread, concerns: readonly (keyof InstanceValue)[] | undefined): Told {
+  const reads: Partial<Record<keyof InstanceValue, true>> = {};
+  for (const fact of concerns ?? Object.keys(value).filter(isFactOf(value))) reads[fact] = true;
+  let changed: FilesChanged | undefined;
+  return { ...reread, before, changed: () => (changed ??= filesChanged(before, value, reads)) };
+}
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
@@ -399,7 +421,7 @@ export class Instance implements Subscription {
   subscribe<K extends keyof InstanceValue>(
     subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>, readsFile?: ReadsFile<K>,
   ): Subscription {
-    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), readsFile };
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), readsFile, told: this.current };
     this.subscribers.push(subscribed);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscribed); } };
   }
@@ -605,7 +627,15 @@ export class Instance implements Subscription {
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns, readsFile }) =>
       tellsEvery || concerns === undefined || concerns.some(changed) || (readsFile !== undefined && reread.named.some((path) => readsFile(path, next))));
-    return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
+    const subscribedBy = new Map(told.map((subscribed) => [subscribed.subscriber, subscribed]));
+    return {
+      settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => {
+        const subscribed = present(subscribedBy.get(subscriber), 'the subscriber told');
+        const before = subscribed.told;
+        subscribed.told = next;
+        return subscriber(next, this.seq, toldOf(before, next, reread, subscribed.concerns));
+      }),
+    };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute

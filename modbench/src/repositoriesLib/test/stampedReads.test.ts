@@ -134,3 +134,18 @@ describe('a read kept by the stamp of its file', () => {
     });
   });
 });
+
+describe('a read naming many files, with many kept (ADR-0029, Consequences, bullet 5)', () => {
+  it('asks of each kept file only the folders above it, not every path named', async () => {
+    const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
+    await Promise.all(Array.from({ length: 200 }, (_, n) => reader(`/instance/mods/Kept/${n}.dds`)));
+    const named = Array.from({ length: 200 }, (_, n) => `/instance/mods/Named/${n}.dds`);
+    const asked = vi.spyOn(String.prototype, 'startsWith');
+
+    await readTrustingKept(named, false, () => Promise.resolve());
+    const startsWith = asked.mock.calls.length;
+    asked.mockRestore();
+
+    expect(startsWith).toBeLessThan(200 + 200);
+  });
+});

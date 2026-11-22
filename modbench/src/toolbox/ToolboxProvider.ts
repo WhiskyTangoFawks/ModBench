@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { RedrawEmitter } from '../drivingLib/heldRedraw';
+import { TOOLBOX_VIEW } from './toolboxCommands';
 import { gameFolderNotFoundLine } from './gameFolderNotFoundLog';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
@@ -98,7 +99,7 @@ function deploymentRow(setting: DeploymentRowSetting): vscode.TreeItem {
 
 /** A readout of the instance itself, one fact per row, read from the instance value alone. */
 export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
-  private readonly _onDidChangeTreeData = new RedrawEmitter<undefined>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<undefined>(TOOLBOX_VIEW);
 
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 

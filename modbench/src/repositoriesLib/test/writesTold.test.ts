@@ -30,10 +30,13 @@ describe('a write the loader is told of', () => {
     expect(told).toEqual([['/a']]);
   });
 
-  it('fails with the loader\'s failure when the write succeeded and the read that was to hold it did not', async () => {
+  it('answers once the read that was to hold the write failed, which the loader tells, so the command goes on (common.md, A gesture that writes, story 3)', async () => {
     loaderTold(() => Promise.reject(new Error('read failed')));
+    const written: string[] = [];
 
-    await expect(toldAfter(['/a'], () => Promise.resolve())).rejects.toThrow('read failed');
+    for (const path of ['/a', '/b']) await toldAfter([path], () => { written.push(path); return Promise.resolve(); });
+
+    expect([written, told]).toEqual([['/a', '/b'], [['/a'], ['/b']]]);
   });
 
   it('tells the files written inside locked work once, after the work has settled, and answers once the loader holds them', async () => {
