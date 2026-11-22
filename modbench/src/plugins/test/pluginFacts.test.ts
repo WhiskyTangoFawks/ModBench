@@ -423,7 +423,7 @@ describe('PluginFacts — an answer for named plugins changes only theirs (ADR-0
   const laterFailing = (name: string) => held({ name, laterReadFailure: [{ sourceRelativePath: `${name}/X.json`, message: 'bad' }] });
   const sourceGone = (name: string) => held({ name, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: false } });
 
-  it('drops the later read failure of a named plugin mEdit no longer answers, and keeps the others\'', () => {
+  it('drops the later read failure of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
     const facts = new PluginFacts();
     facts.refreshed([laterFailing('A.esp'), laterFailing('B.esp')]);
 
@@ -432,7 +432,7 @@ describe('PluginFacts — an answer for named plugins changes only theirs (ADR-0
     expect(facts.readFailureMessage()).toBe('Showing the last good read: "B.esp" (SomeMod): B.esp/X.json: bad');
   });
 
-  it('drops the unreadable source of a named plugin mEdit no longer answers, and keeps the others\'', () => {
+  it('drops the unreadable source of a named plugin mEdit\'s answer leaves out, and keeps the others\'', () => {
     const facts = new PluginFacts();
     facts.refreshed([sourceGone('A.esp'), sourceGone('B.esp')]);
 
@@ -461,7 +461,7 @@ describe('PluginFacts — an answer for named plugins changes only theirs (ADR-0
 
   it.each([
     ['its masters change', [held({ masters: ['X.esm'] })], true],
-    ['mEdit no longer answers it', [], true],
+    ['mEdit\'s answer leaves it out', [], true],
     ['only its matches change', [held({ hasMatchingRecords: false })], false],
   ])('says what the sorting rules judge changed when %s: %s', (_label, answer, changed) => {
     const facts = new PluginFacts();
