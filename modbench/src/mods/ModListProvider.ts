@@ -4,6 +4,7 @@ import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } f
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { originsTouched } from './originsTouched';
 import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { gameFolderFileOver, unreadableArchiveReason } from './modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -37,7 +38,7 @@ function isDraggedRows(value: unknown): value is DraggedRows {
 const TREE_READS = {
   ...MESSAGE_READS, mods: true, modGroups: true, modNames: true, holdsRepository: true, gameName: true, dataFolderFiles: true, stackedCopies: true, plugins: true,
   overwriteFiles: true, overwriteFolders: true, filesByMod: true, foldersByMod: true, listedSourceMods: true, paths: true, publisherConfiguration: true,
-  files: true, archiveContents: true,
+  files: true, archiveContents: true, loadsArchive: true,
 } as const;
 
 type TreeInstance = InstanceOf<keyof typeof TREE_READS>;
@@ -224,13 +225,16 @@ export class ModListProvider
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
-    this.instanceSubscription = options.instance.subscribe(() => { this.invalidate(); }, TREE_READS);
+    this.instanceSubscription = options.instance.subscribe(() => { this.update(); }, TREE_READS);
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
     this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;
     this.open = options.open;
     this.reporter = options.reporter;
-    this.statusSubscription = options.statuses.onDidChange(() => this.render());
+    this.statusSubscription = options.statuses.onDidChange((mods) => {
+      if (mods === 'every') this.render();
+      else for (const name of mods) this.fireRow(rowIdentity('mod', name));
+    });
     this.openSubscription = options.open.onDidChange(() => {
       const before = this.marks;
       if (before) this.fireChangedMarks(before);
@@ -244,6 +248,17 @@ export class ModListProvider
     this.statusSubscription.dispose();
     this.openSubscription.dispose();
     this.firstRead.dispose();
+  }
+
+  // A filter shows a row by its files, so under one any change may show or hide a row.
+  private update(): void {
+    const touched = this.filterText === '' ? originsTouched(this.instanceValue, this.instance.value, TREE_READS) : 'every';
+    if (touched === 'every') {
+      this.invalidate();
+      return;
+    }
+    this.instanceValue = this.instance.value;
+    for (const origin of touched) this.fireRow(origin.kind === 'mod' ? rowIdentity('mod', origin.name) : RUNTIME_OUTPUT.kind);
   }
 
   /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left. */

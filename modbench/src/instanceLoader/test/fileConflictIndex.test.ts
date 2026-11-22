@@ -497,12 +497,14 @@ describe('the copies of each file, stacked as the game stacks them', () => {
 });
 
 describe('how an origin\'s copies stand against the others\' (mods.md, Indicators)', () => {
+  const everyPath = (stack: ReturnType<ReturnType<typeof stackReusing>>): string[] => [...stack].map(({ relativePath }) => relativePath);
+
   it('is Redundant for a mod whose loaded archive loses every file it holds', () => {
     const FILE = 'meshes/shared.nif';
     const index = indexOver([mod('A'), mod('B')], { A: ['A.ba2', FILE], B: ['B.ba2'] });
     const stack = stackReusing()(index, [{ origin: modOrigin('B'), archive: modPath('B', 'B.ba2'), files: [FILE] }], 'Fallout4');
 
-    expect([copyStandingOf(stack, modOrigin('A')).redundant, copyStandingOf(stack, modOrigin('B')).redundant]).toEqual([false, true]);
+    expect([copyStandingOf(stack, modOrigin('A'), everyPath(stack)).redundant, copyStandingOf(stack, modOrigin('B'), everyPath(stack)).redundant]).toEqual([false, true]);
   });
 
   it('is Redundant for a mod whose every other file loses, an archive the game does not load keeping it from nothing', () => {
@@ -510,9 +512,8 @@ describe('how an origin\'s copies stand against the others\' (mods.md, Indicator
     const index = indexOver([mod('A'), mod('B')], { A: ['A.ba2', FILE], B: [FILE, 'B.ba2'] });
     const stack = stackReusing()(index, [], 'Fallout4');
 
-    expect([copyStandingOf(stack, modOrigin('A')).redundant, copyStandingOf(stack, modOrigin('B')).redundant]).toEqual([false, true]);
+    expect([copyStandingOf(stack, modOrigin('A'), everyPath(stack)).redundant, copyStandingOf(stack, modOrigin('B'), everyPath(stack)).redundant]).toEqual([false, true]);
   });
-
 
   type Kind = 'loose' | 'archived';
   type Stacks = Record<string, ReadonlyArray<readonly [Kind, string]>>;
@@ -527,7 +528,7 @@ describe('how an origin\'s copies stand against the others\' (mods.md, Indicator
         })),
       });
     }
-    return copyStandingOf(stack, modOrigin(own));
+    return copyStandingOf(stack, modOrigin(own), Object.keys(stacks));
   };
   const NONE = {
     overwritesLooseFiles: false, overwrittenLooseFiles: false, overwritesArchiveWithLooseFiles: false, archiveOverwrittenByLooseFiles: false,
@@ -557,14 +558,13 @@ describe('how an origin\'s copies stand against the others\' (mods.md, Indicator
     expect(standing({ won: [['loose', 'B'], ['loose', 'A']], lost: [['loose', 'A'], ['loose', 'B']] }, 'B')).toEqual({ ...NONE, overwritesLooseFiles: true, overwrittenLooseFiles: true });
   });
 
-  it('answers every origin from one walk of the stack', () => {
+  it('reads the files at the paths it is given alone, never the whole stack', () => {
     const stack = new FileConflictLookup<StackedFile>();
     const walked = vi.spyOn(stack, 'values');
     stack.set({ relativePath: 'a', copies: [{ origin: modOrigin('A'), at: { kind: 'loose', path: '/a' } }, { origin: modOrigin('B'), at: { kind: 'loose', path: '/b' } }] });
 
-    copyStandingOf(stack, modOrigin('A'));
-    copyStandingOf(stack, modOrigin('B'));
+    copyStandingOf(stack, modOrigin('A'), ['a']);
 
-    expect(walked).toHaveBeenCalledTimes(1);
+    expect(walked).not.toHaveBeenCalled();
   });
 });

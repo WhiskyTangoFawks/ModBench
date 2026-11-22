@@ -361,51 +361,41 @@ const NO_STANDING: CopyStanding = {
   archiveOverwrittenByLooseFiles: false, overwritesAnotherArchiveFile: false, overwrittenByAnotherArchiveFile: false, redundant: false,
 };
 
-function tallyFile({ copies }: StackedFile, tallies: Map<string, Tally>): void {
-  const looseTotal = copies.filter(({ at }) => at.kind === 'loose').length;
+// The standing the copy at `place` gives its origin, as the reference tool ranks the copies of one file.
+function tallyCopy(copies: readonly StackedCopy[], place: number, { at }: StackedCopy, tally: Tally): void {
+  const looseTotal = copies.filter((copy) => copy.at.kind === 'loose').length;
   const archivedTotal = copies.length - looseTotal;
-  let looseOver = 0;
-  let archivedOver = 0;
-  copies.forEach(({ origin, at }, place) => {
-    const key = originKey(origin);
-    const tally = tallies.get(key) ?? { standing: { ...NO_STANDING }, gets: false, loses: false };
-    tallies.set(key, tally);
-    tally.gets ||= place === 0;
-    tally.loses ||= place > 0;
-    const { standing } = tally;
-    if (at.kind === 'loose') {
-      standing.overwritesLooseFiles ||= looseTotal - looseOver > 1;
-      standing.overwrittenLooseFiles ||= looseOver > 0;
-      standing.overwritesArchiveWithLooseFiles ||= archivedTotal > 0;
-      looseOver++;
-    } else {
-      standing.archiveOverwrittenByLooseFiles ||= looseOver > 0;
-      standing.overwritesAnotherArchiveFile ||= archivedTotal - archivedOver > 1;
-      standing.overwrittenByAnotherArchiveFile ||= archivedOver > 0;
-      archivedOver++;
-    }
-  });
-}
-
-function standingsOf(stack: StackedCopies): ReadonlyMap<string, CopyStanding> {
-  const tallies = new Map<string, Tally>();
-  for (const file of stack) tallyFile(file, tallies);
-  return new Map([...tallies].map(([key, { standing, gets, loses }]) => {
-    const redundant = loses && !gets;
-    return [key, redundant ? { ...standing, ...Object.fromEntries(LOSING.map((id) => [id, false])), redundant } : { ...standing, redundant }];
-  }));
-}
-
-const standingsOfStack = new WeakMap<StackedCopies, ReadonlyMap<string, CopyStanding>>();
-
-/** Which of mods.md's loose and archive indicators `own` holds over `stack`. The stack is walked once, however many origins ask. */
-export function copyStandingOf(stack: StackedCopies, own: FileOrigin): CopyStanding {
-  let standings = standingsOfStack.get(stack);
-  if (standings === undefined) {
-    standings = standingsOf(stack);
-    standingsOfStack.set(stack, standings);
+  const looseOver = copies.slice(0, place).filter((copy) => copy.at.kind === 'loose').length;
+  const archivedOver = place - looseOver;
+  tally.gets ||= place === 0;
+  tally.loses ||= place > 0;
+  const { standing } = tally;
+  if (at.kind === 'loose') {
+    standing.overwritesLooseFiles ||= looseTotal - looseOver > 1;
+    standing.overwrittenLooseFiles ||= looseOver > 0;
+    standing.overwritesArchiveWithLooseFiles ||= archivedTotal > 0;
+  } else {
+    standing.archiveOverwrittenByLooseFiles ||= looseOver > 0;
+    standing.overwritesAnotherArchiveFile ||= archivedTotal - archivedOver > 1;
+    standing.overwrittenByAnotherArchiveFile ||= archivedOver > 0;
   }
-  return standings.get(originKey(own)) ?? NO_STANDING;
+}
+
+/** Which of mods.md's loose and archive indicators `own` holds over `stack`, from the files at `paths`: every path it may
+ *  hold a copy at, so the walk costs its own files alone. */
+export function copyStandingOf(stack: StackedCopies, own: FileOrigin, paths: Iterable<string>): CopyStanding {
+  const tally: Tally = { standing: { ...NO_STANDING }, gets: false, loses: false };
+  const walked = new Set<string>();
+  for (const path of paths) {
+    const folded = foldPath(path);
+    if (walked.has(folded)) continue;
+    walked.add(folded);
+    const copies = stack.get(path)?.copies ?? [];
+    copies.forEach((copy, place) => { if (sameOrigin(copy.origin, own)) tallyCopy(copies, place, copy, tally); });
+  }
+  const { standing, gets, loses } = tally;
+  const redundant = loses && !gets;
+  return redundant ? { ...standing, ...Object.fromEntries(LOSING.map((id) => [id, false])), redundant } : { ...standing, redundant };
 }
 
 /** An archive the game loads, at the path that wins its name, and what it holds: nothing known when it cannot be read. */

@@ -28,7 +28,7 @@ function over(initial: readonly ModStatus[], publisherConfiguration: PublisherCo
   let entries = entriesOf;
   const statuses = {
     current: () => Promise.resolve(held), heldByPackage: (mod: string): ReadonlySet<string> => new Set(heldByPackage[mod] ?? []),
-    entriesNoPackageHolds: (mod: string): Entries => entries[mod] ?? new Map(), onDidChange: (listener: () => void) => { changed = listener; return { dispose: () => undefined }; },
+    entriesNoPackageHolds: (mod: string): Entries => entries[mod] ?? new Map(), onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = () => { listener('every'); }; return { dispose: () => undefined }; },
   };
   const instance = new FakeInstance(instanceValueFixture({
     publisherConfiguration, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: '/instance/mods/ModB' }],

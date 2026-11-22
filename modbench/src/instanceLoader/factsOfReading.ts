@@ -103,6 +103,20 @@ const gameFolderArchivedIn = (archives: ReturnType<typeof archivesToReadOf>, con
 const papyrusScriptsIn = (files: FileWinners, dataFolderFiles: DataFolderFiles, gameRelease: string, loaded: readonly LoadedArchive[], gameFolderArchived: GameFolderArchived) =>
   papyrusScriptsOf(files, dataFolderFiles, gameRelease, archivedPathsOf({ loaded, gameFolderArchived }));
 
+const NO_LINKS: readonly OriginFile[] = [];
+const linksOf = new WeakMap<readonly OriginFile[], readonly OriginFile[]>();
+
+// The files of a listing that are links, kept while the listing's files are the same objects.
+function linksIn(files: readonly OriginFile[]): readonly OriginFile[] {
+  let links = linksOf.get(files);
+  if (links === undefined) {
+    const found = files.filter(({ path, sourcePath }) => sourcePath !== path);
+    links = found.length === 0 ? NO_LINKS : found;
+    linksOf.set(files, links);
+  }
+  return links;
+}
+
 // What each archive the game loads holds, nothing known of one that cannot be read.
 const loadedArchivesOf = (loaded: Loaded, contents: ReadonlyMap<string, ArchiveRead>): LoadedArchive[] => loaded.map(({ winner, winnerOrigin }) => {
   const read = contents.get(winner);
@@ -147,9 +161,7 @@ export class FactsOfReading {
   private readonly snapshot = lastBuilt(snapshotOf);
   private readonly downloadedFiles = lastBuilt(downloadedFilesOf);
   private readonly stamped = snapshotStamper();
-  private readonly linked = sliceReusing(({ path, sourcePath }) => sourcePath !== path);
-  private readonly linkTargets = lastBuilt((filesByMod: FileConflictIndex['filesByMod'], overwrite: readonly OriginFile[]): ReadonlySet<string> =>
-    new Set([...[...filesByMod.values()].flat(), ...overwrite].map(({ sourcePath }) => sourcePath)));
+  private readonly linkTargets = lastBuilt((...linked: (readonly OriginFile[])[]): ReadonlySet<string> => new Set(linked.flat().map(({ sourcePath }) => sourcePath)));
   private readonly modKey = (name: string): string => this.entryKey({ kind: 'mod', name });
   // The source mods each reading made: a reading keeps those of the reading its value landed from while the two read the same.
   private readonly sourceModsRead = new WeakMap<InstanceReading, SourceMods>();
@@ -167,8 +179,7 @@ export class FactsOfReading {
     this.sourceModsRead.set(reading, sourceMods);
     told.sourceMods(sourceMods);
     const index = this.index(entries, runtimeOutput.files, reading.modFiles);
-    const links = this.linked(entries, runtimeOutput.files, reading.modFiles);
-    const linkTargets = this.linkTargets(links.index.filesByMod, links.overwrite);
+    const linkTargets = this.linkTargets(...[...index.filesByMod.values(), runtimeOutput.files].map(linksIn));
     // No watch follows the target of a link, so its stamp is taken afresh at each read.
     const stampOf = (path: string) => (linkTargets.has(path) ? this.adapter.fileStamp(path) : trustingKept(() => this.adapter.fileStamp(path)));
     const roots = this.rootPlugins(entries, runtimeOutput.files, reading.modFiles);
