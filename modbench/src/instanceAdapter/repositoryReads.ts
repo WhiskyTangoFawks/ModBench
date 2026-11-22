@@ -46,8 +46,8 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     return repository !== undefined && isInstances(repository) ? repository : undefined;
   };
   const answers = keptUntilNamed(() => Promise.resolve(new Map<string, Promise<string>>()));
-  // Kept under a path in .git that no file holds, so only a name of .git itself forgets it: Modbench's git write, or .git
-  // made, made again or removed. VS Code's change during this status run is no news.
+  // Kept under a path in .git no file holds: only a name of .git itself forgets it, as Modbench's git write or .git made,
+  // remade or removed does. VS Code's change during this run is no news.
   const statusKey = join(dotGit, "VS Code's status");
   let running = false;
   const statusRun = keptUntilNamed(async () => {
