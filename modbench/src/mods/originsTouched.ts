@@ -17,8 +17,8 @@ export type OriginsChange = 'every' | {
   readonly own: Exclude<FilesChanged, 'every'>;
 };
 
-/** The change a new value makes: each origin whose own files changed, and each that provides a path they gained or lost.
- *  Anything while `filesChanged` says anything changed. */
+// The change a new value makes: each origin whose own files changed, and each that provides a path they gained or lost.
+// Anything while `filesChanged` says anything changed.
 function changeOf<K extends keyof InstanceValue>(
   before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>,
 ): OriginsChange {
