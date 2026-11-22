@@ -17,6 +17,7 @@ import { A_NEW_LOOSE_FILE, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
     ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
+    { change: A_NEW_LOOSE_FILE, layer: 'derived' },
     { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
     { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
   ])('$change.name, at the $layer layer', async ({ change, layer }) => {
@@ -27,11 +28,11 @@ describe('a change costs the same on a small and a large instance', () => {
   });
 });
 
-describe('a change derives the same in the file conflict index and the stack of copies, on a small and a large instance', () => {
-  it('a new loose file in one mod', async () => {
-    const indexed = ({ derivedIn: { files, filesByMod, foldersByMod, stackedCopies } }: Awaited<ReturnType<typeof costOf>>) => ({ files, filesByMod, foldersByMod, stackedCopies });
+describe('a new loose file in one mod', () => {
+  it('derives only the facts that hold the file, so the load order snapshot mEdit is handed stays as it was (commands.md, Commands Modbench runs itself, row 1)', async () => {
+    const { derivedIn } = await costOf(3, A_NEW_LOOSE_FILE);
 
-    expect(indexed(await costOf(60, A_NEW_LOOSE_FILE))).toEqual(indexed(await costOf(3, A_NEW_LOOSE_FILE)));
+    expect(Object.keys(derivedIn).filter((fact) => (derivedIn[fact] ?? 0) > 0)).toEqual(['files', 'filesByMod', 'stackedCopies']);
   });
 });
 

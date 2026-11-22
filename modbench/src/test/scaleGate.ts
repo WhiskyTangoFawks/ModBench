@@ -27,6 +27,7 @@ import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { NO_MOD_STATUSES } from './noModStatuses';
 import { recordingReporter } from './surfacingDoubles';
 import { fileSystemCalls } from './fileSystemCalls';
+import { reachableObjects } from './reachableObjects';
 import { FakeCancellationToken } from './vscodeMock';
 import { present } from '../ports/present';
 import { insertModAtWinningEnd, setEnabledInText } from '../instanceAdapter/mo2/codecs/modlistText';
@@ -67,20 +68,6 @@ async function syntheticInstance(mods: number): Promise<string> {
   const long = new Date(Date.now() - 3_600_000);
   await Promise.all([root, ...(await readdir(root, { recursive: true })).map((path) => join(root, path))].map((path) => utimes(path, long, long)));
   return root;
-}
-
-function reachableObjects(value: unknown): Set<object> {
-  const seen = new Set<object>();
-  const stack = [value];
-  while (stack.length > 0) {
-    const next = stack.pop();
-    if ((typeof next !== 'object' && typeof next !== 'function') || next === null || seen.has(next)) continue;
-    seen.add(next);
-    if (typeof next === 'function') continue;
-    const children = next instanceof Map ? [...next].flat() : next instanceof Set ? [...next] : Object.values(next);
-    for (const child of children) stack.push(child);
-  }
-  return seen;
 }
 
 const newObjects = (known: ReadonlySet<object>, after: unknown): number => [...reachableObjects(after)].filter((object) => !known.has(object)).length;

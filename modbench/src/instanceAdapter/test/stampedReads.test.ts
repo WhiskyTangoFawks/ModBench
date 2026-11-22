@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
+import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, symlink, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -10,7 +10,7 @@ import { listDir, listDirByStamp, parsedBy, readTrustingKept, textByStamp } from
 import { sortingRuleFilePaths } from '../mo2/layout';
 import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
-import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type Reread } from '../instanceAdapter';
+import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type OriginFile, type Reread } from '../instanceAdapter';
 const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -436,6 +436,23 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(listed?.folders).not.toEqual([]);
     expect(now?.folders).toBe(listed?.folders);
     expect(now?.files.filter((file) => listed?.files.includes(file))).toHaveLength(listed?.files.length ?? -1);
+  });
+
+  it('hands a file whose link names another file as a new object, and each other file as the landed reading holds it', async () => {
+    const folder = join(instance, 'mods', 'Harder VATS');
+    const [first, second, linked] = [join(instance, 'first.txt'), join(instance, 'second.txt'), join(folder, 'linked.txt')];
+    await Promise.all([writeFile(first, ''), writeFile(second, '')]);
+    await symlink(first, linked);
+    const adapter = managerOver(instance);
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await rm(linked);
+    await symlink(second, linked);
+
+    const filesOf = (reading: Pick<InstanceReading, 'modFiles'>): readonly OriginFile[] => reading.modFiles.get('Harder VATS')?.files ?? [];
+    const [before, now] = [filesOf(landed), filesOf(await adapter.reading(CHECK_THE_DISK, landed))];
+
+    expect(now.find(({ path }) => path === linked)?.sourcePath).toBe(second);
+    expect(now.filter((file) => before.includes(file))).toHaveLength(before.length - 1);
   });
 
   it('hands each mod\'s files as the landed reading holds them while another reading overlaps it', async () => {

@@ -1,6 +1,6 @@
 import type { InstanceValue, Mod, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
-import { buildFileConflictIndex, stackCopies, type LoadedArchive } from '../../instanceLoader/fileConflictIndex';
+import { buildFileConflictIndex, stackReusing, type LoadedArchive } from '../../instanceLoader/fileConflictIndex';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 export const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
@@ -28,7 +28,7 @@ export function indexedValueOf(
   }));
   const index = buildFileConflictIndex(mods, overwrite.files, modFiles);
   return Promise.resolve(instanceValueFixture({
-    mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod, stackedCopies: stackCopies(index, loaded, 'Fallout4'),
+    mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod, stackedCopies: stackReusing()(index, loaded, 'Fallout4'),
     overwriteFiles: overwrite.files, overwriteFolders: overwrite.folders ?? [],
   }));
 }

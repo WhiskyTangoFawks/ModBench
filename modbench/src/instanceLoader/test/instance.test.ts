@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, GameFolder, InstanceAdapter, InstanceReading, Mod,
-  OriginFiles, Separator, PublisherTag, ProgramVersions, Reread,
+  OriginFile, OriginFiles, Separator, PublisherTag, ProgramVersions, Reread,
 } from '../../instanceAdapter/instanceAdapter';
 import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { leveledLog } from '../../test/leveledLog';
@@ -1156,6 +1156,32 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(paths.modDirs.has('Radfall')).toBe(false);
     expect(paths.sourceDirs).toEqual(new Map([['Radfall', '/source/Radfall']]));
     expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
+  });
+
+  it('keeps the paths it landed while another instance reads other source mods (ADR-0029)', async () => {
+    const { instance } = loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Radfall: '/source/Radfall' }) });
+    await instance.refresh();
+    const landed = instance.value.paths;
+    await loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Other: '/source/Other' }) }).instance.refresh();
+
+    await instance.refresh();
+
+    expect(instance.value.paths).toBe(landed);
+  });
+
+  it('reads no file of a mod a change leaves as it was, a loose file added to the mod beside it (ADR-0029)', async () => {
+    let looked = 0;
+    const counted = (file: OriginFile): OriginFile => ({ ...file, get sourcePath() { looked++; return file.sourcePath; } });
+    const listingOf = (name: string, files: OriginFile[]): OriginFiles => ({ origin: name, folder: `/instance/mods/${name}`, files, folders: [], notes: [] });
+    const [a, b] = [listingOf('A', [fileIn('/instance/mods/A', 'a.dds')]), listingOf('B', ['b.dds', 'b.nif'].map((path) => counted(fileIn('/instance/mods/B', path))))];
+    const { instance, fake } = loader({ mods: [mod('A'), mod('B')], modFiles: new Map([['A', a], ['B', b]]) });
+    await instance.refresh();
+    looked = 0;
+
+    fake.read({ modFiles: new Map([['A', { ...a, files: [...a.files, fileIn('/instance/mods/A', 'new.dds')] }], ['B', b]]) });
+    await instance.refresh();
+
+    expect(looked).toBe(0);
   });
 
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
