@@ -417,7 +417,7 @@ function start(context: vscode.ExtensionContext): void {
     refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
-  context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
+  context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON) }));
   context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), taken: () => meditClient.loadOrderApplied() }));
   context.subscriptions.push(surfaceManagerRunning({ reporter: reporterFor('write'), ...opened.managerRunning }));
   const plugins = createPlugins({

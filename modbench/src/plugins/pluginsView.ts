@@ -171,7 +171,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerSortDirectionToggle('plugin', tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-      e, commands, reporterFor('pluginListTree.checkbox'), instance)),
+      e, commands, reporterFor('pluginListTree.checkbox'), instance, (clicked) => { tree.restoreRows(clicked); })),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
     // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),

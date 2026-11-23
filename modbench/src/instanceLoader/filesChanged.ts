@@ -27,7 +27,7 @@ interface OwnFilesChanged {
 export type FilesChanged = 'every' | readonly OwnFilesChanged[];
 
 // Whether a fact no origin's files hold changed: the archives, or another fact `reads` names.
-function changedBeyond<K extends keyof InstanceValue>(before: Pick<InstanceValue, K> & Touching, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>): boolean {
+function changedBeyond<K extends keyof InstanceValue>(before: Pick<InstanceValue, K> & Touching, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Partial<Record<K, true>>>): boolean {
   const isRead = (fact: string): fact is K => fact in reads;
   return before.archiveContents !== after.archiveContents || before.loadsArchive !== after.loadsArchive
     || Object.keys(reads).filter(isRead).some((fact) => !BY_ORIGIN.includes(fact) && before[fact] !== after[fact]);
@@ -49,7 +49,7 @@ function ownChanged(origin: FileOrigin, was: readonly OriginFile[], now: readonl
 /** What a new value changed of the origins' files. Anything while the archives or another fact `reads` names changed, or
  *  the stack changed with no origin's files. */
 export function filesChanged<K extends keyof InstanceValue>(
-  before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Record<K, true>>,
+  before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Partial<Record<K, true>>>,
 ): FilesChanged {
   if (before === undefined || changedBeyond(before, after, reads)) return 'every';
   const mods = [...new Set([...changedKeys(after.filesByMod, before.filesByMod), ...changedKeys(after.foldersByMod, before.foldersByMod)])];

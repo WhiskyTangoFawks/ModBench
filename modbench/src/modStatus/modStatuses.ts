@@ -38,12 +38,15 @@ export const STATUS_READS = {
 
 const isStatusFact = (key: string): key is keyof StatusSource => key in STATUS_READS;
 
+/** What a status is told with a value: what was read again, and the value it was told last. */
+type StatusChange = Reread & { readonly before: StatusSource };
+
 // Keyed by a mod's entry or by a file it holds, so each is compared entry by entry: what changed of one mod touches it alone.
 const BY_ENTRY: ReadonlySet<keyof StatusSource> = new Set(['filesByMod', 'archiveContents', 'flaggedHashes']);
 
 // The mods the files `named` and the facts keyed per entry touch; every mod where one is in no one mod's.
-function touchedAmong(value: StatusSource, handed: StatusSource, named: readonly string[], folders: Folders): Touched {
-  const touched = new Set(changedKeys(value.filesByMod, handed.filesByMod).flatMap((entry) => folders.byEntry.get(entry)?.name ?? []));
+function touchedAmong(value: StatusSource, before: StatusSource, named: readonly string[], folders: Folders): Touched {
+  const touched = new Set(changedKeys(value.filesByMod, before.filesByMod).flatMap((entry) => folders.byEntry.get(entry)?.name ?? []));
   const inFolders = (path: string): string[] => [...foldersAbove(path)].flatMap((folder) => folders.owners.get(folder) ?? []);
   // An archive or a flagged plugin is keyed by the path it is read from, which a link puts outside its mod's folder.
   let linked: ReadonlyMap<string, readonly string[]> | undefined;
@@ -51,7 +54,7 @@ function touchedAmong(value: StatusSource, handed: StatusSource, named: readonly
     const inFolder = inFolders(path);
     return inFolder.length > 0 ? inFolder : (linked ??= modsHolding(value, folders.placed)).get(path) ?? [];
   };
-  const readAgain = [...changedKeys(value.archiveContents, handed.archiveContents), ...changedKeys(value.flaggedHashes, handed.flaggedHashes)];
+  const readAgain = [...changedKeys(value.archiveContents, before.archiveContents), ...changedKeys(value.flaggedHashes, before.flaggedHashes)];
   const placed = placedIn(named.filter((path) => readsIn(folders, path)), inFolders, touched) && placedIn(readAgain, holding, touched);
   return placed ? touched : 'every';
 }
@@ -202,8 +205,6 @@ export class ModStatuses {
   private readonly unreadable = new Map<string, string>();
   private gitFailure: string | undefined;
   private waiting: { value: StatusSource; touched: Touched } | undefined;
-  // The value last handed, which a change is told against.
-  private handed: StatusSource | undefined;
   // A derivation failed, so the next derives every mod, those it would have derived among them.
   private failedLast = false;
   private indexed: { readonly from: readonly unknown[]; readonly folders: Folders } | undefined;
@@ -219,9 +220,8 @@ export class ModStatuses {
 
   /** Derives again from `value` the status of each mod `changed` touches, and every mod's without it; of the values handed
    *  while one derives, the latest alone derives next, the mods each touched. */
-  derive(value: StatusSource, changed?: Reread): void {
+  derive(value: StatusSource, changed?: StatusChange): void {
     const touched = this.touchedBy(value, changed);
-    this.handed = value;
     this.waiting = { value, touched: this.waiting === undefined ? touched : bothTouched(this.waiting.touched, touched) };
     if (this.deriving) return;
     this.deriving = true;
@@ -285,11 +285,11 @@ export class ModStatuses {
 
   // A change touches every mod when it is a check of the disk, changes a fact of every mod, or names a file it reads that no one
   // mod holds.
-  private touchedBy(value: StatusSource, changed: Reread | undefined): Touched {
-    const { handed } = this;
-    if (changed === undefined || changed.disk || handed === undefined) return 'every';
-    if (Object.keys(STATUS_READS).filter(isStatusFact).some((fact) => !BY_ENTRY.has(fact) && value[fact] !== handed[fact])) return 'every';
-    return touchedAmong(value, handed, changed.named, this.foldersOf(value));
+  private touchedBy(value: StatusSource, changed: StatusChange | undefined): Touched {
+    if (changed === undefined || changed.disk) return 'every';
+    const { before } = changed;
+    if (Object.keys(STATUS_READS).filter(isStatusFact).some((fact) => !BY_ENTRY.has(fact) && value[fact] !== before[fact])) return 'every';
+    return touchedAmong(value, before, changed.named, this.foldersOf(value));
   }
 
   /** Whether a status reads the file at `path`: in a mod's folder or source folder, an installation file, a game file, or what

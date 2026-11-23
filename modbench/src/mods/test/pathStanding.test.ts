@@ -6,6 +6,7 @@ vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState, commands: { 
 import { FileConflictLookup, modOrigin, NO_GAME_FOLDER_ARCHIVED, type StackedFile } from '../../instanceLoader/fileConflictIndex';
 import type { FilesChanged } from '../../instanceLoader/filesChanged';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pathStandingOf } from '../pathStanding';
 import type { GameFolder, OriginFile } from '../../instanceAdapter/instanceAdapter';
@@ -80,11 +81,11 @@ describe('a .wav a plugin source names is held by the .xwm the game plays it fro
 
 describe('what a change tells the path problems (ADR-0029, Consequences, bullet 5)', () => {
   const told = (before: InstanceValue, after: InstanceValue): FilesChanged | undefined => {
-    let hear: ((value: InstanceValue) => void) | undefined;
+    const instance = new FakeInstance(before);
     const changes: FilesChanged[] = [];
-    pathStandingOf({ value: before, subscribe: (listener) => { hear = listener; return { dispose: () => undefined }; } }).subscribe((changed) => changes.push(changed));
-    hear?.(before);
-    hear?.(after);
+    pathStandingOf(instance).subscribe((changed) => changes.push(changed));
+    instance.publish(before);
+    instance.publish(after);
     return changes[1];
   };
   const kept = file('a.dds');

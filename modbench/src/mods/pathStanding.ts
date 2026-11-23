@@ -1,7 +1,7 @@
 // source.md, Editing plugin source, story 1: what holds a path a plugin source names.
 
-import type { InstanceValue } from '../instanceLoader/instance';
-import { filesChanged, TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
+import type { InstanceValue, Told } from '../instanceLoader/instance';
+import { TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
 import { SOURCE_FILES_READ } from '../instanceLoader/loadOrderSnapshot';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { gameReleaseForGame, pathsTheGameTries } from '../tables/gamePaths';
@@ -29,7 +29,7 @@ type JudgedValue = Pick<InstanceValue, keyof typeof JUDGED_READ>;
 const triedPathsIn = (gameName: string, dataPath: string): readonly string[] => pathsTheGameTries(gameReleaseForGame(gameName), dataPath.replaceAll('\\', '/'));
 
 export function pathStandingOf(instance: {
-  readonly value: StandingValue; subscribe: (listener: (value: JudgedValue) => void, concerns: typeof JUDGED_READ) => { dispose: () => unknown };
+  readonly value: StandingValue; subscribe: (listener: (value: JudgedValue, sequence: number, told: Pick<Told, 'changed'>) => void, concerns: typeof JUDGED_READ) => { dispose: () => unknown };
 }) {
   return {
     judged: (): boolean => instance.value.gameFolder.kind === 'found' && instance.value.gameFolderInWorkspace,
@@ -39,14 +39,7 @@ export function pathStandingOf(instance: {
     },
     /** Each path, folded, the game tries for `dataPath`: `holds` answers by these alone, with its plugin's mod. */
     triedPaths: (dataPath: string): string[] => triedPathsIn(instance.value.gameName, dataPath).map((path) => path.toLowerCase()),
-    subscribe: (listener: (changed: FilesChanged) => void) => {
-      let held: JudgedValue | undefined;
-      return instance.subscribe((value) => {
-        const changed = filesChanged(held, value, JUDGED_READ);
-        held = value;
-        listener(changed);
-      }, JUDGED_READ);
-    },
+    subscribe: (listener: (changed: FilesChanged) => void) => instance.subscribe((_value, _sequence, told) => { listener(told.changed()); }, JUDGED_READ),
   };
 }
 

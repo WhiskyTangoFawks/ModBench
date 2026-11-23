@@ -4,7 +4,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PluginDiagnosisReport, PluginAddress, LoadOrderSnapshot } from '../client';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
-import { instanceLastGoodReadFailure, managerRunningMessage, MESSAGE_READS, type Instance, type InstanceOf, type InstanceView } from '../instanceLoader/instance';
+import { instanceLastGoodReadFailure, managerRunningMessage, MESSAGE_READS, type Instance, type InstanceOf, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { messageLine } from '../drivingLib/messageLine';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -17,7 +17,7 @@ import { exactPluginAddressKey, pluginNameKey, samePluginAddress } from '../wire
 import { placeOf, type PluginPlace, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
-import { isRecordRow } from './gestureEntry';
+import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
 import type { NamedPlugins } from './pluginAddress';
@@ -25,8 +25,9 @@ import { blueprintLoadsLastIn } from '../tables/gamePaths';
 import { activeViewOrder, viewOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { fileAt, filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { filesChanged, TOUCHING_READ } from '../instanceLoader/filesChanged';
-import { changedKeys, sameInputs } from '../ports/lastBuilt';
-import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
+import { changedKeys, lastBuilt } from '../ports/lastBuilt';
+import { pathKey } from '../repositoriesLib/stampedReads';
+import { readFileFacts, type FileRead, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import { sortingRuleFileLines } from './sortingRuleFilesMessage';
@@ -55,15 +56,14 @@ const TREE_READS = {
 
 type TreeInstance = InstanceOf<keyof typeof TREE_READS | 'entryKey'>;
 
-// A file as a change names it and a read reads it, whatever its case and separators.
-const fileKey = (path: string): string => path.toLowerCase().replaceAll('\\', '/');
+type TreeRead = Pick<InstanceValue, keyof typeof TREE_READS>;
 
 const isTreeRead = (fact: string): fact is keyof typeof TREE_READS => fact in TREE_READS;
 
 // The files present answer the sorting rules' file conditions alone, so a change to them draws no row.
 const ROW_READS = Object.keys(TREE_READS).filter(isTreeRead).filter((fact) => !(fact in TOUCHING_READ) && fact !== 'dataFolderFiles');
 
-const rowsChanged = (before: TreeInstance['value'], after: TreeInstance['value']): boolean => ROW_READS.some((fact) => before[fact] !== after[fact]);
+const rowsChanged = (before: TreeRead, after: TreeRead): boolean => ROW_READS.some((fact) => before[fact] !== after[fact]);
 
 interface PluginsTreeProviderOptions {
   fileReads: FileReads;
@@ -138,7 +138,7 @@ export class PluginsTreeProvider
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
 
-  private readonly _onDidChangeTreeData = new RedrawEmitter<PluginsTreeNode | undefined | null>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<PluginsTreeNode | undefined | null>(PLUGINS_KEY_ARGS.view);
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instance: TreeInstance;
@@ -164,7 +164,8 @@ export class PluginsTreeProvider
   private readFailed = false;
   // Where the last judgement of the sorting rules to land read each file's bytes, so a file rewritten there judges again: kept
   // while those reads and what places them are the same.
-  private readAtOf?: { readonly from: readonly unknown[]; readonly at: ReadonlySet<string> };
+  private readonly readAtOf = lastBuilt((reads: readonly FileRead[], files: TreeInstance['value']['files'], dataFolderFiles: TreeInstance['value']['dataFolderFiles']) =>
+    new Set(reads.flatMap(({ path }) => fileAt({ files, dataFolderFiles }, path) ?? []).map(pathKey)));
 
   /** The view's order of the active plugins, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
   readonly viewOrder = {
@@ -205,22 +206,22 @@ export class PluginsTreeProvider
     this.instanceValue = options.instance.value;
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
     this.firstRead = firstReadOf(options.instance);
-    this.subscriptions.push(this.firstRead, options.instance.subscribe((_value, _sequence, reread) => {
-      const before = this.instanceValue;
+    this.subscriptions.push(this.firstRead, options.instance.subscribe((_value, _sequence, told) => {
+      const { before } = told;
       const recovered = this.readFailed;
       this.instanceValue = options.instance.value;
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
-      const rewritten = reread.disk || reread.named.some((path) => this.readAt().has(fileKey(path)));
+      const rewritten = told.disk || told.named.some((path) => this.readAt().has(pathKey(path)));
       if (rules !== this.rules || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       this.rules = rules;
       if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
       else if (!recovered) return;
       this._onDidChangeTreeData.fire(undefined);
-    }, TREE_READS, (path) => this.readAt().has(fileKey(path))), options.instance.onReadFailure(() => {
+    }, TREE_READS, (path) => this.readAt().has(pathKey(path))), options.instance.onReadFailure(() => {
       this.readFailed = true;
       this.render();
-    }), options.instance.onRedraw(() => this.render()));
+    }));
     this.modStatuses = options.modStatuses;
     this.subscriptions.push(
       options.modStatuses.onDidChange(() => {
@@ -237,17 +238,12 @@ export class PluginsTreeProvider
   }
 
   private readAt(): ReadonlySet<string> {
-    const reads = this.facts.judgedReads();
-    const from = [reads, this.instanceValue.files, this.instanceValue.dataFolderFiles];
-    if (this.readAtOf === undefined || !sameInputs(this.readAtOf.from, from)) {
-      this.readAtOf = { from, at: new Set(reads.flatMap(({ path }) => fileAt(this.instanceValue, path) ?? []).map(fileKey)) };
-    }
-    return this.readAtOf.at;
+    return this.readAtOf(this.facts.judgedReads(), this.instanceValue.files, this.instanceValue.dataFolderFiles);
   }
 
   // Whether the files present changed where the last judgement of the sorting rules read them. A Data folder that is not
   // listed on both sides changed anywhere.
-  private judgedFilesChanged(before: TreeInstance['value'], after: TreeInstance['value']): boolean {
+  private judgedFilesChanged(before: TreeRead, after: TreeRead): boolean {
     const [was, now] = [before.dataFolderFiles, after.dataFolderFiles];
     if (was !== now) {
       if (was.kind !== 'listed' || now.kind !== 'listed') return true;
@@ -471,6 +467,11 @@ export class PluginsTreeProvider
     return isRow(row) ? this.shownRows().find((shown) => shown.id === row.id) : undefined;
   }
 
+  /** Draws `clicked` again (`RedrawEmitter.restore`): the rows VS Code holds, whose check box it set as the user clicked. */
+  restoreRows(clicked: readonly PluginNode[]): void {
+    this._onDidChangeTreeData.restore(clicked);
+  }
+
   /** The row the tree shows for `plugin`; undefined when the plugin has none, or the name filter hides it. */
   rowOf(plugin: PluginAddress): PluginListNode | undefined {
     return this.shownRows().find((row) => samePluginAddress(addressOfRow(row), plugin));
@@ -543,7 +544,11 @@ export class PluginsTreeProvider
 
     // ImplicitMasterNode keeps its constructor's decoration untouched: the locked row's tooltip is
     // the reference tool's one sentence alone (plugins.md, A plugin the game loads with no line).
-    if (element.kind === 'plugin') this.decoratePlugin(element);
+    if (element.kind === 'plugin') {
+      this.decoratePlugin(element);
+      // VS Code sets the box of the item it holds as the user clicks; the row's own value sets it back.
+      element.checkboxState = element.plugin.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+    }
     return element;
   }
 

@@ -139,6 +139,6 @@ describe('RecordDecorationProvider, a row with changes beneath it', () => {
     badges.changeBeneath([PLUGIN]);
     badges.changeBeneath([PLUGIN]);
 
-    expect(handler.mock.calls).toEqual([[[rowResourceUri(PLUGIN)]], [[]]]);
+    expect(handler.mock.calls).toEqual([[[rowResourceUri(PLUGIN)]]]);
   });
 });

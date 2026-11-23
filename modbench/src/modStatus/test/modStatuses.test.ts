@@ -518,7 +518,7 @@ describe('Mod status (mod-status trace)', () => {
     statuses.derive(value);
     await statuses.current();
 
-    statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+    statuses.derive(value, { named: [join(b, 'b.dds')], disk: false, before: value });
 
     expect([(await statuses.current()).size, asked]).toEqual([0, []]);
   });
@@ -645,27 +645,27 @@ describe('Mod status (mod-status trace)', () => {
   });
 
   describe('derives again only the mods a change touches', () => {
-    it.each<{ change: string; changed: (value: StatusSource, b: string) => [StatusSource, { named: string[]; disk: boolean }]; derived: string[] }>([
-      { change: 'a change that names a file of one mod', changed: (value, b) => [value, { named: [join(b, 'b.dds')], disk: false }], derived: ['B'] },
+    it.each<{ change: string; changed: (value: StatusSource, b: string) => [StatusSource, { named: string[]; disk: boolean; before: StatusSource }]; derived: string[] }>([
+      { change: 'a change that names a file of one mod', changed: (value, b) => [value, { named: [join(b, 'b.dds')], disk: false, before: value }], derived: ['B'] },
       {
         change: 'one mod\'s own files listed anew', derived: ['B'],
-        changed: (value, b) => [{ ...value, filesByMod: new Map([['A', value.filesByMod.get('A') ?? []], ['B', [{ relativePath: 'c.dds', sourcePath: join(b, 'c.dds') }]]]) }, { named: [join(b, 'c.dds')], disk: false }],
+        changed: (value, b) => [{ ...value, filesByMod: new Map([['A', value.filesByMod.get('A') ?? []], ['B', [{ relativePath: 'c.dds', sourcePath: join(b, 'c.dds') }]]]) }, { named: [join(b, 'c.dds')], disk: false, before: value }],
       },
       {
         change: 'what an archive of one mod holds', derived: ['B'],
-        changed: (value, b) => [{ ...value, archiveContents: new Map([[join(b, 'B.ba2'), { kind: 'unanswered' }]]) }, { named: [], disk: false }],
+        changed: (value, b) => [{ ...value, archiveContents: new Map([[join(b, 'B.ba2'), { kind: 'unanswered' }]]) }, { named: [], disk: false, before: value }],
       },
       {
         change: 'what an archive a link puts outside its mod\'s folder holds', derived: ['B'],
-        changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/B.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false }],
+        changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/B.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false, before: value }],
       },
       {
         change: 'what an archive in no one mod\'s folders holds', derived: ['A', 'B'],
-        changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/X.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false }],
+        changed: (value) => [{ ...value, archiveContents: new Map([['/elsewhere/X.ba2', { kind: 'unanswered' }]]) }, { named: [], disk: false, before: value }],
       },
-      { change: 'a change to a fact of every mod', changed: (value) => [{ ...value, gameName: 'Skyrim' }, { named: [], disk: false }], derived: ['A', 'B'] },
-      { change: 'a check of the disk', changed: (value) => [value, { named: [], disk: true }], derived: ['A', 'B'] },
-      { change: 'a change that names a file of no one mod, as an installation file is', changed: (value) => [value, { named: ['/downloads/A.7z'], disk: false }], derived: ['A', 'B'] },
+      { change: 'a change to a fact of every mod', changed: (value) => [{ ...value, gameName: 'Skyrim' }, { named: [], disk: false, before: value }], derived: ['A', 'B'] },
+      { change: 'a check of the disk', changed: (value) => [value, { named: [], disk: true, before: value }], derived: ['A', 'B'] },
+      { change: 'a change that names a file of no one mod, as an installation file is', changed: (value) => [value, { named: ['/downloads/A.7z'], disk: false, before: value }], derived: ['A', 'B'] },
     ])('$change: $derived', async ({ changed, derived }) => {
       const [a, b] = [await folderOf('A'), await folderOf('B')];
       const statuses = statusesLogging();
@@ -701,7 +701,7 @@ describe('Mod status (mod-status trace)', () => {
       await statuses.current();
       read.length = 0;
 
-      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false, before: value });
       await statuses.current();
 
       expect([...new Set(read)]).toEqual(['B']);
@@ -722,7 +722,7 @@ describe('Mod status (mod-status trace)', () => {
         await statuses.current();
         placed = 0;
 
-        statuses.derive({ ...value }, { named: [join(folders[0] ?? '', 'a.dds'), '/instance/profiles/Default/plugins.txt'], disk: false });
+        statuses.derive({ ...value }, { named: [join(folders[0] ?? '', 'a.dds'), '/instance/profiles/Default/plugins.txt'], disk: false, before: value });
         await statuses.current();
         return placed;
       };
@@ -738,7 +738,7 @@ describe('Mod status (mod-status trace)', () => {
       statuses.derive(value);
       await statuses.current().catch(() => undefined);
 
-      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false, before: value });
 
       expect([...(await statuses.current()).keys()]).toEqual(['A', 'B']);
     });
@@ -754,7 +754,7 @@ describe('Mod status (mod-status trace)', () => {
       await statuses.current();
       gitFails = false;
 
-      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false });
+      statuses.derive(value, { named: [join(b, 'b.dds')], disk: false, before: value });
 
       expect([...(await statuses.current()).values()].map(({ unreadable }) => unreadable)).toEqual([undefined, undefined]);
     });

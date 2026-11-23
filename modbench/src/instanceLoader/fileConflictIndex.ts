@@ -173,16 +173,20 @@ function winningFirstOf(entries: readonly ModlistEntry[], overwrite: readonly Or
   });
 }
 
-const foldedFiles = new WeakMap<OriginProvides, ReadonlyMap<string, OriginFile>>();
+const foldedFiles = new WeakMap<readonly OriginFile[], ReadonlyMap<string, OriginFile>>();
 
 // Each path the origin provides, by its folded path, at the first of its case variants.
-function foldedFilesOf(provided: OriginProvides): ReadonlyMap<string, OriginFile> {
-  let folded = foldedFiles.get(provided);
+const foldedFilesOf = (provided: OriginProvides): ReadonlyMap<string, OriginFile> => foldedFilesIn(provided.files);
+
+/** Each file of `files` by its folded path, the first of its case variants, as the index takes it; kept while the list is
+ *  the same. */
+export function foldedFilesIn(files: readonly OriginFile[]): ReadonlyMap<string, OriginFile> {
+  let folded = foldedFiles.get(files);
   if (folded === undefined) {
     const each = new Map<string, OriginFile>();
-    for (const file of provided.files) if (!each.has(foldPath(file.relativePath))) each.set(foldPath(file.relativePath), file);
+    for (const file of files) if (!each.has(foldPath(file.relativePath))) each.set(foldPath(file.relativePath), file);
     folded = each;
-    foldedFiles.set(provided, folded);
+    foldedFiles.set(files, folded);
   }
   return folded;
 }

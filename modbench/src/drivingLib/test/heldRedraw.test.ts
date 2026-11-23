@@ -3,17 +3,19 @@ import { EventEmitter, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ EventEmitter }));
 
-import { DecorationRedrawEmitter, drawn, holdingRedraws, RedrawEmitter, undrawn } from '../heldRedraw';
+import { DecorationRedrawEmitter, holdRedraws, RedrawEmitter, releaseRedraws } from '../heldRedraw';
 
-const watched = <E>(emitter: RedrawEmitter<E>) => {
+const MINE = 'modbench.mine';
+
+const watched = <E>(emitter: { readonly event: (listener: (row: E) => void) => unknown }) => {
   const fired: E[] = [];
   emitter.event((row) => { fired.push(row); });
   return fired;
 };
 
-describe('a view\'s redraw while a gesture writes (common.md, A gesture that writes, story 1)', () => {
-  it('draws at once while no gesture writes', () => {
-    const emitter = new RedrawEmitter<string | undefined>();
+describe('a view\'s redraw while a gesture writes from it (common.md, A gesture that writes, story 1)', () => {
+  it('draws at once while no gesture writes from it', () => {
+    const emitter = new RedrawEmitter<string | undefined>(MINE);
     const fired = watched(emitter);
 
     emitter.fire('a');
@@ -21,83 +23,108 @@ describe('a view\'s redraw while a gesture writes (common.md, A gesture that wri
     expect(fired).toEqual(['a']);
   });
 
-  it('holds each row asked while a gesture writes, and draws it once when the gesture ends', async () => {
-    const emitter = new RedrawEmitter<string | undefined>();
-    const fired = watched(emitter);
-    let firedWhileWriting: (string | undefined)[] = [];
+  it('draws another view at once while a gesture writes from one (A view, stories 2 and 14)', () => {
+    const other = new RedrawEmitter<string | undefined>('modbench.other');
+    const fired = watched(other);
 
-    await holdingRedraws(() => {
-      for (const row of ['a', 'b', 'a']) emitter.fire(row);
-      firedWhileWriting = [...fired];
-      return Promise.resolve();
-    });
+    holdRedraws(MINE);
+    other.fire('a');
+    const firedWhileHeld = [...fired];
+    releaseRedraws(MINE);
 
-    expect([firedWhileWriting, fired]).toEqual([[], ['a', 'b']]);
+    expect(firedWhileHeld).toEqual(['a']);
   });
 
-  it('draws the whole view once when the whole was asked among the rows', async () => {
-    const emitter = new RedrawEmitter<string | null | undefined>();
+  it('holds each row asked while held, and draws it once when released', () => {
+    const emitter = new RedrawEmitter<string | undefined>(MINE);
     const fired = watched(emitter);
 
-    await holdingRedraws(() => {
-      for (const row of ['a', null, 'b']) emitter.fire(row);
-      return Promise.resolve();
-    });
+    holdRedraws(MINE);
+    emitter.fire('a');
+    emitter.fire('b');
+    emitter.fire('a');
+    const firedWhileHeld = [...fired];
+    releaseRedraws(MINE);
+
+    expect([firedWhileHeld, fired]).toEqual([[], ['a', 'b']]);
+  });
+
+  it('draws the whole view once when the whole was asked among the rows', () => {
+    const emitter = new RedrawEmitter<string | null | undefined>(MINE);
+    const fired = watched(emitter);
+
+    holdRedraws(MINE);
+    emitter.fire('a');
+    emitter.fire(null);
+    emitter.fire('b');
+    releaseRedraws(MINE);
 
     expect(fired).toEqual([null]);
   });
 
-  it('holds until the outermost gesture ends', async () => {
-    const emitter = new RedrawEmitter<string | undefined>();
-    const fired = watched(emitter);
-    let firedAfterInner: (string | undefined)[] = [];
-
-    await holdingRedraws(async () => {
-      await holdingRedraws(() => { emitter.fire('a'); return Promise.resolve(); });
-      firedAfterInner = [...fired];
-    });
-
-    expect([firedAfterInner, fired]).toEqual([[], ['a']]);
-  });
-
-  it('draws once the gesture ends though it failed, and lets the failure through', async () => {
-    const emitter = new RedrawEmitter<string | undefined>();
+  it('holds until the last hold on the view is released', () => {
+    const emitter = new RedrawEmitter<string | undefined>(MINE);
     const fired = watched(emitter);
 
-    await expect(holdingRedraws(() => { emitter.fire('a'); throw new Error('half written'); })).rejects.toThrow('half written');
+    holdRedraws(MINE);
+    holdRedraws(MINE);
+    emitter.fire('a');
+    releaseRedraws(MINE);
+    const firedAfterOne = [...fired];
+    releaseRedraws(MINE);
 
-    expect(fired).toEqual(['a']);
+    expect([firedAfterOne, fired]).toEqual([[], ['a']]);
   });
 
-  it('asks for every decoration asked while held in one event, each file once', async () => {
-    const emitter = new DecorationRedrawEmitter();
-    const fired: unknown[] = [];
-    emitter.event((uris) => { fired.push(uris); });
+  it('restores a row at once while held, and still draws what it held when released', () => {
+    const emitter = new RedrawEmitter<string | undefined>(MINE);
+    const fired = watched(emitter);
+
+    holdRedraws(MINE);
+    emitter.fire('a');
+    emitter.restore(['b']);
+    const firedWhileHeld = [...fired];
+    releaseRedraws(MINE);
+
+    expect([firedWhileHeld, fired]).toEqual([['b'], ['b', 'a']]);
+  });
+
+  it('draws nothing a disposed view held', () => {
+    const emitter = new RedrawEmitter<string | undefined>(MINE);
+    const fired = watched(emitter);
+
+    holdRedraws(MINE);
+    emitter.fire('a');
+    emitter.dispose();
+    releaseRedraws(MINE);
+
+    expect(fired).toEqual([]);
+  });
+
+  it('asks for every decoration asked while held in one event, each file once', () => {
+    const emitter = new DecorationRedrawEmitter(MINE);
+    const fired = watched(emitter);
     const [a, b] = [Uri.file('/a'), Uri.file('/b')];
 
-    await holdingRedraws(() => {
-      emitter.fire([a]);
-      emitter.fire(b);
-      emitter.fire([Uri.file('/a'), b]);
-      return Promise.resolve();
-    });
+    holdRedraws(MINE);
+    emitter.fire([a]);
+    emitter.fire(b);
+    emitter.fire([Uri.file('/a'), b]);
+    releaseRedraws(MINE);
 
     expect(fired).toEqual([[a, b]]);
   });
 
-  it('runs the newest draw a view asked while held, once, and none it took back', async () => {
-    const drawsOf = { kept: [] as string[], takenBack: [] as string[] };
-    const kept = {};
-    const takenBack = {};
+  it('shows at once a file it does not hold, such as one the Explorer shows too (A view, story 2)', () => {
+    const emitter = new DecorationRedrawEmitter(MINE, (uri) => uri.scheme !== 'file');
+    const fired = watched(emitter);
+    const [row, file] = [Uri.from({ scheme: 'modbench-row', path: '/a' }), Uri.file('/a')];
 
-    await holdingRedraws(() => {
-      drawn(kept, () => { drawsOf.kept.push('older'); });
-      drawn(kept, () => { drawsOf.kept.push('newest'); });
-      drawn(takenBack, () => { drawsOf.takenBack.push('drawn'); });
-      undrawn(takenBack);
-      return Promise.resolve();
-    });
+    holdRedraws(MINE);
+    emitter.fire([row, file]);
+    const firedWhileHeld = [...fired];
+    releaseRedraws(MINE);
 
-    expect(drawsOf).toEqual({ kept: ['newest'], takenBack: [] });
+    expect([firedWhileHeld, fired]).toEqual([[[file]], [[file], [row]]]);
   });
 });

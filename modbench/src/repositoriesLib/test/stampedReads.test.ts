@@ -134,3 +134,24 @@ describe('a read kept by the stamp of its file', () => {
     });
   });
 });
+
+// The set lookups and prefix tests of one read naming `named` paths.
+async function comparisonsOf(named: number): Promise<number> {
+  const paths = Array.from({ length: named }, (_, n) => `/instance/mods/Named/${n}.dds`);
+  const prefixed = vi.spyOn(String.prototype, 'startsWith');
+  const setLookups = vi.spyOn(Set.prototype, 'has');
+  await readTrustingKept(paths, false, () => Promise.resolve());
+  const comparisons = prefixed.mock.calls.length + setLookups.mock.calls.length;
+  prefixed.mockRestore();
+  setLookups.mockRestore();
+  return comparisons;
+}
+
+describe('a read naming many files, with many kept (ADR-0029, Consequences, bullet 5)', () => {
+  it('compares each kept file with the paths named at the same cost however many are named', async () => {
+    const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
+    await Promise.all(Array.from({ length: 200 }, (_, n) => reader(`/instance/mods/Kept/${n}.dds`)));
+
+    expect(await comparisonsOf(200)).toBe(await comparisonsOf(1));
+  });
+});

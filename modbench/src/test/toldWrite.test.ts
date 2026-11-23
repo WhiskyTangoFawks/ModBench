@@ -14,6 +14,7 @@ import { Instance } from '../instanceLoader/instance';
 import { diskCheckedBy, writesToldTo } from '../repositoriesLib/writesTold';
 import { ambientWrites } from '../instanceLoader/ambientWrites';
 import { handingOneChange } from '../drivingLib/writingGesture';
+import { TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeWorkspace } from './fakeWorkspace';
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
@@ -102,6 +103,25 @@ describe('a write over the real adapter', () => {
     await gesture;
 
     expect([returnedWhileDeriving, returned]).toEqual([false, true]);
+  });
+
+  it('tells a subscriber the value it was told last and what changed of the origins\' files since, once for every subscriber (ADR-0029, Consequences, bullet 4)', async () => {
+    const { instance: loader } = await wiredInstance();
+    const folder = join(root ?? '', 'mods', 'Patch Mod');
+    const heard: { before: unknown; changed: FilesChanged }[] = [];
+    const landed: unknown[] = [];
+    loader.subscribe((value, _sequence, told) => {
+      landed.push(value);
+      heard.push({ before: told.before, changed: told.changed() });
+    }, TOUCHING_READ);
+
+    await writeFile(join(folder, 'first.dds'), 'first');
+    await loader.refresh([join(folder, 'first.dds')]);
+    await writeFile(join(folder, 'second.dds'), 'second');
+    await loader.refresh([join(folder, 'second.dds')]);
+
+    const [, second] = heard;
+    expect([second?.before === landed[0], second?.changed]).toMatchObject([true, [{ origin: { kind: 'mod', name: 'Patch Mod' }, gained: [{ relativePath: 'second.dds' }] }]]);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

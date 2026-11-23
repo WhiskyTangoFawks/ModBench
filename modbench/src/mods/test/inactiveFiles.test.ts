@@ -167,6 +167,18 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
     expect(greyed).toEqual([undefined, GREY, undefined]);
   });
 
+  it('greys, of two case variants of a path in another mod, the one the file conflict index takes, the first', () => {
+    const next = indexedValues([mod('Winner'), mod('Loser')]);
+    const losing = [file('Loser', 'a.dds'), file('Loser', 'A.dds')];
+    const instance = new FakeInstance(next({ Winner: { files: [] }, Loser: { files: losing } }));
+    const decorations = decorationsOver(instance);
+    const before = decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds'));
+
+    instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: losing } }));
+
+    expect([before, decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds'))]).toEqual([undefined, GREY]);
+  });
+
   it('greys another mod\'s copy once a mod gains the file that wins over it, and an excluded folder a mod gains', () => {
     const next = indexedValues([mod('Winner'), mod('Loser')]);
     const losing = [file('Loser', 'a.dds')];

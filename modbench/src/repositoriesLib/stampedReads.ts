@@ -96,10 +96,16 @@ export function keptUntilNamed<T, Given = void>(
   };
 }
 
+// A kept key the paths named touch: one of them, the folder of one, or beneath one, found by the folders above the key.
 function touchedBy(named: readonly string[]): (key: string) => boolean {
   const keys = new Set(named.flatMap((path) => [pathKey(path), pathKey(dirname(path))]));
-  const below = named.map((path) => pathKey(path) + sep);
-  return (key) => keys.has(key) || below.some((folder) => key.startsWith(folder));
+  const folders = new Set(named.map(pathKey));
+  return (key) => {
+    if (keys.has(key)) return true;
+    // A key that ends in a separator stands for what is below its folder.
+    for (let above = key.endsWith(sep) ? key.slice(0, -1) : dirname(key); above !== dirname(above); above = dirname(above)) if (folders.has(above)) return true;
+    return false;
+  };
 }
 
 const stampStill = async (stampOf: (path: string) => Promise<FileStamp>, held: Kept<unknown>): Promise<boolean> => {

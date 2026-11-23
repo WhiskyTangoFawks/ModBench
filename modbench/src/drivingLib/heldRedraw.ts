@@ -1,50 +1,58 @@
 import * as vscode from 'vscode';
 
-// common.md, A gesture that writes, story 1.
-let writing = 0;
-const held = new Map<object, () => void>();
+// common.md, A gesture that writes, story 1, for the view the gesture runs from; every other view follows the disk (A view,
+// stories 2 and 14).
+const holds = new Map<string, number>();
+const held = new Map<object, { readonly view: string; readonly draw: () => void }>();
 
-/** Runs `work`, a gesture that writes, holding every view's redraw until the outermost one ends. */
-export async function holdingRedraws<T>(work: () => Promise<T>): Promise<T> {
-  writing++;
-  try {
-    return await work();
-  } finally {
-    writing--;
-    if (writing === 0) {
-      const draws = [...held.values()];
-      held.clear();
-      for (const draw of draws) draw();
-    }
+/** Holds `view`'s redraw until each hold on it is released. */
+export function holdRedraws(view: string): void {
+  holds.set(view, (holds.get(view) ?? 0) + 1);
+}
+
+/** Releases one hold on `view`; the last draws what it held. */
+export function releaseRedraws(view: string): void {
+  const left = (holds.get(view) ?? 1) - 1;
+  if (left > 0) {
+    holds.set(view, left);
+    return;
+  }
+  holds.delete(view);
+  for (const [by, { view: of, draw }] of [...held]) {
+    if (of !== view) continue;
+    held.delete(by);
+    draw();
   }
 }
 
-/** Runs `draw` now, or once the gestures writing have ended; asked again while held, the newest stands. */
-export function drawn(by: object, draw: () => void): void {
-  if (writing === 0) draw();
-  else held.set(by, draw);
+// Runs `draw` now, or when the last hold on `view` is released; asked again while held, the newest stands.
+function drawn(by: object, view: string, draw: () => void): void {
+  if (holds.has(view)) held.set(by, { view, draw });
+  else draw();
 }
 
-/** Takes back the draw `by` asked while held, such as a view that closed. */
-export function undrawn(by: object): void {
-  held.delete(by);
-}
-
-/** A view's change event, which `drawn` holds: each row asked while held fires once, or the whole view once. */
+/** A view's change event, which a gesture from the view holds: each row asked while held fires once, or the whole view once. */
 export class RedrawEmitter<E> implements vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<E>();
   readonly event = this.emitter.event;
   private whole: { readonly row: E } | undefined;
   private rows: E[] = [];
 
+  constructor(private readonly view: string) {}
+
   fire(row: E): void {
     if (row === undefined || row === null) this.whole = { row };
     else if (!this.rows.includes(row)) this.rows.push(row);
-    drawn(this, () => { this.release(); });
+    drawn(this, this.view, () => { this.release(); });
+  }
+
+  /** Fires `rows` now, held or not: a control the user changed shows the value again. */
+  restore(rows: readonly E[]): void {
+    for (const row of rows) this.emitter.fire(row);
   }
 
   dispose(): void {
-    undrawn(this);
+    held.delete(this);
     this.emitter.dispose();
   }
 
@@ -57,21 +65,29 @@ export class RedrawEmitter<E> implements vscode.Disposable {
   }
 }
 
-/** A decoration provider's change event, which `drawn` holds: every file asked while held, each once, in one event. */
+/** A decoration provider's change event, which a gesture from the view it decorates holds: every file asked while held,
+ *  each once, in one event. A URI `holds` passes over shows at once, such as one the Explorer shows too. */
 export class DecorationRedrawEmitter implements vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<vscode.Uri[] | undefined>();
   readonly event = this.emitter.event;
   private whole = false;
   private readonly uris = new Map<string, vscode.Uri>();
 
+  constructor(private readonly view: string, private readonly holds: (uri: vscode.Uri) => boolean = () => true) {}
+
   fire(uris: vscode.Uri | vscode.Uri[] | undefined): void {
     if (uris === undefined) this.whole = true;
-    else for (const uri of [uris].flat()) this.uris.set(uri.toString(), uri);
-    drawn(this, () => { this.release(); });
+    else {
+      const [held, now] = [[uris].flat().filter(this.holds), [uris].flat().filter((uri) => !this.holds(uri))];
+      if (now.length > 0) this.emitter.fire(now);
+      if (held.length === 0) return;
+      for (const uri of held) this.uris.set(uri.toString(), uri);
+    }
+    drawn(this, this.view, () => { this.release(); });
   }
 
   dispose(): void {
-    undrawn(this);
+    held.delete(this);
     this.emitter.dispose();
   }
 

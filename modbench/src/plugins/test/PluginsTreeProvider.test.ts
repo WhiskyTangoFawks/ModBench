@@ -248,16 +248,16 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
-  it('draws the tree again when the instance redraws', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    const { tree } = makeTree([], { instance });
-    await tree.getChildren();
-    const fired: unknown[] = [];
+  it('draws a clicked row again with the box its plugin\'s value sets (common.md, A gesture that writes, story 2)', async () => {
+    const { tree } = makeTree([], { instance: new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, enabled: true })])) });
+    const clicked = expectInstanceOf((await tree.getChildren())[0], PluginNode);
+    const fired: (PluginsTreeNode | undefined | null)[] = [];
     tree.onDidChangeTreeData((e) => fired.push(e));
+    clicked.checkboxState = TreeItemCheckboxState.Unchecked;
 
-    instance.redraw();
+    tree.restoreRows([clicked]);
 
-    expect(fired).toHaveLength(1);
+    expect([fired, tree.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
@@ -1342,6 +1342,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     ['a file a rule reads the bytes of', '/mods/SomeMod/Meshes/x.nif', 1],
     ['a game file a rule reads the bytes of', '/game/Data/Meshes/z.nif', 1],
     ['a file no rule reads', '/mods/SomeMod/Meshes/y.nif', 0],
+    ['a path a rule reads in another case, the same file on Windows alone', '/mods/SomeMod/MESHES/X.NIF', process.platform === 'win32' ? 1 : 0],
   ])('judges the last reconcile\'s order again when %s is rewritten in place, and only then', async (_file, path, judgedAgain) => {
     const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF) or checksum(\"Meshes/z.nif\", DEADBEEF)'}]\n" } } as const;
     const files = new FileConflictLookup();

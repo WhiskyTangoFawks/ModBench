@@ -22,7 +22,8 @@ import { OpenRows } from '../openRows';
 import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
-import { handingOneChange } from '../../drivingLib/writingGesture';
+import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from '../gestureEntry';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -202,31 +203,30 @@ describe('what the view says of itself', () => {
     expect(provider.viewMessage()).toBeUndefined();
   });
 
-  it('holds its redraw while a gesture writes, and draws once the gesture ends (common.md, A gesture that writes, story 1)', async () => {
+  it('holds its redraw while a gesture writes from it, and draws once the gesture ends (common.md, A gesture that writes, story 1)', () => {
     const instance = new FakeInstance(valueOf([mod('A')]));
     const provider = makeProvider([], { instance });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
-    let firedWhileWriting = -1;
 
-    await handingOneChange(instance, () => {
-      instance.publish(valueOf([mod('A'), mod('B')]));
-      firedWhileWriting = fired.length;
-      return Promise.resolve();
-    });
+    holdRedraws(MODS_KEY_ARGS.view);
+    instance.publish(valueOf([mod('A'), mod('B')]));
+    const firedWhileWriting = fired.length;
+    releaseRedraws(MODS_KEY_ARGS.view);
 
     expect([firedWhileWriting, fired.length]).toEqual([0, 1]);
   });
 
-  it('draws the tree again when the instance redraws', () => {
-    const instance = new FakeInstance(valueOf([mod('A')]));
-    const provider = makeProvider([], { instance });
-    const fired: unknown[] = [];
+  it('draws a clicked row again with the box its mod\'s value sets (common.md, A gesture that writes, story 2)', async () => {
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf([mod('A')])) });
+    const clicked = expectInstanceOf((await provider.getChildren())[0], ModNode);
+    const fired: (ModlistNode | undefined)[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
+    clicked.checkboxState = TreeItemCheckboxState.Unchecked;
 
-    instance.redraw();
+    provider.restoreRows([clicked]);
 
-    expect(fired).toHaveLength(1);
+    expect([fired, provider.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {

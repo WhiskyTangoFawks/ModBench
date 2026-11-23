@@ -413,32 +413,6 @@ describe('Instance — what a read tells', () => {
   });
 });
 
-describe('Instance — redraw', () => {
-  it('tells the views that listen to a redraw, and runs no subscriber of the value and reads nothing', async () => {
-    const { instance, fake } = loader();
-    await instance.landed();
-    const subscriber = vi.fn();
-    const view = vi.fn();
-    instance.subscribe(subscriber);
-    instance.onRedraw(view);
-    const readsBefore = fake.calls.length;
-
-    instance.redraw();
-
-    expect({ view: view.mock.calls.length, subscriber: subscriber.mock.calls.length, reads: fake.calls.length - readsBefore }).toEqual({ view: 1, subscriber: 0, reads: 0 });
-  });
-
-  it('tells a view that stopped listening nothing', () => {
-    const { instance } = loader();
-    const view = vi.fn();
-    instance.onRedraw(view).dispose();
-
-    instance.redraw();
-
-    expect(view).not.toHaveBeenCalled();
-  });
-});
-
 describe('Instance — built by watching', () => {
   it('listens for the adapter\'s signal from construction, before any read, until disposed', () => {
     const { instance, fake } = loader();
@@ -489,7 +463,7 @@ describe('Instance — built by watching', () => {
   it('hands each subscriber what the value was read again for: the paths the events named, or the check of the disk', async () => {
     const { instance, fake } = loader();
     const landedFor: Reread[] = [];
-    instance.subscribe((_value, _sequence, landed) => { landedFor.push(landed); });
+    instance.subscribe((_value, _sequence, { named, disk }) => { landedFor.push({ named, disk }); });
 
     fakeClockLeavingSetImmediateReal();
     try {
