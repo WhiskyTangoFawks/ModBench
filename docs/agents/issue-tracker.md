@@ -46,8 +46,6 @@ Traverse with `gh`:
 - Blocking links: dependency is tracker state, not a label or prose. A ticket body's "Blocked by" section is a human-readable mirror of the native edges, never the source of truth — an edge that exists only in prose is not set. `/to-tickets` publishes tickets in dependency order (blockers first, so every number exists), then sets every edge natively in the same run and reads them back to verify. Link the moment a dependency is known: `gh issue edit <n> --add-blocked-by <m>` (`--remove-blocked-by` to undo); read via `--json blockedBy` (nodes carry `state`). Blocked = any `OPEN` node. If `gh`'s installed version predates the `--add-blocked-by`/`--remove-blocked-by` flags (added after 2.45.0), use the REST endpoint directly instead — version-independent: `gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by --method POST -F issue_id=<numeric id>` (numeric `id`, not the issue number — get it via `gh api repos/<owner>/<repo>/issues/<m> --jq .id`; `-f` sends a string and the endpoint rejects it).
 - Close: `gh issue close <number> --comment "..."`
 
-`gh` auto-detects repo via `git remote -v`.
-
 ## Pull requests as a triage surface
 
 PRs as request surface: no. (`yes` if external PRs = feature requests; `/triage` reads this flag.)

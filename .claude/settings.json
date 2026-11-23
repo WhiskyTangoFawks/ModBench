@@ -1,4 +1,7 @@
 {
+  "env": {
+    "GH_REPO": "WhiskyTangoFawks/ModBench"
+  },
   "worktree": {
     "baseRef": "head"
   },
