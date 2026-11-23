@@ -38,7 +38,6 @@ export const STATUS_READS = {
 
 const isStatusFact = (key: string): key is keyof StatusSource => key in STATUS_READS;
 
-/** What a status is told with a value: what was read again, and the value it was told last. */
 type StatusChange = Reread & { readonly before: StatusSource };
 
 // Keyed by a mod's entry or by a file it holds, so each is compared entry by entry: what changed of one mod touches it alone.

@@ -135,7 +135,6 @@ describe('a read kept by the stamp of its file', () => {
   });
 });
 
-// The set lookups and prefix tests of one read naming `named` paths.
 async function comparisonsOf(named: number): Promise<number> {
   const paths = Array.from({ length: named }, (_, n) => `/instance/mods/Named/${n}.dds`);
   const prefixed = vi.spyOn(String.prototype, 'startsWith');
