@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text.Json;
 using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
@@ -130,6 +132,32 @@ public sealed class SpawnedBackendTests
                 $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
 
             Assert.NotEmpty(Directory.GetFiles(LogDirectory(workingDirectory), "medit-*.log"));
+        }
+        finally
+        {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+    }
+
+    [Fact]
+    public async Task ARequestOverKestrelsDefaultBodyLimit_IsReadToTheEnd_ARealProcessSinceTheTestServerSetsNoLimit()
+    {
+        var port = GetFreeTcpPort();
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
+        var lines = new List<string>();
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
+        try
+        {
+            Assert.True(await WaitForLineAsync(lines, l => l.Contains("Application started", StringComparison.Ordinal), TimeSpan.FromSeconds(15)),
+                $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+            using var overTheLimit = new StringContent(
+                $$"""{"records": [{"text": "{{new string('x', 31_000_000)}}"}]}""", System.Text.Encoding.UTF8, "application/json");
+
+            using var client = new HttpClient();
+            using var answered = await client.PostAsync(new Uri($"http://localhost:{port}/plugins/make-patch"), overTheLimit);
+
+            var refusal = await answered.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Plugin name and origin are required.", refusal.GetProperty("detail").GetString());
         }
         finally
         {

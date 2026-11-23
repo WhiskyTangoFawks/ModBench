@@ -2,6 +2,8 @@
 // downloadedFileRows.ts, the same split ModListProvider makes for modlist.txt.
 
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
+import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import {
   downloadedFileContextValue, filterExcludedRows, sortDownloadedFileRows, type DownloadedFileSortColumn,
 } from './downloadedFileRows';
@@ -81,7 +83,7 @@ interface DownloadsProviderOptions {
 /** Flat: downloaded files have no grouping or reorder concept, so every row is a leaf. One row per
  *  downloaded file, from the Instance value alone. */
 export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeNode>, vscode.Disposable {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<DownloadsTreeNode | undefined>(DOWNLOADS_KEY_ARGS.view);
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instance: DownloadsProviderOptions['instance'];

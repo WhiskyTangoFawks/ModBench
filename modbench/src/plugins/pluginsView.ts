@@ -116,14 +116,14 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
     publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,
       (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),
-    publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
+    publishChangedOutside: (warnings, named) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning, undefined, named),
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
     publishSortingErrors: (errors) => publishPluginProblems(sortingErrorDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
     publishSortingWarnings: (warnings) => publishPluginProblems(sortingWarningDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishSortingInfo: (info) => publishPluginProblems(sortingInfoDiagnostics, pluginFile, info, vscode.DiagnosticSeverity.Information),
     publishRuleFiles: (diagnostics) => publishRuleFileDiagnostics(ruleFileDiagnostics, diagnostics),
-    publishSourceUnreadable: (warnings) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning,
-      (plugin, { decompileRepairs }) => decompileLink(plugin, decompileRepairs)),
+    publishSourceUnreadable: (warnings, named) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning,
+      (plugin, { decompileRepairs }) => decompileLink(plugin, decompileRepairs), named),
   });
   const view = vscode.window.createTreeView(PLUGINS_KEY_ARGS.view, {
     treeDataProvider: tree,
@@ -171,7 +171,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerSortDirectionToggle('plugin', tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-      e, commands, reporterFor('pluginListTree.checkbox'), instance)),
+      e, commands, reporterFor('pluginListTree.checkbox'), instance, (clicked) => { tree.restoreRows(clicked); })),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
     // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),

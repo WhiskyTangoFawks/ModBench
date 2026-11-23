@@ -80,7 +80,8 @@ public interface IQueries
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses(CancellationToken cancel);
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin, CancellationToken cancel);
     Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
-    Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing();
+    // Null names every plugin.
+    Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing(IReadOnlyCollection<PluginAddress>? plugins);
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin, RecordsAsked? asked, CancellationToken cancel);
     Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin, RecordsAsked? asked, CancellationToken cancel);
 

@@ -17,7 +17,7 @@ import { fileRowUri } from '../modFiles';
 import { indicatorSetting, modRowUri, overwriteRowUri, separatorRowUri } from '../modIndicators';
 import { PublisherTagDecorations } from '../publisherTagIndicators';
 import { OpenRows } from '../openRows';
-import { file, folder, indexedValueOf, mod } from './indexedValue';
+import { file, folder, indexedValueOf, indexedValues, mod } from './indexedValue';
 
 const tag = (badge: string, marksPaths = true): PublisherTag => ({ name: `${badge} tag`, badge, marksPaths });
 const NM = tag('NM');
@@ -72,6 +72,28 @@ const expanded = (decorations: ReturnType<typeof decorationsOver>, ...uris: vsco
 };
 
 const A_TEXTURES = fileRowUri(modOrigin('A'), 'textures');
+
+describe('the publisher tags a row carries as a change reaches it, counted file by file (ADR-0029, Consequences, bullet 5)', () => {
+  it('carries a tag beneath a mod and its folder once the mod gains a file it covers, and drops it once the mod loses that file', () => {
+    const next = indexedValues([mod('A')]);
+    const kept = [file('A', 'x.esp')];
+    const folders = [folder('A', 'textures')];
+    const first = next({ A: { files: kept, folders } });
+    const paths = { ...first.paths, modDirs: new Map([['A', '/instance/A']]) };
+    const valued = (value: InstanceValue): InstanceValue => ({ ...value, paths, publisherTags: DECLARED, publisherConfiguration: READ });
+    const instance = new FakeInstance(valued(first));
+    const decorations = decorationsOver(instance);
+    const carried = () => [badgesOn(decorations, modRowUri('A')), badgesOn(decorations, A_TEXTURES)];
+    const seen = [carried()];
+
+    instance.publish(valued(next({ A: { files: [...kept, file('A', 'textures/a.dds')], folders } })));
+    seen.push(carried());
+    instance.publish(valued(next({ A: { files: kept, folders } })));
+    seen.push(carried());
+
+    expect(seen).toEqual([[['IN', 'AE'], ['IN']], [['IN', 'IG', 'AE'], ['IN', 'IG']], [['IN', 'AE'], ['IN']]]);
+  });
+});
 
 describe('the publisher tags a row carries (mods.md, Indicators; publishing.md, Publisher tags, story 1)', () => {
   it('an enabled mod carries each publisher tag that covers it, in the order its publisher declares them', async () => {

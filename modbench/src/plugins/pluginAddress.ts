@@ -20,6 +20,16 @@ export class ByPluginAddress<T> {
     return this.bySpelling.get(exactPluginAddressKey(plugin));
   }
 
+  /** Files `value` in its place, or forgets the plugin when there is none. */
+  put(plugin: PluginAddress, value: T | undefined): void {
+    if (value === undefined) this.bySpelling.delete(exactPluginAddressKey(plugin));
+    else this.set(plugin, value);
+  }
+
+  get size(): number {
+    return this.bySpelling.size;
+  }
+
   has(plugin: PluginAddress): boolean {
     return this.bySpelling.has(exactPluginAddressKey(plugin));
   }

@@ -6,9 +6,9 @@ import { change, type RenameEditing, type SymbolOwners } from '../coreLib/change
 import type { ChangeResult } from '../ports/changeResult';
 import { fileOriginOfPlugin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { manifestFileReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
-import { originsWinningFirst, type RankedOrigin, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
+import { originsWinningFirst, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { pluginCompanionRule } from '../tables/gamePaths';
-import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
+import { originAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import { recordIndexReferences, type MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
@@ -42,12 +42,11 @@ async function ownersOf({ adapter, client }: PluginRenameAccess): Promise<Symbol
   return { definition: adapter.pluginReferences, references: [recordIndexReferences(client, manifestFiles.sourceFilesOf, client), manifestFiles] };
 }
 
-const originName = (origin: RankedOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
 
 // The copy mod order resolves the plugin's file name to; the Data folder's, which no rename names, when no origin holds it.
 async function rowsOf(adapter: InstanceAdapter, { name }: PluginAddress): Promise<ResolvedPlugin[]> {
   for (const origin of originsWinningFirst((await adapter.modOrder()).mods)) {
-    if (await adapter.originHoldsFile(origin, name)) return [{ name, origin: originName(origin), winning: true }];
+    if (await adapter.originHoldsFile(origin, name)) return [{ name, origin: originAddressOf(origin), winning: true }];
   }
   return [];
 }

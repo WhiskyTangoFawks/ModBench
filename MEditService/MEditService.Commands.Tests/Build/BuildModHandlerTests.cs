@@ -517,6 +517,39 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(before, SourceFilesOf(Plugin));
     }
 
+    [Fact]
+    public async Task ACopy_NamesEachFileItWrote()
+    {
+        WriteSource(("textures/a.dds", "a"), ("meshes/c.nif", "c"));
+
+        var result = await Build(Copy("textures", "meshes/c.nif"));
+
+        WrittenPaths.Cover(result.Written, Path.Combine(ModFolder, "textures", "a.dds"), Path.Combine(ModFolder, "meshes", "c.nif"));
+        WrittenPaths.Within(result.Written, Path.Combine(_root, "mods"));
+    }
+
+    [Fact]
+    public async Task APack_NamesTheArchiveItWrote()
+    {
+        WriteInFolder("meshes/d.nif", "d");
+
+        var result = await Build(Pack(new ArchiveToPack("Mod - Extra.ba2", ["meshes/d.nif"])), Packing);
+
+        WrittenPaths.Cover(result.Written, Path.Combine(ModFolder, "Mod - Extra.ba2"));
+        WrittenPaths.Within(result.Written, ModFolder);
+    }
+
+    [Fact]
+    public async Task ACompile_NamesThePluginAndStringsItWrote_AndTheRepositoryItParkedTheirSourceIn()
+    {
+        await InitializedWithALocalizedPlugin();
+
+        var result = await Build(Compile());
+
+        WrittenPaths.Cover(result.Written, [Path.Combine(ModFolder, Plugin), Path.Combine(SourceFolder, ".git"), .. Directory.GetFiles(Path.Combine(ModFolder, "Strings"))]);
+        WrittenPaths.Within(result.Written, ModFolder, SourceFolder);
+    }
+
     private string[] SourceFilesOf(string plugin) =>
         [.. Directory.GetFiles(Path.Combine(SourceFolder, "plugin-source", plugin), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
 

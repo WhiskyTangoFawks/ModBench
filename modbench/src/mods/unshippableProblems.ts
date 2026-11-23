@@ -49,7 +49,8 @@ export class UnshippableProblems {
     private readonly instance: Pick<InstanceOf<keyof typeof UNSHIPPABLE_READ>, 'value' | 'subscribe'>,
     private readonly statuses: Pick<ModStatuses, 'current' | 'heldByPackage' | 'entriesNoPackageHolds' | 'onDidChange'>,
   ) {
-    this.following = [instance.subscribe(() => { void this.show(); }, UNSHIPPABLE_READ), statuses.onDidChange(() => { void this.show(); })];
+    const shown = (): void => { void this.show(); };
+    this.following = [instance.subscribe(shown, UNSHIPPABLE_READ), statuses.onDidChange(shown)];
     void this.show();
   }
 

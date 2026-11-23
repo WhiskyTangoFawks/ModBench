@@ -4,7 +4,8 @@ import { askingOnChange } from '../drivingLib/problemsAsker';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import { originAddressOf, pluginAddressKey } from '../wire/pluginAddress';
+import type { FilesChanged } from '../instanceLoader/filesChanged';
 import { addNamed, type PluginRecords } from '../drivingLib/namedPlugins';
 import { askedAgain, positionAt, askingWhenNotLate, settling, type Asked, type Feed } from './feedShape';
 import { tellingOnSurface, type Told } from '../drivingLib/tellingOnSurface';
@@ -18,7 +19,9 @@ export interface PathStanding {
   judged: () => boolean;
   /** Whether the game gets the file at the Data-folder path `dataPath`, or the plugin's mod holds it. */
   holds: (plugin: PluginAddress, dataPath: string) => boolean;
-  subscribe: (listener: () => void) => { dispose: () => unknown };
+  /** Each path, folded, the game tries for `dataPath`: `holds` answers by these alone, with its plugin's mod. */
+  triedPaths: (dataPath: string) => readonly string[];
+  subscribe: (listener: (changed: FilesChanged) => void) => { dispose: () => unknown };
 }
 
 export interface PathProblemsDeps {
@@ -40,30 +43,33 @@ interface Held { answer: PluginFilePaths; texts: Map<string, Promise<string>> }
 
 const WHOLE_SET = '';
 
-async function problemsOf(held: readonly Held[], { paths, sourceFiles, readText }: PathProblemsDeps): Promise<ProblemsByFile> {
+async function problemsOf({ answer: { plugin, paths: named }, texts }: Held, { paths, sourceFiles, readText }: PathProblemsDeps): Promise<ProblemsByFile> {
   const byFile = new Map<string, ProblemOnFile[]>();
-  if (!paths.judged()) return byFile;
-  await Promise.all(held.map(async ({ answer: { plugin, paths: named }, texts }) => {
-    const files = sourceFiles(plugin.origin);
-    if (files === undefined) return;
-    const filesOf = new Map<string, NamedFilePath[]>();
-    for (const path of named.filter(({ dataPath }) => !paths.holds(plugin, dataPath))) {
-      const file = files.file(path.sourceRelativePath);
-      filesOf.set(file, [...filesOf.get(file) ?? [], path]);
-    }
-    await Promise.all([...filesOf].map(async ([file, naming]) => {
-      if (!texts.has(file)) texts.set(file, readText(file).catch(() => ''));
-      const text = await texts.get(file) ?? '';
-      const found = naming.map(({ formKey, fieldPath, dataPath }): ProblemOnFile => {
-        const [span] = stringsAt(text, formKey, [fieldPath]);
-        const at = span ?? { start: 0, end: 0 };
-        return { message: `"${dataPath}" names no file the game gets or ${plugin.origin} holds.`, start: positionAt(text, at.start), end: positionAt(text, at.end) };
-      });
-      byFile.set(file, [...byFile.get(file) ?? [], ...found]);
-    }));
+  const files = sourceFiles(plugin.origin);
+  if (!paths.judged() || files === undefined) return byFile;
+  const filesOf = new Map<string, NamedFilePath[]>();
+  for (const path of named.filter(({ dataPath }) => !paths.holds(plugin, dataPath))) {
+    const file = files.file(path.sourceRelativePath);
+    filesOf.set(file, [...filesOf.get(file) ?? [], path]);
+  }
+  await Promise.all([...filesOf].map(async ([file, naming]) => {
+    if (!texts.has(file)) texts.set(file, readText(file).catch(() => ''));
+    const text = await texts.get(file) ?? '';
+    const found = naming.map(({ formKey, fieldPath, dataPath }): ProblemOnFile => {
+      const [span] = stringsAt(text, formKey, [fieldPath]);
+      const at = span ?? { start: 0, end: 0 };
+      return { message: `"${dataPath}" names no file the game gets or ${plugin.origin} holds.`, start: positionAt(text, at.start), end: positionAt(text, at.end) };
+    });
+    byFile.set(file, [...byFile.get(file) ?? [], ...found]);
   }));
   return byFile;
 }
+
+const merged = (each: Iterable<ProblemsByFile>): ProblemsByFile => {
+  const byFile = new Map<string, ProblemOnFile[]>();
+  for (const problems of each) for (const [file, found] of problems) byFile.set(file, [...byFile.get(file) ?? [], ...found]);
+  return byFile;
+};
 
 /** Publishes each path a plugin's source names that no file the game gets or its mod holds answers to. The links feed
  *  tells of a plugin with no source folder. */
@@ -91,11 +97,45 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     tell([...standing, ...[...failures].map(([target, why]) => ({ key: `failed ${target}`, message: 'The Problems panel shows the last paths mEdit answered.', why }))]);
   };
   const asks = settling();
+  // Each plugin's problems as its answer was last judged; a change that reaches a plugin forgets its own alone.
+  const judgedOf = new Map<string, { answer: PluginFilePaths; problems: ProblemsByFile }>();
+  const tried = new WeakMap<PluginFilePaths, ReadonlySet<string>>();
+  const triedBy = (answer: PluginFilePaths): ReadonlySet<string> => {
+    let held = tried.get(answer);
+    if (held === undefined) {
+      held = new Set(answer.paths.flatMap(({ dataPath }) => paths.triedPaths(dataPath)));
+      tried.set(answer, held);
+    }
+    return held;
+  };
+  const reaches = (changed: FilesChanged, answer: PluginFilePaths): boolean => changed === 'every' || changed.some(({ origin, files }) =>
+    originAddressOf(origin) === answer.plugin.origin || files.some(({ relativePath }) => triedBy(answer).has(relativePath.toLowerCase())));
+  // A judgement a later change reached is stale before it ends, so it is not kept.
+  let changes = 0;
+  const reachedAt = new Map<string, number>();
   const judge = () => asks.working(async () => {
     const mine = ++shown;
-    const problems = await problemsOf([...held.values()], deps);
-    if (mine === shown) publish(problems);
+    const started = changes;
+    await Promise.all([...held].map(async ([key, entry]) => {
+      if (judgedOf.get(key)?.answer === entry.answer) return;
+      const problems = await problemsOf(entry, deps);
+      if ((reachedAt.get(key) ?? 0) <= started) judgedOf.set(key, { answer: entry.answer, problems });
+    }));
+    for (const key of [...judgedOf.keys(), ...reachedAt.keys()]) {
+      if (held.has(key)) continue;
+      judgedOf.delete(key);
+      reachedAt.delete(key);
+    }
+    if (mine === shown) publish(merged([...judgedOf.values()].map(({ problems }) => problems)));
   });
+  const forget = (changed: FilesChanged): void => {
+    changes += 1;
+    for (const [key, { answer }] of held) {
+      if (!reaches(changed, answer)) continue;
+      judgedOf.delete(key);
+      reachedAt.set(key, changes);
+    }
+  };
   const take = (answers: readonly PluginFilePaths[], target: string) => {
     const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
     let changed = answers.length !== answered.size;
@@ -145,7 +185,10 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
     whenNotLate.stop,
   ];
-  const judging = paths.subscribe(() => { void judge(); });
+  const judging = paths.subscribe((changed) => {
+    forget(changed);
+    void judge();
+  });
   askWanted();
   return { stop: () => { for (const off of unsubscribe) off(); judging.dispose(); }, settled: asks.settled };
 }

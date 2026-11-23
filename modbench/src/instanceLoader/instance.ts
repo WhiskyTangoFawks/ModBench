@@ -29,6 +29,9 @@ export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, Upg
 export type { PapyrusScript } from './papyrusScripts';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
+import type { FilesChanged } from './filesChanged';
+import { isFactOf, toldOf } from './told';
+import { present } from '../ports/present';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
 const SETTLE_MS = 200;
@@ -42,8 +45,8 @@ interface Run {
   readonly settled: Promise<void>;
   /** Settles when the read has landed, before its subscribers have settled; rejects with the failure of a read that failed. */
   readonly valueLanded: Promise<void>;
-  /** The named paths the read found as the value held them. */
-  unchanged: ReadonlySet<string>;
+  /** What the read answered. */
+  reading?: InstanceReading;
   landValue(failure?: Error): void;
   land(settled: Promise<void>): void;
 }
@@ -55,7 +58,7 @@ function nextRun(): Run {
   const valueLanded = new Promise<void>((resolve, reject) => { settleValueLanded = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
   // A refresh asks for `settled` alone, so a failure nobody asked `valueLanded` for is not an unhandled one.
   valueLanded.catch(() => undefined);
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, unchanged: new Set(), landValue: settleValueLanded, land };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, landValue: settleValueLanded, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -172,18 +175,32 @@ export interface InstanceValue {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
 }
 
-/** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
-export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceValue> = (value: Pick<InstanceValue, K>, sequence: number, reread: Reread) => void | Promise<void>;
+/** A subscriber that returns a promise holds `refresh` until it settles. */
+export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceValue> = (value: Pick<InstanceValue, K>, sequence: number, told: Told<K>) => void | Promise<void>;
+
+/** What a subscriber is told with a value: what was read again, the value it was told last, and what changed of the
+ *  origins' files since, so nothing above the read model works it out (ADR-0029, Consequences, bullet 4). */
+export interface Told<K extends keyof InstanceValue = keyof InstanceValue> extends Reread {
+  /** The value the subscriber was told last, or the value when it subscribed. */
+  readonly before: Pick<InstanceValue, K>;
+  /** Each origin whose own files changed since `before`, or anything. */
+  changed(): FilesChanged;
+}
 
 /** The facts a subscriber reads, each named as a key. */
 export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
 
+/** Whether a subscriber reads the file at `path`, as `value` places it. */
+export type ReadsFile<K extends keyof InstanceValue = keyof InstanceValue> = (path: string, value: Pick<InstanceValue, K>) => boolean;
+
 interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
+  readonly readsFile: ReadsFile | undefined;
+  // The value it was told last, or the value when it subscribed, which the next change is told against.
+  told: InstanceValue;
 }
 
-const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
@@ -199,7 +216,7 @@ export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 
 /** The Instance as a tree reads it: the held value, sequence and read failure, plus the
  *  channels they move on. */
-export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure' | 'onRedraw'>;
+export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
 /** The Instance as a subscriber that reads the facts `K` sees it. */
 export type InstanceOf<K extends keyof InstanceValue> = Omit<InstanceView, 'value'> & { readonly value: Pick<InstanceValue, K> };
@@ -314,10 +331,14 @@ export class Instance implements Subscription {
 
   private failure: string | undefined;
 
+  // The reading the value last landed from: a file is unchanged against it (ADR-0029).
+  private landedFrom: InstanceReading | undefined;
+
   private subscribers: Subscribed[] = [];
+  // What a failed read was for, which the next read reads again so its change names it (ADR-0029).
+  private unread: { readonly named: ReadonlySet<string>; readonly disk: boolean } = { named: new Set(), disk: false };
 
   private failureListeners: ReadFailureListener[] = [];
-  private redrawListeners: (() => void)[] = [];
   private lateListeners: (() => void)[] = [];
   private late = false;
   private outcomeListeners: ListenerOutcomeListener[] = [];
@@ -368,7 +389,7 @@ export class Instance implements Subscription {
     return this.current;
   }
 
-  /** Rises once per landed recompute. A failed read leaves it where it was. */
+  /** Rises once per recompute that lands a change. A failed read, and one that finds nothing new, leave it where it was. */
   get sequence(): number {
     return this.seq;
   }
@@ -385,12 +406,12 @@ export class Instance implements Subscription {
     return this.failure;
   }
 
-  /** Called with each landed value and its sequence; with `concerns`, only with the first, the first after a failed read, a
-   *  check of the disk, and each in which a concern is not the object it was. */
+  /** Called with each landed value and its sequence. With `concerns`, only with the first, the first after a failed read, a check
+   *  of the disk, a value with a concern changed, and a change naming a file `readsFile` holds. */
   subscribe<K extends keyof InstanceValue>(
-    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
+    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>, readsFile?: ReadsFile<K>,
   ): Subscription {
-    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)) };
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)), readsFile, told: this.current };
     this.subscribers.push(subscribed);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscribed); } };
   }
@@ -406,12 +427,6 @@ export class Instance implements Subscription {
     };
   }
 
-  /** Called on each `redraw`, by the views alone: a subscriber that derives from the value or hands it on does not run again. */
-  onRedraw(listener: () => void): Subscription {
-    this.redrawListeners.push(listener);
-    return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
-  }
-
   /** Whether a change was heard that no read has taken in since. */
   get mayBeLate(): boolean {
     return this.late;
@@ -421,11 +436,6 @@ export class Instance implements Subscription {
   onMayBeLate(listener: () => void): Subscription {
     this.lateListeners.push(listener);
     return { dispose: () => { this.lateListeners = this.lateListeners.filter((l) => l !== listener); } };
-  }
-
-  /** Draws the held value again, with no read: a control the user toggled returns to what the value says. */
-  redraw(): void {
-    for (const listener of [...this.redrawListeners]) listener();
   }
 
   /** Called with the outcome of each call to a subscriber or read-failure listener, so a view that
@@ -446,8 +456,9 @@ export class Instance implements Subscription {
 
   /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
    *  the writer's own caller, holding a lock the write took. */
-  told(wrote: readonly string[]): Promise<void> {
-    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }).valueLanded;
+  told(wrote: readonly string[]): Promise<{ readonly subscribed: Promise<void> }> {
+    const run = this.enqueue({ named: wrote, disk: false, tellsUnheard: false });
+    return run.valueLanded.then(() => ({ subscribed: run.settled }));
   }
 
   /** The value once the first read has landed: reads when none has, and holds the read it has. */
@@ -463,7 +474,6 @@ export class Instance implements Subscription {
     this.mEditChanges.dispose();
     this.subscribers = [];
     this.failureListeners = [];
-    this.redrawListeners = [];
     this.lateListeners = [];
     this.outcomeListeners = [];
   }
@@ -552,6 +562,9 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
+      for (const path of this.unread.named) run.named.add(path);
+      run.disk ||= this.unread.disk;
+      this.unread = { named: new Set(), disk: false };
       const { settled, failed } = await this.recompute(run);
       run.landValue(failed);
       run.land(settled);
@@ -570,18 +583,37 @@ export class Instance implements Subscription {
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
+      this.unread = { named: new Set(run.named), disk: run.disk };
       return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()), failed: new Error(failure) };
     }
     const before = this.current;
     const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
+    const unchanged = new Set(run.reading?.unchangedFiles);
+    const reread: Reread = { named: [...run.named].filter((path) => !unchanged.has(path)), disk: run.disk };
+    const changed = (fact: keyof InstanceValue): boolean => next[fact] !== before[fact];
+    // ADR-0029
+    const nothingNew = !tellsEvery && reread.named.length === 0 && !Object.keys(next).filter(isFactOf(next)).some(changed);
+    if (nothingNew) {
+      this.setLate(this.heardSinceRun());
+      return { settled: Promise.resolve() };
+    }
     this.current = next;
+    this.landedFrom = run.reading;
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
-    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
-    return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
+    const told = this.subscribers.filter(({ concerns, readsFile }) =>
+      tellsEvery || concerns === undefined || concerns.some(changed) || (readsFile !== undefined && reread.named.some((path) => readsFile(path, next))));
+    const subscribedBy = new Map(told.map((subscribed) => [subscribed.subscriber, subscribed]));
+    return {
+      settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => {
+        const subscribed = present(subscribedBy.get(subscriber), 'the subscriber told');
+        const before = subscribed.told;
+        subscribed.told = next;
+        return subscriber(next, this.seq, toldOf(before, next, reread, subscribed.concerns));
+      }),
+    };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
@@ -610,14 +642,15 @@ export class Instance implements Subscription {
   private async read(run: Run): Promise<InstanceValue> {
     const { named, disk, tellsUnheard } = run;
     const { adapter, log } = this.options;
-    const reading = await adapter.reading({ named: [...named], disk });
+    const { landedFrom } = this;
+    const reading = await adapter.reading({ named: [...named], disk }, landedFrom);
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
-    run.unchanged = new Set(reading.unchangedFiles);
+    run.reading = reading;
     return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
       sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },
       archiveSources: (sources) => { this.tellArchivesNothingHolds(sources); },
       archiveContents: (reads) => { this.tellOnce('archiveContents', unreadableArchiveLines(reads), 'warn'); },
-    });
+    }, landedFrom);
   }
 
 }

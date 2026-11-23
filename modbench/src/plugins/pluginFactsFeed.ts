@@ -6,7 +6,10 @@ import type { NamedPlugins } from './pluginAddress';
 import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
-import { readsNamed } from '../sortingRules/lootJudge';
+import { judgingReads } from '../sortingRules/lootJudge';
+import type { LootEntry } from '../sortingRules/lootMetadata';
+
+type JudgingReads = ReturnType<typeof judgingReads>;
 import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, isReadFailed, ReadFailedError } from '../wire/readFailed';
 
@@ -24,15 +27,18 @@ export interface PluginFactsFeedDeps {
   /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
   rules: () => ReadRules;
   /** What the instance says of the files the reads name: the Data folder, and the Instance adapter's reads. */
-  fileFacts: (reads: readonly FileRead[]) => Promise<FileFacts>;
+  /** `trusted`: answering from what was read before, as `FileReads.trusting` does. */
+  fileFacts: (reads: readonly FileRead[], trusted: boolean) => Promise<FileFacts>;
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
-  publishChangedOutside: (warnings: readonly PluginProblem[]) => void;
+  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
+  publishChangedOutside: (warnings: readonly PluginProblem[], named?: NamedPlugins) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The Plugin source unreadable status's other surface, the Problems panel. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
+  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
+  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
@@ -47,6 +53,8 @@ export type PluginRowFacts = Pick<PluginFacts,
   'expansion' | 'indexFailureMessage' | 'heldElsewhereMessage' | 'readFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
   | 'mastersOf' | 'isBlueprint' | 'blueprintPlugins' | 'shown' | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions' | 'suggestedMoves' | 'suggestedMovesOf' | 'brokenRules' | 'sortingNotJudged'>;
 
+const refsOf = (plugins: readonly PluginAddress[]) => plugins.map(({ name, origin }) => ({ origin, filename: name }));
+
 /** mEdit's answers about each plugin, ordered into the facts the Plugins tree's rows read: the
  *  reconcile narrator's events go in; row queries and one change event come out. Pulled once per
  *  event, never per rendered row. */
@@ -58,6 +66,12 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // Each `refresh` reads after the one before it answered, so an answer for a plugin never lands over a newer one.
   private refreshing: Promise<unknown> = Promise.resolve();
+  // What the last judgement of the sorting rules to land read of files.
+  private landedReads: JudgingReads = { reads: [], judges: () => false };
+  // The reads of the last order and rules judged, kept while both are the same objects: the reads depend on nothing else.
+  private judging?: { readonly order: readonly PluginAddress[]; readonly entries: readonly LootEntry[]; readonly reads: JudgingReads };
+  // The last `rejudge` asked.
+  private rejudging: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -106,9 +120,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const active = this.deps.activePlugins();
-    const loot = await this.lootRules(active);
+    const { loot, reads } = await this.lootRules(active, false);
     if (generation !== this.generation) return undefined;
     const rowsGone = this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
+    this.landedReads = reads;
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
@@ -122,10 +137,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     return { held: plugins.length, active: active.length, rowsGone };
   }
 
-  private async readChangedOutside(): Promise<void> {
-    const indexing = await this.deps.client.getPluginsIndexing();
-    if (!isReadFailed(indexing)) this.facts.changedOutsideAre(indexing.filter(({ changedOutside }) => changedOutside).map(({ name, origin }) => ({ name, origin })));
-    this.deps.publishChangedOutside(this.facts.problems().changedOutside);
+  private async readChangedOutside(named?: NamedPlugins): Promise<void> {
+    const indexing = await this.deps.client.getPluginsIndexing(named);
+    if (!isReadFailed(indexing)) this.facts.changedOutsideAre(indexing.filter(({ changedOutside }) => changedOutside).map(({ name, origin }) => ({ name, origin })), named);
+    this.deps.publishChangedOutside(this.facts.problemsOf(named).changedOutside, named);
   }
 
   private publishSorting(): void {
@@ -137,27 +152,47 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishRuleFiles(ruleFileDiagnostics(files, problems, this.facts.brokenRules()));
   }
 
-  // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing.
-  private async lootRules(active: readonly PluginAddress[]): Promise<LootInput> {
+  // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing. A judging
+  // again trusts what was read before; a reconcile checks each file, the ones no change names among them.
+  private async lootRules(active: readonly PluginAddress[], trusted: boolean): Promise<{ loot: LootInput; reads: JudgingReads }> {
     for (;;) {
       const read = this.deps.rules();
-      const files = await this.deps.fileFacts(readsNamed(active.map(({ name, origin }) => ({ origin, filename: name })), read.entries));
-      if (read === this.deps.rules()) return { entries: read.entries, groups: read.groups, files };
+      const reads = this.readsOf(active, read.entries);
+      const files = await this.deps.fileFacts(reads.reads, trusted);
+      if (read === this.deps.rules()) return { loot: { entries: read.entries, groups: read.groups, files }, reads };
     }
+  }
+
+  private readsOf(order: readonly PluginAddress[], entries: readonly LootEntry[]): JudgingReads {
+    if (this.judging?.order !== order || this.judging.entries !== entries) this.judging = { order, entries, reads: judgingReads(refsOf(order), entries) };
+    return this.judging.reads;
+  }
+
+  /** Whether the last judgement of the sorting rules to land read a file, relative to the Data folder: its presence, bytes or version. */
+  judgesFile(path: string): boolean {
+    return this.landedReads.judges(path);
+  }
+
+  /** The reads of files' bytes the last judgement of the sorting rules to land made. */
+  judgedReads(): readonly FileRead[] {
+    return this.landedReads.reads;
   }
 
   /** Judges the order the last reconcile judged again. Before that reconcile there is nothing to judge. */
   async rejudge(): Promise<void> {
-    await this.rejudgeAnnouncing([]);
+    const rejudging = this.rejudgeAnnouncing([]);
+    this.rejudging = rejudging.catch(() => undefined);
+    await rejudging;
   }
 
   private async rejudgeAnnouncing(announced: NamedPlugins): Promise<void> {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
-    const loot = await this.lootRules(judged);
+    const { loot, reads } = await this.lootRules(judged, true);
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
     const altered = this.facts.rejudged(loot);
+    this.landedReads = reads;
     this.publishSorting();
     this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }
@@ -179,11 +214,16 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (generation !== this.generation) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const sortingChanged = this.facts.refreshed(plugins, named);
-    this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    await this.readChangedOutside();
+    this.deps.publishSourceUnreadable(this.facts.problemsOf(named).sourceUnreadable, named);
+    await this.readChangedOutside(named);
     if (generation !== this.generation) return;
     if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudgeAnnouncing(named);
     else this.changed.fire(named);
+  }
+
+  /** Settles once every refresh asked so far has, and the last judging again. */
+  settled(): Promise<unknown> {
+    return Promise.all([this.refreshing, this.rejudging]);
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */

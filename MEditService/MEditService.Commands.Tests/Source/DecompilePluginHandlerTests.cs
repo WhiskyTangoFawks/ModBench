@@ -66,6 +66,8 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Equal(headBefore, Head());
+        WrittenPaths.Cover(result.Written, Path.Combine(_sourceMod, "plugin-source", "Second.esp"), Path.Combine(_sourceMod, ".git"));
+        WrittenPaths.Within(result.Written, _sourceMod);
     }
 
     [Fact]

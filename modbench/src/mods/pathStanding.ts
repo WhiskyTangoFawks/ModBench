@@ -1,6 +1,7 @@
 // source.md, Editing plugin source, story 1: what holds a path a plugin source names.
 
-import type { InstanceValue } from '../instanceLoader/instance';
+import type { InstanceValue, Told } from '../instanceLoader/instance';
+import { TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
 import { SOURCE_FILES_READ } from '../instanceLoader/loadOrderSnapshot';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { gameReleaseForGame, pathsTheGameTries } from '../tables/gamePaths';
@@ -20,21 +21,28 @@ function modHolds(value: StandingValue, origin: string, folded: string): boolean
   });
 }
 
-// The path problems this tells judge each plugin source by its standing and by where `sourceFiles` finds its files.
-const JUDGED_READ = { ...STANDING_READ, ...SOURCE_FILES_READ } as const;
+// The path problems this tells judge each plugin source by its standing, by where `sourceFiles` finds its files, and by
+// what a change did to the origins' files.
+const JUDGED_READ = { ...STANDING_READ, ...SOURCE_FILES_READ, ...TOUCHING_READ } as const;
+type JudgedValue = Pick<InstanceValue, keyof typeof JUDGED_READ>;
+
+const triedPathsIn = (gameName: string, dataPath: string): readonly string[] => pathsTheGameTries(gameReleaseForGame(gameName), dataPath.replaceAll('\\', '/'));
 
 export function pathStandingOf(instance: {
-  readonly value: StandingValue; subscribe: (listener: () => void, concerns: typeof JUDGED_READ) => { dispose: () => unknown };
+  readonly value: StandingValue; subscribe: (listener: (value: JudgedValue, sequence: number, told: Pick<Told, 'changed'>) => void, concerns: typeof JUDGED_READ) => { dispose: () => unknown };
 }) {
   return {
     judged: (): boolean => instance.value.gameFolder.kind === 'found' && instance.value.gameFolderInWorkspace,
     holds: ({ origin }: { origin: string }, dataPath: string): boolean => {
       const { value } = instance;
-      return pathsTheGameTries(gameReleaseForGame(value.gameName), dataPath.replaceAll('\\', '/')).some((path) =>
-        !('none' in copyTheGameGets(value, path)) || modHolds(value, origin, path.toLowerCase()));
+      return triedPathsIn(value.gameName, dataPath).some((path) => !('none' in copyTheGameGets(value, path)) || modHolds(value, origin, path.toLowerCase()));
     },
-    subscribe: (listener: () => void) => instance.subscribe(listener, JUDGED_READ),
+    /** Each path, folded, the game tries for `dataPath`: `holds` answers by these alone, with its plugin's mod. */
+    triedPaths: (dataPath: string): string[] => triedPathsIn(instance.value.gameName, dataPath).map((path) => path.toLowerCase()),
+    subscribe: (listener: (changed: FilesChanged) => void) => instance.subscribe((_value, _sequence, told) => { listener(told.changed()); }, JUDGED_READ),
   };
 }
 
-export const NO_PATH_STANDING: ReturnType<typeof pathStandingOf> = { judged: () => false, holds: () => false, subscribe: () => ({ dispose: () => undefined }) };
+export const NO_PATH_STANDING: ReturnType<typeof pathStandingOf> = {
+  judged: () => false, holds: () => false, triedPaths: () => [], subscribe: () => ({ dispose: () => undefined }),
+};

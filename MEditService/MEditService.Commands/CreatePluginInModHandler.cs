@@ -13,7 +13,7 @@ public sealed class CreatePluginInModHandler
         (_create, _holder) = (create, holder);
 
     /// <summary>As <see cref="CreatePluginHandler.CreatePlugin"/> answers.</summary>
-    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePluginIn(
+    public async Task<Answer<PluginCreated, PluginCreateRefused>> CreatePluginIn(
         string origin, string name, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })

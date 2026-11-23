@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using static MEditService.SourceAdapter.Tests.TestSupport.PluginBaselines;
@@ -410,8 +411,10 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         var renamed = SourceFolderOf("Renamed");
         Directory.Move(_sourceFolder, renamed);
 
-        Assert.Null(TestAdapters.Source().FollowSourceFolderMove(_sourceFolder, renamed));
+        var (failure, written) = WrittenFiles.Of(() => TestAdapters.Source().FollowSourceFolderMove(_sourceFolder, renamed));
 
+        Assert.Null(failure);
+        Assert.Equal([Path.Combine(_instance, ".git")], written);
         Assert.Equal((held, ""), (Git("ls-files", "-s", "--", "source/Renamed"), Git("ls-files", "-s", "--", $"source/{TestMod.Name}")));
         Assert.Contains("modlist.txt", Lines(Git("diff", "--cached", "--name-only")));
         Assert.True(TestAdapters.Source().IsSourceMod(renamed));

@@ -12,12 +12,11 @@ export interface InstanceFacts {
   standingOf: (plugin: PluginAddress) => PluginStanding;
   onChange: (listener: () => void) => Subscription;
   refresh: () => Promise<void>;
-  redraw: () => void;
 }
 
 const FACTS_READ = { listedSourceMods: true, sourceMods: true, mods: true, paths: true, plugins: true, pluginsLoadedWithNoLine: true } as const;
 
-export const factsOf = (instance: InstanceOf<keyof typeof FACTS_READ | 'entryKey'> & Pick<Instance, 'refresh' | 'redraw'>): InstanceFacts => ({
+export const factsOf = (instance: InstanceOf<keyof typeof FACTS_READ | 'entryKey'> & Pick<Instance, 'refresh'>): InstanceFacts => ({
   listedSourceMods: () => instance.value.listedSourceMods,
   sourceMods: () => instance.value.sourceMods,
   modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name,
@@ -25,7 +24,6 @@ export const factsOf = (instance: InstanceOf<keyof typeof FACTS_READ | 'entryKey
   standingOf: (plugin) => pluginStanding(instance.value, plugin),
   onChange: (listener) => instance.subscribe(() => { listener(); }, FACTS_READ),
   refresh: () => instance.refresh(),
-  redraw: () => { instance.redraw(); },
 });
 
 export const NO_INSTANCE_FACTS: InstanceFacts = {
@@ -36,5 +34,4 @@ export const NO_INSTANCE_FACTS: InstanceFacts = {
   standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
   refresh: () => Promise.resolve(),
-  redraw: () => undefined,
 };

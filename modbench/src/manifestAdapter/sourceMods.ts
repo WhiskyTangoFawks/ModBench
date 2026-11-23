@@ -2,7 +2,7 @@
 // cloned builds where it is (source.md, Build, story 4).
 
 import { errorMessage } from '../ports/errorMessage';
-import { lastHanded, noneLeft } from '../ports/lastBuilt';
+import { noneLeft, readAs } from '../ports/lastBuilt';
 import { manifestIn } from './manifestFiles';
 import { repositoryOf } from './manifestPackages';
 
@@ -44,10 +44,8 @@ export async function sourceModsOf(
 ): Promise<SourceMods> {
   const mods = (folders ?? []).filter(({ kind }) => kind === 'mod');
   const links = await Promise.all(mods.map(({ path }) => linkIn(path)));
-  return sourceModsHanded(sourceModsFrom(mods, links, repositories, keyOf), [folders, repositories, keyOf, ...links.flatMap(linkParts)]);
+  return readAs(sourceModsFrom(mods, links, repositories, keyOf), [folders, repositories, keyOf, ...links.flatMap(linkParts)]);
 }
-
-const sourceModsHanded = lastHanded<SourceMods>();
 
 function linkParts(link: Link): unknown[] {
   if ('repository' in link) {

@@ -4,6 +4,10 @@ import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState, commands: { executeCommand: () => Promise.resolve() } }));
 
 import { FileConflictLookup, modOrigin, NO_GAME_FOLDER_ARCHIVED, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import type { FilesChanged } from '../../instanceLoader/filesChanged';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pathStandingOf } from '../pathStanding';
 import type { GameFolder, OriginFile } from '../../instanceAdapter/instanceAdapter';
 
@@ -72,5 +76,23 @@ describe('a .wav a plugin source names is held by the .xwm the game plays it fro
 
   it('holds no .wav when neither file exists', () => {
     expect(holds({})).toBe(false);
+  });
+});
+
+describe('what a change tells the path problems (ADR-0029, Consequences, bullet 5)', () => {
+  const told = (before: InstanceValue, after: InstanceValue): FilesChanged | undefined => {
+    const instance = new FakeInstance(before);
+    const changes: FilesChanged[] = [];
+    pathStandingOf(instance).subscribe((changed) => changes.push(changed));
+    instance.publish(before);
+    instance.publish(after);
+    return changes[1];
+  };
+  const kept = file('a.dds');
+  const before = instanceValueFixture({ filesByMod: new Map([['Mod', [kept]]]) });
+  const gained = { ...before, filesByMod: new Map([['Mod', [kept, file('B.dds')]]]) };
+
+  it('tells the mod that gains a file, with the file it gained', () => {
+    expect(told(before, gained)).toEqual([{ origin: modOrigin('Mod'), files: [file('B.dds')], gained: [file('B.dds')] }]);
   });
 });

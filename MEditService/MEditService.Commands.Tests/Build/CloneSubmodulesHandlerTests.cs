@@ -38,6 +38,18 @@ public sealed class CloneSubmodulesHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AClone_NamesTheFolderItCheckedOut_AndTheInstanceRepositoryThatHoldsIt()
+    {
+        var pin = _submodule.Commit(("build.json", "{\"files\": []}"));
+        _submodule.Pin(pin);
+
+        var answer = await TestEditService.CloneSubmodulesHandler().Clone([new Submodule(_submodule.Folder, pin, null)], CancellationToken.None);
+
+        WrittenPaths.Cover(answer.Written, Path.Combine(_submodule.Folder, "build.json"), Path.Combine(_submodule.Instance, ".git"));
+        WrittenPaths.Within(answer.Written, _submodule.Instance);
+    }
+
+    [Fact]
     public async Task AClone_HandsTheRecordIndexEachPluginWhoseSourceFolderItMade_ToReadBack()
     {
         var pin = _submodule.Commit(("build.json", "{\"files\": []}"));

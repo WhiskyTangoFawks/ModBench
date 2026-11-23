@@ -16,7 +16,8 @@ export class ModProblems {
     private readonly instance: Pick<InstanceOf<keyof typeof PROBLEMS_READ>, 'value' | 'subscribe'>,
     private readonly statuses: Pick<ModStatuses, 'current' | 'of' | 'onDidChange'>,
   ) {
-    this.following = [instance.subscribe(() => { void this.show(); }, PROBLEMS_READ), statuses.onDidChange(() => { void this.show(); })];
+    const shown = (): void => { void this.show(); };
+    this.following = [instance.subscribe(shown, PROBLEMS_READ), statuses.onDidChange(shown)];
     void this.show();
   }
 

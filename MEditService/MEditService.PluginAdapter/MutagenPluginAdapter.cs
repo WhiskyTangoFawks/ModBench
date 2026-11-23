@@ -388,6 +388,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 return EmptyPluginTakeBack.Changed;
 
             File.Delete(path);
+            WrittenFiles.Name(path);
             return EmptyPluginTakeBack.TakenBack;
         });
 
@@ -410,6 +411,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             await WriteAsync(plugin, tempPath, noModKeySync: true);
             var written = PluginBinaryHash.TrailerFormOf(await File.ReadAllBytesAsync(tempPath));
             File.Move(tempPath, destinationPath, overwrite: false);
+            WrittenFiles.Name(destinationPath);
             return PluginAnswer.Of(new EmptyPluginCreated(EmptyPluginWrite.Written, written));
         }
         catch (IOException) when (File.Exists(destinationPath))

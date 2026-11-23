@@ -12,6 +12,8 @@ internal static class QueriesOfACallerWhoStays
     internal static Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins(this IQueries queries, IReadOnlyCollection<PluginAddress>? plugins = null) =>
         queries.GetPlugins(plugins, CancellationToken.None);
 
+    internal static Answer<IReadOnlyList<IndexOfPlugin>, IndexRefused> GetPluginsIndexing(this IQueries queries) => queries.GetPluginsIndexing(null);
+
     internal static Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(this IQueries queries, IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) =>
         queries.GetRecords(types, plugin, search, limit, offset, CancellationToken.None);
 

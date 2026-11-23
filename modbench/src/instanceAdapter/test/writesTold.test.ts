@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -21,7 +22,7 @@ describe('a write through the adapter', () => {
     cpSync(join(__dirname, 'fixtures', 'order-instance'), root, { recursive: true });
     adapter = adapterOver(root);
     told = new Map();
-    writesToldTo({ told: (paths) => { for (const path of paths) told.set(path, existsSync(path)); return Promise.resolve(); } });
+    writesToldTo({ told: (paths) => { for (const path of paths) told.set(path, existsSync(path)); return Promise.resolve({ subscribed: Promise.resolve() }); } });
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -35,6 +36,7 @@ describe('a write through the adapter', () => {
   const writes: Write[] = [
     ...writesUnderALock,
     ['a new mod folder', (a) => a.createModFolder('Fresh'), (r) => [join(r, 'mods', 'Fresh')]],
+    ['the push check', (a) => { execFileSync('git', ['init', '-q', root]); return a.refuseUnpublishedPins(); }, (r) => [join(r, '.git', 'hooks', 'pre-push')]],
     ['a change that changes nothing', (a) => a.changeModOrder(PROFILE, () => []), () => []],
   ];
 
@@ -49,6 +51,7 @@ describe('a write through the adapter', () => {
     const lockedByLoader: string[] = [];
     writesToldTo({ told: async (paths) => {
       await Promise.all(paths.map((path) => withLock(path, () => { lockedByLoader.push(path); return Promise.resolve(); })));
+      return { subscribed: Promise.resolve() };
     } });
 
     await write(adapter);

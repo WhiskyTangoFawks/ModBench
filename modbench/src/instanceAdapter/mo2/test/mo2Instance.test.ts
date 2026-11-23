@@ -44,7 +44,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter, ManagerReading } from '../../publisher';
-import { CHECK_THE_DISK, type Reread, type WatcherExclude } from '../../instanceAdapter';
+import { CHECK_THE_DISK, type ModFolders, type OriginFiles, type Reread, type WatcherExclude } from '../../instanceAdapter';
 import { mo2Watch } from '../mo2Watch';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import type { Mo2Context } from '../mo2Context';
@@ -1265,11 +1265,19 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(2);
     });
 
-    it.each(['.git/config', '.git/hooks/pre-push'])('hears a change to %s, where git init writes the path filter and the push check', (inside) => {
+    it('hears a repository made again at the instance root, which VS Code reports as a change of its .git', () => {
+      const heard: (string | undefined)[] = [];
+      managerOver(root).subscribe((path) => { heard.push(path); });
+
+      expect(fire(root, '.git')).toBe(true);
+      expect(heard).toEqual([join(root, '.git')]);
+    });
+
+    it('hears a change to .git/config, where git init writes the path filter and the hooks path', () => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
 
-      expect(fire(root, inside)).toBe(true);
+      expect(fire(root, '.git/config')).toBe(true);
       expect(signals).toBe(1);
     });
 
@@ -1334,6 +1342,9 @@ describe('the MO2 Instance adapter', () => {
       ['a profile\'s INI, in any case', 'profiles/Default/fallout4.INI', 1],
       ['no other file of a profile', 'profiles/Default/other.txt', 0],
       ['a file deeper in a mod', 'mods/Harder VATS/Textures/a.dds', 1],
+      ['the record index folder', 'modbench', 1],
+      ['the hash index folder', 'hash-index', 1],
+      ['the source folder', 'source', 1],
     ])('signals a change to %s', async (_what, relativePath, signalled) => {
       const watched = managerOver(root);
       let signals = 0;
@@ -1354,6 +1365,22 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(root, join('source/Harder VATS/.git', inside), join('source/Harder VATS/git', inside))).toBe(true);
         expect(signals).toBe(1);
       });
+
+    it.each<[string, string, (repository: string) => void]>([
+      ['git keeps its hooks', '.git/hooks', () => undefined],
+      ['core.hooksPath puts it', '.git/kept-hooks', (repository) => { execFileSync('git', ['-C', repository, 'config', 'core.hooksPath', '.git/kept-hooks']); }],
+    ])('signals a change to the push check where %s, once a reading found the repository', async (_where, hooks, configure) => {
+      execFileSync('git', ['init', '-q', root]);
+      configure(root);
+      const watched = managerOver(root);
+      let signals = 0;
+      watched.subscribe(() => { signals++; });
+      await watched.reading();
+      signals = 0;
+
+      expect(fire(root, `${hooks}/pre-push`)).toBe(true);
+      expect(signals).toBe(1);
+    });
 
     it('tells a ref from git\'s bookkeeping in a Windows path', () => {
       let signals = 0;
@@ -1821,10 +1848,11 @@ describe('the MO2 Instance adapter', () => {
           await mkdir(join(folder(), 'Textures'), { recursive: true });
           await writeFile(join(folder(), 'Textures', 'a.dds'), '');
 
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
+          const walked = callsOn(readdir, join(folder(), 'Textures'));
+          await source.originFiles(mod('Harder VATS'), 'list');
 
-          expect(second).not.toBe(first);
+          expect(callsOn(readdir, join(folder(), 'Textures'))).toBeGreaterThan(walked);
         });
 
         it('does not keep a walk that met a folder removed mid-read, though the stamp of the folder above it did not change', async () => {
@@ -1851,27 +1879,39 @@ describe('the MO2 Instance adapter', () => {
           expect(second.notes).toEqual([expect.stringMatching(/Gone/)]);
         });
 
-        it('keeps only the walks of the mod folders the latest reading names', async () => {
+        it('keeps the walk of a mod\'s root through readings of whole mods, which never ask for it', async () => {
           await settled();
-          const folders = present((await adapter.reading()).modFolders, 'mod folders');
-          const first = await source.originFiles(mod('Harder VATS'), folders);
+          const folders = (): Promise<ModFolders | undefined> => source.modFolders(ignoreSkippedLink);
+          const first = await source.originRootFiles(mod('Harder VATS'), await folders());
+          await source.originFiles(mod('Harder VATS'), await folders());
+          await source.originFiles(mod('Harder VATS'), await folders());
 
-          await source.originFiles(mod('Other'), { ...folders, all: [] });
-          const again = await source.originFiles(mod('Harder VATS'), folders);
+          const again = await source.originRootFiles(mod('Harder VATS'), await folders());
+
+          expect(again).toBe(first);
+        });
+
+        it('forgets, as a reading starts, the walk of a mod the reading before it did not use, its folder still there', async () => {
+          await settled();
+          const reading = async (name: string): Promise<OriginFiles> => source.originFiles(mod(name), await source.modFolders(ignoreSkippedLink));
+          const first = await reading('Harder VATS');
+
+          await reading('Other');
+          await reading('Other');
+          const again = await source.originFiles(mod('Harder VATS'), 'list');
 
           expect(again).not.toBe(first);
         });
 
-        it('walks a mod that links to a file again each time, as a link\'s target is not stamped, and answers the files it answered while it walks the same', async () => {
+        it('walks a mod that links to a file again each time, as a link\'s target is not stamped', async () => {
           await settled();
           await symlink(join(folder(), 'Textures', 'a.dds'), join(folder(), 'Linked.dds'));
 
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
           const followed = callsOn(stat, join(folder(), 'Linked.dds'));
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
+          await source.originFiles(mod('Harder VATS'), 'list');
 
           expect(callsOn(stat, join(folder(), 'Linked.dds'))).toBeGreaterThan(followed);
-          expect(second).toBe(first);
         });
       });
 

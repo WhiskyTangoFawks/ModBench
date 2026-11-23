@@ -12,7 +12,7 @@ import { surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites, type Man
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
-import { leaveWritesUnnamed, diskCheckedBy, writesToldTo } from './repositoriesLib/writesTold';
+import { diskCheckedBy, nameWrites, writesToldTo } from './repositoriesLib/writesTold';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
@@ -57,7 +57,7 @@ import { registerArchiveFiles, registerArchiveOpen } from './mods/archiveFiles';
 import { fileProblemsOver } from './ports/fileProblems';
 import type { Log } from './ports/log';
 import { problemsHostOver } from './problemsHost';
-import { ModStatuses } from './modStatus/modStatuses';
+import { ModStatuses, STATUS_READS } from './modStatus/modStatuses';
 import { DOWNLOADS_KEY_ARGS } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
@@ -85,6 +85,7 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
 import { askedOnceLoadOrderPut, fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
+import { fileAt } from './instanceLoader/filePresence';
 import { trashSetAsideOn } from './pluginCommands/setAside';
 import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryCommands';
 import { placeModsOver } from './sourceCommands/newRepository';
@@ -241,10 +242,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
   const archivedCopies = new ArchivedCopies(client, (path) => adapter.fileStamp(path));
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line), hashesOfEntries(archivedCopies)));
-  own(instance.subscribe(async (value) => {
-    modStatuses.derive(value);
+  own(instance.subscribe(async (value, _sequence, changed) => {
+    modStatuses.derive(value, changed);
     await modStatuses.current();
-  }));
+  }, STATUS_READS, (path, value) => modStatuses.readsFile(path, value)));
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const commandsOfPlugins = pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) });
@@ -257,7 +258,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   })));
   const plugins = own(pluginsBox.onInstance({
     instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter, askedOnceLoadOrderPut(client)), modStatuses,
-    fileReads: fileReadsOver(adapter, () => instance.value.files),
+    fileReads: fileReadsOver(adapter, (path) => fileAt(instance.value, path)),
   }));
   const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), download: downloadOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
@@ -312,7 +313,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerDeployCommands({
     commands: deployCommands({
       adapter,
-      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt, leaveWritesUnnamed),
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt, nameWrites),
       deploymentFolder: deploymentFolderSetting,
     }),
     instance, reporterFor,
@@ -403,7 +404,7 @@ function start(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')), leaveWritesUnnamed });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
   context.subscriptions.push(registerArchiveFiles(meditClient));
   const focusedView = createFocusedView();
 
@@ -416,7 +417,7 @@ function start(context: vscode.ExtensionContext): void {
     refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
-  context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
+  context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON) }));
   context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), taken: () => meditClient.loadOrderApplied() }));
   context.subscriptions.push(surfaceManagerRunning({ reporter: reporterFor('write'), ...opened.managerRunning }));
   const plugins = createPlugins({

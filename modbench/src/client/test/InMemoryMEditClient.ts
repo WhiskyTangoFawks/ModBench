@@ -50,6 +50,13 @@ type Scripted<T> = { value: T };
 type ScriptedAnswers = { [K in QueryMethod]: Scripted<Answer<K>>[] };
 type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 
+// The rows of a whole answer that name a plugin asked for; every row when none are named.
+function namedOf<T extends PluginAddress>(answer: T[] | ReadFailed, plugins: readonly PluginAddress[] | undefined): T[] | ReadFailed {
+  if (!plugins || isReadFailed(answer)) return answer;
+  const asked = new Set(plugins.map(pluginAddressKey));
+  return answer.filter((row) => asked.has(pluginAddressKey(row)));
+}
+
 /** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by method name,
  *  fires the change event, sets the progress and reads every recorded call back. An unscripted query rejects. */
 export class InMemoryMEditClient implements MEditClient {
@@ -370,10 +377,7 @@ export class InMemoryMEditClient implements MEditClient {
   }
 
   async getPlugins(plugins?: readonly PluginAddress[]): ReturnType<MEditClient['getPlugins']> {
-    const answer = await this.query('getPlugins', plugins ? [plugins] : []);
-    if (!plugins || isReadFailed(answer)) return answer;
-    const asked = new Set(plugins.map(pluginAddressKey));
-    return answer.filter((row) => asked.has(pluginAddressKey(row)));
+    return namedOf(await this.query('getPlugins', plugins ? [plugins] : []), plugins);
   }
   getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.query('getDiagnoses', []); }
   getPluginIndexing(...args: Parameters<MEditClient['getPluginIndexing']>): ReturnType<MEditClient['getPluginIndexing']> {
@@ -514,5 +518,7 @@ export class InMemoryMEditClient implements MEditClient {
   clearFilter(): ReturnType<MEditClient['clearFilter']> { return this.query('clearFilter', []); }
   getActiveFilter(): ReturnType<MEditClient['getActiveFilter']> { return this.query('getActiveFilter', []); }
   getFilterCleared(): ReturnType<MEditClient['getFilterCleared']> { return this.query('getFilterCleared', []); }
-  getPluginsIndexing(): ReturnType<MEditClient['getPluginsIndexing']> { return this.query('getPluginsIndexing', []); }
+  async getPluginsIndexing(plugins?: readonly PluginAddress[]): ReturnType<MEditClient['getPluginsIndexing']> {
+    return namedOf(await this.query('getPluginsIndexing', plugins ? [plugins] : []), plugins);
+  }
 }

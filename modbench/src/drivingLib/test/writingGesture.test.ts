@@ -2,7 +2,8 @@ import { describe, it, expect, vi, onTestFinished } from 'vitest';
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return { window: { withProgress: recordedWithProgress } };
+  const { EventEmitter } = await import('../../test/vscodeMock');
+  return { window: { withProgress: recordedWithProgress }, EventEmitter };
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
@@ -10,7 +11,8 @@ import { asViewCall, handingOneChange, holdingTheWrite, whenNoChangeIsRunning, R
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
-import { toldAfter } from '../../repositoriesLib/writesTold';
+import { RedrawEmitter } from '../heldRedraw';
+import { toldAfter, writesToldTo } from '../../repositoriesLib/writesTold';
 
 const unnamed = (): Promise<void> => { ambientWrites.leaveUnnamed(); return Promise.resolve(); };
 
@@ -229,12 +231,11 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
 
     function surfaced() {
       const reporter = recordingReporter();
-      const redraw = vi.fn();
       const surface = surfaceRefusedWrites({
-        reporter, redraw, titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
+        reporter, titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
       });
       onTestFinished(() => { surface.dispose(); });
-      return { reporter, redraw };
+      return { reporter };
     }
 
     it('is refused, naming the write in flight, and starts nothing', async () => {
@@ -260,16 +261,15 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       await expect(asked('modbench.mod.rename')).rejects.toThrow('Rename Mod did not start: Build Mod is still writing.');
     });
 
-    it('tells a view call once, in a notification and the Output, and draws the view from the held value', async () => {
-      const { reporter, redraw } = surfaced();
+    it('tells a view call once, in a notification and the Output', async () => {
+      const { reporter } = surfaced();
       heldWrite('modbench.mod.build');
 
       const answered = await asViewCall(() => asked('modbench.mod.rename'));
 
-      expect({ answered, reports: reporter.reports, redraws: redraw.mock.calls.length, shownOnSurface: reporter.shownFailures }).toEqual({
+      expect({ answered, reports: reporter.reports, shownOnSurface: reporter.shownFailures }).toEqual({
         answered: undefined,
         reports: [{ severity: 'error', message: 'Rename Mod did not start: Build Mod is still writing.', detail: undefined }],
-        redraws: 1,
         shownOnSurface: [],
       });
     });
@@ -312,24 +312,42 @@ describe('handingOneChange', () => {
   const noFile = '/mods/A/meta.ini';
   const told = '/mods/A/a.esp';
 
-  it('tells the files its writes told and the files they named in one read, however many writes there were', async () => {
-    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
+  it('hands the loader each write as it writes, and reads back once it ends only the files its writes named (ADR-0029, Consequences, bullet 1)', async () => {
+    const steps: string[] = [];
+    writesToldTo({ told: (paths) => { steps.push(`told ${paths.join()}`); return Promise.resolve({ subscribed: Promise.resolve() }); } });
+    onTestFinished(() => { writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) }); });
+    const refresh = vi.fn((named?: readonly string[]) => { steps.push(`read ${named?.join() ?? 'the disk'}`); return Promise.resolve(); });
 
     await handingOneChange({ refresh }, async () => {
-      await toldAfter([told], () => Promise.resolve());
+      await toldAfter([told], () => { steps.push('write'); return Promise.resolve(); });
+      steps.push('next write');
       ambientWrites.name([noFile]);
     });
 
-    expect(refresh.mock.calls).toEqual([[[told, noFile]]]);
+    expect(steps).toEqual(['write', `told ${told}`, 'next write', `read ${noFile}`]);
   });
 
-  it('checks the disk in that one read when a write left its files unnamed', async () => {
+  it('holds its view\'s redraw until the read back of what its writes named has landed (common.md, A gesture that writes, story 1)', async () => {
+    const view = new RedrawEmitter<string | undefined>('modbench.thing');
+    const drawn: string[] = [];
+    view.event((row) => { if (row !== undefined) drawn.push(row); });
+    const refresh = vi.fn(() => { view.fire('read back'); return Promise.resolve(); });
+    let drawnWhileWriting: string[] = [];
+
+    await runUnderProgress('modbench.thing', { refresh }, () => {
+      view.fire('written');
+      ambientWrites.name([noFile]);
+      drawnWhileWriting = [...drawn];
+      return Promise.resolve();
+    });
+
+    expect([drawnWhileWriting, drawn]).toEqual([[], ['written', 'read back']]);
+  });
+
+  it('checks the disk once it ends when a write left its files unnamed', async () => {
     const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
 
-    await handingOneChange({ refresh }, async () => {
-      await toldAfter([told], () => Promise.resolve());
-      ambientWrites.leaveUnnamed();
-    });
+    await handingOneChange({ refresh }, unnamed);
 
     expect(refresh.mock.calls).toEqual([[]]);
   });
@@ -342,26 +360,26 @@ describe('handingOneChange', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('reads once, when the outer change ends, for a change inside another', async () => {
+  it('reads back once, when the outer change ends, for a change inside another', async () => {
     const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
 
     await handingOneChange({ refresh }, async () => {
-      await handingOneChange({ refresh }, () => toldAfter([told], () => Promise.resolve()));
+      await handingOneChange({ refresh }, () => { ambientWrites.name([noFile]); return Promise.resolve(); });
       expect(refresh).not.toHaveBeenCalled();
     });
 
-    expect(refresh.mock.calls).toEqual([[[told]]]);
+    expect(refresh.mock.calls).toEqual([[[noFile]]]);
   });
 
-  it('reads what a failed change wrote, and lets the failure through', async () => {
+  it('reads back what a failed change named, and lets the failure through', async () => {
     const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
 
-    await expect(handingOneChange({ refresh }, async () => {
-      await toldAfter([told], () => Promise.resolve());
+    await expect(handingOneChange({ refresh }, () => {
+      ambientWrites.name([noFile]);
       throw new Error('half written');
     })).rejects.toThrow('half written');
 
-    expect(refresh.mock.calls).toEqual([[[told]]]);
+    expect(refresh.mock.calls).toEqual([[[noFile]]]);
   });
 });
 
@@ -428,7 +446,7 @@ describe('whenNoChangeIsRunning', () => {
 
   it('reports a task that fails and still runs the others', async () => {
     const reporter = recordingReporter();
-    const surface = surfaceRefusedWrites({ reporter, titles: new Map(), redraw: () => undefined });
+    const surface = surfaceRefusedWrites({ reporter, titles: new Map() });
     onTestFinished(() => { surface.dispose(); });
     const other = vi.fn(() => Promise.resolve());
     const fails = whenNoChangeIsRunning(() => Promise.reject(new Error('disk full')));

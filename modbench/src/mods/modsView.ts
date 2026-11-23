@@ -170,7 +170,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     provider.onDidChangeTreeData(showKeyContext),
     provider.onDidChangeTreeData(expand),
     view.onDidChangeVisibility(expand),
-    view.onDidChangeCheckboxState(onModCheckboxChanged),
+    view.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, (clicked) => { provider.restoreRows(clicked); })),
     view.onDidExpandElement(({ element }) => { if (element.resourceUri) open.expandedRow(element.resourceUri); }),
     view.onDidCollapseElement(({ element }) => { if (element.resourceUri) open.collapsedRow(element.resourceUri); }),
     ...registerModDecorations(instance, open, vscode.workspace),

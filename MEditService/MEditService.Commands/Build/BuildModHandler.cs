@@ -31,14 +31,14 @@ public sealed class BuildModHandler
         if (_source.WhyGitCannotRun() is { } gitMissing)
             return new SelectionRefusal<BuildRefusal>(BuildRefusal.GitUnavailable, gitMissing.Reason);
 
-        var built = await ModByMod.OverAsync(
+        var (built, written) = await WrittenFiles.Of(() => ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new BuildProgressNotification(progress)),
-            (mod, _) => _build.BuildAsync(mod, instance), CancellationToken.None);
+            (mod, _) => _build.BuildAsync(mod, instance), CancellationToken.None));
         await ReadBack([.. built.Landed.Select(mod => mod.Outcome)], cancel);
         return built.ToResult(
             landed => ModBuiltOf(landed.Item, landed.Outcome),
             refused => new BuildRefused(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new BuildResult(applied, refused));
+            (applied, refused) => new BuildResult(applied, refused, written));
     }
 
     private Task ReadBack(List<ModBuildOutcome> built, CancellationToken cancel) =>

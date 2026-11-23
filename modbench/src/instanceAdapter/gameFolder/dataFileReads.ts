@@ -1,11 +1,12 @@
 import { access, constants, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { crc32Of } from '../fileContents/contentDigest';
-import { isAbsent } from '../files';
+import { isAbsent } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FileAnswer } from '../../sortingRules/lootConditions';
 import type { GameFolder } from '../instanceAdapter';
 import { versionResourceOf } from './versionResource';
+import { keptUntilNamed, stampKept, trustingKept } from '../files';
 
 /** What LOOT's conditions read of a file by path relative to the Data folder (`../` leaves it). `winner` is where mod
  *  order provides it, else the game folder's, found in any case. A file not there answers `undefined`/`false`. */
@@ -15,6 +16,9 @@ export interface DataFileReads {
   /** The File Version or Product Version of a Windows program; `undefined` for one with no version number. */
   dataFileVersion(path: string, winner: string | undefined, field: 'file' | 'product'): Promise<FileAnswer<string | undefined>>;
   dataFileReadable(path: string, winner: string | undefined): Promise<FileAnswer<boolean>>;
+  /** Runs `read` answering each checksum and version from the last read of the file, read again only where a change named
+   *  it or the disk was checked. */
+  dataFilesTrusted<T>(read: () => Promise<T>): Promise<T>;
 }
 
 const read = <T>(value: T): FileAnswer<T> => ({ kind: 'read', value });
@@ -39,6 +43,11 @@ async function inAnyCase(base: string, relative: string): Promise<string> {
 }
 
 export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileReads {
+  // A whole file's checksum and a program's version are read again only once its stamp changed.
+  const checksumAt = stampKept(async (at: string) => parseInt(await crc32Of(at), 16));
+  const versionAt = stampKept(versionResourceOf);
+  // No stamp covers whether a file reads, so a trusted read keeps it until a change names the file.
+  const readableAt = keptUntilNamed((at: string) => access(at, constants.R_OK).then(() => true));
   const located = async (path: string, winner: string | undefined): Promise<{ at: string } | { why: string }> => {
     if (winner !== undefined) return { at: winner };
     const folder = await gameFolder();
@@ -54,12 +63,12 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
     }
   };
   return {
-    dataFileChecksum: (path, winner) => reading<number | undefined>(path, winner, undefined, async (at) => parseInt(await crc32Of(at), 16)),
+    dataFileChecksum: (path, winner) => reading<number | undefined>(path, winner, undefined, checksumAt),
     dataFileVersion: async (path, winner, field) => {
       const found = await located(path, winner);
       if ('why' in found) return unreadable(found.why);
       try {
-        const resource = await versionResourceOf(found.at);
+        const resource = await versionAt(found.at);
         if (resource.kind === 'notAProgram') return unreadable(`${path} is not a Windows program`);
         if (resource.kind === 'noVersionResource') return read(undefined);
         const version = field === 'file' ? resource.fileVersion : resource.productVersion;
@@ -68,6 +77,7 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
         return isAbsent(err) ? read(undefined) : unreadable(errorMessage(err));
       }
     },
-    dataFileReadable: (path, winner) => reading(path, winner, false, (at) => access(at, constants.R_OK).then(() => true)),
+    dataFileReadable: (path, winner) => reading(path, winner, false, readableAt),
+    dataFilesTrusted: trustingKept,
   };
 }

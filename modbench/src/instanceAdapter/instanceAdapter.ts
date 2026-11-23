@@ -668,8 +668,10 @@ export interface InstanceReading extends InstanceGame {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
   /** Each path the check of the disk found changed that no event named. */
   readonly unheardChanges: readonly string[];
-  /** Each path the reading was asked to read again whose content it read, or whose stamp it checked, and found as it held it. */
+  /** Each path the reading was asked to read again whose content it found as the landed reading it was handed did. */
   readonly unchangedFiles?: readonly string[];
+  /** The content the reading found of each file whose content it compares, for a reading handed this one as landed. */
+  readonly contentsFound?: ReadonlyMap<string, unknown>;
   /** Runs `read` trusting what the latest reading left kept, the instance's files and the manifests: each is read again
    *  only where a change named it or the disk was checked. */
   readonly trustingKept: <T>(read: () => Promise<T>) => Promise<T>;
@@ -685,9 +687,9 @@ export interface TakenNames {
 }
 
 export interface InstanceAdapter extends DataFileReads {
-  /** The whole instance in one generation, reading again what `reread` finds changed. A mod order that parses to no entries
-   *  is read again after a settle before it is believed: another tool may be half-way through writing it. */
-  reading(reread?: Reread): Promise<InstanceReading>;
+  /** The instance in one generation, reading again what `reread` asks for. An empty mod order is read again after a settle,
+   *  as another tool may be mid-write. Each fact is held against `landed`, what the value last landed from. */
+  reading(reread?: Reread, landed?: InstanceReading): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
   /** Mutagen's release of the game the mod manager's configuration selects now. */
@@ -971,7 +973,8 @@ export interface OriginProvides {
   readonly files: readonly OriginFile[];
 }
 
-const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
+/** An origin with its files that nothing excludes. */
+export const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
   ({ origin, files: files.filter((file) => !file.excluded) });
 
 /** The origins the game gets a file from, winning-first, as Symbol names ranks them, each with the files nothing excludes. */

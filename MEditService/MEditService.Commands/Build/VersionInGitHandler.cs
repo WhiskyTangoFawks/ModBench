@@ -36,16 +36,16 @@ public sealed class VersionInGitHandler
             return new SelectionRefusal<VersionInGitRefusal>(VersionInGitRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         if (_source.WhyGitCannotRun() is { } gitMissing)
             return new SelectionRefusal<VersionInGitRefusal>(VersionInGitRefusal.GitUnavailable, gitMissing.Reason);
-        var decompiled = await ModByMod.OverAsync(
+        var (decompiled, written) = await WrittenFiles.Of(() => ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new VersionInGitProgressNotification(progress, Phase: null)),
             (mod, at) => _init.InitAsync(
                 loadOrder, mod, new HashSet<PluginAddress>(), repair: null,
                 phase => _notifications.Publish(new VersionInGitProgressNotification(at, phase)), CancellationToken.None),
-            CancellationToken.None);
+            CancellationToken.None));
         await _held.ReadBackSource(decompiled.Landed.SelectMany(landed => landed.Outcome), cancel);
         return decompiled.ToResult(
             landed => new VersionedMod(landed.Item, landed.Outcome),
             refused => new VersionInGitRefused(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new VersionInGitResult(applied, refused));
+            (applied, refused) => new VersionInGitResult(applied, refused, written));
     }
 }

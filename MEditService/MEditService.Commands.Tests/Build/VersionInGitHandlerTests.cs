@@ -59,6 +59,17 @@ public sealed class VersionInGitHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Init_NamesEachFileItWroteInTheSourceFolder_AndItsRepository()
+    {
+        _holder.Apply(Snapshot);
+
+        var result = (await TestEditService.VersionInGitHandler(_holder).VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin))).Value();
+
+        WrittenPaths.Cover(result.Written, [Path.Combine(SourceFolder, ".git"), .. Directory.GetFiles(SourceFolder, "*", SearchOption.AllDirectories).Where(file => !file.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}", StringComparison.Ordinal))]);
+        WrittenPaths.Within(result.Written, Path.Combine(_instanceRoot, "source"));
+    }
+
+    [Fact]
     public async Task Init_HandsTheRecordIndexEachPluginItsSourceFolderHolds_ToReadBack()
     {
         _holder.Apply(Snapshot);

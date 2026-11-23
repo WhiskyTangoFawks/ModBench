@@ -44,12 +44,13 @@ public sealed class SourceFolderMoveApiTests : HostedTests
     }
 
     [Fact]
-    public async Task FollowingAMoveOutsideAnyRepository_Is204()
+    public async Task FollowingAMoveOutsideAnyRepository_Is200_NamingNothingWritten()
     {
         var renamed = Directory.CreateDirectory(Path.Combine(_source, "New")).FullName;
 
         var response = await Client.PostAsJsonAsync("/source-folders/follow-move", new { sourceFolder = Old, movedTo = renamed });
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("written").EnumerateArray());
     }
 }

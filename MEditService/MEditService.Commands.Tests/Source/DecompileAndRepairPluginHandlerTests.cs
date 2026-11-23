@@ -49,6 +49,8 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var result = await Repair(ToRepair(plugin));
 
         Assert.Equal([plugin], result.Applied);
+        WrittenPaths.Cover(result.Written, Path.Combine(_sourceMod, "plugin-source", Malformed), Path.Combine(_sourceMod, ".git"));
+        WrittenPaths.Within(result.Written, _sourceMod);
         Assert.Equal(before, Git(_sourceMod, "rev-parse", "HEAD~2").Trim());
         Assert.Equal([$"Repair {Malformed}", $"Decompile {Malformed} as it was, each malformed record a placeholder"], Subjects(_sourceMod, 2));
         Assert.True(TreeHolds(_sourceMod, "HEAD~1", fixture.Diagnosis), "no placeholder names the diagnosis");

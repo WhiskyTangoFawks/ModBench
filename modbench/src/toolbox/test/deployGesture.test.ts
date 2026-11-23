@@ -26,6 +26,7 @@ vi.mock('vscode', async () => {
   };
 });
 
+import { toldOf } from '../../instanceLoader/told';
 import { progressSteps } from '../../test/recordedProgress';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -33,11 +34,9 @@ import { registerDeployCommands } from '../deployGesture';
 import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { Instance, type InstanceSubscriber } from '../../instanceLoader/instance';
+import type { InstanceSubscriber } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeWorkspace } from '../../test/fakeWorkspace';
-import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
+import { instanceOver } from '../../test/instanceOver';
 import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult } from '../../instanceCommands/deploy';
 
 const value = instanceValueFixture();
@@ -198,16 +197,16 @@ describe('Deploy', () => {
 describe('the problems on the files the deployment folder holds that deploy does not manage', () => {
   const held = () => [...present(collections[0], 'the collection')].map(([uri, [problem]]) => [uri.fsPath, problem?.message]);
 
-  it('are read again at each value the instance lands, as no watch follows the deployment folder', async () => {
-    const instance = new Instance({
-      adapter: fakeInstanceAdapter(readingFixture()).adapter, gameFolderSettingId: GAME_FOLDER_SETTING_ID,
-      log: { info: () => undefined, warn: () => undefined, error: () => undefined }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
-    });
+  it('are read again at a check of the disk and at a change a watch names in the deployment folder, and at no other (ADR-0029)', async () => {
+    const instance = instanceOver(fakeInstanceAdapter(readingFixture()).adapter);
     const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: [] }));
     const { reporterFor } = tagRecordingReporterFor();
     registerDeployCommands({ commands: { deploy: vi.fn(), purge: vi.fn(), moveToOverwrite: vi.fn(), unmanaged }, instance, reporterFor });
 
-    for (let read = 0; read < 3; read++) await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+    await instance.refresh();
+    await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+    await instance.refresh(['/deployed/Data/a.esp']);
+    await instance.refresh();
 
     instance.dispose();
     expect(unmanaged).toHaveBeenCalledTimes(3);
@@ -250,7 +249,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
     unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
-    void present(subscribers[0], 'the instance subscriber')(value, 2, { named: [], disk: true });
+    void present(subscribers[0], 'the instance subscriber')(value, 2, toldOf(value, value, { named: [], disk: true }, undefined));
 
     await vi.waitFor(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
   });

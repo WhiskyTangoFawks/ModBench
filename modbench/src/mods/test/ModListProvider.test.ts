@@ -22,6 +22,8 @@ import { OpenRows } from '../openRows';
 import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
+import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from '../gestureEntry';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -201,15 +203,30 @@ describe('what the view says of itself', () => {
     expect(provider.viewMessage()).toBeUndefined();
   });
 
-  it('draws the tree again when the instance redraws', () => {
+  it('holds its redraw while a gesture writes from it, and draws once the gesture ends (common.md, A gesture that writes, story 1)', () => {
     const instance = new FakeInstance(valueOf([mod('A')]));
     const provider = makeProvider([], { instance });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
-    instance.redraw();
+    holdRedraws(MODS_KEY_ARGS.view);
+    instance.publish(valueOf([mod('A'), mod('B')]));
+    const firedWhileWriting = fired.length;
+    releaseRedraws(MODS_KEY_ARGS.view);
 
-    expect(fired).toHaveLength(1);
+    expect([firedWhileWriting, fired.length]).toEqual([0, 1]);
+  });
+
+  it('draws a clicked row again with the box its mod\'s value sets (common.md, A gesture that writes, story 2)', async () => {
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf([mod('A')])) });
+    const clicked = expectInstanceOf((await provider.getChildren())[0], ModNode);
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+    clicked.checkboxState = TreeItemCheckboxState.Unchecked;
+
+    provider.restoreRows([clicked]);
+
+    expect([fired, provider.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {
@@ -905,5 +922,53 @@ describe('separators that share a prefix', () => {
     provider.setFilter('lone', false);
 
     expect(rowsOf(await provider.getChildren())).toEqual(['mod Lone', 'runtimeOutput Overwrite']);
+  });
+});
+
+describe('what a change asks the Mods view for again (common.md, A view, story 13)', () => {
+  const idsOf = (fired: readonly (ModlistNode | undefined)[]) => fired.map((row) => row?.id);
+  const listed = { A: { files: [file('A', 'a.dds')] }, B: { files: [file('B', 'b.dds')] } };
+
+  it('asks again for the row of the mod whose files changed alone', async () => {
+    const before = await indexedValueOf([mod('A'), mod('B')], listed);
+    const { files, filesByMod, foldersByMod, stackedCopies } = await indexedValueOf([mod('A'), mod('B')], { ...listed, A: { files: [...listed.A.files, file('A', 'new.dds')] } });
+    const instance = new FakeInstance(before);
+    const provider = makeProvider([], { instance });
+    await provider.getChildren();
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((row) => fired.push(row));
+
+    instance.publish({ ...before, files, filesByMod, foldersByMod, stackedCopies });
+
+    expect(idsOf(fired)).toEqual(['mod:A']);
+  });
+
+  it('asks again for the row of the mod whose status changed alone', async () => {
+    let changed: ((mods: 'every' | ReadonlySet<string>) => void) | undefined;
+    const statuses = { ...NO_MOD_STATUSES, onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = listener; return { dispose: () => undefined }; } };
+    const instance = new FakeInstance(await indexedValueOf([mod('A'), mod('B')], listed));
+    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
+    await provider.getChildren();
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((row) => fired.push(row));
+
+    changed?.(new Set(['B']));
+
+    expect(idsOf(fired)).toEqual(['mod:B']);
+  });
+
+  it('draws the tree again when the status of a mod the filter hides changes, so its badge counts it', async () => {
+    let changed: ((mods: 'every' | ReadonlySet<string>) => void) | undefined;
+    const statuses = { ...NO_MOD_STATUSES, onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = listener; return { dispose: () => undefined }; } };
+    const instance = new FakeInstance(await indexedValueOf([mod('A'), mod('B')], listed));
+    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
+    provider.setFilter('a.dds', true);
+    await provider.getChildren();
+    const fired: (ModlistNode | undefined)[] = [];
+    provider.onDidChangeTreeData((row) => fired.push(row));
+
+    changed?.(new Set(['B']));
+
+    expect(fired).toEqual([undefined]);
   });
 });

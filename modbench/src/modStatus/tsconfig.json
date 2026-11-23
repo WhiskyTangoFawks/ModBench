@@ -6,7 +6,9 @@
   },
   "references": [
     { "path": "../instanceAdapter" },
-    { "path": "../manifestAdapter" }
+    { "path": "../manifestAdapter" },
+    { "path": "../ports" },
+    { "path": "../repositoriesLib" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

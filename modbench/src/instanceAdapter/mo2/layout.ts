@@ -178,15 +178,18 @@ const EVERYTHING_BELOW = '**';
 export const FIRST_LEVEL = '?*';
 
 export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] => [
-  // A profile switch rewrites the settings and nothing else; a repository appears at, or vanishes from, the root.
-  { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${SUBMODULES_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
+  // A profile switch rewrites the settings and nothing else; a repository, and each file and folder a publisher keeps out,
+  // appears at, or vanishes from, the root.
+  {
+    base: instanceRoot,
+    pattern: `{${[SETTINGS_FILE_NAME, IGNORE_LIST_FILE, SUBMODULES_FILE, GIT_DIR, RECORD_INDEX, HASH_INDEX, SOURCE_MODS_FOLDER, ...Object.values(SORTING_RULE_FILES)].join(',')}}`,
+  },
   { base: modsDir(instanceRoot), pattern: EVERYTHING_BELOW },
   { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
   { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },
   { base: sourceRootDir(instanceRoot), pattern: EVERYTHING_BELOW },
-  // Git init's path filter and push check, what decides the folders git holds whole, and the commit HEAD names.
+  // Git init's path filter and the hooks path, what decides the folders git holds whole, and the commit HEAD names.
   { base: join(instanceRoot, GIT_DIR), pattern: '{config,index,HEAD}' },
-  { base: join(instanceRoot, GIT_DIR, 'hooks'), pattern: 'pre-push' },
   { base: join(instanceRoot, GIT_DIR, 'info'), pattern: 'exclude' },
 ];
 

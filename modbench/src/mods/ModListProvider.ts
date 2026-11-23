@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
+import { RedrawEmitter } from '../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from './gestureEntry';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups } from '../instanceLoader/instance';
+import { modEntryOf, originsTouched } from './originsTouched';
+import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups, type Told } from '../instanceLoader/instance';
 import { gameFolderFileOver, unreadableArchiveReason } from './modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -37,7 +40,7 @@ function isDraggedRows(value: unknown): value is DraggedRows {
 const TREE_READS = {
   ...MESSAGE_READS, mods: true, modGroups: true, modNames: true, holdsRepository: true, gameName: true, dataFolderFiles: true, stackedCopies: true, plugins: true,
   overwriteFiles: true, overwriteFolders: true, filesByMod: true, foldersByMod: true, listedSourceMods: true, paths: true, publisherConfiguration: true,
-  files: true, archiveContents: true,
+  files: true, archiveContents: true, loadsArchive: true,
 } as const;
 
 type TreeInstance = InstanceOf<keyof typeof TREE_READS>;
@@ -195,7 +198,7 @@ export class ModListProvider
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
 
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<ModlistNode | undefined>();
+  private readonly _onDidChangeTreeData = new RedrawEmitter<ModlistNode | undefined>(MODS_KEY_ARGS.view);
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private modGroups?: ModGroups;
@@ -212,7 +215,6 @@ export class ModListProvider
   private instanceValue: TreeInstance['value'];
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
-  private readonly redrawSubscription: vscode.Disposable;
   private readonly statusSubscription: vscode.Disposable;
   private readonly openSubscription: vscode.Disposable;
   private readonly statuses: ModListProviderOptions['statuses'];
@@ -224,13 +226,15 @@ export class ModListProvider
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
-    this.instanceSubscription = options.instance.subscribe(() => { this.invalidate(); }, TREE_READS);
+    this.instanceSubscription = options.instance.subscribe((_value, _sequence, told) => { this.update(told); }, TREE_READS);
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
-    this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;
     this.open = options.open;
     this.reporter = options.reporter;
-    this.statusSubscription = options.statuses.onDidChange(() => this.render());
+    // The badge counts a mod the filter hides too, so a status with no row to fire draws the tree again.
+    this.statusSubscription = options.statuses.onDidChange((mods) => {
+      if (mods === 'every' || ![...mods].every((name) => this.fireRow(rowIdentity('mod', name)))) this.render();
+    });
     this.openSubscription = options.open.onDidChange(() => {
       const before = this.marks;
       if (before) this.fireChangedMarks(before);
@@ -240,10 +244,20 @@ export class ModListProvider
   dispose(): void {
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
-    this.redrawSubscription.dispose();
     this.statusSubscription.dispose();
     this.openSubscription.dispose();
     this.firstRead.dispose();
+  }
+
+  // A filter shows a row by its files, so under one any change may show or hide a row.
+  private update(told: Told<keyof typeof TREE_READS>): void {
+    const touched = this.filterText === '' ? originsTouched(this.instance.value, told) : 'every';
+    if (touched === 'every') {
+      this.invalidate();
+      return;
+    }
+    this.instanceValue = this.instance.value;
+    for (const origin of touched) this.fireRow(origin.kind === 'mod' ? rowIdentity('mod', origin.name) : RUNTIME_OUTPUT.kind);
   }
 
   /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left. */
@@ -349,11 +363,15 @@ export class ModListProvider
 
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
-    if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) {
-      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.text : OVERWRITE_LABEL;
-      element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
-    }
+    if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) this.label(element);
+    // VS Code sets the box of the item it holds as the user clicks; the row's own value sets it back.
+    if (element instanceof ModNode) element.checkboxState = element.mod.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
     return element;
+  }
+
+  private label(element: ModNode | SeparatorNode | OverwriteNode): void {
+    const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.text : OVERWRITE_LABEL;
+    element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
   }
 
   /** Marks the labels of the rows for these origins, and of each collapsed separator that holds one (mods.md, The tree, story 11). */
@@ -371,11 +389,13 @@ export class ModListProvider
     }
   }
 
-  private fireRow(id: string): void {
+  // Whether the tree shows the row, which it then asks again for.
+  private fireRow(id: string): boolean {
     const row = id === 'runtimeOutput' ? this.overwriteNode()
       : id.startsWith('mod:') ? this.rowFor(modOrigin(id.slice('mod:'.length)))
         : this.separatorRowNamed(id.slice('separator:'.length));
     if (row) this._onDidChangeTreeData.fire(row);
+    return row !== undefined;
   }
 
   private marked(): ReadonlySet<string> {
@@ -540,10 +560,15 @@ export class ModListProvider
     return this.entries().leaves.get(name);
   }
 
+  /** Draws `clicked` again (`RedrawEmitter.restore`): the rows VS Code holds, whose check box it set as the user clicked. */
+  restoreRows(clicked: readonly ModNode[]): void {
+    this._onDidChangeTreeData.restore(clicked);
+  }
+
   /** The row the tree shows for an origin, or undefined when it shows none. */
   rowFor(origin: FileOrigin): ModNode | OverwriteNode | undefined {
     if (origin.kind !== 'mod') return this.overwriteNode();
-    const mod = this.instanceValue.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === origin.name);
+    const mod = modEntryOf(this.instanceValue.mods, origin.name);
     return mod && this.showsMod(mod) ? this.modNode(mod) : undefined;
   }
 

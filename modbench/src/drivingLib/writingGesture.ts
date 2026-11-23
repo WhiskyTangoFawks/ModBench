@@ -2,7 +2,6 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { collectingWrites } from '../instanceLoader/ambientWrites';
-import { toldOnceSettled } from '../repositoriesLib/writesTold';
 import { pausableProgress, type Progress } from './pausableProgress';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
@@ -43,22 +42,34 @@ async function releaseWaiting(): Promise<void> {
   }));
 }
 
-/** Hands the loader every file `work` wrote in one read once it ends, so no subscriber sees it half done. */
+/** Runs `work`, whose writes each hand the loader what they wrote as they write it (ADR-0029, Consequences, bullet 1). Once
+ *  the outermost change ends, it reads back what they named but could not hand, and waits for their subscribers. */
 export async function handingOneChange<T>(instance: Pick<Instance, 'refresh'>, work: (written: WrittenFiles) => Promise<T>): Promise<T> {
   const written = new WrittenFiles();
-  const tellAll = (told: readonly string[]) => {
-    const named = written.named;
-    if (named === undefined) return instance.refresh();
-    const files = [...told, ...named];
-    return files.length === 0 ? Promise.resolve() : instance.refresh(files);
-  };
   changesRunning++;
+  const outermost = changesRunning === 1;
   try {
-    return await toldOnceSettled(() => collectingWrites(written, () => work(written)), tellAll);
+    let answer: T;
+    try {
+      answer = await collectingWrites(written, () => work(written));
+    } catch (err) {
+      if (outermost) await readBack(instance, written).catch(() => undefined);
+      throw err;
+    }
+    if (outermost) await readBack(instance, written);
+    return answer;
   } finally {
     changesRunning--;
     if (changesRunning === 0) void releaseWaiting();
   }
+}
+
+// What the writes named but could not hand, or the disk when one could not name them; then the subscribers each read woke.
+async function readBack(instance: Pick<Instance, 'refresh'>, written: WrittenFiles): Promise<void> {
+  const { named } = written;
+  if (named === undefined) await instance.refresh();
+  else if (named.length > 0) await instance.refresh(named);
+  await written.subscribed();
 }
 
 /** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is given. */
@@ -69,14 +80,14 @@ export async function runUnderProgress<T>(
   const handedBefore = readModel?.handed();
   progress.working();
   try {
-    return await handingOneChange(instance, (written) => command(progress, written));
-  } finally {
-    progress.working();
     try {
-      if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.taken();
+      return await handingOneChange(instance, (written) => command(progress, written));
     } finally {
-      await progress.done();
+      progress.working();
+      if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.taken();
     }
+  } finally {
+    await progress.done();
   }
 }
 
@@ -155,8 +166,6 @@ interface RefusalSurface {
   readonly reporter: Reporter;
   /** The title of each gesture's Command ID, which a refusal names the write by. */
   readonly titles: ReadonlyMap<string, string>;
-  /** Draws the views from the held value, so a control the user toggled does not keep a state nothing wrote. */
-  readonly redraw: () => void;
 }
 
 let surface: RefusalSurface | undefined;
@@ -171,15 +180,14 @@ const titleOf = (command: string): string => surface?.titles.get(command) ?? com
 /** A write refused because another is in flight. */
 export class RefusedWrite extends Refusal {}
 
-/** Runs `work` as a view call: a refused write is told once in a notification and the Output, and the views are
- *  drawn from the held value. An agent's call skips this: the reason goes back to it. */
+/** Runs `work` as a view call: a refused write is told once in a notification and the Output. An agent's call skips this:
+ *  the reason goes back to it. */
 export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefined> {
   try {
     return await work();
   } catch (e) {
     if (!(e instanceof RefusedWrite)) throw e;
     surface?.reporter.report('error', e.message);
-    surface?.redraw();
     return undefined;
   }
 }

@@ -1,0 +1,63 @@
+// ADR-0029, Consequences, bullet 5: what derives from an origin's files updates from the origins whose files changed.
+
+import type { FileOrigin, OriginFile } from '../instanceAdapter/instanceAdapter';
+import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from './fileConflictIndex';
+import { changedKeys } from '../ports/lastBuilt';
+import { differing } from './reordered';
+import type { InstanceValue } from './instance';
+
+const BY_ORIGIN: readonly (keyof InstanceValue)[] = ['filesByMod', 'foldersByMod', 'overwriteFiles', 'overwriteFolders', 'files', 'stackedCopies'];
+
+/** What an origin's files are, and what the game gets of them: the archives and what each holds reach them through the stack. */
+export type Touching = Pick<InstanceValue, 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders' | 'files' | 'stackedCopies' | 'archiveContents' | 'loadsArchive'>;
+
+/** The facts whatever follows the origins' files reads. */
+export const TOUCHING_READ = {
+  filesByMod: true, foldersByMod: true, overwriteFiles: true, overwriteFolders: true, files: true, stackedCopies: true, archiveContents: true, loadsArchive: true,
+} as const satisfies Record<keyof Touching, true>;
+
+// An origin whose own files or folders changed, Overwrite among them, with each file it gained or lost, and those it gained.
+interface OwnFilesChanged {
+  readonly origin: FileOrigin;
+  readonly files: readonly OriginFile[];
+  readonly gained: readonly OriginFile[];
+}
+
+/** Each origin whose own files changed, or anything. */
+export type FilesChanged = 'every' | readonly OwnFilesChanged[];
+
+// Whether a fact no origin's files hold changed: the archives, or another fact `reads` names.
+function changedBeyond<K extends keyof InstanceValue>(before: Pick<InstanceValue, K> & Touching, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Partial<Record<K, true>>>): boolean {
+  const isRead = (fact: string): fact is K => fact in reads;
+  return before.archiveContents !== after.archiveContents || before.loadsArchive !== after.loadsArchive
+    || Object.keys(reads).filter(isRead).some((fact) => !BY_ORIGIN.includes(fact) && before[fact] !== after[fact]);
+}
+
+// Each subscriber asks of the same two lists, so the answer is kept by the list it reached.
+const ownChanges = new WeakMap<readonly OriginFile[], { readonly was: readonly OriginFile[]; readonly change: OwnFilesChanged }>();
+
+function ownChanged(origin: FileOrigin, was: readonly OriginFile[], now: readonly OriginFile[]): OwnFilesChanged {
+  const kept = ownChanges.get(now);
+  if (kept?.was === was && sameOrigin(kept.change.origin, origin)) return kept.change;
+  const files = differing(was, now);
+  const held = new Set(was);
+  const change = { origin, files, gained: files.filter((file) => !held.has(file)) };
+  ownChanges.set(now, { was, change });
+  return change;
+}
+
+/** What a new value changed of the origins' files. Anything while the archives or another fact `reads` names changed, or
+ *  the stack changed with no origin's files. */
+export function filesChanged<K extends keyof InstanceValue>(
+  before: Pick<InstanceValue, K> & Touching | undefined, after: Pick<InstanceValue, K> & Touching, reads: Readonly<Partial<Record<K, true>>>,
+): FilesChanged {
+  if (before === undefined || changedBeyond(before, after, reads)) return 'every';
+  const mods = [...new Set([...changedKeys(after.filesByMod, before.filesByMod), ...changedKeys(after.foldersByMod, before.foldersByMod)])];
+  const overwrite = before.overwriteFiles !== after.overwriteFiles || before.overwriteFolders !== after.overwriteFolders;
+  const own = [
+    ...mods.map((name) => ownChanged(modOrigin(name), before.filesByMod.get(name) ?? [], after.filesByMod.get(name) ?? [])),
+    ...overwrite ? [ownChanged(RUNTIME_OUTPUT, before.overwriteFiles, after.overwriteFiles)] : [],
+  ];
+  if (own.length > 0) return own;
+  return before.files === after.files && before.stackedCopies === after.stackedCopies ? [] : 'every';
+}

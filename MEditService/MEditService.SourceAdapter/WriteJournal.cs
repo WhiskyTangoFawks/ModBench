@@ -64,6 +64,7 @@ internal sealed class WriteJournal(string sourceFolder)
             missing.Push(ancestor);
         foreach (var minted in missing) _entries.Add(new MintedDirectory(minted));
         Directory.CreateDirectory(directory);
+        if (missing.Count > 0) WrittenFiles.Name(missing.Peek());
     }
 
     /// <summary>The stamp the file took, null when the file system cannot answer.</summary>
@@ -77,6 +78,7 @@ internal sealed class WriteJournal(string sourceFolder)
         try
         {
             var stamp = WriteAtomic(path, content, temp);
+            WrittenFiles.Name(path);
             _entries.Add(new FileState(path, before, content));
             return stamp;
         }
@@ -104,6 +106,7 @@ internal sealed class WriteJournal(string sourceFolder)
         }
         var digest = DigestOf(temp);
         File.Move(temp, path, overwrite: true);
+        WrittenFiles.Name(path);
         _entries.Add(new CopiedFile(path, before, digest));
     }
 
@@ -118,6 +121,7 @@ internal sealed class WriteJournal(string sourceFolder)
         if (original == null) return;
         _entries.Add(new DeletedFile(path, original));
         File.Delete(path);
+        WrittenFiles.Name(path);
     }
 
     /// <summary>Runs <paramref name="steps"/>; one that fails puts back what the steps wrote.</summary>
@@ -137,6 +141,7 @@ internal sealed class WriteJournal(string sourceFolder)
     internal void Move(string from, string to)
     {
         MoveFileOrFolder(from, to);
+        WrittenFiles.Name(from, to);
         RecordUndo(() => MoveFileOrFolder(to, from), to);
     }
 
@@ -170,6 +175,7 @@ internal sealed class WriteJournal(string sourceFolder)
         if (Directory.EnumerateFileSystemEntries(directory).Any()) return;
         _entries.Add(new RemovedDirectory(directory));
         Directory.Delete(directory);
+        WrittenFiles.Name(directory);
     }
 
     /// <summary>Records a change that <paramref name="undo"/> puts back, such as a git ref or a repository

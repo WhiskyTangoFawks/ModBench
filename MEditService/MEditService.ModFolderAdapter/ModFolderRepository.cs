@@ -22,7 +22,7 @@ public sealed class ModFolderRepository : IModFolderRepository
     public void WriteFile(string folder, string path, Action<Stream> write)
     {
         var target = Path.Combine(folder, path);
-        Directory.CreateDirectory(folder);
+        WrittenFiles.CreateDirectory(folder);
         TempName.RemoveLeftovers(folder);
         var partial = TempName.FileIn(folder);
         try
@@ -30,8 +30,9 @@ public sealed class ModFolderRepository : IModFolderRepository
             using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 write(content);
             if (File.Exists(target) && SameBytes(partial, target)) return;
-            Directory.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
+            WrittenFiles.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
             File.Move(partial, target, overwrite: true);
+            WrittenFiles.Name(target);
         }
         finally
         {

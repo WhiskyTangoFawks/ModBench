@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { foundUnchanged, handKept, keptTrusted, pathKey, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { handKept, keptTrusted, pathKey, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
@@ -303,28 +303,27 @@ export const listDirByStamp = keptTrusted(stampOf, listDir, listings, true);
 /** `path`'s stamp, kept as `listDirByStamp` keeps a listing. */
 export const stampByStamp = stampKept(stampOf);
 
+/** As `exists`, kept as `stampByStamp` keeps a stamp. */
+export const existsByStamp = (path: string): Promise<boolean> => readOrAbsent(() => stampByStamp(path).then(() => true), false);
+
 const texts = new Map<string, Kept<string>>();
 
 /** The text of a file, read again only when its stamp has changed; the text a write handed over stands for the one read that names it. */
-export const textByStamp = stampKept(async (path) => {
-  const text = await readText(path);
-  if (texts.get(pathKey(path))?.value === text) foundUnchanged(path);
-  return text;
-}, texts, true);
+export const textByStamp = stampKept(readText, texts, true);
 
 export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 
 /** A reader of what `parse` makes of a file's text, parsing again only when the text is not the one parsed before. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) => {
   const parsed = new Map<string, { readonly text: string; readonly value: T }>();
-  return stampKept(async (path) => {
+  return async (path) => {
     const text = await textByStamp(path);
     const held = parsed.get(pathKey(path));
     if (held?.text === text) return held.value;
     const value = parse(text);
     parsed.set(pathKey(path), { text, value });
     return value;
-  });
+  };
 };
 
 /** Hands over a link that cannot be followed, by its path, with why. */
@@ -495,9 +494,6 @@ export async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<
     return { kind: 'unreadable', reason: errorMessage(err) };
   }
 }
-
-/** Whether a failure says the path is not there: it, or a folder it names, is missing or is a file. */
-export const isAbsent = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';
 
 /** A missing file answers `absent`; any other failure rejects. */
 export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promise<T> {

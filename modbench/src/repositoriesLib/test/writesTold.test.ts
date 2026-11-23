@@ -5,11 +5,11 @@ const told: (readonly string[])[] = [];
 
 afterEach(() => {
   told.length = 0;
-  writesToldTo({ told: () => Promise.resolve() });
+  writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
 });
 
 const loaderTold = (answer: () => Promise<void> = () => Promise.resolve()): void => {
-  writesToldTo({ told: (paths) => { told.push(paths); return answer(); } });
+  writesToldTo({ told: async (paths) => { told.push(paths); await answer(); return { subscribed: Promise.resolve() }; } });
 };
 
 describe('a write the loader is told of', () => {
@@ -30,10 +30,12 @@ describe('a write the loader is told of', () => {
     expect(told).toEqual([['/a']]);
   });
 
-  it('fails with the loader\'s failure when the write succeeded and the read that was to hold it did not', async () => {
+  it('answers once the read that was to hold the write failed, which the loader tells, so the command goes on (common.md, A gesture that writes, story 3)', async () => {
     loaderTold(() => Promise.reject(new Error('read failed')));
 
-    await expect(toldAfter(['/a'], () => Promise.resolve())).rejects.toThrow('read failed');
+    const answered = await toldAfter(['/a'], () => Promise.resolve('written'));
+
+    expect([answered, told]).toEqual(['written', [['/a']]]);
   });
 
   it('tells the files written inside locked work once, after the work has settled, and answers once the loader holds them', async () => {

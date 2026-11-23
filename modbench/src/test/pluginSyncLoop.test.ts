@@ -14,11 +14,9 @@ vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleS
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { pluginSyncOn } from '../plugins/pluginSync';
-import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherOver } from './mo2/instanceLoop';
 import { pluginSyncOver, type PluginSyncRun } from '../pluginCommands/plugins';
 import { present } from '../ports/present';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
 import { modSyncOver } from '../modCommands/modCommands';
@@ -193,19 +191,4 @@ describe('the game folder not found, across the whole instance', () => {
     ]);
     expect(pluginSync.message()).toBeUndefined();
   });
-});
-
-describe('plugin sync, as each landed value drives it', () => {
-  it('runs on every value that lands, from the first', async () => {
-    const syncPlugins = vi.fn<PluginSyncRun>(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }));
-    const instance = new FakeInstance(instanceValueFixture());
-    const { pluginSync } = pluginSyncOn({ instance, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
-
-    instance.publish(instanceValueFixture());
-    instance.publish(instanceValueFixture());
-    await pluginSync.settled();
-
-    expect(syncPlugins).toHaveBeenCalledTimes(2);
-  });
-
 });

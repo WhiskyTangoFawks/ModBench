@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { keptTrusted, stampFrom, trustingKept } from '../stampedReads';
+import { keptTrusted, readTrustingKept, stampFrom, trustingKept } from '../stampedReads';
 
 const keptByStamp = <T>(read: (path: string) => Promise<T>): ((path: string) => Promise<T>) =>
   keptTrusted(async (path) => stampFrom(await stat(path, { bigint: true })), read);
@@ -99,5 +99,58 @@ describe('a read kept by the stamp of its file', () => {
     await expect(kept(path)).rejects.toThrow('unreadable');
 
     expect(await kept(path)).toBe(2);
+  });
+
+  describe('of a file that is not there', () => {
+    const absent = (): string => join(root, 'absent.txt');
+
+    it('hands its absence without looking again while it trusts', async () => {
+      const kept = keptByStamp(read);
+      await expect(kept(absent())).rejects.toMatchObject({ code: 'ENOENT' });
+      await writeFile(absent(), 'made');
+
+      await expect(trustingKept(() => kept(absent()))).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await kept(absent())).toBe(1);
+    });
+
+    it('reads it once a re-read is named it', async () => {
+      const kept = keptByStamp(read);
+      await expect(kept(absent())).rejects.toMatchObject({ code: 'ENOENT' });
+      await writeFile(absent(), 'made');
+
+      expect((await readTrustingKept([absent()], false, () => kept(absent()))).answer).toBe(1);
+    });
+
+    it('answers it as unheard at a check of the disk that finds it made, and not while it is still not there', async () => {
+      await readTrustingKept([], true, () => Promise.resolve());
+      const kept = keptByStamp(read);
+      await expect(kept(absent())).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const stillAbsent = await readTrustingKept([], true, () => Promise.resolve());
+      await writeFile(absent(), 'made');
+      const made = await readTrustingKept([], true, () => kept(absent()));
+
+      expect([stillAbsent.unheard, made]).toEqual([[], { answer: 1, unheard: [absent()], found: new Map(), unchanged: new Set() }]);
+    });
+  });
+});
+
+async function comparisonsOf(named: number): Promise<number> {
+  const paths = Array.from({ length: named }, (_, n) => `/instance/mods/Named/${n}.dds`);
+  const prefixed = vi.spyOn(String.prototype, 'startsWith');
+  const setLookups = vi.spyOn(Set.prototype, 'has');
+  await readTrustingKept(paths, false, () => Promise.resolve());
+  const comparisons = prefixed.mock.calls.length + setLookups.mock.calls.length;
+  prefixed.mockRestore();
+  setLookups.mockRestore();
+  return comparisons;
+}
+
+describe('a read naming many files, with many kept (ADR-0029, Consequences, bullet 5)', () => {
+  it('compares each kept file with the paths named at the same cost however many are named', async () => {
+    const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
+    await Promise.all(Array.from({ length: 200 }, (_, n) => reader(`/instance/mods/Kept/${n}.dds`)));
+
+    expect(await comparisonsOf(200)).toBe(await comparisonsOf(1));
   });
 });

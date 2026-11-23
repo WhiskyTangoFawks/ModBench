@@ -20,7 +20,10 @@ interface ScriptLanguageDeps extends FileCopies {
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
-type ScriptsValue = Pick<InstanceValue, 'papyrusScripts' | 'dataFolderFiles' | 'gameFolder' | 'gameFolderInWorkspace' | 'archiveContents'>;
+/** The facts a script resolves against. */
+export const SCRIPTS_READ = { papyrusScripts: true, dataFolderFiles: true, gameFolder: true, gameFolderInWorkspace: true, archiveContents: true } as const;
+
+type ScriptsValue = Pick<InstanceValue, keyof typeof SCRIPTS_READ>;
 
 // A script is held by nothing only once every place that could hold it has answered. A reason is given only where
 // the state lasts; a place that has not answered yet is waited for.

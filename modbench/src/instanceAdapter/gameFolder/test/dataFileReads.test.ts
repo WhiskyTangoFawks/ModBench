@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { crc32 } from 'node:zlib';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dataFileReads, type DataFileReads } from '../dataFileReads';
+import { trustingKept } from '../../files';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
 import type { GameFolder } from '../../instanceAdapter';
 
@@ -27,6 +28,28 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
 
     expect([await reads.dataFileChecksum('a.swf', undefined), await reads.dataFileChecksum('../Game.exe', undefined)])
       .toEqual([read(crc32('some bytes')), read(crc32('game bytes'))]);
+  });
+
+  it('answers the checksum it kept while the file\'s stamp stays as it was', async () => {
+    const file = join(root, 'Data', 'a.swf');
+    const long = new Date(Date.now() - 3_600_000);
+    await writeFile(file, 'some bytes');
+    await utimes(file, long, long);
+    await reads.dataFileChecksum('a.swf', undefined);
+    await writeFile(file, 'more bytes');
+    await utimes(file, long, long);
+
+    expect(await reads.dataFileChecksum('a.swf', undefined)).toEqual(read(crc32('some bytes')));
+  });
+
+  it('answers, inside a trusted read, whether a file is readable as it last read it, and outside one as it reads now', async () => {
+    const file = join(root, 'Game.exe');
+    await writeFile(file, 'game bytes');
+    await trustingKept(() => reads.dataFileReadable('../Game.exe', undefined));
+    await rm(file);
+
+    expect([await trustingKept(() => reads.dataFileReadable('../Game.exe', undefined)), await reads.dataFileReadable('../Game.exe', undefined)])
+      .toEqual([read(true), read(false)]);
   });
 
   it('finds the game folder\'s file in any case, in the folders and the name, as the game does', async () => {

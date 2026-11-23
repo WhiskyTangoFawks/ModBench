@@ -19,6 +19,15 @@ export function filePresence(facts: PresenceFacts, relativePath: string): Presen
   return dataFolderPlugins.kind === 'listed' && dataFolderFiles.kind === 'listed' ? 'absent' : 'unknown';
 }
 
+/** Where the game reads a path relative to the Data folder: the file mod order provides, else the Data folder's own copy.
+ *  Null while the Data folder is listed and holds neither; undefined where no listing places the path. */
+export function fileAt({ files, dataFolderFiles }: Pick<InstanceValue, 'files' | 'dataFolderFiles'>, relativePath: string): string | null | undefined {
+  const normalised = relativePath.replace(/\\/g, '/');
+  const winner = files.get(normalised)?.winner;
+  if (winner !== undefined || normalised.startsWith('../') || dataFolderFiles.kind !== 'listed') return winner;
+  return dataFolderFiles.files.get(normalised.toLowerCase())?.path ?? null;
+}
+
 /** The files the game finds in its Data folder, each once whatever its case and source, `complete` while both listings of the folder read. */
 export function filesPresent(facts: PresenceFacts): { names: readonly string[]; complete: boolean } {
   const { files, plugins, pluginsLoadedWithNoLine = [], dataFolderPlugins, dataFolderFiles } = facts;

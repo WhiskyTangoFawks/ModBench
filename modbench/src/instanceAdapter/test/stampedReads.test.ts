@@ -1,17 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
+import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, symlink, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { adapterOver, managerOver } from '../../test/mo2/adapterOver';
-import { listDir, listDirByStamp, parsedBy, readTrustingKept } from '../files';
+import { listDir, listDirByStamp, parsedBy, readTrustingKept, textByStamp } from '../files';
 import { sortingRuleFilePaths } from '../mo2/layout';
 import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
-import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type Reread } from '../instanceAdapter';
+import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type OriginFile, type Reread } from '../instanceAdapter';
 const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -34,6 +33,11 @@ const modifiedLater = async (path: string): Promise<void> => {
   await utimes(path, later, later);
 };
 const namesOf = async (folder: string, list = listDirByStamp): Promise<string[]> => (await list(folder)).map((entry) => entry.name).sort();
+const NOTES = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles', 'contentsFound']);
+const factsMoved = <R extends object>(landed: R, again: R): string[] => {
+  const now = new Map(Object.entries(again));
+  return Object.entries(landed).filter(([fact, held]) => !NOTES.has(fact) && now.get(fact) !== held).map(([fact]) => fact);
+};
 
 describe('a folder listed and a file parsed by their stamps', () => {
   let root: string;
@@ -249,6 +253,23 @@ describe('a folder listed and a file parsed by their stamps', () => {
     await rm(path);
     await expect(textAt(path)).rejects.toMatchObject({ code: 'ENOENT' });
   });
+
+  it.each([
+    ['a reading that then failed', (path: string): Promise<unknown> =>
+      readTrustingKept([path], false, async () => { await textByStamp(path); throw new Error('another file is half-written'); }).catch(() => undefined)],
+    ['a read outside a reading', (path: string): Promise<unknown> => textByStamp(path)],
+  ])('finds a text unchanged only against what it is handed, never against %s', async (_by, readTheNewText) => {
+    const path = join(root, 'modlist.txt');
+    await writeFile(path, '+A');
+    const landed = await readTrustingKept([path], false, () => textByStamp(path));
+    await writeFile(path, '+B');
+    await modifiedLater(path);
+    await readTheNewText(path);
+    await writeFile(path, '+B');
+    await modifiedLater(path);
+
+    expect((await readTrustingKept([path], false, () => textByStamp(path), landed.found)).unchanged).toEqual(new Set());
+  });
 });
 
 describe('the MO2 reading of an instance nothing changed in', () => {
@@ -327,10 +348,120 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     const first = await adapter.reading(CHECK_THE_DISK);
 
-    const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false })));
+    const again = await adapter.reading({ named: [], disk: false }, first);
 
-    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles']);
-    expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+    expect(factsMoved(first, again)).toEqual([]);
+  });
+
+  it.each([
+    ['modlist.txt', '+Another Mod\n'],
+    ['plugins.txt', '*Another.esp\n'],
+  ])('hands each fact as the landed reading holds it once %s is back as it was, whatever a reading between found', async (file, line) => {
+    const adapter = managerOver(instance);
+    const path = join(instance, 'profiles', 'Default', file);
+    const text = await readFile(path, 'utf8');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await writeFile(path, text + line);
+    await modifiedLater(path);
+    await adapter.reading({ named: [path], disk: false });
+    await writeFile(path, text);
+    await modifiedLater(path);
+
+    const again = await adapter.reading({ named: [path], disk: false }, landed);
+
+    expect(factsMoved(landed, again)).toEqual([]);
+  });
+
+  it('names unchanged a file nothing wrote, its stamp old enough to trust', async () => {
+    const adapter = managerOver(instance);
+    const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    await adapter.reading(CHECK_THE_DISK);
+    const landed = await adapter.reading(CHECK_THE_DISK);
+
+    expect((await adapter.reading({ named: [modlist], disk: false }, landed)).unchangedFiles).toEqual([modlist]);
+  });
+
+  it('names unchanged a file rewritten with its own bytes', async () => {
+    const adapter = managerOver(instance);
+    const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await writeFile(modlist, await readFile(modlist));
+    await modifiedLater(modlist);
+
+    expect((await adapter.reading({ named: [modlist], disk: false }, landed)).unchangedFiles).toEqual([modlist]);
+  });
+
+  it('finds a file unchanged only against the landed reading it is handed, never against a reading between them', async () => {
+    const adapter = managerOver(instance);
+    const modlist = join(instance, 'profiles', 'Default', 'modlist.txt');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await writeFile(modlist, `${await readFile(modlist, 'utf8')}+Another Mod\n`);
+    await modifiedLater(modlist);
+    await adapter.reading({ named: [modlist], disk: false });
+    await writeFile(modlist, await readFile(modlist));
+    await modifiedLater(modlist);
+
+    expect((await adapter.reading({ named: [modlist], disk: false }, landed)).unchangedFiles).toEqual([]);
+  });
+
+  it('hands the files of a mod walked again, its stamp too fresh to trust, as the landed reading holds them', async () => {
+    const adapter = managerOver(instance);
+    await writeFile(join(instance, 'mods', 'Harder VATS', 'fresh.txt'), '');
+    const landed = await adapter.reading();
+
+    const again = await adapter.reading(CHECK_THE_DISK, landed);
+
+    expect(again.modFiles).toBe(landed.modFiles);
+  });
+
+  it('hands the folders and each file of a mod a file was added to as the landed reading holds them', async () => {
+    const folder = join(instance, 'mods', 'Harder VATS');
+    await mkdir(join(folder, 'meshes'));
+    await writeFile(join(folder, 'meshes', 'a.nif'), '');
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    const listed = landed.modFiles.get('Harder VATS');
+    const added = join(folder, 'added.txt');
+    await writeFile(added, '');
+    await modifiedLater(folder);
+
+    const now = (await adapter.reading({ named: [added], disk: false }, landed)).modFiles.get('Harder VATS');
+
+    expect(now?.files.map((file) => file.relativePath)).toContain('added.txt');
+    expect(listed?.folders).not.toEqual([]);
+    expect(now?.folders).toBe(listed?.folders);
+    expect(now?.files.filter((file) => listed?.files.includes(file))).toHaveLength(listed?.files.length ?? -1);
+  });
+
+  it('hands a file whose link names another file as a new object, and each other file as the landed reading holds it', async () => {
+    const folder = join(instance, 'mods', 'Harder VATS');
+    const [first, second, linked] = [join(instance, 'first.txt'), join(instance, 'second.txt'), join(folder, 'linked.txt')];
+    await Promise.all([writeFile(first, ''), writeFile(second, '')]);
+    await symlink(first, linked);
+    const adapter = managerOver(instance);
+    const landed = await adapter.reading(CHECK_THE_DISK);
+    await rm(linked);
+    await symlink(second, linked);
+
+    const filesOf = (reading: Pick<InstanceReading, 'modFiles'>): readonly OriginFile[] => reading.modFiles.get('Harder VATS')?.files ?? [];
+    const [before, now] = [filesOf(landed), filesOf(await adapter.reading(CHECK_THE_DISK, landed))];
+
+    expect(now.find(({ path }) => path === linked)?.sourcePath).toBe(second);
+    expect(now.filter((file) => before.includes(file))).toHaveLength(before.length - 1);
+  });
+
+  it('hands each mod\'s files as the landed reading holds them while another reading overlaps it', async () => {
+    const adapter = managerOver(instance);
+    const landed = await adapter.reading(CHECK_THE_DISK);
+
+    const [again] = await Promise.all([adapter.reading({ named: [], disk: false }, landed), adapter.reading()]);
+
+    expect(again.modFiles).toBe(landed.modFiles);
   });
 
   it('takes a file\'s stamp again, within a reading, only where a re-read is named it or checks the disk, and outside one each time', async () => {
@@ -400,7 +531,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       for (const io of IO) io.mockClear();
       await adapter.reading({ named: [named], disk: false });
       const touched = IO.flatMap((io) => io.mock.calls.flatMap((call: unknown[]) => (typeof call[0] === 'string' ? [call[0]] : [])));
-      return touched.filter((path) => path !== named && path !== dirname(named) && existsSync(path));
+      return touched.filter((path) => path !== named && path !== dirname(named));
     };
 
     it('reads, lists and stats nothing of a repository with a source mod but the file a re-read is named and its folder', async () => {
@@ -415,6 +546,23 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Profile: 'Default', Include: ['mods/Patch Mod/Patch Mod.esp'] }));
 
       expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([instance, join(instance, 'mods')]);
+    });
+
+    it.each([
+      ['read', JSON.stringify({ Profile: 'Default', Include: ['mods/Patch Mod/Patch Mod.esp'] }), JSON.stringify({ Profile: 'Default' })],
+      ['unreadable', '{ "Profile": ', '{ "Include": ['],
+    ])('hands the publisher\'s configuration, %s, as the landed reading holds it once its settings are back as they were, whatever a reading between found', async (_kind, text, between) => {
+      const settings = join(instance, 'compiler_settings.json');
+      await writeFile(settings, text);
+      const adapter = adapterOver(instance, { gameFolder });
+      const landed = await adapter.reading(CHECK_THE_DISK);
+      await writeFile(settings, between);
+      await modifiedLater(settings);
+      await adapter.reading({ named: [settings], disk: false });
+      await writeFile(settings, text);
+      await modifiedLater(settings);
+
+      expect((await adapter.reading({ named: [settings], disk: false }, landed)).publisherConfiguration).toBe(landed.publisherConfiguration);
     });
 
     it('shows a publisher tag\'s path made at the instance root, which no watch hears, at a re-read named another file', async () => {

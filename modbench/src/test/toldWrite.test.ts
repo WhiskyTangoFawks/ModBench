@@ -11,7 +11,10 @@ import { cp, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Instance } from '../instanceLoader/instance';
-import { writesToldTo } from '../repositoriesLib/writesTold';
+import { diskCheckedBy, writesToldTo } from '../repositoriesLib/writesTold';
+import { ambientWrites } from '../instanceLoader/ambientWrites';
+import { handingOneChange } from '../drivingLib/writingGesture';
+import { TOUCHING_READ, type FilesChanged } from '../instanceLoader/filesChanged';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeWorkspace } from './fakeWorkspace';
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
@@ -23,7 +26,7 @@ let instance: Instance | undefined;
 
 afterEach(async () => {
   instance?.dispose();
-  writesToldTo({ told: () => Promise.resolve() });
+  writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
   if (root !== undefined) await rm(root, { recursive: true, force: true });
 });
 
@@ -37,6 +40,7 @@ async function wiredInstance() {
     medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
   });
   writesToldTo(instance);
+  diskCheckedBy(ambientWrites);
   await instance.refresh();
   const modlist = join(root, 'profiles', 'Default', 'modlist.txt');
   return { adapter, instance, modlist };
@@ -52,7 +56,7 @@ describe('a write over the real adapter', () => {
     expect(vi.mocked(readFile).mock.calls.filter(([path]) => path === modlist).length - readsBefore).toBe(1);
   });
 
-  it('is named to the subscribers once, and the watch\'s echo of it, read again by the guard against a stamp too fresh to trust, names nothing', async () => {
+  it('is named to the subscribers once, and the watch\'s echo of it, read again by the guard against a stamp too fresh to trust, is no change', async () => {
     const { adapter, instance: loader, modlist } = await wiredInstance();
     const heard: (readonly string[])[] = [];
     loader.subscribe((_value, _sequence, { named }) => { heard.push(named); });
@@ -60,7 +64,64 @@ describe('a write over the real adapter', () => {
     await adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]);
     await loader.refresh([modlist]);
 
-    expect(heard).toEqual([[modlist], []]);
+    expect(heard).toEqual([[modlist]]);
+  });
+
+  it('is held by the loader as it returns inside a gesture, and the gesture\'s end and the watch\'s echo of it are no change (ADR-0029, Consequences, bullets 1 and 2)', async () => {
+    const { adapter, instance: loader, modlist } = await wiredInstance();
+    const heard: (readonly string[])[] = [];
+    loader.subscribe((_value, _sequence, { named }) => { heard.push(named); });
+    let heardAsItReturned: (readonly string[])[] = [];
+
+    await handingOneChange(loader, async () => {
+      await adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]);
+      heardAsItReturned = [...heard];
+    });
+    await loader.refresh([modlist]);
+
+    expect([heardAsItReturned, heard]).toEqual([[[modlist]], [[modlist]]]);
+  });
+
+  it('returns from a gesture once the subscribers of the values its told writes landed have settled (ADR-0029, Consequences, bullet 1)', async () => {
+    const { adapter, instance: loader } = await wiredInstance();
+    let release = (): void => undefined;
+    let entered = (): void => undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const deriving = new Promise<void>((resolve) => { entered = resolve; });
+    loader.subscribe(async () => {
+      entered();
+      await held;
+    });
+    let returned = false;
+
+    const gesture = handingOneChange(loader, () => adapter.changeModOrder('Default', () => [{ kind: 'enable', mod: 'Harder VATS', enabled: true }]))
+      .then(() => { returned = true; });
+    await deriving;
+    await loader.refresh([]);
+    const returnedWhileDeriving = returned;
+    release();
+    await gesture;
+
+    expect([returnedWhileDeriving, returned]).toEqual([false, true]);
+  });
+
+  it('tells a subscriber the value it was told last and what changed of the origins\' files since, once for every subscriber (ADR-0029, Consequences, bullet 4)', async () => {
+    const { instance: loader } = await wiredInstance();
+    const folder = join(root ?? '', 'mods', 'Patch Mod');
+    const heard: { before: unknown; changed: FilesChanged }[] = [];
+    const landed: unknown[] = [];
+    loader.subscribe((value, _sequence, told) => {
+      landed.push(value);
+      heard.push({ before: told.before, changed: told.changed() });
+    }, TOUCHING_READ);
+
+    await writeFile(join(folder, 'first.dds'), 'first');
+    await loader.refresh([join(folder, 'first.dds')]);
+    await writeFile(join(folder, 'second.dds'), 'second');
+    await loader.refresh([join(folder, 'second.dds')]);
+
+    const [, second] = heard;
+    expect([second?.before === landed[0], second?.changed]).toMatchObject([true, [{ origin: { kind: 'mod', name: 'Patch Mod' }, gained: [{ relativePath: 'second.dds' }] }]]);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

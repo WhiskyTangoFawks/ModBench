@@ -1,4 +1,4 @@
-# Mod status, green: whether each mod's folder and metadata differ from its manifest, after each instance value.
+# Mod status, green: whether each mod's folder and metadata differ from its manifest, after a change to what a status reads.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
@@ -16,8 +16,8 @@ instanceadapter.label: Instance adapter
 mods: @../../spec/architecture/target-architecture.modbench_driving.mods
 mods.label: Mods
 
-instanceloader -> activation: value {class: loadorder}
-activation -> modstatus: value {class: loadorder}
+instanceloader -> activation: "value · the files a change names" {class: loadorder}
+activation -> modstatus: "value · the files a change names" {class: loadorder}
 modstatus -> manifestadapter: "get: each mod's manifest · its build file against its mod source" {class: track}
 instance -> manifestadapter: "manifests · build files · mod sources" {class: track}
 manifestadapter -> modstatus: "each mod's manifest · what its build file names that its mod source lacks" {class: track}

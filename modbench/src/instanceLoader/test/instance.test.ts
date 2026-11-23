@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, GameFolder, InstanceAdapter, InstanceReading, Mod,
-  OriginFiles, Separator, PublisherTag, ProgramVersions, Reread,
+  OriginFile, OriginFiles, Separator, PublisherTag, ProgramVersions, Reread,
 } from '../../instanceAdapter/instanceAdapter';
 import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { leveledLog } from '../../test/leveledLog';
@@ -371,6 +371,35 @@ describe('Instance — what a read tells', () => {
     expect(told).toEqual([1, 2]);
   });
 
+  it('tells a subscriber that names the files it reads of a value whose change names one of them, and of no other', async () => {
+    const { instance } = loader({ mods: [mod('A')] });
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); }, { mods: true }, (path) => path.startsWith('/instance/mods/A/'));
+
+    await instance.refresh([MODLIST]);
+    await instance.refresh(['/instance/mods/A/a.dds']);
+    await instance.refresh(['/instance/mods/B/b.dds']);
+
+    expect(told).toEqual([1, 2]);
+  });
+
+  it.each([
+    ['the files it named', ['/instance/mods/A/a.dds'], { named: ['/instance/mods/A/a.dds', '/instance/mods/B/b.dds'], disk: false }],
+    ['a check of the disk', undefined, { named: ['/instance/mods/B/b.dds'], disk: true }],
+  ])('reads again at the next read what a failed read was for, %s, and its change names it (ADR-0029)', async (_what, failedFor, told) => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    const rereads: Reread[] = [];
+    instance.subscribe((_value, _sequence, { named, disk }) => { rereads.push({ named: [...named].sort(), disk }); }, { mods: true });
+    await instance.refresh([MODLIST]);
+
+    fake.failReading('locked');
+    await instance.refresh(failedFor);
+    fake.failReading(undefined);
+    await instance.refresh(['/instance/mods/B/b.dds']);
+
+    expect(rereads.at(-1)).toEqual(told);
+  });
+
   it('tells a subscriber that names its concerns of each check of the disk, as a check is how the user recovers', async () => {
     const { instance } = loader({ mods: [mod('A')] });
     const told: number[] = [];
@@ -381,32 +410,6 @@ describe('Instance — what a read tells', () => {
     await instance.refresh();
 
     expect(told).toEqual([1, 3]);
-  });
-});
-
-describe('Instance — redraw', () => {
-  it('tells the views that listen to a redraw, and runs no subscriber of the value and reads nothing', async () => {
-    const { instance, fake } = loader();
-    await instance.landed();
-    const subscriber = vi.fn();
-    const view = vi.fn();
-    instance.subscribe(subscriber);
-    instance.onRedraw(view);
-    const readsBefore = fake.calls.length;
-
-    instance.redraw();
-
-    expect({ view: view.mock.calls.length, subscriber: subscriber.mock.calls.length, reads: fake.calls.length - readsBefore }).toEqual({ view: 1, subscriber: 0, reads: 0 });
-  });
-
-  it('tells a view that stopped listening nothing', () => {
-    const { instance } = loader();
-    const view = vi.fn();
-    instance.onRedraw(view).dispose();
-
-    instance.redraw();
-
-    expect(view).not.toHaveBeenCalled();
   });
 });
 
@@ -460,7 +463,7 @@ describe('Instance — built by watching', () => {
   it('hands each subscriber what the value was read again for: the paths the events named, or the check of the disk', async () => {
     const { instance, fake } = loader();
     const landedFor: Reread[] = [];
-    instance.subscribe((_value, _sequence, landed) => { landedFor.push(landed); });
+    instance.subscribe((_value, _sequence, { named, disk }) => { landedFor.push({ named, disk }); });
 
     fakeClockLeavingSetImmediateReal();
     try {
@@ -861,6 +864,64 @@ describe('Instance — a value that survives a bad read', () => {
     expect(reads).toEqual([['/instance/mods/A/A.esp']]);
   });
 
+  it('hands each reading the reading its value last landed from, though a read failed between', async () => {
+    const handed: (InstanceReading | undefined)[] = [];
+    const answered: InstanceReading[] = [];
+    const { instance, fake } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (reread, landed) => {
+        handed.push(landed);
+        const reading = { ...(await adapter.reading(reread)) };
+        answered.push(reading);
+        return reading;
+      },
+    }));
+    await instance.refresh();
+    fake.failReading('ModOrganizer.ini is half-written');
+    await instance.refresh();
+    fake.failReading(undefined);
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(handed.map((reading) => (reading === undefined ? 'none' : answered.indexOf(reading)))).toEqual(['none', 0, 0, 1]);
+  });
+
+  it('hands each reading the reading its value last landed from, though a reading between answered and its value failed', async () => {
+    const handed: (InstanceReading | undefined)[] = [];
+    const answered: InstanceReading[] = [];
+    let spoiled: Partial<InstanceReading> = {};
+    const { instance } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (reread, landed) => {
+        handed.push(landed);
+        const answer = { ...(await adapter.reading(reread)), ...spoiled };
+        answered.push(answer);
+        return answer;
+      },
+    }));
+    await instance.refresh();
+    spoiled = { trustingKept: () => Promise.reject(new Error('a file is half-written')) };
+    await instance.refresh();
+    spoiled = {};
+    await instance.refresh();
+
+    expect(instance.readFailure).toBeUndefined();
+    expect(handed.map((reading) => (reading === undefined ? 'none' : answered.indexOf(reading)))).toEqual(['none', 0, 0]);
+  });
+
+  it('lands nothing for a read that finds nothing new: the value and its sequence hold, and no subscriber is told', async () => {
+    const { instance } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
+    await instance.refresh();
+    const before = instance.value;
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); });
+
+    await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+
+    expect(instance.value).toBe(before);
+    expect({ sequence: instance.sequence, told }).toEqual({ sequence: 1, told: [] });
+  });
+
   it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {
     const { instance } = loader();
     const heard: number[] = [];
@@ -1069,6 +1130,17 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(paths.modDirs.has('Radfall')).toBe(false);
     expect(paths.sourceDirs).toEqual(new Map([['Radfall', '/source/Radfall']]));
     expect(factsOf(instance).sourceDirs()).toBe(paths.sourceDirs);
+  });
+
+  it('keeps the paths it landed while another instance reads other source mods (ADR-0029)', async () => {
+    const { instance } = loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Radfall: '/source/Radfall' }) });
+    await instance.refresh();
+    const landed = instance.value.paths;
+    await loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Other: '/source/Other' }) }).instance.refresh();
+
+    await instance.refresh();
+
+    expect(instance.value.paths).toBe(landed);
   });
 
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
@@ -1576,5 +1648,22 @@ describe('Instance — what each archive holds', () => {
 
       expect(copies).toEqual([archived('A', 'Listed.ba2')]);
     });
+  });
+});
+
+describe('Instance — what a change reads', () => {
+  it('reads no file of a mod a change leaves as it was, a loose file added to the mod beside it (ADR-0029)', async () => {
+    let looked = 0;
+    const counted = (file: OriginFile): OriginFile => ({ ...file, get sourcePath() { looked++; return file.sourcePath; } });
+    const listingOf = (name: string, files: OriginFile[]): OriginFiles => ({ origin: name, folder: `/instance/mods/${name}`, files, folders: [], notes: [] });
+    const [a, b] = [listingOf('A', [fileIn('/instance/mods/A', 'a.dds')]), listingOf('B', ['b.dds', 'b.nif'].map((path) => counted(fileIn('/instance/mods/B', path))))];
+    const { instance, fake } = loader({ mods: [mod('A'), mod('B')], modFiles: new Map([['A', a], ['B', b]]) });
+    await instance.refresh();
+    looked = 0;
+
+    fake.read({ modFiles: new Map([['A', { ...a, files: [...a.files, fileIn('/instance/mods/A', 'new.dds')] }], ['B', b]]) });
+    await instance.refresh();
+
+    expect(looked).toBe(0);
   });
 });
