@@ -30,11 +30,19 @@ GATE_NAME="gates.$(basename "$ROOT")"
 $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
-# On main itself the diff is empty, so the change is the whole tree. core.quotePath=false keeps
+# A branch lands on the local branch it tracks, such as a ticket's integration branch, and any
+# other branch lands on main. Its change is the diff since where it lands.
+BASE=main
+if head=$(git -C "$ROOT" symbolic-ref -q HEAD); then
+  upstream=$(git -C "$ROOT" for-each-ref --format='%(upstream)' "$head")
+  [[ $upstream == refs/heads/* ]] && BASE=${upstream#refs/heads/}
+fi
+
+# On the base itself the diff is empty, so the change is the whole tree. core.quotePath=false keeps
 # non-ASCII paths unquoted, so they match the selectors' prefixes.
-changed_since_main() {
+changed_since_base() {
   local base git=(git -C "$ROOT" -c core.quotePath=false)
-  base=$(git -C "$ROOT" merge-base main HEAD) || return
+  base=$(git -C "$ROOT" merge-base "$BASE" HEAD) || return
   if [[ $base == "$(git -C "$ROOT" rev-parse HEAD)" ]]; then
     "${git[@]}" ls-files
   else
@@ -42,15 +50,15 @@ changed_since_main() {
   fi && "${git[@]}" ls-files --others --exclude-standard
 }
 
-if [[ ${GATE_ARGS[*]} != --comments ]] && ! git -C "$ROOT" merge-base --is-ancestor main HEAD; then
-  echo "Refused: HEAD is behind main. Merge main first, so the gates test the tree that will land."
+if [[ ${GATE_ARGS[*]} != --comments ]] && ! git -C "$ROOT" merge-base --is-ancestor "$BASE" HEAD; then
+  echo "Refused: HEAD is behind $BASE. Merge $BASE first, so the gates test the tree that will land."
   exit 1
 fi
 
 if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
-  changed=$(changed_since_main) || exit 1
+  changed=$(changed_since_base) || exit 1
   selection=$(python3 "$ROOT/.claude/skills/validate/select_gates.py" <<< "$changed") || exit 1
-  echo "=== Gates the change since main can break ==="
+  echo "=== Gates the change since $BASE can break ==="
   echo "${selection:-none beyond Gate 1}"
   flags=$(cut -d' ' -f1 <<< "$selection")
   exec bash "$0" ${flags:---comments}
@@ -111,10 +119,10 @@ ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 backend_tests() {
   local results="/tmp/medit-test-results.$(basename "$ROOT")" changed selected
   rm -rf "$results" && mkdir -p "$results" || return
-  changed=$(changed_since_main) || return
+  changed=$(changed_since_base) || return
   selected=$(python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" \
     "$ROOT/MEditService" "$results/selected.slnf" <<< "$changed") || return
-  echo "Test projects: ${selected:-none, no backend change since main}" | paste -sd ' '
+  echo "Test projects: ${selected:-none, no backend change since $BASE}" | paste -sd ' '
   local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
   if [[ -n $selected ]]; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "$results/selected.slnf") || return

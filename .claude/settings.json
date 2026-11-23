@@ -1,11 +1,14 @@
 {
+  "env": {
+    "GH_REPO": "WhiskyTangoFawks/ModBench"
+  },
   "worktree": {
     "baseRef": "head"
   },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Monitor",
+        "matcher": "Bash|Monitor|Agent|SendMessage",
         "hooks": [
           {
             "type": "command",
