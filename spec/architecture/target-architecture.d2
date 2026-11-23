@@ -16,7 +16,7 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
   class: band; grid-rows: 1
   user: "The user\nclicks, checks, drags, types" {class: other}
   agent_driver: "The agent\nasks and acts through MCP" {class: other}
-  agent: "Agent\nowns: what the user's agent reads and runs,\nand how a script finds mEdit\nhides: MCP and the terminal's environment" {class: driving}
+  agent: "Agent\nowns: what the user's agent reads and runs\nhides: MCP" {class: driving}
   activation: "Activation\nowns: wiring" {class: driving}
 }
 
@@ -97,7 +97,8 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
   }
   manifestadapter: "Manifest adapter\nowns: the manifests and build files\nhides: their text" {class: repositories}
   textdocuments: "Text documents\nowns: plugin source and build files as VS Code holds them,\nsaved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
-  client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {class: repositories}
+  client: "mEdit client\nowns: Modbench's one reach to mEdit,\nand how a program reaches it\nhides: mEdit's process and transport,\nand that it forgets on restart" {class: repositories}
+  programs: "Programs\nowns: a program the user names, run in a folder,\nand its output\nhides: the process, and how each platform stops one" {class: repositories}
   nexus: "Nexus\nowns: Modbench's one reach to Nexus\nhides: the API" {class: repositories}
   lootmetadata: "LOOT metadata\nowns: Modbench's one reach to LOOT's metadata\nhides: its addresses and branches" {class: repositories}
   deployment: "Deployment\nowns: a load order deployed where the game reads it\nhides: the deployment type, and where each platform's game\nreads plugins.txt" {class: repositories}

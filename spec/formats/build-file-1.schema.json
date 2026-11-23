@@ -23,11 +23,6 @@
       "minItems": 1,
       "uniqueItems": true
     },
-    "args": {
-      "description": "The arguments the step hands what it runs.",
-      "type": "array",
-      "items": { "type": "string" }
-    },
     "step": {
       "oneOf": [
         {
@@ -85,44 +80,14 @@
         {
           "type": "object",
           "properties": {
-            "task": {
-              "description": "The label of the VS Code user task that runs the step, in the mod's folder.",
-              "type": "string",
-              "minLength": 1
-            },
-            "args": { "$ref": "#/$defs/args" },
-            "page": {
-              "description": "The page where the user gets the tool the task runs. Absent when the tool comes with the mod source.",
-              "type": "string",
-              "format": "uri"
+            "command": {
+              "description": "The program the step runs, by its name on the machine's PATH, then its arguments. It runs in the mod's folder, and each `${source}` in an argument is the mod source's folder.",
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
             }
           },
-          "required": ["task"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "script": {
-              "description": "The Modbench script the step runs, by its path in the mod source.",
-              "$ref": "manifest-1.schema.json#/$defs/path"
-            },
-            "args": { "$ref": "#/$defs/args" }
-          },
-          "required": ["script"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "defaultScript": {
-              "description": "The default Modbench script the step runs, by its name.",
-              "type": "string",
-              "minLength": 1
-            },
-            "args": { "$ref": "#/$defs/args" }
-          },
-          "required": ["defaultScript"],
+          "required": ["command"],
           "additionalProperties": false
         }
       ]

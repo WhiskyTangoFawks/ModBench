@@ -1,6 +1,6 @@
 # Scripts
 
-A Modbench script is a program, here in Python, that I or my agent write, Modbench's evolution of the xEdit script, to do what an xEdit script does: making a patch plugin, a bulk fix, a pass over the load order. It reads and changes records through mEdit, and nothing else. xEdit decides what a Modbench script is for; Mutagen names what it reads and writes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Mod management is a task's or the agent's job, never a Modbench script's ([ADR-0021](../adr/0021-agents-reach-modbench-through-one-mcp-server-the-extension-serves.md)).
+A Modbench script is a program, in any language, that I or my agent write, Modbench's evolution of the xEdit script, to do what an xEdit script does: making a patch plugin, a bulk fix, a pass over the load order. It reads and changes records through mEdit's HTTP API, and nothing else. Python is the default, through the API Modbench ships. xEdit decides what a Modbench script is for; Mutagen names what it reads and writes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Mod management is a task's or the agent's job, never a Modbench script's ([ADR-0021](../adr/0021-agents-reach-modbench-through-one-mcp-server-the-extension-serves.md)).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -41,7 +41,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Each default Modbench script to be an ordinary one I can read and copy, through the path its build step prints.
+1. Each default Modbench script to be an ordinary one I can read and copy, and a command step to run it by its name.
 2. A default Modbench script that cleans a plugin as xEdit's Quick Auto Clean does. Cites: out-of-scope/xedit.md, Plugin
 
 ## Reporting
