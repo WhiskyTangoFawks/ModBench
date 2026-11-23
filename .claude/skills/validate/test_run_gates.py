@@ -1,5 +1,5 @@
-"""Observes run-gates.sh: a branch behind main is refused, a gate run takes the build slot, and the
-change since main selects the gates."""
+"""Observes run-gates.sh: a branch behind where it lands is refused, a gate run takes the build slot,
+and the change since where it lands selects the gates."""
 import os
 import pathlib
 import shutil
@@ -112,6 +112,34 @@ class SelectedByChange(GateRepo):
         self.write("spec/a.d2", "edited")
         git(self.repo, "commit", "-q", "-am", "edit")
         self.assertEqual(self.selected(), self.slot_line("--docs"))
+
+    def branch_tracking_an_integration_branch_with_a_backend_change(self):
+        git(self.repo, "checkout", "-q", "-b", "integration")
+        self.write("MEditService/Core/a.cs", "edited")
+        git(self.repo, "commit", "-q", "-am", "backend")
+        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
+
+    def test_a_branch_tracking_a_local_branch_runs_the_gates_its_diff_since_that_branch_can_break(self):
+        self.branch_tracking_an_integration_branch_with_a_backend_change()
+        self.write("spec/a.d2", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.selected(), self.slot_line("--docs"))
+
+    def test_a_branch_behind_the_local_branch_it_tracks_is_refused(self):
+        self.branch_tracking_an_integration_branch_with_a_backend_change()
+        git(self.repo, "checkout", "-q", "integration")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "ahead")
+        git(self.repo, "checkout", "-q", "ticket")
+        run = self.gates()
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("behind integration", run.stdout)
+
+    def test_a_branch_tracking_a_remote_branch_runs_the_gates_its_diff_since_main_can_break(self):
+        self.branch_tracking_an_integration_branch_with_a_backend_change()
+        git(self.repo, "config", "branch.ticket.remote", "origin")
+        self.write("spec/a.d2", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertIn("--backend", self.selected())
 
     def test_a_branch_changing_only_a_non_ascii_path_runs_the_gates_it_can_break(self):
         git(self.repo, "checkout", "-q", "-b", "feature")
