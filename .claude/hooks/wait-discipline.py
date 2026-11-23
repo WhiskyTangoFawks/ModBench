@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""PreToolUse[Bash|Monitor]: a build or test runs in the build slot, a gate or wait command
-carries an explicit timeout, a subagent waits in the foreground, and tsc checks a named project.
+"""PreToolUse[Bash|Monitor|Agent|SendMessage]: a build or test runs in the build slot, a gate or
+wait command carries an explicit timeout, a subagent waits in the foreground and resumes no agent,
+and tsc checks a named project.
 
 The Bash tool's 120 s default silently backgrounds a longer run, so a gate invoked
 without a timeout can report nothing while still running. A subagent's turn ending is
@@ -54,6 +55,12 @@ tool = data.get("tool_name")
 tool_input = data.get("tool_input", {})
 subagent = is_subagent(data)
 
+if subagent and (tool == "SendMessage" or (tool == "Agent" and tool_input.get("run_in_background"))):
+    block(
+        "a subagent's turn ending is its report, so an agent's reply that arrives later never "
+        "reaches it, and a resumed agent always replies later. Spawn a fresh agent with Agent in "
+        "the foreground, and give it what the earlier one knew."
+    )
 if subagent and (tool == "Monitor" or tool_input.get("run_in_background")):
     block(
         "a subagent's turn ending is its report, so nothing it waits for in the "

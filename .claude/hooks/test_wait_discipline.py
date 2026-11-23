@@ -165,3 +165,19 @@ class SubagentForeground(unittest.TestCase):
 
     def test_top_level_monitor_passes(self):
         self.assertEqual(hook("Monitor", TOP, command="tail -f x.log", description="x", timeout_ms=1000, persistent=False).returncode, 0)
+
+    def test_a_subagent_resuming_an_agent_is_blocked_with_the_form_to_use(self):
+        run = hook("SendMessage", SUB, to="a07c6195e1b8ed607", message="re-review")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("fresh agent", run.stderr)
+
+    def test_top_level_send_message_passes(self):
+        self.assertEqual(hook("SendMessage", TOP, to="a07c6195e1b8ed607", message="re-review").returncode, 0)
+
+    def test_a_subagent_spawning_a_background_agent_is_blocked(self):
+        run = hook("Agent", SUB, description="review", prompt="x", run_in_background=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("fresh agent", run.stderr)
+
+    def test_a_subagent_spawning_a_foreground_agent_passes(self):
+        self.assertEqual(hook("Agent", SUB, description="review", prompt="x").returncode, 0)
