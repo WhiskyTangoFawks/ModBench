@@ -16,6 +16,10 @@ import { ModNode, OverwriteNode } from '../ModListProvider';
 
 beforeEach(() => { executeCommand.mockClear(); });
 
+const restored: (readonly string[])[] = [];
+const restore = (mods: readonly string[]) => { restored.push(mods); };
+beforeEach(() => { restored.length = 0; });
+
 function modNode(name: string, enabled = true): ModNode {
   return new ModNode({ kind: 'mod', name, enabled });
 }
@@ -25,7 +29,7 @@ describe('a checkbox click in Mods', () => {
     const a = modNode('A', false);
     const b = modNode('B', false);
 
-    await onModCheckboxChanged({ items: [[a, 1], [b, 1]] });
+    await onModCheckboxChanged({ items: [[a, 1], [b, 1]] }, restore);
 
     expect(executeCommand.mock.calls).toEqual([['modbench.mod.enable', a, [a, b]]]);
   });
@@ -34,7 +38,7 @@ describe('a checkbox click in Mods', () => {
     const on = modNode('On', false);
     const off = modNode('Off');
 
-    await onModCheckboxChanged({ items: [[off, 0], [on, 1]] });
+    await onModCheckboxChanged({ items: [[off, 0], [on, 1]] }, restore);
 
     expect(executeCommand.mock.calls).toEqual([
       ['modbench.mod.enable', on, [on]],
@@ -42,8 +46,16 @@ describe('a checkbox click in Mods', () => {
     ]);
   });
 
+  it('restores every mod row it clicked once the commands end, though one failed (common.md, A gesture that writes, story 2)', async () => {
+    executeCommand.mockRejectedValueOnce(new Error('refused'));
+
+    await expect(onModCheckboxChanged({ items: [[modNode('A'), 0], [modNode('B', false), 1]] }, restore)).rejects.toThrow('refused');
+
+    expect(restored).toEqual([['A', 'B']]);
+  });
+
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
-    await onModCheckboxChanged({ items: [[new OverwriteNode([], 'MO2'), 1]] });
+    await onModCheckboxChanged({ items: [[new OverwriteNode([], 'MO2'), 1]] }, restore);
 
     expect(executeCommand).not.toHaveBeenCalled();
   });

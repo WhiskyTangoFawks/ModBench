@@ -135,17 +135,26 @@ describe('a read kept by the stamp of its file', () => {
   });
 });
 
+// The set lookups and prefix tests of one read naming `named` paths.
+async function comparisonsOf(named: number): Promise<number> {
+  const paths = Array.from({ length: named }, (_, n) => `/instance/mods/Named/${n}.dds`);
+  const prefixed = vi.spyOn(String.prototype, 'startsWith');
+  const setLookups = vi.spyOn(Set.prototype, 'has');
+  await readTrustingKept(paths, false, () => Promise.resolve());
+  const comparisons = prefixed.mock.calls.length + setLookups.mock.calls.length;
+  prefixed.mockRestore();
+  setLookups.mockRestore();
+  return comparisons;
+}
+
 describe('a read naming many files, with many kept (ADR-0029, Consequences, bullet 5)', () => {
-  it('asks of each kept file only the folders above it, not every path named', async () => {
-    const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
-    await Promise.all(Array.from({ length: 200 }, (_, n) => reader(`/instance/mods/Kept/${n}.dds`)));
-    const named = Array.from({ length: 200 }, (_, n) => `/instance/mods/Named/${n}.dds`);
-    const asked = vi.spyOn(String.prototype, 'startsWith');
+  it('compares the files kept with the paths named at a cost that does not grow with the paths named', async () => {
+    const byNamed = async (kept: number): Promise<number> => {
+      const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
+      await Promise.all(Array.from({ length: kept }, (_, n) => reader(`/instance/mods/Kept${kept}/${n}.dds`)));
+      return await comparisonsOf(200) - await comparisonsOf(1);
+    };
 
-    await readTrustingKept(named, false, () => Promise.resolve());
-    const startsWith = asked.mock.calls.length;
-    asked.mockRestore();
-
-    expect(startsWith).toBeLessThan(200 + 200);
+    expect(await byNamed(200)).toBe(await byNamed(20));
   });
 });

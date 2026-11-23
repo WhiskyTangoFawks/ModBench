@@ -58,14 +58,12 @@ type TreeInstance = InstanceOf<keyof typeof TREE_READS | 'entryKey'>;
 
 type TreeRead = Pick<InstanceValue, keyof typeof TREE_READS>;
 
-// A file as a change names it and a read reads it, whatever its case and separators.
-
 const isTreeRead = (fact: string): fact is keyof typeof TREE_READS => fact in TREE_READS;
 
 // The files present answer the sorting rules' file conditions alone, so a change to them draws no row.
 const ROW_READS = Object.keys(TREE_READS).filter(isTreeRead).filter((fact) => !(fact in TOUCHING_READ) && fact !== 'dataFolderFiles');
 
-const rowsChanged = (before: TreeRead | undefined, after: TreeRead): boolean => before === undefined || ROW_READS.some((fact) => before[fact] !== after[fact]);
+const rowsChanged = (before: TreeRead, after: TreeRead): boolean => ROW_READS.some((fact) => before[fact] !== after[fact]);
 
 interface PluginsTreeProviderOptions {
   fileReads: FileReads;
@@ -208,13 +206,13 @@ export class PluginsTreeProvider
     this.instanceValue = options.instance.value;
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
     this.firstRead = firstReadOf(options.instance);
-    this.subscriptions.push(this.firstRead, options.instance.subscribe((_value, _sequence, reread) => {
-      const { before } = reread;
+    this.subscriptions.push(this.firstRead, options.instance.subscribe((_value, _sequence, told) => {
+      const { before } = told;
       const recovered = this.readFailed;
       this.instanceValue = options.instance.value;
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
-      const rewritten = reread.disk || reread.named.some((path) => this.readAt().has(pathKey(path)));
+      const rewritten = told.disk || told.named.some((path) => this.readAt().has(pathKey(path)));
       if (rules !== this.rules || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       this.rules = rules;
       if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
@@ -223,7 +221,7 @@ export class PluginsTreeProvider
     }, TREE_READS, (path) => this.readAt().has(pathKey(path))), options.instance.onReadFailure(() => {
       this.readFailed = true;
       this.render();
-    }), options.instance.onRedraw(() => this.render()));
+    }));
     this.modStatuses = options.modStatuses;
     this.subscriptions.push(
       options.modStatuses.onDidChange(() => {
@@ -245,8 +243,7 @@ export class PluginsTreeProvider
 
   // Whether the files present changed where the last judgement of the sorting rules read them. A Data folder that is not
   // listed on both sides changed anywhere.
-  private judgedFilesChanged(before: TreeRead | undefined, after: TreeRead): boolean {
-    if (before === undefined) return true;
+  private judgedFilesChanged(before: TreeRead, after: TreeRead): boolean {
     const [was, now] = [before.dataFolderFiles, after.dataFolderFiles];
     if (was !== now) {
       if (was.kind !== 'listed' || now.kind !== 'listed') return true;
@@ -468,6 +465,12 @@ export class PluginsTreeProvider
    *  rebuild; undefined when the plugin is gone or the name filter hides it. */
   shownRow(row: PluginsTreeNode): PluginListNode | undefined {
     return isRow(row) ? this.shownRows().find((shown) => shown.id === row.id) : undefined;
+  }
+
+  /** Draws the rows of `plugins` at once, held or not, so a check box the user clicked shows the value (common.md, A
+   *  gesture that writes, story 2). */
+  restoreRows(plugins: readonly PluginAddress[]): void {
+    this._onDidChangeTreeData.restore(plugins.flatMap((plugin) => this.rowOf(plugin) ?? []));
   }
 
   /** The row the tree shows for `plugin`; undefined when the plugin has none, or the name filter hides it. */

@@ -8,6 +8,7 @@ vi.mock('vscode', () => ({
   Disposable: class { constructor(readonly dispose: () => void) {} },
 }));
 
+import { toldOf } from '../../instanceLoader/told';
 import { publishRepository } from '../repositoryContext';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceSubscriber } from '../../instanceLoader/instance';
@@ -25,7 +26,10 @@ function instanceHolding(holdsRepository: boolean, repositorySetUp = false) {
         return { dispose: () => { disposed.push(true); } };
       },
     },
-    land: (held: boolean, setUp = false) => { for (const subscriber of subscribers) void subscriber(instanceValueFixture({ holdsRepository: held, repositorySetUp: setUp }), 1, { named: [], disk: true, before: undefined, changed: () => 'every' as const }); },
+    land: (held: boolean, setUp = false) => {
+      const value = instanceValueFixture({ holdsRepository: held, repositorySetUp: setUp });
+      for (const subscriber of subscribers) void subscriber(value, 1, toldOf(value, value, { named: [], disk: true }, undefined));
+    },
     disposed,
   };
 }

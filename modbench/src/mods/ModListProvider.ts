@@ -215,7 +215,6 @@ export class ModListProvider
   private instanceValue: TreeInstance['value'];
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
-  private readonly redrawSubscription: vscode.Disposable;
   private readonly statusSubscription: vscode.Disposable;
   private readonly openSubscription: vscode.Disposable;
   private readonly statuses: ModListProviderOptions['statuses'];
@@ -229,7 +228,6 @@ export class ModListProvider
     this.firstRead = firstReadOf(options.instance);
     this.instanceSubscription = options.instance.subscribe((_value, _sequence, told) => { this.update(told); }, TREE_READS);
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
-    this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;
     this.open = options.open;
     this.reporter = options.reporter;
@@ -246,7 +244,6 @@ export class ModListProvider
   dispose(): void {
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
-    this.redrawSubscription.dispose();
     this.statusSubscription.dispose();
     this.openSubscription.dispose();
     this.firstRead.dispose();
@@ -557,6 +554,12 @@ export class ModListProvider
 
   private leafNamed(name: string): SeparatorLeaf | undefined {
     return this.entries().leaves.get(name);
+  }
+
+  /** Draws the rows of `mods` at once, held or not, so a check box the user clicked shows the value (common.md, A gesture
+   *  that writes, story 2). */
+  restoreRows(mods: readonly string[]): void {
+    this._onDidChangeTreeData.restore(mods.flatMap((name) => this.rowFor(modOrigin(name)) ?? []));
   }
 
   /** The row the tree shows for an origin, or undefined when it shows none. */

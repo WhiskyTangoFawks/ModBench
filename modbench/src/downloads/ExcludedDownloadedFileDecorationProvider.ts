@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import { DecorationRedrawEmitter } from '../drivingLib/heldRedraw';
+import { DOWNLOADS_KEY_ARGS } from './keyContext';
 
 /** Colour only, no badge: Show excluded is additive, so excluded rows sit alongside included ones
  *  and this tint is the only cue telling them apart — the reference tool draws none. */
 export class ExcludedDownloadedFileDecorationProvider implements vscode.FileDecorationProvider {
-  private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
+  private readonly _onDidChangeFileDecorations = new DecorationRedrawEmitter(DOWNLOADS_KEY_ARGS.view);
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
 
   constructor(

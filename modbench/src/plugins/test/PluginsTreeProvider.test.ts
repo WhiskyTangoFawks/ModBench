@@ -36,6 +36,8 @@ vi.mock('vscode', async () => {
 
 import * as vscode from 'vscode';
 import { PluginsTreeProvider, NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
+import { PLUGINS_KEY_ARGS } from '../gestureEntry';
+import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
 import { PluginNode, ImplicitMasterNode, type PluginsTreeNode } from '../pluginRows';
 import { RecordBrowser } from '../RecordBrowser';
 import { pluginsTreeOver } from './pluginsTreeOver';
@@ -248,16 +250,18 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
-  it('draws the tree again when the instance redraws', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
+  it('restores a clicked plugin\'s row at once while a gesture writes from the view (common.md, A gesture that writes, story 2)', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
-    await tree.getChildren();
-    const fired: unknown[] = [];
+    const b = expectInstanceOf((await tree.getChildren())[1], PluginNode);
+    const fired: (PluginsTreeNode | undefined | null)[] = [];
     tree.onDidChangeTreeData((e) => fired.push(e));
 
-    instance.redraw();
+    holdRedraws(PLUGINS_KEY_ARGS.view);
+    tree.restoreRows([b.argument.plugin]);
+    releaseRedraws(PLUGINS_KEY_ARGS.view);
 
-    expect(fired).toHaveLength(1);
+    expect(fired.map((row) => row?.id)).toEqual([b.id]);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {

@@ -2,6 +2,8 @@
 // in the Explorer.
 
 import * as vscode from 'vscode';
+import { DecorationRedrawEmitter } from '../drivingLib/heldRedraw';
+import { MODS_KEY_ARGS } from './gestureEntry';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { foldedFilesIn, foldPath, originKey, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { modEntryOf, RowsByOwner, rowsFollowing, touchedIn, type OriginsChange, type Owned, type Row } from './originsTouched';
@@ -138,7 +140,7 @@ function * ownedIn(value: FilesValue, change: OriginsChange): Iterable<Owned<Ina
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new instance value (ADR-0003), for
  *  the rows of the origins it touches, and on every change to its setting. */
 export class InactiveFileDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
-  private readonly changed = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
+  private readonly changed = new DecorationRedrawEmitter(MODS_KEY_ARGS.view);
   readonly onDidChangeFileDecorations = this.changed.event;
   private readonly held: () => RowsByOwner<Inactive>;
   private readonly subscriptions: readonly { dispose(): unknown }[];

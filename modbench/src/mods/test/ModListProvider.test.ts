@@ -22,7 +22,7 @@ import { OpenRows } from '../openRows';
 import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
-import { holdingRedraws } from '../../drivingLib/heldRedraw';
+import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -203,31 +203,31 @@ describe('what the view says of itself', () => {
     expect(provider.viewMessage()).toBeUndefined();
   });
 
-  it('holds its redraw while a gesture writes from it, and draws once the gesture ends (common.md, A gesture that writes, story 1)', async () => {
+  it('holds its redraw while a gesture writes from it, and draws once the gesture ends (common.md, A gesture that writes, story 1)', () => {
     const instance = new FakeInstance(valueOf([mod('A')]));
     const provider = makeProvider([], { instance });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
-    let firedWhileWriting = -1;
 
-    await holdingRedraws(MODS_KEY_ARGS.view, () => {
-      instance.publish(valueOf([mod('A'), mod('B')]));
-      firedWhileWriting = fired.length;
-      return Promise.resolve();
-    });
+    holdRedraws(MODS_KEY_ARGS.view);
+    instance.publish(valueOf([mod('A'), mod('B')]));
+    const firedWhileWriting = fired.length;
+    releaseRedraws(MODS_KEY_ARGS.view);
 
     expect([firedWhileWriting, fired.length]).toEqual([0, 1]);
   });
 
-  it('draws the tree again when the instance redraws', () => {
-    const instance = new FakeInstance(valueOf([mod('A')]));
+  it('restores a clicked mod\'s row at once while a gesture writes from the view (common.md, A gesture that writes, story 2)', () => {
+    const instance = new FakeInstance(valueOf([mod('A'), mod('B')]));
     const provider = makeProvider([], { instance });
-    const fired: unknown[] = [];
+    const fired: (ModlistNode | undefined)[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
-    instance.redraw();
+    holdRedraws(MODS_KEY_ARGS.view);
+    provider.restoreRows(['B']);
+    releaseRedraws(MODS_KEY_ARGS.view);
 
-    expect(fired).toHaveLength(1);
+    expect(fired.map((row) => row?.id)).toEqual(['mod:B']);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {

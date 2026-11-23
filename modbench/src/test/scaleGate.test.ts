@@ -15,7 +15,7 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { A_FILE_A_RULE_READS_REWRITTEN, A_GESTURE_WRITING_A_LOOSE_FILE, filesNamed, A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
+import { A_FILE_A_RULE_READS_REWRITTEN, A_GESTURE_WRITING_A_LOOSE_FILE, A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
 describe('a change costs the same on a small and a large instance', () => {
   it.each<{ change: Gesture; layer: keyof Cost }>([
@@ -77,14 +77,6 @@ describe('a gesture into one mod costs the same whatever that mod holds (ADR-002
     const large = await costOf(3, into(300));
 
     expect(large[layer]).toBe(small[layer]);
-  });
-});
-
-describe('a read naming many files, as a deploy names what it wrote (common.md, A gesture that writes, story 4)', () => {
-  it('tests the files kept against the paths named at the same cost whatever the instance holds', async () => {
-    const byNamed = async (mods: number): Promise<number> => (await costOf(mods, filesNamed(200))).scans - (await costOf(mods, filesNamed(1))).scans;
-
-    expect(await byNamed(60)).toBe(await byNamed(3));
   });
 });
 

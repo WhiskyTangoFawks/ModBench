@@ -115,14 +115,13 @@ describe('a write over the real adapter', () => {
       heard.push({ before: told.before, changed: told.changed() });
     }, TOUCHING_READ);
 
-    for (const name of ['first.dds', 'second.dds']) {
-      await writeFile(join(folder, name), name);
-      await loader.refresh([join(folder, name)]);
-    }
+    await writeFile(join(folder, 'first.dds'), 'first');
+    await loader.refresh([join(folder, 'first.dds')]);
+    await writeFile(join(folder, 'second.dds'), 'second');
+    await loader.refresh([join(folder, 'second.dds')]);
 
     const [, second] = heard;
-    expect([second?.before === landed[0], second?.changed === 'every' ? 'every' : second?.changed.map(({ origin, gained }) => [origin, gained.map(({ relativePath }) => relativePath)])])
-      .toEqual([true, [[{ kind: 'mod', name: 'Patch Mod' }, ['second.dds']]]]);
+    expect([second?.before === landed[0], second?.changed]).toMatchObject([true, [{ origin: { kind: 'mod', name: 'Patch Mod' }, gained: [{ relativePath: 'second.dds' }] }]]);
   });
 
   it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {

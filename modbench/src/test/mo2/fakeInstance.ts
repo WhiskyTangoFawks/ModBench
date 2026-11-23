@@ -1,5 +1,5 @@
 import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
-import { toldOf } from '../../instanceLoader/told';
+import { isFactOf, toldOf } from '../../instanceLoader/told';
 import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 
 /** The double every provider's row contract needs: `.value` plus `.subscribe`, structurally
@@ -11,15 +11,14 @@ export class FakeInstance {
   // of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
   readFailure: string | undefined;
-  private subscribers: { readonly subscriber: InstanceSubscriber; readonly concerns: readonly (keyof InstanceValue)[] | undefined; told?: InstanceValue }[] = [];
+  private subscribers: { readonly subscriber: InstanceSubscriber; readonly concerns: readonly (keyof InstanceValue)[] | undefined; told: InstanceValue }[] = [];
   private failureListeners: (() => void)[] = [];
-  private redrawListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
   }
   subscribe(subscriber: InstanceSubscriber, concerns?: Readonly<Partial<Record<keyof InstanceValue, true>>>) {
-    const subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter((fact): fact is keyof InstanceValue => fact in this.value), told: this.value };
+    const subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.value)), told: this.value };
     this.subscribers.push(subscribed);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscribed); } };
   }
@@ -42,13 +41,6 @@ export class FakeInstance {
   onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
-  }
-  onRedraw(listener: () => void) {
-    this.redrawListeners.push(listener);
-    return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
-  }
-  redraw(): void {
-    for (const listener of [...this.redrawListeners]) listener();
   }
   // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {

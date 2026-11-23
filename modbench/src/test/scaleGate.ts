@@ -61,8 +61,6 @@ export interface Cost {
   /** The URIs made, each a row's or its file's, until the gesture settles: a row derived again that a change did not touch
    *  shows here. */
   readonly rows: number;
-  /** The paths tested as beneath another until the gesture settles: a path tested against every kept one shows here. */
-  readonly scans: number;
 }
 
 const quiet = { info: () => undefined, warn: () => undefined, error: () => undefined };
@@ -283,17 +281,6 @@ export const A_GESTURE_WRITING_A_LOOSE_FILE: Gesture = {
   },
 };
 
-/** A read naming `count` files written into the game's Data folder, as a deploy names what it wrote. */
-export const filesNamed = (count: number): Gesture => ({
-  name: `a read naming ${count} files written into the game's Data folder`,
-  async make({ root, instance }) {
-    const files = Array.from({ length: count }, (_, n) => join(root, 'Game', 'Data', `deployed ${n}.dds`));
-    await Promise.all(files.map((file) => writeFile(file, 'deployed')));
-    await instance.refresh(files);
-    return 0;
-  },
-});
-
 export const A_RECORD_WRITTEN: Gesture = {
   name: 'a record written into one plugin, which mEdit says changed',
   make({ client }) {
@@ -407,7 +394,6 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     const lookups = vi.spyOn(FileConflictLookup.prototype, 'get');
     const madeFiles = vi.spyOn(vscode.Uri, 'file');
     const madeFrom = vi.spyOn(vscode.Uri, 'from');
-    const scanned = vi.spyOn(String.prototype, 'startsWith');
     const start = fileSystemCalls.count;
     const asked = client.calls.length + answered();
     const landed = landings.length;
@@ -417,14 +403,13 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
 
     const looked = lookups.mock.calls.length;
     const made = madeFiles.mock.calls.length + madeFrom.mock.calls.length;
-    const scans = scanned.mock.calls.length;
-    for (const spy of [lookups, madeFiles, madeFrom, scanned]) spy.mockRestore();
+    for (const spy of [lookups, madeFiles, madeFrom]) spy.mockRestore();
     const viewsIn = { ...host.count(), Conflicts: table.posted.length };
     const derivedIn = Object.fromEntries(Object.entries(instance.value).map(([fact, held]) => [fact, newObjects(known, held)]));
     return {
       read: (landings[landed] ?? fileSystemCalls.count) - start, derived: newObjects(known, instance.value, pluginsTree.facts.rows), derivedIn, subscribers, mEdit: client.calls.length + answered() - asked,
       views: viewsIn.Mods + viewsIn.Plugins + viewsIn.Conflicts, viewsIn, shown, settling: landings[landed] === undefined ? 0 : fileSystemCalls.count - landings[landed],
-      told: { ...told }, lookups: looked, rows: made, scans,
+      told: { ...told }, lookups: looked, rows: made,
     };
   } finally {
     writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });

@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { productionFiles, SRC } from './scanSource';
 
-const VIEW_EVENT = /readonly onDidChangeTreeData = this\.(\w+)\.event/g;
+const VIEW_EVENT = /readonly onDidChange(?:TreeData|FileDecorations) = this\.(\w+)\.event/g;
 
 const unheldIn = (source: string): string[] => [...source.matchAll(VIEW_EVENT)].flatMap(([, emitter = '']) =>
   (new RegExp(`\\b${emitter} = new vscode\\.EventEmitter\\b`).test(source) ? [emitter] : []));
 
-describe('every view\'s tree is one a gesture writing from it holds (common.md, A gesture that writes, story 1)', () => {
-  it('no view fires its tree from an emitter a gesture does not hold', () => {
+describe('every view\'s tree and decorations are ones a gesture writing from it holds (common.md, A gesture that writes, story 1)', () => {
+  it('no view fires its tree or decorations from an emitter a gesture does not hold', () => {
     const offenders = Object.fromEntries(productionFiles(SRC).flatMap((path) => {
       const unheld = unheldIn(readFileSync(path, 'utf8'));
       return unheld.length === 0 ? [] : [[relative(SRC, path), unheld]];

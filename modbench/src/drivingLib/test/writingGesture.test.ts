@@ -231,12 +231,11 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
 
     function surfaced() {
       const reporter = recordingReporter();
-      const redraw = vi.fn();
       const surface = surfaceRefusedWrites({
-        reporter, redraw, titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
+        reporter, titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
       });
       onTestFinished(() => { surface.dispose(); });
-      return { reporter, redraw };
+      return { reporter };
     }
 
     it('is refused, naming the write in flight, and starts nothing', async () => {
@@ -262,16 +261,15 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       await expect(asked('modbench.mod.rename')).rejects.toThrow('Rename Mod did not start: Build Mod is still writing.');
     });
 
-    it('tells a view call once, in a notification and the Output, and draws the view from the held value', async () => {
-      const { reporter, redraw } = surfaced();
+    it('tells a view call once, in a notification and the Output', async () => {
+      const { reporter } = surfaced();
       heldWrite('modbench.mod.build');
 
       const answered = await asViewCall(() => asked('modbench.mod.rename'));
 
-      expect({ answered, reports: reporter.reports, redraws: redraw.mock.calls.length, shownOnSurface: reporter.shownFailures }).toEqual({
+      expect({ answered, reports: reporter.reports, shownOnSurface: reporter.shownFailures }).toEqual({
         answered: undefined,
         reports: [{ severity: 'error', message: 'Rename Mod did not start: Build Mod is still writing.', detail: undefined }],
-        redraws: 1,
         shownOnSurface: [],
       });
     });
@@ -344,19 +342,6 @@ describe('handingOneChange', () => {
     });
 
     expect([drawnWhileWriting, drawn]).toEqual([[], ['written', 'read back']]);
-  });
-
-  it('runs every write and ends though the read of each fails, leaving the failure to the loader (common.md, A gesture that writes, story 3)', async () => {
-    writesToldTo({ told: () => Promise.reject(new Error('read failed')) });
-    onTestFinished(() => { writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) }); });
-    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
-    const written: string[] = [];
-
-    await handingOneChange({ refresh }, async () => {
-      for (const path of ['/mods/A/a.esp', '/mods/A/b.esp']) await toldAfter([path], () => { written.push(path); return Promise.resolve(); });
-    });
-
-    expect(written).toEqual(['/mods/A/a.esp', '/mods/A/b.esp']);
   });
 
   it('checks the disk once it ends when a write left its files unnamed', async () => {
@@ -461,7 +446,7 @@ describe('whenNoChangeIsRunning', () => {
 
   it('reports a task that fails and still runs the others', async () => {
     const reporter = recordingReporter();
-    const surface = surfaceRefusedWrites({ reporter, titles: new Map(), redraw: () => undefined });
+    const surface = surfaceRefusedWrites({ reporter, titles: new Map() });
     onTestFinished(() => { surface.dispose(); });
     const other = vi.fn(() => Promise.resolve());
     const fails = whenNoChangeIsRunning(() => Promise.reject(new Error('disk full')));

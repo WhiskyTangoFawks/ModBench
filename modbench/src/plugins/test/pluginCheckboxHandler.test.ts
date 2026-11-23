@@ -23,9 +23,11 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 import { aWriteInFlight } from '../../test/writeInFlight';
+import type { PluginAddress } from '../../wire/pluginAddress';
 
 beforeEach(() => {
   progressSteps.length = 0;
+  restored.length = 0;
 });
 
 const REFUSED: InstanceAnswers = { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') };
@@ -35,8 +37,10 @@ const instance = { refresh: () => { progressSteps.push('Instance loader: read ev
 const toggled = (...items: [string, 0 | 1][]) => ({
   items: items.map(([name, state]) => [new PluginNode({ name, enabled: state === 0 }, 'SomeMod'), state] as [PluginNode, 0 | 1]),
 });
+const restored: (readonly PluginAddress[])[] = [];
+const restore = (plugins: readonly PluginAddress[]) => { restored.push(plugins); };
 const toggle = (event: ReturnType<typeof toggled>, adapter = fake(), reporter = recordingReporter()) =>
-  onPluginCheckboxChanged(event, pluginCommandsWith(adapter.adapter), reporter, instance);
+  onPluginCheckboxChanged(event, pluginCommandsWith(adapter.adapter), reporter, instance, restore);
 const enabling = (...pairs: [string, boolean][]) =>
   [{ verb: 'changePluginOrder', profile: 'Default', changes: pairs.map(([plugin, enabled]) => ({ kind: 'enable', plugin, enabled })) }];
 
@@ -59,6 +63,12 @@ describe('onPluginCheckboxChanged', () => {
     expect(adapter.calls).toEqual([...enabling(['A.esp', true]), ...enabling(['B.esp', false])]);
   });
 
+  it('restores every row it clicked once its writes end, though they failed (common.md, A gesture that writes, story 2)', async () => {
+    await toggle(toggled(['A.esp', 1], ['B.esp', 0]), fake(REFUSED));
+
+    expect(restored).toEqual([[{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }]]);
+  });
+
   it('names the failure of each direction by its own', async () => {
     const reporter = recordingReporter();
 
@@ -70,15 +80,16 @@ describe('onPluginCheckboxChanged', () => {
     ]);
   });
 
-  it('is refused while a write is in flight: the user is told once, the view is drawn from the held value, and nothing is written', async () => {
-    const { told, redraw } = aWriteInFlight();
+  it('is refused while a write is in flight: the user is told once, its row is restored, and nothing is written', async () => {
+    const { told } = aWriteInFlight();
     const adapter = fake();
     const own = recordingReporter();
 
     await toggle(toggled(['A.esp', 1]), adapter, own);
 
-    expect({ calls: adapter.calls, own: own.reports, told: told.reports.map(({ message }) => message), redraws: redraw.mock.calls.length }).toEqual({
-      calls: [], own: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'], redraws: 1,
+    expect({ calls: adapter.calls, own: own.reports, told: told.reports.map(({ message }) => message), restored }).toEqual({
+      calls: [], own: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'],
+      restored: [[{ name: 'A.esp', origin: 'SomeMod' }]],
     });
   });
 
@@ -97,7 +108,7 @@ describe('onPluginCheckboxChanged', () => {
     const adapter = fake();
     const recordNode = await recordRow(recordSummaryFixture(), 'Data/');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginCommandsWith(adapter.adapter), recordingReporter(), instance);
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginCommandsWith(adapter.adapter), recordingReporter(), instance, restore);
 
     expect([adapter.calls, progressSteps]).toEqual([[], []]);
   });

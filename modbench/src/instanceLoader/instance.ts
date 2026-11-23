@@ -30,7 +30,7 @@ export type { PapyrusScript } from './papyrusScripts';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
 import type { FilesChanged } from './filesChanged';
-import { toldOf } from './told';
+import { isFactOf, toldOf } from './told';
 import { present } from '../ports/present';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
@@ -175,18 +175,17 @@ export interface InstanceValue {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
 }
 
-/** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
+/** A subscriber that returns a promise holds `refresh` until it settles. */
 export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceValue> = (value: Pick<InstanceValue, K>, sequence: number, told: Told<K>) => void | Promise<void>;
 
 /** What a subscriber is told with a value: what was read again, the value it was told last, and what changed of the
  *  origins' files since, so nothing above the read model works it out (ADR-0029, Consequences, bullet 4). */
 export interface Told<K extends keyof InstanceValue = keyof InstanceValue> extends Reread {
-  /** The value the subscriber was told last; none at its first. */
-  readonly before: Pick<InstanceValue, K> | undefined;
+  /** The value the subscriber was told last, or the value when it subscribed. */
+  readonly before: Pick<InstanceValue, K>;
   /** Each origin whose own files changed since `before`, or anything. */
   changed(): FilesChanged;
 }
-
 
 /** The facts a subscriber reads, each named as a key. */
 export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
@@ -198,11 +197,9 @@ interface Subscribed {
   readonly subscriber: InstanceSubscriber;
   readonly concerns: readonly (keyof InstanceValue)[] | undefined;
   readonly readsFile: ReadsFile | undefined;
-  // The value it was told last, or held when it subscribed, which the next change is told against.
+  // The value it was told last, or the value when it subscribed, which the next change is told against.
   told: InstanceValue;
 }
-
-const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
 
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
@@ -219,7 +216,7 @@ export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 
 /** The Instance as a tree reads it: the held value, sequence and read failure, plus the
  *  channels they move on. */
-export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure' | 'onRedraw'>;
+export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
 /** The Instance as a subscriber that reads the facts `K` sees it. */
 export type InstanceOf<K extends keyof InstanceValue> = Omit<InstanceView, 'value'> & { readonly value: Pick<InstanceValue, K> };
@@ -342,7 +339,6 @@ export class Instance implements Subscription {
   private unread: { readonly named: ReadonlySet<string>; readonly disk: boolean } = { named: new Set(), disk: false };
 
   private failureListeners: ReadFailureListener[] = [];
-  private redrawListeners: (() => void)[] = [];
   private lateListeners: (() => void)[] = [];
   private late = false;
   private outcomeListeners: ListenerOutcomeListener[] = [];
@@ -431,12 +427,6 @@ export class Instance implements Subscription {
     };
   }
 
-  /** Called on each `redraw`, by the views alone: a subscriber that derives from the value or hands it on does not run again. */
-  onRedraw(listener: () => void): Subscription {
-    this.redrawListeners.push(listener);
-    return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
-  }
-
   /** Whether a change was heard that no read has taken in since. */
   get mayBeLate(): boolean {
     return this.late;
@@ -446,11 +436,6 @@ export class Instance implements Subscription {
   onMayBeLate(listener: () => void): Subscription {
     this.lateListeners.push(listener);
     return { dispose: () => { this.lateListeners = this.lateListeners.filter((l) => l !== listener); } };
-  }
-
-  /** Draws the held value again, with no read: a control the user toggled returns to what the value says. */
-  redraw(): void {
-    for (const listener of [...this.redrawListeners]) listener();
   }
 
   /** Called with the outcome of each call to a subscriber or read-failure listener, so a view that
@@ -489,7 +474,6 @@ export class Instance implements Subscription {
     this.mEditChanges.dispose();
     this.subscribers = [];
     this.failureListeners = [];
-    this.redrawListeners = [];
     this.lateListeners = [];
     this.outcomeListeners = [];
   }
