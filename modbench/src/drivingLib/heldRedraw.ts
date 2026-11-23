@@ -66,18 +66,23 @@ export class RedrawEmitter<E> implements vscode.Disposable {
 }
 
 /** A decoration provider's change event, which a gesture from the view it decorates holds: every file asked while held,
- *  each once, in one event. */
+ *  each once, in one event. A URI `holds` passes over shows at once, such as one the Explorer shows too. */
 export class DecorationRedrawEmitter implements vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<vscode.Uri[] | undefined>();
   readonly event = this.emitter.event;
   private whole = false;
   private readonly uris = new Map<string, vscode.Uri>();
 
-  constructor(private readonly view: string) {}
+  constructor(private readonly view: string, private readonly holds: (uri: vscode.Uri) => boolean = () => true) {}
 
   fire(uris: vscode.Uri | vscode.Uri[] | undefined): void {
     if (uris === undefined) this.whole = true;
-    else for (const uri of [uris].flat()) this.uris.set(uri.toString(), uri);
+    else {
+      const [held, now] = [[uris].flat().filter(this.holds), [uris].flat().filter((uri) => !this.holds(uri))];
+      if (now.length > 0) this.emitter.fire(now);
+      if (held.length === 0) return;
+      for (const uri of held) this.uris.set(uri.toString(), uri);
+    }
     drawn(this, this.view, () => { this.release(); });
   }
 

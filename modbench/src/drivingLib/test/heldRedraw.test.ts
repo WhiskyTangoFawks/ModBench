@@ -114,4 +114,17 @@ describe('a view\'s redraw while a gesture writes from it (common.md, A gesture 
 
     expect(fired).toEqual([[a, b]]);
   });
+
+  it('shows at once a file it does not hold, such as one the Explorer shows too (A view, story 2)', () => {
+    const emitter = new DecorationRedrawEmitter(MINE, (uri) => uri.scheme !== 'file');
+    const fired = watched(emitter);
+    const [row, file] = [Uri.from({ scheme: 'modbench-row', path: '/a' }), Uri.file('/a')];
+
+    holdRedraws(MINE);
+    emitter.fire([row, file]);
+    const firedWhileHeld = [...fired];
+    releaseRedraws(MINE);
+
+    expect([firedWhileHeld, fired]).toEqual([[[file]], [[file], [row]]]);
+  });
 });

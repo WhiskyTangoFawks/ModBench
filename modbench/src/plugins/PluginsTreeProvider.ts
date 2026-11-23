@@ -467,10 +467,9 @@ export class PluginsTreeProvider
     return isRow(row) ? this.shownRows().find((shown) => shown.id === row.id) : undefined;
   }
 
-  /** Draws the rows of `plugins` at once, held or not, so a check box the user clicked shows the value (common.md, A
-   *  gesture that writes, story 2). */
-  restoreRows(plugins: readonly PluginAddress[]): void {
-    this._onDidChangeTreeData.restore(plugins.flatMap((plugin) => this.rowOf(plugin) ?? []));
+  /** Draws `clicked` again (`RedrawEmitter.restore`): the rows VS Code holds, whose check box it set as the user clicked. */
+  restoreRows(clicked: readonly PluginNode[]): void {
+    this._onDidChangeTreeData.restore(clicked);
   }
 
   /** The row the tree shows for `plugin`; undefined when the plugin has none, or the name filter hides it. */
@@ -545,7 +544,11 @@ export class PluginsTreeProvider
 
     // ImplicitMasterNode keeps its constructor's decoration untouched: the locked row's tooltip is
     // the reference tool's one sentence alone (plugins.md, A plugin the game loads with no line).
-    if (element.kind === 'plugin') this.decoratePlugin(element);
+    if (element.kind === 'plugin') {
+      this.decoratePlugin(element);
+      // VS Code sets the box of the item it holds as the user clicks; the row's own value sets it back.
+      element.checkboxState = element.plugin.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+    }
     return element;
   }
 

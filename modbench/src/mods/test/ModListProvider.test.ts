@@ -217,17 +217,16 @@ describe('what the view says of itself', () => {
     expect([firedWhileWriting, fired.length]).toEqual([0, 1]);
   });
 
-  it('restores a clicked mod\'s row at once while a gesture writes from the view (common.md, A gesture that writes, story 2)', () => {
-    const instance = new FakeInstance(valueOf([mod('A'), mod('B')]));
-    const provider = makeProvider([], { instance });
+  it('draws a clicked row again with the box its mod\'s value sets (common.md, A gesture that writes, story 2)', async () => {
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf([mod('A')])) });
+    const clicked = expectInstanceOf((await provider.getChildren())[0], ModNode);
     const fired: (ModlistNode | undefined)[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
+    clicked.checkboxState = TreeItemCheckboxState.Unchecked;
 
-    holdRedraws(MODS_KEY_ARGS.view);
-    provider.restoreRows(['B']);
-    releaseRedraws(MODS_KEY_ARGS.view);
+    provider.restoreRows([clicked]);
 
-    expect(fired.map((row) => row?.id)).toEqual(['mod:B']);
+    expect([fired, provider.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {

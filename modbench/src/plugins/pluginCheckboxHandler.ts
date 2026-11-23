@@ -6,14 +6,13 @@ import { reportPluginsParticipation } from './pluginParticipationCommands';
 import { asViewCall, RefusedWrite, runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
-import type { PluginAddress } from '../wire/pluginAddress';
 
 /** The boxes toggled to one state are one call to `setPluginsParticipation`'s core: one splice, one report. Each box
  *  clicked shows the value once the call ends, whatever its outcome. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
   commands: Pick<PluginCommands, 'setPluginsParticipation'>, reporter: Reporter, instance: Pick<Instance, 'refresh'>,
-  restore: (plugins: readonly PluginAddress[]) => void,
+  restore: (clicked: readonly PluginNode[]) => void,
 ): Promise<void> {
   const clicked = e.items.filter((item): item is [PluginNode, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin');
   if (clicked.length === 0) return;
@@ -34,6 +33,6 @@ export async function onPluginCheckboxChanged(
       }
     });
   } finally {
-    restore(clicked.map(([node]) => node.argument.plugin));
+    restore(clicked.map(([node]) => node));
   }
 }

@@ -140,7 +140,8 @@ function * ownedIn(value: FilesValue, change: OriginsChange): Iterable<Owned<Ina
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new instance value (ADR-0003), for
  *  the rows of the origins it touches, and on every change to its setting. */
 export class InactiveFileDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
-  private readonly changed = new DecorationRedrawEmitter(MODS_KEY_ARGS.view);
+  // The Explorer's grey follows the disk; the Mods tree's rows hold with their view.
+  private readonly changed = new DecorationRedrawEmitter(MODS_KEY_ARGS.view, (uri) => uri.scheme !== 'file');
   readonly onDidChangeFileDecorations = this.changed.event;
   private readonly held: () => RowsByOwner<Inactive>;
   private readonly subscriptions: readonly { dispose(): unknown }[];

@@ -36,8 +36,6 @@ vi.mock('vscode', async () => {
 
 import * as vscode from 'vscode';
 import { PluginsTreeProvider, NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
-import { PLUGINS_KEY_ARGS } from '../gestureEntry';
-import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
 import { PluginNode, ImplicitMasterNode, type PluginsTreeNode } from '../pluginRows';
 import { RecordBrowser } from '../RecordBrowser';
 import { pluginsTreeOver } from './pluginsTreeOver';
@@ -250,18 +248,16 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
-  it('restores a clicked plugin\'s row at once while a gesture writes from the view (common.md, A gesture that writes, story 2)', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
-    const { tree } = makeTree([], { instance });
-    const b = expectInstanceOf((await tree.getChildren())[1], PluginNode);
+  it('draws a clicked row again with the box its plugin\'s value sets (common.md, A gesture that writes, story 2)', async () => {
+    const { tree } = makeTree([], { instance: new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, enabled: true })])) });
+    const clicked = expectInstanceOf((await tree.getChildren())[0], PluginNode);
     const fired: (PluginsTreeNode | undefined | null)[] = [];
     tree.onDidChangeTreeData((e) => fired.push(e));
+    clicked.checkboxState = TreeItemCheckboxState.Unchecked;
 
-    holdRedraws(PLUGINS_KEY_ARGS.view);
-    tree.restoreRows([b.argument.plugin]);
-    releaseRedraws(PLUGINS_KEY_ARGS.view);
+    tree.restoreRows([clicked]);
 
-    expect(fired.map((row) => row?.id)).toEqual([b.id]);
+    expect([fired, tree.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {

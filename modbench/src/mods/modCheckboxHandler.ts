@@ -4,7 +4,7 @@ import type { ModlistNode, ModNode } from './ModListProvider';
 /** Its own file to stay unit testable: `ModListProvider` is a type-only import, so loading this
  *  never evaluates a module that extends `vscode.TreeItem` under a minimal `vi.mock('vscode')`. */
 export async function onModCheckboxChanged(
-  e: vscode.TreeCheckboxChangeEvent<ModlistNode>, restore: (mods: readonly string[]) => void,
+  e: vscode.TreeCheckboxChangeEvent<ModlistNode>, restore: (clicked: readonly ModNode[]) => void,
 ): Promise<void> {
   const toggled = e.items.flatMap(([node, state]) =>
     (node.kind === 'mod' ? [{ node, checked: state === vscode.TreeItemCheckboxState.Checked }] : []));
@@ -15,6 +15,6 @@ export async function onModCheckboxChanged(
       if (first) await vscode.commands.executeCommand(checked ? 'modbench.mod.enable' : 'modbench.mod.disable', first, nodes);
     }
   } finally {
-    restore(toggled.map(({ node }) => node.mod.name));
+    restore(toggled.map(({ node }) => node));
   }
 }

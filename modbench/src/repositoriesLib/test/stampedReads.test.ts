@@ -148,13 +148,10 @@ async function comparisonsOf(named: number): Promise<number> {
 }
 
 describe('a read naming many files, with many kept (ADR-0029, Consequences, bullet 5)', () => {
-  it('compares the files kept with the paths named at a cost that does not grow with the paths named', async () => {
-    const byNamed = async (kept: number): Promise<number> => {
-      const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
-      await Promise.all(Array.from({ length: kept }, (_, n) => reader(`/instance/mods/Kept${kept}/${n}.dds`)));
-      return await comparisonsOf(200) - await comparisonsOf(1);
-    };
+  it('compares each kept file with the paths named at the same cost however many are named', async () => {
+    const reader = keptTrusted(() => Promise.resolve({ size: 1n, modifiedNs: 0n }), (path) => Promise.resolve(path));
+    await Promise.all(Array.from({ length: 200 }, (_, n) => reader(`/instance/mods/Kept/${n}.dds`)));
 
-    expect(await byNamed(200)).toBe(await byNamed(20));
+    expect(await comparisonsOf(200)).toBe(await comparisonsOf(1));
   });
 });

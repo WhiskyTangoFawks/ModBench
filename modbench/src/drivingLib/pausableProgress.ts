@@ -22,10 +22,10 @@ export function pausableProgress(viewId: string): Progress & { readonly done: ()
   return {
     working: () => {
       if (shown !== undefined) return;
-      holdRedraws(viewId);
       let release: () => void = () => undefined;
       const held = new Promise<void>((resolve) => { release = resolve; });
       shown = { release, closed: vscode.window.withProgress({ location: { viewId } }, () => held) };
+      holdRedraws(viewId);
     },
     waiting: () => { void close(); },
     done: async () => { await close(); },

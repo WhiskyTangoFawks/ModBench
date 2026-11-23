@@ -23,7 +23,6 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 import { aWriteInFlight } from '../../test/writeInFlight';
-import type { PluginAddress } from '../../wire/pluginAddress';
 
 beforeEach(() => {
   progressSteps.length = 0;
@@ -37,8 +36,8 @@ const instance = { refresh: () => { progressSteps.push('Instance loader: read ev
 const toggled = (...items: [string, 0 | 1][]) => ({
   items: items.map(([name, state]) => [new PluginNode({ name, enabled: state === 0 }, 'SomeMod'), state] as [PluginNode, 0 | 1]),
 });
-const restored: (readonly PluginAddress[])[] = [];
-const restore = (plugins: readonly PluginAddress[]) => { restored.push(plugins); };
+const restored: string[][] = [];
+const restore = (clicked: readonly PluginNode[]) => { restored.push(clicked.map(({ plugin }) => plugin.name)); };
 const toggle = (event: ReturnType<typeof toggled>, adapter = fake(), reporter = recordingReporter()) =>
   onPluginCheckboxChanged(event, pluginCommandsWith(adapter.adapter), reporter, instance, restore);
 const enabling = (...pairs: [string, boolean][]) =>
@@ -66,7 +65,7 @@ describe('onPluginCheckboxChanged', () => {
   it('restores every row it clicked once its writes end, though they failed (common.md, A gesture that writes, story 2)', async () => {
     await toggle(toggled(['A.esp', 1], ['B.esp', 0]), fake(REFUSED));
 
-    expect(restored).toEqual([[{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }]]);
+    expect(restored).toEqual([['A.esp', 'B.esp']]);
   });
 
   it('names the failure of each direction by its own', async () => {
@@ -89,7 +88,7 @@ describe('onPluginCheckboxChanged', () => {
 
     expect({ calls: adapter.calls, own: own.reports, told: told.reports.map(({ message }) => message), restored }).toEqual({
       calls: [], own: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'],
-      restored: [[{ name: 'A.esp', origin: 'SomeMod' }]],
+      restored: [['A.esp']],
     });
   });
 

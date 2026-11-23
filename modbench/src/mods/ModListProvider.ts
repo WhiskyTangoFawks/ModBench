@@ -363,11 +363,15 @@ export class ModListProvider
 
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
-    if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) {
-      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.text : OVERWRITE_LABEL;
-      element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
-    }
+    if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) this.label(element);
+    // VS Code sets the box of the item it holds as the user clicks; the row's own value sets it back.
+    if (element instanceof ModNode) element.checkboxState = element.mod.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
     return element;
+  }
+
+  private label(element: ModNode | SeparatorNode | OverwriteNode): void {
+    const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.text : OVERWRITE_LABEL;
+    element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
   }
 
   /** Marks the labels of the rows for these origins, and of each collapsed separator that holds one (mods.md, The tree, story 11). */
@@ -556,10 +560,9 @@ export class ModListProvider
     return this.entries().leaves.get(name);
   }
 
-  /** Draws the rows of `mods` at once, held or not, so a check box the user clicked shows the value (common.md, A gesture
-   *  that writes, story 2). */
-  restoreRows(mods: readonly string[]): void {
-    this._onDidChangeTreeData.restore(mods.flatMap((name) => this.rowFor(modOrigin(name)) ?? []));
+  /** Draws `clicked` again (`RedrawEmitter.restore`): the rows VS Code holds, whose check box it set as the user clicked. */
+  restoreRows(clicked: readonly ModNode[]): void {
+    this._onDidChangeTreeData.restore(clicked);
   }
 
   /** The row the tree shows for an origin, or undefined when it shows none. */
