@@ -24,15 +24,15 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
     public static TheoryData<GameRelease, string> InstalledMasters()
     {
         var rows = new TheoryData<GameRelease, string>();
-        foreach (var release in CandidateGames.Where(IsReferenced))
+        foreach (var release in CandidateGames)
         {
-            if (!new GameLocator().TryGetDataDirectory(release, out var dataDir)) continue;
+            if (!new GameLocator().TryGetDataDirectory(release, out var dataDir) || !IsReferenced(release)) continue;
             foreach (var master in MastersIn(release, dataDir.Path)) rows.Add(release, master);
         }
         return rows;
     }
 
-    [SmokeTheory("run the real-install smoke test")]
+    [SmokeTheory]
     [MemberData(nameof(InstalledMasters))]
     public async Task AnInstalledMaster_IsListedAndItsRecordsRead(GameRelease release, string master)
     {

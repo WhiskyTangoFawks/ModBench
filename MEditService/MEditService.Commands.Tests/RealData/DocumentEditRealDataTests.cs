@@ -57,7 +57,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath(string recordType) =>
         RunSweep([.. OnTheSmallestRecordOfEachShape().Where(g => g.Record.RecordType == recordType)]);
 
-    [SmokeFact("sweep every record of the cut-down plugin, not one per gesture shape")]
+    [SmokeFact]
     public void EveryGestureOfEveryRecord_ChangesExactlyItsPath()
     {
         Assert.True(EveryGesture.Value.Count > 4900, $"the plugin should offer plenty of gestures; it offered {EveryGesture.Value.Count}");

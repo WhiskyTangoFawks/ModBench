@@ -30,7 +30,7 @@ public sealed class VanillaMasterFormatTests
             new ModPath(ModKey.FromFileName(Path.GetFileName(path)), path), release, new BinaryReadParameters { MasterFlagsLookup = styles });
     }
 
-    [SmokeTheory("round-trip every installed vanilla master through the plugin source's format")]
+    [SmokeTheory]
     [MemberData(nameof(InstalledVanillaMasters))]
     public void EveryRecordOfAVanillaMaster_ReadsBackFromTheFormatsText_AndTheRecompilesNormalizationLeavesThatTextAsItIs(
         GameRelease release, string path)

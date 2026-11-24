@@ -1,12 +1,10 @@
+using Xunit.Sdk;
+
 namespace MEditService.TestSupport;
 
-/// <summary>Skipped, not passed, without MEDIT_SMOKE=1, so a run reports honestly rather than a
-/// green no-op.</summary>
-public sealed class SmokeFactAttribute : FactAttribute
+/// <summary>The test reads the user's game folder, so it runs only on a real machine.</summary>
+[TraitDiscoverer(KindDiscoverer.TypeName, KindDiscoverer.AssemblyName)]
+public sealed class SmokeFactAttribute : FactAttribute, ITraitAttribute
 {
-    public SmokeFactAttribute(string reason)
-    {
-        if (Environment.GetEnvironmentVariable("MEDIT_SMOKE") != "1")
-            Skip = $"Set MEDIT_SMOKE=1 to {reason}.";
-    }
+    public string Kind { get; } = KindDiscoverer.Smoke;
 }
