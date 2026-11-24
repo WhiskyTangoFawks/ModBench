@@ -18,7 +18,7 @@ public sealed class VanillaMalformedScanProofTests
         return rows;
     }
 
-    [SmokeTheory("run the vanilla-proof scan")]
+    [SmokeTheory]
     [MemberData(nameof(InstalledVanillaPlugins))]
     public void AVanillaPlugin_TripsNoDetector_ElseTheTableRowIsWrongNotTheGame(GameRelease release, string path)
     {

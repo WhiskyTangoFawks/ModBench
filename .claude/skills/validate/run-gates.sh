@@ -116,6 +116,10 @@ echo "=== Gate runner tests ==="
 
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
+# A test's kind is its Kind trait (MEditService.TestSupport). A branch leaves out the kinds that wait
+# for main: a real-size budget runs below, and a smoke test needs the user's game folder.
+BRANCH_TESTS='Kind!=RealSize&Kind!=Smoke'
+
 backend_tests() {
   local results="/tmp/medit-test-results.$(basename "$ROOT")" changed selected
   rm -rf "$results" && mkdir -p "$results" || return
@@ -123,7 +127,7 @@ backend_tests() {
   selected=$(python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" \
     "$ROOT/MEditService" "$results/selected.slnf" <<< "$changed") || return
   echo "Test projects: ${selected:-none, no backend change since $BASE}" | paste -sd ' '
-  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
+  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results" --filter "$BRANCH_TESTS")
   if [[ -n $selected ]]; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "$results/selected.slnf") || return
   fi
@@ -145,8 +149,8 @@ real_size_budgets() {
   local results="/tmp/medit-real-size-results.$(basename "$ROOT")" project
   rm -rf "$results"
   for project in $(cd "$ROOT/MEditService" && grep -rl --include='*.cs' '\[RealSizeFact' -- *.Tests | cut -d/ -f1 | sort -u); do
-    (cd "$ROOT/MEditService" && MEDIT_REAL_SIZE=1 dotnet test --no-build -v minimal --logger trx --results-directory "$results" \
-      "$project" --filter "FullyQualifiedName~.RealSize.") || return
+    (cd "$ROOT/MEditService" && dotnet test --no-build -v minimal --logger trx --results-directory "$results" \
+      "$project" --filter 'Kind=RealSize') || return
   done
   grep -qs 'outcome="Passed"' "$results"/*.trx || { echo "No budget of real size ran."; return 1; }
 }

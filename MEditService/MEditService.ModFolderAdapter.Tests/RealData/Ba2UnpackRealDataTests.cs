@@ -38,7 +38,7 @@ public sealed class Ba2UnpackRealDataTests
     public static TheoryData<GameRelease> InstalledFallout4() =>
         InstalledGameSmokeTheoryAttribute.IsInstalled(GameRelease.Fallout4) ? [GameRelease.Fallout4] : [];
 
-    [InstalledGameSmokeTheory("unpack from the installed game's own archives", GameRelease.Fallout4, GameRelease.Starfield)]
+    [InstalledGameSmokeTheory(GameRelease.Fallout4, GameRelease.Starfield)]
     [MemberData(nameof(InstalledGames))]
     public void EveryEntryOfTheInstalledGamesArchives_Unpacks_ACubemapWithItsCubeCaps(GameRelease release)
     {
@@ -65,7 +65,7 @@ public sealed class Ba2UnpackRealDataTests
         Assert.True(cubemaps > 0, "an installed game's archives hold cubemaps");
     }
 
-    [InstalledGameSmokeTheory("compare the DDS headers Modbench writes with Mutagen's", GameRelease.Fallout4)]
+    [InstalledGameSmokeTheory(GameRelease.Fallout4)]
     [MemberData(nameof(InstalledFallout4))]
     public void TheDdsHeaderOfEveryTextureOfAVersion1Archive_MatchesMutagens_ExceptTheCapsOfASingleMipTextureAndTheCubeFieldsOfACubemapWhichCarryTheCubeFlags(GameRelease release)
     {

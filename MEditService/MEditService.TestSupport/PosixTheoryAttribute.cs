@@ -1,11 +1,10 @@
+using Xunit.Sdk;
+
 namespace MEditService.TestSupport;
 
 /// <summary><see cref="PosixFactAttribute"/> for a test with data rows.</summary>
-public sealed class PosixTheoryAttribute : TheoryAttribute
+[TraitDiscoverer(KindDiscoverer.TypeName, KindDiscoverer.AssemblyName)]
+public sealed class PosixTheoryAttribute : TheoryAttribute, ITraitAttribute
 {
-    public PosixTheoryAttribute()
-    {
-        if (OperatingSystem.IsWindows())
-            Skip = "Needs POSIX file modes, a FIFO, or names differing only in case.";
-    }
+    public string Kind { get; } = KindDiscoverer.Posix;
 }

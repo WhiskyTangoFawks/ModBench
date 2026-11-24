@@ -150,14 +150,16 @@ class SelectedByChange(GateRepo):
 
 
 class RealSizeBudgets(GateRepo):
-    REAL_SIZE_RUN = "MEDIT_REAL_SIZE=1 test --no-build -v minimal --logger trx --results-directory {results} " \
-        "MEditService.RecordIndex.Tests --filter FullyQualifiedName~.RealSize."
+    REAL_SIZE_RUN = "test --no-build -v minimal --logger trx --results-directory {results} " \
+        "MEditService.RecordIndex.Tests --filter Kind=RealSize"
+    UNMARKED_RUN = "--filter Kind!=RealSize&Kind!=Smoke"
     DOTNET_PASSING_EACH_RUN_OF_REAL_SIZE = """#!/bin/sh
-echo "MEDIT_REAL_SIZE=$MEDIT_REAL_SIZE $*" >> {calls}
+echo "$*" >> {calls}
 previous=
 for arg in "$@"; do
-  if [ "$previous" = --results-directory ] && [ "$MEDIT_REAL_SIZE" = 1 ] && [ -z "$NONE_RAN" ]; then
-    mkdir -p "$arg" && echo '<UnitTestResult outcome="Passed" />' > "$arg/run.trx"
+  if [ "$previous" = --results-directory ]; then results=$arg; fi
+  if [ "$previous" = --filter ] && [ "$arg" = Kind=RealSize ] && [ -z "$NONE_RAN" ]; then
+    mkdir -p "$results" && echo '<UnitTestResult outcome="Passed" />' > "$results/run.trx"
   fi
   previous=$arg
 done
@@ -214,6 +216,13 @@ done
         _, calls = self.run_after_changing("MEditService/MEditService.LoadOrder/a.cs")
         self.assertTrue(any(call.endswith("selected.slnf") for call in calls), calls)
         self.assertNotIn(self.real_size_run(), calls)
+
+    def test_the_tests_of_a_branch_leave_out_the_marked_kinds_that_wait_for_main(self):
+        _, calls = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs")
+        runs = [call for call in calls if call.endswith("selected.slnf") or call.endswith("Architecture.Tests")]
+        self.assertEqual(len(runs), 2, calls)
+        for call in runs:
+            self.assertIn(self.UNMARKED_RUN, call)
 
     def test_a_run_of_real_size_that_ran_no_test_fails_the_gate(self):
         run, _ = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs", NONE_RAN="1")
