@@ -149,20 +149,10 @@ class SelectedByChange(GateRepo):
         self.assertEqual(self.selected(), self.slot_line("--frontend"))
 
 
-class RealSizeBudgets(GateRepo):
-    REAL_SIZE_RUN = "test --no-build -v minimal --logger trx --results-directory {results} " \
-        "MEditService.RecordIndex.Tests --filter Kind=RealSize"
+class BranchTests(GateRepo):
     UNMARKED_RUN = "--filter Kind!=RealSize&Kind!=Smoke"
-    DOTNET_PASSING_EACH_RUN_OF_REAL_SIZE = """#!/bin/sh
+    DOTNET_RECORDING_ITS_ARGUMENTS = """#!/bin/sh
 echo "$*" >> {calls}
-previous=
-for arg in "$@"; do
-  if [ "$previous" = --results-directory ]; then results=$arg; fi
-  if [ "$previous" = --filter ] && [ "$arg" = Kind=RealSize ] && [ -z "$NONE_RAN" ]; then
-    mkdir -p "$results" && echo '<UnitTestResult outcome="Passed" />' > "$results/run.trx"
-  fi
-  previous=$arg
-done
 """
 
     def setUp(self):
@@ -175,13 +165,12 @@ done
         self.project("Commands")
         self.project("Http", "Commands")
         self.project("Http.Tests", "Http")
-        self.project("LoadOrder")
-        self.project("LoadOrder.Tests", "LoadOrder")
+        self.project("Architecture.Tests")
         self.calls = pathlib.Path(self.repo, "dotnet-calls")
         self.bin = pathlib.Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.bin)
         dotnet = self.bin / "dotnet"
-        dotnet.write_text(self.DOTNET_PASSING_EACH_RUN_OF_REAL_SIZE.format(calls=self.calls))
+        dotnet.write_text(self.DOTNET_RECORDING_ITS_ARGUMENTS.format(calls=self.calls))
         dotnet.chmod(0o755)
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "projects")
@@ -192,41 +181,30 @@ done
         self.write(f"MEditService/MEditService.{name}/MEditService.{name}.csproj", test_sdk + "".join(
             f'<ProjectReference Include="..\\MEditService.{r}\\MEditService.{r}.csproj" />' for r in references))
 
-    def run_after_changing(self, path, **env):
+    def run_after_changing(self, path, *flags):
         self.write(path, "edited")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "edit")
-        for results in ("medit-test-results", "medit-real-size-results"):
-            self.addCleanup(shutil.rmtree, f"/tmp/{results}.{pathlib.Path(self.repo).name}", ignore_errors=True)
-        run = self.gates("--backend", BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
-        return run, self.calls.read_text().splitlines()
+        self.addCleanup(shutil.rmtree, f"/tmp/medit-test-results.{pathlib.Path(self.repo).name}", ignore_errors=True)
+        self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}")
+        return self.calls.read_text().splitlines()
 
-    def real_size_run(self):
-        return self.REAL_SIZE_RUN.format(results=f"/tmp/medit-real-size-results.{pathlib.Path(self.repo).name}")
-
-    def test_a_change_the_record_index_tests_can_break_runs_the_budgets_of_real_size(self):
-        _, calls = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs")
-        self.assertIn(self.real_size_run(), calls)
-
-    def test_a_change_to_the_write_path_runs_the_budgets_of_real_size(self):
-        _, calls = self.run_after_changing("MEditService/MEditService.Commands/a.cs")
-        self.assertIn(self.real_size_run(), calls)
-
-    def test_a_change_no_gesture_reaches_the_index_through_runs_no_budget_of_real_size(self):
-        _, calls = self.run_after_changing("MEditService/MEditService.LoadOrder/a.cs")
-        self.assertTrue(any(call.endswith("selected.slnf") for call in calls), calls)
-        self.assertNotIn(self.real_size_run(), calls)
-
-    def test_the_tests_of_a_branch_leave_out_the_marked_kinds_that_wait_for_main(self):
-        _, calls = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs")
-        runs = [call for call in calls if call.endswith("selected.slnf") or call.endswith("Architecture.Tests")]
-        self.assertEqual(len(runs), 2, calls)
-        for call in runs:
+    def test_a_branch_that_touches_http_runs_no_test_of_real_size(self):
+        calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
+        tests = [call for call in calls if call.startswith("test ")]
+        self.assertEqual(len(tests), 2, calls)
+        for call in tests:
             self.assertIn(self.UNMARKED_RUN, call)
 
-    def test_a_run_of_real_size_that_ran_no_test_fails_the_gate(self):
-        run, _ = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs", NONE_RAN="1")
-        self.assertIn("BACKEND GATES FAILED", run.stdout)
+    def test_a_branch_that_touches_the_record_index_runs_no_test_of_real_size(self):
+        calls = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs", "--backend")
+        self.assertFalse([call for call in calls if "Kind=RealSize" in call], calls)
+
+    def test_the_docs_scans_of_a_branch_leave_out_the_marked_kinds_that_wait_for_main(self):
+        calls = self.run_after_changing("spec/a.d2", "--docs")
+        scans = [call for call in calls if call.startswith("test ")]
+        self.assertEqual(len(scans), 1, calls)
+        self.assertIn(self.UNMARKED_RUN, scans[0])
 
 
 if __name__ == '__main__':
