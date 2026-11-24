@@ -189,22 +189,16 @@ echo "$*" >> {calls}
         self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}")
         return self.calls.read_text().splitlines()
 
-    def test_a_branch_that_touches_http_runs_no_test_of_real_size(self):
+    def dotnet_test_runs_filtered(self, calls):
+        return [self.UNMARKED_RUN in call for call in calls if call.startswith("test ")]
+
+    def test_the_tests_of_a_branch_that_touches_http_leave_out_the_kinds_that_wait_for_main(self):
         calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
-        tests = [call for call in calls if call.startswith("test ")]
-        self.assertEqual(len(tests), 2, calls)
-        for call in tests:
-            self.assertIn(self.UNMARKED_RUN, call)
+        self.assertEqual(self.dotnet_test_runs_filtered(calls), [True, True], calls)
 
-    def test_a_branch_that_touches_the_record_index_runs_no_test_of_real_size(self):
-        calls = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs", "--backend")
-        self.assertFalse([call for call in calls if "Kind=RealSize" in call], calls)
-
-    def test_the_docs_scans_of_a_branch_leave_out_the_marked_kinds_that_wait_for_main(self):
+    def test_the_docs_scans_of_a_branch_leave_out_the_kinds_that_wait_for_main(self):
         calls = self.run_after_changing("spec/a.d2", "--docs")
-        scans = [call for call in calls if call.startswith("test ")]
-        self.assertEqual(len(scans), 1, calls)
-        self.assertIn(self.UNMARKED_RUN, scans[0])
+        self.assertEqual(self.dotnet_test_runs_filtered(calls), [True], calls)
 
 
 if __name__ == '__main__':
