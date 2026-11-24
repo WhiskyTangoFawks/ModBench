@@ -14,13 +14,13 @@ public sealed class CreatePluginInModHandler
 
     /// <summary>As <see cref="CreatePluginHandler.CreatePlugin"/> answers.</summary>
     public async Task<Answer<PluginCreated, PluginCreateRefused>> CreatePluginIn(
-        string origin, string name, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
+        string origin, string name, IReadOnlyList<string>? flags = null)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         if (!PlaceOf(loadOrder, origin, name).Holds(out var place, out var refused)) return refused;
 
-        return await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags, cancel);
+        return await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags);
     }
 
     /// <summary>The enabled mod or Overwrite <paramref name="origin"/> names, which a new plugin named <paramref name="name"/> goes into.</summary>

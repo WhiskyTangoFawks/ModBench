@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -43,13 +42,13 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     private CreatePluginInModHandler Handler => TestEditService.PluginCreateInModHandler(_holder, _index.Queries);
 
     [Fact]
-    public async Task CreatePluginIn_AModTheLoadOrderHoldsAPluginOf_WritesItInThatModsFolder_AndHandsItToTheRecordIndexToReadBack()
+    public async Task CreatePluginIn_AModTheLoadOrderHoldsAPluginOf_WritesItInThatModsFolder_AndHandsTheRecordIndexNothing()
     {
         var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp", []);
 
         Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created().Plugin);
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
-        Assert.Equal([HandedPlugin.ReadBack(result.Created().Plugin)], Assert.Single(_index.Hands).Require());
+        Assert.Empty(_index.Hands);
     }
 
     [Fact]
@@ -74,6 +73,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
         Assert.Equal(new PluginAddress("Patch.esp", LoadOrderEntry.OverwriteOrigin), result.Created().Plugin);
         Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
+        Assert.Empty(_index.Hands);
     }
 
     [Fact]

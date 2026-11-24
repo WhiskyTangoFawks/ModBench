@@ -11,20 +11,19 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands;
 
 /// <summary>The create gesture writes the plugin file, and in a source mod its source: no init, no
-/// load order change and no plugins.txt line (create-plugin). The watch hands the new file on.</summary>
+/// load order change, no plugins.txt line (create-plugin). The gesture's read of the instance hands the file on.</summary>
 public sealed class CreatePluginHandler
 {
     private readonly IPluginAdapter _adapter;
     private readonly LoadOrderHolder _holder;
     private readonly ISourceAdapter _source;
-    private readonly HeldWrites _held;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal CreatePluginHandler(
-        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
+        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector,
         ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _held, _decompiler) = (adapter, holder, source, held, new PluginDecompiler(logger, adapter, schemaReflector));
+        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
@@ -50,14 +49,6 @@ public sealed class CreatePluginHandler
     /// <summary>A new plugin as it will sit in <paramref name="mod"/>'s folder.</summary>
     internal static RegisteredPlugin RegisteredIn(IPluginAdapter adapter, PluginAddress address, PluginProvider.FromMod mod) =>
         new(address.Name, address.Origin, adapter.PathOfEmpty(ModKey.FromFileName(address.Name), mod.Folder), mod, Line: null, PluginStrings.None);
-
-    private async Task<Answer<PluginAddress, PluginCreateRefused>> WrittenOnceItsSourceLands(
-        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)
-    {
-        var landed = await LandSourceIfCompiledPlugin(loadOrder, address, folder, sourceFolder, written);
-        if (landed.Holds(out _, out _)) await _held.ReadBack([address], cancel);
-        return landed;
-    }
 
     private string TakeBack(ModKey modKey, string name, string folder, string written)
     {
@@ -114,14 +105,14 @@ public sealed class CreatePluginHandler
     /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is the
     /// mod's, null for Overwrite. <paramref name="flags"/> may be left out where one combination is offered.</summary>
     public async Task<Answer<PluginCreated, PluginCreateRefused>> CreatePlugin(
-        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
+        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null)
     {
-        var (answer, written) = await WrittenFiles.Of(() => Created(plugin, folder, sourceFolder, flags, cancel));
+        var (answer, written) = await WrittenFiles.Of(() => Created(plugin, folder, sourceFolder, flags));
         return answer.Holds(out var created, out var refused) ? new PluginCreated(created, written) : refused;
     }
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> Created(
-        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags, CancellationToken cancel)
+        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -140,7 +131,7 @@ public sealed class CreatePluginHandler
 
         return created switch
         {
-            { Outcome: EmptyPluginWrite.Written } => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written, cancel),
+            { Outcome: EmptyPluginWrite.Written } => await LandSourceIfCompiledPlugin(loadOrder, plugin, folder, sourceFolder, created.Written),
             { Outcome: EmptyPluginWrite.FolderGone } => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             { Outcome: EmptyPluginWrite.FileExists, Held: var held } => new PluginCreateRefused(PluginCreateRefusal.FileExists,
