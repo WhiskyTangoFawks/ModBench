@@ -402,24 +402,24 @@ internal static class PluginEndpoints
         string.IsNullOrWhiteSpace(req.RecordType) ? EndpointMapping.BadRequest("A record type is required.") : null;
 
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory, CancellationToken cancel)
+        CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (Malformed(req) is { } malformed) return malformed;
 
         var plugin = new PluginAddress(req.Name, req.Origin);
         return EndpointMapping.Answered(
-            "Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder, req.Flags, cancel));
+            "Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder, req.Flags));
     }
 
     internal static async Task<IResult> CreatePluginInMod(
-        CreatePluginInModRequest req, CreatePluginInModHandler create, ILoggerFactory loggerFactory, CancellationToken cancel)
+        CreatePluginInModRequest req, CreatePluginInModHandler create, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
         return EndpointMapping.Answered(
-            "Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name, req.Flags, cancel));
+            "Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name, req.Flags));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be

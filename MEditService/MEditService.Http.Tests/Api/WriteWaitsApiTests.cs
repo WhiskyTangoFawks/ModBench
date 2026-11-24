@@ -96,28 +96,6 @@ public sealed class WriteWaitsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACreatePlugin_Answers_OnlyOnceTheRecordIndexHasReadIt()
-    {
-        var fx = await Loaded();
-        var folder = Directory.CreateDirectory(Path.Combine(fx.Root, "mod-minted")).FullName;
-
-        await AssertTheWriteWaitsForTheIndex(Client.PostAsJsonAsync(
-            "/plugins/create", new { origin = "MintedMod", name = "Minted.esp", folder, flags = Array.Empty<string>() }));
-    }
-
-    [Fact]
-    public async Task ACreatePluginInMod_Answers_OnlyOnceTheRecordIndexHasReadIt()
-    {
-        var fx = await Loaded();
-        var emptyFolder = Directory.CreateDirectory(Path.Combine(fx.Root, "mod-empty")).FullName;
-        (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(
-            fx.DataFolder, fx.InstanceRoot, fx.Plugins, places: new object[] { new { name = "EmptyMod", folder = emptyFolder } }))).EnsureSuccessStatusCode();
-
-        await AssertTheWriteWaitsForTheIndex(Client.PostAsJsonAsync(
-            "/plugins/create-in-mod", new { origin = "EmptyMod", name = "Patch.esp", flags = Array.Empty<string>() }));
-    }
-
-    [Fact]
     public async Task ADecompile_Answers_OnlyOnceTheRecordIndexHasReadIt()
     {
         await Loaded();
