@@ -3,7 +3,6 @@
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +17,7 @@ class Step(NamedTuple):
     name: str
     command: list
     after: Optional[str] = None
+    log: Optional[Path] = None
 
 
 # Lint reads only sources, so it runs beside the build. The tests wait on the build: they run only
@@ -30,7 +30,8 @@ def steps(results: Path):
                     f'--outputFile.json={results / "unit.json"}'], after=BUILD),
         Step('Gate 6: Frontend unit test times',
              [sys.executable, str(Path(__file__).with_name('check_test_times.py')), str(results)], after=UNIT),
-        Step('Gate 6: Frontend integration tests', ['npm', 'run', 'test:integration'], after=BUILD),
+        Step('Gate 6: Frontend integration tests', ['npm', 'run', 'test:integration'], after=BUILD,
+             log=results / 'integration.mocha'),
     ]
 
 
@@ -43,6 +44,8 @@ def run(steps, cwd: Path):
         start = time.monotonic()
         done = subprocess.run(step.command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True, check=False)
+        if step.log:
+            step.log.write_text(done.stdout)
         with printing:
             print(f'=== {step.name} ({time.monotonic() - start:.0f} s) ===')
             print(done.stdout, end='')
@@ -59,8 +62,7 @@ def run(steps, cwd: Path):
 
 
 def main(argv=None):
-    root = Path((sys.argv[1:] if argv is None else argv)[0])
-    results = Path(tempfile.gettempdir()) / f'medit-unit-results.{root.name}'
+    root, results = map(Path, (sys.argv[1:] if argv is None else argv)[:2])
     shutil.rmtree(results, ignore_errors=True)
     results.mkdir()
     return 0 if run(steps(results), root / 'modbench') else 1

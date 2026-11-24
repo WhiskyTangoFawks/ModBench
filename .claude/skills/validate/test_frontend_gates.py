@@ -68,6 +68,11 @@ class Run(unittest.TestCase):
                     after='Build'))
         self.assertTrue(passed)
 
+    def test_a_step_with_a_log_leaves_its_output_there(self):
+        log = self.dir / 'it.mocha'
+        self.run_steps(fg.Step('Integration', python('print("1 pending")'), log=log))
+        self.assertEqual(log.read_text(), '1 pending\n')
+
 
 if __name__ == '__main__':
     unittest.main()
