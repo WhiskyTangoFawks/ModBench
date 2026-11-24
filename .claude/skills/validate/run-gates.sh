@@ -117,7 +117,7 @@ echo "=== Gate runner tests ==="
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
 # A test's kind is its Kind trait (MEditService.TestSupport). A branch leaves out the kinds that wait
-# for main: a real-size budget runs below, and a smoke test needs the user's game folder.
+# for main: a test of real size, and a smoke test, which needs the user's game folder.
 BRANCH_TESTS='Kind!=RealSize&Kind!=Smoke'
 
 backend_tests() {
@@ -136,23 +136,7 @@ backend_tests() {
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
   fi
   echo "=== Gate 3: Backend test times ==="
-  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results" || return
-  real_size_budgets "$selected"
-}
-
-# The test projects that reach the record index, directly or through a gesture that writes to it.
-REAL_SIZE_REACHERS='^MEditService\.(RecordIndex|Http)\.Tests$'
-
-real_size_budgets() {
-  grep -Eq "$REAL_SIZE_REACHERS" <<< "$1" || return 0
-  echo "=== Gate 3: Budgets on the record index of real size ==="
-  local results="/tmp/medit-real-size-results.$(basename "$ROOT")" project
-  rm -rf "$results"
-  for project in $(cd "$ROOT/MEditService" && grep -rl --include='*.cs' '\[RealSizeFact' -- *.Tests | cut -d/ -f1 | sort -u); do
-    (cd "$ROOT/MEditService" && dotnet test --no-build -v minimal --logger trx --results-directory "$results" \
-      "$project" --filter 'Kind=RealSize') || return
-  done
-  grep -qs 'outcome="Passed"' "$results"/*.trx || { echo "No budget of real size ran."; return 1; }
+  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results"
 }
 
 if $BACKEND; then
@@ -170,7 +154,7 @@ fi
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
-    (cd "$ROOT/MEditService" && dotnet test -v minimal "${ARCHITECTURE_SCANS[@]}") \
+    (cd "$ROOT/MEditService" && dotnet test -v minimal --filter "$BRANCH_TESTS" "${ARCHITECTURE_SCANS[@]}") \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
