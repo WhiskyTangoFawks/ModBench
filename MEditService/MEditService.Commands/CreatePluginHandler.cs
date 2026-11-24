@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands;
 
 /// <summary>The create gesture writes the plugin file, and in a source mod its source: no init, no
-/// load order change and no plugins.txt line (create-plugin). The gesture's read of the instance hands the new file on.</summary>
+/// load order change, no plugins.txt line (create-plugin). The gesture's read of the instance hands the file on.</summary>
 public sealed class CreatePluginHandler
 {
     private readonly IPluginAdapter _adapter;
