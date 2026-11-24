@@ -36,6 +36,10 @@ class Skipped(unittest.TestCase):
     def test_a_unittest_log_names_each_test_skipped(self):
         self.assertEqual(skips.in_unittest(UNITTEST), ['test_skipped (m.C.test_skipped)'])
 
+    def test_a_unittest_log_whose_skip_line_is_split_by_output_still_counts_the_skip(self):
+        self.assertEqual(skips.in_unittest("test_x (m.C.test_x) ... printed\nskipped 'r'\n\nOK (skipped=1)\n"),
+                         ['1 skipped, unnamed'])
+
     def test_a_mocha_log_names_each_test_pending(self):
         self.assertEqual(skips.in_mocha(MOCHA), ['skipped'])
 
@@ -56,13 +60,15 @@ class Main(unittest.TestCase):
         return code, printed.getvalue()
 
     def test_it_names_every_stacks_skip_and_fails(self):
-        for name, body in (('a.trx', TRX), ('unit.json', VITEST), ('hooks.unittest', UNITTEST), ('it.mocha', MOCHA)):
-            (self.dir / name).write_text(body)
+        (self.dir / 'a.trx').write_text(TRX)
+        (self.dir / 'unit.json').write_text(VITEST)
+        (self.dir / 'hooks.unittest').write_text(UNITTEST)
+        (self.dir / 'it.mocha').write_text(MOCHA)
         code, printed = self.run_main(self.dir)
-        self.assertEqual(code, 1)
-        for name in ('A.Skipped(x: 1)', 'a.test.ts > skipped', 'test_skipped (m.C.test_skipped)', 'skipped'):
-            self.assertIn(name, printed)
-        self.assertNotIn('A.Ran', printed)
+        self.assertEqual(
+            (code, printed.splitlines()),
+            (1, ['skipped  A.Skipped(x: 1)', 'skipped  test_skipped (m.C.test_skipped)', 'skipped  skipped',
+                 'skipped  a.test.ts > skipped', 'skipped  a.test.ts > todo', '--- 5 TESTS SKIPPED ---']))
 
     def test_it_reads_every_directory_it_is_given(self):
         other = self.dir / 'other'

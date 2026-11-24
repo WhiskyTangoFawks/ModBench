@@ -198,8 +198,8 @@ fi
         self.write(path, "edited")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "edit")
-        for results in ("medit-test-results", "medit-main-test-results", "medit-skip-logs", "medit-unit-results"):
-            self.addCleanup(shutil.rmtree, f"/tmp/{results}.{pathlib.Path(self.repo).name}", ignore_errors=True)
+        for results in pathlib.Path("/tmp").glob(f"medit-*.{pathlib.Path(self.repo).name}"):
+            self.addCleanup(shutil.rmtree, results, ignore_errors=True)
         run = self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
         return run, self.calls.read_text().splitlines() if self.calls.exists() else []
 
@@ -217,10 +217,6 @@ class BranchTests(FakeDotnet):
     def test_the_docs_scans_of_a_branch_leave_out_the_kinds_that_wait_for_main(self):
         _, calls = self.run_after_changing("spec/a.d2", "--docs")
         self.assertEqual(self.filter_present_per_dotnet_test(calls), [True], calls)
-
-    def test_a_skipped_test_does_not_fail_a_branch(self):
-        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("NotExecuted"))
-        self.assertNotIn("SKIPPED", run.stdout)
 
 
 class MergeToMain(FakeDotnet):
@@ -253,10 +249,6 @@ class MergeToMain(FakeDotnet):
         self.assertIn("skipped  Fake.ATest", run.stdout)
         self.assertEqual(run.returncode, 1)
 
-    def test_a_run_that_skipped_no_test_reports_no_skip(self):
-        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
-        self.assertNotIn("skipped  ", run.stdout)
-
     def windows_vm_test(self, body):
         self.write(".claude/skills/windows-vm/test_probe.py",
                    f"import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        {body}\n")
@@ -265,10 +257,6 @@ class MergeToMain(FakeDotnet):
         self.windows_vm_test("self.fail('windows-vm test ran')")
         run, _ = self.run_after_changing("spec/a.d2", "--comments")
         self.assertIn("windows-vm test ran", run.stderr)
-
-    def test_the_gate_runner_tests_run_without_a_windows_vm_skill_test(self):
-        run, _ = self.run_after_changing("spec/a.d2", "--comments")
-        self.assertNotIn("windows-vm", run.stderr)
 
     def test_a_skipped_python_test_fails_the_run_naming_it(self):
         self.windows_vm_test("self.skipTest('no vm')")

@@ -11,6 +11,7 @@ from pathlib import Path
 TRX = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
 VITEST_SKIPPED = {'pending', 'skipped', 'todo', 'disabled'}
 UNITTEST_SKIP = re.compile(r'^(.+?) \.\.\. skipped\b', re.MULTILINE)
+UNITTEST_SUMMARY = re.compile(r'\(.*\bskipped=(\d+)')
 MOCHA_PENDING_SUMMARY = re.compile(r'^\s+\d+ pending$', re.MULTILINE)
 MOCHA_PENDING_TEST = re.compile(r'^\s+- (.+)$', re.MULTILINE)
 
@@ -27,7 +28,10 @@ def in_vitest(text: str) -> list[str]:
 
 
 def in_unittest(text: str) -> list[str]:
-    return UNITTEST_SKIP.findall(text)
+    """A test that prints splits its result line from its name, but the summary still counts it."""
+    names = UNITTEST_SKIP.findall(text)
+    summary = UNITTEST_SUMMARY.search(text)
+    return names or ([f'{summary[1]} skipped, unnamed'] if summary else [])
 
 
 def in_mocha(text: str) -> list[str]:
