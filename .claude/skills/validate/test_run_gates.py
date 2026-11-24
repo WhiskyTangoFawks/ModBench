@@ -189,16 +189,16 @@ echo "$*" >> {calls}
         self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}")
         return self.calls.read_text().splitlines()
 
-    def dotnet_test_runs_filtered(self, calls):
+    def filter_present_per_dotnet_test(self, calls):
         return [self.UNMARKED_RUN in call for call in calls if call.startswith("test ")]
 
     def test_the_tests_of_a_branch_that_touches_http_leave_out_the_kinds_that_wait_for_main(self):
         calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
-        self.assertEqual(self.dotnet_test_runs_filtered(calls), [True, True], calls)
+        self.assertEqual(self.filter_present_per_dotnet_test(calls), [True, True], calls)
 
     def test_the_docs_scans_of_a_branch_leave_out_the_kinds_that_wait_for_main(self):
         calls = self.run_after_changing("spec/a.d2", "--docs")
-        self.assertEqual(self.dotnet_test_runs_filtered(calls), [True], calls)
+        self.assertEqual(self.filter_present_per_dotnet_test(calls), [True], calls)
 
 
 if __name__ == '__main__':
