@@ -221,14 +221,18 @@ class BranchTests(FakeDotnet):
 
 class MergeToMain(FakeDotnet):
     MODE = "--merge-to-main"
-    WORLD_RUN = "--filter Kind=RealSize|Kind=Smoke"
+    ONE_PROJECT_AT_A_TIME = " -m:1 "
 
     def world_runs(self, calls):
-        return [call for call in calls if self.WORLD_RUN in call]
+        return [call for call in calls if "--filter Kind=RealSize|Kind=Smoke" in call]
 
     def test_the_mode_runs_the_real_size_and_smoke_tests_beside_the_gates_of_the_diff(self):
         _, calls = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
         self.assertEqual(len(self.world_runs(calls)), 1, calls)
+
+    def test_the_tests_of_the_users_world_run_one_project_at_a_time_so_a_budget_runs_alone(self):
+        _, calls = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+        self.assertIn(self.ONE_PROJECT_AT_A_TIME, self.world_runs(calls)[0])
 
     def test_the_mode_runs_the_gates_the_whole_diff_since_main_can_break_not_the_diff_since_the_branch_it_tracks(self):
         git(self.repo, "checkout", "-q", "-b", "integration")

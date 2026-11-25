@@ -169,12 +169,13 @@ backend_tests() {
   ! $MERGE_TO_MAIN || tests_on_the_users_world
 }
 
-# The kinds a branch leaves out, run at a merge to main. A filter that selects nothing is no test,
-# so a run with no passing test fails.
+# The kinds a branch leaves out, run at a merge to main, one project at a time so a budget never
+# shares the machine with another project's tests. A filter that selects nothing is no test, so a
+# run with no passing test fails.
 tests_on_the_users_world() {
   echo "=== Gate 3: Backend tests of real size, soak and smoke ==="
   mkdir -p "$MAIN_RESULTS" || return
-  (cd "$ROOT/MEditService" && dotnet test --no-build -v minimal --logger trx --results-directory "$MAIN_RESULTS" \
+  (cd "$ROOT/MEditService" && dotnet test --no-build -m:1 -v minimal --logger trx --results-directory "$MAIN_RESULTS" \
     --filter 'Kind=RealSize|Kind=Smoke') || return
   grep -qs 'outcome="Passed"' "$MAIN_RESULTS"/*.trx || { echo "No test of real size or smoke ran."; return 1; }
 }
