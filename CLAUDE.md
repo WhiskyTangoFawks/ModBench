@@ -67,4 +67,4 @@ principle > ADR > architecture and surfaces > code. Together they are the specif
 - A plugin is `(origin, filename)` on every seam, payload, map key, tree row and temp path (ADR-0012). Keyed on the filename alone, two plugins that share a filename collapse into one and nothing fails. The backend scan sees only a public `string` member named `…plugin` with no `…origin` beside it; map keys, return values and all of modbench go unchecked.
 - Detection of an external change is gated; recovery is not. Anything that holds disk-derived state recovers when a file changed without Modbench's knowledge (ADR-0003).
 - A gate is code, and changing it is tactical. A change serves the gate's purpose: the gate still catches every defect it exists to catch.
-- A fixture taken from a real mod is committed only after the developer approves it.
+- A fixture taken from a real mod or from vanilla is committed only after the developer approves it.
