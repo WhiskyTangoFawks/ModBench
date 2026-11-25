@@ -25,7 +25,7 @@ public sealed class ResolveNamesTests(SqlDoorFixture door) : IClassFixture<SqlDo
     [Theory]
     [InlineData("testnpc01")]
     [InlineData("000800:TestPlugin.esp")]
-    public void ARecordsNameOrFormKey_ResolvesToItsRecord(string name)
+    public void ARecordsNameWhateverItsCase_OrFormKey_ResolvesToItsRecord(string name)
     {
         var named = Assert.Single(Queries.ResolveNames([Name(name)]).Value());
 

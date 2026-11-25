@@ -82,6 +82,33 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Empty(Directory.GetFiles(folder, "*.spool"));
     }
 
+    [Fact]
+    public void ASelectJoiningOverridesToTheirMastersRecordsByBody_AnswersInMemoryTheBodiesOutgrow()
+    {
+        const int copied = 5;
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
+            (Master, () => Items(Master, 32_000, nameLength: 2_000)),
+            (Later, () => Items(Master, copied, nameLength: 2_000))), memoryLimit: 32_000_000);
+
+        var rows = index.Queries.Selected($"""
+            SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.plugin = c.form_key_plugin
+            WHERE c.plugin = '{Later}' AND c.form_key_plugin <> c.plugin AND c.body = m.body
+            """);
+
+        Assert.Equal(copied, rows.Length);
+    }
+
+    [Fact]
+    public void ASelectWhoseJoinHashesMoreBodiesThanTheMemoryLimit_Spills_AndAnswers()
+    {
+        const int many = 200_000;
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 250_000_000);
+
+        var rows = index.Queries.Selected("SELECT count(*) AS n FROM records a JOIN records b ON b.form_key = a.form_key AND b.body = a.body WHERE a.record_type = 'misc'");
+
+        Assert.Equal(many, rows.Single().GetProperty("n").GetInt32());
+    }
+
     [Theory]
     [InlineData("SELECT body FROM records")]
     [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
