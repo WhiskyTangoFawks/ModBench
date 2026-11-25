@@ -65,6 +65,7 @@ import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamApp
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
+import { onPosix } from '../../../test/platform';
 
 const INI = 'ModOrganizer.ini';
 const TRASH: MoveToTrash = (file) => rm(file);
@@ -652,7 +653,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
+    onPosix.it('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
       await mkdir(join(root, 'mods', 'ModA'));
       await mkdir(join(root, 'mods', 'moda'));
       const folders = present(await source.modFolders(ignoreSkippedLink), 'the mod folders');
@@ -710,7 +711,7 @@ describe('the MO2 Instance adapter', () => {
         expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
       });
 
-      it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
+      onPosix.it('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
         const data = join(game, 'Data');
         await mkdir(data, { recursive: true });
         await writeFile(join(data, 'Foo.esp'), '');
@@ -731,7 +732,7 @@ describe('the MO2 Instance adapter', () => {
         expect(ignored).toEqual([join(data, 'Hard.esp')]);
       });
 
-      it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) answers no plugin that is a symlink, broken or not, and hands over each', async () => {
+      onPosix.it('(a link needs no privilege on POSIX) answers no plugin that is a symlink, broken or not, and hands over each', async () => {
         const data = join(game, 'Data');
         await mkdir(data, { recursive: true });
         await writeFile(join(game, 'Real.esp'), '');
@@ -1057,7 +1058,7 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) answers no archive that is a symlink, and hands it over', async () => {
+      onPosix.it('(a link needs no privilege on POSIX) answers no archive that is a symlink, and hands it over', async () => {
         const data = join(game, 'Data');
         await mkdir(data, { recursive: true });
         await writeFile(join(game, 'Real.ba2'), '');
@@ -1413,7 +1414,7 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
-    describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the folders a folder heard created already held', () => {
+    onPosix.describe('(VS Code\'s recursive watcher misses them only on Linux) the folders a folder heard created already held', () => {
       const mod = (): string => join(root, 'source', 'Harder VATS');
       const fireCreated = (path: string): void => {
         watcherOf(path)?.fireCreate(path);
@@ -2107,7 +2108,7 @@ describe('the MO2 Instance adapter', () => {
         await expect(source.originFiles(mod('Harder VATS'), 'list')).rejects.toThrow(/permission denied/);
       });
 
-      it.skipIf(process.platform === 'win32')('notes a FIFO and a link to one, and answers neither as a file, built with the POSIX mkfifo that Windows lacks', async () => {
+      onPosix.it('notes a FIFO and a link to one, and answers neither as a file, built with the POSIX mkfifo that Windows lacks', async () => {
         const folder = join(root, 'mods', 'Pipes');
         await mkdir(folder);
         execFileSync('mkfifo', [join(folder, 'pipe')]);
@@ -3025,7 +3026,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await held()).toEqual(aside.slice().sort());
       });
 
-      it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) refuses a path it had that a link resolves outside the folder, moving nothing', async () => {
+      onPosix.it('(a link needs no privilege on POSIX) refuses a path it had that a link resolves outside the folder, moving nothing', async () => {
         await put(join(source(), '.medit_tmp_aside_x', 'A.esp', 'old.json'));
         await put(join(root, 'outside', 'A.esp', 'other.json'));
         await symlink(join(root, 'outside'), join(source(), 'linked'));
@@ -3050,7 +3051,7 @@ describe('the MO2 Instance adapter', () => {
       expect([left.sort(), await readdir(mod)]).toEqual([['Textures', join('Textures', 'b.dds')], []]);
     });
 
-    it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root writes every folder) trashes the file and answers why a folder it emptied could not be removed, naming the folder', async () => {
+    onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root writes every folder) trashes the file and answers why a folder it emptied could not be removed, naming the folder', async () => {
       const mod = join(root, 'mods', 'Built');
       await put(join(mod, 'locked', 'sub', 'a.dds'));
       await chmod(join(mod, 'locked'), 0o555);
@@ -3072,7 +3073,7 @@ describe('the MO2 Instance adapter', () => {
       expect(trashed).toEqual([]);
     });
 
-    it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) refuses to trash a file a link in the mod\'s folder resolves outside it, trashing nothing', async () => {
+    onPosix.it('(a link needs no privilege on POSIX) refuses to trash a file a link in the mod\'s folder resolves outside it, trashing nothing', async () => {
       await put(join(root, 'outside', 'a.txt'));
       await symlink(join(root, 'outside'), join(root, 'mods', 'Harder VATS', 'linked'));
       const trashed: string[] = [];

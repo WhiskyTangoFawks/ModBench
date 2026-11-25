@@ -20,7 +20,7 @@ The gates need the VM up. Start it with `vm.sh up` when it is down, and stop it 
 
 While the VM's container runs, every `slot-run.sh` waits, from any worktree, and says the VM is why. The slot frees when the container stops, however it stops. A Linux run of your own in the meantime: `SLOT_INSIDE=windows-vm bash .claude/skills/validate/slot-run.sh <command>`, or the same variable before `run-gates.sh`. A VM left up after its agent is gone keeps the slot until `vm.sh down`.
 
-`gates.sh` runs root CLAUDE.md's Tools commands natively in the VM, in PowerShell, against this worktree with its uncommitted files. It prints `All Windows gates passed` or the gates that failed, and exits non-zero on a failure. The comment and diagram gates stay on Linux: they read text, the same on every platform.
+`gates.sh` runs root CLAUDE.md's Tools commands natively in the VM, in PowerShell, against this worktree with its uncommitted files. The backend filter leaves out the kinds a virtual machine cannot prove (`RealSize`, `Smoke`, `Measured`) and the `Posix` kind. A gate that passed with a skipped test fails, and `validate/skips.py` names each skip from that stack's report. It prints `All Windows gates passed` or the gates that failed, and exits non-zero on a failure. The comment and diagram gates stay on Linux: they read text, the same on every platform.
 
 `vm.sh sync` copies the worktree to `C:\work\modbench` and the Mutagen feed to `C:\work\mutagen-feed`, for a narrower run: `vm.sh ssh 'cd C:\work\modbench\MEditService; dotnet test <project> --filter <name>'`. Dependencies and build output stay in the VM between syncs.
 

@@ -22,6 +22,7 @@ import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
 import { updateManifest } from '../updateManifest';
 import { sourceFolderRestoredFrom } from '../restoreFromManifest';
+import { onPosix } from '../../test/platform';
 
 let root: string;
 
@@ -145,7 +146,7 @@ describe('build over an instance on disk', () => {
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root writes every folder) stops when a folder its trash emptied cannot be removed, naming the folder', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root writes every folder) stops when a folder its trash emptied cannot be removed, naming the folder', async () => {
     const { build } = await aSourceMod();
     await build();
     await put('mods/Mod/locked/sub/mine.txt', 'mine');

@@ -16,7 +16,7 @@ public sealed class AbandonedReadTests : IDisposable
 
     private OpenedIndex Index() => Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => [])));
 
-    [Fact]
+    [MeasuredFact]
     public async Task ASelectWhoseCallerLeft_StopsWorkingWithinASecond()
     {
         using var index = Index();

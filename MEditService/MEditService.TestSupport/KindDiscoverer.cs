@@ -13,6 +13,7 @@ public sealed class KindDiscoverer : ITraitDiscoverer
     public const string RealSize = "RealSize";
     public const string Smoke = "Smoke";
     public const string Posix = "Posix";
+    public const string Measured = "Measured";
 
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute) =>
         [KeyValuePair.Create("Kind", traitAttribute.GetNamedArgument<string>("Kind"))];

@@ -7,6 +7,7 @@ import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../../wire/sourceMod';
 import { buildFileAgainst, buildFileIn, buildFileText, manifestFileFor, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 import { writeBuildFile } from '../../test/buildFiles';
+import { onPosix } from '../../test/platform';
 
 const manifest: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
 
@@ -234,7 +235,7 @@ describe('buildFileAgainst', () => {
     });
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) says which plugin sources and paths it cannot read, and names none of them as lacking', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) says which plugin sources and paths it cannot read, and names none of them as lacking', async () => {
     await holding(['locked/a.nif', `${PLUGIN_SOURCE_FOLDER}/Built.esp/npc_/1.json`]);
     await building([{ kind: 'copy', paths: ['locked/a.nif'] }, { kind: 'compile', paths: ['Built.esp'] }]);
     await chmod(join(folder, 'locked'), 0o000);

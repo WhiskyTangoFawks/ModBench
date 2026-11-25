@@ -9,6 +9,7 @@ import { NO_DETECTORS } from '../../../test/noDetectors';
 import { documentsFolder } from '../documentsFolder';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import { fixedGameFolderSetting, GAME_FOLDER_SETTING_ID } from '../../../test/gameFolderSetting';
+import { onPosix } from '../../../test/platform';
 
 const noDetectPrefix = () => Promise.resolve(null);
 
@@ -151,7 +152,7 @@ describe('the game folder resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive game path, as a Windows manager under Proton writes it, to its POSIX path', async () => {
+  onPosix.it('(Wine translates a drive letter only on Linux) normalizes a Z:-drive game path, as a Windows manager under Proton writes it, to its POSIX path', async () => {
     const gameRoot = await gameFolder();
     const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
 
@@ -160,7 +161,7 @@ describe('the game folder resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C: drive-mapped game path into the Proton prefix's drive_c", async () => {
+  onPosix.it("(Wine translates a drive letter only on Linux) normalizes a C: drive-mapped game path into the Proton prefix's drive_c", async () => {
     const prefixDir = await mkdtemp(join(tmpdir(), 'medit-prefix-'));
     dirs.push(prefixDir);
     const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');
@@ -172,7 +173,7 @@ describe('the game folder resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: game path has no determinable prefix', async () => {
+  onPosix.it('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: game path has no determinable prefix', async () => {
     const detectors: GameDetectors = {
       ...NO_DETECTORS,
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),

@@ -10,6 +10,7 @@ public sealed class KindTests
     [InlineData(typeof(SmokeTheoryAttribute), "Smoke")]
     [InlineData(typeof(PosixFactAttribute), "Posix")]
     [InlineData(typeof(PosixTheoryAttribute), "Posix")]
+    [InlineData(typeof(MeasuredFactAttribute), "Measured")]
     public void AMark_NamesItsKind_ForTheDiscovererThatMakesItTheKindTrait(Type mark, string kind)
     {
         var instance = Assert.IsAssignableFrom<ITraitAttribute>(Activator.CreateInstance(mark));

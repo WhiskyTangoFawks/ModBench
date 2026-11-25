@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { downloadsDirectoryResolver } from '../downloadsDirectory';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
+import { onPosix } from '../../../test/platform';
 
 const iniOf = (downloadDirectory?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n[Settings]\r\n${
@@ -24,14 +25,14 @@ describe('the downloads directory resolver', () => {
     expect(await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf(downloadDirectory))).toEqual(resolved(downloadsDir));
   });
 
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive absolute path, as MO2 under Proton writes it, to its POSIX path', async () => {
+  onPosix.it('(Wine translates a drive letter only on Linux) normalizes a Z:-drive absolute path, as MO2 under Proton writes it, to its POSIX path', async () => {
     const real = join('/home', 'user', 'MyDownloads');
     const winePath = 'Z:' + real.replaceAll('/', '\\');
 
     expect(await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf(winePath))).toEqual(resolved(real));
   });
 
-  it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
+  onPosix.it("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
     const prefix = join('/home', 'user', '.steam', 'compatdata', '377160', 'pfx');
     const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) };
 
@@ -39,7 +40,7 @@ describe('the downloads directory resolver', () => {
       .toEqual(resolved(join(prefix, 'drive_c', 'Games/MO2/downloads')));
   });
 
-  describe.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) an untranslatable download_directory answers unresolved with why rather than guessing at the default folder, which is not the folder MO2 names', () => {
+  onPosix.describe('(Wine translates a drive letter only on Linux) an untranslatable download_directory answers unresolved with why rather than guessing at the default folder, which is not the folder MO2 names', () => {
     it.each([
       ['naming the key and the drive, for a drive letter neither Z nor C', 'D:\\Games\\downloads', /download_directory.*drive/i],
       ['naming the prefix, for a C: path with no determinable Proton prefix', 'C:\\Games\\downloads', /download_directory.*prefix/i],

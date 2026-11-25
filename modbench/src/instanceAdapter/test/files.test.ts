@@ -5,6 +5,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { write, putIfChanged, makeDir } from '../files';
+import { onPosix } from '../../test/platform';
 
 let crashBeforeTheNextRenameLands = false;
 
@@ -77,7 +78,7 @@ describe('a file written whole', () => {
     }
   });
 
-  it.skipIf(process.platform === 'win32')('(Windows has no POSIX mode bits) carries the target\'s own mode onto the file that lands, not the default mode of a fresh temp', async () => {
+  onPosix.it('(Windows has no POSIX mode bits) carries the target\'s own mode onto the file that lands, not the default mode of a fresh temp', async () => {
     await writeFile(path, 'original');
     await chmod(path, 0o640);
 

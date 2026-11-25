@@ -3,6 +3,7 @@ import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { downloadedFileReader } from '../downloadedFileReader';
+import { onPosix } from '../../../test/platform';
 
 describe('downloadedFileReader, spawning the binary itself', () => {
   const exe = (name: string): string => (process.platform === 'win32' ? `${name}.exe` : name);
@@ -63,7 +64,7 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     await expect(downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
   });
 
-  it.skipIf(process.platform === 'win32')('(Windows has no signals) names the signal that killed the binary', async () => {
+  onPosix.it('(Windows has no signals) names the signal that killed the binary', async () => {
     fakeNodeAs7zPreloadedToDieBy('SIGSEGV');
 
     await expect(downloadedFileReader.extract('/tmp/mod.rar', '/tmp/stage')).rejects.toThrow('Failed to extract /tmp/mod.rar: 7z was killed by signal SIGSEGV');
