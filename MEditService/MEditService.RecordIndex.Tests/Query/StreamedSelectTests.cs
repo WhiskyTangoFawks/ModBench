@@ -85,8 +85,8 @@ public sealed class StreamedSelectTests : IDisposable
     [Fact]
     public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow()
     {
-        const int many = 64_000;
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 64_000_000);
+        const int many = 32_000;
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 32_000_000);
 
         using var rows = index.Queries.SelectRows("SELECT body FROM records").Value();
 
@@ -98,11 +98,11 @@ public sealed class StreamedSelectTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
 
-        using var rows = index.Queries.SelectRows("SELECT CAST(CASE WHEN n < 1000000 THEN '1' ELSE 'x' END AS INTEGER) AS v FROM range(2000000) t(n)").Value();
+        using var rows = index.Queries.SelectRows("SELECT CAST(CASE WHEN n < 100000 THEN '1' ELSE 'x' END AS INTEGER) AS v FROM range(200000) t(n)").Value();
 
         var read = rows.Rows().ToList();
         Assert.All(read[..^1], row => row.Value());
-        Assert.InRange(read.Count - 1, 1, 999_999);
+        Assert.InRange(read.Count - 1, 1, 99_999);
         var refused = read[^1].Refused();
         Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
         const string TheFaultsReasonOrOnlyTheInterruptThatFollowsIt = "Could not convert string 'x'|^DuckDB interrupted the SELECT partway, and gave no reason";

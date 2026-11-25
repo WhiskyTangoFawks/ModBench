@@ -77,7 +77,7 @@ public class PluginReadInterruptionTests
                 Interlocked.Increment(ref reads);
                 aNewerSnapshotOnTheFirstRead();
             },
-            thenEachRecordTakes: TimeSpan.FromMilliseconds(10)));
+            thenEachRecordTakes: TimeSpan.FromMilliseconds(1)));
 
         holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
         Waits.Reached(
