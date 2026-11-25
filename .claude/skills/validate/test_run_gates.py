@@ -113,6 +113,12 @@ class SelectedByChange(GateRepo):
         git(self.repo, "commit", "-q", "-am", "edit")
         self.assertEqual(self.selected(), self.slot_line("--docs"))
 
+    def test_a_backend_change_since_main_runs_the_frontend_gate_that_reaches_it_by_the_wire(self):
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        self.write("MEditService/Core/a.cs", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.selected(), self.slot_line("--backend --api-drift --scripts --frontend"))
+
     def branch_tracking_an_integration_branch_with_a_backend_change(self):
         git(self.repo, "checkout", "-q", "-b", "integration")
         self.write("MEditService/Core/a.cs", "edited")

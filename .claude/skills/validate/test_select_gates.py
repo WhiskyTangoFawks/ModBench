@@ -15,12 +15,18 @@ def selected(*changed):
 
 
 class SelectGates(unittest.TestCase):
-    def test_backend_source_selects_backend_api_drift_and_the_scripts_it_answers(self):
+    def test_backend_source_selects_backend_api_drift_scripts_and_the_frontend_that_reaches_it_by_the_wire(self):
         self.assertEqual(selected('MEditService/MEditService.Http/Program.cs'), [
             '--backend MEditService/MEditService.Http/Program.cs',
             '--api-drift MEditService/MEditService.Http/Program.cs',
             '--scripts MEditService/MEditService.Http/Program.cs',
+            '--frontend MEditService/MEditService.Http/Program.cs',
         ])
+
+    def test_a_change_to_any_backend_project_selects_the_frontend(self):
+        for path in ('MEditService/MEditService.Codec/A.cs', 'MEditService/MEditService.Commands.Tests/A.cs'):
+            with self.subTest(path=path):
+                self.assertIn(f'--frontend {path}', selected(path))
 
     def test_scripts_and_the_fixture_instance_their_harness_loads_select_scripts(self):
         self.assertEqual(selected('scripts/medit.py'), ['--scripts scripts/medit.py'])
