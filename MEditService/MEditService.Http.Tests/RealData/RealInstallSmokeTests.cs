@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.RealData;
 
-[Kind(Kinds.Smoke)]
+[Kind(Kinds.Tool)]
 public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtATime install)
     : IClassFixture<RealInstallSmokeTests.OneGameLoadedAtATime>
 {
