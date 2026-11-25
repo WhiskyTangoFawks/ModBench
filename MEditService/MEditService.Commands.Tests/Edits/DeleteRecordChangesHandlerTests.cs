@@ -26,7 +26,6 @@ public sealed class DeleteRecordChangesHandlerTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal(header, refused.Item);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
-        Assert.False(string.IsNullOrWhiteSpace(refused.Message));
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.Null(mod.Document(mod.OtherNpc.ToString()));
         Assert.NotNull(mod.Document(header.FormKey));

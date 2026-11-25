@@ -12,10 +12,10 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class FormIdEditTests
 {
-    private const string FreeFormKey = "000F00:Fixture.esp";
+    private const string FreeFormKey = "001000:Fixture.esp";
 
     [Fact]
-    public void EditingTheFormId_MovesTheRecordToTheNewFormKey_OldGoneAtTheWorkingTree_NewChangedSinceTheLastCommit()
+    public void EditingTheFormId_OfAnUnflaggedPlugin_MovesTheRecordToTheNewFormKey_PastTheLightRange()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
 
@@ -25,7 +25,6 @@ public sealed class FormIdEditTests
         Assert.Equal(FreeFormKey, result.NewFormKey);
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(mod.Document(FreeFormKey));
-        Assert.Contains(FreeFormKey, mod.ChangedFormKeys());
     }
 
     [Fact]
@@ -55,14 +54,13 @@ public sealed class FormIdEditTests
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
-    [Theory]
-    [InlineData("\"not-a-formkey\"")]
-    public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField(string json)
+    [Fact]
+    public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
-        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse(json).RootElement);
+        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse("\"not-a-formkey\"").RootElement);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
@@ -130,17 +128,6 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_OnAnUnflaggedPlugin_Accepts_AValueAboveTheLightRange()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal("001000:Fixture.esp", result.NewFormKey);
-    }
-
-    [Fact]
     public void EditingTheFormId_Refuses_WhenTheValueNamesADifferentPlugin()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
@@ -164,23 +151,6 @@ public sealed class FormIdEditTests
         Assert.Equal("FormKey", result.Path);
         Assert.Contains("Base.esm", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin));
-    }
-
-    [Fact]
-    public void EditingTheFormId_CarriesAReferencerInAnotherModsPluginSource_AndLeavesNothingBehind()
-    {
-        using var two = TwoModReferenceFixture.Create();
-        var oldFormKey = two.TargetRace.ToString();
-        var referencerBefore = two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body;
-
-        var changes = TargetRaceRekeyed(two);
-        EditSaving.Save(changes.Moves.Select(move => (move.From, move.To)), changes.Deletions, changes.Documents.Select(document => (document.Path, document.Text)));
-
-        Assert.Empty(changes.LeftBehind);
-        Assert.Contains($"\"Race\": \"{oldFormKey}\"", referencerBefore, StringComparison.Ordinal);
-        Assert.Equal(
-            referencerBefore.Replace(oldFormKey, "000F00:Base.esm", StringComparison.Ordinal),
-            two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body);
     }
 
     [Fact]

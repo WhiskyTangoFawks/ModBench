@@ -15,11 +15,13 @@ public sealed class RecordEditTests : IDisposable
     [Fact]
     public void EditField_WithAnUnknownFieldName_RefusesAsFieldNotFound_AndChangesNoRecord()
     {
+        var before = SourceModTree.Records(_mod.ModFolder, _mod.Plugin);
+
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Empty(_mod.ChangedFormKeys());
+        Assert.Equal(before, SourceModTree.Records(_mod.ModFolder, _mod.Plugin));
     }
 
     [Fact]

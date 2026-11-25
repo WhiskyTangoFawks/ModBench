@@ -45,22 +45,14 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
-    public void AFieldEdit_AnswersTheRecordAndPathItEdited()
-    {
-        var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
-
-        Assert.Equal(_mod.Npc.ToString(), answer.Changes.Require().FormKey);
-        Assert.Equal("HeightMax", answer.Changes.Require().Path);
-    }
-
-    [Fact]
-    public void AFieldEdit_AnswersTheRecordsDocumentWithTheNewValue_AndWritesNothing()
+    public void AFieldEdit_AnswersTheRecordThePathAndTheRecordsDocumentWithTheNewValue_AndWritesNothing()
     {
         var before = TreeSnapshot.Of(_mod.ModFolder);
 
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        Assert.Equal((_mod.Npc.ToString(), "HeightMax"), (answer.Changes.Require().FormKey, answer.Changes.Require().Path));
         Assert.Empty(answer.Changes.Require().Moves);
         var document = Assert.Single(answer.Changes.Require().Documents);
         Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), document.Path);
@@ -95,14 +87,13 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("FormKey", "\"000F00:Fixture.esp\"")]
-    public void AnEdit_UnsavedTextTheCodecCannotRead_IsRefusedAsRecordParseFailed(string member, string value)
+    [Fact]
+    public void AFormIdEdit_OfUnsavedTextTheCodecCannotRead_IsRefusedAsRecordParseFailed()
     {
         var unreadable = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", $"\"{SourceEditFixture.NpcEditorId}\", \"HeightMax\": {{ \"x\": 1 }}", StringComparison.Ordinal);
 
-        var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set(member, value), unreadable);
+        var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unreadable);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, answer.Outcome.Refusal);
     }
