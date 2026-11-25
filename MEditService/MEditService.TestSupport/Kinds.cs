@@ -3,7 +3,7 @@ namespace MEditService.TestSupport;
 /// <summary>The kinds that wait for a merge to main, or for a real machine, or for one platform.</summary>
 public static class Kinds
 {
-    /// <summary>The input is a modlist of real size, which takes minutes to index.</summary>
+    /// <summary>The input is a modlist of real size.</summary>
     public const string RealSize = "RealSize";
 
     /// <summary>The input is the user's game folder.</summary>
