@@ -9,7 +9,8 @@ DETACH=false
 WAIT=false
 FAILED=false
 # The mode survives each re-exec in the environment, as BUILD_SLOT_HELD does.
-MERGE_TO_MAIN=${MEDIT_MERGE_TO_MAIN:-false}
+MERGE_TO_MAIN=false
+[[ ${MEDIT_MERGE_TO_MAIN:-} == true ]] && MERGE_TO_MAIN=true
 GATE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
