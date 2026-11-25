@@ -113,7 +113,7 @@ class SelectedByChange(GateRepo):
         git(self.repo, "commit", "-q", "-am", "edit")
         self.assertEqual(self.selected(), self.slot_line("--docs"))
 
-    def test_a_backend_change_since_main_runs_the_frontend_gate_that_reaches_it_by_the_wire(self):
+    def test_a_backend_change_since_main_runs_the_frontend_gate(self):
         git(self.repo, "checkout", "-q", "-b", "feature")
         self.write("MEditService/Core/a.cs", "edited")
         git(self.repo, "commit", "-q", "-am", "edit")
