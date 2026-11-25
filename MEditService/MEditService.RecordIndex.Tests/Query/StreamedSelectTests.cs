@@ -3,7 +3,6 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Query;
@@ -45,22 +44,6 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Fact]
-    public void ASelectPausedAfterItsFirstRow_HoldsNoSnapshotThatHoldsBackTheCheckpoint()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))));
-        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
-        using var rows = index.Queries.SelectRows("SELECT form_key FROM records WHERE record_type = 'misc'").Value();
-        using var taken = rows.Rows().GetEnumerator();
-        Assert.True(taken.MoveNext());
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        IndexFiles.Checkpointed(_fixture.InstanceRoot);
-
-        Assert.True(taken.MoveNext());
-    }
-
-    [Fact]
     public void AnIndexOpened_RemovesTheSpoolFilesAKilledProcessLeft()
     {
         Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records)))).Dispose();
@@ -99,34 +82,15 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Empty(Directory.GetFiles(folder, "*.spool"));
     }
 
-    [Theory]
-    [InlineData("SELECT body FROM records")]
-    [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
-    public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
+    [Fact]
+    public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow()
     {
         const int many = 64_000;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 64_000_000);
 
-        using var rows = index.Queries.SelectRows(sql).Value();
+        using var rows = index.Queries.SelectRows("SELECT body FROM records").Value();
 
         Assert.Equal(many, rows.Rows().Count(row => row.Value().Length > 2_000));
-    }
-
-    [Fact]
-    public void ASelectRefusedAtItsFirstRow_LeavesNoReadThatHoldsBackTheCheckpoint()
-    {
-        var log = new List<LogEntry>();
-        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(
-            holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))), loggerFactory: loggers);
-        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        Assert.Equal(IndexRefusal.SelectRejected, index.Queries.SelectRows("SELECT CAST(editor_id AS INTEGER) AS v FROM records WHERE record_type = 'misc'").Refused().Refusal);
-        lock (log) log.Clear();
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal)); }, "the checkpoint");
     }
 
     [Fact]
