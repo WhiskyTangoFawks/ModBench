@@ -219,9 +219,9 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
     private void Uninstalls()
     {
         var kept = Modlist.LoadOrder.Where((_, rank) => !UninstalledRanks.Contains(rank)).ToArray();
-        realSize.Receive(SnapshotPlugins.Snapshot(Modlist.DataFolder, Modlist.InstanceRoot, GameRelease.Fallout4, kept));
+        Index.Receive(Index.Holder, SnapshotPlugins.Snapshot(Modlist.DataFolder, Modlist.InstanceRoot, GameRelease.Fallout4, kept));
         Assert.Equal(Modlist.LoadOrder.Count - UninstalledRanks.Length, Count("SELECT count(*) FROM registrations"));
-        realSize.Receive(Modlist.Snapshot());
+        Index.Receive(Index.Holder, Modlist.Snapshot());
         Assert.Equal(Modlist.LoadOrder.Count, Count("SELECT count(*) FROM registrations"));
     }
 

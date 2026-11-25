@@ -1,4 +1,3 @@
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
@@ -27,9 +26,6 @@ public sealed class RealSizeIndex : IDisposable
             throw;
         }
     }
-
-    /// <summary>Applies <paramref name="snapshot"/> and waits for the index to answer it.</summary>
-    internal void Receive(LoadOrderSnapshot snapshot) => Index.Receive(Index.Holder, snapshot);
 
     public void Dispose()
     {
