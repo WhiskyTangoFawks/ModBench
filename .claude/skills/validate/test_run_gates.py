@@ -54,6 +54,7 @@ class GateRepo(unittest.TestCase):
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo)
+        self.addCleanup(shutil.rmtree, pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}"), ignore_errors=True)
         self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
         self.validate.mkdir(parents=True)
         shutil.copy(SCRIPT, self.validate)
@@ -204,8 +205,6 @@ fi
         self.write(path, "edited")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "edit")
-        for results in pathlib.Path("/tmp").glob(f"medit-*.{pathlib.Path(self.repo).name}"):
-            self.addCleanup(shutil.rmtree, results, ignore_errors=True)
         run = self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
         return run, self.calls.read_text().splitlines() if self.calls.exists() else []
 
