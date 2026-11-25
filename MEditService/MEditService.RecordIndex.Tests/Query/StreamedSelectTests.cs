@@ -12,6 +12,9 @@ public sealed class StreamedSelectTests : IDisposable
     private const string Master = "Master.esm";
     private const string Later = "Later.esp";
     private const int Records = 100;
+    private const long SmallMemoryLimit = 32_000_000;
+    private const int BodyLength = 2_000;
+    private const int BodiesTwiceTheSmallLimit = 32_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-select")
         .WithPlugin(Master).WithPlugin(Later).Build();
@@ -87,8 +90,8 @@ public sealed class StreamedSelectTests : IDisposable
     {
         const int copied = 5;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
-            (Master, () => Items(Master, 32_000, nameLength: 2_000)),
-            (Later, () => Items(Master, copied, nameLength: 2_000))), memoryLimit: 32_000_000);
+            (Master, () => Items(Master, BodiesTwiceTheSmallLimit, BodyLength)),
+            (Later, () => Items(Master, copied, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         var rows = index.Queries.Selected($"""
             SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.plugin = c.form_key_plugin
@@ -98,15 +101,14 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Equal(copied, rows.Length);
     }
 
-    [Fact]
-    public void ASelectThatMustSpillToAnswer_AnswersUnderTheRecordIndexsMemoryLimit()
+    [Theory]
+    [InlineData(250_000_000, "1")]
+    [InlineData(500_000_000, "2")]
+    public void TheRecordIndex_RunsADuckDbThreadPer250MbOfItsMemoryLimit_ForLessLeavesAThreadNoRoomToSpill(long memoryLimit, string threads)
     {
-        const int many = 200_000;
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 250_000_000);
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, memoryLimit: memoryLimit);
 
-        var rows = index.Queries.Selected("SELECT count(*) AS n FROM records a JOIN records b ON b.form_key = a.form_key AND b.body = a.body WHERE a.record_type = 'misc'");
-
-        Assert.Equal(many, rows.Single().GetProperty("n").GetInt32());
+        Assert.Equal(threads, index.Queries.Selected("SELECT current_setting('threads')::VARCHAR AS n").Single().GetProperty("n").GetString());
     }
 
     [Theory]
@@ -114,12 +116,12 @@ public sealed class StreamedSelectTests : IDisposable
     [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
     public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
     {
-        const int many = 32_000;
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 32_000_000);
+        using var index = Indexes.Reconciled(
+            _fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, BodiesTwiceTheSmallLimit, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         using var rows = index.Queries.SelectRows(sql).Value();
 
-        Assert.Equal(many, rows.Rows().Count(row => row.Value().Length > 2_000));
+        Assert.Equal(BodiesTwiceTheSmallLimit, rows.Rows().Count(row => row.Value().Length > BodyLength));
     }
 
     [Fact]

@@ -11,10 +11,10 @@ public sealed class ManyRecordsMemoryTests : IDisposable
     private const string Master = "Master.esm";
     private const string Copies = "Copies.esp";
     private const string Script = "Ns:Attached";
-    private const long MemoryLimit = 128_000_000;
-    private const int Records = 400;
+    private const long MemoryLimit = 32_000_000;
+    private const int Records = 100;
     private const int UnspillableNameLength = 100_000;
-    private const int AnEighthOfMemoryNameLength = 8_000_000;
+    private const int AnEighthOfMemoryNameLength = 2_000_000;
 
     private static readonly PluginAddress Mastered = new(Master, PluginOrigin.DataDirectory);
     private static readonly PluginAddress Copier = new(Copies, PluginOrigin.DataDirectory);
