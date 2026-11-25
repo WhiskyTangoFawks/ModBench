@@ -83,7 +83,7 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Fact]
-    public void ASelectJoiningOverridesToTheirMastersRecordsByBody_AnswersInMemoryTheBodiesOutgrow()
+    public void ASelectJoiningCopiesToTheirMastersRecordsOfTheSameBody_AnswersInMemoryTheBodiesOutgrow()
     {
         const int copied = 5;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
@@ -99,7 +99,7 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Fact]
-    public void ASelectWhoseJoinHashesMoreBodiesThanTheMemoryLimit_Spills_AndAnswers()
+    public void ASelectThatMustSpillToAnswer_AnswersUnderTheRecordIndexsMemoryLimit()
     {
         const int many = 200_000;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 250_000_000);
