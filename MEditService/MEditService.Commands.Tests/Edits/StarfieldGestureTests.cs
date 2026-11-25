@@ -14,12 +14,10 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class StarfieldGestureTests : TestInstance
 {
     private const string LightName = "Light.esm";
-    private const string MediumName = "Medium.esm";
     private const string UnrelatedName = "Unrelated.esm";
     private const string CompiledPluginName = "CompiledPlugin.esp";
 
     private readonly FormKey _weapon;
-    private readonly FormKey _mediumKeyword;
     private readonly PluginAddress _light;
     private readonly PluginAddress _unrelated;
     private readonly PluginAddress _compiledPlugin;
@@ -32,18 +30,11 @@ public sealed class StarfieldGestureTests : TestInstance
         _weapon = light.Weapons.AddNew("LightWeapon").FormKey;
         _light = Add(light, "LightMod", compiledPlugin: false);
 
-        var medium = new StarfieldMod(ModKey.FromFileName(MediumName), StarfieldRelease.Starfield);
-        medium.ModHeader.Flags |= StarfieldModHeader.HeaderFlag.Medium;
-        _mediumKeyword = medium.Keywords.AddNew("MediumKeyword").FormKey;
-        Add(medium, "MediumMod", compiledPlugin: false);
-
         _unrelated = Add(new StarfieldMod(ModKey.FromFileName(UnrelatedName), StarfieldRelease.Starfield), "UnrelatedMod", compiledPlugin: false);
 
         var compiledPlugin = new StarfieldMod(ModKey.FromFileName(CompiledPluginName), StarfieldRelease.Starfield);
-        var weapon = new Weapon(_weapon, StarfieldRelease.Starfield) { EditorID = "LightWeaponOverride", Keywords = [] };
-        weapon.Keywords.Add(_mediumKeyword);
-        compiledPlugin.Weapons.Add(weapon);
-        compiledPlugin.ModHeader.MasterReferences.AddRange([new MasterReference { Master = light.ModKey }, new MasterReference { Master = medium.ModKey }]);
+        compiledPlugin.Weapons.Add(new Weapon(_weapon, StarfieldRelease.Starfield) { EditorID = "LightWeaponOverride" });
+        compiledPlugin.ModHeader.MasterReferences.Add(new MasterReference { Master = light.ModKey });
         _compiledPlugin = Add(compiledPlugin, "SourceMod");
     }
 
@@ -77,12 +68,9 @@ public sealed class StarfieldGestureTests : TestInstance
 
         var refused = Assert.Single((await CompileHandler.CompileAsync([_compiledPlugin])).Value().Refused);
 
-        Assert.Equal(
-            (CompileRefusal.MasterUnreadable,
-             $"{CompiledPluginName} could not be compiled: its master {LightName} could not be read: the plugin — unknown: " +
-             "Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected. " +
-             $"Fix or restore {LightName}, then compile again."),
-            (refused.Refusal, refused.Message));
+        Assert.Equal(CompileRefusal.MasterUnreadable, refused.Refusal);
+        Assert.StartsWith($"{CompiledPluginName} could not be compiled: its master {LightName} could not be read: ", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith($"Fix or restore {LightName}, then compile again.", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

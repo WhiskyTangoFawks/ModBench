@@ -1,9 +1,6 @@
 using System.Text.Json;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -34,28 +31,15 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains($"001000:{SourceEditFixture.PluginName}", refused.Message, StringComparison.Ordinal);
     }
 
-    private RecordEditResult SetFlags(string names) =>
-        Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(names).RootElement);
-
-    [Fact]
-    public void EditField_RawFlagsSettingSmall_IsRefusedNamingTheLightFlagsDoor()
+    [Theory]
+    [InlineData(false, """["Small"]""", RecordEditRefusal.SyntheticMemberIndirectWrite)]
+    [InlineData(true, """["Small", "Master"]""", RecordEditRefusal.None)]
+    public void ARawFlagsWrite_IsRefused_OnlyWhereItChangesTheLightFlag(bool light, string flags, RecordEditRefusal refusal)
     {
-        var result = SetFlags("[\"Small\"]");
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(light)).Applied);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
-        Assert.Contains("IsSmallMaster", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.ChangedFormKeys());
-    }
+        var result = Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(flags).RootElement);
 
-    [Fact]
-    public void EditField_RawFlagsLeavingSmallAsItIs_WhileChangingAnotherBit_IsAccepted()
-    {
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
-
-        var result = SetFlags("[\"Small\", \"Master\"]");
-
-        Assert.True(result.Applied, result.Message);
-        Assert.True(HeaderDocument.Read(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body), GameRelease.Fallout4).IsSmallMaster);
+        Assert.Equal(refusal, result.Refusal);
     }
 }

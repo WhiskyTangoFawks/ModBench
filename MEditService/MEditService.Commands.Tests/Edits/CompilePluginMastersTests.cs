@@ -62,22 +62,12 @@ public sealed class CompilePluginMastersTests : TestInstance
         Assert.Equal(binary, File.ReadAllBytes(BinaryPath));
     }
 
-    public static TheoryData<string, Action<CompilePluginMastersTests>> EditsReachingDelta => new()
+    [Fact]
+    public async Task Compile_AfterAnEditLinkingAPluginNoMasterNamed_AddsItAsAMaster_InLoadOrder()
     {
-        {
-            "a link to its record",
-            test => SourceEdits.Rewrite<Npc>(
-                test.RepositoryOf(test._plugin).Require(), test._plugin,
-                new RecordIdentity(test._npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
-                npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(test._deltaKeyword)))
-        },
-    };
-
-    [Theory]
-    [MemberData(nameof(EditsReachingDelta))]
-    public async Task Compile_AfterAnEditReachingAPluginNoMasterNamed_AddsItAsAMaster_InLoadOrder(string _, Action<CompilePluginMastersTests> edit)
-    {
-        edit(this);
+        SourceEdits.Rewrite<Npc>(
+            RepositoryOf(_plugin).Require(), _plugin, new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
+            npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
         using var compiled = await this.CompiledAsync(_plugin);
 

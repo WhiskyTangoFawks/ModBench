@@ -52,7 +52,7 @@ public sealed class CompilePluginLinkTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_OfAPluginHoldingADanglingLink_WritesThePlugin_AndNamesTheRecordAndMember()
+    public async Task Compile_OfAPluginHoldingADanglingLink_WritesThePlugin_AndNamesTheRecordItsDocumentAndTheMember()
     {
         PointTheNpcAt(FormKey.Factory(Dangling));
 
@@ -62,19 +62,11 @@ public sealed class CompilePluginLinkTests : TestInstance
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics, d => d.Message.Contains(Dangling, StringComparison.Ordinal));
         Assert.Equal(_npc.ToString(), diagnostic.FormKey);
+        Assert.Equal(
+            TreeTampering.FileOf(ModFolderOf(_host), _host, new RecordIdentity(_npc.ToString(), "npc_", HostNpcEditorId)),
+            Path.Combine(ModFolderOf(_host), diagnostic.SourceRelativePath.Require()));
         Assert.Equal($"Keywords: [0]: [{Dangling}] <Error: Could not be resolved>", diagnostic.Message);
         Assert.Equal([FormKey.Factory(Dangling)], KeywordsInTheBinary());
-    }
-
-    [Fact]
-    public async Task Compile_WhenEveryLinkResolvesAgainstTheLoadOrdersFiles_ReportsNoLinkDiagnostic()
-    {
-        var answer = await CompileHost();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.DoesNotContain(
-            diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -97,7 +89,7 @@ public sealed class CompilePluginLinkTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_WhenALoadOrderFileCannotBeRead_IsSilentAboutItWhenNoLinkNamesIt()
+    public async Task Compile_WhoseLinksResolve_IsSilentAboutALoadOrderFileThatCannotBeRead_WhenNoLinkNamesIt()
     {
         const string Bystander = "Bystander.esp";
         var bystander = Add(new Fallout4Mod(ModKey.FromFileName(Bystander), Fallout4Release.Fallout4), "BystanderMod");
@@ -105,8 +97,7 @@ public sealed class CompilePluginLinkTests : TestInstance
 
         var answer = await CompileHost();
 
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.DoesNotContain(diagnostics, d => d.Message.Contains(Bystander, StringComparison.Ordinal));
+        Assert.Empty(Assert.Single(answer.Applied).Diagnostics);
     }
 
     [Fact]

@@ -37,34 +37,27 @@ public sealed class SkyrimGestureTests : TestInstance
         _compiledPlugin = Add(compiledPlugin, "SourceMod");
     }
 
-    [Theory]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", "[]", "Configuration.Flags.Essential")]
-    public void AWriteThatChangesATemplatedMemberOrBit_ThroughTheMemberOrItsStruct_IsRefused(
-        NpcConfiguration.TemplateFlag templateFlag, NpcConfiguration.Flag held, string member, string requested, string? refusedMember)
+    [Fact]
+    public void AWriteThatChangesATemplatedBit_ThroughItsMemberOrItsStruct_IsRefusedNamingTheBit()
     {
         var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
         var template = mod.Npcs.AddNew("Template");
         var copy = mod.Npcs.AddNew("Copy");
-        copy.Configuration.TemplateFlags = templateFlag;
-        copy.Configuration.Flags = held;
+        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.BaseData;
+        copy.Configuration.Flags = NpcConfiguration.Flag.Essential;
         copy.Template.SetTo(template.FormKey);
         var plugin = Add(mod, "TemplatedMod");
         var configuration = JsonNode.Parse(Document.Parse(RecordTextCodec.SerializeToText(copy, GameRelease.SkyrimSE)).DocumentAt("Configuration").Require().Text).Require();
-        configuration[member] = JsonNode.Parse(requested);
+        configuration["Flags"] = new JsonArray();
 
-        var throughMember = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json(requested), Member("Configuration"), Member(member)));
+        var throughMember = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("[]"), Member("Configuration"), Member("Flags")));
         var throughStruct = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json(configuration.ToJsonString()), Member("Configuration")));
 
-        Assert.Equal(refusedMember is null, throughMember.Applied);
-        Assert.Equal(refusedMember is null, throughStruct.Applied);
-        if (refusedMember is not null)
+        Assert.All([throughMember, throughStruct], result =>
         {
-            Assert.All([throughMember, throughStruct], result =>
-            {
-                Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
-                Assert.Contains(refusedMember, result.Message);
-            });
-        }
+            Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
+            Assert.Contains("Configuration.Flags.Essential", result.Message);
+        });
     }
 
     [Fact]
