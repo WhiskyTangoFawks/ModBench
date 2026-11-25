@@ -11,6 +11,7 @@ import type { ConfigurationFile } from '../../publisher';
 import { sedReplacement, sedSubstitution } from '../../pathTokens';
 import { managerOver } from '../../../test/mo2/adapterOver';
 import { fileProblemsFake } from '../../../test/fileProblemsFake';
+import { onPosix } from '../../../test/platform';
 
 vi.mock('vscode', () => fakeVscodeModule());
 const smudge = vi.hoisted(() => ({ beforeRun: vi.fn<() => void>() }));
@@ -646,7 +647,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-'))).toEqual(['filter.modbench-tokens.clean=cat']);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) leaves the repository with no filter, no attributes and no config when a first write fails', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) leaves the repository with no filter, no attributes and no config when a first write fails', async () => {
     const { root, adapter } = await instanceRepository([]);
     await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
     await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);
@@ -658,7 +659,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(await exists(join(root, '.git', 'modbench'))).toBe(false);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) takes back only the filter a failed write added, and keeps each the repository held', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) takes back only the filter a failed write added, and keeps each the repository held', async () => {
     const { root } = await instanceRepository([]);
     await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
     const withoutPublisher = managerOver(root);

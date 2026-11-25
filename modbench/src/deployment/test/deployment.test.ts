@@ -31,6 +31,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 import { hardlinkDeployment, overwritePathOf, type FileTheGameGets, type PluginOrder } from '../deployment';
 import type { PluginsTxtPlace } from '../pluginsTxtPlace';
 import { recordIn } from '../record';
+import { onPosix, onWindows } from '../../test/platform';
 
 let root: string;
 let mods: string;
@@ -261,7 +262,7 @@ describe('what deploy wrote', () => {
     expect(await readdir(folder, { recursive: true })).toEqual(['Data']);
   });
 
-  it.runIf(process.platform === 'win32')('(Windows matches a path without case) is the same for the folder in any case', async () => {
+  onWindows.it('(Windows matches a path without case) is the same for the folder in any case', async () => {
     await deploy([await modFile('Mod', 'a.esp')], folder.toUpperCase());
 
     await deploy([]);
@@ -547,7 +548,7 @@ describe('a deploy refused', () => {
     await expect(deploy([await modFile('Mod', 'a.esp')], missing)).rejects.toThrow(`The deployment folder ${missing} does not exist.`);
   });
 
-  it.runIf(process.platform === 'linux')('(a tmpfs is a volume of its own on Linux) names both volumes, and writes nothing', async () => {
+  onPosix.it('(a tmpfs is a volume of its own on Linux) names both volumes, and writes nothing', async () => {
     const elsewhere = await mkdtemp(join('/dev/shm', 'deployment-'));
     try {
       await expect(deploy([await modFile('Mod', 'a.esp')], elsewhere)).rejects.toThrow(
@@ -865,7 +866,7 @@ describe('the files in the deployment folder deploy does not manage', () => {
     expect((await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)).sort()).toEqual(['Data/b.esp', 'game.exe']);
   });
 
-  it.skipIf(process.platform === 'win32')('names a file whose name differs only in case from one deploy wrote', async () => {
+  onPosix.it('names a file whose name differs only in case from one deploy wrote', async () => {
     const written = await modFile('Mod', 'foo.esp');
     await deploy([written]);
     await writeFile(join(folder, 'Data', 'Foo.esp'), 'mine');

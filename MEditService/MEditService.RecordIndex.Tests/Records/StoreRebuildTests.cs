@@ -213,7 +213,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
     }
 
-    [Fact]
+    [MeasuredFact]
     public void WhileARebuildReappliesTheRecordFilter_TheStatusAnswersWithoutWaitingForIt()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-status");
@@ -231,7 +231,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
     }
 
-    [Fact]
+    [MeasuredFact]
     public void WhileAFatalErrorReopensTheIndexFile_TheStatusAnswersWithoutWaitingForTheRecordFilter()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-reopen-filter-status");

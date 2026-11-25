@@ -2,7 +2,7 @@ using Xunit.Sdk;
 
 namespace MEditService.TestSupport;
 
-/// <summary>Building a <see cref="RealSizeModlist"/>'s index takes minutes, so the gate of its own runs it.</summary>
+/// <summary>The test runs on a <see cref="RealSizeModlist"/>, which only a real machine holds.</summary>
 [TraitDiscoverer(KindDiscoverer.TypeName, KindDiscoverer.AssemblyName)]
 public sealed class RealSizeFactAttribute : FactAttribute, ITraitAttribute
 {

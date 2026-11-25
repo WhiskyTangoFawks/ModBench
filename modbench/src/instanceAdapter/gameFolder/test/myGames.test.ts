@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { GameDetectors } from '../gameFolderResolver';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { myGamesResolver } from '../myGames';
+import { onPosix } from '../../../test/platform';
 
 describe('the My Games folder of a release', () => {
   let base: string;
@@ -70,7 +71,7 @@ describe('the My Games folder of a release', () => {
     });
   });
 
-  describe.skipIf(process.platform === 'win32')('on Linux (Wine prefixes are POSIX paths, so only Linux holds one)', () => {
+  onPosix.describe('on Linux (Wine prefixes are POSIX paths, so only Linux holds one)', () => {
     const prefixDocuments = (prefix: string, user: string): string => join(prefix, 'drive_c', 'users', user, 'Documents');
 
     it('is in the Steam compatdata prefix of the release\'s app id', async () => {

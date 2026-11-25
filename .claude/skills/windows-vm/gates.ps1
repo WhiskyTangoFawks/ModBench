@@ -1,5 +1,19 @@
 $failed = @()
-$env:NODE_OPTIONS = '--max-old-space-size=3072'
+$env:NODE_OPTIONS = '--max-old-space-size=4096'
+$env:PYTHONUTF8 = 1
+$reports = Join-Path $env:TEMP 'modbench-gates'
+Remove-Item -Recurse -Force $reports -ErrorAction SilentlyContinue
+New-Item -ItemType Directory $reports | Out-Null
+
+# Shows each line of a run and keeps it in a report, for a stack whose own report names no skip.
+function Record($file) {
+  process {
+    $line = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { "$_" }
+    $line
+    Add-Content -Path $file -Value $line -Encoding utf8
+  }
+}
+
 function Gate($name, $dir, $command) {
   Write-Host "=== $name ==="
   Push-Location $dir
@@ -17,13 +31,14 @@ if (-not (Test-Path modbench/node_modules/.lock-hash) -or (Get-Content modbench/
 }
 Gate 'Backend format' MEditService 'dotnet format --verify-no-changes'
 Gate 'Backend build' MEditService 'dotnet build -v minimal'
-Gate 'Backend tests' MEditService 'dotnet test -v minimal --filter "Kind!=RealSize&Kind!=Smoke&Kind!=Posix"'
-Gate 'Scripts tests' scripts 'python -m unittest discover -q'
+Gate 'Backend tests' MEditService 'dotnet test -v minimal --filter "Kind!=RealSize&Kind!=Smoke&Kind!=Posix&Kind!=Measured" --logger trx --results-directory "$reports"'
+Gate 'Scripts tests' scripts 'python -m unittest discover -v 2>&1 | Record "$reports\scripts.unittest"'
 Gate 'Frontend lint' modbench 'npm run lint'
 Gate 'Frontend build' modbench 'npm run build'
-Gate 'Frontend unit tests' modbench 'npm run test:unit'
-Gate 'Frontend integration tests' modbench 'npm run test:integration'
+Gate 'Frontend unit tests' modbench 'npm run test:unit -- --reporter=default --reporter=json --outputFile.json="$reports\unit.json"'
+Gate 'Frontend integration tests' modbench 'npm run test:integration 2>&1 | Record "$reports\integration.mocha"'
 Gate 'Package' . '& .claude/skills/windows-vm/package-check.ps1'
+Gate 'Skipped tests' . 'python .claude/skills/validate/skips.py "$reports"'
 
 if ($failed) { Write-Host "=== Windows gates FAILED: $($failed -join ', ') ==="; exit 1 }
 Write-Host '=== All Windows gates passed ==='

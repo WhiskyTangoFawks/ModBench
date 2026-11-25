@@ -16,7 +16,7 @@ public sealed class LoadOrderAtScaleTests
     private const int RunsOfTheComparison = 5;
     private static readonly TimeSpan LitRsSevenHundredPluginsInTenSeconds = TimeSpan.FromSeconds(10) / 700;
 
-    [Fact]
+    [MeasuredFact]
     public void ALaunchWithNothingChanged_IsReadyAtTheRatePerPluginThatLaunchesLitRInTenSeconds()
     {
         const int plugins = 200;
@@ -27,7 +27,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(LoadOrderState.Ready, scale.Index.Status.State);
     }
 
-    [Fact]
+    [MeasuredFact]
     public void APluginWhoseWholeTreeIsUncommitted_IsIndexedWithinTwoSecondsOfArriving()
     {
         using var scale = new LoadOrderAtScale();
@@ -40,7 +40,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(WorkingTreeState.Added, scale.Index.RowOf(scale.AReferenceInTheUncommittedCell, scale.UncommittedPlugin.Key)?.WorkingTreeState);
     }
 
-    [Fact]
+    [MeasuredFact]
     public void AnEditMadeOutsideModbenchToOneReferenceInABigCell_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
@@ -51,7 +51,7 @@ public sealed class LoadOrderAtScaleTests
         Budgets.Reached(OneGesture, () => EditReachedReads(scale), "An edit made outside Modbench to one reference reaching reads through a check of the whole disk");
     }
 
-    [Fact]
+    [MeasuredFact]
     public void AThousandSeparateDocumentsChangedOutsideModbench_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         const int documents = 1_000;
@@ -81,7 +81,7 @@ public sealed class LoadOrderAtScaleTests
         scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
             ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
 
-    [Fact]
+    [MeasuredFact]
     public void AThousandReferencesTakenOutsideModbenchOutOfABigCellsDocument_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
@@ -96,7 +96,7 @@ public sealed class LoadOrderAtScaleTests
         Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 3_000, "1,000 references taken outside Modbench out of a big cell reaching reads through a check of the whole disk");
     }
 
-    [Fact]
+    [MeasuredFact]
     public void ABigCellsDocumentDeletedOutsideModbench_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
@@ -113,7 +113,7 @@ public sealed class LoadOrderAtScaleTests
     private static int ReferencesListed(LoadOrderAtScale scale) =>
         scale.Index.Queries.GetCellChildRecords(scale.BigCellPlugin.Key, scale.BigCell).Value().Temporary.Count;
 
-    [Fact]
+    [MeasuredFact]
     public void ABigCell_OpensWithinOneSecond()
     {
         using var scale = new LoadOrderAtScale();
@@ -123,7 +123,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Contains("\"BigCell\"", opened?.Text, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [MeasuredFact]
     public void ABigCell_ListsItsReferencesWithinOneSecond()
     {
         using var scale = new LoadOrderAtScale();
@@ -133,7 +133,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(4_000, listed?.Temporary.Count);
     }
 
-    [Fact]
+    [MeasuredFact]
     public void APluginsOverrides_AreJudgedWithinItsMastersInOneCallWithinTheQueryBudget()
     {
         using var scale = new LoadOrderAtScale();
@@ -144,7 +144,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(scale.RecordsTheOverridingPluginOverrides.Count, judged?.Count);
     }
 
-    [Fact]
+    [MeasuredFact]
     public void TheConflictStackOfARecordWithManyCopies_ComparesWithinTheNavigationBudget()
     {
         const int copies = 200;
