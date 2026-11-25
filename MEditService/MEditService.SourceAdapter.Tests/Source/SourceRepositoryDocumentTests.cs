@@ -46,7 +46,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         return repository;
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task PuttingARecordNoDocumentHolds_ReadsNoOtherDocument()
     {
         Opened();
@@ -155,7 +155,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.True(File.Exists(file));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void RemovingAFlatRecordWhoseFileCannotBeRead_StillDeletesIt()
     {
         var repository = Opened();

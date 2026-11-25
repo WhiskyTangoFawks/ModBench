@@ -162,7 +162,7 @@ public sealed class VersionInGitHandlerTests : IDisposable
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task Init_OfAnAssetThatCannotBeRead_RefusesTheMod_LeavingNoRepository()
     {
         WriteInModFolder("textures/held.dds", "held");

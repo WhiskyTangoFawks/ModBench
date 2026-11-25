@@ -583,7 +583,7 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.False(unreadable?.DecompileRepairs);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void ATreeWhoseDocumentCannotBeOpened_SaysWhy_AndDecompileDoesNotRepairIt()
     {
         SourceMods.Init(Plugin);

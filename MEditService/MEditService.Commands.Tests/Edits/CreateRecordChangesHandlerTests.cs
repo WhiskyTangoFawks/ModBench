@@ -245,7 +245,7 @@ public sealed class CreateRecordChangesHandlerTests
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void CreateRecord_WhenADocumentHoldingTheHighestRecordCannotBeRead_RefusesAndWritesNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();

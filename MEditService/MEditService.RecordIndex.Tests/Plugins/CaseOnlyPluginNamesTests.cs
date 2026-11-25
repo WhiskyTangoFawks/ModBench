@@ -144,7 +144,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         Assert.Equal(["fine.esp"], FailedNames(index));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AFileRenamedOnDiskOnlyInCase_KeepsItsRowsUnderTheNewSpelling()
     {
         var fine = Named("Fine.esp");

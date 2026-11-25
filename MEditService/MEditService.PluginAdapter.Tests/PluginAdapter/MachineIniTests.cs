@@ -38,7 +38,7 @@ public sealed class MachineIniTests : IDisposable
         _root.Dispose();
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void OpenDocuments_AnArchiveThisMachinesGameIniListsBesideThePlugin_IsNotReadWhenTheSnapshotListsNone()
     {
         var loadOrder = new LoadOrderSnapshot(_modFolder, null, GameRelease.SkyrimSE, [], [], [], [], [], [], [], Language.English);

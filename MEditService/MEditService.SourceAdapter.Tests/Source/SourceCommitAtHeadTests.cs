@@ -361,7 +361,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.False(Directory.Exists(SourceFolder) && Directory.EnumerateFileSystemEntries(SourceFolder).Any());
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task ACloneCancelledWhileGitWaits_StopsGit_LeavingTheFolderHoldingNothing()
     {
         var stalled = Directory.CreateDirectory(Path.Combine(_root, "stalled", ".git")).FullName;

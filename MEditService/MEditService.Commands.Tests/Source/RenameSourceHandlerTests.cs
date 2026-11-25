@@ -189,7 +189,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Contains(MasterName, result.Message, StringComparison.Ordinal);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void RenameSource_OfAPluginWhoseSourceHasTwinFolders_RefusesItNamingThem_AndWritesNothing()
     {
         var sources = Path.GetDirectoryName(PluginSourceRoot.In(_sourceMod, Old.Name)).Require();

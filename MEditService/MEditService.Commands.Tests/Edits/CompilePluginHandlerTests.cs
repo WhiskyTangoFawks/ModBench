@@ -89,7 +89,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task APluginWhoseSourceHasTwinFolders_IsRefusedNamingThem_AsUnreadable()
     {
         var sources = Path.GetDirectoryName(PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName)).Require();

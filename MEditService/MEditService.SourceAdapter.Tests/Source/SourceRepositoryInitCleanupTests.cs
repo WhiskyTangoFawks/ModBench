@@ -57,7 +57,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Equal("theirs", File.ReadAllText(existing));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void APluginWhoseFilesCannotBeWritten_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashAnInitAfterItMadeTheRepository();
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Equal(before, GitDirContents());
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitWhoseCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashAnInitAfterItMadeTheRepository();
@@ -88,7 +88,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Subset(GitDirContents().ToHashSet(), before.ToHashSet());
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitWhoseCommitFails_RestoresTheSourceFileItReplaced()
     {
         var existing = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
@@ -120,7 +120,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitWhoseCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
@@ -132,7 +132,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitWhoseCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
     {
         var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
@@ -143,7 +143,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Contains("000001.json — changed by something else", failure, StringComparison.Ordinal);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitWhoseCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
     {
         var gitignore = Path.Combine(_modFolder, ".gitignore");
@@ -163,7 +163,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
 
     private string InitRefused(string plugin) => TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf(plugin)]).Require().Reason;
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitWhoseCommitFails_TakesBackWhatItMade_AndAnInitAgainCreatesTheRepository()
     {
         var asset = UnreadableFileTheCommitCannotAdd();
@@ -254,7 +254,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnInitIntoTheHalfMadeRepositoryOfACrashedInit_Recovers()
     {
         CrashAnInitAfterItMadeTheRepository();

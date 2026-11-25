@@ -9,6 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.RecordIndex.Tests.Plugins;
 
 [Collection(TimedCollection.Name)]
+[Kind(Kinds.Measured)]
 public sealed class LoadOrderAtScaleTests
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
@@ -16,7 +17,7 @@ public sealed class LoadOrderAtScaleTests
     private const int RunsOfTheComparison = 5;
     private static readonly TimeSpan LitRsSevenHundredPluginsInTenSeconds = TimeSpan.FromSeconds(10) / 700;
 
-    [MeasuredFact]
+    [Fact]
     public void ALaunchWithNothingChanged_IsReadyAtTheRatePerPluginThatLaunchesLitRInTenSeconds()
     {
         const int plugins = 200;
@@ -27,7 +28,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(LoadOrderState.Ready, scale.Index.Status.State);
     }
 
-    [MeasuredFact]
+    [Fact]
     public void APluginWhoseWholeTreeIsUncommitted_IsIndexedWithinTwoSecondsOfArriving()
     {
         using var scale = new LoadOrderAtScale();
@@ -40,7 +41,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(WorkingTreeState.Added, scale.Index.RowOf(scale.AReferenceInTheUncommittedCell, scale.UncommittedPlugin.Key)?.WorkingTreeState);
     }
 
-    [MeasuredFact]
+    [Fact]
     public void AnEditMadeOutsideModbenchToOneReferenceInABigCell_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
@@ -51,7 +52,7 @@ public sealed class LoadOrderAtScaleTests
         Budgets.Reached(OneGesture, () => EditReachedReads(scale), "An edit made outside Modbench to one reference reaching reads through a check of the whole disk");
     }
 
-    [MeasuredFact]
+    [Fact]
     public void AThousandSeparateDocumentsChangedOutsideModbench_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         const int documents = 1_000;
@@ -81,7 +82,7 @@ public sealed class LoadOrderAtScaleTests
         scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
             ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
 
-    [MeasuredFact]
+    [Fact]
     public void AThousandReferencesTakenOutsideModbenchOutOfABigCellsDocument_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
@@ -96,7 +97,7 @@ public sealed class LoadOrderAtScaleTests
         Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 3_000, "1,000 references taken outside Modbench out of a big cell reaching reads through a check of the whole disk");
     }
 
-    [MeasuredFact]
+    [Fact]
     public void ABigCellsDocumentDeletedOutsideModbench_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         using var scale = new LoadOrderAtScale();
@@ -113,7 +114,7 @@ public sealed class LoadOrderAtScaleTests
     private static int ReferencesListed(LoadOrderAtScale scale) =>
         scale.Index.Queries.GetCellChildRecords(scale.BigCellPlugin.Key, scale.BigCell).Value().Temporary.Count;
 
-    [MeasuredFact]
+    [Fact]
     public void ABigCell_OpensWithinOneSecond()
     {
         using var scale = new LoadOrderAtScale();
@@ -123,7 +124,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Contains("\"BigCell\"", opened?.Text, StringComparison.Ordinal);
     }
 
-    [MeasuredFact]
+    [Fact]
     public void ABigCell_ListsItsReferencesWithinOneSecond()
     {
         using var scale = new LoadOrderAtScale();
@@ -133,7 +134,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(4_000, listed?.Temporary.Count);
     }
 
-    [MeasuredFact]
+    [Fact]
     public void APluginsOverrides_AreJudgedWithinItsMastersInOneCallWithinTheQueryBudget()
     {
         using var scale = new LoadOrderAtScale();
@@ -144,7 +145,7 @@ public sealed class LoadOrderAtScaleTests
         Assert.Equal(scale.RecordsTheOverridingPluginOverrides.Count, judged?.Count);
     }
 
-    [MeasuredFact]
+    [Fact]
     public void TheConflictStackOfARecordWithManyCopies_ComparesWithinTheNavigationBudget()
     {
         const int copies = 200;

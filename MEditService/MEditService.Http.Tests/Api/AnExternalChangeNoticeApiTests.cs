@@ -29,7 +29,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
     private static string PluginPath(ScatteredFixtureData fx) => fx.Plugins.Single(p => p.Origin == Origin).Path;
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task ACompiledPluginWhoseBinaryCannotBeRead_FailsToLoad_NamedInTheLoadOrdersStatus()
     {
         var fx = Owned(await Watched());
