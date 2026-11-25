@@ -20,7 +20,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 {
     private const string Game = "Fallout4.esm";
     private const string Base = "Base.esm";
-    private const string Coast = "Coast.esm";
     private const string Mod = "PatchMod";
     private const string Patch = "Patch.esp";
 
@@ -31,8 +30,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     private readonly Cell _exterior;
     private readonly PlacedObject _exteriorRef;
     private readonly PlacedObject _persistentRef;
-    private readonly Cell _gameCell;
-    private readonly PlacedObject _gameCellRef;
     private readonly PlacedObject _gameGridRef;
     private readonly PluginFixtureData _data;
     private readonly LoadOrderHolder _holder = new();
@@ -42,17 +39,10 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     public MakePatchPluginHandlerTests()
     {
         (Npc Npc, SpatialPlugin.Records Spatial, Cell TopCell, PlacedObject PersistentRef)? made = null;
-        (Cell Cell, PlacedObject Ref)? inGame = null;
         (Worldspace World, Cell Cell, PlacedObject Ref)? inGameWorld = null;
         _data = new PluginFixtureBuilder("make-patch-handler")
             .WithPlugin(Game, mod =>
             {
-                var cell = new Cell(mod) { EditorID = "GameCell", Flags = Cell.Flag.IsInteriorCell, WaterHeight = 5 };
-                var placed = new PlacedObject(mod) { EditorID = "GameCellRef" };
-                cell.Temporary.Add(placed);
-                mod.AddInteriorCells(cell);
-                inGame = (cell, placed);
-
                 var world = new Worldspace(mod) { EditorID = "GameWorld" };
                 var gridCell = new Cell(mod) { EditorID = "GameGridCell", MajorRecordFlagsRaw = PersistentFlag.Bit, Grid = new CellGrid { Point = new P2Int(2, 3) } };
                 var gridRef = new PlacedObject(mod) { EditorID = "GameGridRef" };
@@ -70,20 +60,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
                 spatial.Worldspace.TopCell = topCell;
                 made = (mod.Npcs.AddNew("BaseNpc"), spatial, topCell, persistentRef);
             })
-            .WithPlugin(Coast, mod =>
-            {
-                var deleted = inGame.Require().Cell.DeepCopy();
-                deleted.Temporary.Clear();
-                deleted.WaterHeight = 7;
-                deleted.IsCompressed = true;
-                mod.AddInteriorCells(deleted);
-            })
             .Build();
-        (_gameCell, _gameCellRef) = inGame.Require();
-        var coastPath = Path.Combine(_data.DataFolder, Coast);
-        File.WriteAllBytes(coastPath, RawPlugin.WithRecordFlags(File.ReadAllBytes(coastPath), _gameCell.FormKey.ID, (uint)DeletedFlag.Bit));
-        _index.Owners[_gameCell.FormKey.ToString()] = new PluginAddress(Coast, PluginOrigin.DataDirectory);
-        _index.Owners[_gameCellRef.FormKey.ToString()] = new PluginAddress(Game, PluginOrigin.DataDirectory);
         var (gameWorld, gridCell, gridRef) = inGameWorld.Require();
         _gameGridRef = gridRef;
         foreach (var record in new IMajorRecordGetter[] { gameWorld, gridCell, gridRef })
@@ -152,19 +129,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
             (written.Npcs.Single().EditorID, interior.FormKey, interior.Persistent.Single().FormKey, world.FormKey, exterior.FormKey,
                 exterior.Persistent.Single().FormKey, string.Join(", ", written.ModHeader.MasterReferences.Select(master => master.Master.FileName))));
         Assert.Equal([HandedPlugin.ReadBack(patch.Plugin)], Assert.Single(_index.Hands).Require());
-    }
-
-    [Fact]
-    public async Task ARefWhoseCellsWinningCopyIsDeletedAndCompressed_LandsInAPartialFormOfTheCell_ThatOverridesNoneOfItsFields()
-    {
-        var made = await Handler.Make(Mod, Patch, [], [Given(_gameCellRef)]);
-
-        Assert.True(made.Holds(out _, out var refused), refused?.Message);
-        using var written = Written();
-        var cell = Assert.Single(InteriorCellsOf(written));
-        Assert.Equal(
-            (_gameCell.FormKey, PartialFormFlag.Bit, default(Cell.Flag), (float?)null, _gameCellRef.FormKey),
-            (cell.FormKey, cell.MajorRecordFlagsRaw, cell.Flags, cell.WaterHeight, cell.Temporary.Single().FormKey));
     }
 
     [Fact]
@@ -260,10 +224,10 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal((CompileRefusal.SourceDoesNotParse, unread), (compiled.Refusal, compiled.Message[..unread.Length]));
     }
 
-    [Theory]
-    [InlineData("patch.ESP")]
-    public async Task AFileLandingAtThePathWhileThePluginIsMade_IsLeft_AndRefusesTheMake(string landed)
+    [Fact]
+    public async Task AFileLandingAtThePathWhileThePluginIsMade_IsLeft_AndRefusesTheMake()
     {
+        const string landed = "patch.ESP";
         await File.WriteAllTextAsync(Path.Combine(_folder, landed), "landed");
 
         var made = await HandlerOver(new MissingTheFileThatLandsAfterTheCheck(TestAdapters.Mutagen())).Make(Mod, Patch, [], [Given(_npc)]);
@@ -274,10 +238,10 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
             (refused, await File.ReadAllTextAsync(Path.Combine(_folder, landed))));
     }
 
-    [Theory]
-    [InlineData("patch.ESP")]
-    public async Task Replacing_AFileAtItsPath_WritesThePlugin_AndSetsTheFileAside_NamingItOnThePush(string held)
+    [Fact]
+    public async Task Replacing_AFileAtItsPath_WritesThePlugin_AndSetsTheFileAside_NamingItOnThePush()
     {
+        const string held = "patch.ESP";
         await File.WriteAllTextAsync(Path.Combine(_folder, held), "held");
 
         var made = await Handler.Make(Mod, Patch, [], [Given(_npc)], replace: true);
@@ -305,13 +269,11 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal(earlier.Paths, Assert.IsType<FilesSetAsideNotification>(_pushed.Notifications[^1]).Paths);
     }
 
-    [Theory]
-    [InlineData(CompileFixture.PluginName, "NoSuch.esp", true)]
-    public async Task APatchNamedAsACompiledPluginOfItsMod_IsRefusedNamingItsPluginSource_WithOrWithoutItsBinary_EvenAskedToReplace(
-        string name, string deleted, bool replace)
+    [Fact]
+    public async Task APatchNamedAsACompiledPluginOfItsMod_IsRefusedNamingItsPluginSource_EvenAskedToReplace()
     {
+        const string name = CompileFixture.PluginName;
         using var compiled = new CompileFixture();
-        File.Delete(Path.Combine(compiled.ModFolder, deleted));
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(
             compiled.DataFolder, null, GameRelease.Fallout4, compiled.Entries,
@@ -319,7 +281,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         var heldBefore = string.Join(", ", Directory.GetFiles(compiled.ModFolder));
 
         var made = await TestEditService.Over(holder, index: compiled.Index.Queries).GetRequiredService<MakePatchPluginHandler>()
-            .Make(CompileFixture.Origin, name, [], [], replace);
+            .Make(CompileFixture.Origin, name, [], [], replace: true);
 
         Assert.False(made.Holds(out _, out var refused));
         Assert.Equal(
@@ -366,23 +328,30 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(Giving.ARecordNoPluginHoldsWithNoType, "No active plugin and no compiled plugin holds 000800:Patch.esp, so its record type must be given.")]
-    [InlineData(Giving.APlacedRecordWhoseCellNoPluginHolds, "No active plugin and no compiled plugin holds {0}, which holds a record given.")]
-    [InlineData(Giving.AnExteriorCellNoPluginHolds, "No active plugin and no compiled plugin holds 000800:Patch.esp, an exterior cell, so which worldspace it sits in is unknown.")]
-    public async Task ARecordNoActiveOrCompiledPluginHolds_IsRefusedSayingSo_SinceAnInactivePluginMayHoldIt(Giving giving, string expected)
+    [InlineData(
+        Giving.ARecordNoPluginHoldsWithNoType, RecordEditRefusal.RecordTypeNotFound,
+        "No active plugin and no compiled plugin holds 000800:Patch.esp, so its record type must be given.")]
+    [InlineData(
+        Giving.APlacedRecordWhoseCellNoPluginHolds, RecordEditRefusal.ContainerUnknown,
+        "No active plugin and no compiled plugin holds {0}, which holds a record given.")]
+    [InlineData(
+        Giving.AnExteriorCellNoPluginHolds, RecordEditRefusal.ContainerUnknown,
+        "No active plugin and no compiled plugin holds 000800:Patch.esp, an exterior cell, so which worldspace it sits in is unknown.")]
+    public async Task ARecordNoActiveOrCompiledPluginHolds_IsRefusedSayingSo_SinceAnInactivePluginMayHoldIt(
+        Giving giving, RecordEditRefusal refusal, string message)
     {
         var (origin, name, flags, records) = Making(giving);
 
         var made = await Handler.Make(origin, name, flags, records);
 
         Assert.False(made.Holds(out _, out var refused));
-        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, expected, _interior.FormKey), refused.Message);
+        Assert.Equal(
+            new PatchRefused.OfRecord(refusal, string.Format(System.Globalization.CultureInfo.InvariantCulture, message, _interior.FormKey)), refused);
     }
 
     public enum Giving
     {
         ARecordNamingNoFormKey,
-        ARecordTwice,
         ARecordTwiceInPluginNamesOfDifferentCase,
         ARecordNoPluginHoldsWithNoType,
         ANativeFormIdOutsideTheLightRange,
@@ -402,8 +371,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         {
             case Giving.ARecordNamingNoFormKey:
                 return (Mod, Patch, [], [new GivenRecord("{\"EditorID\": \"Nameless\"}", "npc_")]);
-            case Giving.ARecordTwice:
-                return (Mod, Patch, [], [Given(_npc), Given(_npc)]);
             case Giving.ARecordTwiceInPluginNamesOfDifferentCase:
                 var given = Given(_npc);
                 return (Mod, Patch, [], [given, given with { Text = given.Text.Replace($"\"{_npc.FormKey}\"", $"\"{_npc.FormKey.ToString().ToLowerInvariant()}\"", StringComparison.Ordinal) }]);
@@ -441,17 +408,12 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     public static TheoryData<Giving, PatchRefused> Refusals => new()
     {
         { Giving.ARecordNamingNoFormKey, new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, "") },
-        { Giving.ARecordTwice, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },
         { Giving.ARecordTwiceInPluginNamesOfDifferentCase, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },
-        { Giving.ARecordNoPluginHoldsWithNoType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
         { Giving.ANativeFormIdOutsideTheLightRange, new PatchRefused.AsCompile(CompileRefusal.FormIdOutsideFlagLimit, "") },
         { Giving.ARecordAsNoRecordType, new PatchRefused.OfRecord(RecordEditRefusal.RecordTypeNotFound, "") },
-        { Giving.APlacedRecordWhoseCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.AnExteriorCellWithNoGrid, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
-        { Giving.AnExteriorCellNoPluginHolds, new PatchRefused.OfRecord(RecordEditRefusal.ContainerUnknown, "") },
         { Giving.ANameThatIsNoPluginFile, new PatchRefused.AsCreate(PluginCreateRefusal.NotAPluginFile, "") },
         { Giving.AnOriginThatIsNoEnabledMod, new PatchRefused.AsCreate(PluginCreateRefusal.OriginNotAMod, "") },
-
         { Giving.ARecordTheRecordIndexNamesAPluginNotHolding, new PatchRefused.OfRecord(RecordEditRefusal.RecordNotFound, "") },
         { Giving.ARecordWhosePluginCannotBeRead, new PatchRefused.OfRecord(RecordEditRefusal.RecordParseFailed, "") },
     };

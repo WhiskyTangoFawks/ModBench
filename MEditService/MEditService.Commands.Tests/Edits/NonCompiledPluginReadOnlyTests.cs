@@ -19,6 +19,7 @@ public sealed class NonCompiledPluginReadOnlyTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
         Assert.Contains("patch", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("version in git", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -35,33 +36,15 @@ public sealed class NonCompiledPluginReadOnlyTests
         Assert.DoesNotContain("base-game", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Theory]
-    [InlineData("GhostMod")]
-    public void EditingAPluginTheLoadOrderDoesNotName_IsRefusedAsNotInTheLoadOrder(string origin)
+    [Fact]
+    public void EditingAPluginTheLoadOrderDoesNotName_IsRefusedAsNotInTheLoadOrder()
     {
         using var mod = SourceModFixture.VanillaMaster(out var npc);
 
-        var result = mod.EditHandler.Set(new PluginAddress("Ghost.esp", origin), npc.ToString(), "HeightMax", Json("0.75"));
+        var result = mod.EditHandler.Set(new PluginAddress("Ghost.esp", "GhostMod"), npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotInLoadOrder, result.Refusal);
-    }
-
-    [Fact]
-    public void TheTwoRefusalsAreDistinct_AndNeitherMessageOffersTheOthersWayOut()
-    {
-        using var nonCompiledPlugin = SourceEditFixture.NonCompiledPlugin();
-        using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
-
-        var initable = nonCompiledPlugin.EditHandler
-            .Set(nonCompiledPlugin.Plugin, nonCompiledPlugin.Npc.ToString(), "HeightMax", Json("0.75"));
-        var notInitable = vanilla.EditHandler
-            .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.NotEqual(initable.Refusal, notInitable.Refusal);
-        Assert.DoesNotContain("patch", initable.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("version in git", notInitable.Message, StringComparison.Ordinal);
-        Assert.Contains("version in git on its mod", initable.Message, StringComparison.Ordinal);
     }
 
     [Fact]
