@@ -149,19 +149,24 @@ class SelectedByChange(GateRepo):
         self.assertEqual(self.selected(), self.slot_line("--frontend"))
 
 
-class BranchTests(GateRepo):
-    UNMARKED_RUN = "--filter Kind!=RealSize&Kind!=Smoke"
+class FakeDotnet(GateRepo):
     DOTNET_RECORDING_ITS_ARGUMENTS = """#!/bin/sh
 echo "$*" >> {calls}
+if [ "$1" = test ] && [ -n "$FAKE_TRX" ]; then
+  while [ $# -gt 1 ]; do
+    [ "$1" = --results-directory ] && cp "$FAKE_TRX" "$2/fake.trx"
+    shift
+  done
+fi
 """
 
     def setUp(self):
         super().setUp()
         shutil.copy(SCRIPT.parent / "select_backend_tests.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_times.py", self.validate)
+        shutil.copy(SCRIPT.parent / "skips.py", self.validate)
         self.project("RecordIndex")
         self.project("RecordIndex.Tests", "RecordIndex")
-        self.write("MEditService/MEditService.RecordIndex.Tests/RealSize/Budgets.cs", "[RealSizeFact]")
         self.project("Commands")
         self.project("Http", "Commands")
         self.project("Http.Tests", "Http")
@@ -181,24 +186,86 @@ echo "$*" >> {calls}
         self.write(f"MEditService/MEditService.{name}/MEditService.{name}.csproj", test_sdk + "".join(
             f'<ProjectReference Include="..\\MEditService.{r}\\MEditService.{r}.csproj" />' for r in references))
 
-    def run_after_changing(self, path, *flags):
+    def trx(self, outcome):
+        name = pathlib.Path(self.repo, "fake.trx")
+        name.write_text(
+            '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>'
+            f'<UnitTestResult testName="Fake.ATest" duration="00:00:00.1" endTime="2026-10-02T19:00:01+00:00" outcome="{outcome}" />'
+            '</Results></TestRun>')
+        return str(name)
+
+    def run_after_changing(self, path, *flags, **env):
         self.write(path, "edited")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "edit")
-        self.addCleanup(shutil.rmtree, f"/tmp/medit-test-results.{pathlib.Path(self.repo).name}", ignore_errors=True)
-        self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}")
-        return self.calls.read_text().splitlines()
+        for results in pathlib.Path("/tmp").glob(f"medit-*.{pathlib.Path(self.repo).name}"):
+            self.addCleanup(shutil.rmtree, results, ignore_errors=True)
+        run = self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
+        return run, self.calls.read_text().splitlines() if self.calls.exists() else []
+
+
+class BranchTests(FakeDotnet):
+    UNMARKED_RUN = "--filter Kind!=RealSize&Kind!=Smoke"
 
     def filter_present_per_dotnet_test(self, calls):
         return [self.UNMARKED_RUN in call for call in calls if call.startswith("test ")]
 
     def test_the_tests_of_a_branch_that_touches_http_leave_out_the_kinds_that_wait_for_main(self):
-        calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
+        _, calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
         self.assertEqual(self.filter_present_per_dotnet_test(calls), [True, True], calls)
 
     def test_the_docs_scans_of_a_branch_leave_out_the_kinds_that_wait_for_main(self):
-        calls = self.run_after_changing("spec/a.d2", "--docs")
+        _, calls = self.run_after_changing("spec/a.d2", "--docs")
         self.assertEqual(self.filter_present_per_dotnet_test(calls), [True], calls)
+
+
+class MergeToMain(FakeDotnet):
+    MODE = "--merge-to-main"
+    ONE_PROJECT_AT_A_TIME = " -m:1 "
+
+    def world_runs(self, calls):
+        return [call for call in calls if "--filter Kind=RealSize|Kind=Smoke" in call]
+
+    def test_the_mode_runs_the_real_size_and_smoke_tests_beside_the_gates_of_the_diff(self):
+        _, calls = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+        self.assertEqual(len(self.world_runs(calls)), 1, calls)
+
+    def test_the_tests_of_the_users_world_run_one_project_at_a_time_so_a_budget_runs_alone(self):
+        _, calls = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+        self.assertIn(self.ONE_PROJECT_AT_A_TIME, self.world_runs(calls)[0])
+
+    def test_the_mode_runs_the_gates_the_whole_diff_since_main_can_break_not_the_diff_since_the_branch_it_tracks(self):
+        git(self.repo, "checkout", "-q", "-b", "integration")
+        self.write("modbench/src/a.ts", "edited")
+        git(self.repo, "commit", "-q", "-am", "frontend")
+        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
+        self.write("spec/a.d2", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.gates(self.MODE).stdout.splitlines()[-1], self.slot_line(f"{self.MODE} --frontend --docs"))
+
+    def test_a_run_that_executed_no_test_fails(self):
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE)
+        self.assertIn("No test of real size or smoke ran.", run.stdout)
+        self.assertEqual(run.returncode, 1)
+
+    def test_a_skipped_test_fails_the_run_naming_it(self):
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("NotExecuted"))
+        self.assertIn("skipped  Fake.ATest", run.stdout)
+        self.assertEqual(run.returncode, 1)
+
+    def windows_vm_test(self, body):
+        self.write(".claude/skills/windows-vm/test_probe.py",
+                   f"import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        {body}\n")
+
+    def test_the_gate_runner_tests_include_the_windows_vm_skills_tests(self):
+        self.windows_vm_test("self.fail('windows-vm test ran')")
+        run, _ = self.run_after_changing("spec/a.d2", "--comments")
+        self.assertIn("windows-vm test ran", run.stderr)
+
+    def test_a_skipped_python_test_fails_the_run_naming_it(self):
+        self.windows_vm_test("self.skipTest('no vm')")
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+        self.assertIn("skipped  test_probe (test_probe.Probe.test_probe)", run.stdout)
 
 
 if __name__ == '__main__':
