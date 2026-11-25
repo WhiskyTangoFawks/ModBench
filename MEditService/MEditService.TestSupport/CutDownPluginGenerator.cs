@@ -51,9 +51,8 @@ public sealed class CutDownPluginGenerator
         Assert.InRange(new FileInfo(outPath).Length, 1, 5 * 1024 * 1024);
     }
 
-    // Fallout4.esm is localized (strings packed in BA2s). DeepCopy enumerates every language
-    // source; on Linux that path resolves a plugin-listings path that needs the (case-sensitive)
-    // "LocalAppData" env var.
+    // Fallout4.esm is localized, its strings packed in BA2s. DeepCopy enumerates every language source.
+    // On Linux that resolves a plugin-listings path, which needs the case-sensitive "LocalAppData" env var.
     private static void GiveMutagenTheLocalAppDataItsLanguageSourcesReadOnLinux()
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
@@ -72,7 +71,7 @@ public sealed class CutDownPluginGenerator
         foreach (var r in src.Globals.Take(RecordsPerType)) dst.Globals.Add(r.DeepCopy());
     }
 
-    // Records with real VMAD scripts, so the VMAD indexer runs on authentic property shapes.
+    // Records with real VMAD scripts, so a reader of script properties meets real shapes.
     private static void CopyVmadRecords(IFallout4ModGetter src, Fallout4Mod dst)
     {
         foreach (var n in src.Npcs.Where(x => x.VirtualMachineAdapter != null).Take(RecordsPerType))
@@ -123,7 +122,7 @@ public sealed class CutDownPluginGenerator
         while (list.Count > RefsPerCell) list.RemoveAt(list.Count - 1);
     }
 
-    // The source TestData folder, so the rewritten plugin lands where git tracks it, not in bin/.
+    // Where git tracks the plugin, not bin/.
     private static string SourceTestDataDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

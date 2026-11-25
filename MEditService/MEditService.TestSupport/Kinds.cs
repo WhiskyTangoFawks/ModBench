@@ -7,8 +7,7 @@ public enum Kinds
     /// <summary>The input is a modlist of real size.</summary>
     RealSize,
 
-    /// <summary>A tool, not a test: a sweep over the user's data, a soak, or a generator of a committed fixture. No gate
-    /// runs it; a release does (docs/agents/release.md).</summary>
+    /// <summary>A tool, not a test (spec/architecture/tests.md), or the generator of a committed fixture. No gate runs it.</summary>
     Tool,
 
     /// <summary>The test needs a POSIX file system: a file mode that makes a read, write or delete fail, a FIFO, or two
