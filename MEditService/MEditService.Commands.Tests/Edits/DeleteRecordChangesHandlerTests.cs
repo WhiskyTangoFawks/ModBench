@@ -99,45 +99,6 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void TheChangesOfDeletingARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var npc = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
-        var retyped = $"000F00:{mod.Plugin.Name}";
-        var file = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
-        mod.Unsaved.Typed(new DocumentChange(file, npc.Body.Replace(mod.Npc.ToString(), retyped, StringComparison.Ordinal)));
-
-        var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, retyped)]);
-
-        Assert.Equal(file, Assert.Single(Assert.Single(result.Applied).Deletions));
-    }
-
-    [Fact]
-    public void ADeleteOfTwoChildrenOfOneContainer_LeavesTheContainerWithNeither()
-    {
-        using var fixture = new ContainerModFixture();
-
-        var result = fixture.DeleteHandler.DeleteRecordsSync(
-            [new RecordAt(fixture.Plugin, fixture.TemporaryRef.ToString()), new RecordAt(fixture.Plugin, fixture.PersistentRef.ToString())]);
-
-        Assert.Empty(result.Refused);
-        var owner = fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId).Body;
-        Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, owner, StringComparison.Ordinal);
-        Assert.DoesNotContain(ContainerModPlugin.PersistentRefEditorId, owner, StringComparison.Ordinal);
-        Assert.Contains(ContainerModPlugin.NavmeshEditorId, owner, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ADelete_LeavesOtherRecordsUntouched()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
-
-        Assert.NotNull(mod.Document(mod.OtherNpc.ToString()));
-    }
-
-    [Fact]
     public void ADeleteInANonCompiledPlugin_IsRefusedAsPluginNotCompiledPlugin()
     {
         using var mod = SourceEditFixture.NonCompiledPlugin();

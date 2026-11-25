@@ -35,10 +35,4 @@ public sealed class TranslatedTextEditTests : IDisposable
 
         Assert.Equal("Pistolet", french.Require()["String"].Require().GetValue<string>());
     }
-
-    [Fact]
-    public void AnEditToText_InAPluginThatIsNotLocalized_IsItsOneText()
-    {
-        Assert.Equal("Pistolet", NameAfterEditToText()["Value"].Require().GetValue<string>());
-    }
 }

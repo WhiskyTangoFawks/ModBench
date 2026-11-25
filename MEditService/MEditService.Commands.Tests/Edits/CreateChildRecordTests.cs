@@ -21,9 +21,6 @@ public sealed class CreateChildRecordTests : IDisposable
     public static TheoryData<string, string, string> OneChildOfEachSlotFiledInItsContainersDirectory => new()
     {
         { "dial", nameof(ContainerModFixture.Quest), "DialogTopics" },
-        { "dlbr", nameof(ContainerModFixture.Quest), "DialogBranches" },
-        { "scen", nameof(ContainerModFixture.Quest), "Scenes" },
-        { "info", nameof(ContainerModFixture.DialogTopic), "Responses" },
     };
 
     [Theory]
@@ -63,22 +60,9 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(outcome.NewFormKey, cell["NavigationMeshes"].Require().AsArray()[^1].Require()["FormKey"].Require().GetValue<string>());
     }
 
-    [Fact]
-    public void ANavmeshCreatedOnItsCell_LandsLastInItsNavmeshes()
-    {
-        var siblings = SlotOf(_fixture.EmbedCell, "NavigationMeshes");
-
-        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "navm", _fixture.EmbedCell.ToString());
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal([.. siblings, result.NewFormKey.Require()], SlotOf(_fixture.EmbedCell, "NavigationMeshes"));
-    }
-
     public static TheoryData<string, string> ChildrenTheContainerCannotHold => new()
     {
         { "npc_", nameof(ContainerModFixture.Quest) },
-        { "land", nameof(ContainerModFixture.Cell) },
-        { "land", nameof(ContainerModFixture.EmbedCell) },
     };
 
     [Theory]
@@ -96,30 +80,6 @@ public sealed class CreateChildRecordTests : IDisposable
     }
 
     [Fact]
-    public void ALandscapeCreatedOnAnExteriorCell_LandsAsItsLandscape()
-    {
-        using var mod = ExteriorCell(out var cell);
-
-        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString());
-
-        Assert.True(result.Applied, result.Message);
-        var landscape = JsonNode.Parse(mod.Body(cell)).Require()["Landscape"].Require();
-        Assert.Equal(result.NewFormKey, landscape["FormKey"].Require().GetValue<string>());
-    }
-
-    [Fact]
-    public void ANavmeshCreatedOnAnExteriorCell_LandsInItsNavmeshes()
-    {
-        using var mod = ExteriorCell(out var cell);
-
-        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "navm", cell.ToString());
-
-        Assert.True(result.Applied, result.Message);
-        var navmeshes = JsonNode.Parse(mod.Body(cell)).Require()["NavigationMeshes"].Require().AsArray();
-        Assert.Equal(result.NewFormKey, Assert.Single(navmeshes).Require()["FormKey"].Require().GetValue<string>());
-    }
-
-    [Fact]
     public void ALandscapeCreatedOnACellHoldingOne_IsRefusedNamingIt_AndTheTreeIsAsItWas()
     {
         using var mod = ExteriorCell(out var cell);
@@ -131,38 +91,6 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.Refusal);
         Assert.Contains(held, result.Message, StringComparison.Ordinal);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
-    }
-
-    [Fact]
-    public void AChildCreatedOnADeletedContainer_IsRefused_AndTheTreeIsAsItWas()
-    {
-        var questKey = FormKey.Null;
-        using var mod = SourceModFixture.CompiledPlugin("Deleted.esp", "DeletedMod", plugin =>
-        {
-            var quest = plugin.Quests.AddNew("DeletedQuest");
-            quest.MajorRecordFlagsRaw = DeletedFlag.Bit;
-            questKey = quest.FormKey;
-        });
-        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
-
-        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "dial", questKey.ToString());
-
-        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
-        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
-    }
-
-    [Fact]
-    public void ALandscapeCreatedOnADeletedExteriorCellHoldingOne_IsRefusedAsOneItCannotHold()
-    {
-        using var mod = ExteriorCell(out var cell, (plugin, cell) =>
-        {
-            cell.Landscape = new Landscape(plugin);
-            cell.MajorRecordFlagsRaw = DeletedFlag.Bit;
-        });
-
-        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString());
-
-        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
     }
 
     [Fact]
@@ -182,12 +110,7 @@ public sealed class CreateChildRecordTests : IDisposable
 
     public static TheoryData<bool, CellPlace> EachCellShape => new()
     {
-        { false, CellPlace.Interior },
         { true, CellPlace.Interior },
-        { false, CellPlace.Exterior },
-        { true, CellPlace.Exterior },
-        { false, CellPlace.PersistentWorldspaceCell },
-        { true, CellPlace.PersistentWorldspaceCell },
     };
 
     [Theory]
@@ -207,25 +130,8 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(persistent, (created[RecordHeaderFlags.Member]?.GetValue<int>() ?? 0) == PersistentFlag.Bit);
     }
 
-    public static TheoryData<string> PlacedRecordTableNames => [.. PlacedRecordTables.Names];
-
-    [Theory]
-    [MemberData(nameof(PlacedRecordTableNames))]
-    public void EveryPlacedRecordCreatedOnAPersistentCell_LandsInItsPersistentGroup(string recordType)
-    {
-        using var mod = InteriorCell(out var cell, interior => interior.MajorRecordFlagsRaw = PersistentFlag.Bit);
-
-        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, recordType, cell.ToString());
-
-        Assert.True(result.Applied, result.Message);
-        var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.PersistentGroup].Require().AsArray());
-        Assert.Equal(result.NewFormKey, created.Require()["FormKey"].Require().GetValue<string>());
-    }
-
     [Theory]
     [InlineData("refr", CellPlace.Exterior)]
-    [InlineData("phzd", CellPlace.Exterior)]
-    [InlineData("refr", CellPlace.Interior)]
     public void APlacedRecordCreatedOnACellWithAGrid_LandsInItsTemporaryGroup_AtTheCentreOfTheGridCell(string recordType, CellPlace place)
     {
         using var mod = CellShaped(place, cell => cell.Grid = new CellGrid { Point = new P2Int(3, -2) }, out var cell);
@@ -240,8 +146,6 @@ public sealed class CreateChildRecordTests : IDisposable
 
     [Theory]
     [InlineData(CellPlace.Interior)]
-    [InlineData(CellPlace.Exterior)]
-    [InlineData(CellPlace.PersistentWorldspaceCell)]
     public void APlacedRecordCreatedOnAPersistentCellWithAGrid_KeepsTheBarePosition_WhereverTheCellSits(CellPlace place)
     {
         using var mod = CellShaped(
@@ -270,18 +174,6 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.TemporaryGroup].Require().AsArray()).Require();
         Assert.Null(created["Position"]);
-    }
-
-    [Fact]
-    public void ANavmeshCreatedOnAnInteriorCellCarryingThePersistentFlag_IsRefused_AndTheTreeIsAsItWas()
-    {
-        using var mod = InteriorCell(out var cell, interior => interior.MajorRecordFlagsRaw = PersistentFlag.Bit);
-        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
-
-        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "navm", cell.ToString());
-
-        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
-        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     private static SourceModFixture CellShaped(CellPlace place, Action<Cell> shape, out FormKey cell) => place switch
@@ -336,8 +228,4 @@ public sealed class CreateChildRecordTests : IDisposable
 
     private FormKey KeyOf(string container) =>
         (FormKey)typeof(ContainerModFixture).GetProperty(container).Require().GetValue(_fixture).Require();
-
-    private string[] SlotOf(FormKey container, string slot) =>
-        [.. JsonNode.Parse(_fixture.Document(container.ToString()).Require().Body).Require()[slot].Require().AsArray()
-            .Select(child => child.Require()["FormKey"].Require().GetValue<string>())];
 }

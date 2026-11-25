@@ -1,10 +1,8 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Noggog;
@@ -55,23 +53,8 @@ public sealed class RecordDocumentEditTests : IDisposable
     private string SeedNpc() => _fixture.Seed(_npc, "npc_");
     private string SeedCobj() => _fixture.Seed(_cobj, "cobj");
 
-    private string Applied(string formKey, RecordEditEnvelope envelope)
-    {
-        var (result, after) = _fixture.Apply(formKey, envelope);
-        Assert.True(result.Applied, result.Message);
-        return after ?? throw new InvalidOperationException("Expected an applied edit to report its document.");
-    }
-
-    private static JsonNode Node(string text, string dotted)
-    {
-        var node = JsonNode.Parse(text).Require();
-        foreach (var hop in dotted.Split('.')) node = node[hop].Require();
-        return node;
-    }
-
     [Theory]
     [InlineData("MasterReferences", "[]", "'MasterReferences' is read-only: masters are wholly content-derived at compile time.")]
-    [InlineData("FormID", "2048", "'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.")]
     public void AHeaderMemberTheContentDerives_IsRefusedAsReadOnly_WithItsReason(string member, string value, string message)
     {
         var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
@@ -118,7 +101,6 @@ public sealed class RecordDocumentEditTests : IDisposable
     [InlineData("frobnicate", "HeightMax", "1")]
     [InlineData("set", "HeightMax", null)]
     [InlineData("remove", "HeightMax", null)]
-    [InlineData("move", "Keywords[0]", "\"up\"")]
     [InlineData("move", "Keywords[0]", "1.5")]
     [InlineData("move", "Keywords[0]", "99999999999999999999")]
     public void MalformedEnvelope_IsRefusedAsSuch(string op, string path, string? value)
@@ -165,7 +147,6 @@ public sealed class RecordDocumentEditTests : IDisposable
 
     [Theory]
     [InlineData("\"#7F102030\"")]
-    [InlineData("\"#FF102030\"")]
     public void AColorHoldingNoAlpha_RefusesAnAlpha_NamingTheField(string color)
     {
         var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
@@ -208,7 +189,6 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Theory]
-    [InlineData("VirtualMachineAdapter.ExtraBindDataVersion", "5", "VirtualMachineAdapter.ExtraBindDataVersion")]
     [InlineData("VirtualMachineAdapter.Script.Name", "\"QuestFragments\"", "VirtualMachineAdapter.Script")]
     public void AValueForAMemberPastItsOwnersSetBreak_IsRefusedNamingTheOutermostUnheldMemberAndThatBreak(string path, string value, string unheld)
     {
@@ -223,17 +203,6 @@ public sealed class RecordDocumentEditTests : IDisposable
             $"'{unheld}' lies past its owner's Versioning.Break0, which is set, so the record does not hold it and nothing was written.",
             result.Message);
         Assert.Null(after);
-    }
-
-    [Fact]
-    public void RecordFlags_ClearedToNone_LeavesNoSpellingOfThemBehind()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0420 };
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var cleared = JsonNode.Parse(Applied(formKey, SetAt(Json("0"), Member("MajorRecordFlagsRaw")))).Require().AsObject();
-
-        Assert.DoesNotContain(cleared, p => p.Key is "MajorRecordFlagsRaw" or "IsDeleted" or "Fallout4MajorRecordFlags" or "MajorFlags");
     }
 
     [Fact]

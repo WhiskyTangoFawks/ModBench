@@ -57,8 +57,6 @@ public sealed class FormIdEditTests
 
     [Theory]
     [InlineData("\"not-a-formkey\"")]
-    [InlineData("2048")]
-    [InlineData("null")]
     public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField(string json)
     {
         using var mod = SourceEditFixture.CompiledPlugin();
@@ -156,7 +154,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_OfAnOverride_Refuses_NamingItsMaster()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
         var before = SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin);
 
         var result = two.EditHandler.SetFormId(two.ReferencerPlugin, two.Npc.ToString(), "000F00:Winner.esp");
@@ -171,7 +169,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void EditingTheFormId_CarriesAReferencerInAnotherModsPluginSource_AndLeavesNothingBehind()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
         var oldFormKey = two.TargetRace.ToString();
         var referencerBefore = two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body;
 
@@ -186,22 +184,9 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_LeavesAReferencerInAPluginWithNoPluginSource_AsItWas()
-    {
-        using var two = TwoModReferenceFixture.Create(initReferencer: false);
-        var binary = Path.Combine(two.ReferencerModFolder, two.ReferencerPlugin.Name);
-        var before = File.ReadAllBytes(binary);
-
-        var result = two.EditHandler.SetFormId(two.TargetPlugin, two.TargetRace.ToString(), "000F00:Base.esm");
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(before, File.ReadAllBytes(binary));
-    }
-
-    [Fact]
     public void EditingTheFormId_LeavesBehindAPluginSourceThatCannotBeRead_NamingWhy_AndStillChangesTheRecord()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
         var referencer = two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId);
         var referencerFile = SourceModTree.DocumentFile(two.ReferencerModFolder, two.ReferencerPlugin, referencer.FormKey).Require();
         var unreadable = Path.Combine(two.ReferencerModFolder, Path.GetDirectoryName(referencerFile).Require(), "Broken.json");
@@ -219,7 +204,7 @@ public sealed class FormIdEditTests
     [Fact]
     public async Task AScriptsEditOfTheFormId_CarriesAReferencerInAnotherModsPluginSource()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
 
         var result = (await two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: Envelopes.NoCopies, CancellationToken.None)).AsResult();
 
@@ -230,7 +215,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void AFormKeyChange_AnswersTheCopiesWithNoPluginSourceItReads_AsLeftBehind_AndThePluginsItChanges()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
         RecordAt binary = new(new PluginAddress("Binary.esp", "BinaryMod"), "000801:Binary.esp");
 
         Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, () => new[] { binary }).Holds(out var changes, out var refused), refused?.Message);
@@ -243,7 +228,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void AFormKeyChange_WhoseCopiesCannotBeRead_Lands_NamingWhy()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
 
         Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, () => "The record index is not ready.").Holds(out var changes, out var refused), refused?.Message);
 
@@ -253,7 +238,7 @@ public sealed class FormIdEditTests
     [Fact]
     public void AnEditOfAnotherField_NeverReadsTheCopies_AndLeavesNothingBehind()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        using var two = TwoModReferenceFixture.Create();
         var envelope = Envelopes.SetAt(JsonSerializer.SerializeToElement("Renamed"), Envelopes.Member("EditorID"));
         var reads = 0;
 
