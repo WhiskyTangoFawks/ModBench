@@ -51,12 +51,16 @@ class BehindMain(unittest.TestCase):
 
 
 class GateRepo(unittest.TestCase):
+    TIER_PAUSED = "true"
+
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo)
+        self.addCleanup(shutil.rmtree, pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}"), ignore_errors=True)
         self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
         self.validate.mkdir(parents=True)
-        shutil.copy(SCRIPT, self.validate)
+        script = self.validate / "run-gates.sh"
+        script.write_text(SCRIPT.read_text().replace("MERGE_TIER_PAUSED=true", f"MERGE_TIER_PAUSED={self.TIER_PAUSED}", 1))
         shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
         (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
         for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "spec/a.d2"):
@@ -204,28 +208,54 @@ fi
         self.write(path, "edited")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "edit")
-        for results in pathlib.Path("/tmp").glob(f"medit-*.{pathlib.Path(self.repo).name}"):
-            self.addCleanup(shutil.rmtree, results, ignore_errors=True)
         run = self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
         return run, self.calls.read_text().splitlines() if self.calls.exists() else []
 
 
 class BranchTests(FakeDotnet):
-    UNMARKED_RUN = "--filter Kind!=RealSize&Kind!=Smoke"
+    """A filter on the command line replaces the branch's filter in MEditService/Directory.Build.props."""
 
     def filter_present_per_dotnet_test(self, calls):
-        return [self.UNMARKED_RUN in call for call in calls if call.startswith("test ")]
+        return ["--filter" in call for call in calls if call.startswith("test ")]
 
-    def test_the_tests_of_a_branch_that_touches_http_leave_out_the_kinds_that_wait_for_main(self):
+    def test_the_tests_of_a_branch_that_touches_http_pass_no_filter(self):
         _, calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
-        self.assertEqual(self.filter_present_per_dotnet_test(calls), [True, True], calls)
+        self.assertEqual(self.filter_present_per_dotnet_test(calls), [False, False], calls)
 
-    def test_the_docs_scans_of_a_branch_leave_out_the_kinds_that_wait_for_main(self):
+    def test_the_docs_scans_of_a_branch_pass_no_filter(self):
         _, calls = self.run_after_changing("spec/a.d2", "--docs")
-        self.assertEqual(self.filter_present_per_dotnet_test(calls), [True], calls)
+        self.assertEqual(self.filter_present_per_dotnet_test(calls), [False], calls)
+
+
+class MergeToMainPaused(FakeDotnet):
+    NOTICE = "The merge-to-main tier is paused until epic #2450 lands"
+
+    def test_the_mode_runs_the_branch_gates_and_says_the_tier_is_paused(self):
+        run, calls = self.run_after_changing("spec/a.d2", "--merge-to-main")
+        self.assertIn(self.NOTICE, run.stdout)
+        self.assertEqual([call for call in calls if "--filter" in call], [], calls)
+        self.assertNotIn("=== Skipped tests ===", run.stdout)
+
+    def test_the_environment_form_of_the_mode_says_the_tier_is_paused(self):
+        run, _ = self.run_after_changing("spec/a.d2", MEDIT_MERGE_TO_MAIN="true")
+        self.assertEqual(run.stdout.count(self.NOTICE), 1, run.stdout)
+
+    def test_a_branch_run_does_not_say_it(self):
+        run, _ = self.run_after_changing("spec/a.d2")
+        self.assertNotIn(self.NOTICE, run.stdout)
+
+    def test_the_mode_runs_the_branch_diff_since_the_branch_it_tracks(self):
+        git(self.repo, "checkout", "-q", "-b", "integration")
+        self.write("modbench/src/a.ts", "edited")
+        git(self.repo, "commit", "-q", "-am", "frontend")
+        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
+        self.write("spec/a.d2", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.gates("--merge-to-main").stdout.splitlines()[-1], self.slot_line("--docs"))
 
 
 class MergeToMain(FakeDotnet):
+    TIER_PAUSED = "false"
     MODE = "--merge-to-main"
     ONE_PROJECT_AT_A_TIME = " -m:1 "
 

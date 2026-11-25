@@ -6,7 +6,7 @@ namespace MEditService.TestSupport;
 /// at every branch.</summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
 [TraitDiscoverer(KindDiscoverer.TypeName, KindDiscoverer.AssemblyName)]
-public sealed class KindAttribute(string kind) : Attribute, ITraitAttribute
+public sealed class KindAttribute(Kinds kind) : Attribute, ITraitAttribute
 {
-    public string Kind { get; } = kind;
+    public Kinds Kind { get; } = kind;
 }

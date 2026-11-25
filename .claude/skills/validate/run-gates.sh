@@ -8,8 +8,13 @@ SCRIPTS=false
 DETACH=false
 WAIT=false
 FAILED=false
+# The merge-to-main tier is paused until epic #2450 lands: a merge run runs the branch gates. #2466 resumes
+# the tier by deleting this switch and PAUSED_NOTICE.
+MERGE_TIER_PAUSED=true
+PAUSED_NOTICE="The merge-to-main tier is paused until epic #2450 lands: these are the branch gates."
 # The mode survives each re-exec in the environment, as BUILD_SLOT_HELD does.
-MERGE_TO_MAIN=${MEDIT_MERGE_TO_MAIN:-false}
+MERGE_TO_MAIN=false
+[[ ${MEDIT_MERGE_TO_MAIN:-} == true ]] && MERGE_TO_MAIN=true
 GATE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -27,6 +32,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+MERGE_REQUESTED=$MERGE_TO_MAIN
+! $MERGE_TIER_PAUSED || MERGE_TO_MAIN=false
 ! $MERGE_TO_MAIN || BACKEND=true
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
@@ -95,6 +102,7 @@ unittest_discover() {
   return $status
 }
 
+! { $MERGE_REQUESTED && $MERGE_TIER_PAUSED; } || echo "$PAUSED_NOTICE"
 echo "=== Gate 1: Comment discipline ==="
 EXCLUDE_RE='^(references/|modbench/src/wire/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
 tracked() { (cd "$ROOT" && git ls-files "$@" | grep -Ev "$EXCLUDE_RE" | while read -r f; do [[ -f "$f" ]] && echo "$f"; done); }
@@ -142,10 +150,8 @@ echo "=== Gate runner tests ==="
 
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
-# A test's kind is its Kind trait (MEditService.TestSupport). A branch leaves out the kinds that wait
-# for main: a test of real size, and a smoke test, which needs the user's game folder.
-BRANCH_TESTS='Kind!=RealSize&Kind!=Smoke'
-
+# A bare dotnet test runs a branch's tests: MEditService/Directory.Build.props holds their filter, and a
+# filter on the command line would replace it.
 backend_tests() {
   local results=$BACKEND_RESULTS changed selected
   rm -rf "$results" && mkdir -p "$results" || return
@@ -153,7 +159,7 @@ backend_tests() {
   selected=$(python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" \
     "$ROOT/MEditService" "$results/selected.slnf" <<< "$changed") || return
   echo "Test projects: ${selected:-none, no backend change since $BASE}" | paste -sd ' '
-  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results" --filter "$BRANCH_TESTS")
+  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
   if [[ -n $selected ]]; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "$results/selected.slnf") || return
   fi
@@ -192,7 +198,7 @@ fi
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
-    (cd "$ROOT/MEditService" && dotnet test -v minimal --filter "$BRANCH_TESTS" "${ARCHITECTURE_SCANS[@]}") \
+    (cd "$ROOT/MEditService" && dotnet test -v minimal "${ARCHITECTURE_SCANS[@]}") \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
