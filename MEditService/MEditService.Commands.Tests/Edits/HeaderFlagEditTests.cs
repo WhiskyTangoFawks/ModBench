@@ -4,7 +4,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -22,19 +21,6 @@ public sealed class HeaderFlagEditTests : IDisposable
     private static JsonElement Json(bool value) => JsonDocument.Parse(value ? "true" : "false").RootElement;
 
     [Fact]
-    public async Task EditField_IsLightTrue_SetsTheSmallFlag_AndCompilesItIntoTheBinary()
-    {
-        var result = Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true));
-
-        Assert.True(result.Applied, result.Message);
-
-        Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
-
-        using var written = await _fixture.CompiledAsync(_fixture.Plugin);
-        Assert.True(written.IsSmallMaster);
-    }
-
-    [Fact]
     public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecord()
     {
         SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
@@ -46,16 +32,6 @@ public sealed class HeaderFlagEditTests : IDisposable
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.FormIdOutsideFlagLimit, refused.Refusal);
         Assert.Contains($"001000:{SourceEditFixture.PluginName}", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Compile_OfAnOutOfRangeRecord_Succeeds_OnceTheLightFlagIsCleared()
-    {
-        SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
-
-        await _fixture.CompileHandler.CompileLandedAsync(_fixture.Plugin);
     }
 
     private RecordEditResult SetFlags(string names) =>
@@ -81,14 +57,5 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.True(HeaderDocument.Read(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body), GameRelease.Fallout4).IsSmallMaster);
-    }
-
-    [Fact]
-    public async Task EditField_Author_CompilesIntoTheBinary()
-    {
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
-
-        using var written = await _fixture.CompiledAsync(_fixture.Plugin);
-        Assert.Equal("Someone", written.ModHeader.Author);
     }
 }

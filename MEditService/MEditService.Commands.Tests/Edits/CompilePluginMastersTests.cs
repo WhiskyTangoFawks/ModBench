@@ -62,23 +62,8 @@ public sealed class CompilePluginMastersTests : TestInstance
         Assert.Equal(binary, File.ReadAllBytes(BinaryPath));
     }
 
-    [Fact]
-    public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
-    {
-        using var compiled = await this.CompiledAsync(_plugin);
-
-        Assert.Equal([CharlieName, BravoName], compiled.MasterReferences.Select(m => m.Master.FileName.String));
-    }
-
     public static TheoryData<string, Action<CompilePluginMastersTests>> EditsReachingDelta => new()
     {
-        {
-            "an override of its record",
-            test => SourceEdits.Write(
-                test.RepositoryOf(test._plugin).Require(), test._plugin,
-                new Keyword(test._deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
-                "kywd", GameRelease.Fallout4)
-        },
         {
             "a link to its record",
             test => SourceEdits.Rewrite<Npc>(

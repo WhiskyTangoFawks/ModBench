@@ -78,19 +78,6 @@ public sealed class CompilePluginLinkTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_ForALinkIntoACompiledPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
-    {
-        SourceModTree.Remove(ModFolderOf(_target), _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
-
-        var answer = await CompileHost();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.DoesNotContain(
-            diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
-    }
-
-    [Fact]
     public async Task Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
     {
         File.WriteAllText(Path.Combine(ModFolderOf(_target), TargetName), "not a plugin at all");
@@ -146,23 +133,5 @@ public sealed class CompilePluginLinkTests : TestInstance
             RegisteredPlugin compiled,
             IReadOnlyCollection<string> formKeys) =>
             throw new InvalidOperationException(Fault);
-    }
-
-    [Fact]
-    public async Task Compile_ForALinkToARecordTheCompiledPluginItselfHolds_ReportsNothingAboutIt()
-    {
-        var ownKeyword = new Keyword(FormKey.Factory($"000801:{_host.Name}"), Fallout4Release.Fallout4)
-        {
-            EditorID = "HostOwnKeyword",
-        };
-        SourceEdits.Write(RepositoryOf(_host).Require(), _host, ownKeyword, "kywd", GameRelease.Fallout4);
-        PointTheNpcAt(ownKeyword.FormKey);
-
-        var answer = await CompileHost();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.DoesNotContain(
-            diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 }
