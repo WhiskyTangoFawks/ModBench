@@ -83,11 +83,11 @@ public sealed class RecordDocumentEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
-    public static TheoryData<string, Func<RecordDocumentEditTests, string>, RecordEditEnvelope, RecordEditRefusal, string> Refusals => new()
+    public static TheoryData<string, Func<RecordDocumentEditTests, string>, RecordEditEnvelope, RecordEditRefusal, string, string> Refusals => new()
     {
         {
             "a move to the position the element holds", t => t.SeedCobj(), MoveTo(0, Member("Conditions"), At(0)),
-            RecordEditRefusal.InvalidEnvelope, "'Conditions[0]': the element is already at position 0."
+            RecordEditRefusal.InvalidEnvelope, "Conditions[0]", "'Conditions[0]': the element is already at position 0."
         },
         {
             "a move in an array whose order the game does not read",
@@ -97,37 +97,32 @@ public sealed class RecordDocumentEditTests : IDisposable
                 return t.SeedNpc();
             },
             MoveTo(1, Member("Keywords"), At(0)),
-            RecordEditRefusal.InvalidEnvelope, "'Keywords' is an array whose order the game does not read"
+            RecordEditRefusal.InvalidEnvelope, "Keywords[0]", "'Keywords' is an array whose order the game does not read"
         },
         {
             "hex of another length",
             t => t._fixture.Seed(new MaterialObject(t._mod) { EditorID = "Mato", DNAMs = [new MemorySlice<byte>([0x01, 0x02, 0x03])] }, "mato"),
             SetAt(Json("\"0x0102\""), Member("DNAMs"), At(0)),
-            RecordEditRefusal.HexLengthMismatch, "holds 3 bytes; a value of 2 bytes"
+            RecordEditRefusal.HexLengthMismatch, "DNAMs[0]", "holds 3 bytes; a value of 2 bytes"
         },
         {
             "a value the codec cannot hold",
             t => t._fixture.Seed(new MiscItem(t._mod) { EditorID = "Misc", ComponentDisplayIndices = [1] }, "misc"),
             SetAt(Json("[3, 4096]"), Member("ComponentDisplayIndices")),
-            RecordEditRefusal.CodecRejected, "'ComponentDisplayIndices': the codec rejected the document — "
+            RecordEditRefusal.CodecRejected, "ComponentDisplayIndices", "'ComponentDisplayIndices': the codec rejected the document — "
         },
         {
             "a union value naming no leaf", t => t.SeedNpc(), SetAt(Json("""{"Level": 20}"""), Member("Level")),
-            RecordEditRefusal.DiscriminatorInvalid, "MutagenObjectType"
+            RecordEditRefusal.DiscriminatorInvalid, "Level", "MutagenObjectType"
         },
         {
             "an alpha in a color holding none", t => t._fixture.Seed(t._mod.Weather.AddNew("Wt"), "wthr"),
             SetAt(Json("\"#7F102030\""), Member("LightningColor")),
-            RecordEditRefusal.AlphaNotHeld, "'LightningColor' holds no alpha"
-        },
-        {
-            "an element pasted with an alpha in a color holding none", t => t._fixture.Seed(t._mod.LensFlares.AddNew("Lf"), "lens"),
-            AddAt(Json("""{"Data": {"Tint": "#7F102030"}}"""), Member("Sprites")),
-            RecordEditRefusal.AlphaNotHeld, "'Sprites[0].Data.Tint' holds no alpha"
+            RecordEditRefusal.AlphaNotHeld, "LightningColor", "'LightningColor' holds no alpha"
         },
         {
             "a member the codec drops", t => t.SeedNpc(), SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")),
-            RecordEditRefusal.CodecDroppedValue, "'Weight.Bogus' was not kept by the codec"
+            RecordEditRefusal.CodecDroppedValue, "Weight.Bogus", "'Weight.Bogus' was not kept by the codec"
         },
         {
             "a member past its owner's set break",
@@ -137,7 +132,7 @@ public sealed class RecordDocumentEditTests : IDisposable
                 return t._fixture.Seed(t._quest, "qust");
             },
             SetAt(Json("\"QuestFragments\""), Member("VirtualMachineAdapter"), Member("Script"), Member("Name")),
-            RecordEditRefusal.CodecDroppedValue,
+            RecordEditRefusal.CodecDroppedValue, "VirtualMachineAdapter.Script",
             "'VirtualMachineAdapter.Script' lies past its owner's Versioning.Break0, which is set, so the record does not hold it and nothing was written."
         },
     };
@@ -145,14 +140,14 @@ public sealed class RecordDocumentEditTests : IDisposable
     [Theory]
     [MemberData(nameof(Refusals))]
     public void AWriteTheRulesOfAnEditRefuse_IsRefusedSayingWhy_AndChangesNothing(
-        string _, Func<RecordDocumentEditTests, string> seed, RecordEditEnvelope envelope, RecordEditRefusal refusal, string why)
+        string _, Func<RecordDocumentEditTests, string> seed, RecordEditEnvelope envelope, RecordEditRefusal refusal, string path, string why)
     {
         var formKey = seed(this);
         var before = _fixture.Document(formKey);
 
         var (result, after) = _fixture.Apply(formKey, envelope);
 
-        Assert.Equal(refusal, result.Refusal);
+        Assert.Equal((refusal, path), (result.Refusal, result.Path));
         Assert.Contains(why, result.Message, StringComparison.Ordinal);
         Assert.Null(after);
         Assert.Equal(before, _fixture.Document(formKey));

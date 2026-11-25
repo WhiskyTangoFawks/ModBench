@@ -32,14 +32,16 @@ public sealed class HeaderFlagEditTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, """["Small"]""", RecordEditRefusal.SyntheticMemberIndirectWrite)]
-    [InlineData(true, """["Small", "Master"]""", RecordEditRefusal.None)]
-    public void ARawFlagsWrite_IsRefused_OnlyWhereItChangesTheLightFlag(bool light, string flags, RecordEditRefusal refusal)
+    [InlineData(false, """["Small"]""", RecordEditRefusal.SyntheticMemberIndirectWrite, true)]
+    [InlineData(true, """["Small", "Master"]""", RecordEditRefusal.None, false)]
+    public void ARawFlagsWrite_IsRefused_OnlyWhereItChangesTheLightFlag(bool light, string flags, RecordEditRefusal refusal, bool namesTheLightFlag)
     {
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(light)).Applied);
 
         var result = Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(flags).RootElement);
 
-        Assert.Equal(refusal, result.Refusal);
+        Assert.Equal(
+            (refusal, namesTheLightFlag),
+            (result.Refusal, result.Message?.Contains("IsSmallMaster", StringComparison.Ordinal) == true));
     }
 }

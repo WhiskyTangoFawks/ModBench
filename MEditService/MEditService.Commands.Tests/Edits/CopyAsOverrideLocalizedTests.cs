@@ -21,7 +21,7 @@ public sealed class CopyAsOverrideLocalizedTests
         private readonly PluginAddress _source;
         private readonly PluginAddress _destination;
 
-        internal LocalizedSourceCopy(bool destinationLocalized, bool doorNamedInStringsLanguage = true)
+        internal LocalizedSourceCopy(bool destinationLocalized, bool doorNamedInStringsLanguage = true, bool cellNamedInStringsLanguage = true)
             : base(stringsLanguage: Language.French)
         {
             var sourceMod = new Fallout4Mod(ModKey.FromFileName("Localized.esm"), Fallout4Release.Fallout4) { UsingLocalization = true };
@@ -35,7 +35,7 @@ public sealed class CopyAsOverrideLocalizedTests
                 EditorID = "MainCell",
                 Name = new TranslatedString(Language.English, [
                     new KeyValuePair<Language, string>(Language.English, EnglishName),
-                    new KeyValuePair<Language, string>(Language.French, FrenchName),
+                    new KeyValuePair<Language, string>(cellNamedInStringsLanguage ? Language.French : Language.German, FrenchName),
                 ]),
             };
             var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
@@ -98,6 +98,17 @@ public sealed class CopyAsOverrideLocalizedTests
         Assert.Contains("Name", refused.Message, StringComparison.Ordinal);
         Assert.Contains("French", refused.Message, StringComparison.Ordinal);
         Assert.Null(copy.InDestination(copy.MainDoor));
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_OfAChildWhoseContainerHasAStringWithNoTextInTheStringsLanguage_RefusesTheChildAndWritesNothing()
+    {
+        using var copy = new LocalizedSourceCopy(destinationLocalized: false, cellNamedInStringsLanguage: false);
+
+        var refused = Assert.Single(copy.CopyOverride(copy.MainRef).Refused);
+
+        Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, refused.Refusal);
+        Assert.Null(copy.InDestination(copy.MainCell));
     }
 
     [Fact]

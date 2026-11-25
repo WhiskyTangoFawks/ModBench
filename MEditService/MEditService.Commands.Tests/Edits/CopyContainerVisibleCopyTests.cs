@@ -29,9 +29,6 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     private static Cell CellOf(FormKey formKey, string editorId, float waterHeight, int flags = 0) =>
         new(formKey, Fallout4Release.Fallout4) { EditorID = editorId, WaterHeight = waterHeight, MajorRecordFlagsRaw = flags };
 
-    private static Fallout4Mod HoldingTheCell(string name, string editorId, float waterHeight, int flags = 0) =>
-        Plugin(name, mod => mod.AddInteriorCells(CellOf(BaseCell, editorId, waterHeight, flags)));
-
     private Fallout4Mod SourceWithARefInTheCell(string name, float waterHeight, int flags) => Plugin(name, mod =>
     {
         var cell = CellOf(BaseCell, "SourceCell", waterHeight, flags);

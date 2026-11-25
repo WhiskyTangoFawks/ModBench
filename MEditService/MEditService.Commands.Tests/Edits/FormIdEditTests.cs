@@ -54,13 +54,15 @@ public sealed class FormIdEditTests
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
-    [Fact]
-    public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField()
+    [Theory]
+    [InlineData("\"not-a-formkey\"")]
+    [InlineData("2048")]
+    public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField(string json)
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
-        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse("\"not-a-formkey\"").RootElement);
+        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse(json).RootElement);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
@@ -79,6 +81,17 @@ public sealed class FormIdEditTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
+    }
+
+    [Fact]
+    public void EditingTheFormId_OnALightPlugin_ToTheTopOfTheLightRange_MovesTheRecord()
+    {
+        using var mod = SourceEditFixture.CompiledPluginLight();
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "000FFF:Fixture.esp");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal("000FFF:Fixture.esp", result.NewFormKey);
     }
 
     [Theory]

@@ -95,9 +95,9 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(before, SourceModTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
 
-    public static TheoryData<string, CellPlace, Action<Cell>, string, string?> CellsAPlacedRecordIsCreatedOn => new()
+    public static TheoryData<string, CellPlace, Action<Cell>, string, int, string?> CellsAPlacedRecordIsCreatedOn => new()
     {
-        { "an exterior cell at a grid", CellPlace.Exterior, cell => cell.Grid = new CellGrid { Point = new P2Int(3, -2) }, PersistentFlag.TemporaryGroup, "14336, -6144, 0" },
+        { "an exterior cell at a grid", CellPlace.Exterior, cell => cell.Grid = new CellGrid { Point = new P2Int(3, -2) }, PersistentFlag.TemporaryGroup, 0, "14336, -6144, 0" },
         {
             "a persistent interior cell at a grid", CellPlace.Interior,
             cell =>
@@ -105,15 +105,15 @@ public sealed class CreateChildRecordTests : IDisposable
                 cell.MajorRecordFlagsRaw = PersistentFlag.Bit;
                 cell.Grid = new CellGrid { Point = new P2Int(3, -2) };
             },
-            PersistentFlag.PersistentGroup, null
+            PersistentFlag.PersistentGroup, PersistentFlag.Bit, null
         },
-        { "an interior cell with no grid", CellPlace.Interior, _ => { }, PersistentFlag.TemporaryGroup, null },
+        { "an interior cell with no grid", CellPlace.Interior, _ => { }, PersistentFlag.TemporaryGroup, 0, null },
     };
 
     [Theory]
     [MemberData(nameof(CellsAPlacedRecordIsCreatedOn))]
     public void APlacedRecordCreatedOnACell_LandsInTheGroupItsPersistentFlagNames_AtTheCentreOfATemporaryGroupsGrid(
-        string _, CellPlace place, Action<Cell> shape, string group, string? position)
+        string _, CellPlace place, Action<Cell> shape, string group, int flags, string? position)
     {
         using var mod = CellShaped(place, shape, out var cell);
 
@@ -123,7 +123,7 @@ public sealed class CreateChildRecordTests : IDisposable
         var landed = JsonNode.Parse(mod.Body(cell)).Require();
         var created = Assert.Single(landed[group].Require().AsArray()).Require();
         Assert.Equal(result.NewFormKey, created["FormKey"].Require().GetValue<string>());
-        Assert.Equal(group == PersistentFlag.PersistentGroup, (created[RecordHeaderFlags.Member]?.GetValue<int>() ?? 0) == PersistentFlag.Bit);
+        Assert.Equal(flags, created[RecordHeaderFlags.Member]?.GetValue<int>() ?? 0);
         Assert.Equal(position, created["Position"]?.GetValue<string>());
     }
 

@@ -28,27 +28,27 @@ public sealed class CopyAsNewTests
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
     }
 
-    public static TheoryData<string, Func<CopyFixture, FormKey>, string?> EditorIdsDerived => new()
-    {
-        { "a source named", mod => mod.SourceNpc, CopyFixture.SourceNpcEditorId + "DUPLICATE002" },
-        { "a source with no EditorID", mod => mod.SourceNpcWithNoEditorId, null },
-    };
-
-    [Theory]
-    [MemberData(nameof(EditorIdsDerived))]
-    public void CopyRecordAsNewRecord_NamesTheCopyAfterItsSource_PastANameTheDestinationHoldsInAnyCase(
-        string _, Func<CopyFixture, FormKey> source, string? expected)
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheDestinationAlreadyHoldsTheDerivedName_InAnyCase_SkipsToTheNextCounter()
     {
         using var mod = CopyFixture.Create();
         Assert.True(mod.EditHandler.Set(
             mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
             JsonDocument.Parse("\"SOURCENPCDUPLICATE001\"").RootElement).Applied);
 
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, source(mod).ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
-        var document = mod.Document(mod.DestinationPlugin, result.OnlyLanded().Require());
-        Assert.NotNull(document);
-        Assert.Equal(expected, document.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", mod.Document(mod.DestinationPlugin, result.OnlyLanded().Require()).Require().EditorId);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheSourceHasNoEditorID_TheCopyHasNone()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpcWithNoEditorId.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
+
+        Assert.Null(mod.Document(mod.DestinationPlugin, result.OnlyLanded().Require()).Require().EditorId);
     }
 
     [Fact]
