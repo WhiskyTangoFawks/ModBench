@@ -9,7 +9,7 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.RealData;
 
-[Kind(Kinds.Smoke)]
+[Kind(Kinds.Tool)]
 public sealed class VanillaMasterFormatTests
 {
     public static TheoryData<GameRelease, string> InstalledVanillaMasters()
@@ -18,25 +18,26 @@ public sealed class VanillaMasterFormatTests
         foreach (var release in new[] { GameRelease.Fallout4, GameRelease.SkyrimSE, GameRelease.Starfield })
         {
             if (!new GameLocator().TryGetDataDirectory(release, out var dataDir)) continue;
-            foreach (var path in Directory.EnumerateFiles(dataDir.Path, "*.esm")) rows.Add(release, path);
+            foreach (var path in Directory.EnumerateFiles(dataDir.Path, "*.esm")) rows.Add(release, Path.GetFileName(path));
         }
         return rows;
     }
 
-    private static IModDisposeGetter OpenedWithItsMastersStyles(GameRelease release, string path)
+    private static IModDisposeGetter OpenedWithItsMastersStyles(GameRelease release, string fileName)
     {
+        Assert.True(new GameLocator().TryGetDataDirectory(release, out var dataDir));
         var styles = new Cache<IModMasterStyledGetter, ModKey>(style => style.ModKey);
-        foreach (var master in Directory.EnumerateFiles(Path.GetDirectoryName(path) ?? "", "*.esm")) styles.Add(KeyedMasterStyle.FromPath(master, release));
+        foreach (var master in Directory.EnumerateFiles(dataDir.Path, "*.esm")) styles.Add(KeyedMasterStyle.FromPath(master, release));
         return ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(Path.GetFileName(path)), path), release, new BinaryReadParameters { MasterFlagsLookup = styles });
+            new ModPath(ModKey.FromFileName(fileName), Path.Combine(dataDir.Path, fileName)), release, new BinaryReadParameters { MasterFlagsLookup = styles });
     }
 
     [Theory]
     [MemberData(nameof(InstalledVanillaMasters))]
     public void EveryRecordOfAVanillaMaster_ReadsBackFromTheFormatsText_AndTheRecompilesNormalizationLeavesThatTextAsItIs(
-        GameRelease release, string path)
+        GameRelease release, string fileName)
     {
-        using var master = OpenedWithItsMastersStyles(release, path);
+        using var master = OpenedWithItsMastersStyles(release, fileName);
         var game = GameCodecs.For(release);
         var types = RecordTypes.For(release);
 

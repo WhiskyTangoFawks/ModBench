@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Installs;
 
 namespace MEditService.ModFolderAdapter.Tests.RealData;
 
-[Kind(Kinds.Smoke)]
+[Kind(Kinds.Tool)]
 public sealed class Ba2UnpackRealDataTests
 {
     private const int Batch = 1000;

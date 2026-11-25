@@ -10,7 +10,6 @@ using Mutagen.Bethesda;
 namespace MEditService.RecordIndex.Tests.RealSize;
 
 [Collection(RealSizeCollection.Name)]
-[Kind(Kinds.RealSize)]
 public sealed class RealSizeSoakTests(RealSizeIndex realSize)
 {
     private const int Rounds = 6;
@@ -26,17 +25,17 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
 
     private RealSizeModlist Modlist => realSize.Modlist;
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void ASessionOfEveryOperationKind_LeavesTheEnginesMemoryWhereItStarted_AndEveryReadAnswers() => Soak(reading: null);
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void ASessionOfEveryOperationKindWithAReadAlwaysInFlight_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() => Soak(new ReadsInFlight(Index.Queries));
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void AScriptTakingASelectsRowsSlowlyWhileItWrites_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() =>
         Soak(new SlowStream(Index.Queries));
 
-    [Fact]
+    [Fact, Kind(Kinds.RealSize)]
     public void ASelectOfEveryRecord_ReturnsItsFirstRowWithinOneGesture()
     {
         Budgets.Ran(TimeSpan.FromSeconds(1), () =>
