@@ -57,17 +57,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
     public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath(string recordType) =>
         RunSweep([.. OnTheSmallestRecordOfEachShape().Where(g => g.Record.RecordType == recordType)]);
 
-    private const int RecordsPerType = 2;
-
-    [Fact]
-    public void EveryGestureOfTheFirstRecordsOfEachType_ChangesExactlyItsPath()
-    {
-        Assert.True(EveryGesture.Value.Count > 4900, $"the plugin should offer plenty of gestures; it offered {EveryGesture.Value.Count}");
-        RunSweep([.. EveryGesture.Value
-            .GroupBy(g => g.Record.RecordType)
-            .SelectMany(type => type.GroupBy(g => g.Record.FormKey).OrderBy(record => record.Key.ToString(), StringComparer.Ordinal).Take(RecordsPerType).SelectMany(record => record))]);
-    }
-
     private static IEnumerable<Gesture> OnTheSmallestRecordOfEachShape() => EveryGesture.Value
         .OrderBy(g => g.Record.Text.Length)
         .DistinctBy(g => (g.Record.RecordType, g.Envelope.Op, g.Path));

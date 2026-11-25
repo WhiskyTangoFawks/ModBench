@@ -9,5 +9,5 @@ public sealed class KindDiscoverer : ITraitDiscoverer
     public const string AssemblyName = "MEditService.TestSupport";
 
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute) =>
-        [KeyValuePair.Create(nameof(KindAttribute.Kind), traitAttribute.GetNamedArgument<string>(nameof(KindAttribute.Kind)))];
+        [KeyValuePair.Create(nameof(KindAttribute.Kind), traitAttribute.GetNamedArgument<Kinds>(nameof(KindAttribute.Kind)).ToString())];
 }
