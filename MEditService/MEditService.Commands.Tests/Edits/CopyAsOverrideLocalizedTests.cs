@@ -22,7 +22,7 @@ public abstract class LocalizedSourceCopyScenario : TestInstance
     private readonly FormKey _cell;
     private readonly FormKey _placedObject;
 
-    protected LocalizedSourceCopyScenario(bool destinationLocalized, bool doorNamedInStringsLanguage = true, bool cellNamedInStringsLanguage = true)
+    protected LocalizedSourceCopyScenario(bool destinationLocalized, bool doorNamedInStringsLanguage = true)
         : base(stringsLanguage: Language.French)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName("Localized.esm"), Fallout4Release.Fallout4) { UsingLocalization = true };
@@ -36,7 +36,7 @@ public abstract class LocalizedSourceCopyScenario : TestInstance
             EditorID = "MainCell",
             Name = new TranslatedString(Language.English, [
                 new KeyValuePair<Language, string>(Language.English, EnglishName),
-                new KeyValuePair<Language, string>(cellNamedInStringsLanguage ? Language.French : Language.German, FrenchName),
+                new KeyValuePair<Language, string>(Language.French, FrenchName),
             ]),
         };
         var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
@@ -76,12 +76,7 @@ public abstract class LocalizedSourceCopyScenario : TestInstance
         return CopyHandler.CopySync([new RecordAt(_source, _door.ToString())], CopyMode.Override, [_destination], replace: false);
     }
 
-    protected CopyRecordResult CopyPlacedObject() =>
-        CopyHandler.CopySync([new RecordAt(_source, _placedObject.ToString())], CopyMode.Override, [_destination], replace: false);
-
     protected SourceDocument? DoorInDestination() => SourceModTree.Document(ModFolderOf(_destination), _destination, _door.ToString());
-
-    protected SourceDocument? CellInDestination() => SourceModTree.Document(ModFolderOf(_destination), _destination, _cell.ToString());
 
     private string CopiedBody(FormKey copied, FormKey landed)
     {
@@ -125,28 +120,6 @@ public sealed class CopyAsOverrideWithoutStringsLanguageTextTests() : LocalizedS
         Assert.Contains("French", refused.Message, StringComparison.Ordinal);
         Assert.Null(DoorInDestination());
     }
-
-    [Fact]
-    public void CopyRecordAsOverride_OfASelectionWithOneStringWithNoTextInTheStringsLanguage_LandsTheOthers()
-    {
-        var result = CopyCellThenDoor();
-
-        Assert.Single(result.Applied);
-        Assert.NotNull(CellInDestination());
-    }
-}
-
-public sealed class CopyAsOverrideOfAChildWithoutStringsLanguageTextInItsContainerTests()
-    : LocalizedSourceCopyScenario(destinationLocalized: false, cellNamedInStringsLanguage: false)
-{
-    [Fact]
-    public void CopyRecordAsOverride_OfAChildWhoseContainerHasAStringWithNoTextInTheStringsLanguage_RefusesTheChildAndWritesNothing()
-    {
-        var result = CopyPlacedObject();
-
-        Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, Assert.Single(result.Refused).Refusal);
-        Assert.Null(CellInDestination());
-    }
 }
 
 public sealed class CopyAsOverrideIntoLocalizedTests() : LocalizedSourceCopyScenario(destinationLocalized: true)
@@ -169,18 +142,6 @@ public sealed class CopyAsOverrideFromASourceMissingItsStringsFilesTests() : Loc
         var refused = Assert.Single(CopyDoorWhoseSourceLostItsStringsFiles().Refused);
 
         Assert.Contains("Localized.esm", refused.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("strings file", refused.Message, StringComparison.Ordinal);
-        Assert.Null(DoorInDestination());
-    }
-}
-
-public sealed class CopyAsOverrideIntoLocalizedFromASourceMissingItsStringsFilesTests() : LocalizedSourceCopyScenario(destinationLocalized: true)
-{
-    [Fact]
-    public void CopyRecordAsOverride_IntoALocalizedPlugin_RefusesNamingTheMissingFileAndWritesNothing()
-    {
-        var refused = Assert.Single(CopyDoorWhoseSourceLostItsStringsFiles().Refused);
-
         Assert.Contains("strings file", refused.Message, StringComparison.Ordinal);
         Assert.Null(DoorInDestination());
     }

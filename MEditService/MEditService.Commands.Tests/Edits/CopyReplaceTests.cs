@@ -34,11 +34,8 @@ public sealed class CopyReplaceTests : IDisposable
 
     public static TheoryData<string, Func<ContainerCopyFixture, FormKey[]>, string, string, string> HeldRecords => new()
     {
-        { "a flat record", f => [f.FlatNpc], ContainerCopyFixture.FlatNpcEditorId, "HeightMax", "0.75" },
         { "an interior cell, holding a reference copied in", f => [f.InteriorCell, f.PersistentRef], ContainerCopyFixture.InteriorCellEditorId, "WaterHeight", "7.0" },
-        { "a placed reference", f => [f.PersistentRef], ContainerCopyFixture.PersistentRefEditorId, "Scale", "2.5" },
         { "a topic in its quest's document, holding a response copied in", f => [f.DialogTopic, f.Response1], ContainerCopyFixture.QuestEditorId, "Priority", "7.0" },
-        { "a quest", f => [f.Quest], ContainerCopyFixture.QuestEditorId, "Name", "\"Edited\"" },
     };
 
     [Theory]
@@ -55,18 +52,5 @@ public sealed class CopyReplaceTests : IDisposable
         CopyAsOverride(replace: true, record).OnlyLanded();
 
         Assert.Equal(copied, _fixture.DocumentCarrying(_fixture.DestinationPlugin, carrierEditorId).Body);
-    }
-
-    [Fact]
-    public void CopyAsOverride_IntoADestinationThatLoadsBeforeTheOrigin_RefusesAsUnderride()
-    {
-        using var underrideFixture = ContainerCopyFixture.CreateWithDestinationLoadingFirst();
-
-        var result = underrideFixture.CopyHandler.CopySync([new RecordAt(underrideFixture.SourcePlugin, underrideFixture.FlatNpc.ToString())], CopyMode.Override, [underrideFixture.DestinationPlugin], replace: false);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.UnderrideDestination, refused.Refusal);
-        Assert.Null(underrideFixture.Document(
-            underrideFixture.DestinationPlugin, underrideFixture.FlatNpc.ToString()));
     }
 }

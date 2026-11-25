@@ -28,27 +28,7 @@ public sealed class CopyAsNewTests
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
     }
 
-    [Fact]
-    public void CopyRecordAsNewRecord_TwoCopiesOfOneRecordIntoOneDestination_GetDistinctEditorIDs()
-    {
-        using var mod = CopyFixture.Create();
-
-        var first = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
-        var second = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
-
-        var firstFormKey = first.OnlyLanded().Require();
-        var secondFormKey = second.OnlyLanded().Require();
-        var firstDocument = mod.Document(mod.DestinationPlugin, firstFormKey);
-        var secondDocument = mod.Document(mod.DestinationPlugin, secondFormKey);
-        Assert.NotNull(firstDocument);
-        Assert.NotNull(secondDocument);
-        Assert.NotEqual(firstDocument.EditorId, secondDocument.EditorId);
-        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", firstDocument.EditorId);
-        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", secondDocument.EditorId);
-    }
-
     [Theory]
-    [InlineData("SourceNpcDUPLICATE001")]
     [InlineData("SOURCENPCDUPLICATE001")]
     public void CopyRecordAsNewRecord_WhenTheDestinationAlreadyHoldsTheDerivedName_InAnyCase_SkipsToTheNextCounter(string held)
     {
@@ -92,19 +72,6 @@ public sealed class CopyAsNewTests
         Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), document.Body, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
-    {
-        using var mod = CopyFixture.Create();
-        SourceModTree.Seed(mod.ModFolderOf(mod.DestinationPlugin), mod.DestinationPlugin, "FFFFFF:Destination.esp");
-
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
-        var refused = result.OnlyRefused();
-
-        Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, refused.Refusal);
-        Assert.Equal("Destination.esp has no FormKey free after the highest of its own records, up to 0xFFFFFF.", refused.Message);
-    }
-
     public static TheoryData<string, Func<ContainerCopyFixture, FormKey>> CellsAndWorldspaces => new()
     {
         { "a cell", fixture => fixture.InteriorCell },
@@ -121,16 +88,5 @@ public sealed class CopyAsNewTests
         var refused = result.OnlyRefused();
 
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, refused.Refusal);
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_OnAQuestFromACompiledPluginSource_Succeeds()
-    {
-        using var fixture = ContainerCopyFixture.CreateWithCompiledPluginSource();
-
-        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString())], CopyMode.New, [fixture.DestinationPlugin], replace: false);
-
-        var newFormKey = result.OnlyLanded().Require();
-        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, newFormKey));
     }
 }

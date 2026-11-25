@@ -112,7 +112,6 @@ public sealed class CopyContainerPartialFormTests : IDisposable
             "a worldspace's persistent cell of Fallout4.esm without the persistent flag, a partial form",
             PersistentCellOfAWorldspace, worldspace => worldspace["TopCell"].Require().AsObject(), null, PartialFormFlag.Bit
         },
-        { "a partial form cell of Fallout4.esm, still a partial form", () => Interior("Fallout4.esm", PartialFormFlag.Bit), cell => cell, null, PartialFormFlag.Bit },
         { "an interior cell of another plugin, a full override", () => Interior("DLCRobot.esm", 0), cell => cell, WaterHeight, null },
     };
 

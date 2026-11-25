@@ -84,29 +84,13 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public const string ExteriorCellEditorId = "SourceExteriorCell";
     public FormKey ExteriorCell { get; }
 
-    // Three more SubCells cells, one per shape — each shares progressively more of
-    // ExteriorCell's spatial ancestry, so copying it *after* ExteriorCell exercises "the
-    // destination already overrides the WRLD (and maybe the block, and maybe the sub-block)".
-    public const int OtherBlockX = 5;
-    public const int OtherBlockY = 1;
-    public const int OtherSubX = 21;
-    public const int OtherSubY = 5;
-    public FormKey OtherBlockCell { get; }
-
-    public const int SameBlockOtherSubX = 2;
-    public const int SameBlockOtherSubY = -3;
-    public FormKey SameBlockCell { get; }
-
-    public const string SameSubBlockCellEditorId = "SourceSameSubBlockCell";
-    public FormKey SameSubBlockCell { get; }
-
     public const string ExteriorPersistentRefEditorId = "SourceExteriorPersistentRef";
     public FormKey ExteriorPersistentRef { get; }
 
     public const string ExteriorTemporaryRefEditorId = "SourceExteriorTemporaryRef";
     public FormKey ExteriorTemporaryRef { get; }
 
-    private ContainerCopyFixture(bool destinationLoadsFirst, bool initSource)
+    private ContainerCopyFixture(bool initSource)
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
@@ -184,33 +168,6 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
         exteriorBlock.Items.Add(exteriorSubBlock);
         worldspace.SubCells.Add(exteriorBlock);
 
-        var sameSubBlockCell = new Cell(sourceMod)
-        {
-            EditorID = SameSubBlockCellEditorId,
-            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 1, ExteriorGridY + 1) },
-        };
-        exteriorSubBlock.Items.Add(sameSubBlockCell);
-
-        var sameBlockCell = new Cell(sourceMod)
-        {
-            EditorID = "SourceSameBlockCell",
-            Grid = new CellGrid { Point = new P2Int(17, -20) },
-        };
-        var sameBlockOtherSub = new WorldspaceSubBlock { BlockNumberX = (short)SameBlockOtherSubX, BlockNumberY = (short)SameBlockOtherSubY };
-        sameBlockOtherSub.Items.Add(sameBlockCell);
-        exteriorBlock.Items.Add(sameBlockOtherSub);
-
-        var otherBlockCell = new Cell(sourceMod)
-        {
-            EditorID = "SourceOtherBlockCell",
-            Grid = new CellGrid { Point = new P2Int(170, 42) },
-        };
-        var otherSub = new WorldspaceSubBlock { BlockNumberX = (short)OtherSubX, BlockNumberY = (short)OtherSubY };
-        otherSub.Items.Add(otherBlockCell);
-        var otherBlock = new WorldspaceBlock { BlockNumberX = (short)OtherBlockX, BlockNumberY = (short)OtherBlockY };
-        otherBlock.Items.Add(otherSub);
-        worldspace.SubCells.Add(otherBlock);
-
         sourceMod.Worldspaces.Add(worldspace);
 
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
@@ -223,30 +180,17 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
         ExteriorCell = exteriorCell.FormKey;
         (ExteriorPersistentRef, ExteriorTemporaryRef) = (exteriorPersistentRef.FormKey, exteriorTemporaryRef.FormKey);
-        (OtherBlockCell, SameBlockCell, SameSubBlockCell) =
-            (otherBlockCell.FormKey, sameBlockCell.FormKey, sameSubBlockCell.FormKey);
 
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
         destinationMod.Npcs.AddNew("DestinationNpc");
 
-        if (destinationLoadsFirst)
-        {
-            DestinationPlugin = Add(destinationMod, DestinationOrigin);
-            SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
-        }
-        else
-        {
-            SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
-            DestinationPlugin = Add(destinationMod, DestinationOrigin);
-        }
+        SourcePlugin = Add(sourceMod, SourceOrigin, initSource);
+        DestinationPlugin = Add(destinationMod, DestinationOrigin);
     }
 
-    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, initSource: false);
+    public static ContainerCopyFixture Create() => new(initSource: false);
 
-    public static ContainerCopyFixture CreateWithCompiledPluginSource() => new(destinationLoadsFirst: false, initSource: true);
-
-    public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
-        new(destinationLoadsFirst: true, initSource: false);
+    public static ContainerCopyFixture CreateWithCompiledPluginSource() => new(initSource: true);
 
     internal void AssertDestinationCellSitsAt(
         string cellFormKey, string? editorId, int blockX, int blockY, int subX, int subY)

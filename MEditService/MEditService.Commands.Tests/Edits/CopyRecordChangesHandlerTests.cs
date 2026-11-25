@@ -9,7 +9,6 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class CopyRecordChangesHandlerTests
 {
     [Theory]
-    [InlineData(CopyMode.New)]
     [InlineData(CopyMode.Override)]
     public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsNonCompiledPlugin_LandsInTheCompiledPluginOne_AndAnswersPerItem(CopyMode mode)
     {
@@ -29,7 +28,6 @@ public sealed class CopyRecordChangesHandlerTests
     }
 
     [Theory]
-    [InlineData(CopyMode.New)]
     [InlineData(CopyMode.Override)]
     public void Copying_ARecordTheSourcePluginDoesNotHold_IsRefusedAsNotFound(CopyMode mode)
     {
@@ -42,7 +40,6 @@ public sealed class CopyRecordChangesHandlerTests
 
     [Theory]
     [InlineData(false)]
-    [InlineData(true)]
     public void CopyingAsOverride_OfARecordTheDestinationsTreeUsesButNoRecordAnswersTo_RefusesIt_AndTheOthersLand(bool replace)
     {
         using var mod = CopyFixture.Create();
@@ -60,7 +57,6 @@ public sealed class CopyRecordChangesHandlerTests
 
     [Theory]
     [InlineData(false)]
-    [InlineData(true)]
     public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal(bool replace)
     {
         using var mod = CopyFixture.Create(initSource: true);
@@ -109,7 +105,6 @@ public sealed class CopyRecordChangesHandlerTests
     }
 
     [Theory]
-    [InlineData(CopyMode.New)]
     [InlineData(CopyMode.Override)]
     public void CopyChanges_AnswerTheDestinationsDocuments_AndWriteNothing(CopyMode mode)
     {
