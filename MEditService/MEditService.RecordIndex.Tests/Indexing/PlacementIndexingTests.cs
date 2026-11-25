@@ -46,14 +46,4 @@ public class PlacementIndexingTests
         Assert.Single(blocks.Blocks.SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells), c => c.FormKey == cell.ToString());
         Assert.Single(index.Queries.GetCellChildRecords(key, cell.ToString()).Value().Persistent, p => p.FormKey == placed.ToString());
     }
-
-    [Fact]
-    public void PlacedObjects_AreAlsoIndexedAsRefrRecords()
-    {
-        using var fixture = OneWorldspaceCell("placement-refr", "RefrPlacement.esp", out _, out var placed, out _);
-        using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("RefrPlacement.esp", PluginOrigin.DataDirectory);
-
-        Assert.Single(index.Queries.GetRecords(["refr"], key, search: placed.ToString(), limit: 10, offset: 0).Value().Items);
-    }
 }

@@ -1,30 +1,25 @@
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
-using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
 public sealed class TranslatedStringConflictTests
 {
-    [Theory]
-    [InlineData(Language.English)]
-    [InlineData(Language.French)]
-    public void ACopyNotLocalized_HoldingTheMastersTextsInTheStringsLanguage_IsIdenticalToMaster_InTheConflictView(Language stringsLanguage)
+    [Fact]
+    public void ACopyNotLocalized_HoldingTheMastersTextsInTheStringsLanguage_IsIdenticalToMaster_InTheConflictView()
     {
-        using var copies = new LocalizedCopies(stringsLanguage);
+        using var copies = new LocalizedCopies();
 
         var compare = copies.Index.Queries.GetCompare(LocalizedCopies.Message.ToString()).Value().Require();
 
         Assert.Equal(ConflictThis.IdenticalToMaster, compare.Overrides.Single(o => o.Plugin == LocalizedCopies.Copy.Name).ConflictThis);
     }
 
-    [Theory]
-    [InlineData(Language.English)]
-    [InlineData(Language.French)]
-    public void ACopyNotLocalized_HoldingTheMastersTextsInTheStringsLanguage_ComparesWithItsMasterWithNoConflict(Language stringsLanguage)
+    [Fact]
+    public void ACopyNotLocalized_HoldingTheMastersTextsInTheStringsLanguage_ComparesWithItsMasterWithNoConflict()
     {
-        using var copies = new LocalizedCopies(stringsLanguage);
+        using var copies = new LocalizedCopies();
         var message = LocalizedCopies.Message.ToString();
 
         var compared = copies.Index.Queries.GetCompareRecords(

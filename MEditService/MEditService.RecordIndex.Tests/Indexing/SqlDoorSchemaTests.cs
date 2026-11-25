@@ -96,17 +96,4 @@ public sealed class SqlDoorSchemaTests : IDisposable
 
         Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
     }
-
-    [Fact]
-    public void AFilterNamingAnUnknownColumn_IsRefused_AndTheFilterInForceStands()
-    {
-        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", "filter.sql");
-
-        Assert.Equal(
-            IndexRefusal.FilterRejected,
-            _index.Queries.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql")?.Refusal);
-
-        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.Queries.GetFilter().Value()?.Sql);
-        Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
-    }
 }

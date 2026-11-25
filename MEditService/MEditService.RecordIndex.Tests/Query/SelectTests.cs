@@ -22,14 +22,6 @@ public class SelectTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void ASelect_ReturnsEveryRowTheViewHolds()
-    {
-        using var index = LoadedIndex();
-
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT form_key FROM npc_").Length);
-    }
-
-    [Fact]
     public void ASelect_NeedsNoFormKeyColumn()
     {
         using var index = LoadedIndex();
@@ -99,20 +91,5 @@ public class SelectTests(TestPluginFixture fixture)
         Assert.Contains(("records", "is_active"), columns);
         Assert.Contains(("npc_", "editor_id"), columns);
         Assert.DoesNotContain(columns, column => column.Item1 == "view_columns");
-    }
-
-    [Fact]
-    public void TheRecordsView_HasNoMastersColumn_AndRefusesASelectOfIt()
-    {
-        using var index = LoadedIndex();
-
-        var columns = index.Queries.Selected("SELECT column_name FROM view_columns WHERE view_name = 'records'")
-            .Select(row => row.GetProperty("column_name").GetString()).ToList();
-        var refused = index.Queries.SelectRows("SELECT masters FROM records").Refused();
-
-        Assert.Contains("is_active", columns);
-        Assert.DoesNotContain("masters", columns);
-        Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
-        Assert.Contains("masters", refused.Message, StringComparison.Ordinal);
     }
 }

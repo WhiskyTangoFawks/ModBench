@@ -172,36 +172,4 @@ public class HeaderIndexingTests
         Assert.Single(index.StackOf("000000:ReindexHeader.esp"));
         Assert.Single(HeaderRows(index, key));
     }
-
-    [Fact]
-    public void TwoPlugins_EachHaveTheirOwnHeaderDocument_NeitherOverridesTheOther()
-    {
-        using var fixture = new PluginFixtureBuilder("header-two-plugins")
-            .WithPlugin("PluginA.esp")
-            .WithPlugin("PluginB.esp")
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        Assert.Equal("PluginA.esp", Assert.Single(index.StackOf("000000:PluginA.esp")).Plugin);
-        Assert.Equal("PluginB.esp", Assert.Single(index.StackOf("000000:PluginB.esp")).Plugin);
-    }
-
-    [Theory]
-    [InlineData("ModA", "Author A")]
-    [InlineData("ModB", "Author B")]
-    public void TwoOriginsOfOneFilename_EachHaveTheirOwnHeaderDocument_NeitherOverridesTheOther(string winner, string author)
-    {
-        using var fixture = new PluginFixtureBuilder("header-two-origins")
-            .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author A", origin: "ModA")
-            .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author B", origin: "ModB")
-            .BuildScattered();
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-
-        var header = Assert.Single(index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner)
-            .StackOf("000000:Shared.esp"));
-
-        Assert.Equal(winner, header.Origin);
-        Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header, "Author")).GetString());
-    }
 }

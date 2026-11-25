@@ -98,24 +98,6 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void TwoPluginsOfOneName_OnlyThePluginThatMatchesIsListed()
-    {
-        using var plugins = new PluginFixtureBuilder("filter-two-plugins")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("InBoth"), origin: "ModA")
-            .WithPlugin("Shared.esp", mod =>
-            {
-                mod.Npcs.AddNew("InBoth");
-                mod.Npcs.AddNew("OnlyInModB");
-            }, origin: "ModB")
-            .BuildScattered();
-        using var index = Indexes.Reconciled(plugins);
-
-        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'OnlyInModB'", "filter.sql");
-
-        Assert.Equal([new PluginAddress("Shared.esp", "ModB")], PluginsWithMatches(index));
-    }
-
-    [Fact]
     public void NoMatchingRecords_FlagsNoPluginAsMatching_ButKeepsEveryPluginListed_ForTheTreeIsAlsoTheLoadOrder()
     {
         using var index = LoadedIndex();

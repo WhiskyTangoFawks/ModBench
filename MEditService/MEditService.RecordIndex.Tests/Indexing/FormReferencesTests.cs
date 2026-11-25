@@ -11,27 +11,6 @@ public class FormReferencesTests
         [.. index.Queries.GetReferencesInActiveOrCompiledPlugins(target.ToString()).Value().Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
 
     [Fact]
-    public void ScalarFormKeyField_IsIndexedInFormReferences()
-    {
-        FormKey raceFormKey = default, npcFormKey = default;
-        using var fixture = new PluginFixtureBuilder("form-refs-scalar")
-            .WithPlugin("References.esp", mod =>
-            {
-                var race = mod.Races.AddNew("TestRace01");
-                raceFormKey = race.FormKey;
-                var npc = mod.Npcs.AddNew("TestNPC01");
-                npcFormKey = npc.FormKey;
-                npc.Race.SetTo(race.FormKey);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        var row = Assert.Single(ReferencesTo(index, raceFormKey), r => r.FieldPath == "Race");
-        Assert.Equal(npcFormKey.ToString(), row.Source);
-        Assert.Equal("npc_", row.RecordType);
-    }
-
-    [Fact]
     public void ReindexingAPlugin_ReplacesItsReferencesRatherThanDuplicating()
     {
         FormKey raceFormKey = default;

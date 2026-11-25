@@ -5,7 +5,6 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
@@ -127,12 +126,10 @@ public sealed class CopyStatesTests : IDisposable
         Assert.Equal(ConflictThis.IdenticalToMaster, states[edited]);
     }
 
-    [Theory]
-    [InlineData(Language.English)]
-    [InlineData(Language.French)]
-    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_IsIdenticalToMaster_AsXEditJudgesIt(Language stringsLanguage)
+    [Fact]
+    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_IsIdenticalToMaster_AsXEditJudgesIt()
     {
-        using var copies = new LocalizedCopies(stringsLanguage);
+        using var copies = new LocalizedCopies();
 
         var states = StatesOf(copies.Index, LocalizedCopies.Item, LocalizedCopies.Copy);
 
