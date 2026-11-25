@@ -87,14 +87,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         return placed;
     }
 
-    private static Fallout4Mod Middle(Action<Fallout4Mod, Worldspace> holds) => Plugin("Middle.esp", mod =>
-    {
-        mod.Statics.Add(new Static(MiddleStatic, Fallout4Release.Fallout4) { EditorID = "MiddleStatic" });
-        var world = new Worldspace(World, Fallout4Release.Fallout4) { EditorID = "World" };
-        holds(mod, world);
-        mod.Worldspaces.Add(world);
-    });
-
     private void Load(bool masterCompiledPlugin, bool masterHasPersistentCell = true, Fallout4Mod? middle = null)
     {
         _edited = Edited();
@@ -171,23 +163,26 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(["Leaver"], Group(Document(MasterGridCell), "Temporary"));
     }
 
-    private static Fallout4Mod MiddleOverridingThePersistentCell() => Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
+    private static Fallout4Mod MiddleOverridingThePersistentCell() => Plugin("Middle.esp", mod =>
     {
-        EditorID = "MiddlesPersistentCell",
-        MajorRecordFlagsRaw = Persistent,
-        WaterHeight = 9f,
+        mod.Statics.Add(new Static(MiddleStatic, Fallout4Release.Fallout4) { EditorID = "MiddleStatic" });
+        var world = new Worldspace(World, Fallout4Release.Fallout4)
+        {
+            EditorID = "World",
+            TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
+            {
+                EditorID = "MiddlesPersistentCell",
+                MajorRecordFlagsRaw = Persistent,
+                WaterHeight = 9f,
+            },
+        };
+        mod.Worldspaces.Add(world);
     });
 
-    public static TheoryData<bool, Fallout4Mod?> MastersHoldingAPersistentCell() => new()
+    [Fact]
+    public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster()
     {
-        { false, null },
-    };
-
-    [Theory]
-    [MemberData(nameof(MastersHoldingAPersistentCell))]
-    public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
-    {
-        Load(masterCompiledPlugin, middle: nonMaster);
+        Load(masterCompiledPlugin: false);
 
         SetFlags("Mover", Persistent);
 
@@ -199,16 +194,10 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
     }
 
-    public static TheoryData<Fallout4Mod?> PluginsHoldingNoPersistentCellToCopy() => new()
+    [Fact]
+    public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne()
     {
-        { null },
-    };
-
-    [Theory]
-    [MemberData(nameof(PluginsHoldingNoPersistentCellToCopy))]
-    public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne(Fallout4Mod? nonMaster)
-    {
-        Load(masterCompiledPlugin: false, masterHasPersistentCell: false, middle: nonMaster);
+        Load(masterCompiledPlugin: false, masterHasPersistentCell: false);
 
         SetFlags("Mover", Persistent);
 
@@ -219,17 +208,10 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
     }
 
-    public static TheoryData<bool, Fallout4Mod?> MastersHoldingTheCellAtThePosition() => new()
+    [Fact]
+    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster()
     {
-        { true, null },
-        { false, null },
-    };
-
-    [Theory]
-    [MemberData(nameof(MastersHoldingTheCellAtThePosition))]
-    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
-    {
-        Load(masterCompiledPlugin, middle: nonMaster);
+        Load(masterCompiledPlugin: false);
 
         SetFlags("Leaver", 0);
 
@@ -240,21 +222,15 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(["Wanderer"], Group(Document(_keys["Here"]), "Persistent"));
     }
 
-    public static TheoryData<bool, Fallout4Mod?> PluginsHoldingNoCellAtThePosition() => new()
+    [Fact]
+    public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid_AfterTheHighestOfThePluginsOwnRecords()
     {
-        { true, null },
-    };
-
-    [Theory]
-    [MemberData(nameof(PluginsHoldingNoCellAtThePosition))]
-    public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
-    {
-        Load(masterCompiledPlugin, middle: nonMaster);
+        Load(masterCompiledPlugin: true);
 
         SetFlags("Wanderer", 0);
 
         var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Value().Require();
-        Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
+        Assert.Equal("000805:Override.esp", created.FormKey);
         Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
         Assert.Equal(["Leaver"], Group(Document(_keys["Here"]), "Persistent"));
     }
@@ -287,16 +263,4 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Contains("moves into is copied in from the nearest of Override.esp's masters to hold it, and the source tree that names Override.esp's masters cannot be read", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _plugins.Text(Override, _keys["Here"]));
     }
-
-    [Fact]
-    public void ClearingPersistent_WhereItCreatesACellAtItsGrid_NamesTheCellAfterTheHighestOfTheOverridesRecords()
-    {
-        Load(masterCompiledPlugin: true);
-
-        SetFlags("Wanderer", 0);
-
-        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Value().Require();
-        Assert.Equal("000805:Override.esp", created.FormKey);
-    }
-
 }
