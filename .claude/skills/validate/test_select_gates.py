@@ -23,6 +23,12 @@ class SelectGates(unittest.TestCase):
             '--frontend MEditService/MEditService.Http/Program.cs',
         ])
 
+    def test_a_test_project_or_the_test_support_selects_backend_only(self):
+        self.assertEqual(selected('MEditService/MEditService.Http.Tests/Api/A.cs'),
+                         ['--backend MEditService/MEditService.Http.Tests/Api/A.cs'])
+        self.assertEqual(selected('MEditService/MEditService.TestSupport/KindAttribute.cs'),
+                         ['--backend MEditService/MEditService.TestSupport/KindAttribute.cs'])
+
     def test_scripts_and_the_fixture_instance_their_harness_loads_select_scripts(self):
         self.assertEqual(selected('scripts/medit.py'), ['--scripts scripts/medit.py'])
         self.assertEqual(selected('DevListFallout/profiles/Dev/plugins.txt'), ['--scripts DevListFallout/profiles/Dev/plugins.txt'])

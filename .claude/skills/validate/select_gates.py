@@ -2,14 +2,20 @@
 """Reads changed repo paths on stdin and prints each gate they can break, one `<flag> <path>` line
 per gate, naming the first path that selected it. Gate 1 runs on every invocation, so a path that
 selects no gate is still checked."""
+import re
 import sys
 
+TEST_PROJECT_RE = re.compile(r'MEditService/(?:[^/]+\.Tests|MEditService\.TestSupport)/')
 
-def gates(path):
+
+def gates(path: str) -> list[str]:
     if path.startswith(('docs/', 'spec/')):
         return ['--docs']
     if path.endswith('.md'):
         return []
+    if TEST_PROJECT_RE.match(path):
+        # No production box references a test project, so nothing beyond the backend reaches one.
+        return ['--backend']
     if path.startswith('MEditService/'):
         # The client reaches Http through the wire, and Http references every mEdit box.
         return ['--backend', '--api-drift', '--scripts', '--frontend']
