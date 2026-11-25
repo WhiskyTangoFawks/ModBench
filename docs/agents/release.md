@@ -5,7 +5,7 @@ The developer releases. A release is a version commit on main, an annotated tag 
 ## Steps
 
 1. Start on main with a clean tree. Every goal the release names has passed its acceptance.
-2. Run the gates on Linux, then the Windows gates through `/windows-vm`. The Windows gates include a Package gate: the Windows `.vsix` installs and its bundled backend answers `/health`. Then run the tools that [tests.md](../../spec/architecture/tests.md) names.
+2. Run the gates on Linux, then the Windows gates through `/windows-vm`. The Windows gates include a Package gate: the Windows `.vsix` installs and its bundled backend answers `/health`. Then run the tools, from `MEditService/`: `slot-run.sh dotnet test -m:1 --filter Kind=Tool`. A tool that fails has a finding. A sweep's becomes a fixture, as [tests.md](../../spec/architecture/tests.md) says. A `TestData` file a tool rewrote waits for the developer's approval, outside the version commit.
 3. Edit the `version` line of `modbench/package.json` and the two version lines at the top of `modbench/package-lock.json`. Do not run `npm version`: it reformats `package.json`. A minor bump is a goal. A patch bump is a fix to a release.
 4. Make README.md's Status true for this release: what works today, and what is planned. Grep `docs/` for a command or a format a breaking change renamed.
 5. Commit the two files and the docs as `Modbench X.Y.Z: the version, and a README that says what X.Y.Z does`.

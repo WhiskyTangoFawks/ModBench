@@ -9,9 +9,9 @@ public sealed class KindAttributeTests
     {
         var mark = typeof(Marked).GetCustomAttributesData().Single();
 
-        Assert.Equal([KeyValuePair.Create("Kind", "Smoke")], new KindDiscoverer().GetTraits(Reflector.Wrap(mark)));
+        Assert.Equal([KeyValuePair.Create("Kind", "Tool")], new KindDiscoverer().GetTraits(Reflector.Wrap(mark)));
     }
 
-    [Kind(Kinds.Smoke)]
+    [Kind(Kinds.Tool)]
     private static class Marked;
 }
