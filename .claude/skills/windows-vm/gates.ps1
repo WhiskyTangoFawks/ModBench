@@ -1,6 +1,7 @@
 $failed = @()
 $env:NODE_OPTIONS = '--max-old-space-size=4096'
 $env:PYTHONUTF8 = 1
+$env:MEDIT_VIRTUAL_MACHINE = 'true'
 $reports = Join-Path $env:TEMP 'modbench-gates'
 Remove-Item -Recurse -Force $reports -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $reports | Out-Null
@@ -31,7 +32,7 @@ if (-not (Test-Path modbench/node_modules/.lock-hash) -or (Get-Content modbench/
 }
 Gate 'Backend format' MEditService 'dotnet format --verify-no-changes'
 Gate 'Backend build' MEditService 'dotnet build -v minimal'
-Gate 'Backend tests' MEditService 'dotnet test -v minimal --filter "Kind!=RealSize&Kind!=Smoke&Kind!=Posix&Kind!=Measured" --logger trx --results-directory "$reports"'
+Gate 'Backend tests' MEditService 'dotnet test -v minimal --logger trx --results-directory "$reports"'
 Gate 'Scripts tests' scripts 'python -m unittest discover -v 2>&1 | Record "$reports\scripts.unittest"'
 Gate 'Frontend lint' modbench 'npm run lint'
 Gate 'Frontend build' modbench 'npm run build'

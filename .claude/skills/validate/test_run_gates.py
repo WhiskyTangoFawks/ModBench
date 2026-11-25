@@ -211,18 +211,18 @@ fi
 
 
 class BranchTests(FakeDotnet):
-    UNMARKED_RUN = "--filter Kind!=RealSize&Kind!=Smoke"
+    """A filter on the command line replaces the branch's filter in MEditService/Directory.Build.props."""
 
     def filter_present_per_dotnet_test(self, calls):
-        return [self.UNMARKED_RUN in call for call in calls if call.startswith("test ")]
+        return ["--filter" in call for call in calls if call.startswith("test ")]
 
-    def test_the_tests_of_a_branch_that_touches_http_leave_out_the_kinds_that_wait_for_main(self):
+    def test_the_tests_of_a_branch_that_touches_http_pass_no_filter(self):
         _, calls = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
-        self.assertEqual(self.filter_present_per_dotnet_test(calls), [True, True], calls)
+        self.assertEqual(self.filter_present_per_dotnet_test(calls), [False, False], calls)
 
-    def test_the_docs_scans_of_a_branch_leave_out_the_kinds_that_wait_for_main(self):
+    def test_the_docs_scans_of_a_branch_pass_no_filter(self):
         _, calls = self.run_after_changing("spec/a.d2", "--docs")
-        self.assertEqual(self.filter_present_per_dotnet_test(calls), [True], calls)
+        self.assertEqual(self.filter_present_per_dotnet_test(calls), [False], calls)
 
 
 class MergeToMain(FakeDotnet):
