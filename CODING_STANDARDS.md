@@ -32,7 +32,7 @@ An integration test drives a gesture as the user does: a command through VS Code
 
 Tests share fixtures and fakes. A test uses the fake and the fixture that already exist before it builds its own.
 
-These are the marks a skipped loop or a drifted layer leaves in a diff.
+These are the marks a skipped loop or a drifted layer leaves. A review looks for them in the tests of each box a diff touches, not only in the diff.
 
 - A hunk changes behaviour and no test in the diff covers it. → Name the hunk. Red comes before green.
 - A test cannot fail. Its expected value is computed the way the code computes it, or it asserts only that a value exists or nothing threw, or it asserts what its own double was told to return. → Assert a known literal from the spec, or delete the test.
@@ -48,6 +48,7 @@ These are the marks a skipped loop or a drifted layer leaves in a diff.
 - A responsibility moves to another box and its tests stay behind. → Move the tests with the code, and delete what the new owner already asserts.
 - Several tests differ only in inputs and expected values. → Make them one table.
 - A test file builds data that a shared fixture already builds. → Use the fixture.
+- A test's input is larger than its rule needs: a real plugin where one record proves the rule, a modlist where two plugins do. → Use the smallest input that fails without the code.
 
 ## Naming
 
