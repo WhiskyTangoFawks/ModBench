@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Reads the test reports in each directory it is given and names every test that skipped: a TRX
-file, a Vitest JSON report, and the logs of unittest (.unittest) and mocha (.mocha). Exit 0 when
-none did, 1 otherwise."""
+"""Reads the test reports under a directory and names every test that skipped: a TRX file, a Vitest
+JSON report, and the logs of unittest (.unittest) and mocha (.mocha). Exit 0 when none did, 1
+otherwise."""
 import json
 import re
 import sys
@@ -42,12 +42,15 @@ READERS = {'.trx': in_trx, '.json': in_vitest, '.unittest': in_unittest, '.mocha
 
 
 def skipped(directory: Path) -> list[str]:
-    return [name for report in sorted(directory.iterdir()) if report.suffix in READERS
+    if not directory.is_dir():
+        raise SystemExit(f'No reports folder {directory}.')
+    return [name for report in sorted(directory.rglob('*')) if report.is_file() and report.suffix in READERS
             for name in READERS[report.suffix](report.read_text())]
 
 
 def main(argv: list[str] | None = None) -> int:
-    names = [name for directory in (sys.argv[1:] if argv is None else argv) for name in skipped(Path(directory))]
+    (directory,) = sys.argv[1:] if argv is None else argv
+    names = skipped(Path(directory))
     for name in names:
         print(f'skipped  {name}')
     if names:
