@@ -247,7 +247,7 @@ class MergeToMain(FakeDotnet):
         git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
         self.write("spec/a.d2", "edited")
         git(self.repo, "commit", "-q", "-am", "edit")
-        self.assertEqual(self.gates(self.MODE).stdout.splitlines()[-1], self.slot_line(f"{self.MODE} --frontend --docs"))
+        self.assertEqual(self.gates(self.MODE).stdout.splitlines()[-1], self.slot_line("--frontend --docs"))
 
     def test_a_run_that_executed_no_test_fails(self):
         run, _ = self.run_after_changing("spec/a.d2", self.MODE)
@@ -259,17 +259,16 @@ class MergeToMain(FakeDotnet):
         self.assertIn("skipped  Fake.ATest", run.stdout)
         self.assertEqual(run.returncode, 1)
 
-    def windows_vm_test(self, body):
-        self.write(".claude/skills/windows-vm/test_probe.py",
-                   f"import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        {body}\n")
-
-    def test_the_gate_runner_tests_include_the_windows_vm_skills_tests(self):
-        self.windows_vm_test("self.fail('windows-vm test ran')")
-        run, _ = self.run_after_changing("spec/a.d2", "--comments")
-        self.assertIn("windows-vm test ran", run.stderr)
+    def test_the_gate_runner_tests_run_as_branch_runs(self):
+        self.write(".claude/skills/validate/test_probe.py",
+                   "import os, unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n"
+                   "        self.assertNotIn('MEDIT_MERGE_TO_MAIN', os.environ)\n")
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+        self.assertNotIn("test_probe", run.stdout)
 
     def test_a_skipped_python_test_fails_the_run_naming_it(self):
-        self.windows_vm_test("self.skipTest('no vm')")
+        self.write(".claude/hooks/test_probe.py",
+                   "import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        self.skipTest('no probe')\n")
         run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
         self.assertIn("skipped  test_probe (test_probe.Probe.test_probe)", run.stdout)
 
