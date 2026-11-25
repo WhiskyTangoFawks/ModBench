@@ -8,8 +8,8 @@ SCRIPTS=false
 DETACH=false
 WAIT=false
 FAILED=false
-MERGE_TO_MAIN=false
-MODE_ARGS=()
+# The mode survives each re-exec in the environment, as BUILD_SLOT_HELD does.
+MERGE_TO_MAIN=${MEDIT_MERGE_TO_MAIN:-false}
 GATE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -20,19 +20,19 @@ while [[ $# -gt 0 ]]; do
     --docs)      DOCS=true;      GATE_ARGS+=("$1"); shift ;;
     --scripts)   SCRIPTS=true;   GATE_ARGS+=("$1"); shift ;;
     --comments)                  GATE_ARGS+=("$1"); shift ;;
-    --merge-to-main) MERGE_TO_MAIN=true; BACKEND=true; MODE_ARGS+=("$1"); shift ;;
+    --merge-to-main) export MEDIT_MERGE_TO_MAIN=true; MERGE_TO_MAIN=true; shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
 
-ALL_ARGS=("${MODE_ARGS[@]}" "${GATE_ARGS[@]}")
+! $MERGE_TO_MAIN || BACKEND=true
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
 GATE_NAME="gates.$(basename "$ROOT")"
 $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
-$DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${ALL_ARGS[@]}"
+$DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
 # A branch lands on the local branch it tracks, such as a ticket's integration branch, and any
 # other branch lands on main. Its change is the diff since where it lands. A merge to main lands on
@@ -66,7 +66,7 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
   echo "=== Gates the change since $BASE can break ==="
   echo "${selection:-none beyond Gate 1}"
   flags=$(cut -d' ' -f1 <<< "$selection")
-  exec bash "$0" "${MODE_ARGS[@]}" ${flags:---comments}
+  exec bash "$0" ${flags:---comments}
 fi
 
 # Every gate but the comment gate builds or tests: api-drift and scripts build and boot a backend,
@@ -74,16 +74,15 @@ fi
 HOLDS_SLOT=false
 { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS || $SCRIPTS; } && HOLDS_SLOT=true
 if $HOLDS_SLOT && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
-  exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${ALL_ARGS[@]}"
+  exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
 
 # The logs and reports a skip is read from, under --merge-to-main. A run beside the comment gate's
-# own would delete them, so only a run in the slot clears them.
-SKIP_LOGS="/tmp/medit-skip-logs.$(basename "$ROOT")"
-BACKEND_RESULTS="/tmp/medit-test-results.$(basename "$ROOT")"
-MAIN_RESULTS="/tmp/medit-main-test-results.$(basename "$ROOT")"
-UNIT_RESULTS="/tmp/medit-unit-results.$(basename "$ROOT")"
-! $HOLDS_SLOT || { rm -rf "$SKIP_LOGS" "$BACKEND_RESULTS" "$MAIN_RESULTS" "$UNIT_RESULTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+# own would delete them, so only a run in the slot clears them. MAIN_RESULTS has a folder of its own,
+# since check_test_times.py reads all of the folder it is given.
+REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
+SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend MAIN_RESULTS=$REPORTS/main UNIT_RESULTS=$REPORTS/unit
+! $HOLDS_SLOT || { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
 
 # A merge to main fails on a skipped test, so each unittest run leaves its verbose log for skips.py.
 unittest_discover() {
@@ -137,11 +136,9 @@ done <<< "$(tracked '*.d2')"
 $DIAGRAM_OK || { echo "--- ARCHITECTURE DIAGRAM GATE FAILED ---"; FAILED=true; }
 
 echo "=== Gate runner tests ==="
-for skill in validate windows-vm; do
-  compgen -G "$ROOT/.claude/skills/$skill/test_*.py" > /dev/null || continue
-  (cd "$ROOT" && unittest_discover "$skill" -s ".claude/skills/$skill" -p 'test_*.py') \
-    || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
-done
+# The gate's own tests start runs of it, which are branch runs.
+(cd "$ROOT" && unset MEDIT_MERGE_TO_MAIN && unittest_discover validate -s .claude/skills/validate -p 'test_*.py') \
+  || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
@@ -223,11 +220,7 @@ fi
 
 if $MERGE_TO_MAIN; then
   echo "=== Skipped tests ==="
-  skip_reports=("$SKIP_LOGS")
-  for results in "$BACKEND_RESULTS" "$MAIN_RESULTS" "$UNIT_RESULTS"; do
-    [[ -d $results ]] && skip_reports+=("$results")
-  done
-  python3 "$ROOT/.claude/skills/validate/skips.py" "${skip_reports[@]}" || FAILED=true
+  python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
 if $FAILED; then

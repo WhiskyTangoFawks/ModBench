@@ -53,10 +53,10 @@ class Main(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.dir = pathlib.Path(self.tmp.name)
 
-    def run_main(self, *directories):
+    def run_main(self, directory):
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            code = skips.main([str(directory) for directory in directories])
+            code = skips.main([str(directory)])
         return code, printed.getvalue()
 
     def test_it_names_every_stacks_skip_and_fails(self):
@@ -70,13 +70,17 @@ class Main(unittest.TestCase):
             (1, ['skipped  A.Skipped(x: 1)', 'skipped  test_skipped (m.C.test_skipped)', 'skipped  skipped',
                  'skipped  a.test.ts > skipped', 'skipped  a.test.ts > todo', '--- 5 TESTS SKIPPED ---']))
 
-    def test_it_reads_every_directory_it_is_given(self):
-        other = self.dir / 'other'
-        other.mkdir()
-        (other / 'a.trx').write_text(TRX)
-        code, printed = self.run_main(self.dir, other)
+    def test_it_reads_the_reports_in_every_folder_below_it(self):
+        (self.dir / 'backend' / 'nested').mkdir(parents=True)
+        (self.dir / 'backend' / 'nested' / 'a.trx').write_text(TRX)
+        code, printed = self.run_main(self.dir)
         self.assertEqual(code, 1)
         self.assertIn('A.Skipped', printed)
+
+    def test_it_fails_when_the_folder_does_not_exist(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.run_main(self.dir / 'missing')
+        self.assertIn('No reports folder', str(refused.exception))
 
     def test_it_passes_when_nothing_skipped(self):
         (self.dir / 'a.trx').write_text(TRX.replace('NotExecuted', 'Passed'))
