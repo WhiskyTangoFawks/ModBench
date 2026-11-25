@@ -60,7 +60,7 @@ public sealed class StringsScratchTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(_temp));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void DisposingAReadWhoseStringsScratchWillNotDelete_LeavesItInTempWithoutThrowing()
     {
         var documents = OpenDocuments();

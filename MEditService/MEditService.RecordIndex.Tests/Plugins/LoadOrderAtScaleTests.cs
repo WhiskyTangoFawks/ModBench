@@ -9,6 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.RecordIndex.Tests.Plugins;
 
 [Collection(TimedCollection.Name)]
+[Kind(Kinds.Measured)]
 public sealed class LoadOrderAtScaleTests
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);

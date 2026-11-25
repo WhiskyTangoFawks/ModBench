@@ -11,6 +11,7 @@ import { sortingRuleFilePaths } from '../mo2/layout';
 import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
 import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type OriginFile, type Reread } from '../instanceAdapter';
+import { onWindows } from '../../test/platform';
 const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -81,7 +82,7 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(listingsOf(root)).toBe(1);
   });
 
-  it.runIf(process.platform === 'win32')('lists again within a re-read the folder of a path named in another case, as VS Code\'s watcher spells a drive', async () => {
+  onWindows.it('lists again within a re-read the folder of a path named in another case, as VS Code\'s watcher spells a drive', async () => {
     await writeFile(join(root, 'a.esp'), '');
     settle();
     await namesOf(root);

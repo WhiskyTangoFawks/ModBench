@@ -77,7 +77,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         repository => repository.EditorIdsHeld(Plugin),
     ];
 
-    [PosixTheory]
+    [Theory, Kind(Kinds.Posix)]
     [MemberData(nameof(Queries))]
     public void ADocumentTheTreeListsButCannotRead_StopsTheQuery_NamingIt_RatherThanFreeWhatItHolds(
         Func<ISourceRepository, Answer<IReadOnlySet<string>, SourceFailure>> query)

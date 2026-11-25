@@ -11,7 +11,8 @@ def gates(path):
     if path.endswith('.md'):
         return []
     if path.startswith('MEditService/'):
-        return ['--backend', '--api-drift', '--scripts']
+        # The client reaches Http through the wire, and Http references every mEdit box.
+        return ['--backend', '--api-drift', '--scripts', '--frontend']
     if path.startswith(('scripts/', 'DevListFallout/')):
         return ['--scripts']
     if path.startswith('modbench/'):

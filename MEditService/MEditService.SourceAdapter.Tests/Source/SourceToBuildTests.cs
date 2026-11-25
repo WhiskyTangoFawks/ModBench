@@ -104,7 +104,7 @@ public sealed class SourceToBuildTests : IDisposable
         Assert.False(Built().Unpushed);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void CopiedFilesWhosePathsDifferOnlyInCase_AreUnreadable_NamingBoth()
     {
         WriteFile("Scripts/a.pex");

@@ -4,6 +4,7 @@ using Mutagen.Bethesda.Installs;
 
 namespace MEditService.PluginAdapter.Tests.RealData;
 
+[Kind(Kinds.Smoke)]
 public sealed class VanillaMalformedScanProofTests
 {
     public static TheoryData<GameRelease, string> InstalledVanillaPlugins()
@@ -18,7 +19,7 @@ public sealed class VanillaMalformedScanProofTests
         return rows;
     }
 
-    [SmokeTheory("run the vanilla-proof scan")]
+    [Theory]
     [MemberData(nameof(InstalledVanillaPlugins))]
     public void AVanillaPlugin_TripsNoDetector_ElseTheTableRowIsWrongNotTheGame(GameRelease release, string path)
     {

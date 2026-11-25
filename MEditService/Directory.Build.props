@@ -21,6 +21,13 @@
     <SerializationVersion>1.38.6</SerializationVersion>
   </PropertyGroup>
 
+  <!-- A bare dotnet test runs the tests of a branch (spec/architecture/tests.md), and Windows leaves out the POSIX-only
+       ones. A filter on the command line replaces this one. -->
+  <PropertyGroup>
+    <VSTestTestCaseFilter>Kind!=RealSize&amp;Kind!=Smoke</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter Condition="'$(OS)' == 'Windows_NT'">$(VSTestTestCaseFilter)&amp;Kind!=Posix</VSTestTestCaseFilter>
+  </PropertyGroup>
+
   <!-- Every production box, by the same naming rule the architecture gates read the solution
        with: a test project ends in .Tests, and TestSupport is the shared fixture library. -->
   <PropertyGroup>

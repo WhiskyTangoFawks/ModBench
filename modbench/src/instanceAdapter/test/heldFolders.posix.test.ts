@@ -21,7 +21,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
 });
 
-describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the watch of the folders a folder created already held', () => {
+describe('(VS Code\'s recursive watcher misses them only on Linux) the watch of the folders a folder created already held', () => {
   let root: string;
   let heard: string[];
   let failures: number;

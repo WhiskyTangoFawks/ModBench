@@ -8,6 +8,8 @@ SCRIPTS=false
 DETACH=false
 WAIT=false
 FAILED=false
+# The mode survives each re-exec in the environment, as BUILD_SLOT_HELD does.
+MERGE_TO_MAIN=${MEDIT_MERGE_TO_MAIN:-false}
 GATE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -18,12 +20,14 @@ while [[ $# -gt 0 ]]; do
     --docs)      DOCS=true;      GATE_ARGS+=("$1"); shift ;;
     --scripts)   SCRIPTS=true;   GATE_ARGS+=("$1"); shift ;;
     --comments)                  GATE_ARGS+=("$1"); shift ;;
+    --merge-to-main) export MEDIT_MERGE_TO_MAIN=true; MERGE_TO_MAIN=true; shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
 
+! $MERGE_TO_MAIN || BACKEND=true
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
 GATE_NAME="gates.$(basename "$ROOT")"
@@ -31,9 +35,10 @@ $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
 # A branch lands on the local branch it tracks, such as a ticket's integration branch, and any
-# other branch lands on main. Its change is the diff since where it lands.
+# other branch lands on main. Its change is the diff since where it lands. A merge to main lands on
+# main, whatever the branch tracks.
 BASE=main
-if head=$(git -C "$ROOT" symbolic-ref -q HEAD); then
+if ! $MERGE_TO_MAIN && head=$(git -C "$ROOT" symbolic-ref -q HEAD); then
   upstream=$(git -C "$ROOT" for-each-ref --format='%(upstream)' "$head")
   [[ $upstream == refs/heads/* ]] && BASE=${upstream#refs/heads/}
 fi
@@ -66,9 +71,29 @@ fi
 
 # Every gate but the comment gate builds or tests: api-drift and scripts build and boot a backend,
 # and docs runs both stacks' scans.
-if { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS || $SCRIPTS; } && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
+HOLDS_SLOT=false
+{ $BACKEND || $FRONTEND || $API_DRIFT || $DOCS || $SCRIPTS; } && HOLDS_SLOT=true
+if $HOLDS_SLOT && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
   exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
+
+# The logs and reports a skip is read from, under --merge-to-main. A run beside the comment gate's
+# own would delete them, so only a run in the slot clears them. MAIN_RESULTS has a folder of its own,
+# since check_test_times.py reads all of the folder it is given.
+REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
+SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend MAIN_RESULTS=$REPORTS/main UNIT_RESULTS=$REPORTS/unit
+! $HOLDS_SLOT || { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+
+# A merge to main fails on a skipped test, so each unittest run leaves its verbose log for skips.py.
+unittest_discover() {
+  local log=$1 status
+  shift
+  $MERGE_TO_MAIN || { python3 -m unittest discover -q "$@"; return; }
+  python3 -m unittest discover -v "$@" > "$SKIP_LOGS/$log.unittest" 2>&1
+  status=$?
+  grep -Ev ' \.\.\. ok$' "$SKIP_LOGS/$log.unittest"
+  return $status
+}
 
 echo "=== Gate 1: Comment discipline ==="
 EXCLUDE_RE='^(references/|modbench/src/wire/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
@@ -91,7 +116,7 @@ while IFS= read -r f; do
 done <<< "$MJS"
 (cd "$ROOT" && echo "$RAW_FILES" | xargs -d '\n' -r "$VALE" --config=.vale-raw.ini) || COMMENT_OK=false
 (cd "$ROOT" && echo "$COMMENT_CODE" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
-(cd "$ROOT" && python3 -m unittest discover -q -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false
+(cd "$ROOT" && unittest_discover hooks -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false
 $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
 
 echo "=== Gate 1: Architecture diagrams ==="
@@ -111,19 +136,24 @@ done <<< "$(tracked '*.d2')"
 $DIAGRAM_OK || { echo "--- ARCHITECTURE DIAGRAM GATE FAILED ---"; FAILED=true; }
 
 echo "=== Gate runner tests ==="
-(cd "$ROOT" && python3 -m unittest discover -q -s .claude/skills/validate -p 'test_*.py') \
+# The gate's own tests start runs of it, which are branch runs.
+(cd "$ROOT" && unset MEDIT_MERGE_TO_MAIN && unittest_discover validate -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
+# A test's kind is its Kind trait (MEditService.TestSupport). A branch leaves out the kinds that wait
+# for main: a test of real size, and a smoke test, which needs the user's game folder.
+BRANCH_TESTS='Kind!=RealSize&Kind!=Smoke'
+
 backend_tests() {
-  local results="/tmp/medit-test-results.$(basename "$ROOT")" changed selected
+  local results=$BACKEND_RESULTS changed selected
   rm -rf "$results" && mkdir -p "$results" || return
   changed=$(changed_since_base) || return
   selected=$(python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" \
     "$ROOT/MEditService" "$results/selected.slnf" <<< "$changed") || return
   echo "Test projects: ${selected:-none, no backend change since $BASE}" | paste -sd ' '
-  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
+  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results" --filter "$BRANCH_TESTS")
   if [[ -n $selected ]]; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "$results/selected.slnf") || return
   fi
@@ -133,22 +163,18 @@ backend_tests() {
   fi
   echo "=== Gate 3: Backend test times ==="
   python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results" || return
-  real_size_budgets "$selected"
+  ! $MERGE_TO_MAIN || tests_on_the_users_world
 }
 
-# The test projects that reach the record index, directly or through a gesture that writes to it.
-REAL_SIZE_REACHERS='^MEditService\.(RecordIndex|Http)\.Tests$'
-
-real_size_budgets() {
-  grep -Eq "$REAL_SIZE_REACHERS" <<< "$1" || return 0
-  echo "=== Gate 3: Budgets on the record index of real size ==="
-  local results="/tmp/medit-real-size-results.$(basename "$ROOT")" project
-  rm -rf "$results"
-  for project in $(cd "$ROOT/MEditService" && grep -rl --include='*.cs' '\[RealSizeFact' -- *.Tests | cut -d/ -f1 | sort -u); do
-    (cd "$ROOT/MEditService" && MEDIT_REAL_SIZE=1 dotnet test --no-build -v minimal --logger trx --results-directory "$results" \
-      "$project" --filter "FullyQualifiedName~.RealSize.") || return
-  done
-  grep -qs 'outcome="Passed"' "$results"/*.trx || { echo "No budget of real size ran."; return 1; }
+# The kinds a branch leaves out, run at a merge to main, one project at a time so a budget never
+# shares the machine with another project's tests. A filter that selects nothing is no test, so a
+# run with no passing test fails.
+tests_on_the_users_world() {
+  echo "=== Gate 3: Backend tests of real size, soak and smoke ==="
+  mkdir -p "$MAIN_RESULTS" || return
+  (cd "$ROOT/MEditService" && dotnet test --no-build -m:1 -v minimal --logger trx --results-directory "$MAIN_RESULTS" \
+    --filter 'Kind=RealSize|Kind=Smoke') || return
+  grep -qs 'outcome="Passed"' "$MAIN_RESULTS"/*.trx || { echo "No test of real size or smoke ran."; return 1; }
 }
 
 if $BACKEND; then
@@ -166,30 +192,35 @@ fi
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
-    (cd "$ROOT/MEditService" && dotnet test -v minimal "${ARCHITECTURE_SCANS[@]}") \
+    (cd "$ROOT/MEditService" && dotnet test -v minimal --filter "$BRANCH_TESTS" "${ARCHITECTURE_SCANS[@]}") \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
     [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] || (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1)
-    (cd "$ROOT/modbench" && npx vitest related --run eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
+    (cd "$ROOT/modbench" && npx vitest related --run --reporter=basic --reporter=json --outputFile.json="$SKIP_LOGS/docs.json" eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
 fi
 
 if $FRONTEND; then
-  python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" \
+  python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" "$UNIT_RESULTS" \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 
 if $SCRIPTS; then
   echo "=== Gate 3: Scripts lint, types and tests ==="
-  (cd "$ROOT/scripts" && uvx ruff@0.17.0 check . && uvx ty@0.0.88 check . && python3 -m unittest discover -q) \
+  (cd "$ROOT/scripts" && uvx ruff@0.17.0 check . && uvx ty@0.0.88 check . && unittest_discover scripts) \
   || { echo "--- SCRIPTS GATE FAILED ---"; FAILED=true; }
 fi
 
 if $API_DRIFT; then
   bash "$ROOT/.claude/skills/validate/check-api-drift.sh" \
   || { echo "--- API DRIFT GATE FAILED ---"; FAILED=true; }
+fi
+
+if $MERGE_TO_MAIN; then
+  echo "=== Skipped tests ==="
+  python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
 if $FAILED; then

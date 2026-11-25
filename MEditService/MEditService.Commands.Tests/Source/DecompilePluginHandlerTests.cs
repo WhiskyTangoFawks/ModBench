@@ -199,7 +199,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Contains("Vanilla.esp", refused.Message, StringComparison.Ordinal);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task Decompile_OfAPluginWhoseSourceHasTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_IsRefusedAsAmbiguousSource()
     {
         var sources = Path.Combine(_sourceMod, "plugin-source");

@@ -68,7 +68,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(_modFolder, aside[1].Aside)));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void ASourceReplacedMovingItsTreeAside_MovesEachTreeNamedForThePluginInAnyCaseAside()
     {
         Directory.CreateDirectory(Path.Combine(_modFolder, "plugin-source", "a.ESP"));

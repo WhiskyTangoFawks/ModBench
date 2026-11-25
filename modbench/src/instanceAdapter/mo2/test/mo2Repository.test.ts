@@ -14,6 +14,7 @@ import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { whitelistIgnoreList, withHeldWholeLines, withSourceModLines } from '../layout';
 import { BUILD_FILE } from '../../../wire/sourceMod';
+import { onPosix } from '../../../test/platform';
 
 let root: string;
 
@@ -354,7 +355,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect([untracked, [...(await adapter.sourceModFolders()).keys()], (await readFile(join(root, '.gitignore'), 'utf8')).split('\n')]).toEqual([[], ['Mod A'], expect.arrayContaining(['!/source/Mod A/']) as unknown]);
     });
 
-    it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) lets in no link and no loose file beside it, which a clone on another machine could not use', async () => {
+    onPosix.it('(a link needs no privilege on POSIX) lets in no link and no loose file beside it, which a clone on another machine could not use', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
@@ -1338,7 +1339,7 @@ describe('the MO2 adapter\'s game files', () => {
     ]));
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) hands no file of a path the Steam install cannot read, though the game folder holds it', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) hands no file of a path the Steam install cannot read, though the game folder holds it', async () => {
     const adapter = await instance();
     await put('game/Data/Meshes/a.nif', 'aaaa');
     await put('game/Data/b.dds', 'bbbb');
@@ -1355,7 +1356,7 @@ describe('the MO2 adapter\'s game files', () => {
     }
   });
 
-  it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands no game file for a path through or to a symlink in the Data folder', async () => {
+  onPosix.it('(a link needs no privilege on POSIX) hands no game file for a path through or to a symlink in the Data folder', async () => {
     const adapter = await instance();
     await put('elsewhere/A.nif', 'aaaa');
     await put('elsewhere/b.dds', 'bbbb');
@@ -1377,7 +1378,7 @@ describe('the MO2 adapter\'s game files', () => {
     expect(found).toEqual({ files: [{ root: join(root, 'game'), path: 'Data/Textures/c.dds', hash: HASH_OF_CCCC }], unreadable: {} });
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, only the paths whose folder cannot be listed, not that they are absent', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, only the paths whose folder cannot be listed, not that they are absent', async () => {
     const adapter = await instance();
     await put('game/Data/Meshes/a.nif', 'aaaa');
     await put('game/Data/b.dds', 'aaaa');
@@ -1392,7 +1393,7 @@ describe('the MO2 adapter\'s game files', () => {
     }
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) refuses the game files a mod takes only when one of its own folders cannot be listed', async () => {
+  onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) refuses the game files a mod takes only when one of its own folders cannot be listed', async () => {
     const adapter = await instance();
     await put('game/Data/Meshes/a.nif', 'aaaa');
     await put('game/Data/b.dds', 'bbbb');
@@ -1447,7 +1448,7 @@ describe('the MO2 adapter\'s game files', () => {
     expect(taken).toHaveProperty('answer.gameFiles.length', gameFiles.length);
   });
 
-  it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands the game files below a Data folder that is a link, as a game folder with its Data on another drive has', async () => {
+  onPosix.it('(a link needs no privilege on POSIX) hands the game files below a Data folder that is a link, as a game folder with its Data on another drive has', async () => {
     const adapter = await instance();
     await put('drive/Data/a.nif', 'aaaa');
     await mkdir(join(root, 'game'), { recursive: true });
@@ -1459,7 +1460,7 @@ describe('the MO2 adapter\'s game files', () => {
     expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ root: gamePlace().root, path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'a.nif' }], notes: [] } });
   });
 
-  it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) looks a mod folder up as a mod\'s however its path spells the instance', async () => {
+  onPosix.it('(a link needs no privilege on POSIX) looks a mod folder up as a mod\'s however its path spells the instance', async () => {
     const adapter = await instance();
     await put('game/Data/a.nif', 'aaaa');
     await put('mods/Mod/a.nif', 'aaaa');
