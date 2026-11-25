@@ -6,15 +6,15 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 /// parallel reader of a shared index asks for. What a filter may name is the schema's.</summary>
 public sealed class SqlDoorFixture : IDisposable
 {
-    private readonly TestPluginFixture _plugin = new();
+    internal TestPluginFixture Plugin { get; } = new();
 
     internal OpenedIndex Index { get; }
 
-    public SqlDoorFixture() => Index = Indexes.Reconciled(_plugin.DataFolder, _plugin.Plugins);
+    public SqlDoorFixture() => Index = Indexes.Reconciled(Plugin.DataFolder, Plugin.Plugins);
 
     public void Dispose()
     {
         Index.Dispose();
-        _plugin.Dispose();
+        Plugin.Dispose();
     }
 }

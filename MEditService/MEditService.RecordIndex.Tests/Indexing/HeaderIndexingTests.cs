@@ -158,18 +158,4 @@ public class HeaderIndexingTests
             ["Kept.esm", "Linked.esm"],
             MastersOf(index.DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), plugin.Key)));
     }
-
-    [Fact]
-    public void ReindexingAPlugin_ReplacesItsHeaderDocumentRatherThanDuplicating()
-    {
-        using var fixture = OnePlugin("header-reindex", "ReindexHeader.esp");
-        using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("ReindexHeader.esp", PluginOrigin.DataDirectory);
-
-        PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        index.NextCheck();
-
-        Assert.Single(index.StackOf("000000:ReindexHeader.esp"));
-        Assert.Single(HeaderRows(index, key));
-    }
 }

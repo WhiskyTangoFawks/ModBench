@@ -6,63 +6,36 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-[Collection(TestPluginFixtureCollection.Name)]
-public class ResolveNamesTests(TestPluginFixture fixture)
+public sealed class ResolveNamesTests(SqlDoorFixture door) : IClassFixture<SqlDoorFixture>
 {
-    private OpenedIndex LoadedIndex() => Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
+    private IQueries Queries => door.Index.Queries;
 
     private static NameQuery Name(string name, string? origin = null) => new(name, origin);
 
-    [Fact]
-    public void APluginsFileName_ResolvesToThePluginWithItsOrigin()
+    [Theory]
+    [InlineData(TestPluginFixture.PluginName)]
+    [InlineData("TESTPLUGIN.ESP")]
+    public void APluginsFileName_ResolvesToThePluginWithItsOrigin_WhateverItsCase(string name)
     {
-        using var index = LoadedIndex();
+        var named = Assert.Single(Queries.ResolveNames([Name(name)]).Value());
 
-        var named = Assert.Single(index.Queries.ResolveNames([Name(TestPluginFixture.PluginName)]).Value());
-
-        Assert.Equal(new PluginAddress(TestPluginFixture.PluginName, fixture.Plugins.Single().Origin), named.Plugin);
-        Assert.Null(named.FormKey);
+        Assert.Equal((door.Plugin.Plugins.Single().Key, (string?)null), (named.Plugin, named.FormKey));
     }
 
-    [Fact]
-    public void AnEditorId_ResolvesToItsRecord_WhateverItsCase()
+    [Theory]
+    [InlineData("testnpc01")]
+    [InlineData("000800:TestPlugin.esp")]
+    public void AnEditorIdWhateverItsCase_OrAFormKey_ResolvesToItsRecord(string name)
     {
-        using var index = LoadedIndex();
+        var named = Assert.Single(Queries.ResolveNames([Name(name)]).Value());
 
-        var named = Assert.Single(index.Queries.ResolveNames([Name("testnpc01")]).Value());
-
-        Assert.Equal(fixture.Npc1FormKey.ToString(), named.FormKey);
-        Assert.Equal("TestNPC01", named.EditorId);
-        Assert.Null(named.Plugin);
-    }
-
-    [Fact]
-    public void APluginsFileName_ResolvesWhateverItsCase()
-    {
-        using var index = LoadedIndex();
-
-        var named = Assert.Single(index.Queries.ResolveNames([Name(TestPluginFixture.PluginName.ToUpperInvariant())]).Value());
-
-        Assert.Equal(new PluginAddress(TestPluginFixture.PluginName, fixture.Plugins.Single().Origin), named.Plugin);
-    }
-
-    [Fact]
-    public void AFormKey_ResolvesToItsRecord()
-    {
-        using var index = LoadedIndex();
-
-        var named = Assert.Single(index.Queries.ResolveNames([Name(fixture.Npc1FormKey.ToString())]).Value());
-
-        Assert.Equal(fixture.Npc1FormKey.ToString(), named.FormKey);
-        Assert.Equal("TestNPC01", named.EditorId);
+        Assert.Equal((door.Plugin.Npc1FormKey.ToString(), "TestNPC01", (PluginAddress?)null), (named.FormKey, named.EditorId, named.Plugin));
     }
 
     [Fact]
     public void SeveralNames_ResolveInTheOrderGiven()
     {
-        using var index = LoadedIndex();
-
-        var named = index.Queries.ResolveNames([Name("TestNPC02"), Name(TestPluginFixture.PluginName)]).Value();
+        var named = Queries.ResolveNames([Name("TestNPC02"), Name(TestPluginFixture.PluginName)]).Value();
 
         Assert.Equal(["TestNPC02", null], named.Select(n => n.EditorId));
         Assert.Equal([null, TestPluginFixture.PluginName], named.Select(n => n.Plugin?.Name));
@@ -71,39 +44,20 @@ public class ResolveNamesTests(TestPluginFixture fixture)
     [Fact]
     public void ANameNothingHas_IsRefusedNamingIt()
     {
-        using var index = LoadedIndex();
-
-        var refused = index.Queries.ResolveNames([Name("TestNPC01"), Name("NoSuchThing")]).Refused();
+        var refused = Queries.ResolveNames([Name("TestNPC01"), Name("NoSuchThing")]).Refused();
 
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
         Assert.Contains("NoSuchThing", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("TestNPC01", refused.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AFormKeyNoPluginHolds_IsRefused()
+    [Theory]
+    [InlineData("0FFFFF:TestPlugin.esp", null)]
+    [InlineData("TestNPC01", PluginOrigin.DataDirectory)]
+    [InlineData(TestPluginFixture.PluginName, "NoSuchMod")]
+    public void AFormKeyNoPluginHolds_AnOriginBesideARecordsName_OrAnOriginThePluginIsNotIn_IsRefused(string name, string? origin)
     {
-        using var index = LoadedIndex();
-
-        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("0FFFFF:TestPlugin.esp")]).Refused().Refusal);
-    }
-
-    [Fact]
-    public void AnOrigin_NamesOnlyAPlugin()
-    {
-        using var index = LoadedIndex();
-
-        Assert.Equal(IndexRefusal.NameRefused,
-            index.Queries.ResolveNames([Name("TestNPC01", fixture.Plugins.Single().Origin)]).Refused().Refusal);
-    }
-
-    [Fact]
-    public void AnOriginThePluginIsNotIn_IsRefused()
-    {
-        using var index = LoadedIndex();
-
-        Assert.Equal(IndexRefusal.NameRefused,
-            index.Queries.ResolveNames([Name(TestPluginFixture.PluginName, "NoSuchMod")]).Refused().Refusal);
+        Assert.Equal(IndexRefusal.NameRefused, Queries.ResolveNames([Name(name, origin)]).Refused().Refusal);
     }
 
     [Fact]
@@ -144,31 +98,20 @@ public class ResolveNamesTests(TestPluginFixture fixture)
         Assert.Equal(2, refused.Message.Split(":Twins.esp").Length - 1);
     }
 
-    [Fact]
-    public void ARecordAnOverrideRenames_IsNamedByTheWinningCopysEditorId()
+    [Theory]
+    [InlineData("ModA", "FromModA", "FromModB")]
+    [InlineData("ModB", "FromModB", "FromModA")]
+    public void ARecordAnOverrideRenames_IsNamedByTheWinningCopysEditorId(string winner, string winning, string losing)
     {
         var holder = new LoadOrderHolder();
         using var shared = SharedFilename("names-renamed");
-        using var index = Indexes.Open(holder).WithWinner(holder, shared.DataFolder, shared.Plugins, "ModA");
+        using var index = Indexes.Open(holder).WithWinner(holder, shared.DataFolder, shared.Plugins, winner);
 
-        var named = Assert.Single(index.Queries.ResolveNames([Name("FromModA")]).Value());
+        var named = Assert.Single(index.Queries.ResolveNames([Name(winning)]).Value());
 
-        Assert.Equal("FromModA", named.EditorId);
-        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModB")]).Refused().Refusal);
-        Assert.Equal("FromModA", Assert.Single(index.Queries.ResolveNames([Name(Assert.IsType<string>(named.FormKey))]).Value()).EditorId);
-    }
-
-    [Fact]
-    public void ARecordAnOverrideRenames_FollowsTheWinnerWhenTheWinnerChanges()
-    {
-        var holder = new LoadOrderHolder();
-        using var shared = SharedFilename("names-winner-changes");
-        using var index = Indexes.Open(holder).WithWinner(holder, shared.DataFolder, shared.Plugins, "ModB");
-
-        var named = Assert.Single(index.Queries.ResolveNames([Name("FromModB")]).Value());
-
-        Assert.Equal("FromModB", named.EditorId);
-        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModA")]).Refused().Refusal);
+        Assert.Equal(winning, named.EditorId);
+        Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name(losing)]).Refused().Refusal);
+        Assert.Equal(winning, Assert.Single(index.Queries.ResolveNames([Name(Assert.IsType<string>(named.FormKey))]).Value()).EditorId);
     }
 
     [Fact]
