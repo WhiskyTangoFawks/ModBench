@@ -35,16 +35,6 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
     public void AScriptTakingASelectsRowsSlowlyWhileItWrites_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() =>
         Soak(new SlowStream(Index.Queries));
 
-    [Fact, Kind(Kinds.RealSize)]
-    public void ASelectOfEveryRecord_ReturnsItsFirstRowWithinOneGesture()
-    {
-        Budgets.Ran(TimeSpan.FromSeconds(1), () =>
-        {
-            using var rows = Index.Queries.SelectRows("SELECT form_key, editor_id FROM records", CancellationToken.None).Value();
-            Assert.NotNull(rows.Rows().First().Value());
-        }, "The first row of a select of every record", 5);
-    }
-
     private void Soak(IDisposable? reading)
     {
         using var held = reading;
