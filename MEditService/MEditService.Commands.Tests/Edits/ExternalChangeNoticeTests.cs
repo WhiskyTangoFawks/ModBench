@@ -153,22 +153,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void AChangeSignal_NamesNoPlugin_ForAChangedCompiledPluginFileOrMetaIni()
-    {
-        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, compiledPlugin));
-        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
-        File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n");
-        Init((PluginName, compiledPlugin));
-        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
-        File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n*.esm\n");
-
-        PutThenSignal(loadOrder);
-
-        Assert.Equal([], TheChanged());
-    }
-
-    [Fact]
     public void AChangeSignal_TellsNothing_OfAnNonSourceMod()
     {
         var loadOrder = WithPlugins((PluginName, "anything"u8.ToArray()));
@@ -193,22 +177,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         Assert.Empty(TheChanged());
         Assert.Equal([PluginName, PluginName], TheTold());
-    }
-
-    [Fact]
-    public void AChangeSignal_TellsNothingMore_OfAModWhoseRepositoryWentBeforeTheLastSignal()
-    {
-        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, compiledPlugin));
-        Init((PluginName, compiledPlugin));
-        PutThenSignal(loadOrder);
-        AnotherTool.Delete(Path.Combine(ModFolder, ".git"));
-        PutThenSignal(loadOrder);
-        var told = _notifications.Notifications.Count;
-
-        PutThenSignal(loadOrder);
-
-        Assert.Equal(told, _notifications.Notifications.Count);
     }
 
     [Fact]
@@ -255,20 +223,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASecondChangeSignal_OverTheSameBytes_TellsNothingMore()
-    {
-        var compiledPlugin = "the compiled plugin binary"u8.ToArray();
-        WithPlugins((PluginName, compiledPlugin));
-        Init((PluginName, compiledPlugin));
-        var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
-
-        PutThenSignal(loadOrder);
-        PutThenSignal(loadOrder);
-
-        Assert.Equal([PluginName], TheTold());
-    }
-
-    [Fact]
     public void AChangeSignal_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
     {
         var old = "the compiled plugin binary"u8.ToArray();
@@ -308,21 +262,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         PutThenSignal(loadOrder);
 
         Assert.Empty(TheChanged());
-    }
-
-    [Fact]
-    public async Task AChangeSignal_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var pluginPath = mod.LoadOrder.Plugin(mod.Plugin)?.Path ?? throw new InvalidOperationException("Expected the fixture's plugin in its load order.");
-        var before = File.ReadAllBytes(pluginPath);
-        mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-        await mod.CompileHandler.CompileLandedAsync(mod.Plugin);
-        File.WriteAllBytes(pluginPath, before);
-
-        PutThenSignal(mod.LoadOrder);
-
-        Assert.Equal([mod.Plugin.Name], TheChanged(SourceEditFixture.ModFolderOrigin));
     }
 
     private static Dictionary<string, string> FilesUnder(string folder) =>

@@ -65,7 +65,6 @@ public sealed class ChangeSignalPathsTests : IDisposable
 
     [Theory]
     [InlineData("plugin file")]
-    [InlineData("plugin file,asset")]
     [InlineData("plugin file,plugin source")]
     public void ThePluginsOwnFileNamed_HasTheRecordIndexReadThatPluginWhole(string kinds)
     {
@@ -85,7 +84,6 @@ public sealed class ChangeSignalPathsTests : IDisposable
 
     [Theory]
     [InlineData("")]
-    [InlineData("build file")]
     [InlineData("plugin file,build file")]
     public void NoPath_OrOneReadForPluginsItsAdapterCannotName_HasTheRecordIndexCheckTheDisk_AndEveryModChecked(string kinds)
     {

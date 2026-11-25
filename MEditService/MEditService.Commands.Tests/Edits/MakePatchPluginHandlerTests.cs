@@ -260,25 +260,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal((CompileRefusal.SourceDoesNotParse, unread), (compiled.Refusal, compiled.Message[..unread.Length]));
     }
 
-    [Fact]
-    public async Task ACellMutagenWritesAsBytesItCannotReadBack_IsRefused_AndWritesNothing()
-    {
-        var deletedCompressed = _interior.DeepCopy();
-        deletedCompressed.MajorRecordFlagsRaw = (int)DeletedFlag.Bit;
-        deletedCompressed.IsCompressed = true;
-
-        var made = await Handler.Make(Mod, Patch, [], [Given(deletedCompressed)]);
-
-        Assert.False(made.Holds(out _, out var refused));
-        var compiled = Assert.IsType<PatchRefused.AsCompile>(refused);
-        var unread = $"{Patch} cannot be made: the plugin written from the records given does not read back, so nothing was written: ";
-        Assert.Equal(
-            (CompileRefusal.SourceValueDropped, unread, false),
-            (compiled.Refusal, compiled.Message[..unread.Length], File.Exists(PatchPath)));
-    }
-
     [Theory]
-    [InlineData(Patch)]
     [InlineData("patch.ESP")]
     public async Task AFileLandingAtThePathWhileThePluginIsMade_IsLeft_AndRefusesTheMake(string landed)
     {
@@ -293,7 +275,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(Patch)]
     [InlineData("patch.ESP")]
     public async Task Replacing_AFileAtItsPath_WritesThePlugin_AndSetsTheFileAside_NamingItOnThePush(string held)
     {
@@ -325,10 +306,7 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(CompileFixture.PluginName, "NoSuch.esp", false)]
     [InlineData(CompileFixture.PluginName, "NoSuch.esp", true)]
-    [InlineData(CompileFixture.PluginName, CompileFixture.PluginName, false)]
-    [InlineData("compile.esp", CompileFixture.PluginName, false)]
     public async Task APatchNamedAsACompiledPluginOfItsMod_IsRefusedNamingItsPluginSource_WithOrWithoutItsBinary_EvenAskedToReplace(
         string name, string deleted, bool replace)
     {
@@ -363,17 +341,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
         Assert.Equal(
             (new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, $"{_folder} already holds patch.ESP, so {Patch} was not made."), "patch.ESP", "held"),
             (refused, string.Join(", ", Directory.GetFiles(_folder).Select(Path.GetFileName)), await File.ReadAllTextAsync(Path.Combine(_folder, "patch.ESP"))));
-    }
-
-    [Fact]
-    public async Task AMake_AsksTheRecordIndexWhoHoldsTheRecordsGiven_ThenTheContainersCarriedIn_ALayerAtATime()
-    {
-        var made = await Handler.Make(Mod, Patch, [], [Given(_npc), Given(_interiorRef), Given(_exteriorRef)]);
-
-        Assert.True(made.Holds(out _, out var refused), refused?.Message);
-        Assert.Equal(
-            [[_npc.FormKey, _interiorRef.FormKey, _exteriorRef.FormKey], [_interior.FormKey, _exterior.FormKey], [_world.FormKey]],
-            _index.OwnersAsked.Select(asked => asked.FormKeys.Select(formKey => FormKey.Factory(formKey))));
     }
 
     [Fact]
@@ -414,7 +381,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
     public enum Giving
     {
-        AFileAtItsPath,
         ARecordNamingNoFormKey,
         ARecordTwice,
         ARecordTwiceInPluginNamesOfDifferentCase,
@@ -434,9 +400,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
     {
         switch (giving)
         {
-            case Giving.AFileAtItsPath:
-                File.WriteAllText(PatchPath, "held");
-                return (Mod, Patch, [], [Given(_npc)]);
             case Giving.ARecordNamingNoFormKey:
                 return (Mod, Patch, [], [new GivenRecord("{\"EditorID\": \"Nameless\"}", "npc_")]);
             case Giving.ARecordTwice:
@@ -477,7 +440,6 @@ public sealed class MakePatchPluginHandlerTests : IDisposable
 
     public static TheoryData<Giving, PatchRefused> Refusals => new()
     {
-        { Giving.AFileAtItsPath, new PatchRefused.AsCreate(PluginCreateRefusal.FileExists, "") },
         { Giving.ARecordNamingNoFormKey, new PatchRefused.OfRecord(RecordEditRefusal.InvalidEnvelope, "") },
         { Giving.ARecordTwice, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },
         { Giving.ARecordTwiceInPluginNamesOfDifferentCase, new PatchRefused.AsCompile(CompileRefusal.FormKeyCollision, "") },

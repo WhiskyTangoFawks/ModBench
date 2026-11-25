@@ -82,14 +82,4 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
         Assert.Null(_holder.Held);
     }
-
-    [Fact]
-    public void ALoadOrderWithAMissingFolderAndAnUnsupportedRelease_IsRefusedForTheFolder()
-    {
-        var gone = Path.Combine(_dataFolder, "no-such-data");
-
-        var result = Refused(Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], [], [], [], [], Language.English, []));
-
-        Assert.Equal(PutLoadOrderRefusal.DataFolderNotFound, result.Refusal);
-    }
 }

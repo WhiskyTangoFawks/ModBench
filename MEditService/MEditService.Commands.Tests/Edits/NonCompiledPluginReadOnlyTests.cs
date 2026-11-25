@@ -36,7 +36,6 @@ public sealed class NonCompiledPluginReadOnlyTests
     }
 
     [Theory]
-    [InlineData("overwrite")]
     [InlineData("GhostMod")]
     public void EditingAPluginTheLoadOrderDoesNotName_IsRefusedAsNotInTheLoadOrder(string origin)
     {

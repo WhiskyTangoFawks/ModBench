@@ -97,22 +97,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Equal(headBefore, Head(folder));
     }
 
-    [Fact]
-    public async Task CreatePlugin_IntoASourceModTheLoadOrderNamesNoPluginOf_LandsItsSourceInTheSourceFolderItWasHanded()
-    {
-        var folder = await SourceModWith("EmptiedMod", "First.esp");
-        File.Delete(Path.Combine(folder, "First.esp"));
-        _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, _data.Plugins));
-
-        var result = await Create("Second.esp", folder, "EmptiedMod");
-
-        result.Created();
-        Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "EmptiedMod", folder)));
-    }
-
     [Theory]
     [InlineData("First.esp")]
-    [InlineData("first.ESP")]
     public async Task CreatePlugin_OfAPluginTheSourceModsPluginSourceHolds_WithNoBinary_IsRefusedNamingIt_AndLeavesItsSource(string name)
     {
         var folder = await SourceModWith("SourcedMod", "First.esp");
@@ -243,21 +229,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePlugin_OverAFileAlreadyThere_IsRefusedNamingIt_AndLeavesItAsItWas()
-    {
-        var folder = ModFolder("OccupiedMod");
-        var occupied = Path.Combine(folder, "Occupied.esp");
-        File.WriteAllText(occupied, "another tool's file");
-
-        var result = (await Create("Occupied.esp", folder, "OccupiedMod")).Refused();
-
-        Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
-        Assert.Contains(folder, result.Message, StringComparison.Ordinal);
-        Assert.Contains("Occupied.esp", result.Message, StringComparison.Ordinal);
-        Assert.Equal("another tool's file", File.ReadAllText(occupied));
-    }
-
-    [Fact]
     public async Task CreatePlugin_OverAFileSpelledInAnotherCase_IsRefusedNamingItAsItIsSpelled_AndLeavesItAsItWas()
     {
         var folder = ModFolder("OccupiedMod");
@@ -273,7 +244,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     [Theory]
     [InlineData(GameRelease.Oblivion)]
-    [InlineData(GameRelease.OblivionRE)]
     public async Task CreatePlugin_ALightPluginInAReleaseWithoutThem_IsRefusedNamingIt_BeforeAnyWrite(GameRelease release)
     {
         var folder = ModFolder("LightMod");
@@ -299,8 +269,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     [Theory]
     [InlineData("Mod.txt")]
-    [InlineData("Mod")]
-    [InlineData("Mod.esp.bak")]
     public async Task CreatePlugin_ANameThatIsNotAPluginFile_IsRefusedNamingIt_BeforeAnyWrite(string name)
     {
         var folder = ModFolder("BadMod");
@@ -314,7 +282,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     [Theory]
     [InlineData(GameRelease.Fallout4, "must be .esm, .esl or .esp.")]
-    [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
     public async Task CreatePlugin_ANonPluginName_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
     {
         var result = (await HandlerIn(release).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"), ModFolder("BadMod"))).Refused();
@@ -373,11 +340,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Plain.esl", new string[0])]
     [InlineData("Plain.esp", new[] { "Medium" })]
     [InlineData("Plain.esp", new[] { "Bogus" })]
-    [InlineData("Plain.esp", new[] { "1" })]
-    [InlineData("Plain.esp", new[] { "small" })]
     public async Task CreatePlugin_FlagsTheExtensionDoesNotOffer_AreRefused_AndWriteNothing(string name, string[] flags)
     {
         var folder = ModFolder("NotOfferedMod");

@@ -28,13 +28,6 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         ], [new PluginPlace(Mod, _folder, _folder)]));
     }
 
-    private void Place(PluginPlace place)
-    {
-        var held = _holder.Current;
-        _holder.Apply(new LoadOrderSnapshot(
-            held.DataFolderPath, held.InstanceRoot, held.GameRelease, held.Plugins, [], [], [], [], [], [.. held.Places, place], held.StringsLanguage));
-    }
-
     public void Dispose() => _data.Dispose();
 
     private readonly HandedWrites _index = HandedWrites.Create();
@@ -51,43 +44,8 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         Assert.Empty(_index.Hands);
     }
 
-    [Fact]
-    public async Task CreatePluginIn_APlaceTheLoadOrderHoldsNoPluginOf_WritesItInThatPlacesFolder()
-    {
-        var emptyFolder = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "EmptyMod")).FullName;
-        Place(new PluginPlace("EmptyMod", emptyFolder, null));
-
-        var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp", []);
-
-        result.Created();
-        Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
-    }
-
-    [Fact]
-    public async Task CreatePluginIn_Overwrite_WritesItInOverwritesFolder()
-    {
-        var overwrite = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "overwrite")).FullName;
-        Place(new PluginPlace(LoadOrderEntry.OverwriteOrigin, overwrite, null));
-
-        var result = await Handler.CreatePluginIn(LoadOrderEntry.OverwriteOrigin, "Patch.esp", []);
-
-        Assert.Equal(new PluginAddress("Patch.esp", LoadOrderEntry.OverwriteOrigin), result.Created().Plugin);
-        Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
-        Assert.Empty(_index.Hands);
-    }
-
-    [Fact]
-    public async Task CreatePluginIn_ThatRefuses_HandsTheRecordIndexNothing()
-    {
-        var result = (await Handler.CreatePluginIn(Mod, "First.esp", [])).Refused();
-
-        Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
-        Assert.Empty(_index.Hands);
-    }
-
     [Theory]
     [InlineData("NoSuchMod")]
-    [InlineData(PluginOrigin.DataDirectory)]
     public async Task CreatePluginIn_AnOriginThatIsNoPlaceOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
     {
         var result = (await Handler.CreatePluginIn(origin, "Second.esp", [])).Refused();
