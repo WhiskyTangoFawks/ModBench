@@ -1,4 +1,6 @@
 $failed = @()
+# #2466 resumes the merge-to-main tier and deletes this line.
+Write-Host 'The merge-to-main tier is paused until epic #2450 lands: these are the branch gates.'
 $env:NODE_OPTIONS = '--max-old-space-size=4096'
 $env:PYTHONUTF8 = 1
 $env:MEDIT_VIRTUAL_MACHINE = 'true'

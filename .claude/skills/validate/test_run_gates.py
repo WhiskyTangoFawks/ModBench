@@ -51,13 +51,16 @@ class BehindMain(unittest.TestCase):
 
 
 class GateRepo(unittest.TestCase):
+    TIER_PAUSED = "true"
+
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo)
         self.addCleanup(shutil.rmtree, pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}"), ignore_errors=True)
         self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
         self.validate.mkdir(parents=True)
-        shutil.copy(SCRIPT, self.validate)
+        script = self.validate / "run-gates.sh"
+        script.write_text(SCRIPT.read_text().replace("MERGE_TIER_PAUSED=true", f"MERGE_TIER_PAUSED={self.TIER_PAUSED}", 1))
         shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
         (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
         for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "spec/a.d2"):
@@ -224,7 +227,35 @@ class BranchTests(FakeDotnet):
         self.assertEqual(self.filter_present_per_dotnet_test(calls), [False], calls)
 
 
+class MergeToMainPaused(FakeDotnet):
+    NOTICE = "The merge-to-main tier is paused until epic #2450 lands"
+
+    def test_the_mode_runs_the_branch_gates_and_says_the_tier_is_paused(self):
+        run, calls = self.run_after_changing("spec/a.d2", "--merge-to-main")
+        self.assertIn(self.NOTICE, run.stdout)
+        self.assertEqual([call for call in calls if "--filter" in call], [], calls)
+        self.assertNotIn("=== Skipped tests ===", run.stdout)
+
+    def test_the_environment_form_of_the_mode_says_the_tier_is_paused(self):
+        run, _ = self.run_after_changing("spec/a.d2", MEDIT_MERGE_TO_MAIN="true")
+        self.assertEqual(run.stdout.count(self.NOTICE), 1, run.stdout)
+
+    def test_a_branch_run_does_not_say_it(self):
+        run, _ = self.run_after_changing("spec/a.d2")
+        self.assertNotIn(self.NOTICE, run.stdout)
+
+    def test_the_mode_runs_the_branch_diff_since_the_branch_it_tracks(self):
+        git(self.repo, "checkout", "-q", "-b", "integration")
+        self.write("modbench/src/a.ts", "edited")
+        git(self.repo, "commit", "-q", "-am", "frontend")
+        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
+        self.write("spec/a.d2", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.gates("--merge-to-main").stdout.splitlines()[-1], self.slot_line("--docs"))
+
+
 class MergeToMain(FakeDotnet):
+    TIER_PAUSED = "false"
     MODE = "--merge-to-main"
     ONE_PROJECT_AT_A_TIME = " -m:1 "
 
