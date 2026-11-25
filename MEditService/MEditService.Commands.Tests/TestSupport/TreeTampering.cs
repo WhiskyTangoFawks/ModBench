@@ -52,20 +52,6 @@ internal static class TreeTampering
         return copy;
     }
 
-    /// <summary>The record's container document copied under a sibling directory, so two container
-    /// directories claim one FormKey.</summary>
-    internal static string DuplicateInSiblingDirectory(string modFolder, PluginAddress plugin, RecordIdentity identity)
-    {
-        var original = FileOf(modFolder, plugin, identity);
-        var directory = FolderOf(original);
-        var sibling = Path.Combine(
-            FolderOf(directory), "Impostor - " + Path.GetFileName(directory).Split(" - ")[1]);
-        Directory.CreateDirectory(sibling);
-        var copy = Path.Combine(sibling, Path.GetFileName(original));
-        File.Copy(original, copy);
-        return copy;
-    }
-
     /// <summary>A group document in the record's folder: the shape of a file init never writes
     /// there.</summary>
     internal static string StrayGroupDocument(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
