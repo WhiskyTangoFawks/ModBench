@@ -29,7 +29,7 @@ An agent runs each build and test through `.claude/skills/validate/slot-run.sh <
 
 ## The workflow
 
-- Epics, tickets and a run's report: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
+- Epics, tickets and a run's report: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md). A release: [docs/agents/release.md](docs/agents/release.md).
 - The gates: `bash .claude/skills/validate/run-gates.sh --detach`, then `run-gates.sh --wait` until it prints a verdict (exit 3: wait again). Before a merge to main, the Windows gates too, through `/windows-vm`.
 - Acceptance stands the system up through `/acceptance`. Its throwaway instances and the Windows VM are cleared for subagents.
 - Lanes: the composition root is one module: `modbench/src/*.ts`, `modbench/package.json` and `MEditService.Http`'s `Program.cs`. `api.ts` is generated: `/regenerate-api`. Run 3 lanes at most.
