@@ -15,11 +15,12 @@ def selected(*changed):
 
 
 class SelectGates(unittest.TestCase):
-    def test_backend_source_selects_backend_api_drift_and_the_scripts_it_answers(self):
+    def test_backend_source_selects_backend_api_drift_scripts_and_frontend(self):
         self.assertEqual(selected('MEditService/MEditService.Http/Program.cs'), [
             '--backend MEditService/MEditService.Http/Program.cs',
             '--api-drift MEditService/MEditService.Http/Program.cs',
             '--scripts MEditService/MEditService.Http/Program.cs',
+            '--frontend MEditService/MEditService.Http/Program.cs',
         ])
 
     def test_scripts_and_the_fixture_instance_their_harness_loads_select_scripts(self):
