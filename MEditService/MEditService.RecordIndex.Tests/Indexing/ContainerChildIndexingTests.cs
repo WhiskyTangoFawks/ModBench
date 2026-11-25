@@ -29,6 +29,7 @@ public sealed class ContainerChildIndexingTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
         Assert.NotEmpty(Children(index, quest));
+        Assert.NotEmpty(Children(index, topic));
 
         File.Delete(fixture.Plugins.Single().Path);
         index.NextCheck();

@@ -25,7 +25,7 @@ public sealed class ResolveNamesTests(SqlDoorFixture door) : IClassFixture<SqlDo
     [Theory]
     [InlineData("testnpc01")]
     [InlineData("000800:TestPlugin.esp")]
-    public void AnEditorIdWhateverItsCase_OrAFormKey_ResolvesToItsRecord(string name)
+    public void ARecordsNameOrFormKey_ResolvesToItsRecord(string name)
     {
         var named = Assert.Single(Queries.ResolveNames([Name(name)]).Value());
 
@@ -55,7 +55,7 @@ public sealed class ResolveNamesTests(SqlDoorFixture door) : IClassFixture<SqlDo
     [InlineData("0FFFFF:TestPlugin.esp", null)]
     [InlineData("TestNPC01", PluginOrigin.DataDirectory)]
     [InlineData(TestPluginFixture.PluginName, "NoSuchMod")]
-    public void AFormKeyNoPluginHolds_AnOriginBesideARecordsName_OrAnOriginThePluginIsNotIn_IsRefused(string name, string? origin)
+    public void AFormKeyOrAnOriginThatNamesNothing_IsRefused(string name, string? origin)
     {
         Assert.Equal(IndexRefusal.NameRefused, Queries.ResolveNames([Name(name, origin)]).Refused().Refusal);
     }

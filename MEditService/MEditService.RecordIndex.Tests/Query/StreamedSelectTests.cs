@@ -82,13 +82,15 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Empty(Directory.GetFiles(folder, "*.spool"));
     }
 
-    [Fact]
-    public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow()
+    [Theory]
+    [InlineData("SELECT body FROM records")]
+    [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
+    public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
     {
         const int many = 32_000;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 32_000_000);
 
-        using var rows = index.Queries.SelectRows("SELECT body FROM records").Value();
+        using var rows = index.Queries.SelectRows(sql).Value();
 
         Assert.Equal(many, rows.Rows().Count(row => row.Value().Length > 2_000));
     }
