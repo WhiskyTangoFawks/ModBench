@@ -47,7 +47,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         _loggers.Dispose();
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AFatalError_WhoseReopenFails_PublishesAFailedStatusThatSaysSo_NamingTheFatalErrorAndTheIndexFile()
     {
         LockIndexFolder();
@@ -58,7 +58,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         NextCheckSaysTheReopenFailed(before);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AStoreInvalidatedBeforeTheCheck_WhoseReopenFails_PublishesAFailedStatusThatSaysSo_NamingTheFatalErrorAndTheIndexFile()
     {
         IndexFiles.Invalidate(_fixture.InstanceRoot);

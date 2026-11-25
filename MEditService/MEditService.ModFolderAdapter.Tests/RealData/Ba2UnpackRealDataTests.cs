@@ -1,10 +1,12 @@
 using System.Buffers.Binary;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 using Mutagen.Bethesda.Installs;
 
 namespace MEditService.ModFolderAdapter.Tests.RealData;
 
+[Kind(Kinds.Smoke)]
 public sealed class Ba2UnpackRealDataTests
 {
     private const int Batch = 1000;
@@ -30,15 +32,15 @@ public sealed class Ba2UnpackRealDataTests
         TheoryData<GameRelease> rows = [];
         foreach (var release in new[] { GameRelease.Fallout4, GameRelease.Starfield })
         {
-            if (InstalledGameSmokeTheoryAttribute.IsInstalled(release)) rows.Add(release);
+            if (InstalledGameTheoryAttribute.IsInstalled(release)) rows.Add(release);
         }
         return rows;
     }
 
     public static TheoryData<GameRelease> InstalledFallout4() =>
-        InstalledGameSmokeTheoryAttribute.IsInstalled(GameRelease.Fallout4) ? [GameRelease.Fallout4] : [];
+        InstalledGameTheoryAttribute.IsInstalled(GameRelease.Fallout4) ? [GameRelease.Fallout4] : [];
 
-    [InstalledGameSmokeTheory(GameRelease.Fallout4, GameRelease.Starfield)]
+    [InstalledGameTheory(GameRelease.Fallout4, GameRelease.Starfield)]
     [MemberData(nameof(InstalledGames))]
     public void EveryEntryOfTheInstalledGamesArchives_Unpacks_ACubemapWithItsCubeCaps(GameRelease release)
     {
@@ -65,7 +67,7 @@ public sealed class Ba2UnpackRealDataTests
         Assert.True(cubemaps > 0, "an installed game's archives hold cubemaps");
     }
 
-    [InstalledGameSmokeTheory(GameRelease.Fallout4)]
+    [InstalledGameTheory(GameRelease.Fallout4)]
     [MemberData(nameof(InstalledFallout4))]
     public void TheDdsHeaderOfEveryTextureOfAVersion1Archive_MatchesMutagens_ExceptTheCapsOfASingleMipTextureAndTheCubeFieldsOfACubemapWhichCarryTheCubeFlags(GameRelease release)
     {

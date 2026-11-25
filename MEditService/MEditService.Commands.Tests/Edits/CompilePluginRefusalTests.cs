@@ -133,7 +133,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         Assert.Contains(Path.GetRelativePath(mod.ModFolder, directory), refused.Message, StringComparison.Ordinal);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task Compile_WithAFolderOfItsSourceItCannotList_IsRefusedAsNotParsing()
     {
         var folder = Path.GetDirectoryName(TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity)).Require();

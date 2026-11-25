@@ -14,6 +14,7 @@ using Mutagen.Bethesda;
 namespace MEditService.RecordIndex.Tests.RealSize;
 
 [Collection(RealSizeCollection.Name)]
+[Kind(Kinds.RealSize)]
 public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
@@ -37,7 +38,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
     private RealSizeModlist Modlist => realSize.Modlist;
 
-    [RealSizeFact]
+    [Fact]
     public void TheGeneratedModlist_IsIndexedAtLitRsSize()
     {
         Assert.Equal(LoadOrderState.Ready, Index.Status.State);
@@ -52,7 +53,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private long Count(string sql) =>
         long.Parse(IndexFiles.Rows(Modlist.InstanceRoot, sql).Single().Single(), CultureInfo.InvariantCulture);
 
-    [RealSizeFact]
+    [Fact]
     public void OnePluginsFacts_AreReadWithinAFewMilliseconds_AndUnderARecordFilterInAThirdOfEveryPluginsTime()
     {
         PluginAddress[] one = [Modlist.LoadOrder[^1].Key];
@@ -82,7 +83,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.True(bigFilteredTook < everyFilteredTook);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ALaunchWithNothingChanged_IsReadyWithinLitRsTenSeconds()
     {
         _ = Index;
@@ -91,7 +92,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(LoadOrderState.Ready, Index.Status.State);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void APluginWhoseWholeTreeIsUncommitted_IsIndexedWithinTwoSecondsOfArriving()
     {
         var (index, modlist) = (Index, Modlist);
@@ -111,7 +112,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         }
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AnEditMadeOutsideModbenchToOneReferenceInABigCell_ReachesReadsThroughAWholeDiskCheckOfEveryTreesStamps()
     {
         var reference = Index.DocumentOf(Modlist.AReferenceInTheBigCell, Modlist.BigSourcePlugin.Key);
@@ -124,7 +125,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
             "An edit made outside Modbench to one reference reaching reads through a check of the whole disk");
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AnEditItsWriterMadeToOneReferenceInABigCell_IsReadWithinOneGesture()
     {
         var plugin = Modlist.BigSourcePlugin;
@@ -144,7 +145,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private string ReferenceRead() =>
         Index.Queries.GetRenderedDocument(Modlist.BigSourcePlugin.Key, Modlist.AReferenceInTheBigCell).Value()?.Text ?? "";
 
-    [RealSizeFact]
+    [Fact]
     public void AThousandSeparateDocumentsChangedOutsideModbench_ReachReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         var plugin = Modlist.BigSourcePlugin;
@@ -162,7 +163,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Index.Queries.GetRecords(types: null, Modlist.BigSourcePlugin.Key, search: "Edited", limit: int.MaxValue, offset: 0)
             .Value().Items.Count(row => row.EditorId == "Edited");
 
-    [RealSizeFact]
+    [Fact]
     public void AThousandReferencesTakenOutsideModbenchOutOfABigCellsDocument_ReachReadsThroughAWholeDiskCheckOfEveryTreesStamps()
     {
         var path = BigCellsDocument();
@@ -178,7 +179,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
             "1,000 references taken outside Modbench out of a big cell reaching reads through a check of the whole disk");
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ABigCellsDocumentDeletedOutsideModbench_ReachesReadsThroughAWholeDiskCheckWithinOneGesture()
     {
         var path = BigCellsDocument();
@@ -191,7 +192,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Null(Index.CopyIn(Modlist.BigCell, Modlist.BigSourcePlugin.Key));
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ARecordItsWriterDeleted_IsReadWithinLitRsIndexWorkForOneDeletedRecord()
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[0]);
@@ -204,7 +205,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Null(Index.CopyIn(formKey, plugin.Key));
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AScriptsRunOfSingleRecordDeletes_IsReadWithinLitRsIndexWorkForEachDeletedRecord()
     {
         var plugin = Modlist.BigSourcePlugin;
@@ -248,7 +249,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Waits.Reached(() => !Index.Status.Validating, "the record index's read of the write");
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheWatchersEchoOfAWrite_IsReadWithinOneFilesRead()
     {
         var plugin = Modlist.BigSourcePlugin;
@@ -264,8 +265,8 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         }, "Reading the watcher's echo of a write");
     }
 
-    [RealSizeFact]
-    public void AnEditMadeDuringACheckThatReadsManyPlugins_ReturnsWithinOneGesture()
+    [Fact]
+    public async Task AnEditMadeDuringACheckThatReadsManyPlugins_ReturnsWithinOneGesture()
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[2]);
         var record = Index.DocumentOf(formKey, plugin.Key);
@@ -283,10 +284,10 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.True(took <= OneGesture, $"The edit took {took.TotalSeconds:F2} s, past its budget of {OneGesture.TotalSeconds:F1} s.");
         Assert.False(check.IsCompleted, "The check ended before the edit returned.");
         Assert.Equal("Edited", Index.RowOf(formKey, plugin.Key)?.EditorId);
-        Assert.Null(check.GetAwaiter().GetResult());
+        Assert.Null(await check);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void OneKeystrokeInABigPluginsDocument_IsHeldWithinOneKeystroke()
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[4]);
@@ -317,25 +318,25 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         }
     }
 
-    [RealSizeFact]
-    public void AViewsReads_AnswerWithinTheirBudgets_WhileARecordFilterLands()
+    [Fact]
+    public async Task AViewsReads_AnswerWithinTheirBudgets_WhileARecordFilterLands()
     {
         WarmedReads();
         var filter = Task.Run(() => Index.Queries.SetFilter("SELECT form_key FROM records WHERE hash(body) = 0", "slow.sql"));
         try
         {
             Answering("while a record filter lands", filter);
-            Assert.Null(filter.GetAwaiter().GetResult());
+            Assert.Null(await filter);
         }
         finally
         {
-            filter.GetAwaiter().GetResult();
+            await filter;
             Index.Queries.ClearFilter();
         }
     }
 
-    [RealSizeFact]
-    public void AViewsReads_AnswerWithinTheirBudgets_WhileACheckOfTheDiskRuns()
+    [Fact]
+    public async Task AViewsReads_AnswerWithinTheirBudgets_WhileACheckOfTheDiskRuns()
     {
         var rewritten = Modlist.SmallBinaryPlugins;
         using var restored = Restoring([.. rewritten.Select(small => small.Path)], () => CheckEnded() && !Index.Status.Validating);
@@ -345,10 +346,10 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         var check = Index.Queries.Hold(null, CancellationToken.None);
 
         Answering($"while a check of the disk reads {rewritten.Count} plugins", check);
-        Assert.Null(check.GetAwaiter().GetResult());
+        Assert.Null(await check);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AViewsReads_AnswerWithinTheirBudgets_WhileALaunchReconcilesEveryPlugin()
     {
         var launch = realSize.Relaunching();
@@ -388,7 +389,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private void Held(PluginChange written) =>
         Assert.Null(Index.Queries.Hold([new HandedPlugin(written.Plugin, written.Files, [])], CancellationToken.None).GetAwaiter().GetResult());
 
-    [RealSizeFact]
+    [Fact]
     public void ARecordItsWriterCreated_IsReadWithinOneGesture()
     {
         var plugin = Modlist.BigSourcePlugin;
@@ -407,7 +408,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal("Created", Index.RowOf(formKey, plugin.Key)?.EditorId);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void APluginReadWholeAgain_IsReadAndSweptWithinHalfAGesture()
     {
         var small = Modlist.SmallBinaryPlugins[0];
@@ -434,7 +435,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private void ReadBack(PluginAddress plugin) =>
         Assert.Null(Index.Queries.Hold([HandedPlugin.ReadBack(plugin)], CancellationToken.None).GetAwaiter().GetResult());
 
-    [RealSizeFact]
+    [Fact]
     public void AReferenceItsWriterCopiedAsNewIntoABigCell_IsReadWithinOneGesture()
     {
         var plugin = Modlist.BigSourcePlugin;
@@ -486,7 +487,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         }, restored);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersBigCell_OpensWithinOneSecond()
     {
         var (queries, modlist) = (Index.Queries, Modlist);
@@ -496,7 +497,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Contains("\"MastersBigCell\"", opened?.Text, StringComparison.Ordinal);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AReferenceInABigSourceCell_OpensWithinAQuarterOfAGesture()
     {
         RenderedDocument? opened = null;
@@ -506,7 +507,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(Path.GetFileName(BigCellsDocument()), opened?.FileName);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ASlowReadItsCallerLeft_StopsWithinThreeKeystrokes()
     {
         const string slow = "SELECT max(hash(a.form_key || b.form_key)) AS v FROM records a, (SELECT form_key FROM records LIMIT 20000) b";
@@ -522,7 +523,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.True(abandoned.Elapsed <= OneKeystroke * 3, $"The read went on for {abandoned.Elapsed.TotalSeconds:F2} s after its caller left.");
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersBigCell_ListsItsReferencesWithinOneSecond()
     {
         var (queries, modlist) = (Index.Queries, Modlist);
@@ -532,7 +533,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(RealSizeModlist.ReferencesInTheBigCell, listed?.Temporary.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ASearchAsTheUserTypes_AnswersWithinAQuarterOfAGesture()
     {
         PagedResult<RecordSummary>? found = null;
@@ -541,7 +542,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(20, found?.Items.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersWorldspaceBlocks_ListWithinOneSecond()
     {
         var master = Modlist.Master.Key;
@@ -552,7 +553,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed?.Blocks ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersInteriorCells_ListWithinOneSecond()
     {
         IReadOnlyList<InteriorCellBlock>? listed = null;
@@ -561,7 +562,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AQuestsTopics_ListWithinAQuarterOfAGesture()
     {
         var master = Modlist.Master.Key;
@@ -572,7 +573,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void OneRecordsRead_TakesAQuarterOfAGesture()
     {
         var (queries, modlist) = (Index.Queries, Modlist);
@@ -583,7 +584,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Single(read?.Compare?.Overrides ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ARecordsComparisonAcrossItsDeepestStack_TakesHalfAGesture()
     {
         var (queries, modlist) = (Index.Queries, Modlist);
@@ -593,7 +594,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(modlist.LoadOrder.Take(RealSizeModlist.PluginsOverridingOneRecord + 1).Count(plugin => plugin.Enabled), compared?.Overrides.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheFilePathsOfEveryPlugin_ListWithinOneGesture()
     {
         IReadOnlyList<PluginFilePaths>? listed = null;
@@ -603,7 +604,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Contains(listed ?? [], plugin => plugin.Paths.Count > 0);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheFilePathsOfOnePlugin_ListWithinAQuarterOfAGesture()
     {
         IReadOnlyList<PluginFilePaths>? listed = null;
@@ -612,7 +613,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(Assert.Single(listed ?? []).Paths);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToAFilePath_ArePlacedWithinOneGesture()
     {
         PlacedReferences? listed = null;
@@ -621,7 +622,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed?.Copies ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToAScript_ListWithinAQuarterOfAGesture()
     {
         MemberReferences? listed = null;
@@ -630,7 +631,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed?.Copies ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersRecordTypes_AreCountedWithinOneGesture()
     {
         IReadOnlyList<PluginRecordTypeCount>? listed = null;
@@ -639,7 +640,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Contains(listed ?? [], type => type.Type == "npc_");
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersNpcs_ListWithinOneGesture()
     {
         PagedResult<RecordSummary>? listed = null;
@@ -648,7 +649,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed?.Items ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersWorldspaces_ListWithinHalfAGesture()
     {
         IReadOnlyList<WorldspaceSummary>? listed = null;
@@ -657,7 +658,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal("World000", Assert.Single(listed ?? []).EditorId);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheWorkingTreeStatesBeneathTheBigSourcePlugin_ReadWithinAQuarterOfAGesture()
     {
         WorkingTreeStatesBeneath? read = null;
@@ -666,7 +667,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal((0, 0, 0), (read?.Plugin.Count, read?.RecordTypes.Count, read?.Records.Count));
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheTypesTheMastersBigCellCanHold_ReadWithinAQuarterOfAGesture()
     {
         IReadOnlyList<RecordTypeChoice>? read = null;
@@ -675,7 +676,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Contains(read ?? [], type => type.Type == "refr");
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ARecordsDocument_IsFoundWithinAQuarterOfAGesture()
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[6]);
@@ -685,7 +686,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key))), found);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheMastersBigCellsRenderedDocument_IsFoundWithinAQuarterOfAGesture()
     {
         CopyDocument? found = null;
@@ -694,7 +695,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(CopyDocumentKind.Rendered, found?.Kind);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ARecordsOwner_IsReadWithinAQuarterOfAGesture()
     {
         IReadOnlyList<PluginAddress>? owners = null;
@@ -703,7 +704,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Single(owners ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToARecord_ListWithinOneGesture()
     {
         IReadOnlyList<ReferenceResult>? listed = null;
@@ -712,7 +713,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(RealSizeModlist.ReferencesInTheBigCell, listed?.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToARecord_ArePlacedWithinOneGesture()
     {
         PlacedReferences? placed = null;
@@ -721,7 +722,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(placed?.Copies ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheBigSourcePluginsProblems_ReadWithinOneGesture()
     {
         IReadOnlyList<PluginProblems>? read = null;
@@ -730,7 +731,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Single(read ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void EveryPluginsProblems_ReadWithinOneGesture()
     {
         IReadOnlyList<PluginProblems>? read = null;
@@ -739,7 +740,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(RealSizeModlist.SourceTreePlugins, read?.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void EveryPluginsDiagnoses_ReadWithinAQuarterOfAGesture()
     {
         IReadOnlyList<PluginDiagnosisReport>? read = null;
@@ -748,7 +749,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Empty(read ?? [new PluginDiagnosisReport("", "", "unread")]);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheNamesInADocument_AreReadWithinAQuarterOfAGesture()
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[3]);
@@ -760,7 +761,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(named ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToASmallPluginsName_ListWithinOneKeyedRead()
     {
         var small = Modlist.SmallBinaryPlugins.First(plugin => plugin.Enabled);
@@ -770,7 +771,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToTheMastersName_ListWithinOneAnswerOfEveryMastersRecord()
     {
         IReadOnlyList<CopyNaming>? listed = null;
@@ -779,7 +780,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.NotEmpty(listed ?? []);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToAScript_ArePlacedWithinTheTimeToReadEachCopysDocument()
     {
         var copies = Index.Queries.GetScriptReferences(RealSizeModlist.AttachedScript).Value().Copies.Count;
@@ -789,7 +790,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(copies, placed?.Copies.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void TheReferencesToASmallPluginsName_ArePlacedWithinTheTimeToReadEachCopysDocument()
     {
         var small = Modlist.SmallBinaryPlugins.First(plugin => plugin.Enabled);
@@ -800,7 +801,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(copies, placed?.Copies.Count);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void AName_ResolvesWithinOneKeyedRead()
     {
         IReadOnlyList<NamedObject>? named = null;
@@ -809,7 +810,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal(Modlist.OverriddenRecord, Assert.Single(named ?? []).FormKey);
     }
 
-    [RealSizeFact]
+    [Fact]
     public void ARenamedScriptsReferences_AreReadWithinOneGesture()
     {
         var queries = Index.Queries;

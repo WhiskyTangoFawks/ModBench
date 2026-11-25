@@ -45,7 +45,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.True(TestAdapters.Source().SourceReads(Registered(Recased)));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void APluginSourceThatCannotBeListed_DoesNotRead_NotAThrow()
     {
         var sources = Path.Combine(_modFolder, "plugin-source");
@@ -159,7 +159,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.Empty(Repository.LastWrittenBinarySha256s(AsTreeNamesIt).Value());
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void APluginWithTwinTreesOneSpelledAsTheLoadOrderNamesIt_ReadsThatOne()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
@@ -168,7 +168,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.Equal([HeaderBody, NpcBody], TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void APluginWithTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_DoesNotRead()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
@@ -176,7 +176,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.False(TestAdapters.Source().SourceReads(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void TwinTreesNeitherSpelledAsTheLoadOrderNamesIt_AreStillPluginSourceItsModHolds()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
@@ -184,7 +184,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.Equal([TestMod.Name], TestAdapters.Source().PlacesHoldingPluginSourceOf([new PluginPlace(TestMod.Name, _modFolder, _modFolder)], "fixture.esp"));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void WhyTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_DoNotRead_NamesBothFolders()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
@@ -206,7 +206,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.True(missing.DecompileRepairs);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void WhyAPluginSourceThatCannotBeListed_DoesNotRead_SaysWhyTheSystemGave()
     {
         var sources = Path.Combine(_modFolder, "plugin-source");
@@ -229,7 +229,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.Null(TestAdapters.Source().WhySourceDoesNotRead(Registered(Recased)));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void ReplacingTheSourceOfTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_IsAmbiguousNamingBoth_AndWritesNoThirdFolder()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
@@ -246,7 +246,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
             Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void ADocumentOfATwinTreeThePluginDoesNotRead_IsRefused()
     {
         MakeTwinOfTheTreeIn(Recased.Name);

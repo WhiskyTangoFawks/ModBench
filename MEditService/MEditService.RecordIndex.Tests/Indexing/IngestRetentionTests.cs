@@ -33,7 +33,7 @@ public sealed class IngestRetentionTests : IDisposable
         Assert.False(documents.FirstHeldAtTheLast);
     }
 
-    [MeasuredFact]
+    [Fact, Kind(Kinds.Measured)]
     public void APluginsIngest_HandsDuckDbTheRecordsItHasWritten_BeforeItReadsThePluginsLast()
     {
         using var documents = new MegabyteRecords(_fixture.InstanceRoot);
@@ -43,7 +43,7 @@ public sealed class IngestRetentionTests : IDisposable
         Assert.InRange(documents.DuckDbBytesAtTheLast, 16L * MegabyteEditorId, long.MaxValue);
     }
 
-    [MeasuredFact]
+    [Fact, Kind(Kinds.Measured)]
     public void APluginsIngest_LeavesNoIndexNodesInDuckDbsMemory()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);

@@ -50,7 +50,7 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
     private static void AssertStoppedNaming(string relativePath, SourceFailure stopped) =>
         Assert.Contains(relativePath, Assert.IsType<SourceFailure.Inaccessible>(stopped).Reason);
 
-    [PosixTheory]
+    [Theory, Kind(Kinds.Posix)]
     [InlineData("Hidden - 000850_Unreadable.esp.json")]
     [InlineData("RenamedByHand.json")]
     public void ARecordByFormKey_WhoseDocumentIsUnreadable_NamedForItOrNot_StopsNamingIt(string leaf)
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
         AssertStoppedNaming(Unreadable(npc), repository.RecordByFormKey(Plugin, $"000850:{PluginName}").Stopped());
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnEmbeddedChildByFormKey_WhoseOwnerIsUnreadable_StopsNamingTheOwner()
     {
         var (cellPath, cell) = CellWithAReference(out var reference);
@@ -70,7 +70,7 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
         AssertStoppedNaming(Unreadable(cellPath), repository.RecordByFormKey(Plugin, reference.FormKey.ToString()).Stopped());
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void AnEmbeddedChildByFormKey_WhoseOwnerTurnsUnreadableAfterTheScan_StopsNamingTheOwner()
     {
         var (cellPath, cell) = CellWithAReference(out var reference);

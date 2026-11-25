@@ -9,6 +9,7 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.RealData;
 
+[Kind(Kinds.Smoke)]
 public sealed class VanillaMasterFormatTests
 {
     public static TheoryData<GameRelease, string> InstalledVanillaMasters()
@@ -30,7 +31,7 @@ public sealed class VanillaMasterFormatTests
             new ModPath(ModKey.FromFileName(Path.GetFileName(path)), path), release, new BinaryReadParameters { MasterFlagsLookup = styles });
     }
 
-    [SmokeTheory]
+    [Theory]
     [MemberData(nameof(InstalledVanillaMasters))]
     public void EveryRecordOfAVanillaMaster_ReadsBackFromTheFormatsText_AndTheRecompilesNormalizationLeavesThatTextAsItIs(
         GameRelease release, string path)

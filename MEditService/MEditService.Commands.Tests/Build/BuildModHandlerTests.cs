@@ -327,7 +327,7 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task AFileThatCannotBeReadAfterTheFirstWrite_LandsTheCopyWithThatFailure()
     {
         WriteSource(("a.txt", "a"), ("z.txt", "z"));

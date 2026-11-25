@@ -11,6 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.RealData;
 
+[Kind(Kinds.Smoke)]
 public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtATime install)
     : IClassFixture<RealInstallSmokeTests.OneGameLoadedAtATime>
 {
@@ -32,7 +33,7 @@ public sealed class RealInstallSmokeTests(RealInstallSmokeTests.OneGameLoadedAtA
         return rows;
     }
 
-    [SmokeTheory]
+    [Theory]
     [MemberData(nameof(InstalledMasters))]
     public async Task AnInstalledMaster_IsListedAndItsRecordsRead(GameRelease release, string master)
     {

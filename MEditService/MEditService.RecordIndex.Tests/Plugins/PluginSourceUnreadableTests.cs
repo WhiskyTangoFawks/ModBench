@@ -59,7 +59,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Assert.Empty(index.Status.Failures);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public void APluginSourceWithTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
     {
         var sources = Path.GetDirectoryName(SourceRoot).Require();
@@ -74,7 +74,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Assert.False(unreadable?.DecompileRepairs);
     }
 
-    [PosixFact]
+    [Fact, Kind(Kinds.Posix)]
     public async Task AReadBackOfAPluginSourceWithTwinFolders_IsAnsweredNamingBothFolders()
     {
         var sources = Path.GetDirectoryName(SourceRoot).Require();
