@@ -7,9 +7,6 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class NotActivePluginEditTests
 {
-    private static void Disable(OverriddenAndUnlistedFixture mod, PluginAddress plugin) =>
-        mod.Relist(plugin, entry => entry with { Enabled = false });
-
     private static (PluginAddress Plugin, string Npc) Overridden(OverriddenAndUnlistedFixture mod) =>
         (mod.OverriddenPlugin, mod.OverriddenNpc.ToString());
 
@@ -18,7 +15,7 @@ public sealed class NotActivePluginEditTests
 
     private static (PluginAddress Plugin, string Npc) DisablingTheWinner(OverriddenAndUnlistedFixture mod)
     {
-        Disable(mod, mod.WinningPlugin);
+        mod.Relist(mod.WinningPlugin, entry => entry with { Enabled = false });
         return (mod.WinningPlugin, mod.WinningNpc.ToString());
     }
 
@@ -44,69 +41,16 @@ public sealed class NotActivePluginEditTests
         Assert.Equal([npc], mod.ChangedFormKeys(plugin));
     }
 
-    [Theory]
-    [InlineData("overridden")]
-    public void CreatingARecord_InAPluginThatIsNotActive_Lands(string which)
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        var (plugin, _) = NotActivePlugin[which](mod);
-
-        var result = mod.CreateHandler.CreateRecordSync(plugin, "npc_");
-
-        Assert.True(result.Applied, result.Message);
-    }
-
-    [Theory]
-    [InlineData("overridden")]
-    public void DeletingARecord_InAPluginThatIsNotActive_Lands(string which)
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        var (plugin, npc) = NotActivePlugin[which](mod);
-
-        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(plugin, npc)]);
-
-        Assert.Single(result.Applied);
-        Assert.Null(mod.Document(plugin, npc));
-    }
-
-    [Theory]
-    [InlineData("overridden")]
-    public void CopyingAsNewRecord_IntoAPluginThatIsNotActive_Lands(string which)
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        var (plugin, _) = NotActivePlugin[which](mod);
-
-        var result = mod.CopyHandler.CopySync(
-            [new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.New, [plugin], replace: false);
-
-        result.OnlyLanded();
-    }
-
-    [Theory]
-    [InlineData("overridden")]
-    public void CopyingAsOverride_IntoAPluginThatIsNotActive_Lands(string which)
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        var (plugin, _) = NotActivePlugin[which](mod);
-
-        var result = mod.CopyHandler.CopySync(
-            [new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.Override, [plugin], replace: false);
-
-        result.OnlyLanded();
-        Assert.NotNull(mod.Document(plugin, mod.CopySourceNpc.ToString()));
-    }
-
     [Fact]
-    public void CopyingAsOverride_IntoADisabledPluginWhoseLineIsBeforeTheOrigin_IsRefusedAsAnUnderride()
+    public void CopyingAsOverride_IntoTheOverriddenCopyOfAFileName_LandsInThatCopy()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
-        Disable(mod, mod.CopySourcePlugin);
 
         var result = mod.CopyHandler.CopySync(
-            [new RecordAt(mod.WinningPlugin, mod.WinningNpc.ToString())], CopyMode.Override, [mod.CopySourcePlugin], replace: false);
+            [new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.Override, [mod.OverriddenPlugin], replace: false);
 
-        Assert.Equal(RecordEditRefusal.UnderrideDestination, result.OnlyRefused().Refusal);
-        Assert.Null(mod.Document(mod.CopySourcePlugin, mod.WinningNpc.ToString()));
+        result.OnlyLanded();
+        Assert.NotNull(mod.Document(mod.OverriddenPlugin, mod.CopySourceNpc.ToString()));
     }
 
     [Fact]

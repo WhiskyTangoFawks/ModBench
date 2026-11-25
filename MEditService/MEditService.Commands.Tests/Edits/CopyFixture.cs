@@ -30,10 +30,8 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
 
     // Related to itself: the self-reference-follows-the-duplicate proof needs a FormLink that can
     // validly target its own record type.
-    public const string SelfLinkingFactionEditorId = "SelfLinkingFaction";
     public FormKey SelfLinkingFaction { get; }
 
-    public const string DestinationNpcEditorId = "DestinationNpc";
     public FormKey DestinationNpc { get; }
 
     private CopyFixture(bool initSource)
@@ -41,7 +39,7 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var npc = sourceMod.Npcs.AddNew(SourceNpcEditorId);
         var namelessNpc = sourceMod.Npcs.AddNew((string?)null);
-        var faction = sourceMod.Factions.AddNew(SelfLinkingFactionEditorId);
+        var faction = sourceMod.Factions.AddNew("SelfLinkingFaction");
         var relation = new Relation();
         relation.Target.SetTo(faction);
         faction.Relations.Add(relation);
@@ -50,7 +48,7 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
         SourceNpcWithNoEditorId = namelessNpc.FormKey;
 
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
-        var destinationNpc = destinationMod.Npcs.AddNew(DestinationNpcEditorId);
+        var destinationNpc = destinationMod.Npcs.AddNew("DestinationNpc");
         DestinationPlugin = Add(destinationMod, DestinationOrigin);
         DestinationNpc = destinationNpc.FormKey;
     }

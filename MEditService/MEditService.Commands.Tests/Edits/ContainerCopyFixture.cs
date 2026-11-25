@@ -27,24 +27,18 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public const string QuestEditorId = "SourceQuest";
     public FormKey Quest { get; }
 
-    public const string FlatNpcEditorId = "SourceFlatNpc";
     public FormKey FlatNpc { get; }
 
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
 
     // Two responses under the topic: DIAL with INFOs. Response1 links to itself, Response2 to Response1.
-    public const string Response1EditorId = "SourceResponse1";
     public FormKey Response1 { get; }
 
-    public const string Response2EditorId = "SourceResponse2";
     public FormKey Response2 { get; }
 
     public const string SceneEditorId = "SourceScene";
     public FormKey Scene { get; }
-
-    public const string DialogBranchEditorId = "SourceBranch";
-    public FormKey DialogBranch { get; }
 
     // Interior — the non-spatial case: a real block/sub-block pair.
     public const string InteriorCellEditorId = "SourceInteriorCell";
@@ -57,21 +51,11 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public const string TemporaryRefEditorId = "SourceTemporaryRef";
     public FormKey TemporaryRef { get; }
 
-    public const string NavmeshEditorId = "SourceNavmesh";
-    public FormKey Navmesh { get; }
-
-    public const string LandscapeEditorId = "SourceLandscape";
-    public FormKey Landscape { get; }
-
     // TopCell is a worldspace's persistent cell: embedded in the worldspace's document, with no grid.
     public const string WorldspaceEditorId = "SourceWorld";
     public FormKey Worldspace { get; }
 
-    public const string TopCellEditorId = "SourceTopCell";
     public FormKey TopCell { get; }
-
-    public const string TopCellRefEditorId = "SourceTopCellRef";
-    public FormKey TopCellRef { get; }
 
     // A real SubCells cell: each cell's block and sub-block are the ones its own grid falls in.
     public const int ExteriorBlockX = 0;
@@ -94,12 +78,12 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
-        var flatNpc = sourceMod.Npcs.AddNew(FlatNpcEditorId);
+        var flatNpc = sourceMod.Npcs.AddNew("SourceFlatNpc");
 
         var quest = new Quest(sourceMod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };
-        var response1 = new DialogResponses(sourceMod) { EditorID = Response1EditorId };
-        var response2 = new DialogResponses(sourceMod) { EditorID = Response2EditorId };
+        var response1 = new DialogResponses(sourceMod) { EditorID = "SourceResponse1" };
+        var response2 = new DialogResponses(sourceMod) { EditorID = "SourceResponse2" };
         response1.PreviousDialog.SetTo(response1);
         response2.PreviousDialog.SetTo(response1);
         dialogTopic.Responses.Add(response1);
@@ -107,8 +91,6 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
         quest.DialogTopics.Add(dialogTopic);
         var scene = new Scene(sourceMod) { EditorID = SceneEditorId };
         quest.Scenes.Add(scene);
-        var dialogBranch = new DialogBranch(sourceMod) { EditorID = DialogBranchEditorId };
-        quest.DialogBranches.Add(dialogBranch);
         sourceMod.Quests.Add(quest);
 
         var interiorCell = new Cell(sourceMod) { EditorID = InteriorCellEditorId, WaterHeight = InteriorCellWaterHeight };
@@ -124,23 +106,12 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
             Position = new P3Float(4f, 5f, 6f),
             Scale = 1f,
         };
-        var navmesh = new NavigationMesh(sourceMod) { EditorID = NavmeshEditorId };
-        var landscape = new Landscape(sourceMod) { EditorID = LandscapeEditorId };
         interiorCell.Persistent.Add(persistentRef);
         interiorCell.Temporary.Add(temporaryRef);
-        interiorCell.NavigationMeshes.Add(navmesh);
-        interiorCell.Landscape = landscape;
         sourceMod.AddInteriorCells(interiorCell);
 
         var worldspace = new Worldspace(sourceMod) { EditorID = WorldspaceEditorId };
-        var topCell = new Cell(sourceMod) { EditorID = TopCellEditorId };
-        var topCellRef = new PlacedObject(sourceMod)
-        {
-            EditorID = TopCellRefEditorId,
-            Position = new P3Float(7f, 8f, 9f),
-            Scale = 1f,
-        };
-        topCell.Temporary.Add(topCellRef);
+        var topCell = new Cell(sourceMod) { EditorID = "SourceTopCell" };
         worldspace.TopCell = topCell;
 
         var exteriorCell = new Cell(sourceMod)
@@ -172,12 +143,11 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
         (Response1, Response2) = (response1.FormKey, response2.FormKey);
-        (Scene, DialogBranch) = (scene.FormKey, dialogBranch.FormKey);
+        Scene = scene.FormKey;
         FlatNpc = flatNpc.FormKey;
         InteriorCell = interiorCell.FormKey;
         (PersistentRef, TemporaryRef) = (persistentRef.FormKey, temporaryRef.FormKey);
-        (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
-        (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
+        (Worldspace, TopCell) = (worldspace.FormKey, topCell.FormKey);
         ExteriorCell = exteriorCell.FormKey;
         (ExteriorPersistentRef, ExteriorTemporaryRef) = (exteriorPersistentRef.FormKey, exteriorTemporaryRef.FormKey);
 

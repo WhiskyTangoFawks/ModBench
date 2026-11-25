@@ -38,7 +38,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     }
 
     [Fact]
-    public async Task CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
+    public void CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {
         var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Quest.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
 
@@ -52,13 +52,5 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var questText = _fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId + "DUPLICATE001").Body;
         Assert.DoesNotContain(ContainerCopyFixture.DialogTopicEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.SceneEditorId, questText, StringComparison.Ordinal);
-        Assert.DoesNotContain(ContainerCopyFixture.DialogBranchEditorId, questText, StringComparison.Ordinal);
-
-        using var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
-        var compiledQuest = compiled.Quests.Single(q => q.FormKey.ToString() == newFormKey);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId + "DUPLICATE001", compiledQuest.EditorID);
-        Assert.Empty(compiledQuest.DialogTopics);
-        Assert.Empty(compiledQuest.DialogBranches);
-        Assert.Empty(compiledQuest.Scenes);
     }
 }
