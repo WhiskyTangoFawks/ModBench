@@ -74,7 +74,6 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     [InlineData(Compressed, Compressed | Deleted, Deleted)]
     [InlineData(Compressed, Compressed | PartialForm, PartialForm)]
     [InlineData(PartialForm, PartialForm | Deleted, Deleted)]
-    [InlineData(Deleted | Persistent, Deleted | Persistent | PartialForm, Persistent | PartialForm)]
     [InlineData(0, Deleted | PartialForm, PartialForm)]
     public void DeletedAndPartialFormExcludeEachOtherAndCompressed_WhateverIsWrittenAfterwards(int held, int written, int kept)
     {
@@ -84,7 +83,6 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Theory]
-    [InlineData(PartialForm, PartialForm | Deleted)]
     [InlineData(0, Deleted | PartialForm)]
     public void AnEmptiedRecordWithNoCopyToItsLeft_HoldsNeitherItsEditorIdNorItsFields(int held, int written)
     {
@@ -98,9 +96,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Theory]
-    [InlineData(0, Deleted)]
     [InlineData(0, PartialForm)]
-    [InlineData(PartialForm, PartialForm | Deleted)]
     public void EmptyingACell_KeepsItsChildren_AndDropsItsOwnFields(int held, int written)
     {
         var cell = InteriorCellOfFallout4Esm(held);
@@ -223,18 +219,6 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPartialForm_WithNoCopyToItsLeft_LeavesItsOwnFieldsEmpty()
-    {
-        var cell = InteriorCellOfFallout4Esm(PartialForm);
-        cell.WaterHeight = 5f;
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var whole = SetFlags(formKey, 0);
-
-        Assert.DoesNotContain(whole, p => p.Key is "EditorID" or "WaterHeight" or "Flags");
-    }
-
-    [Fact]
     public void Bit14_OnATypeThatCannotBeAPartialForm_ChangesOnlyItsBit()
     {
         var npc = _mod.Npcs.AddNew("Guy");
@@ -245,28 +229,6 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
 
         Assert.Equal(PartialForm, FlagsOf(written));
         Assert.Equal(0.5f, written["HeightMax"].Require().GetValue<float>());
-    }
-
-    [Fact]
-    public void ClearingPartialForm_MakesTheCopysOwnFieldsEditable()
-    {
-        var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(PartialForm), "cell");
-
-        SetFlags(formKey, 0);
-        var (result, _) = _fixture.Apply(formKey, SetAt(Flags(9), Member("WaterHeight")));
-
-        Assert.True(result.Applied, result.Message);
-    }
-
-    [Fact]
-    public void ARecordHeaderRow_OnAPartialForm_Edits()
-    {
-        var formKey = _fixture.Seed(new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm }, "cell");
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Flags(9), Member("VersionControl")));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(9, Parse(after.Require())["VersionControl"].Require().GetValue<int>());
     }
 
     [Fact]

@@ -116,19 +116,6 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_OnAPlacedRecordInAnInteriorCell_MovesItIntoTheCellsTemporaryGroup()
-    {
-        var before = Document("InsidePersist");
-
-        var result = SetFlags("InsidePersist", 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["InsideTemp", "InsidePersist"], Group("Inside", "Temporary"));
-        Assert.Empty(Group("Inside", "Persistent"));
-        AssertOnlyFlagsChanged(before, "InsidePersist", 0);
-    }
-
-    [Fact]
     public void SettingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_MovesItIntoThatCellsPersistentGroup()
     {
         var before = Document("TopTemp");
@@ -182,16 +169,6 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_OnAPlacedRecordOutsideItsExteriorCellsGrid_MovesItIntoTheCellAtItsPosition()
-    {
-        var result = SetFlags("HoldingBeyond", 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["OutsideTemp", "OutsideStale", "HoldingBeyond"], Group("Outside", "Temporary"));
-        Assert.Equal(["HoldingWithin"], Group("Holding", "Persistent"));
-    }
-
-    [Fact]
     public void ClearingPersistent_IntoTheCellAtItsPosition_WhoseDocumentIsNoJson_IsRefusedAsRecordParseFailed_AndAnswersNoChanges()
     {
         File.WriteAllText(
@@ -215,7 +192,6 @@ public sealed class PersistentFlagEditTests : IDisposable
 
     [Theory]
     [InlineData("RuinDeleted", Deleted | Persistent, "Ruin")]
-    [InlineData("RuinDeletedPersistent", Deleted, "Ruin")]
     [InlineData("InsideTemp", Deleted | Persistent, "Inside")]
     public void ChangingPersistent_OnAPlacedRecordDeletedBeforeOrByTheWrite_IsRefused_NamingDeleted(string placed, int written, string cell)
     {

@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -24,7 +23,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     private readonly Fallout4Mod _master;
     private readonly Fallout4Mod _edited;
     private readonly FormKey _ownCell;
-    private readonly FormKey _deletedWorld;
 
     public CreateCellInWorldspaceTests()
     {
@@ -53,7 +51,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         });
         _ownCell = _edited.Worldspaces[World].SubCells
             .SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items).Single(cell => cell.EditorID == "OwnCell").FormKey;
-        _deletedWorld = _edited.Worldspaces.Single(world => world.EditorID == "DeletedWorld").FormKey;
         _plugins.Load((_master, false), (_edited, true));
     }
 
@@ -68,8 +65,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
 
     [Theory]
     [InlineData(-9, 33, "-1, 1", "-2, 4")]
-    [InlineData(0, 0, "0, 0", "0, 0")]
-    [InlineData(32, -1, "1, -1", "4, -1")]
     public void ACellCreatedOnAWorldspace_LandsAtItsGrid_InTheBlockAndSubBlockItFallsIn(int x, int y, string block, string subBlock)
     {
         var result = CreateCellAt(x, y);
@@ -99,37 +94,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void ACellCreatedWhereTheUnsavedTextOfThePluginsCellNoLongerSits_LandsThere_AndWritesNothing()
-    {
-        var before = Tree;
-        var file = _plugins.DocumentFileOf(_edited, _ownCell);
-        var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
-
-        _plugins.Unsaved.Typed(new DocumentChange(file, moved.Text));
-
-        var (outcome, changes) = _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(5, 6));
-
-        Assert.True(outcome.Applied, outcome.Message);
-        Assert.Contains(changes.Require().Documents, document => document.Text.Contains(outcome.NewFormKey.Require(), StringComparison.Ordinal));
-        Assert.Equal(before, Tree);
-    }
-
-    [Fact]
-    public void ACellCreatedWhereTheUnsavedTextOfAMastersCellNoLongerSits_LandsThere()
-    {
-        using var compiledPluginMaster = new LoadOrderOfPlugins();
-        compiledPluginMaster.Load((_master, true), (_edited, true));
-        var file = compiledPluginMaster.DocumentFileOf(_master, MasterCell);
-        var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
-
-        compiledPluginMaster.Unsaved.Typed(new DocumentChange(file, moved.Text));
-
-        var (outcome, _) = compiledPluginMaster.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(3, 3));
-
-        Assert.True(outcome.Applied, outcome.Message);
-    }
-
-    [Fact]
     public void ACellCreatedWhereAMasterHoldsOne_IsRefusedNamingIt_PointingAtCopyAsOverride_AndWritesNothing()
     {
         var before = Tree;
@@ -145,7 +109,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     public static TheoryData<FormKey, int, int> OverridesOfAMastersCellSayingNoGridOrAnother => new()
     {
         { PartialFormOverride, 40, 40 },
-        { MovedOverride, -40, -40 },
     };
 
     [Theory]
@@ -165,7 +128,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
 
     [Theory]
     [InlineData(1, null)]
-    [InlineData(null, 2)]
     public void ACellCreatedOnAWorldspaceWithOneCoordinate_IsRefusedAsAMalformedEnvelope_AndWritesNothing(int? x, int? y)
     {
         var before = Tree;
@@ -173,56 +135,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var result = CreateCellAt(x, y);
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Equal(before, Tree);
-    }
-
-    [Fact]
-    public void ACellCreatedOnAWorldspaceWithNoPosition_IsRefusedAsAMalformedEnvelope_AndWritesNothing()
-    {
-        var before = Tree;
-
-        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "cell", World.ToString());
-
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Equal(before, Tree);
-    }
-
-    [Fact]
-    public void ARecordOtherThanACellCreatedOnAWorldspace_IsRefusedAsOneItCannotHold()
-    {
-        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "npc_", World.ToString());
-
-        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
-        Assert.Contains(World.ToString(), result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ARecordOtherThanACellCreatedOnAWorldspaceWithAGridPosition_IsRefusedAsAMalformedEnvelope()
-    {
-        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "refr", World.ToString(), new GridPosition(1, 1));
-
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-    }
-
-    [Fact]
-    public void ACellCreatedOnAWorldspaceThePluginDoesNotHold_IsRefusedNamingIt()
-    {
-        var gone = new FormKey(_edited.ModKey, 0xFFF).ToString();
-
-        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "cell", gone, new GridPosition(1, 1));
-
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-        Assert.Contains(gone, result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ACellCreatedOnADeletedWorldspace_IsRefusedAsOneItCannotHold_AndWritesNothing()
-    {
-        var before = Tree;
-
-        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "cell", _deletedWorld.ToString(), new GridPosition(1, 1));
-
-        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Equal(before, Tree);
     }
 

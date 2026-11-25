@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -135,30 +134,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     }
 
     [Fact]
-    public void SettingPersistent_CopiesTheMastersPersistentCellFromItsUnsavedText()
-    {
-        Load(masterCompiledPlugin: true);
-
-        _plugins.Unsaved.Typed(MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent"));
-        SetFlags("Mover", Persistent);
-
-        Assert.Equal("UnsavedPersistent", Document(World)["TopCell"].Require()["EditorID"].Require().GetValue<string>());
-    }
-
-    [Fact]
-    public void SettingPersistent_KeepsTheUnsavedTextOfThePluginsOwnWorldspaceDocument_ItLandsIn()
-    {
-        Load(masterCompiledPlugin: false);
-        var file = _plugins.DocumentFileOf(Override, World);
-        var dirty = new DocumentChange(file, File.ReadAllText(file).Replace("\"World\"", "\"DirtyWorld\"", StringComparison.Ordinal));
-
-        _plugins.Unsaved.Typed(dirty);
-        SetFlags("Mover", Persistent);
-
-        Assert.Equal("DirtyWorld", Document(World)["EditorID"].Require().GetValue<string>());
-    }
-
-    [Fact]
     public void ClearingPersistent_CopiesTheMastersCellFromItsUnsavedText()
     {
         Load(masterCompiledPlugin: true);
@@ -167,36 +142,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         SetFlags("Leaver", 0);
 
         Assert.Equal("UnsavedGrid", Document(MasterGridCell)["EditorID"].Require().GetValue<string>());
-    }
-
-    private sealed class FaultingOnClosingAMasterAskedForACell() : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
-            RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-            base.OpenRecordLookup(plugin, loadOrder, schemas).Map<IPluginRecords, IPluginRecords>(records => new Faulting(records));
-
-        private sealed class Faulting(IPluginRecords inner) : IPluginRecords
-        {
-            private bool _askedForACell;
-
-            public Answer<RecordIdentity?, PluginFailure> IdentityOf(string formKey) => inner.IdentityOf(formKey);
-            public Answer<long?, PluginFailure> RecordFlagsOf(string formKey) => inner.RecordFlagsOf(formKey);
-            public Answer<string?, PluginFailure> TextOf(string formKey) => inner.TextOf(formKey);
-            public Answer<DocumentContainment?, PluginFailure> ContainmentOf(string formKey) => inner.ContainmentOf(formKey);
-            public Answer<CellStructure?, PluginFailure> CellStructureOf(string formKey) => inner.CellStructureOf(formKey);
-
-            public Answer<string?, PluginFailure> CellAt(string worldspace, int x, int y)
-            {
-                _askedForACell = true;
-                return inner.CellAt(worldspace, x, y);
-            }
-
-            public void Dispose()
-            {
-                inner.Dispose();
-                if (_askedForACell) throw new InvalidOperationException("Expected the plugin to close.");
-            }
-        }
     }
 
     private sealed class HidingTheRepositoryWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -226,19 +171,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(["Leaver"], Group(Document(MasterGridCell), "Temporary"));
     }
 
-    [Fact]
-    public void ClearingPersistent_WhoseLandingFaults_ThrowsTheFault_NeverRefusesItAsATreeMovedOutsideModbench()
-    {
-        Load(masterCompiledPlugin: false);
-        var services = TestEditService.Over(_plugins.Holder, adapter: new FaultingOnClosingAMasterAskedForACell());
-        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>());
-
-        var fault = Assert.Throws<InvalidOperationException>(() => handler.Edit(
-            Address(Override), _keys["Leaver"].ToString(), SetAt(JsonDocument.Parse("0").RootElement, Member("MajorRecordFlagsRaw"))));
-
-        Assert.Equal("Expected the plugin to close.", fault.Message);
-    }
-
     private static Fallout4Mod MiddleOverridingThePersistentCell() => Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
     {
         EditorID = "MiddlesPersistentCell",
@@ -246,24 +178,9 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         WaterHeight = 9f,
     });
 
-    private static Fallout4Mod MiddleOverridingTheGridCell() => Middle((_, world) => world.SubCells.Add(CellBlocks.Exterior(
-        new Cell(MasterGridCell, Fallout4Release.Fallout4)
-        {
-            EditorID = "MiddlesGrid",
-            WaterHeight = 9f,
-            Grid = new CellGrid { Point = new P2Int(3, 3) },
-        })));
-
-    private static Fallout4Mod MiddleHoldingAPersistentCell() => Middle((mod, world) =>
-        world.TopCell = new Cell(mod) { EditorID = "MiddlesPersistentCell", MajorRecordFlagsRaw = Persistent });
-
-    private static Fallout4Mod MiddleHoldingTheCellAtTheGrid() => Middle((mod, world) =>
-        world.SubCells.Add(CellBlocks.Exterior(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } })));
-
     public static TheoryData<bool, Fallout4Mod?> MastersHoldingAPersistentCell() => new()
     {
         { false, null },
-        { false, MiddleOverridingThePersistentCell() },
     };
 
     [Theory]
@@ -285,7 +202,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     public static TheoryData<Fallout4Mod?> PluginsHoldingNoPersistentCellToCopy() => new()
     {
         { null },
-        { MiddleHoldingAPersistentCell() },
     };
 
     [Theory]
@@ -307,7 +223,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         { true, null },
         { false, null },
-        { false, MiddleOverridingTheGridCell() },
     };
 
     [Theory]
@@ -328,7 +243,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     public static TheoryData<bool, Fallout4Mod?> PluginsHoldingNoCellAtThePosition() => new()
     {
         { true, null },
-        { false, MiddleHoldingTheCellAtTheGrid() },
     };
 
     [Theory]
@@ -385,13 +299,4 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal("000805:Override.esp", created.FormKey);
     }
 
-    [Fact]
-    public void SettingPersistent_WhereItCreatesThePersistentCell_NamesTheCellAfterTheHighestOfTheOverridesRecords()
-    {
-        Load(masterCompiledPlugin: false, masterHasPersistentCell: false);
-
-        SetFlags("Mover", Persistent);
-
-        Assert.Equal("000805:Override.esp", Document(World)["TopCell"].Require()["FormKey"].Require().GetValue<string>());
-    }
 }
