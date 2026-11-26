@@ -157,6 +157,22 @@ class SelectedByChange(GateRepo):
         self.assertEqual(self.selected(), self.slot_line("--frontend"))
 
 
+class DeletedTests(GateRepo):
+    def test_a_ticket_that_deletes_a_survivor_its_integration_branch_named_meets_it(self) -> None:
+        shutil.copy(SCRIPT.parent / "check_deleted_tests.py", self.validate)
+        self.write("CODING_STANDARDS.md", "## Tests\n")
+        self.write("scripts/tests/test_box.py", "    def test_a(self): ...\n    def test_b(self): ...\n    def test_c(self): ...\n")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "tests")
+        git(self.repo, "checkout", "-q", "-b", "integration")
+        self.write("scripts/tests/test_box.py", "    def test_b(self): ...\n    def test_c(self): ...\n")
+        git(self.repo, "commit", "-q", "-am", "delete a\n\nDeleted-test: test_a => test_b")
+        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
+        self.write("scripts/tests/test_box.py", "    def test_c(self): ...\n")
+        git(self.repo, "commit", "-q", "-am", "delete b\n\nDeleted-test: test_b => test_c")
+        self.assertIn("test_a => test_b: no test at the tip", self.gates("--comments").stdout)
+
+
 class FakeDotnet(GateRepo):
     DOTNET_RECORDING_ITS_ARGUMENTS = """#!/bin/sh
 echo "$*" >> {calls}
