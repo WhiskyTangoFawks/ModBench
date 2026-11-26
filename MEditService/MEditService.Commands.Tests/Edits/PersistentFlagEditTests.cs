@@ -51,8 +51,8 @@ public sealed class PersistentFlagEditTests : IDisposable
             holding.Grid = new CellGrid { Point = new P2Int(2, -1) };
             holding.Persistent.Add(Placed(plugin, "HoldingWithin", Persistent, 2.5f * CellWidth, -0.5f * CellWidth));
             holding.Persistent.Add(Placed(plugin, "HoldingBeyond", Persistent, 1.5f * CellWidth, 1.5f * CellWidth));
-            world.SubCells.Add(CellBlocks.Exterior(outside));
             world.SubCells.Add(CellBlocks.Exterior(holding));
+            world.SubCells.Add(CellBlocks.Exterior(outside));
         });
     }
 
