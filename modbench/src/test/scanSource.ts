@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { onTestFinished } from 'vitest';
 import { tsFiles } from './tsFiles';
@@ -38,6 +38,13 @@ export const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[
 
 export const sourceFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
+
+/** The file a relative specifier names, or `undefined` for a package or a file that is not TypeScript. */
+export function resolved(from: string, specifier: string): string | undefined {
+  if (!specifier.startsWith('.')) return undefined;
+  const base = resolve(dirname(from), specifier);
+  return [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')].find((candidate) => existsSync(candidate));
+}
 
 export function plantedTree(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'modbench-planted-tree-'));
