@@ -146,6 +146,10 @@ echo "=== Gate runner tests ==="
 (cd "$ROOT" && unset MEDIT_MERGE_TO_MAIN && unittest_discover validate -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
+echo "=== Deleted tests and their survivors ==="
+python3 "$ROOT/.claude/skills/validate/check_deleted_tests.py" "$ROOT" "$BASE" \
+  || { echo "--- DELETED TEST GATE FAILED ---"; FAILED=true; }
+
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
 # A bare dotnet test runs a branch's tests: MEditService/Directory.Build.props holds their filter, and a
