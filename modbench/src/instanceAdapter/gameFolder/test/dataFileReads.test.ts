@@ -1,26 +1,33 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { crc32 } from 'node:zlib';
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dataFileReads, type DataFileReads } from '../dataFileReads';
-import { trustingKept } from '../../files';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
-import type { GameFolder } from '../../instanceAdapter';
+import type { GameFolder, InstanceAdapter } from '../../instanceAdapter';
+import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+import { instanceOnDisk } from '../../test/instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
 
 const read = <T>(value: T) => ({ kind: 'read', value });
 
 describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
   let root: string;
-  let reads: DataFileReads;
+  let instance: string;
+  let reads: InstanceAdapter;
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'data-file-reads-'));
     await mkdir(join(root, 'Data'));
-    const found: GameFolder = { kind: 'found', root, dataFolder: join(root, 'Data') };
-    reads = dataFileReads(() => Promise.resolve(found));
+    instance = await instanceOnDisk();
+    reads = adapterOver(instance, { gameFolder: { kind: 'found', root, dataFolder: join(root, 'Data') } });
   });
-  afterEach(() => rm(root, { recursive: true, force: true }));
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(instance, { recursive: true, force: true });
+  });
 
   it('checksums a file in the Data folder as CRC-32 of its bytes, and a path that leaves it', async () => {
     await writeFile(join(root, 'Data', 'a.swf'), 'some bytes');
@@ -45,10 +52,10 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
   it('answers, inside a trusted read, whether a file is readable as it last read it, and outside one as it reads now', async () => {
     const file = join(root, 'Game.exe');
     await writeFile(file, 'game bytes');
-    await trustingKept(() => reads.dataFileReadable('../Game.exe', undefined));
+    await reads.dataFilesTrusted(() => reads.dataFileReadable('../Game.exe', undefined));
     await rm(file);
 
-    expect([await trustingKept(() => reads.dataFileReadable('../Game.exe', undefined)), await reads.dataFileReadable('../Game.exe', undefined)])
+    expect([await reads.dataFilesTrusted(() => reads.dataFileReadable('../Game.exe', undefined)), await reads.dataFileReadable('../Game.exe', undefined)])
       .toEqual([read(true), read(false)]);
   });
 
@@ -105,7 +112,7 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
   });
 
   it('answers why for a file of a game folder that was not found, and reads the winner all the same', async () => {
-    const lost = dataFileReads(() => Promise.resolve<GameFolder>({ kind: 'notFound', looked: [], setting: 's' }));
+    const lost = adapterOver(instance, { gameFolder: { kind: 'notFound', looked: [], setting: 's' } satisfies GameFolder });
 
     expect(await lost.dataFileChecksum('a.swf', undefined)).toEqual({ kind: 'unreadable', why: 'the game folder was not found' });
     expect(await lost.dataFileChecksum('a.swf', '/mod/a.swf')).toEqual(read(undefined));

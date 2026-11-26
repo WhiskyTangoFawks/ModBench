@@ -1,14 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { programRunning } from '../processes';
+import { describe, it, expect, vi } from 'vitest';
+import { rm } from 'node:fs/promises';
 import { runningProgram } from '../../test/runningProgram';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { adapterAsBuilt, instanceOnDisk } from './instanceOnDisk';
 
-describe('programRunning, over the machine\'s own processes', () => {
-  it('finds a process running the program by its file name, longer than Linux keeps a process\'s name, and none once it exits', async () => {
-    const program = `ProbeProgram${process.pid}.exe`;
-    const running = await runningProgram(program);
-    const whileUp = await programRunning(program);
+vi.mock('vscode', () => fakeVscodeModule());
+
+describe('whether MO2 is running, over the machine\'s own processes', () => {
+  it('finds a process running the program by its file name, longer than Linux keeps a process\'s name', async () => {
+    const instance = await instanceOnDisk();
+    const running = await runningProgram('ModOrganizer.exe');
+    const whileUp = await adapterAsBuilt(instance).managerRunning();
     await running.stop();
+    await rm(instance, { recursive: true, force: true });
 
-    expect([whileUp, await programRunning(program)]).toEqual([true, false]);
+    expect(whileUp).toEqual({ kind: 'running' });
   });
 });

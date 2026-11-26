@@ -1,11 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { rm } from 'node:fs/promises';
 import type { Mod, ModGroups, ModlistEntry, Separator } from '../instanceAdapter';
-import { groupModOrder } from '../modGroups';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../test/mo2/adapterOver';
+import { instanceOnDisk } from './instanceOnDisk';
 
-const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
+vi.mock('vscode', () => fakeVscodeModule());
+
+const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, updateAvailable: false });
 const sep = (name: string): Separator => ({ kind: 'separator', name, enabled: false });
 
+const modlistOf = (order: readonly ModlistEntry[]): string =>
+  order.map((entry) => (entry.kind === 'mod' ? `+${entry.name}` : `-${entry.name}_separator`)).join('\n');
+
 describe('a separator\'s group in the mod order', () => {
+  let instance: string;
+  afterEach(() => rm(instance, { recursive: true, force: true }));
+
   it.each<{ name: string; order: ModlistEntry[]; grouped: ModGroups }>([
     {
       name: 'an order with no separator leaves every mod ungrouped',
@@ -38,7 +49,9 @@ describe('a separator\'s group in the mod order', () => {
         ungrouped: [],
       },
     },
-  ])('$name', ({ order, grouped }) => {
-    expect(groupModOrder(order)).toEqual(grouped);
+  ])('$name', async ({ order, grouped }) => {
+    instance = await instanceOnDisk({ 'profiles/Default/modlist.txt': modlistOf(order) });
+
+    expect((await adapterOver(instance).reading()).modGroups).toEqual(grouped);
   });
 });
