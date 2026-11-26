@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isInstallationFileName } from '../installationFileNames';
+import { isInstallationFileName } from '../../instanceAdapter';
 
 describe('an installation file, named for an archive install can extract', () => {
   it.each([
