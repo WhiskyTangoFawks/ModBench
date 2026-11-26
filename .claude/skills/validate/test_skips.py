@@ -23,7 +23,7 @@ class Main(unittest.TestCase):
 
     def test_it_names_every_stacks_skip_and_fails(self):
         (self.dir / 'a.trx').write_text(fx.trx(fx.trx_result('A.Ran'), fx.trx_result('A.Skipped', outcome='NotExecuted')))
-        (self.dir / 'unit.json').write_text(fx.vitest(('/repo/src/a.test.ts', [('ran', 'passed', 3), ('skipped', 'pending', None)])))
+        (self.dir / 'unit.json').write_text(fx.vitest(('/repo/modbench/src/a.test.ts', [('ran', 'passed', 3), ('skipped', 'pending', None)])))
         (self.dir / 'hooks.unittest').write_text(fx.unittest_log(skipped=['test_skipped (m.C.test_skipped)']))
         (self.dir / 'it.mocha').write_text(fx.mocha_log(pending=['skipped']))
         code, printed = self.run_main()

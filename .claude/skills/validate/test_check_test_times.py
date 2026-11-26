@@ -1,13 +1,16 @@
-"""Pins check_test_times.py: each test over a second is named, slowest first, the wall time is
-printed against its budget, and nothing fails."""
+"""Pins check_test_times.py: each test over a second is named, slowest first, each box's summed test
+time is printed against its budget, and the wall time against the run's. A box over its budget fails the
+run once the switch is on, and only where budgets are given."""
 import contextlib
 import io
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 import check_test_times as ctt
 import report_fixtures as fx
+import reports
 
 
 class Reports(unittest.TestCase):
@@ -23,23 +26,23 @@ class Reports(unittest.TestCase):
 class OverCeiling(Reports):
     def test_a_test_over_a_second_is_named_with_its_time_and_one_under_it_is_not(self):
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Under', 5, 0.99), fx.trx_result('A.Over', 9, 1.01)))
-        self.assertEqual(ctt.over_ceiling(self.dir), [('A.Over', 1.01)])
+        self.assertEqual(ctt.over_ceiling(reports.results(self.dir)), [('A.Over', 1.01)])
 
     def test_a_test_with_no_time_is_not_named(self):
         self.report('a.trx', fx.trx(fx.trx_result('A.Skipped', outcome='NotExecuted')))
-        self.assertEqual(ctt.over_ceiling(self.dir), [])
+        self.assertEqual(ctt.over_ceiling(reports.results(self.dir)), [])
 
     def test_the_slowest_comes_first_whichever_report_holds_it(self):
-        self.report('unit.json', fx.vitest(('/repo/a.test.ts', [('quick', 'passed', 40), ('slow', 'passed', 2500)])))
+        self.report('unit.json', fx.vitest(('/repo/modbench/src/a.test.ts', [('quick', 'passed', 40), ('slow', 'passed', 2500)])))
         self.report('it.mocha', fx.mocha_log(passed=[('slower', 4000), ('slowest', 7000)]))
-        self.assertEqual([name for name, _ in ctt.over_ceiling(self.dir)], ['slowest', 'slower', 'a.test.ts > slow'])
+        self.assertEqual([name for name, _ in ctt.over_ceiling(reports.results(self.dir))], ['slowest', 'slower', 'a.test.ts > slow'])
 
 
 class Main(Reports):
-    def main(self, elapsed, budget):
+    def main(self, elapsed, budget, *budgets):
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            status = ctt.main([str(self.dir), str(elapsed), str(budget)])
+            status = ctt.main([str(self.dir), str(elapsed), str(budget), *budgets])
         return status, printed.getvalue()
 
     def test_it_names_each_test_over_the_ceiling_and_not_the_others(self):
@@ -56,6 +59,46 @@ class Main(Reports):
     def test_it_fails_nothing(self):
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Slow', 100, 5)))
         self.assertEqual(self.main(900, 300)[0], 0)
+
+
+class Boxes(Main):
+    BUDGETS = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
+
+    def setUp(self):
+        super().setUp()
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1, project='B.Tests'), fx.trx_result('A.Two', 3, 2.5, project='B.Tests'),
+                                    fx.trx_result('A.Skipped', outcome='NotExecuted', project='B.Tests')))
+        self.report('unit.json', fx.vitest(('/repo/modbench/src/plugins/a.test.ts', [('one', 'passed', 1500)]),
+                                           ('/repo/modbench/webview/b.test.tsx', [('two', 'passed', 500)])))
+        self.report('hooks.unittest', fx.unittest_log(durations=[('test_a (m.C.test_a)', 1.25)]))
+
+    def with_budgets(self, text):
+        budgets = self.dir / 'budgets.toml'
+        budgets.write_text(text)
+        return self.main(10, 300, str(budgets))
+
+    def test_with_no_budgets_it_prints_each_boxs_summed_time_most_first(self):
+        self.assertIn('    2.0 s  B.Tests\n    1.5 s  plugins\n    1.2 s  hooks\n    0.5 s  webview\n', self.main(10, 300)[1])
+
+    def test_it_prints_each_box_against_its_budget_and_the_others_together_against_theirs(self):
+        self.assertIn('    2.0 s of    4 s  B.Tests\n    1.5 s of    2 s  plugins\n    1.8 s of    3 s  the other tests\n'
+                      '      1.2 s  hooks\n      0.5 s  webview\n--- 0 BUDGETS OVERRUN ---\n',
+                      self.with_budgets(self.BUDGETS)[1])
+
+    def test_a_box_and_the_other_tests_over_their_budgets_are_each_said_to_be(self):
+        _, printed = self.with_budgets('other = 1\n[boxes]\n"B.Tests" = 1.5\nplugins = 2\n')
+        self.assertIn('    2.0 s of  1.5 s  B.Tests: OVER BUDGET by 0.5 s\n', printed)
+        self.assertIn('    1.8 s of    1 s  the other tests: OVER BUDGET by 0.8 s\n', printed)
+        self.assertIn('--- 2 BUDGETS OVERRUN ---\n', printed)
+
+    def test_a_budget_overrun_fails_the_run_once_the_switch_is_on_and_not_before(self):
+        for switch, status in ((False, 0), (True, 1)):
+            with self.subTest(switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
+                self.assertEqual(self.with_budgets('other = 3\n[boxes]\n"B.Tests" = 1\n')[0], status)
+
+    def test_a_run_given_no_budgets_fails_on_none_though_the_switch_is_on(self):
+        with mock.patch.object(ctt, 'FAILS_THE_RUN', True):
+            self.assertEqual(self.main(900, 300)[0], 0)
 
 
 if __name__ == '__main__':

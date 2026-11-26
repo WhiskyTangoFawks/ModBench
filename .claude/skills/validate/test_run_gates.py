@@ -179,6 +179,7 @@ fi
         shutil.copy(SCRIPT.parent / "check_test_data.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_only_code.py", self.validate)
         shutil.copy(SCRIPT.parent / "skips.py", self.validate)
+        shutil.copy(SCRIPT.parent / "test-budgets.toml", self.validate)
         self.project("RecordIndex")
         self.project("RecordIndex.Tests", "RecordIndex")
         self.project("Commands")
@@ -202,11 +203,13 @@ fi
 
     def trx(self, outcome, slow_seconds=0):
         name = pathlib.Path(self.repo, "fake.trx")
-        slow = (f'<UnitTestResult testName="Fake.Slow" duration="00:00:{slow_seconds:02d}" '
+        slow = (f'<UnitTestResult testId="s" testName="Fake.Slow" duration="00:00:{slow_seconds:02d}" '
                 'endTime="2026-10-02T19:01:00+00:00" outcome="Passed" />') if slow_seconds else ""
         name.write_text(
-            '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>'
-            f'<UnitTestResult testName="Fake.ATest" duration="00:00:00.1" endTime="2026-10-02T19:00:01+00:00" outcome="{outcome}" />'
+            '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><TestDefinitions>'
+            + "".join(f'<UnitTest id="{test}"><TestMethod codeBase="/b/MEditService.Http.Tests.dll" /></UnitTest>' for test in "as")
+            + '</TestDefinitions><Results>'
+            f'<UnitTestResult testId="a" testName="Fake.ATest" duration="00:00:00.1" endTime="2026-10-02T19:00:01+00:00" outcome="{outcome}" />'
             f'{slow}</Results></TestRun>')
         return str(name)
 
@@ -274,13 +277,23 @@ class TimeReport(FakeDotnet):
     def test_the_switch_of_the_backend_report_fails_the_run(self):
         self.assertIn("--- BACKEND TEST-ONLY CODE REPORT FAILED ---", self.run_with_the_switch_of("check_test_only_code.py").stdout)
 
+    def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self):
+        self.write(".claude/skills/validate/test-budgets.toml", 'other = 60\n[boxes]\n"MEditService.Http.Tests" = 4\n')
+        switched = self.validate / "check_test_times.py"
+        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
+        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
+        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
+        self.assertEqual(run.returncode, 1)
+
     def test_the_comment_gate_alone_prints_the_time_report_of_its_unittests_and_no_other(self):
         self.write(".claude/hooks/test_probe.py",
                    "import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        pass\n")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
-        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 1 s ---\nWall time \d+ s of 300 s budget\n")
+        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 1 s ---\n +0\.0 s of +\d+ s  the other tests\n"
+                                     r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN ---\nWall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
         self.assertNotIn("TEST DATA FILES", run.stdout)
