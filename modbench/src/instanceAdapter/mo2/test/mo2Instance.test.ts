@@ -1077,10 +1077,10 @@ describe('the MO2 Instance adapter', () => {
       const wholeBelow = (): string[] => live().filter((w) => recursive(w.pattern) && !relativeFrom(root, w.base).startsWith('..'))
         .map((w) => relativeFrom(root, w.base).split(sep).join('/')).sort();
       const firstLevelOf = (folder: string): number => live().filter((w) => w.base === join(root, folder) && w.pattern === '?*').length;
-      const listedWith = async (patterns: Record<string, boolean>, game?: string): Promise<InstanceAdapter> => {
+      const listedWith = async (patterns: Record<string, boolean>): Promise<InstanceAdapter> => {
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures', 'actors'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'actors', 'a.dds'), '');
-        const watched = onThisMachineOver(root, { game, watcherExclude: watcherExcluding(patterns) });
+        const watched = onThisMachineOver(root, { watcherExclude: watcherExcluding(patterns) });
         watched.subscribe(() => undefined);
         return watched;
       };
@@ -1154,16 +1154,12 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('names an excluded mod once, though both its root-only and its full listing name it', async () => {
-        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-root-'));
-        try {
-          await mkdir(join(game, 'Data'));
-          await writeFile(join(root, DEFAULT_MODLIST), (await text(root, DEFAULT_MODLIST)).replace('-Harder VATS', '+Harder VATS'));
-          const watched = await listedWith({ '**/mods/Harder VATS/**': true }, game);
+        await writeFile(join(root, DEFAULT_MODLIST), (await text(root, DEFAULT_MODLIST)).replace('-Harder VATS', '+Harder VATS'));
+        const watched = await listedWith({ '**/mods/Harder VATS/**': true });
 
-          expect(await named(watched)).toEqual([{ folder: 'mods/Harder VATS', reason: EXCLUDED }]);
-        } finally {
-          await rm(game, { recursive: true, force: true });
-        }
+        await watched.changePluginOrderOverProvided('Default', () => []);
+
+        expect(await named(watched)).toEqual([{ folder: 'mods/Harder VATS', reason: EXCLUDED }]);
       });
 
       it('watches everything whole, and names no folder, once the user stops excluding them', async () => {
