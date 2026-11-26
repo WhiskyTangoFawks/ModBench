@@ -1,29 +1,23 @@
-"""Pins check_test_data.py: each committed file in a test-data folder over the limit is named with its size, and nothing fails."""
+"""Pins check_test_data.py: each file in a test-data folder over the limit is named with its size, and nothing fails."""
 import contextlib
 import io
 import pathlib
-import subprocess
 import tempfile
 import unittest
 
 import check_test_data as ctd
 
 
-class CommittedData(unittest.TestCase):
+class Tree(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.repo = pathlib.Path(self.tmp.name)
-        self.git('init', '-q')
-
-    def git(self, *args: str) -> None:
-        subprocess.run(['git', '-C', str(self.repo), *args], check=True, capture_output=True)
 
     def commit(self, path: str, size: int) -> None:
         file = self.repo / path
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_bytes(b'x' * size)
-        self.git('add', path)
 
     def main(self) -> tuple[int, str]:
         printed = io.StringIO()
@@ -32,7 +26,7 @@ class CommittedData(unittest.TestCase):
         return status, printed.getvalue()
 
 
-class Over(CommittedData):
+class Over(Tree):
     def test_a_file_in_a_test_data_folder_is_named_with_its_size_when_over_the_limit_and_not_at_it(self):
         self.commit('Box.Tests/TestData/at.bin', ctd.LIMIT_BYTES)
         self.commit('Box.Tests/TestData/over.bin', ctd.LIMIT_BYTES + 1)
@@ -47,9 +41,13 @@ class Over(CommittedData):
         self.commit('modbench/package-lock.json', ctd.LIMIT_BYTES + 1)
         self.assertEqual(ctd.over_limit(self.repo), [])
 
-    def test_a_file_that_is_not_committed_is_not_read(self):
-        (self.repo / 'TestData').mkdir()
-        (self.repo / 'TestData/loose.bin').write_bytes(b'x' * (ctd.LIMIT_BYTES + 1))
+    def test_a_file_named_like_a_test_data_folder_is_not_in_one(self):
+        self.commit('Box/TestData', ctd.LIMIT_BYTES + 1)
+        self.assertEqual(ctd.over_limit(self.repo), [])
+
+    def test_build_output_dependencies_and_references_are_not_read(self):
+        for folder in ('node_modules', 'bin', 'obj', 'references', '.vscode-test'):
+            self.commit(f'{folder}/TestData/big.bin', ctd.LIMIT_BYTES + 1)
         self.assertEqual(ctd.over_limit(self.repo), [])
 
     def test_the_largest_comes_first(self):
@@ -62,7 +60,7 @@ class Over(CommittedData):
         self.assertEqual([name for name, _ in ctd.over_limit(self.repo)], ["TestData/Ünïcode's.bin"])
 
 
-class Main(CommittedData):
+class Main(Tree):
     def test_it_prints_each_file_over_the_limit_in_kilobytes_with_the_count(self):
         self.commit('TestData/big.bin', 750 * 1024)
         self.commit('TestData/small.bin', 10)

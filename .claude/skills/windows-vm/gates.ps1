@@ -44,7 +44,7 @@ Gate 'Frontend integration tests' modbench 'npm run test:integration 2>&1 | Reco
 Gate 'Package' . '& .claude/skills/windows-vm/package-check.ps1'
 Gate 'Skipped tests' . 'python .claude/skills/validate/skips.py "$reports"'
 Gate 'Test times and budget' . 'python .claude/skills/validate/check_test_times.py "$reports" $clock.Elapsed.TotalSeconds 600'
-Gate 'Committed test data over its size' . 'python .claude/skills/validate/check_test_data.py .'
+Gate 'Test data over its size' . 'python .claude/skills/validate/check_test_data.py .'
 Gate 'Backend code only tests reach' . 'python .claude/skills/validate/check_test_only_code.py MEditService'
 
 if ($failed) { Write-Host "=== Windows gates FAILED: $($failed -join ', ') ==="; exit 1 }

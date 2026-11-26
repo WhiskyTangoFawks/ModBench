@@ -71,6 +71,24 @@ class Members(Solution):
         self.project('Box.Tests', 'class T { string s = new Box().ToString(); }')
         self.assertEqual(self.reported(), [])
 
+    def test_a_type_with_a_base_list_is_not_reported_for_an_interface_or_reflection_may_reach_it(self):
+        self.project('Box', 'public interface IRule { }\ninternal sealed class FoundByReflection : IRule\n{\n}\n'
+                            'internal sealed class FromBase(int a) : Base(a)\n{\n}', uses='IRule, Base')
+        self.project('Box.Tests', 'class T { object[] all = [typeof(FoundByReflection), typeof(FromBase)]; }')
+        self.assertEqual(self.reported(), [])
+
+    def test_overloads_are_one_name_with_each_file(self):
+        self.project('Box', 'public class Box {\n    public int OnlyTests() => 1;\n    public int OnlyTests(int n) => n;\n}', uses='Box')
+        self.project('Box.Tests', 'class T { int n = new Box().OnlyTests(1); }')
+        self.assertEqual([(member.name, member.files) for member in ctoc.test_only_members(self.root)], [('OnlyTests', ['Box/Source.cs'])])
+
+    def test_build_output_is_not_source(self):
+        self.project('Box', 'public class Box {\n}', uses='Box')
+        (self.root / 'Box/obj').mkdir()
+        (self.root / 'Box/obj/Generated.cs').write_text('public class Generated {\n    public int OnlyTests() => 1;\n}')
+        self.project('Box.Tests', 'class T { int n = new Generated().OnlyTests(); }')
+        self.assertEqual(self.reported(), [])
+
     def test_a_member_of_the_test_side_is_not_production(self):
         self.project('Box.TestSupport', 'public class Fixture {\n    public int Helper() => 1;\n}')
         self.project('Box.Tests', 'class T { int n = new Fixture().Helper(); }')

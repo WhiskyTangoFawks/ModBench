@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Names each committed file in a test-data folder (TestData, fixtures, goldens) over the size limit.
-Reports only: exit 0."""
-import subprocess
+"""Names each file in a test-data folder (TestData, fixtures, goldens) over the size limit. It walks the
+tree, because the Windows VM's copy has no .git. Reports only: exit 0."""
+import os
 import sys
 from pathlib import Path
 
 LIMIT_BYTES = 64 * 1024
 TEST_DATA_FOLDERS = {'TestData', 'fixtures', 'goldens'}
+NOT_SOURCE_FOLDERS = {'.git', '.vscode-test', 'node_modules', 'bin', 'obj', 'out', 'dist', 'references'}
 FAILS_THE_RUN = False
 
 
 def over_limit(root: Path) -> list[tuple[str, int]]:
-    tracked = subprocess.run(['git', '-C', str(root), 'ls-files', '-z'], check=True, capture_output=True, text=True).stdout
-    sizes = ((name, (root / name).stat().st_size) for name in tracked.split('\0')
-             if name and TEST_DATA_FOLDERS.intersection(name.split('/')[:-1]) and (root / name).is_file())
-    return sorted(((name, size) for name, size in sizes if size > LIMIT_BYTES), key=lambda over: -over[1])
+    found = []
+    for folder, subfolders, files in os.walk(root):
+        subfolders[:] = [subfolder for subfolder in subfolders if subfolder not in NOT_SOURCE_FOLDERS]
+        if TEST_DATA_FOLDERS.intersection(Path(folder).relative_to(root).parts):
+            found += [(Path(folder, file).relative_to(root).as_posix(), Path(folder, file).stat().st_size) for file in files]
+    return sorted(((name, size) for name, size in found if size > LIMIT_BYTES), key=lambda file: -file[1])
 
 
 def main(argv: list[str] | None = None) -> int:
