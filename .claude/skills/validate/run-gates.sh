@@ -222,6 +222,10 @@ fi
 if $HOLDS_SLOT; then
   echo "=== Test times and budget ==="
   python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS"
+  echo "=== Committed test data over its size ==="
+  python3 "$ROOT/.claude/skills/validate/check_test_data.py" "$ROOT"
+  echo "=== Backend code only tests reach ==="
+  python3 "$ROOT/.claude/skills/validate/check_test_only_code.py" "$ROOT/MEditService"
 fi
 
 if $FAILED; then
