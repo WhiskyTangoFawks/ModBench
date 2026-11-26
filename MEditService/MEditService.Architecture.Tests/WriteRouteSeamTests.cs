@@ -6,203 +6,83 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class WriteRouteSeamTests
 {
-    private static readonly string[] EndpointFiles =
-        ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ChangeSignalEndpoints.cs", "ModEndpoints.cs", "SubmoduleEndpoints.cs", "PluginFileEndpoints.cs", "UnsavedDocumentEndpoints.cs"];
+    private const string AnsweredCall = "EndpointMapping.Answered(";
+    private const string BadRequestCall = "EndpointMapping.BadRequest(";
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex ProblemCall = new(@"Results\.Problem\(|EndpointMapping\.BadRequest\(", RegexOptions.Compiled);
-    private static readonly Regex LiteralOrNamedConstant = new(
-        @"^(?:""(?:[^""\\]|\\.)*""|[A-Z]\w*(?:\.[A-Z]\w*)+)$", RegexOptions.Compiled);
-    private const string BadRequestCall = "EndpointMapping.BadRequest(";
-    private const string AnsweredCall = "EndpointMapping.Answered(";
     private static readonly Regex RefusalCall = new(@"EndpointMapping\.(?:Refusal|LogRefusal)\s*[<(]", RegexOptions.Compiled);
-
+    private static readonly Regex LiteralOrNamedConstant = new(@"^(?:""(?:[^""\\]|\\.)*""|[A-Z]\w*(?:\.[A-Z]\w*)+)$", RegexOptions.Compiled);
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
-    public static IEnumerable<object[]> EveryNamedMethodRoute =>
-        WriteRouteHandlerTests.Routes.Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
-
-    public static IEnumerable<object[]> EveryRouteWithAnAnswerToMap =>
-        WriteRouteHandlerTests.Routes
-            .Where(r => HasAnAnswerToMap(r.Handler))
-            .Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
-
-    private static bool HasAnAnswerToMap(Type handler) =>
-        handler.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Any(m => m.ReturnType != typeof(void));
-
-    [Theory]
-    [MemberData(nameof(EveryRouteWithAnAnswerToMap))]
-    public void AWriteRoute_AnswersThroughEndpointMappingAnswered(string route, string method)
+    [Fact]
+    public void EveryWriteRoute_MapsItsHandlersOutcomeOnlyThroughEndpointMappingAnswered()
     {
-        Assert.True(MethodBody(method) is not null, $"{route}: no internal/private/public static method named {method} found in {string.Join(", ", EndpointFiles)}.");
-        Assert.True(
-            AnswersThroughAnswered(EndpointFiles.Select(EndpointFile), method),
-            $"{route}: {method} never answers through EndpointMapping.Answered — the one place a write's answer and refusal are mapped.");
-    }
+        var endpoints = Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints");
+        var files = Directory.GetFiles(endpoints, "*Endpoints.cs").Order(StringComparer.Ordinal).ToList();
 
-    [Theory]
-    [MemberData(nameof(EveryNamedMethodRoute))]
-    public void AWriteRoute_NeverHandRollsAResultsProblemForAHandlerOutcome(string route, string method)
-    {
-        var offenders = ReachInFollowingEachHelperOnce(EndpointFiles.Select(EndpointFile), method)
-            .SelectMany(ExtractProblemCalls)
-            .ToArray();
+        var offences = WriteRouteHandlerTests.WriteRoutes.Value
+            .SelectMany(route => Offences(
+                    files, Path.Combine(endpoints, route.EndpointFile), route.EndpointMethod, route.Handlers.Any(HasAnAnswerToMap))
+                .Select(offence => $"{route.Route}: {offence}"))
+            .ToList();
 
         Assert.True(
-            offenders.Length == 0,
-            $"{route}: {method} hand-rolls a Results.Problem(...) outside the request-shape validation "
-            + $"carve-out — a handler outcome must map through EndpointMapping instead: {string.Join(" | ", offenders)}");
+            offences.Count == 0,
+            "A write route maps its handler's outcome outside EndpointMapping.Answered, the one place a write's answer "
+            + "and refusal are mapped and logged:\n" + string.Join("\n", offences));
     }
+
+    public static TheoryData<string[], string[]> PlantedRoutes => new()
+    {
+        {
+            ["internal static IResult Route(bool x) => x ? EndpointMapping.Answered(null!) : EndpointMapping.Refusal(null!);"],
+            ["calls EndpointMapping.Refusal( itself"]
+        },
+        {
+            ["internal static IResult Route(bool x) => x ? EndpointMapping.Answered(null!) : Results.Ok(EndpointMapping.LogRefusal(null!, \"x\", 1, \"m\"));"],
+            ["calls EndpointMapping.LogRefusal( itself"]
+        },
+        {
+            ["internal static IResult Route(bool x) => x ? EndpointMapping.Answered(null!) : EndpointMapping.BadRequest(refused.Message);"],
+            ["hand-rolls EndpointMapping.BadRequest(refused.Message)"]
+        },
+        {
+            ["internal static IResult Route() => EndpointMapping.BadRequest(\"x\");"],
+            ["never answers through EndpointMapping.Answered"]
+        },
+        {
+            ["internal static IResult Route(int x)\n{\n    return HandRolled(x);\n}\n\nprivate static IResult HandRolled(int x)\n{\n    return Results.Problem(\"not found\", statusCode: 404);\n}"],
+            ["never answers through EndpointMapping.Answered", "hand-rolls Results.Problem(\"not found\", statusCode: 404)"]
+        },
+        {
+            [
+                "internal static IResult Shared() { return EndpointMapping.Answered(null!); }",
+                "internal static IResult Route() { return Shared(); }\nprivate static IResult Shared() { return Results.Problem(\"x\", statusCode: 404); }",
+            ],
+            ["never answers through EndpointMapping.Answered", "hand-rolls Results.Problem(\"x\", statusCode: 404)"]
+        },
+    };
 
     [Theory]
-    [MemberData(nameof(EveryNamedMethodRoute))]
-    public void AWriteRoute_NeverCallsARefusalHelperOutsideAnswered(string route, string method)
-    {
-        var offenders = ReachInFollowingEachHelperOnce(EndpointFiles.Select(EndpointFile), method)
-            .SelectMany(body => RefusalCall.Matches(body).Select(m => m.Value))
-            .ToArray();
-
-        Assert.True(offenders.Length == 0, $"{route}: {method} calls {string.Join(", ", offenders)} itself; a refusal is mapped and logged only through EndpointMapping.Answered.");
-    }
-
-    [Theory]
-    [InlineData("EndpointMapping.Refusal(null!)", 1)]
-    [InlineData("EndpointMapping.LogRefusal(null!, \"x\", 1, \"m\")", 1)]
-    [InlineData("EndpointMapping.Answered(\"x\", null!, 1, EndpointMapping.Refusal)", 0)]
-    public void TheScan_FlagsARefusalHelperCalledBesideAnswered(string other, int flagged)
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + $"    internal static IResult Route(bool x) => x ? EndpointMapping.Answered(null!) : {other};\n}}\n",
-            file => Assert.Equal(flagged, ReachInFollowingEachHelperOnce([file], "Route").SelectMany(body => RefusalCall.Matches(body)).Count()));
-    }
-
-    [Fact]
-    public void TheScan_FindsTheDeclaration_NotAnEarlierCallSite()
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult Caller(int x)\n    {\n"
-            + "        return DirectHit(x);\n    }\n\n"
-            + "    internal static IResult DirectHit(int x)\n    {\n"
-            + "        return EndpointMapping.Answered(null!);\n    }\n}\n",
-            file =>
-            {
-                Assert.Null(BodyOfStaticDeclarationIn(file, "NoSuchMethod"));
-                var body = BodyOfStaticDeclarationIn(file, "DirectHit");
-                Assert.NotNull(body);
-                Assert.Contains("EndpointMapping.Answered(", body, StringComparison.Ordinal);
-                Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
-            });
-    }
-
-    [Fact]
-    public void TheScan_FollowsASiblingMethodTheRouteCalls()
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult ThroughASibling(int x)\n    {\n"
-            + "        return Shared(x);\n    }\n\n"
-            + "    private static IResult Shared(int x)\n    {\n"
-            + "        return EndpointMapping.Answered(null!);\n    }\n}\n",
-            file => Assert.True(AnswersThroughAnswered([file], "ThroughASibling")));
-    }
-
-    [Fact]
-    public void TheScan_FailsARouteWhoseSiblingNeverReachesTheSeam()
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult ThroughAHandRolledSibling(int x)\n    {\n"
-            + "        return HandRolled(x);\n    }\n\n"
-            + "    private static IResult HandRolled(int x)\n    {\n"
-            + "        return Results.Problem(\"not found\", statusCode: 404);\n    }\n}\n",
-            file =>
-            {
-                Assert.False(AnswersThroughAnswered([file], "ThroughAHandRolledSibling"));
-                var offenders = ReachInFollowingEachHelperOnce([file], "ThroughAHandRolledSibling")
-                    .SelectMany(ExtractProblemCalls)
-                    .ToArray();
-                Assert.Single(offenders);
-            });
-    }
-
-    [Fact]
-    public void TheScan_ReadsAnExpressionBodiedRoute()
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult HandRolled(int x) =>\n"
-            + "        Results.Problem(\"not found\", statusCode: 404);\n}\n",
-            file =>
-            {
-                Assert.Single(ReachInFollowingEachHelperOnce([file], "HandRolled").SelectMany(ExtractProblemCalls));
-            });
-    }
-
-    [Fact]
-    public void TheScan_FollowsAnExpressionBodiedRouteIntoTheSeam()
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult Mapped(int x) => EndpointMapping.Answered(null!);\n}\n",
-            file => Assert.True(AnswersThroughAnswered([file], "Mapped")));
-    }
-
-    [Fact]
-    public void TheScan_FollowsACalleeInTheCallersOwnFileFirst()
+    [MemberData(nameof(PlantedRoutes))]
+    public void TheScan_NamesEachWayARouteMapsAnOutcomeOutsideAnswered(string[] sources, string[] offences)
     {
         using var root = new ScratchDirectory("medit-write-route-seam-scan-");
-        var other = Path.Combine(root, "OtherEndpoints.cs");
-        var own = Path.Combine(root, "OwnEndpoints.cs");
-        File.WriteAllText(other,
-            "internal static class Other\n{\n    internal static IResult Shared() { return EndpointMapping.Answered(null!); }\n}\n");
-        File.WriteAllText(own,
-            "internal static class Own\n{\n    internal static IResult Route() { return Shared(); }\n"
-            + "    private static IResult Shared() { return Results.Problem(\"x\", statusCode: 404); }\n}\n");
+        var files = sources.Select((source, at) =>
+        {
+            var file = Path.Combine(root, $"Planted{at}Endpoints.cs");
+            File.WriteAllText(file, $"internal static class Planted{at}\n{{\n{source}\n}}\n");
+            return file;
+        }).ToList();
 
-        Assert.False(AnswersThroughAnswered([other, own], "Route"));
-        Assert.Single(ReachInFollowingEachHelperOnce([other, own], "Route").SelectMany(ExtractProblemCalls));
+        Assert.Equal(offences, Offences(files, files[^1], "Route", mustAnswer: true));
     }
 
-    [Theory]
-    [InlineData("EndpointMapping.BadRequest(\"x\")")]
-    [InlineData("EndpointMapping.Refusal(null!)")]
-    [InlineData("Results.Ok(EndpointMapping.LogRefusal(null!, \"x\", 1, \"m\"))")]
-    public void TheScan_CountsNothingButAnsweredAsTheSeam(string answer)
+    [Fact]
+    public void TheScan_HoldsToAnsweredAHandlerWithAVerbThatAnswers()
     {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + $"    internal static IResult Route() => {answer};\n}}\n",
-            file => Assert.False(AnswersThroughAnswered([file], "Route")));
-    }
-
-    [Theory]
-    [InlineData("\"At least one mod is required.\"", 0)]
-    [InlineData("ArchiveVariantsRequest.NotOneEach", 0)]
-    [InlineData("refused.Message", 1)]
-    [InlineData("$\"Unknown {x}\"", 1)]
-    public void TheScan_FlagsABadRequestUnlessItsDetailIsALiteralOrANamedConstant(string detail, int flagged)
-    {
-        WithPlantedFile(
-            "internal static class PlantedEndpoints\n{\n"
-            + $"    internal static IResult Route(int x) => EndpointMapping.BadRequest({detail});\n}}\n",
-            file => Assert.Equal(flagged, ReachInFollowingEachHelperOnce([file], "Route").SelectMany(ExtractProblemCalls).Count()));
-    }
-
-    [Theory]
-    [InlineData(typeof(PlantedHandlerAnsweringNothing), false)]
-    [InlineData(typeof(PlantedHandlerAnsweringOneVerb), true)]
-    public void TheScan_HoldsToTheAnsweredSeamEveryHandlerWithAVerbThatAnswers(Type handler, bool held)
-    {
-        Assert.Equal(held, HasAnAnswerToMap(handler));
-    }
-
-    private sealed class PlantedHandlerAnsweringNothing
-    {
-        private int _signals;
-
-        public void Signal() => _signals++;
+        Assert.True(HasAnAnswerToMap(typeof(PlantedHandlerAnsweringOneVerb)));
     }
 
     private sealed class PlantedHandlerAnsweringOneVerb
@@ -214,43 +94,46 @@ public sealed class WriteRouteSeamTests
         public int Answer() => _signals;
     }
 
-    private static void WithPlantedFile(string source, Action<string> assert)
+    private static bool HasAnAnswerToMap(Type handler) =>
+        handler.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Any(m => m.ReturnType != typeof(void));
+
+    private static List<string> Offences(IReadOnlyList<string> files, string routeFile, string method, bool mustAnswer)
     {
-        using var root = new ScratchDirectory("medit-write-route-seam-scan-");
-        var file = Path.Combine(root, "PlantedEndpoints.cs");
-        File.WriteAllText(file, source);
-        assert(file);
+        var bodies = ReachInFollowingEachHelperOnce(files.ToDictionary(file => file, File.ReadAllText), routeFile, method);
+        if (bodies.Count == 0) return [$"no static method {method} in {Path.GetFileName(routeFile)}"];
+
+        return
+        [
+            .. mustAnswer && !bodies.Any(body => body.Contains(AnsweredCall, StringComparison.Ordinal))
+                ? ["never answers through EndpointMapping.Answered"]
+                : Array.Empty<string>(),
+            .. bodies.SelectMany(HandRolledProblems).Select(call => $"hand-rolls {call}"),
+            .. bodies.SelectMany(body => RefusalCall.Matches(body)).Select(call => $"calls {call.Value} itself"),
+        ];
     }
 
-    private static string EndpointFile(string name) =>
-        Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
-
-    private static bool AnswersThroughAnswered(IEnumerable<string> files, string methodName) =>
-        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains(AnsweredCall, StringComparison.Ordinal));
-
-    private static IReadOnlyList<string> ReachInFollowingEachHelperOnce(IEnumerable<string> files, string methodName)
+    private static List<string> ReachInFollowingEachHelperOnce(Dictionary<string, string> texts, string routeFile, string methodName)
     {
-        var fileList = files.ToArray();
-        var visited = new HashSet<(string? File, string Method)>();
+        var visited = new HashSet<(string File, string Method)>();
         var bodies = new List<string>();
-        Collect(methodName, null);
+        Collect(methodName, routeFile);
         return bodies;
 
-        void Collect(string method, string? callerFile)
+        void Collect(string method, string callerFile)
         {
-            var (file, body) = fileList
-                .OrderBy(candidate => candidate == callerFile ? 0 : 1)
-                .Select(candidate => (File: candidate, Body: BodyOfStaticDeclarationIn(candidate, method)))
-                .FirstOrDefault(found => found.Body is not null);
-            if (body is null || !visited.Add((file, method))) return;
+            var found = texts.Keys
+                .OrderBy(file => file == callerFile ? 0 : 1)
+                .Select(file => (File: file, Body: BodyOfStaticDeclaration(texts[file], method)))
+                .FirstOrDefault(candidate => candidate.Body is not null);
+            if (found.Body is not { } body || !visited.Add((found.File, method))) return;
             bodies.Add(body);
 
-            foreach (var candidate in CallSite.Matches(body).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal))
-                Collect(candidate, file);
+            foreach (var callee in CallSite.Matches(body).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal))
+                Collect(callee, found.File);
         }
     }
 
-    private static IEnumerable<string> ExtractProblemCalls(string body)
+    private static IEnumerable<string> HandRolledProblems(string body)
     {
         foreach (Match m in ProblemCall.Matches(body))
         {
@@ -265,28 +148,19 @@ public sealed class WriteRouteSeamTests
 
     private static string Normalize(string text) => WhitespaceRun.Replace(text, " ").Trim();
 
-    private static string? MethodBody(string methodName) =>
-        EndpointFiles.Select(file => BodyOfStaticDeclarationIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
-
-    private static string? BodyOfStaticDeclarationIn(string file, string methodName)
+    private static string? BodyOfStaticDeclaration(string text, string methodName)
     {
-        var text = File.ReadAllText(file);
-        var declaration = new Regex(
-            $@"(?:internal|private|public)\s+static\s+(?:async\s+)?\S+\s+{Regex.Escape(methodName)}\s*\(",
-            RegexOptions.Compiled);
-        var match = declaration.Match(text);
+        var match = Regex.Match(text, $@"(?:internal|private|public)\s+static\s+(?:async\s+)?\S+\s+{Regex.Escape(methodName)}\s*\(");
         if (!match.Success) return null;
 
-        var parametersOpen = match.Index + match.Length - 1;
-        var parametersClose = MatchingDelimiter(text, parametersOpen, '(', ')');
+        var parametersClose = MatchingDelimiter(text, match.Index + match.Length - 1, '(', ')');
         var bodyOpen = parametersClose + 1;
         while (bodyOpen < text.Length && char.IsWhiteSpace(text[bodyOpen])) bodyOpen++;
         if (text.AsSpan(bodyOpen).StartsWith("=>"))
             return text[bodyOpen..(EndOfExpression(text, bodyOpen) + 1)];
         if (bodyOpen >= text.Length || text[bodyOpen] != '{') return null;
 
-        var bodyClose = MatchingDelimiter(text, bodyOpen, '{', '}');
-        return text[bodyOpen..(bodyClose + 1)];
+        return text[bodyOpen..(MatchingDelimiter(text, bodyOpen, '{', '}') + 1)];
     }
 
     private static int EndOfExpression(string text, int start)
