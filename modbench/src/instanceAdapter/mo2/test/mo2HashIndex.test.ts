@@ -1,4 +1,3 @@
-import { setIniValue } from '../codecs/qSettingsIni';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,7 +6,8 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { installationFileMeta } from './installationFileMeta';
+import { adapterOver } from '../../../test/mo2/adapterOver';
 
 let root: string;
 
@@ -22,8 +22,8 @@ describe('the MO2 adapter\'s hashes', () => {
     root = await mkdtemp(join(tmpdir(), 'modbench-mo2-hashes-'));
     await mkdir(join(root, 'mods', 'Mod'), { recursive: true });
     await writeFile(join(root, 'Mod.7z'), 'aaaa');
-    await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), setIniValue('[General]\r\n', 'General', 'installationFile', join(root, 'Mod.7z')));
-    const adapter = managerOver(root);
+    await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), installationFileMeta(join(root, 'Mod.7z')));
+    const adapter = adapterOver(root);
 
     await adapter.installationFile('Mod');
 
@@ -35,7 +35,7 @@ describe('the MO2 adapter\'s hashes', () => {
     const folder = join(root, 'mods', 'Mod');
     await mkdir(join(folder, 'textures'), { recursive: true });
     await Promise.all(['meta.ini', 'Mod.manifest.json', 'a.esp', 'textures/b.dds', '.medit_tmp_1_x.tmp'].map((name) => writeFile(join(folder, name), '')));
-    const adapter = managerOver(root);
+    const adapter = adapterOver(root);
 
     expect([[...await adapter.filesIn(folder)].sort(), await adapter.filesIn(join(root, 'mods', 'Gone'))]).toEqual([['a.esp', 'textures/b.dds'], []]);
   });
