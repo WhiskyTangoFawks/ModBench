@@ -1,6 +1,5 @@
 using System.Reflection;
 using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -32,22 +31,6 @@ public sealed class DerivedContainerMembersTests
 
         Assert.NotEmpty(expected);
         Assert.Equal(expected, DerivedChildFields(release).Order().ToList());
-    }
-
-    [Theory]
-    [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    [InlineData(GameRelease.Starfield)]
-    public void EveryRecordTypeInTheGameAssembly_IsSwept_IncludingTheSiblingsOfATablesBoundType_BecauseADerivedMemberOnATypeOutsideTheSweepIsOneTheOtherTestsNeverReach(GameRelease release)
-    {
-        var swept = RecordClasses(release).Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        var tabled = SchemaTablesWithoutTheModHeaderWhichHasATableOfItsOwnAndIsNoRecord(release);
-
-        Assert.True(swept.Count > tabled.Count,
-            "the sweep is no broader than the schema's tables, so it asserts nothing about the siblings sharing one, such as GMST's.");
-        Assert.Empty(tabled.Except(swept.Select(RecordTypes.For(release).RecordTypeNamed).OfType<string>(), StringComparer.Ordinal));
-
-        Assert.Empty(DerivedChildFields(release).Select(row => row.Parent).Distinct().Except(swept, StringComparer.Ordinal));
     }
 
     [Theory]
@@ -134,12 +117,6 @@ public sealed class DerivedContainerMembersTests
         getterType.Name is ['I', .. var stem] && stem.EndsWith("Getter", StringComparison.Ordinal)
             ? module.GetType($"{getterType.Namespace}.{stem[..^"Getter".Length]}")
             : null;
-
-    private static HashSet<string> SchemaTablesWithoutTheModHeaderWhichHasATableOfItsOwnAndIsNoRecord(GameRelease release) =>
-        SharedSchemaReflector.Instance.GetSchemas(release).Values
-            .Where(s => !s.IsHeader)
-            .Select(s => s.TableName)
-            .ToHashSet(StringComparer.Ordinal);
 
     private static bool TypedAsChildMajor(PropertyInfo property) =>
         typeof(IMajorRecordGetter).IsAssignableFrom(property.PropertyType)

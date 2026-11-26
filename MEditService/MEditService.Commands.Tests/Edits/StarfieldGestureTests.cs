@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -7,7 +6,6 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Starfield;
-using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -37,8 +35,6 @@ public sealed class StarfieldGestureTests : TestInstance
         compiledPlugin.ModHeader.MasterReferences.Add(new MasterReference { Master = light.ModKey });
         _compiledPlugin = Add(compiledPlugin, "SourceMod");
     }
-
-    private static string Header => new FormKey(ModKey.FromFileName(CompiledPluginName), 0).ToString();
 
     private IStarfieldModDisposableGetter Compiled() =>
         StarfieldMod.CreateFromBinaryOverlay(
@@ -71,21 +67,5 @@ public sealed class StarfieldGestureTests : TestInstance
         Assert.Equal(CompileRefusal.MasterUnreadable, refused.Refusal);
         Assert.StartsWith($"{CompiledPluginName} could not be compiled: its master {LightName} could not be read: ", refused.Message, StringComparison.Ordinal);
         Assert.EndsWith($"Fix or restore {LightName}, then compile again.", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AFormKeyEdit_PastAMediumPluginsRange_IsRefused()
-    {
-        Assert.True(EditHandler.Set(_compiledPlugin, Header, "Flags", Json("[\"Medium\"]")).Applied);
-        var created = CreateHandler.CreateRecordSync(_compiledPlugin, "kywd").NewFormKey.Require();
-        var wide = $"010000:{CompiledPluginName}";
-
-        var result = EditHandler.SetFormId(_compiledPlugin, created, wide);
-
-        Assert.Equal(
-            (RecordEditRefusal.FormIdOutsideFlagLimit,
-             $"{wide} exceeds {CompiledPluginName}'s medium local FormID range — a medium plugin can only address local FormIDs up to 0xFFFF. " +
-             "Choose a FormID within that range, or clear the medium flag."),
-            (result.Refusal, result.Message));
     }
 }

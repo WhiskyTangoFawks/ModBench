@@ -26,8 +26,6 @@ public sealed class ContainerModFixture : TestInstance, ICompiledPlugin
 
     public FormKey TemporaryRef { get; }
 
-    public FormKey Worldspace { get; }
-
     public FormKey ExteriorRef { get; }
 
     // A quest holding a topic, so it has a directory of its own for a created child to land in.
@@ -53,7 +51,7 @@ public sealed class ContainerModFixture : TestInstance, ICompiledPlugin
 
         Npc = npc.FormKey;
         Cell = containerKeys.Cell;
-        (EmbedCell, TemporaryRef, Worldspace) = (containerKeys.EmbedCell, containerKeys.TemporaryRef, containerKeys.Worldspace);
+        (EmbedCell, TemporaryRef) = (containerKeys.EmbedCell, containerKeys.TemporaryRef);
         (ExteriorRef, Quest) = (exteriorRef.FormKey, quest.FormKey);
     }
 }

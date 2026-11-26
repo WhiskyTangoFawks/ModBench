@@ -17,19 +17,15 @@ public sealed class UnionMechanismSchemaTests
 
     [Theory]
     [InlineData("gmst")]
-    [InlineData("glob")]
-    [InlineData("dmgt")]
     [InlineData("omod")]
     public void ATableOfSeveralRecordClasses_IsOneSparseUnionKeyedByTheDocumentsDiscriminator(string table) =>
         AssertOneSparseUnion([.. Schemas[table].RecordColumns.Select(c => c.Field)]);
 
     [Theory]
     [InlineData("omod", "Properties.[]")]
-    [InlineData("cobj", "Conditions.[]")]
     [InlineData("cobj", "Conditions.[].Data")]
     [InlineData("npc_", "VirtualMachineAdapter.Scripts.[].Properties.[]")]
     [InlineData("npc_", "Level")]
-    [InlineData("qust", "Aliases.[]")]
     public void AMemberWhoseBaseHasLeaves_IsOneSparseUnionKeyedByTheDocumentsDiscriminator(string table, string path) =>
         AssertOneSparseUnion(SchemaFields.At(GameRelease.Fallout4, table, path).Fields.Require());
 

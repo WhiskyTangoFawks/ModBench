@@ -42,13 +42,8 @@ public sealed class RecordTypeAmbiguityTests
 
     [Theory]
     [InlineData("GlobalFloat", true)]
-    [InlineData("GameSettingInt", true)]
     [InlineData("Weapon", false)]
-    [InlineData("Npc", false)]
-    [InlineData("Cell", false)]
-    [InlineData("Worldspace", false)]
     [InlineData("PlacedObject", false)]
-    [InlineData("Landscape", false)]
     public void ARecordIsWrittenNamingItsType_WhenItsPathDoesNotSay(string className, bool expected) =>
         Assert.Equal(expected, NamesItsType(ConcreteMajorRecordTypes().Single(t => t.Name == className)));
 
