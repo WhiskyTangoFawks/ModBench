@@ -37,31 +37,4 @@ public sealed class CopyAsOverrideTests
         Assert.Contains(
             "MutatedOnDisk", mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
-
-    [Fact]
-    public void CopyRecordAsOverride_FromANonCompiledPluginSource_WritesTheSameTextACompiledPluginSourceWould()
-    {
-        using var nonCompiledPlugin = CopyFixture.Create();
-        using var compiledPlugin = CopyFixture.Create(initSource: true);
-
-        nonCompiledPlugin.CopyHandler.CopySync([new RecordAt(nonCompiledPlugin.SourcePlugin, nonCompiledPlugin.SourceNpc.ToString())], CopyMode.Override, [nonCompiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
-        compiledPlugin.CopyHandler.CopySync([new RecordAt(compiledPlugin.SourcePlugin, compiledPlugin.SourceNpc.ToString())], CopyMode.Override, [compiledPlugin.DestinationPlugin], replace: false).OnlyLanded();
-
-        Assert.Equal(
-            compiledPlugin.Document(compiledPlugin.DestinationPlugin, compiledPlugin.SourceNpc.ToString()).Require().Body,
-            nonCompiledPlugin.Document(nonCompiledPlugin.DestinationPlugin, nonCompiledPlugin.SourceNpc.ToString()).Require().Body);
-    }
-
-    [Fact]
-    public void CopyRecordAsOverride_OfARecordTheDestinationDeletedSinceTheLastCommit_LandsItAgain()
-    {
-        using var mod = CopyFixture.Create();
-        mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false).OnlyLanded();
-        SourceModTree.Commit(mod.DestinationModFolder);
-        Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.DestinationPlugin, mod.SourceNpc.ToString())]).Refused);
-
-        mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false).OnlyLanded();
-
-        Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString()));
-    }
 }

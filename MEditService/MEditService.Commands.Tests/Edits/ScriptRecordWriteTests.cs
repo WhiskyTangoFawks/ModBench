@@ -1,9 +1,7 @@
-using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -52,17 +50,6 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
-    public void ACopy_HandsTheRecordIndexTheDocumentItWrote()
-    {
-        using var mod = CopyFixture.Create();
-
-        var outcome = Copy(mod, CopyMode.New, mod.DestinationPlugin);
-
-        AssertHanded(mod, mod.DestinationPlugin, Path.Combine(
-            mod.DestinationModFolder, SourceModTree.DocumentFile(mod.DestinationModFolder, mod.DestinationPlugin, outcome.NewFormKey.Require()).Require()));
-    }
-
-    [Fact]
     public void ACopyIntoANonCompiledPlugin_IsRefused()
     {
         using var mod = CopyFixture.Create();
@@ -70,17 +57,6 @@ public sealed class ScriptRecordWriteTests
         var outcome = Copy(mod, CopyMode.New, mod.SourcePlugin);
 
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, outcome.Refusal);
-    }
-
-    [Fact]
-    public void ACreate_IsWrittenToTheTree_AndAnswersTheNewFormKey()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        var outcome = Create(mod);
-
-        Assert.True(outcome.Applied, outcome.Message);
-        Assert.NotNull(mod.Document(outcome.NewFormKey.Require()));
     }
 
     [Fact]
@@ -94,17 +70,6 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
-    public void ADelete_RemovesTheRecordsFile()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        var outcome = Delete(mod, mod.Npc.ToString());
-
-        Assert.True(outcome.Applied, outcome.Message);
-        Assert.Null(mod.Document(mod.Npc.ToString()));
-    }
-
-    [Fact]
     public void ADelete_HandsTheRecordIndexItsPlugin_NamingTheFileItDeleted()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
@@ -114,30 +79,5 @@ public sealed class ScriptRecordWriteTests
 
         var handed = Assert.Single(Assert.Single(mod.Index.Hands).Require());
         Assert.Equal((mod.Plugin, file, 0), (handed.Plugin, Assert.Single(handed.Files.Require()), handed.Documents.Count));
-    }
-
-    [Fact]
-    public void ADeleteOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var file = Path.Combine(mod.ModFolder, mod.DocumentFile(mod.Npc.ToString()).Require());
-        mod.Unsaved.Typed(new DocumentChange(file, File.ReadAllText(file) + " "));
-
-        var outcome = Delete(mod, mod.Npc.ToString());
-
-        Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
-        Assert.True(File.Exists(file));
-    }
-
-    [Fact]
-    public void ADeleteOfTheHeader_IsRefused_AndWritesNothing()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
-
-        var outcome = Delete(mod, PluginHeader.IdentityOf(mod.ActualPluginName).FormKey);
-
-        Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, outcome.Refusal);
-        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 }

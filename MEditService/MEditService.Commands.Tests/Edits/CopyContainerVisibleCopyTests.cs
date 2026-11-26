@@ -29,9 +29,6 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     private static Cell CellOf(FormKey formKey, string editorId, float waterHeight, int flags = 0) =>
         new(formKey, Fallout4Release.Fallout4) { EditorID = editorId, WaterHeight = waterHeight, MajorRecordFlagsRaw = flags };
 
-    private static Fallout4Mod HoldingTheCell(string name, string editorId, float waterHeight, int flags = 0) =>
-        Plugin(name, mod => mod.AddInteriorCells(CellOf(BaseCell, editorId, waterHeight, flags)));
-
     private Fallout4Mod SourceWithARefInTheCell(string name, float waterHeight, int flags) => Plugin(name, mod =>
     {
         var cell = CellOf(BaseCell, "SourceCell", waterHeight, flags);
@@ -74,8 +71,16 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
         Assert.Equal(_ref.ToString(), Assert.Single(cell["Persistent"].Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
     }
 
-    [Fact]
-    public void ACopiedInContainer_CarriesTheFieldsOfADestinationMasterThatLoadsAfterTheSourceAndOverridesIt()
+    public static TheoryData<string, Func<LoadOrderEntry, LoadOrderEntry>, string, float> DestinationLines => new()
+    {
+        { "a destination with a line, judged: its master's copy", entry => entry, "LaterCell", LaterWaterHeight },
+        { "a destination with no line, not judged: the source's copy", entry => entry with { Line = null }, "SourceCell", BaseWaterHeight },
+    };
+
+    [Theory]
+    [MemberData(nameof(DestinationLines))]
+    public void ACopiedInContainer_CarriesTheFieldsOfADestinationMasterThatLoadsAfterTheSource_OnlyWhereTheDestinationHasALine(
+        string _, Func<LoadOrderEntry, LoadOrderEntry> listing, string editorId, float waterHeight)
     {
         var master = Plugin("Later.esm", mod =>
         {
@@ -85,30 +90,14 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
         var source = SourceWithARefInTheCell("Source.esm", BaseWaterHeight, 0);
         var destination = MasteringThrough("Dest.esp", LaterStatic);
         _plugins.Load((source, false), (master, false), (destination, true));
+        _plugins.Relist(Address(destination), listing);
 
         CopyRefIntoDestination(source, destination);
 
         var cell = DestinationCell(destination);
-        Assert.Equal("LaterCell", cell["EditorID"].Require().GetValue<string>());
-        Assert.Equal(LaterWaterHeight, cell["WaterHeight"].Require().GetValue<float>());
-    }
-
-    [Fact]
-    public void ACopiedInContainer_IntoADestinationWithNoLine_IsNotJudged_AndCarriesTheSourcesFields()
-    {
-        var master = Plugin("Later.esm", mod =>
-        {
-            mod.AddInteriorCells(CellOf(BaseCell, "LaterCell", LaterWaterHeight));
-            mod.Statics.Add(new Static(LaterStatic, Fallout4Release.Fallout4) { EditorID = "LaterStatic" });
-        });
-        var source = SourceWithARefInTheCell("Source.esm", BaseWaterHeight, 0);
-        var destination = MasteringThrough("Dest.esp", LaterStatic);
-        _plugins.Load((source, false), (master, false), (destination, true));
-        _plugins.Relist(Address(destination), entry => entry with { Line = null });
-
-        CopyRefIntoDestination(source, destination);
-
-        Assert.Equal("SourceCell", DestinationCell(destination)["EditorID"].Require().GetValue<string>());
+        Assert.Equal(
+            (editorId, waterHeight),
+            (cell["EditorID"].Require().GetValue<string>(), cell["WaterHeight"].Require().GetValue<float>()));
     }
 
     [Fact]

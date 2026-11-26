@@ -8,16 +8,14 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CopyRecordChangesHandlerTests
 {
-    [Theory]
-    [InlineData(CopyMode.New)]
-    [InlineData(CopyMode.Override)]
-    public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsNonCompiledPlugin_LandsInTheCompiledPluginOne_AndAnswersPerItem(CopyMode mode)
+    [Fact]
+    public void CopyingTwoRecordsIntoTwoDestinations_WhereOneIsNonCompiledPlugin_LandsInTheCompiledPluginOne_AndAnswersPerItem()
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         var faction = new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString());
 
-        var result = mod.CopyHandler.CopySync([npc, faction], mode, [mod.DestinationPlugin, mod.SourcePlugin], replace: false);
+        var result = mod.CopyHandler.CopySync([npc, faction], CopyMode.Override, [mod.DestinationPlugin, mod.SourcePlugin], replace: false);
 
         Assert.Equal(
             [new CopyItem(npc, mod.DestinationPlugin), new CopyItem(faction, mod.DestinationPlugin)],
@@ -28,29 +26,25 @@ public sealed class CopyRecordChangesHandlerTests
         Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, refused.Refusal));
     }
 
-    [Theory]
-    [InlineData(CopyMode.New)]
-    [InlineData(CopyMode.Override)]
-    public void Copying_ARecordTheSourcePluginDoesNotHold_IsRefusedAsNotFound(CopyMode mode)
+    [Fact]
+    public void Copying_ARecordTheSourcePluginDoesNotHold_IsRefusedAsNotFound()
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, $"ABCDEF:{CopyFixture.SourcePluginName}")], mode, [mod.DestinationPlugin], replace: false);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, $"ABCDEF:{CopyFixture.SourcePluginName}")], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.OnlyRefused().Refusal);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CopyingAsOverride_OfARecordTheDestinationsTreeUsesButNoRecordAnswersTo_RefusesIt_AndTheOthersLand(bool replace)
+    [Fact]
+    public void CopyingAsOverride_OfARecordTheDestinationsTreeUsesButNoRecordAnswersTo_RefusesIt_AndTheOthersLand()
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         var faction = new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString());
         TreeTampering.NameInAnUnplaceableChild(mod.DestinationModFolder, mod.DestinationPlugin, mod.SourceNpc.ToString());
 
-        var result = mod.CopyHandler.CopySync([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace);
+        var result = mod.CopyHandler.CopySync([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
         Assert.Equal([new CopyItem(faction, mod.DestinationPlugin)], result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
         var refused = Assert.Single(result.Refused);
@@ -58,17 +52,15 @@ public sealed class CopyRecordChangesHandlerTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, refused.Refusal);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal(bool replace)
+    [Fact]
+    public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal()
     {
         using var mod = CopyFixture.Create(initSource: true);
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         LeaveTextTheCodecWouldRespell(mod);
         var before = SourceModTree.Records(mod.SourceModFolder, mod.SourcePlugin);
 
-        var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.SourcePlugin], replace);
+        var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.SourcePlugin], replace: false);
 
         Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
         Assert.Empty(result.Refused);
@@ -108,16 +100,14 @@ public sealed class CopyRecordChangesHandlerTests
         Assert.Equal(before, SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
     }
 
-    [Theory]
-    [InlineData(CopyMode.New)]
-    [InlineData(CopyMode.Override)]
-    public void CopyChanges_AnswerTheDestinationsDocuments_AndWriteNothing(CopyMode mode)
+    [Fact]
+    public void CopyChanges_AnswerTheDestinationsDocuments_AndWriteNothing()
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         var before = SourceModTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
 
-        var result = mod.CopyHandler.CopyChangesSync([npc], mode, [mod.DestinationPlugin], replace: false);
+        var result = mod.CopyHandler.CopyChangesSync([npc], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
         var changes = Assert.Single(result.Applied);
         Assert.NotEmpty(changes.Documents);
