@@ -71,12 +71,11 @@ function stringLiterals(
   return found;
 }
 
-// A file parses only where its text quotes a token alone.
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const MAY_HOLD_A_TOKEN = new RegExp(`(['"\`])(${TOKENS.map(escaped).join('|')})(\\1|\\$\\{)`);
+const QUOTES_A_TOKEN_ALONE = new RegExp(`(['"\`])(${TOKENS.map(escaped).join('|')})(\\1|\\$\\{)`);
 
 function tokenLeaks(sourceText: string, fileName: string): string[] {
-  if (!MAY_HOLD_A_TOKEN.test(sourceText)) return [];
+  if (!QUOTES_A_TOKEN_ALONE.test(sourceText)) return [];
   const literals = new Set(stringLiterals(sourceText, fileName));
   return TOKENS.filter((tok) => literals.has(tok));
 }
