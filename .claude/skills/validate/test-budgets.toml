@@ -1,5 +1,5 @@
 # The developer sets each box's budget, in seconds of its tests' summed time on the machine that runs a
-# branch's gates (spec/architecture/tests.md). The tests of a box not named here share the budget of `other`.
+# branch's gates (spec/architecture/tests.md). `other` is the budget of the tests of no box.
 other = 165
 
 [boxes]
@@ -34,6 +34,7 @@ pluginCommands = 5
 plugins = 5
 ports = 5
 repositoriesLib = 5
+scripts = 5
 sortingRules = 5
 sourceCommands = 10
 sourceLanguage = 5

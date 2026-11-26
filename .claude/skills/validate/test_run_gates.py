@@ -237,9 +237,9 @@ class BranchTests(FakeDotnet):
 
 
 class TimeReport(FakeDotnet):
-    def test_a_run_in_the_slot_names_each_test_over_a_second_and_the_wall_time_against_the_branch_budget(self):
+    def test_a_run_in_the_slot_names_each_test_over_100_ms_and_the_wall_time_against_the_branch_budget(self) -> None:
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("5.0 s  Fake.Slow", run.stdout)
+        self.assertIn("5.00 s  Fake.Slow", run.stdout)
         self.assertNotIn("Fake.ATest", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 300 s budget\n")
 
@@ -294,8 +294,8 @@ class TimeReport(FakeDotnet):
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
-        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 1 s ---\n +0\.0 s of +\d+ s  the other tests\n"
-                                     r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN ---\nWall time \d+ s of 300 s budget\n")
+        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n +0\.0 s of +\d+ s  the tests of no box\n"
+                                     r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN OR MISSING ---\nWall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
         self.assertNotIn("TEST DATA FILES", run.stdout)
