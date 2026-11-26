@@ -419,15 +419,15 @@ public class ConflictByCompareTests
     }
 
     [Theory]
-    [InlineData(false, ConflictAll.NoConflict, ConflictThis.IdenticalToMaster)]
-    [InlineData(true, ConflictAll.Override, ConflictThis.Override)]
+    [InlineData("Unchanged", ConflictAll.NoConflict, ConflictThis.IdenticalToMaster)]
+    [InlineData("Changed", ConflictAll.Override, ConflictThis.Override)]
     public void CopiesDifferingInTheVersionStamps_ConflictOnTheRecordAndThePlugin_OnlyAsAnotherFieldDiffers(
-        bool notesDiffer, ConflictAll record, ConflictThis plugin)
+        string notes, ConflictAll record, ConflictThis plugin)
     {
         var compare = ComparedCopies.Of<Keyword>(Stamped, keyword =>
         {
             WithDifferingStamps(keyword);
-            keyword.Notes = notesDiffer ? "Changed" : "Unchanged";
+            keyword.Notes = notes;
         });
 
         Assert.Equal((record, plugin), (compare.ConflictAll, compare.Overrides.Single(o => o.Plugin == "B.esp").ConflictThis));
