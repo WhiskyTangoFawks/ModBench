@@ -697,15 +697,25 @@ describe('a write to the compiler settings changes only the entries it names (Ne
       settingsWith(entries('"mods/A",', '"mods/B", // about b', '"mods/C"')), settingsWith(entries('"mods/A",', '"mods\\\\D", // about b', '"mods/C"'))],
   ];
 
-  for (const eol of ['\n', '\r\n']) {
-    it.each(cases)(`${eol === '\n' ? 'LF' : 'CRLF'} %s`, async (_, gesture, before, after) => {
-      await writeSettings(before.replaceAll('\n', eol));
+  it.each(cases)('%s', async (_, gesture, before, after) => {
+    await writeSettings(before);
 
-      await gesture();
+    await gesture();
 
-      expect(await settingsText()).toBe(after.replaceAll('\n', eol));
-    });
-  }
+    expect(await settingsText()).toBe(after);
+  });
+
+  // Where a line ends decides what a line comment holds and what a removal takes.
+  const AT_LINE_ENDS = ['remove: a line comment after the comma stays', 'remove: the first entry takes its line',
+    'add: after a last entry with a trailing comma and a comment, the comment stays on its entry',
+    'add: a list the settings lack follows the last setting, before the comment after it'];
+  it.each(cases.filter(([name]) => AT_LINE_ENDS.includes(name)))('in CRLF, %s', async (_, gesture, before, after) => {
+    await writeSettings(before.replaceAll('\n', '\r\n'));
+
+    await gesture();
+
+    expect(await settingsText()).toBe(after.replaceAll('\n', '\r\n'));
+  });
 
   it('keeps a tab indent and a missing final newline', async () => {
     await writeSettings('{\n\t"Include": [\n\t\t"mods\\\\A"\n\t]\n}');
