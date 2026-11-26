@@ -2345,13 +2345,13 @@ describe('the MO2 Instance adapter', () => {
           ['the instance game it names no game of its own', metaWith('modid=600\r\n', [['600', '901']]), pageOf('600', '901')],
         ] as const;
         const WRITTEN = [
-          ['a fresh clone with no modid and no pair', metaWith('gameName=Fallout4\r\n', []), pageOf('600', '901')],
-          ['a fresh clone and a page with no file', metaWith('gameName=Fallout4\r\n', []), pageOf('1')],
-          ['the modid MO2 writes by default', metaWith('gameName=Fallout4\r\nmodid=0\r\n', []), pageOf('600', '901')],
-          ['a modid beside a pair the page does not name', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('700', '950')],
-          ['several pairs with the page naming the one the modid does not', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['9', '78']]), pageOf('9', '78')],
-          ['a page with no file beside a pair', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600')],
-          ['a page with no file and a modid of another mod', metaWith('gameName=Fallout4\r\nmodid=601\r\n', []), pageOf('600')],
+          ['a fresh clone with no modid and no pair', metaWith('gameName=Fallout4\r\n', []), pageOf('600', '901'), '600', 1],
+          ['a fresh clone and a page with no file', metaWith('gameName=Fallout4\r\n', []), pageOf('1'), '1', 0],
+          ['the modid MO2 writes by default', metaWith('gameName=Fallout4\r\nmodid=0\r\n', []), pageOf('600', '901'), '600', 1],
+          ['a modid beside a pair the page does not name', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('700', '950'), '700', 1],
+          ['several pairs with the page naming the one the modid does not', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['9', '78']]), pageOf('9', '78'), '9', 1],
+          ['a page with no file beside a pair', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600'), '600', 0],
+          ['a page with no file and a modid of another mod', metaWith('gameName=Fallout4\r\nmodid=601\r\n', []), pageOf('600'), '600', 0],
         ] as const;
 
         it('reads the page of a mod of a game Modbench does not support on that game\'s domain, and writes it back as held', async () => {
@@ -2362,6 +2362,16 @@ describe('the MO2 Instance adapter', () => {
           await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: skyrimPage } }, TRASH);
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+        });
+
+        it.each(WRITTEN)('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
+          await holding(text);
+
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } }, TRASH);
+
+          const written = await readFile(metaOf(PATCH), 'utf8');
+          expect(generalModId(written)).toBe(modId);
+          expect(written.match(/^\d+\\modid=/gm) ?? []).toHaveLength(pairs);
         });
 
         it.each([...LEFT_ALONE.map(([name, text, page]) => [name, text, page, false] as const), ...WRITTEN.map(([name, text, page]) => [name, text, page, true] as const)])(

@@ -23,21 +23,22 @@ describe('where a release\'s files start', () => {
   };
 
   it.each([
-    ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], 'Data', undefined],
-    ['files at the top', ['foo.esp', 'meshes/x.nif'], '', undefined],
-    ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], 'MyMod-Main', undefined],
-    ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], 'MyMod-Main/Data', undefined],
-    ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], 'Data', undefined],
-    ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], '', undefined],
-    ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], '', 'xml'],
-    ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], 'MyMod', 'xml'],
-    ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], '', undefined],
-    ['a lone top-level data folder, never a wrapper', ['meshes/x.nif'], '', undefined],
-    ['a lone top-level script extender folder, never a wrapper', ['F4SE/x.dll'], '', undefined],
-  ])('is %s', async (_, release, root, fomod) => {
+    ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], { root: 'Data' }],
+    ['files at the top', ['foo.esp', 'meshes/x.nif'], { root: '' }],
+    ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], { root: 'MyMod-Main' }],
+    ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], { root: 'MyMod-Main/Data' }],
+    ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], { root: 'Data' }],
+    ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], { root: '' }],
+    ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], { root: '', fomod: 'xml' }],
+    ['a FOMOD whose installer is a script', ['fomod/script.cs', '00 Core/foo.esp'], { root: '', fomod: 'script' }],
+    ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], { root: 'MyMod', fomod: 'xml' }],
+    ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], { root: '' }],
+    ['a lone top-level data folder, never a wrapper', ['meshes/x.nif'], { root: '' }],
+    ['a lone top-level script extender folder, never a wrapper', ['F4SE/x.dll'], { root: '' }],
+  ])('is %s', async (_, release, { root, ...fomod }) => {
     await holding(release);
 
-    expect(await releaseRoot(extracted)).toEqual({ root: join(extracted, root), ...fomod === undefined ? {} : { fomod } });
+    expect(await releaseRoot(extracted)).toEqual({ root: join(extracted, root), ...fomod });
   });
 
   it('peels no more than 32 wrapper folders', async () => {

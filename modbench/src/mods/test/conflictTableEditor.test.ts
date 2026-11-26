@@ -27,6 +27,7 @@ import { sameCopies, type FileCopies } from '../sameCopies';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture } from '../../test/fakeInstanceAdapter';
 import { instanceOver } from '../../test/instanceOver';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { settled } from '../../test/eventually';
 
 const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
 
@@ -185,7 +186,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     return row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : [];
   };
   const rowCounts = (panel: FakePanel) => shownTables(panel).map((table) => (table.kind === 'table' ? table.rows.length : undefined));
-  const posted = (panel: FakePanel, count: number) => vi.waitFor(() => expect(panel.webview.posted).toHaveLength(count), { interval: 1 });
+  const posted = (panel: FakePanel, count: number) => settled(() => expect(panel.webview.posted).toHaveLength(count));
   const ready = { type: CONFLICT_TABLE_READY };
   const unreadableHigh = (reason: string, origin: FileOrigin = { kind: 'mod', name: 'High' }) => (paths: readonly string[]) =>
     Promise.resolve(paths.map((relativePath) => ({

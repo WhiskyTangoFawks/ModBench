@@ -30,6 +30,7 @@ import {
 } from '../../test/fakeInstanceAdapter';
 import { modCommands } from '../../modCommands/modCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { settled } from '../../test/eventually';
 
 
 const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
@@ -129,7 +130,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
     const installing = installRow(installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE, upgrades }, scripted);
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled(), { interval: 1 });
+    await settled(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
     return { qp: double.qp };
@@ -219,7 +220,7 @@ describe('modbench.mod.install over a downloaded file: the progress bar and the 
     const running = installRow(
       installDeps({ reporter: recordingReporter() }),
       { ...ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE, upgrades: [{ modName: 'Foo Mod', version: '1.0' }] });
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled(), { interval: 1 });
+    await settled(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;
 

@@ -267,10 +267,8 @@ describe('the FOMOD installer', () => {
     expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
   });
 
-  it.each([
-    ['UTF-16 little-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16le],
-  ])('reads a module config in %s, as MO2 reads it, though it names no schema and a folder its archive lacks', async (_, declaration, encoded) => {
-    const unnamed = encoded(`${declaration}<config><moduleName>No schema</moduleName><requiredInstallFiles>`
+  it('reads a module config in UTF-16 little-endian, by its byte order mark, as MO2 reads it, though it names no schema and a folder its archive lacks', async () => {
+    const unnamed = utf16le(`<?xml version="1.0" encoding="UTF-16"?><config><moduleName>No schema</moduleName><requiredInstallFiles>`
       + `${file('core/Core.esp', 'Café.esp')}<folder source="gone" destination=""/></requiredInstallFiles></config>`);
     await release(unnamed, ['core/Core.esp']);
 
@@ -283,7 +281,7 @@ describe('the FOMOD installer', () => {
     ['its installer is a script', 'script', undefined, /its installer is a script, which Modbench does not run/],
     ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
   ] as const;
-  const refusedLanding = async (fomod: 'script' | 'xml', moduleConfig: string | undefined, answer: FomodAnswer) => {
+  const landing = async (fomod: 'script' | 'xml', moduleConfig: string | undefined, answer: FomodAnswer) => {
     if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
     return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
   };
@@ -295,7 +293,7 @@ describe('the FOMOD installer', () => {
     ['its module dependencies do not hold', 'xml', config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'),
       /needed\.esm/i],
   ] as const)('refuses to an agent a FOMOD whose %s, telling it to ask for manual, and lands nothing', async (_, fomod, moduleConfig, why) => {
-    const refusal = refusedLanding(fomod, moduleConfig, { kind: 'choices', steps: [] });
+    const refusal = landing(fomod, moduleConfig, { kind: 'choices', steps: [] });
 
     await expect(refusal).rejects.toThrow(why);
     await expect(refusal).rejects.toThrow('Request it again with manual');
@@ -308,12 +306,12 @@ describe('the FOMOD installer', () => {
     ] as const)('is refused to the page, which %s, while the install waits on the user', async (__, reply, ended) => {
       const { dialog, events } = refusingPage(reply);
 
-      expect(await refusedLanding(fomod, moduleConfig, { kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
+      expect(await landing(fomod, moduleConfig, { kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
       expect(events).toEqual(['asking true', expect.stringMatching(why), 'asking false']);
     });
 
     it('lands as a plain copy when Manual is asked for, without refusing', async () => {
-      expect(await refusedLanding(fomod, moduleConfig, { kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await landing(fomod, moduleConfig, { kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
     });
   });
 
@@ -549,14 +547,14 @@ describe('the FOMOD installer', () => {
       };
       const imageOf = (state: FomodState<ReleaseImage>): ReleaseImage => state.steps[0]?.optionalFileGroups?.group[0]?.options[0]?.image;
 
-      it('carries the author, version and website of the FOMOD\'s info file, found as the release spells it', async () => {
+      it('carries the author, version and website of the FOMOD\'s info file, found as the release spells it and read as MO2 reads it', async () => {
         await release(imaged('', ''), ['a/A.esp']);
         await mkdir(join(root, 'FOMOD'), { recursive: true });
-        await writeFile(join(root, 'FOMOD', 'Info.XML'), INFO);
+        await writeFile(join(root, 'FOMOD', 'Info.XML'), utf16le(INFO.replace('Ada', 'Adé')));
 
         const { page } = await answered([INSTALL]);
 
-        expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Ada & <Bo>', version: '1.2', website: 'https://example.com/m' });
+        expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Adé & <Bo>', version: '1.2', website: 'https://example.com/m' });
       });
 
       it('leaves a header field empty when the FOMOD gives no info file', async () => {

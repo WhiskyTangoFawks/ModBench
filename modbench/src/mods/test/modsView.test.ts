@@ -88,6 +88,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingTasks } from '../../test/recordingTasks';
 import { ArchivedCopies } from '../archivedCopies';
+import { settled } from '../../test/eventually';
 
 
 const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> => ({
@@ -161,8 +162,6 @@ beforeEach(() => {
   h.decorationProviders.length = 0;
   h.picked.length = 0;
 });
-
-const settled = (check: () => void): Promise<void> => vi.waitFor(check, { interval: 1 });
 
 describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', () => {
   it('publishes a publisher tag that names no path to the Problems panel', () => {

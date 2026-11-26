@@ -23,6 +23,7 @@ import { adapterOver } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { FOMOD_PAGE } from '../../../test/fomodDialogDouble';
+import { settled } from '../../../test/eventually';
 
 const MOD = 'New Mod';
 const UPGRADED = 'Unofficial Fallout 4 Patch';
@@ -507,7 +508,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
 
         await writeFile(join(folder(UPGRADED), 'after-upgrade.txt'), 'x');
-        await vi.waitFor(() => expect(heard).toContain('after-upgrade.txt'), { interval: 1 });
+        await settled(() => expect(heard).toContain('after-upgrade.txt'));
       } finally {
         watcher.close();
       }

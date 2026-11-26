@@ -9,6 +9,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
 import { ModProblems } from '../modProblems';
+import { settled } from '../../test/eventually';
 
 const packaged = status;
 const FOLDER = '/instance/mods/ModA';
@@ -29,7 +30,6 @@ function over(initial: readonly ModStatus[], plugins: InstanceValue['plugins'] =
   } };
 }
 
-const settled = (check: () => void): Promise<void> => vi.waitFor(check, { interval: 1 });
 const messagesOn = (collection: FakeDiagnosticCollection, file: string) => (collection.get(Uri.file(file)) ?? []).map(({ message, severity }) => [message, severity]);
 
 describe('the Problems panel follows Mod status (instance-repository.md, Status, story 2)', () => {

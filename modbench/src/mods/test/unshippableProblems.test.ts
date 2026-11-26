@@ -9,6 +9,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
 import { UnshippableProblems } from '../unshippableProblems';
+import { settled } from '../../test/eventually';
 
 const SETTINGS = '/instance/compiler_settings.json';
 const FOLDER = '/instance/mods/ModA';
@@ -46,7 +47,6 @@ function over(initial: readonly ModStatus[], publisherConfiguration: PublisherCo
   };
 }
 
-const settled = (check: () => void): Promise<void> => vi.waitFor(check, { interval: 1 });
 const problemsOn = (collection: FakeDiagnosticCollection) => (collection.get(Uri.file(SETTINGS)) ?? []).map(({ range, message, severity }) => [range, message, severity]);
 const firstLine = new Range(0, 0, 0, Number.MAX_SAFE_INTEGER);
 

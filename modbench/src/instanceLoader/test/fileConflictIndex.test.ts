@@ -236,21 +236,21 @@ describe('a lookup changed from the one before it', () => {
   const pathsUpTo = (count: number): string[] => Array.from({ length: count }, (_, at) => `meshes/${at}.nif`);
 
   it('holds what a lookup built afresh holds, and leaves the one before it as it was', () => {
-    const paths = pathsUpTo(20);
-    const added = pathsUpTo(25).slice(20);
+    const paths = pathsUpTo(1100);
+    const added = pathsUpTo(1400).slice(1100);
     const was = lookupOf(paths.map((path) => entryAt(path)));
     const now = was.changed(new Map<string, ConflictEntry | undefined>([
-      ...paths.slice(0, 5).map((path) => [path, undefined] as const),
-      ...[...paths.slice(5, 10), ...added].map((path) => [path, entryAt(path, 'B')] as const),
+      ...paths.slice(0, 300).map((path) => [path, undefined] as const),
+      ...[...paths.slice(300, 600), ...added].map((path) => [path, entryAt(path, 'B')] as const),
     ]));
 
-    const afresh = lookupOf([...paths.slice(10).map((path) => entryAt(path)), ...[...paths.slice(5, 10), ...added].map((path) => entryAt(path, 'B'))]);
+    const afresh = lookupOf([...paths.slice(600).map((path) => entryAt(path)), ...[...paths.slice(300, 600), ...added].map((path) => entryAt(path, 'B'))]);
     expect([...now].sort(byPath)).toEqual([...afresh].sort(byPath));
     expect([...was].sort(byPath)).toEqual([...lookupOf(paths.map((path) => entryAt(path)))].sort(byPath));
   });
 
   it('holds no more than an empty lookup once every path it held is taken out', () => {
-    const paths = pathsUpTo(20);
+    const paths = pathsUpTo(1100);
     const emptied = lookupOf(paths.map((path) => entryAt(path))).changed(new Map(paths.map((path) => [path, undefined])));
 
     expect(reachableObjects(emptied).size).toBe(reachableObjects(new FileConflictLookup()).size);
