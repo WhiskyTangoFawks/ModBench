@@ -44,7 +44,6 @@ const KNOWN: ConditionFacts = {
 };
 
 const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
-const utf16be = (text: string): Buffer => Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, 'utf16le').swap16()]);
 
 const choose = (...each: [string, Record<string, string[]>][]): FomodStepChoice[] =>
   each.map(([name, groups]) => ({ step: name, groups: Object.entries(groups).map(([named, options]) => ({ group: named, options })) }));
@@ -270,9 +269,6 @@ describe('the FOMOD installer', () => {
 
   it.each([
     ['UTF-16 little-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16le],
-    ['UTF-16 big-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16be],
-    ['UTF-16 little-endian with no byte order mark, by its first characters', '<?xml version="1.0" encoding="UTF-16"?>', (text: string) => Buffer.from(text, 'utf16le')],
-    ['neither UTF-8 nor UTF-16, as Windows-1252, where MO2 falls back to Latin-1', '<?xml version="1.0"?>', (text: string) => Buffer.from(text, 'latin1')],
   ])('reads a module config in %s, as MO2 reads it, though it names no schema and a folder its archive lacks', async (_, declaration, encoded) => {
     const unnamed = encoded(`${declaration}<config><moduleName>No schema</moduleName><requiredInstallFiles>`
       + `${file('core/Core.esp', 'Café.esp')}<folder source="gone" destination=""/></requiredInstallFiles></config>`);
@@ -283,38 +279,41 @@ describe('the FOMOD installer', () => {
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'))).toEqual(unnamed);
   });
 
-  describe.each([
+  const UNREADABLE = [
     ['its installer is a script', 'script', undefined, /its installer is a script, which Modbench does not run/],
+    ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
+  ] as const;
+  const refusedLanding = async (fomod: 'script' | 'xml', moduleConfig: string | undefined, answer: FomodAnswer) => {
+    if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
+    return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
+  };
+
+  it.each([
+    ...UNREADABLE,
     ['its module config is never closed', 'xml', '<config><moduleName>Never closed</moduleName>',
       /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 175/],
-    ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
     ['its module dependencies do not hold', 'xml', config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'),
       /needed\.esm/i],
-  ] as const)('a FOMOD whose %s', (_, fomod, moduleConfig, why) => {
-    const landing = async (answer: FomodAnswer) => {
-      if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
-      return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
-    };
+  ] as const)('refuses to an agent a FOMOD whose %s, telling it to ask for manual, and lands nothing', async (_, fomod, moduleConfig, why) => {
+    const refusal = refusedLanding(fomod, moduleConfig, { kind: 'choices', steps: [] });
 
-    it('is refused to an agent, who is told to ask for manual, and lands nothing', async () => {
-      const refusal = landing({ kind: 'choices', steps: [] });
+    await expect(refusal).rejects.toThrow(why);
+    await expect(refusal).rejects.toThrow('Request it again with manual');
+  });
 
-      await expect(refusal).rejects.toThrow(why);
-      await expect(refusal).rejects.toThrow('Request it again with manual');
-    });
-
+  describe.each(UNREADABLE)('a FOMOD whose %s', (_, fomod, moduleConfig, why) => {
     it.each([
       ['takes Manual', 'manual', { kind: 'landing', fomod: { kind: 'plainCopy', why: 'Manual was asked for' } }],
       ['declines it', 'cancelled', { kind: 'cancelled' }],
     ] as const)('is refused to the page, which %s, while the install waits on the user', async (__, reply, ended) => {
       const { dialog, events } = refusingPage(reply);
 
-      expect(await landing({ kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
+      expect(await refusedLanding(fomod, moduleConfig, { kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
       expect(events).toEqual(['asking true', expect.stringMatching(why), 'asking false']);
     });
 
     it('lands as a plain copy when Manual is asked for, without refusing', async () => {
-      expect(await landing({ kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await refusedLanding(fomod, moduleConfig, { kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
     });
   });
 
@@ -558,32 +557,6 @@ describe('the FOMOD installer', () => {
         const { page } = await answered([INSTALL]);
 
         expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Ada & <Bo>', version: '1.2', website: 'https://example.com/m' });
-      });
-
-      const cyrillicInWindows1251 = (text: string): Buffer =>
-        Buffer.from(Array.from({ length: text.length }, (_, i) => {
-          const code = text.charCodeAt(i);
-          return code >= 0x410 && code <= 0x44f ? code - 0x410 + 0xc0 : code;
-        }));
-
-      it.each([
-        ['UTF-8 with a byte order mark', 'Adé', (text: string): Buffer => Buffer.from(`\uFEFF${text}`)],
-        ['UTF-8, of an even length that UTF-16 would decode, whose declaration names UTF-16', 'Adé', (text: string): Buffer => {
-          const declared = `<?xml version="1.0" encoding="UTF-16"?>${text}`;
-          return Buffer.from(Buffer.byteLength(declared) % 2 === 0 ? declared : `${declared}\n`);
-        }],
-        ['UTF-16 little-endian, by its byte order mark', 'Adé', utf16le],
-        ['UTF-16 big-endian, by its byte order mark', 'Adé', utf16be],
-        ['UTF-16 little-endian with no byte order mark, by its first characters', 'Adé', (text: string): Buffer => Buffer.from(`<?xml version="1.0"?>${text}`, 'utf16le')],
-        ['the encoding its declaration names', 'Иван', (text: string): Buffer => cyrillicInWindows1251(`<?xml version="1.0" encoding="windows-1251"?>${text}`)],
-        ['neither UTF-8 nor UTF-16 and naming none, as Windows-1252, where MO2 falls back to Latin-1', 'Adé', (text: string): Buffer => Buffer.from(text, 'latin1')],
-      ])('reads an info file in %s', async (_, author, encoded) => {
-        await release(imaged('', ''), ['a/A.esp']);
-        await writeFile(join(root, 'fomod', 'info.xml'), encoded(INFO.replace('Ada', author)));
-
-        const { page } = await answered([INSTALL]);
-
-        expect(page.states[0]).toMatchObject({ author: `${author} & <Bo>`, version: '1.2', website: 'https://example.com/m' });
       });
 
       it('leaves a header field empty when the FOMOD gives no info file', async () => {

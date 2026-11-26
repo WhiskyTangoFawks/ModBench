@@ -533,7 +533,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
 
         await writeFile(join(folder(UPGRADED), 'after-upgrade.txt'), 'x');
-        await vi.waitFor(() => expect(heard).toContain('after-upgrade.txt'));
+        await vi.waitFor(() => expect(heard).toContain('after-upgrade.txt'), { interval: 1 });
       } finally {
         watcher.close();
       }

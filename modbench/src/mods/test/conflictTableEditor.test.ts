@@ -185,7 +185,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     return row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : [];
   };
   const rowCounts = (panel: FakePanel) => shownTables(panel).map((table) => (table.kind === 'table' ? table.rows.length : undefined));
-  const posted = (panel: FakePanel, count: number) => vi.waitFor(() => expect(panel.webview.posted).toHaveLength(count));
+  const posted = (panel: FakePanel, count: number) => vi.waitFor(() => expect(panel.webview.posted).toHaveLength(count), { interval: 1 });
   const ready = { type: CONFLICT_TABLE_READY };
   const unreadableHigh = (reason: string, origin: FileOrigin = { kind: 'mod', name: 'High' }) => (paths: readonly string[]) =>
     Promise.resolve(paths.map((relativePath) => ({
