@@ -89,4 +89,16 @@ public sealed class PlacedCellTests
         var read = JsonNode.Parse(RecordTextCodec.RoundTrip(created.Text, release, "refr")).Require();
         Assert.Equal(centre, positionPath.Aggregate(read, (node, member) => node[member].Require()).GetValue<string>());
     }
+
+    [Theory]
+    [InlineData(PersistentFlag.PersistentGroup, """{ "Grid": { "Point": "3, -2" } }""", PersistentFlag.Bit)]
+    [InlineData(PersistentFlag.TemporaryGroup, "{}", 0)]
+    public void AReferenceCreatedInAPersistentGroup_IsPersistent_AndOneInACellWithNoGrid_HasNoPosition(string group, string cell, int flags)
+    {
+        var bare = Document.Parse(RecordTextCodec.SerializeToText(new Mutagen.Bethesda.Fallout4.PlacedObject(Placed, Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4), GameRelease.Fallout4));
+
+        var created = JsonNode.Parse(PlacedCell.AsCreatedIn(bare, group, Cell(cell), GameRelease.Fallout4).Text).Require();
+
+        Assert.Equal((flags, null), (created[RecordHeaderFlags.Member]?.GetValue<int>() ?? 0, created["Position"]?.GetValue<string>()));
+    }
 }

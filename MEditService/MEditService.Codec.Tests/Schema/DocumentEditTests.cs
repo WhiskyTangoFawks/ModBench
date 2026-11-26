@@ -64,6 +64,7 @@ public sealed class DocumentEditTests
             ["the int global"] = ("glob", TextOf(_globalInt)),
             ["the keyword"] = ("kywd", TextOf(_keyword)),
             ["a weather"] = ("wthr", TextOf(_mod.Weather.AddNew("Wt"))),
+            ["a lens flare"] = ("lens", TextOf(_mod.LensFlares.AddNew("Lf"))),
             ["a magic effect with a cloak archetype"] = ("mgef", """
                 {
                   "FormKey": "000801:DocEdit.esp",
@@ -696,11 +697,21 @@ public sealed class DocumentEditTests
     }
 
     [Theory]
+    [InlineData("a weather", EditOp.Set, "LightningColor", "\"#7F102030\"", "LightningColor")]
+    [InlineData("a lens flare", EditOp.Add, "Sprites", """{"Data": {"Tint": "#7F102030"}}""", "Sprites[0].Data.Tint")]
+    public void AnAlphaGivenToAColorHoldingNone_FailsNamingTheColor_AtAnyDepth(string record, EditOp op, string path, string value, string color)
+    {
+        var (table, text) = _records[record];
+
+        Assert.Equal(new EditFailure.AlphaGiven(color, "#7F102030"), Failure(text, table, op, value, Path(path)));
+    }
+
+    [Theory]
     [InlineData("#102030")]
     [InlineData("#00102030")]
     public void AnElementPasted_WithAColorHoldingNoAlpha_HoldsItInMutagensOwnSpellingOfNoAlpha(string tint)
     {
-        var after = Edited(TextOf(_mod.LensFlares.AddNew("Lf")), "lens", EditOp.Add, $$$"""{"Data": {"Tint": "{{{tint}}}"}}""", Member("Sprites"));
+        var after = EditedRecord("a lens flare", EditOp.Add, "Sprites", $$$"""{"Data": {"Tint": "{{{tint}}}"}}""");
 
         Assert.Equal("#00102030", Node(after, "Sprites").AsArray()[0].Require()["Data"].Require()["Tint"].Require().GetValue<string>());
     }
