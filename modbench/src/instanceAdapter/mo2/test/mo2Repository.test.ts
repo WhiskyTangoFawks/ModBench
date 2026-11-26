@@ -3,16 +3,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { adapterOver, managerOver } from '../../../test/mo2/adapterOver';
-import type { GamePlace } from '../../instanceAdapter';
-import type { ManagerAdapter as Adapter } from '../../publisher';
-import { PRE_PUSH_HOOK } from '../../prePushHook';
-import { whitelistIgnoreList, withHeldWholeLines, withSourceModLines } from '../layout';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+import type { GamePlace, InstanceAdapter as Adapter } from '../../instanceAdapter';
 import { BUILD_FILE } from '../../../wire/sourceMod';
 import { onPosix } from '../../../test/platform';
 
@@ -24,10 +21,32 @@ afterEach(async () => {
 
 async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
-  return managerOver(root);
+  return adapterOver(root);
 }
 
-const everySourceModNamedForItsRepository = async (adapter: Awaited<ReturnType<typeof instance>>): ReturnType<typeof adapter.writeSubmodules> =>
+const PUBLISHER_FILE = 'compiler_settings.json';
+
+const WHITELIST = `${[
+  '/*', '!/.gitignore', '!/.gitmodules', '!/ModOrganizer.ini', '!/userlist.yaml', `!/${PUBLISHER_FILE}`, '!/source/', '/source/*',
+  '!/profiles/', '/profiles/*', '!/profiles/*/', '/profiles/*/*', '!/profiles/*/modlist.txt', '!/profiles/*/plugins.txt', '!/profiles/*/loadorder.txt',
+  '!/profiles/*/*.[iI][nN][iI]', '!/mods/', '/mods/*', '!/mods/*/', '/mods/*/*', '!/mods/*/*.manifest.json', '!/mods/*_separator/[mM][eE][tT][aA][..][iI][nN][iI]',
+].join('\n')}\n`;
+
+const heldWhole = (name: string): string =>
+  `# Mod folders this repository holds whole\n!/mods/${name}/*\n/mods/${name}/meta.ini\n# End of mod folders this repository holds whole\n`;
+
+async function pushCheckAnInstanceRepositoryHolds(): Promise<string> {
+  const other = await mkdtemp(join(tmpdir(), 'modbench-mo2-hook-'));
+  try {
+    execFileSync('git', ['init', '--quiet'], { cwd: other });
+    await adapterOver(other).refuseUnpublishedPins();
+    return await readFile(join(other, '.git', 'hooks', 'pre-push'), 'utf8');
+  } finally {
+    await rm(other, { recursive: true, force: true });
+  }
+}
+
+const everySourceModNamedForItsRepository = async (adapter: Adapter): ReturnType<typeof adapter.writeSubmodules> =>
   adapter.writeSubmodules('every', await adapter.sourceModFolders());
 
 const gamePlace = (): GamePlace => ({ root: join(root, 'game'), depots: [], depotProblems: [] });
@@ -39,7 +58,7 @@ async function put(path: string, text = 'x'): Promise<void> {
 
 const runGit = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 
-const SETTINGS_NAMING_DOWNLOADS = '[General]\r\ngameName=Fallout 4\r\n[Settings]\r\ndownload_directory=@ByteArray(my downloads)\r\n';
+const SETTINGS_NAMING_DOWNLOADS = '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n[Settings]\r\ndownload_directory=@ByteArray(my downloads)\r\n';
 
 describe('the MO2 adapter\'s repository', () => {
   it('reads that the instance holds none until its folder has a .git', async () => {
@@ -56,10 +75,10 @@ describe('the MO2 adapter\'s repository', () => {
 
   describe('the ignore list', () => {
     const crlf = (text: string): string => text.replaceAll('\n', '\r\n');
-    const withSourceMod = withSourceModLines(whitelistIgnoreList(undefined), { submodules: ['Mod A'], plain: ['Mod B'] }) ?? '';
+    const withSourceMod = `${WHITELIST}# Source folders in this repository\n!/source/Mod A\n!/source/Mod B/\n# End of source folders in this repository\n`;
     const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
-    const whitelistLines = whitelistIgnoreList(undefined).trimEnd().split('\n');
+    const whitelistLines = WHITELIST.trimEnd().split('\n');
     const joined = (lines: string[]): string => `${lines.join('\n')}\n`;
     const withoutLastLine = joined(whitelistLines.slice(0, -1));
     const swapped = joined([whitelistLines[1] ?? '', whitelistLines[0] ?? '', ...whitelistLines.slice(2)]);
@@ -67,15 +86,15 @@ describe('the MO2 adapter\'s repository', () => {
     const trailingSpace = joined([`${whitelistLines[0] ?? ''} `, ...whitelistLines.slice(1)]);
 
     it.each([
-      ['the lines of an ignore list already there', 'mine\n', `mine\n${whitelistIgnoreList(undefined)}`],
-      ['an ignore list with no final newline', 'mine', `mine\n${whitelistIgnoreList(undefined)}`],
-      ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(whitelistIgnoreList(undefined))}`],
-      ['an ignore list whose whitelist lacks a line', withoutLastLine, `${withoutLastLine}${whitelistIgnoreList(undefined)}`],
-      ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${whitelistIgnoreList(undefined)}`],
-      ['an ignore list whose whitelist a line of the user splits', split, `${split}${whitelistIgnoreList(undefined)}`],
+      ['the lines of an ignore list already there', 'mine\n', `mine\n${WHITELIST}`],
+      ['an ignore list with no final newline', 'mine', `mine\n${WHITELIST}`],
+      ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(WHITELIST)}`],
+      ['an ignore list whose whitelist lacks a line', withoutLastLine, `${withoutLastLine}${WHITELIST}`],
+      ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${WHITELIST}`],
+      ['an ignore list whose whitelist a line of the user splits', split, `${split}${WHITELIST}`],
       ['an ignore list that holds its whitelist and its source mods', withSourceMod, withSourceMod],
-      ['an ignore list that holds lines of the user on both sides of its whitelist', `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`, `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`],
-      ['an ignore list of CRLF lines that holds its whitelist, then lines of the user', crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`), crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`)],
+      ['an ignore list that holds lines of the user on both sides of its whitelist', `mine/\n${WHITELIST}!/docs/\n`, `mine/\n${WHITELIST}!/docs/\n`],
+      ['an ignore list of CRLF lines that holds its whitelist, then lines of the user', crlf(`${WHITELIST}!/docs/\n`), crlf(`${WHITELIST}!/docs/\n`)],
       ['an ignore list that holds its whitelist with a trailing space, then lines of the user', `${trailingSpace}!/docs/\n`, `${trailingSpace}!/docs/\n`],
     ])('writes the ignore list for %s, and takes back to what the file was', async (_name, before, after) => {
       const adapter = await instance();
@@ -135,7 +154,7 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('takes back nothing, and keeps what another program wrote, when it added nothing', async () => {
       const adapter = await instance();
-      await put('.gitignore', whitelistIgnoreList(undefined));
+      await put('.gitignore', WHITELIST);
       const takeBack = await adapter.writeIgnoreList();
       await put('.gitignore', 'theirs\n');
 
@@ -145,15 +164,14 @@ describe('the MO2 adapter\'s repository', () => {
     });
 
     it('lets git see the publisher\'s configuration', async () => {
-      root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
-      const adapter = managerOver(root, {}, { name: 'publisher.json', spelling: { separators: [], ends: '"', nativeStarts: [] } });
-      await put('publisher.json', '{}');
+      const adapter = await instance();
+      await put(PUBLISHER_FILE, '{}');
       await put('other.json', '{}');
       runGit('init', '--quiet');
 
       await adapter.writeIgnoreList();
 
-      expect(runGit('status', '--porcelain', '--untracked-files=all')).toContain('publisher.json');
+      expect(runGit('status', '--porcelain', '--untracked-files=all')).toContain(PUBLISHER_FILE);
       expect(runGit('status', '--porcelain', '--untracked-files=all')).not.toContain('other.json');
     });
 
@@ -167,55 +185,64 @@ describe('the MO2 adapter\'s repository', () => {
     });
   });
 
-  describe('the files Modbench keeps in the instance', () => {
+  describe('the files Modbench keeps in the instance, which the publisher\'s configuration ignores', () => {
+    async function ignoredAfterReading(ignored: readonly string[]): Promise<unknown> {
+      const adapter = adapterOver(root);
+      await put('profiles/Default/modlist.txt', '');
+      await put('profiles/Default/plugins.txt', '');
+      await put(PUBLISHER_FILE, JSON.stringify({ Ignore: ignored }));
+      await adapter.reading();
+      return JSON.parse(await readFile(join(root, PUBLISHER_FILE), 'utf8'));
+    }
+
     it('are its record index, hash index, source folder, sorting rule files and repository files, and every manifest a mod folder holds', async () => {
-      const adapter = await instance();
+      await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('mods/A/A.manifest.json');
       await put('mods/A/meta.ini');
       await put('mods/B/Renamed.manifest.json');
       await mkdir(join(root, 'mods', 'C'));
       await put('plugins/rootbuilder/rootbuilder.manifest.json');
-      for (const name of ['.git', '.gitignore', '.gitmodules', 'hash-index', 'masterlist.yaml', 'modbench', 'prelude.yaml', 'source', 'userlist.yaml']) await put(name);
+      runGit('init', '--quiet');
+      for (const name of ['.gitignore', '.gitmodules', 'masterlist.yaml', 'prelude.yaml', 'userlist.yaml']) await put(name);
+      for (const name of ['hash-index', 'modbench', 'source']) await mkdir(join(root, name));
 
-      expect((await adapter.filesKept()).present.map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
-        '.git', '.gitignore', '.gitmodules', 'hash-index', 'masterlist.yaml', 'modbench', 'mods/A/A.manifest.json', 'mods/B/Renamed.manifest.json',
+      expect(await ignoredAfterReading([])).toEqual({ Ignore: expect.arrayContaining([
+        '.git', '.gitignore', '.gitmodules', 'hash-index', 'masterlist.yaml', 'modbench', 'mods\\A\\A.manifest.json', 'mods\\B\\Renamed.manifest.json',
         'prelude.yaml', 'source', 'userlist.yaml',
-      ].sort());
+      ]) as unknown });
+      expect(await ignoredAfterReading([])).not.toEqual({ Ignore: expect.arrayContaining(['plugins\\rootbuilder\\rootbuilder.manifest.json']) as unknown });
     });
 
     it('lists a fixed path only while the instance holds it, and owns it there or not', async () => {
-      const adapter = await instance();
+      await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('userlist.yaml');
-      const { present, owns } = await adapter.filesKept();
-      const relatives = present.map((path) => relative(root, path).replaceAll('\\', '/'));
 
-      expect(relatives).toEqual(['userlist.yaml']);
-      expect(['userlist.yaml', '.gitmodules', 'source', 'masterlist.yaml', 'prelude.yaml', 'hash-index', 'modbench'].map((name) => owns(join(root, name)))).toEqual(Array(7).fill(true));
+      expect(await ignoredAfterReading(['userlist.yaml', '.gitmodules', 'source', 'masterlist.yaml', 'prelude.yaml', 'hash-index', 'modbench', 'mine']))
+        .toEqual({ Ignore: ['userlist.yaml', 'mine', '.env'] });
     });
-  });
 
-  it.each([
-    ['a manifest of the mod\'s name, however it is cased', ['MODS', 'Gone', 'gone.MANIFEST.json'], true],
-    ['a manifest a rename left in the folder of another mod', ['mods', 'Y', 'X.manifest.json'], true],
-    ['a mod folder', ['mods', 'Gone'], false],
-    ['another file in a mod folder', ['mods', 'Gone', 'notes.txt'], false],
-    ['a path below a manifest', ['mods', 'A', 'A.manifest.json', 'x'], false],
-    ['a manifest in a folder of a mod', ['mods', 'A', 'sub', 'A.manifest.json'], false],
-    ['a source mod\'s manifest', ['source', 'A', 'A.manifest.json'], false],
-    ['a manifest outside the mod folders, named for the folder it is in', ['plugins', 'Rootbuilder', 'rootbuilder.MANIFEST.json'], false],
-    ['a manifest at the instance root', ['instance.manifest.json'], false],
-    ['a manifest in a profile\'s folder', ['profiles', 'P', 'P.manifest.json'], false],
-    ['a manifest in the downloads folder', ['my downloads', 'D', 'D.manifest.json'], false],
-    ['a manifest below the folder of another', ['Stock Game', 'Data', 'Data.manifest.json'], false],
-  ])('owns %s: %s', async (_name, segments, owned) => {
-    const adapter = await instance();
-    await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
-    await put('Stock Game/Stock Game.manifest.json');
-    const { owns } = await adapter.filesKept();
+    it.each([
+      ['a manifest of the mod\'s name, however it is cased', 'MODS\\Gone\\gone.MANIFEST.json', true],
+      ['a manifest a rename left in the folder of another mod', 'mods\\Y\\X.manifest.json', true],
+      ['a mod folder', 'mods\\Gone', false],
+      ['another file in a mod folder', 'mods\\Gone\\notes.txt', false],
+      ['a path below a manifest', 'mods\\A\\A.manifest.json\\x', false],
+      ['a manifest in a folder of a mod', 'mods\\A\\sub\\A.manifest.json', false],
+      ['a source mod\'s manifest', 'source\\A\\A.manifest.json', false],
+      ['a manifest outside the mod folders, named for the folder it is in', 'plugins\\Rootbuilder\\rootbuilder.MANIFEST.json', false],
+      ['a manifest at the instance root', 'instance.manifest.json', false],
+      ['a manifest in a profile\'s folder', 'profiles\\P\\P.manifest.json', false],
+      ['a manifest in the downloads folder', 'my downloads\\D\\D.manifest.json', false],
+      ['a manifest below the folder of another', 'Stock Game\\Data\\Data.manifest.json', false],
+    ])('owns %s: %s', async (_name, entry, owned) => {
+      await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      await put('Stock Game/Stock Game.manifest.json');
 
-    expect(owns(join(root, ...segments))).toBe(owned);
+      expect(await ignoredAfterReading([entry])).toEqual({ Ignore: owned ? ['.env'] : [entry, '.env'] });
+    });
   });
 
   describe('whether git init has set the repository up', () => {
@@ -272,7 +299,8 @@ describe('the MO2 adapter\'s repository', () => {
       runGit('init', '--quiet');
       await before.refuseUnpublishedPins();
       await before.writePathTokens();
-      const adapter = managerOver(root, {}, { name: 'publisher.json', spelling: { separators: [], ends: '"' } });
+      runGit('config', '--remove-section', 'filter.modbench-publisher-tokens');
+      const adapter = adapterOver(root);
 
       const beforeCovered = (await adapter.reading()).repositorySetUp;
       await adapter.writePathTokens();
@@ -520,7 +548,7 @@ describe('the MO2 adapter\'s repository', () => {
     it('keeps the mod manager\'s metadata file out under the name it is renamed to, and holds a separator\'s whole', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      await put('.gitignore', whitelistIgnoreList(undefined));
+      await put('.gitignore', WHITELIST);
       const held = await modFolder('Mod [A]');
       const separator = await modFolder('Group_separator');
       await adapter.writeHeldWholeLines([held, separator], true);
@@ -534,16 +562,16 @@ describe('the MO2 adapter\'s repository', () => {
     it('holds a renamed folder whole by its new name alone', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      await put('.gitignore', whitelistIgnoreList(undefined));
+      await put('.gitignore', WHITELIST);
       const held = await modFolder('Mod [A]');
       await adapter.writeHeldWholeLines([held], true);
 
       await adapter.followFoldersInRepository([{ from: held, to: join(root, 'mods', 'Renamed') }]);
 
-      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(withHeldWholeLines(whitelistIgnoreList(undefined), ['Renamed'], true));
+      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(`${WHITELIST}${heldWhole('Renamed')}`);
     });
 
-    async function committed(ignoreList: string): Promise<Awaited<ReturnType<typeof instance>>> {
+    async function committed(ignoreList: string): Promise<Adapter> {
       const adapter = await instance();
       runGit('init', '--quiet');
       runGit('config', 'user.name', 't');
@@ -555,8 +583,8 @@ describe('the MO2 adapter\'s repository', () => {
     }
 
     it('is committed with the lines that let it in, and no other line of the ignore list', async () => {
-      const adapter = await committed(whitelistIgnoreList(undefined));
-      await put('.gitignore', `${whitelistIgnoreList(undefined)}mine\n`);
+      const adapter = await committed(WHITELIST);
+      await put('.gitignore', `${WHITELIST}mine\n`);
       const held = await modFolder('Mod [A]');
       await adapter.writeHeldWholeLines([held], true);
 
@@ -566,7 +594,7 @@ describe('the MO2 adapter\'s repository', () => {
     });
 
     it('is committed with the mod manager\'s metadata file kept out', async () => {
-      const adapter = await committed(whitelistIgnoreList(undefined));
+      const adapter = await committed(WHITELIST);
       const held = await modFolder('Mod [A]');
       await adapter.writeHeldWholeLines([held], true);
 
@@ -577,9 +605,9 @@ describe('the MO2 adapter\'s repository', () => {
     });
 
     it('is refused, committing nothing, naming the ignore list, when the one HEAD holds has an unpaired marker', async () => {
-      const unpaired = (withHeldWholeLines(whitelistIgnoreList(undefined), ['Other'], true) ?? '').trimEnd().split('\n').slice(0, -1).join('\n');
+      const unpaired = `${WHITELIST}${heldWhole('Other')}`.trimEnd().split('\n').slice(0, -1).join('\n');
       const adapter = await committed(`${unpaired}\n`);
-      await put('.gitignore', whitelistIgnoreList(undefined));
+      await put('.gitignore', WHITELIST);
       const held = await modFolder('Mod [A]');
       await adapter.writeHeldWholeLines([held], true);
 
@@ -589,7 +617,7 @@ describe('the MO2 adapter\'s repository', () => {
   });
 
   describe.each([
-    { lines: 'a mod folder held whole', folderIn: 'mods', elsewhere: 'source', write: (a: Awaited<ReturnType<typeof instance>>, folders: string[]) => a.writeHeldWholeLines(folders, true) },
+    { lines: 'a mod folder held whole', folderIn: 'mods', elsewhere: 'source', write: (a: Adapter, folders: string[]) => a.writeHeldWholeLines(folders, true) },
   ])('the lines for $lines', ({ folderIn, elsewhere, write }) => {
     it('keep every line it did not write', async () => {
       const adapter = await instance();
@@ -767,7 +795,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Old Name.path').trim()).toBe('source/Old Name');
     });
 
-    async function submoduleOfOne(): Promise<{ adapter: Awaited<ReturnType<typeof instance>>; folder: string }> {
+    async function submoduleOfOne(): Promise<{ adapter: Adapter; folder: string }> {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
@@ -813,6 +841,25 @@ describe('the MO2 adapter\'s repository', () => {
         git(folder, 'remote', 'add', second, `https://example.test/${second}.git`);
 
         expect(await adapter.sourceHost(folder)).toEqual({ kind: 'read', answer: { kind: 'host', url: `https://example.test/${read}.git` } });
+      });
+
+      const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
+      const LOCAL = 'its remote is on this machine alone';
+
+      it.each([
+        ['https://example.test/a.git', { kind: 'host', url: 'https://example.test/a.git' }],
+        ['https://user:token@example.test/a.git', { kind: 'host', url: 'https://example.test/a.git' }],
+        ['ssh://git:secret@example.test/a.git', { kind: 'host', url: 'ssh://git@example.test/a.git' }],
+        ['git@example.test:owner/a.git', { kind: 'host', url: 'git@example.test:owner/a.git' }],
+        ['https://user:p@ss@example.test/a.git', { kind: 'noHost', why: UNSAFE }],
+        ['user:secret@example.test:a.git', { kind: 'noHost', why: UNSAFE }],
+        ['../a', { kind: 'noHost', why: LOCAL }],
+        ['C:\\srv\\a.git', { kind: 'noHost', why: LOCAL }],
+        ['file:///srv/a.git', { kind: 'noHost', why: LOCAL }],
+      ])('reads the remote %s as %j', async (remote, host) => {
+        const adapter = await instance();
+
+        expect(await adapter.sourceHost(await sourceMod('Mod A', remote))).toEqual({ kind: 'read', answer: host });
       });
 
       it('reads a repository with no remote as having none', async () => {
@@ -1179,7 +1226,7 @@ describe('the MO2 adapter\'s repository', () => {
         const cloned = join(clone, 'modlist');
         await mkdir(join(cloned, 'source', 'Mod A'), { recursive: true });
         await mkdir(join(cloned, '.git', 'hooks'), { recursive: true });
-        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), PRE_PUSH_HOOK, { mode: 0o755 });
+        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), await pushCheckAnInstanceRepositoryHolds(), { mode: 0o755 });
         git(cloned, 'config', 'user.name', 't');
         git(cloned, 'config', 'user.email', 't@t');
         git(cloned, 'commit', '--quiet', '--allow-empty', '-m', 'unrelated');
@@ -1198,7 +1245,7 @@ describe('the MO2 adapter\'s repository', () => {
         const cloned = join(clone, 'modlist');
         await mkdir(join(cloned, 'source', 'Mod A'), { recursive: true });
         await mkdir(join(cloned, '.git', 'hooks'), { recursive: true });
-        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), PRE_PUSH_HOOK, { mode: 0o755 });
+        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), await pushCheckAnInstanceRepositoryHolds(), { mode: 0o755 });
         git(cloned, 'config', 'user.name', 't');
         git(cloned, 'config', 'user.email', 't@t');
         git(cloned, 'update-index', '--add', '--cacheinfo', `160000,${'a'.repeat(40)},source/Mod A`);
@@ -1210,11 +1257,12 @@ describe('the MO2 adapter\'s repository', () => {
       it('takes a pre-push hook already in a clone as written when it is Modbench\'s own', async () => {
         const adapter = await instance();
         runGit('init', '--quiet');
-        await put('.git/hooks/pre-push', PRE_PUSH_HOOK);
+        const own = await pushCheckAnInstanceRepositoryHolds();
+        await put('.git/hooks/pre-push', own);
 
         await adapter.refuseUnpublishedPins();
 
-        expect(await readFile(join(root, '.git', 'hooks', 'pre-push'), 'utf8')).toBe(PRE_PUSH_HOOK);
+        expect(await readFile(join(root, '.git', 'hooks', 'pre-push'), 'utf8')).toBe(own);
       });
 
       it('leaves a pre-push hook already in the repository as it is, naming it', async () => {

@@ -6,8 +6,8 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import type { ManagerAdapter } from '../../publisher';
-import { managerOver } from '../../../test/mo2/adapterOver';
+import type { InstanceAdapter } from '../../instanceAdapter';
+import { adapterOver } from '../../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 
@@ -16,13 +16,13 @@ const UFO4P = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 describe('the MO2 Instance adapter, on a file or folder another program renames', () => {
   let root: string;
-  let adapter: ManagerAdapter;
+  let adapter: InstanceAdapter;
   const at = (relative: string): string => join(root, relative);
   const renamed = (from: string, to: string) => adapter.renamedSymbol(at(from), at(to));
 
   beforeEach(() => {
     root = cloneCorpusFixture();
-    adapter = managerOver(root);
+    adapter = adapterOver(root);
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -75,14 +75,14 @@ describe('the MO2 Instance adapter, on a file or folder another program renames'
   });
 
   it('says why it cannot tell whether a file install can take is a downloaded file while the downloads folder cannot be resolved, and names a mod\'s folder still', async () => {
-    const unresolved = managerOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
+    const unresolved = adapterOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
 
     await expect(unresolved.renamedSymbol(at(`downloads/${UFO4P}`), at('downloads/UFO4P.7z'))).rejects.toThrow('download_directory names no folder');
     expect(await unresolved.renamedSymbol(at('mods/Patch Mod'), at('mods/Renamed Mod'))).toMatchObject({ entry: { kind: 'mod', name: 'Patch Mod' } });
   });
 
   it('names nothing for a file install can take in a mod while the downloads folder cannot be resolved', async () => {
-    const unresolved = managerOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
+    const unresolved = adapterOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
 
     expect(await unresolved.renamedSymbol(at('mods/Patch Mod/Bundled.zip'), at('mods/Patch Mod/Renamed.zip'))).toBeUndefined();
   });
