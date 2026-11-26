@@ -84,37 +84,17 @@ public sealed class ArchiveUnpackerTests : IDisposable
         Assert.Equal(Mesh, Read(Assert.Single(files)));
     }
 
-    [Fact]
-    public void ATexturesBa2_UnpacksADdsWhoseHeaderIsRebuiltAroundItsPixels()
-    {
-        var dds = Dds.Dxt1(width: 8, height: 8, mips: 2);
-        With("textures/a_d.dds", dds.File);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds");
-
-        var files = Unpacked(GameRelease.Fallout4, archive, "textures/a_d.dds");
-
-        Assert.Equal(dds.Pixels, Read(Assert.Single(files))[^dds.Pixels.Length..]);
-    }
-
-    [Fact]
-    public void ACompressedGeneralVersion2Ba2_UnpacksTheInflatedBytes()
-    {
-        With(Meshes, Mesh);
-        var archive = Packed(new Ba2Variant(2, Ba2Contents.General, Compressed: true), Meshes);
-
-        Assert.Equal(Mesh, Read(Assert.Single(Unpacked(GameRelease.Starfield, archive, Meshes))));
-    }
-
     [Theory]
-    [InlineData(7u)]
-    [InlineData(8u)]
-    public void ACompressedGeneralBa2OfAFallout4Version_UnpacksTheInflatedBytes(uint version)
+    [InlineData(2u, 2u, GameRelease.Starfield)]
+    [InlineData(1u, 7u, GameRelease.Fallout4)]
+    [InlineData(1u, 8u, GameRelease.Fallout4)]
+    public void ACompressedGeneralBa2OfEachZlibVersion_UnpacksTheInflatedBytes(uint packedVersion, uint archiveVersion, GameRelease release)
     {
         With(Meshes, Mesh);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: true), Meshes);
-        SetVersion(archive, version);
+        var archive = Packed(new Ba2Variant(packedVersion, Ba2Contents.General, Compressed: true), Meshes);
+        SetVersion(archive, archiveVersion);
 
-        Assert.Equal(Mesh, Read(Assert.Single(Unpacked(GameRelease.Fallout4, archive, Meshes))));
+        Assert.Equal(Mesh, Read(Assert.Single(Unpacked(release, archive, Meshes))));
     }
 
     [Fact]
@@ -155,9 +135,10 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Theory]
+    [InlineData(1u)]
     [InlineData(2u)]
     [InlineData(3u)]
-    public void ATexturesBa2OfVersion2And3_UnpacksTheInflatedPixels_TheLz4OneIncluded(uint version)
+    public void ATexturesBa2OfEachVersion_UnpacksADdsRebuiltAroundItsInflatedPixels_TheLz4OneIncluded(uint version)
     {
         var dds = Dds.Dxt1(width: 16, height: 16, mips: 3);
         With("textures/a_d.dds", dds.File);

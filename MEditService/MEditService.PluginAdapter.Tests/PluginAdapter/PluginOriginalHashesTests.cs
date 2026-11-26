@@ -15,12 +15,20 @@ public sealed class PluginOriginalHashesTests : IDisposable
 
     public void Dispose() => _scratch.Dispose();
 
-    private string Written(string fileName, Action<Fallout4Mod> shape)
+    private string Written(string fileName, Action<Fallout4Mod> shape) => Written(_scratch, fileName, shape);
+
+    private static string Written(string folder, string fileName, Action<Fallout4Mod> shape)
     {
-        var path = Path.Combine(_scratch, fileName);
+        var path = Path.Combine(folder, fileName);
         var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
         shape(mod);
         mod.WriteToBinary(path);
+        return path;
+    }
+
+    private static string WrittenAt(string path, byte[] bytes)
+    {
+        File.WriteAllBytes(path, bytes);
         return path;
     }
 
@@ -41,14 +49,6 @@ public sealed class PluginOriginalHashesTests : IDisposable
         var small = Written("Small.esp", mod => mod.IsSmallMaster = true);
 
         Assert.Equal(new[] { HashOf(plain), HashOf(small) }.Order(), Of(small, SmallSet).Order());
-    }
-
-    [Fact]
-    public void AFileWithoutTheFlagsTheManifestSets_HasNoOriginalHash()
-    {
-        var plain = Written("Plain.esp", _ => { });
-
-        Assert.Empty(Of(plain, SmallSet));
     }
 
     [Fact]
@@ -76,15 +76,18 @@ public sealed class PluginOriginalHashesTests : IDisposable
         Assert.Equal(["Small.esp"], Directory.GetFiles(_scratch).Select(Path.GetFileName));
     }
 
-    [Theory]
-    [InlineData(64)]
-    [InlineData(3)]
-    public void AFileThatIsNoPlugin_HasNoOriginalHash_AsItCouldNotHaveHeldACopyOfOne(int length)
+    public static TheoryData<string, Func<string, string>> WithNoOriginal => new()
     {
-        var path = Path.Combine(_scratch, "Not.esp");
-        File.WriteAllBytes(path, new byte[length]);
+        { "a plugin without the flags the manifest sets", folder => Written(folder, "Plain.esp", _ => { }) },
+        { "a file that is no plugin", folder => WrittenAt(Path.Combine(folder, "Not.esp"), new byte[64]) },
+        { "a file shorter than a record header", folder => WrittenAt(Path.Combine(folder, "Short.esp"), new byte[3]) },
+    };
 
-        Assert.Empty(Of(path, SmallSet));
+    [Theory]
+    [MemberData(nameof(WithNoOriginal))]
+    public void AFileThatCouldNotHaveHeldACopyWithTheFlags_HasNoOriginalHash(string _, Func<string, string> fileIn)
+    {
+        Assert.Empty(Of(fileIn(_scratch), SmallSet));
     }
 
     [Fact]

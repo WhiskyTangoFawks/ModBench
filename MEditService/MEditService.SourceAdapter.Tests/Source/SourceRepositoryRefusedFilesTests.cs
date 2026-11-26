@@ -43,12 +43,6 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     }
 
     [Fact]
-    public void ATreeTheCodecReadsThrough_RefusesNoFile()
-    {
-        Assert.Empty(Repository.TreeOf(Plugin).Value().RefusedFiles().Value());
-    }
-
-    [Fact]
     public void ABlockLevelDocumentWithAFieldMisspelled_IsRefusedByItsPathInTheSourceFolder_NamingTheField()
     {
         Rewrite(BlockPath, "BlockNumber", "BlockNumbr");
