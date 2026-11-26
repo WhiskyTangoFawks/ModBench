@@ -178,17 +178,17 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     private string RunGit(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
-    [Fact]
-    public void ANewEditorId_MovesTheFileToTheNameTheLayoutComputes_WhereTheRecordIsStillFound()
+    [Theory]
+    [InlineData("RenamedNpc")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void ANewEditorId_MovesTheFileToTheNameTheLayoutComputes_WholeInIt_WhereTheRecordIsStillFound(string editorId)
     {
         var repository = Opened();
 
-        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc"))).Wrote();
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", editorId, WithEditorId(editorId))).Wrote();
 
-        Assert.Equal([$"RenamedNpc - 000800_{PluginName}.json"], NpcFileNames());
-        Assert.Equal(
-            WithEditorId("RenamedNpc"),
-            repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", "RenamedNpc")).Value()?.Body);
+        Assert.Equal([$"{editorId} - 000800_{PluginName}.json"], NpcFileNames());
+        Assert.Equal(WithEditorId(editorId), repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", editorId)).Value()?.Body);
     }
 
     [Fact]
@@ -204,18 +204,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             $"{NpcFormKey} cannot be written: its EditorID {longId} makes a file name of 326 bytes, and a file name holds at most 255.",
             refused.Reason);
         Assert.Equal(before, NpcFileNames());
-    }
-
-    [Fact]
-    public void ALongEditorId_IsWholeInItsFileName()
-    {
-        var repository = Opened();
-        var longId = new string('A', 80);
-
-        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", longId, WithEditorId(longId))).Wrote();
-
-        Assert.Equal([$"{longId} - 000800_{PluginName}.json"], NpcFileNames());
-        Assert.Equal(WithEditorId(longId), repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", longId)).Value()?.Body);
     }
 
     [Fact]
@@ -435,19 +423,11 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Empty(repository.LastWrittenBinarySha256s(Plugin).Value());
     }
 
-    [Fact]
-    public void TextThatIsNoDocument_IsUnreadable_AsTheRecordsSource()
+    [Theory]
+    [InlineData("this is not a document", $"The source of {NpcFormKey} in {PluginName} ({TestMod.Name}) is not a readable document.")]
+    [InlineData(NpcBody, null)]
+    public void WhyARecordsTextIsUnreadable_IsThatItIsNoDocument(string text, string? reason)
     {
-        var repository = Opened();
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(repository.WhyUnreadable(Plugin, Npc, "this is not a document"));
-
-        Assert.Equal($"The source of {NpcFormKey} in {PluginName} ({Plugin.Origin}) is not a readable document.", refused.Reason);
-    }
-
-    [Fact]
-    public void TheRecordsOwnReadableText_IsReadable()
-    {
-        Assert.Null(Opened().WhyUnreadable(Plugin, Npc, NpcBody));
+        Assert.Equal(reason, Opened().WhyUnreadable(Plugin, Npc, text)?.Reason);
     }
 }

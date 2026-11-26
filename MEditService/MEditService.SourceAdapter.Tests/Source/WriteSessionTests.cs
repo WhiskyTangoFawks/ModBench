@@ -118,20 +118,6 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
-    [Fact]
-    public void RemovingAChildThenTheDocumentThatCarriedIt_AnswersTheDocumentsDeletionAlone()
-    {
-        var session = Session();
-
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell"))));
-
-        Assert.Equal([FullPath(RoomDirectory(_room))], session.Changes.Deletions);
-        Assert.Empty(session.Changes.Documents);
-        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_room, "cell")).Value());
-        Assert.True(File.Exists(FullPath(RoomPath)));
-    }
-
     private IWriteSession SessionAfter(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         var session = Session();
@@ -167,6 +153,7 @@ public sealed class WriteSessionTests : IDisposable
 
     public enum Sequence
     {
+        RemoveAChildThenItsContainer,
         RenameThenRemoveAChildOfTheRenamed,
         RenameThenRemoveTheRenamed,
         RenameAContainerThenPutAChildInIt,
@@ -187,6 +174,11 @@ public sealed class WriteSessionTests : IDisposable
         var rekeyed = cell with { FormKey = $"000900:{PluginName}" };
         return sequence switch
         {
+            Sequence.RemoveAChildThenItsContainer =>
+            [
+                repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")),
+                repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell")),
+            ],
             Sequence.RenameThenRemoveAChildOfTheRenamed =>
             [
                 repository => repository.ChangesToPut(Plugin, renamedRoom),
@@ -231,6 +223,7 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Theory]
+    [InlineData(Sequence.RemoveAChildThenItsContainer)]
     [InlineData(Sequence.RenameThenRemoveAChildOfTheRenamed)]
     [InlineData(Sequence.RenameThenRemoveTheRenamed)]
     [InlineData(Sequence.RenameAContainerThenPutAChildInIt)]

@@ -203,25 +203,21 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ABuild_IsUnpushedOnlyWhileTheRemoteLacksTheLastCommitTouchingTheSourceFolder_AndUncommittedOnlyForItsOwnChanges(bool changedSincePushed)
+    [InlineData("modlist.txt", false)]
+    [InlineData("source/TestMod/build.json", true)]
+    public void ABuild_IsUnpushedOnlyWhileTheRemoteLacksTheLastCommitTouchingTheSourceFolder_AndUncommittedOnlyForItsOwnChanges(
+        string changedSincePushed, bool unpushed)
     {
         Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
         Git("remote", "add", "origin", "https://example.com/modlist.git");
         Git("update-ref", "refs/remotes/origin/main", "HEAD");
-        if (changedSincePushed)
-        {
-            File.WriteAllText(Path.Combine(_sourceFolder, "build.json"), "the build file, changed");
-            Git("commit", "-q", "-m", "Change the build file", "--", $"source/{TestMod.Name}/build.json");
-        }
-        StageAnotherChange();
-        Git("commit", "-q", "-m", "Another mod");
+        File.AppendAllText(Path.Combine(_instance, changedSincePushed), "changed\n");
+        Git("commit", "-q", "-m", "A change since the push", "--", changedSincePushed);
         StageAnotherChange();
 
         var source = TestAdapters.Source().SourceToBuild(_sourceFolder, ["build.json"]).Value();
 
-        Assert.Equal((false, changedSincePushed), (source.Uncommitted, source.Unpushed));
+        Assert.Equal((false, unpushed), (source.Uncommitted, source.Unpushed));
     }
 
     [Fact]

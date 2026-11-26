@@ -293,24 +293,13 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.DoesNotContain("filed as a record", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ARenameOfATreeHoldingADocumentThatIsNoJson_IsRefusedNamingIt()
-    {
-        const string text = """{ "FormKey": "000801:Old.esp", """;
-        var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
-        File.WriteAllText(broken, text);
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.ChangesToRenameSource(Old, "New.esp").Stopped());
-
-        Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
-    }
-
     [Theory]
-    [InlineData("{")]
-    [InlineData("[]")]
-    public void ARenameOfATreeWhoseSpriggitMetaIsNoJsonObject_IsRefusedNamingIt(string text)
+    [InlineData("Npcs/SelfNpc - 000801_Old.esp.json", """{ "FormKey": "000801:Old.esp", """)]
+    [InlineData("spriggit-meta.json", "{")]
+    [InlineData("spriggit-meta.json", "[]")]
+    public void ARenameOfATreeHoldingADocumentOrASpriggitMetaThatIsNoJsonObject_IsRefusedNamingIt(string path, string text)
     {
-        var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "spriggit-meta.json");
+        var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), path);
         File.WriteAllText(broken, text);
 
         var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.ChangesToRenameSource(Old, "New.esp").Stopped());
