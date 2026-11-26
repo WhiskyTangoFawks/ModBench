@@ -816,5 +816,36 @@ describe('the MO2 adapter\'s path tokens', () => {
         expect(await readFile(join(root, PUBLISHER_FILE), 'utf8')).toBe(`{"x": ${JSON.stringify(`${root}\\downloads`)}}`);
       });
     });
+
+    onWindows.describe('(a network share is Windows\')', () => {
+      const onShare = async (lines: readonly string[]): Promise<string> => {
+        const { root } = await instanceRepository(lines);
+        await adapterOver(root, {
+          gameFolder: { kind: 'found', root: '\\\\nas\\share\\Games\\Fallout 4', dataFolder: '\\\\nas\\share\\Games\\Fallout 4\\Data' },
+          downloadsFolder: { kind: 'resolved', downloadsDir: '\\\\nas\\share\\Downloads' },
+        }).writePathTokens();
+        return root;
+      };
+
+      it.each([
+        ['with backslashes', ['x=\\\\nas\\share\\Games\\Fallout 4\\Data'], ['x={game folder:\\}\\Data']],
+        ['with forward slashes in another case', ['x=//NAS/share/games/Fallout 4/x.exe'], ['x={game folder:/}/x.exe']],
+        ['with escaped backslashes', ['x=\\"\\\\\\\\nas\\\\share\\\\Games\\\\Fallout 4\\\\\\"'], ['x=\\"{game folder:\\\\}\\\\\\"']],
+        ['at a line\'s start', ['x', '\\\\nas\\share\\Games\\Fallout 4\\Data'], ['x', '{game folder:\\}\\Data']],
+        ['for the downloads folder', ['x=\\\\nas\\share\\Downloads\\a.7z'], ['x={downloads folder:\\}\\a.7z']],
+        ['after a drive, which is no share\'s path', ['x=D:\\\\nas\\share\\Games\\Fallout 4\\Data'], ['x=D:\\\\nas\\share\\Games\\Fallout 4\\Data']],
+      ])('holds a folder on a network share by its token, %s', async (_place, written, tokens) => {
+        expect(held(await onShare(written), 'ModOrganizer.ini')).toBe(SETTINGS(tokens));
+      });
+
+      it.each([
+        ['with forward slashes', 'x={game folder:/}/tools', 'x=//nas/share/Games/Fallout 4/tools'],
+        ['with backslashes', 'x={game folder:\\}\\tools', 'x=\\\\nas\\share\\Games\\Fallout 4\\tools'],
+        ['with escaped backslashes', 'x={game folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Games\\\\Fallout 4\\\\tools'],
+        ['with the doubled separator\'s token', 'x={game folder:\\\\\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Games\\\\Fallout 4\\\\tools'],
+      ])('puts the path of a folder on a network share in place of its token, %s', async (_place, token, written) => {
+        expect(await readFile(join(await onShare([token]), 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([written]));
+      });
+    });
   });
 });

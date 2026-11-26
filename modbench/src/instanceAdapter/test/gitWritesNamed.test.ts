@@ -58,6 +58,15 @@ describe('the git a gesture runs names each file it writes, and nothing it only 
       return adapter.submodule('Mod A');
     }, () => []],
     ['the hooks path read', (adapter) => adapter.checkPushRefusalFree(), () => []],
+    ['a reading\'s check that a file staged under a path token filter was filtered', async (adapter) => {
+      await put('profiles/Default/modlist.txt', '');
+      await put('profiles/Default/plugins.txt', '');
+      await adapter.writePathTokens();
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      named.length = 0;
+      unnamed = 0;
+      return adapter.reading();
+    }, () => []],
   ])('for %s', async (_gesture, gesture, files) => {
     const adapter = adapterOver(root);
     listening();
