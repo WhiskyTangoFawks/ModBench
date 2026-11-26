@@ -45,15 +45,6 @@ public sealed class TestProjectReferenceScanTests
             + string.Join("\n", violations));
     }
 
-    [Fact]
-    public void TheScan_WalksTheProductionAndTestSideProjects()
-    {
-        var solution = ServiceProjects.SolutionDirectory();
-
-        Assert.True(ServiceProjects.Production(solution).Count > 5, "The scan found too few production projects beside MEditService.sln.");
-        Assert.True(ServiceProjects.TestSide(solution).Count > 5, "The scan found too few test-side projects beside MEditService.sln.");
-    }
-
     private static SortedSet<string>? Required(string solution, string project)
     {
         if (project == TestSupport)

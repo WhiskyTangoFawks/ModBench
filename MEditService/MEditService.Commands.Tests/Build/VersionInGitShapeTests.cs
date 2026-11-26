@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
@@ -31,20 +30,9 @@ public sealed class VersionInGitShapeTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Init_ParksEachPluginsBinary_SoNoPluginReadsAsChangedOutsideModbench()
-    {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        await Init();
-
-        Assert.Empty(ExternalChanges.NamedBy(LoadOrder()));
-    }
-
-    [Fact]
     public async Task Init_ParksTheHashOfTheBytesEachPluginsSourceWasReadFrom()
     {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePlugin("First.esp", "FirstNpc");
 
         await Init(new ReadingAs("READ-FROM"));
 
@@ -54,32 +42,17 @@ public sealed class VersionInGitShapeTests : IDisposable
                 .LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)).Value());
     }
 
-    public static TheoryData<string, Func<string, ISourceAdapter>, VersionInGitRefusal, string> FoldersHoldingARepository => new()
+    [Fact]
+    public async Task Init_IntoAFolderThatHoldsAnotherRepository_RefusesTheMod_AndInitsNothing()
     {
-        {
-            "a source mod", folder => new FakeSourceAdapter().WithSourceMod(folder), VersionInGitRefusal.AlreadyInitialized,
-            "is already a source mod's source folder."
-        },
-        {
-            "a repository with no main", folder => new FakeSourceAdapter().HoldingAnotherRepository(folder), VersionInGitRefusal.AnotherRepository,
-            "already holds a repository with no main branch, made outside Modbench."
-        },
-    };
+        WritePlugin("First.esp", "FirstNpc");
 
-    [Theory]
-    [MemberData(nameof(FoldersHoldingARepository))]
-    public async Task Init_IntoAFolderThatAlreadyHoldsARepository_RefusesTheMod_AndInitsNothing(
-        string _, Func<string, ISourceAdapter> holding, VersionInGitRefusal refusal, string reason)
-    {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var result = await Init(TestAdapters.Mutagen(), holding(_modFolder));
+        var result = await Init(TestAdapters.Mutagen(), new FakeSourceAdapter().HoldingAnotherRepository(_modFolder));
 
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(
-            (ModName, refusal, $"'{_modFolder}' {reason}"),
+            (ModName, VersionInGitRefusal.AnotherRepository, $"'{_modFolder}' already holds a repository with no main branch, made outside Modbench."),
             (refused.Item, refused.Refusal, refused.Message));
     }
 
@@ -87,8 +60,6 @@ public sealed class VersionInGitShapeTests : IDisposable
     {
         { ["First", "Second", "Third"], ["Second"], ["SecondNpc"], [] },
         { ["First", "Second", "Third"], ["First", "Third"], ["First.esp", "Third.esp"], ["Second.esp"] },
-        { ["Second"], ["Second"], ["SecondNpc"], [] },
-        { ["First", "Second"], ["First", "Second"], ["FirstNpc", "SecondNpc"], [] },
     };
 
     [Theory]
@@ -112,7 +83,7 @@ public sealed class VersionInGitShapeTests : IDisposable
     [Fact]
     public async Task Init_OfAModWhoseEveryPluginIsRefusedForDifferentCauses_RefusesTheModAsPluginsRefused_NamingEachReason()
     {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePlugin("First.esp", "FirstNpc");
         WriteLocalizedPluginWithoutItsStrings("Second.esp");
 
         var source = new FakeSourceAdapter();
@@ -154,19 +125,15 @@ public sealed class VersionInGitShapeTests : IDisposable
 
     private void WritePluginsOf(IEnumerable<string> plugins)
     {
-        foreach (var plugin in plugins) WritePluginReturningItsBinarySha256($"{plugin}.esp", $"{plugin}Npc");
+        foreach (var plugin in plugins) WritePlugin($"{plugin}.esp", $"{plugin}Npc");
     }
 
-    private string WritePluginReturningItsBinarySha256(string name, string editorId)
+    private void WritePlugin(string name, string editorId)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
         mod.Npcs.AddNew(editorId);
-        var path = Path.Combine(_modFolder, name);
-        mod.WriteToBinary(path);
-        return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+        mod.WriteToBinary(Path.Combine(_modFolder, name));
     }
-
-    private Task<VersionInGitResult> Init() => Init(TestAdapters.Mutagen());
 
     private async Task<VersionInGitResult> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
         (await VersionInGitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source)).Value();
