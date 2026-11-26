@@ -21,7 +21,7 @@ afterEach(async () => {
   await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
 });
 
-const filtered = (command: string | undefined, text: string): string =>
+const filteredInGitsShellByAnAliasThatNeedsNoRepository = (command: string | undefined, text: string): string =>
   execFileSync('git', ['-c', `alias.filtered=!${present(command, 'the filter\'s command')}`, 'filtered'], { input: text, encoding: 'utf8' });
 
 async function filterConfig(folders: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): Promise<Readonly<Record<string, string>>> {
@@ -33,11 +33,11 @@ async function filterConfig(folders: TokenFolders, platform: NodeJS.Platform, sp
 }
 
 async function heldByGit(folders: TokenFolders, platform: NodeJS.Platform, text: string, spelling = WINDOWS_PROGRAMS): Promise<string> {
-  return filtered((await filterConfig(folders, platform, spelling))[`filter.${DRIVER}.clean`], text);
+  return filteredInGitsShellByAnAliasThatNeedsNoRepository((await filterConfig(folders, platform, spelling))[`filter.${DRIVER}.clean`], text);
 }
 
 async function checkedOutByGit(folders: TokenFolders, platform: NodeJS.Platform, held: string, spelling = WINDOWS_PROGRAMS): Promise<string> {
-  return filtered((await filterConfig(folders, platform, spelling))[`filter.${DRIVER}.smudge`], held);
+  return filteredInGitsShellByAnAliasThatNeedsNoRepository((await filterConfig(folders, platform, spelling))[`filter.${DRIVER}.smudge`], held);
 }
 
 const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4', downloads: '//nas/share/Downloads', committedOutsideInstance: [] };
