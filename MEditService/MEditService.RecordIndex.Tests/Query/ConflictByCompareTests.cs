@@ -385,9 +385,7 @@ public class ConflictByCompareTests
         var result = ComparedCopies.Spelled<Npc>(
             "B.esp", document => document["VirtualMachineAdapter"] = JsonNode.Parse(spelled), Scripted, Scripted);
 
-        var objectFormat = (result.Diffs.Single(d => d.FieldName == "VirtualMachineAdapter").Children
-            ?? throw new InvalidOperationException("Expected the adapter's diff to have children."))
-            .Single(c => c.FieldName == "ObjectFormat");
+        var objectFormat = RequireChildren(Row(result, "VirtualMachineAdapter")).Single(c => c.FieldName == "ObjectFormat");
         Assert.Equal(expected, objectFormat.CellStates["B.esp"]);
     }
 
@@ -413,33 +411,26 @@ public class ConflictByCompareTests
     [InlineData("Version2")]
     public void AVersionStampTheCopiesDifferIn_IsNoConflict(string stamp)
     {
-        var diff = ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps).Diffs.Single(d => d.FieldName == stamp);
+        var diff = Row(ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps), stamp);
 
         Assert.Equal(ConflictAll.NoConflict, diff.ConflictAll);
         Assert.Empty(diff.CellStates);
         Assert.Equal(2, diff.Values.Count(v => v.Value != null));
     }
 
-    [Fact]
-    public void CopiesDifferingInTheVersionStampsAlone_ShowNoConflictOnTheRecordOrThePlugin()
-    {
-        var compare = ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps);
-
-        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
-        Assert.Equal(ConflictThis.IdenticalToMaster, compare.Overrides.Single(o => o.Plugin == "B.esp").ConflictThis);
-    }
-
-    [Fact]
-    public void CopiesDifferingInTheVersionStampsAndAnotherField_ConflictOnThatFieldAlone()
+    [Theory]
+    [InlineData(false, ConflictAll.NoConflict, ConflictThis.IdenticalToMaster)]
+    [InlineData(true, ConflictAll.Override, ConflictThis.Override)]
+    public void CopiesDifferingInTheVersionStamps_ConflictOnTheRecordAndThePlugin_OnlyAsAnotherFieldDiffers(
+        bool notesDiffer, ConflictAll record, ConflictThis plugin)
     {
         var compare = ComparedCopies.Of<Keyword>(Stamped, keyword =>
         {
             WithDifferingStamps(keyword);
-            keyword.Notes = "Changed";
+            keyword.Notes = notesDiffer ? "Changed" : "Unchanged";
         });
 
-        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
-        Assert.Equal(ConflictThis.Override, compare.Overrides.Single(o => o.Plugin == "B.esp").ConflictThis);
+        Assert.Equal((record, plugin), (compare.ConflictAll, compare.Overrides.Single(o => o.Plugin == "B.esp").ConflictThis));
     }
 
     private static readonly FormKey Holder = ComparedCopies.InMaster(0x800);

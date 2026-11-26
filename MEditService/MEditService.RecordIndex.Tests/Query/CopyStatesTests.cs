@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-public sealed class CopyStatesTests : IDisposable
+public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClassFixture<CopyStatesTests.FourPlugins>
 {
     private static readonly PluginAddress First = new("A.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress Second = new("B.esp", PluginOrigin.DataDirectory);
@@ -17,20 +17,23 @@ public sealed class CopyStatesTests : IDisposable
     private static readonly FormKey Item = new(ModKey.FromFileName(First.Name), 0x800);
     private static readonly FormKey OtherItem = new(ModKey.FromFileName(First.Name), 0x801);
 
-    private readonly PluginFixtureData _fixture;
-    private readonly OpenedIndex _index;
-
-    public CopyStatesTests()
+    /// <summary>The item and its copies, indexed once: every test of the class only reads them.</summary>
+    public sealed class FourPlugins : IDisposable
     {
-        _fixture = Fixture();
-        _index = Indexes.Reconciled(_fixture);
+        private readonly PluginFixtureData _fixture = Fixture();
+
+        public FourPlugins() => Index = Indexes.Reconciled(_fixture);
+
+        internal OpenedIndex Index { get; }
+
+        public void Dispose()
+        {
+            Index.Dispose();
+            _fixture.Dispose();
+        }
     }
 
-    public void Dispose()
-    {
-        _index.Dispose();
-        _fixture.Dispose();
-    }
+    private readonly OpenedIndex _index = plugins.Index;
 
     private static MiscItem Named(FormKey key, string name) => new(key, Fallout4Release.Fallout4) { EditorID = $"E{key.ID:X}", Name = name };
 

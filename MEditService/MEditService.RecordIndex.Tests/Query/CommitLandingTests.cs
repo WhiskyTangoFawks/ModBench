@@ -29,7 +29,7 @@ public sealed class CommitLandingTests : IDisposable
     {
         int before;
         lock (log) before = log.Count;
-        Thread.Sleep(TimeSpan.FromMilliseconds(100));
+        Thread.Sleep(TimeSpan.FromMilliseconds(500));
         lock (log) return log.Count == before;
     }
 

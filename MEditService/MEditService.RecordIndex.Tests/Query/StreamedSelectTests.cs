@@ -14,7 +14,7 @@ public sealed class StreamedSelectTests : IDisposable
     private const int Records = 100;
     private const long SmallMemoryLimit = 32_000_000;
     private const int BodyLength = 2_000;
-    private const int BodiesTwiceTheSmallLimit = 32_000;
+    private const int BodyCountTwiceTheSmallLimit = 32_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-select")
         .WithPlugin(Master).WithPlugin(Later).Build();
@@ -90,7 +90,7 @@ public sealed class StreamedSelectTests : IDisposable
     {
         const int copied = 5;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
-            (Master, () => Items(Master, BodiesTwiceTheSmallLimit, BodyLength)),
+            (Master, () => Items(Master, BodyCountTwiceTheSmallLimit, BodyLength)),
             (Later, () => Items(Master, copied, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         var rows = index.Queries.Selected($"""
@@ -102,9 +102,9 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Theory]
-    [InlineData(250_000_000, "1")]
+    [InlineData(100_000_000, "1")]
     [InlineData(500_000_000, "2")]
-    public void TheRecordIndex_RunsADuckDbThreadPer250MbOfItsMemoryLimit_ForLessLeavesAThreadNoRoomToSpill(long memoryLimit, string threads)
+    public void TheRecordIndex_RunsADuckDbThreadPer250MbOfItsMemoryLimit_AndAtLeastOne(long memoryLimit, string threads)
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, memoryLimit: memoryLimit);
 
@@ -117,11 +117,11 @@ public sealed class StreamedSelectTests : IDisposable
     public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
     {
         using var index = Indexes.Reconciled(
-            _fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, BodiesTwiceTheSmallLimit, BodyLength))), memoryLimit: SmallMemoryLimit);
+            _fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, BodyCountTwiceTheSmallLimit, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         using var rows = index.Queries.SelectRows(sql).Value();
 
-        Assert.Equal(BodiesTwiceTheSmallLimit, rows.Rows().Count(row => row.Value().Length > BodyLength));
+        Assert.Equal(BodyCountTwiceTheSmallLimit, rows.Rows().Count(row => row.Value().Length > BodyLength));
     }
 
     [Fact]
