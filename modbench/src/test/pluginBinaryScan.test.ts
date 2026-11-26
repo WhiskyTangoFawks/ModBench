@@ -176,7 +176,8 @@ function modulesImported(sourceText: string, fileName: string): string[] {
 }
 
 const importsTheFomodXmlReadFromOutside = (sourceText: string, fileName: string): boolean =>
-  !relative(SRC, fileName).startsWith(`${FOMOD_INSTALLER}${sep}`) && modulesImported(sourceText, fileName).includes(FOMOD_XML_READ_MODULE);
+  !relative(SRC, fileName).startsWith(`${FOMOD_INSTALLER}${sep}`) && sourceText.includes(basename(FOMOD_XML_READ_MODULE))
+  && modulesImported(sourceText, fileName).includes(FOMOD_XML_READ_MODULE);
 
 describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, the Game folder\'s version read, the FOMOD installer\'s XML read and Steam\'s shortcuts read, feed a hash, a program\'s version, a FOMOD\'s text or a Steam shortcut, and nothing else', () => {
   it('covers the whole extension source tree', () => {

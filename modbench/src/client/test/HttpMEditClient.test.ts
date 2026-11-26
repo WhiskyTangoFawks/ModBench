@@ -10,6 +10,7 @@ import { EventEmitter } from 'node:events';
 import { answerOf as read, isReadFailed } from '../../wire/readFailed';
 import { answered } from './healthAnswer';
 import { diskCheckedBy } from '../../repositoriesLib/writesTold';
+import { settled as until } from '../../test/eventually';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -94,7 +95,7 @@ describe('HttpMEditClient — the record index standing', () => {
     await client.start();
 
     push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => expect(client.recordIndexProgress?.settled).toBe(true));
+    await until(() => expect(client.recordIndexProgress?.settled).toBe(true));
     await client.stop();
 
     expect(client.recordIndexProgress).toBeUndefined();
@@ -106,26 +107,26 @@ describe('HttpMEditClient — the record index standing', () => {
     await client.start();
 
     push(loadOrderStatusTick({ conflictsComputed: false, version: 1 }));
-    await vi.waitFor(() => expect(client.recordIndexMayBeLate).toBe(true));
+    await until(() => expect(client.recordIndexMayBeLate).toBe(true));
     push(loadOrderStatusTick({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false, version: 1 }));
-    await vi.waitFor(() => expect(client.recordIndexProgress?.refusal).toEqual({ kind: 'heldElsewhere', message: 'another window holds the record index' }));
+    await until(() => expect(client.recordIndexProgress?.refusal).toEqual({ kind: 'heldElsewhere', message: 'another window holds the record index' }));
     expect(client.recordIndexMayBeLate).toBe(true);
     push(loadOrderStatusTick({ conflictsComputed: true, version: 2 }));
 
-    await vi.waitFor(() => expect(client.recordIndexMayBeLate).toBe(false));
+    await until(() => expect(client.recordIndexMayBeLate).toBe(false));
   });
 
   it('is gone once the stream reopens, as it may have reattached to another process', async () => {
     const { streams, open } = reopeningStreams();
     const client = makeClient(routedFetch([['/notifications/stream', open]]), { reconnectDelayMs: 0 });
     await client.start();
-    await vi.waitFor(() => expect(streams).toHaveLength(1));
+    await until(() => expect(streams).toHaveLength(1));
     streams[0]?.push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => expect(client.recordIndexProgress?.settled).toBe(true));
+    await until(() => expect(client.recordIndexProgress?.settled).toBe(true));
 
     streams[0]?.end();
 
-    await vi.waitFor(() => expect(client.recordIndexProgress).toBeUndefined());
+    await until(() => expect(client.recordIndexProgress).toBeUndefined());
     expect(streams).toHaveLength(2);
   });
 });
@@ -140,7 +141,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
 
     await client.start();
 
-    await vi.waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
+    await until(() => expect(stream).toHaveBeenCalledTimes(1));
   });
 
   it('closes the stream when the backend stops', async () => {
@@ -151,7 +152,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
     });
     const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-document', noContent]]));
     await client.start();
-    await vi.waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
+    await until(() => expect(stream).toHaveBeenCalledTimes(1));
 
     await client.stop();
 
@@ -822,7 +823,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await client.start();
 
     const load = client.sendLoadOrder(snapshot);
-    await vi.waitFor(() => expect(putBody).toBeDefined());
+    await until(() => expect(putBody).toBeDefined());
     push(readyTickThatSettlesPutLoadOrder());
     await load;
 
@@ -847,7 +848,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
     const { response, push } = pushableStreamResponse();
     resolveStream(response);
-    await vi.waitFor(() => expect(putFetch).toHaveBeenCalledTimes(1));
+    await until(() => expect(putFetch).toHaveBeenCalledTimes(1));
     push(readyTickThatSettlesPutLoadOrder());
     await load;
   });
@@ -878,10 +879,10 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ]);
     const client = makeClient(fetch, { reconnectDelayMs: 0 });
     await client.start();
-    await vi.waitFor(() => expect(streams).toHaveLength(1));
+    await until(() => expect(streams).toHaveLength(1));
 
     const load = client.sendLoadOrder(snapshot);
-    await vi.waitFor(() => expect(put).toBe(true));
+    await until(() => expect(put).toBe(true));
     status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
     streams[0]?.end();
 
@@ -902,9 +903,9 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await client.start();
 
     const load = client.sendLoadOrder(snapshot);
-    await vi.waitFor(() => expect(answerPut).toBeDefined());
+    await until(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
-    await vi.waitFor(() => expect(client.recordIndexProgress?.version).toBe(0));
+    await until(() => expect(client.recordIndexProgress?.version).toBe(0));
     answerPut(jsonResponse(200, appliedBody));
 
     await expect(load).resolves.toMatchObject({ outcome: 'applied', version: 1 });
@@ -929,7 +930,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     client.onExit(() => exits.push('exit'));
 
     children[0]?.emit('exit', 1);
-    await vi.waitFor(() => expect(client.status).toBe('stopped'));
+    await until(() => expect(client.status).toBe('stopped'));
 
     expect(exits).toEqual(['exit']);
     await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
@@ -956,7 +957,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     });
     await client.start();
     const sent = client.sendLoadOrder(snapshot);
-    await vi.waitFor(() => expect(putSignal).toBeDefined());
+    await until(() => expect(putSignal).toBeDefined());
 
     await client.stop();
 
@@ -1084,7 +1085,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
     await client.start();
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172', '--Serilog:MinimumLevel:Default', 'Debug']);
-    await vi.waitFor(() => expect(channel.warn).toHaveBeenCalledWith('[backend] slow'));
+    await until(() => expect(channel.warn).toHaveBeenCalledWith('[backend] slow'));
   });
 });
 
@@ -1104,7 +1105,7 @@ describe('HttpMEditClient — the change event', () => {
 
     streams[0]?.end();
 
-    await vi.waitFor(() => expect(heard).toEqual([undefined]));
+    await until(() => expect(heard).toEqual([undefined]));
   });
 });
 
@@ -1124,7 +1125,7 @@ describe('HttpMEditClient — what a frame names', () => {
 
     await client.start();
 
-    await vi.waitFor(() => expect(heard).toContainEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
+    await until(() => expect(heard).toContainEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
     await client.stop();
   });
 });
@@ -1182,7 +1183,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const client = makeClient(fetch);
     await client.start();
     client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
-    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
+    await until(() => expect(handedOver).toHaveBeenCalled());
 
     const gesturing = gesture(client);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1212,7 +1213,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const client = makeClient(fetch);
     await client.start();
     client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
-    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
+    await until(() => expect(handedOver).toHaveBeenCalled());
 
     const asking = reading(client);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1236,7 +1237,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const client = makeClient(fetch);
     await client.start();
     void client.sendLoadOrder(EMPTY_SNAPSHOT);
-    await vi.waitFor(() => expect(putLoadOrder).toBe(true));
+    await until(() => expect(putLoadOrder).toBe(true));
 
     const gesturing = gesture(client);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1278,7 +1279,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     const client = makeClient(fetch);
     await client.start();
     void client.sendLoadOrder(EMPTY_SNAPSHOT);
-    await vi.waitFor(() => expect(putLoadOrder).toBe(true));
+    await until(() => expect(putLoadOrder).toBe(true));
 
     const asking = reading(client);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1305,7 +1306,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     client.handUnsavedDocument({ path: '/m/Npc.json', text: '{}', version: 3 });
     client.handUnsavedDocument({ path: '/m/Npc.json', closed: true });
 
-    await vi.waitFor(() => { expect(requests).toEqual([
+    await until(() => { expect(requests).toEqual([
       'PUT /unsaved-document {"path":"/m/Npc.json","text":"{}","version":3,"opened":true}',
       'DELETE /unsaved-document?path=%2Fm%2FNpc.json ',
     ]); });
@@ -1323,7 +1324,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 
     client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
 
-    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ refused: true, message: 'mEdit could not take the unsaved plugin source — Not plugin source.' }));
+    await until(() => expect(settled).toHaveBeenCalledWith({ refused: true, message: 'mEdit could not take the unsaved plugin source — Not plugin source.' }));
   });
 
   it('leaves a hand-over to finish however long it takes, as a write is never timed', async () => {
@@ -1407,7 +1408,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const { token: flying, cancel } = cancellableToken();
 
     const asking = client.getPlugins(undefined, flying);
-    await vi.waitFor(() => expect(sent).toBe(true));
+    await until(() => expect(sent).toBe(true));
     cancel();
 
     expect(await asking).toEqual(cancelled);
@@ -1454,7 +1455,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const { token: streaming, cancel } = cancellableToken();
 
     const asking = client.selectRows('SELECT 1', 1000, streaming);
-    await vi.waitFor(() => expect(sentRow).toBe(true));
+    await until(() => expect(sentRow).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 20));
     cancel();
 
@@ -1492,7 +1493,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     ]);
     const client = makeClient(fetch);
     await client.start();
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
 
     void client.sendLoadOrder(EMPTY_SNAPSHOT);
     expect(client.recordIndexMayBeLate).toBe(true);
@@ -1502,7 +1503,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     expect(client.recordIndexMayBeLate).toBe(true);
 
     push(readyTickThatSettlesPutLoadOrder());
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 
   describe('the promise a change signal returns', () => {
@@ -1516,7 +1517,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       ]);
       const client = makeClient(fetch);
       await client.start();
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
       return { client, push };
     }
 
@@ -1525,7 +1526,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       let settled = false;
 
       const signalled = client.signalChange([]).then(() => { settled = true; });
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(true); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(true); });
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(settled).toBe(false);
 
@@ -1548,7 +1549,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       ]);
       const client = makeClient(fetch);
       await client.start();
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
       return { client, push };
     }
 
@@ -1560,9 +1561,9 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
       sequence = 5;
       push(rowsTick(4));
-      await vi.waitFor(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(true); });
+      await until(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(true); });
       push(rowsTick(5));
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
     });
 
     it('hears a process it reconnects to from where that process stands', async () => {
@@ -1574,14 +1575,14 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       ]);
       const client = makeClient(fetch, { reconnectDelayMs: 1 });
       await client.start();
-      await vi.waitFor(() => { expect(streams).toHaveLength(1); });
+      await until(() => { expect(streams).toHaveLength(1); });
       await client.refreshRecordIndexLateness();
 
       sequence = 7;
       streams[0]?.end();
-      await vi.waitFor(() => { expect(streams).toHaveLength(2); });
+      await until(() => { expect(streams).toHaveLength(2); });
 
-      await vi.waitFor(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(false); });
     });
   });
 
@@ -1596,12 +1597,12 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       ]);
       const client = makeClient(fetch);
       await client.start();
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
       const told: boolean[] = [];
       client.onDidChangeRecordIndexMayBeLate((late) => { told.push(late); });
 
       const signalled = client.signalChange(['/m/Foo.esp']);
-      await vi.waitFor(() => { expect(told).toEqual([true]); });
+      await until(() => { expect(told).toEqual([true]); });
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
       await signalled;
 
@@ -1621,8 +1622,8 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       const client = makeClient(fetch);
       await client.start();
       if (holdingALoadOrder) push(readyTickThatSettlesPutLoadOrder());
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
-      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.recordIndexProgress).toBeDefined(); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      if (holdingALoadOrder) await until(() => { expect(client.recordIndexProgress).toBeDefined(); });
       return { client, push };
     }
 
@@ -1633,7 +1634,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       expect(client.recordIndexMayBeLate).toBe(true);
 
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false, version: 1 }));
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
     });
 
     it('is not late when mEdit holds no load order to refill', async () => {
@@ -1656,13 +1657,13 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     ]);
     const client = makeClient(fetch);
     await client.start();
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
 
     client.handUnsavedDocument({ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}', version: 1 });
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 
   describe.each<[string, (client: MEditClient) => void]>([
@@ -1687,7 +1688,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       ]);
       const client = makeClient(fetch);
       await client.start();
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
       return {
         client, push,
         hand: async (answeredWith: typeof status, failing = false) => {
@@ -1695,7 +1696,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
           statusFails = failing;
           const reads = statusReads;
           hand(client);
-          await vi.waitFor(() => { expect(statusReads).toBeGreaterThan(reads); });
+          await until(() => { expect(statusReads).toBeGreaterThan(reads); });
         },
       };
     }
@@ -1707,7 +1708,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       expect(client.recordIndexMayBeLate).toBe(true);
 
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
     });
 
     it('is false when mEdit has nothing validating', async () => {
@@ -1715,7 +1716,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
       await handOver({ validating: false });
 
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
     });
 
     it('is false when mEdit holds no load order, as nothing is then late', async () => {
@@ -1723,7 +1724,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
       await handOver({ state: 'None', conflictsComputed: false });
 
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
     });
 
     it('keeps waiting on the stream when the status cannot be read', async () => {
@@ -1733,7 +1734,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       expect(client.recordIndexMayBeLate).toBe(true);
 
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
-      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await until(() => { expect(client.recordIndexMayBeLate).toBe(false); });
     });
   });
 });

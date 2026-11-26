@@ -56,6 +56,7 @@ import { TOOL_DESCRIPTIONS } from '../instructions/tools';
 import { INSTANCE_GUIDE_BY_MANAGER } from '../instructions/guides';
 import { REPLY_CHARS } from '../tooLarge';
 import { gestureName, phrase } from '../../ports/phrase';
+import { settled } from '../../test/eventually';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -1856,13 +1857,13 @@ describe('the agent server, running a gesture', () => {
     const cancelled = new AbortController();
     const answered = client.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal });
     answered.catch(() => undefined);
-    await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
+    await settled(() => { expect(fired.calls).toHaveLength(1); });
     const [signal] = fired.signals;
     expect(signal?.aborted).toBe(false);
 
     cancelled.abort();
 
-    await vi.waitFor(() => { expect(signal?.aborted).toBe(true); });
+    await settled(() => { expect(signal?.aborted).toBe(true); });
   });
 
   it('cancels only the call of the client that cancels, though another client\'s call has the same request id', async () => {
@@ -1878,14 +1879,14 @@ describe('the agent server, running a gesture', () => {
     const second = await connected('second');
     const cancelled = new AbortController();
     first.callTool({ name: 'mod_build', arguments: { argument: [] } }, undefined, { signal: cancelled.signal }).catch(() => undefined);
-    await vi.waitFor(() => { expect(fired.calls).toHaveLength(1); });
+    await settled(() => { expect(fired.calls).toHaveLength(1); });
     second.callTool({ name: 'mod_build', arguments: { argument: [] } }).catch(() => undefined);
-    await vi.waitFor(() => { expect(fired.calls).toHaveLength(2); });
+    await settled(() => { expect(fired.calls).toHaveLength(2); });
     const [firstSignal, secondSignal] = fired.signals;
 
     cancelled.abort();
 
-    await vi.waitFor(() => { expect(firstSignal?.aborted).toBe(true); });
+    await settled(() => { expect(firstSignal?.aborted).toBe(true); });
     expect(secondSignal?.aborted).toBe(false);
   });
 

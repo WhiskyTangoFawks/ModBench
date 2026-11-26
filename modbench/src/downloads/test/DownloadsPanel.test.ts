@@ -45,6 +45,7 @@ import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixtur
 import { downloadedFilesOf, fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { settled } from '../../test/eventually';
 
 const downloadsFake = (answers: InstanceAnswers = {}) =>
   fakeInstanceAdapter(readingFixture({ downloadedFiles: downloadedFilesOf('a.7z', 'b.7z', 'foo.7z', 'locked.7z') }), answers);
@@ -99,7 +100,7 @@ describe('opening a downloaded file or its metadata', () => {
     registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     invoke(command, node(ROOT, 'foo.7z', { hasMeta: true }));
 
-    await vi.waitFor(() => expect(opener).toHaveBeenCalled());
+    await settled(() => expect(opener).toHaveBeenCalled());
     expect(calledFsPath(opener)).toBe(path);
     expect(other).not.toHaveBeenCalled();
   });
@@ -114,7 +115,7 @@ describe('opening a downloaded file or its metadata', () => {
     registerDownloadsSingleRowCommands(report, () => []);
     invoke(command, node(ROOT, 'foo.7z', { hasMeta: true }));
 
-    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
+    await settled(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message, detail: reason }]);
   });
 });
@@ -426,10 +427,10 @@ describe('sorting the Downloads view', () => {
 
     registerDownloadsSortCommand(provider);
     invoke('modbench.downloadedFile.sort');
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    await settled(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Size (Largest First)', column: 'size', descending: true });
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(provider.currentSort()).toEqual({ column: 'size', descending: true });
     });
   });
@@ -441,10 +442,10 @@ describe('sorting the Downloads view', () => {
 
     registerDownloadsSortCommand(provider);
     invoke('modbench.downloadedFile.sort');
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    await settled(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
-    await vi.waitFor(() => expect(qp.dispose).toHaveBeenCalled());
+    await settled(() => expect(qp.dispose).toHaveBeenCalled());
     expect(provider.currentSort()).toEqual({ column: 'mtimeMs', descending: true });
   });
 
@@ -459,7 +460,7 @@ describe('sorting the Downloads view', () => {
 
     registerDownloadsSortCommand(provider);
     invoke('modbench.downloadedFile.sort');
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    await settled(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
     expect(qp.activeItems).toEqual([marked]);

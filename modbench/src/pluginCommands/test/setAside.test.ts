@@ -4,6 +4,7 @@ import { trashSetAsideOn } from '../setAside';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { settled } from '../../test/eventually';
 
 describe('trashSetAsideOn — scripts.md, Writing, story 8: a file a make replaced goes to the trash', () => {
   it('trashes each file mEdit names as set aside, where it was set aside', async () => {
@@ -14,7 +15,7 @@ describe('trashSetAsideOn — scripts.md, Writing, story 8: a file a make replac
 
     client.setAside({ folder: '/mods/Patch', paths: ['.medit_tmp_replaced_a/Patch.esp', '.medit_tmp_replaced_b/patch.ESP'] });
 
-    await vi.waitFor(() => expect(instance.calls).toEqual([
+    await settled(() => expect(instance.calls).toEqual([
       { verb: 'trashFileIn', folder: '/mods/Patch', relativePath: '.medit_tmp_replaced_a/Patch.esp' },
       { verb: 'trashFileIn', folder: '/mods/Patch', relativePath: '.medit_tmp_replaced_b/patch.ESP' },
     ]));
@@ -32,7 +33,7 @@ describe('trashSetAsideOn — scripts.md, Writing, story 8: a file a make replac
 
     client.setAside({ folder: '/mods/Patch', paths: [refused, '.medit_tmp_replaced_b/Other.esp'] });
 
-    await vi.waitFor(() => expect(instance.calls).toHaveLength(2));
+    await settled(() => expect(instance.calls).toHaveLength(2));
     expect(reporter.reports).toEqual([{
       severity: 'error',
       message: `Moving Patch.esp, which a Modbench script replaced, to the trash did not finish. It was at ${join('/mods/Patch', refused)}.`,

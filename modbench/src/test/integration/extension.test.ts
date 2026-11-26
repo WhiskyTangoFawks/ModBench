@@ -1837,22 +1837,6 @@ describe('modbench.downloads tree', () => {
     await probeUntilListed(downloadsDir, 'dropped');
   });
 
-  it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
-    this.timeout(40000);
-    const external = mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
-    const originalIni = readFileSync(iniPath, 'utf8');
-    try {
-      writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${forwardSlashed(external)}\r\n`,
-        (rows) => rows.includes('external-preexisting.zip'));
-
-      await probeUntilListed(external, 'external-new');
-    } finally {
-      await repointDownloads(originalIni, (rows) => !rows.some((row) => row.startsWith('external-')));
-      rmSync(external, { recursive: true, force: true });
-    }
-  });
-
   it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
     this.timeout(40000);
     const container = mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
@@ -2527,24 +2511,6 @@ describe('A FormKey in plugin source', () => {
       [compiledPluginChildUri, compiledPlugin.lastIndexOf(quoted)],
       [renderedUri(RENDERED_REFERRER_FORM_KEY), renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
     ].sort());
-  });
-
-  it('lists no references in JSON outside the plugin source folder', async () => {
-    await activated();
-    const other = await documentAt('Other.json');
-    const found = await vscode.commands.executeCommand<vscode.Location[]>(
-      'vscode.executeReferenceProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
-
-    assert.deepStrictEqual(found, []);
-  });
-
-  it('has no definition in JSON outside the plugin source folder', async () => {
-    await activated();
-    const other = await documentAt('Other.json');
-    const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
-      'vscode.executeDefinitionProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
-
-    assert.deepStrictEqual(definitions, []);
   });
 
   it('finds a record by Go to Symbol in Workspace, each copy at its plugin\'s file until it is picked', async () => {

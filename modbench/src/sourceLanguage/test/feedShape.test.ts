@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { askingWhenNotLate, mergedFeeds, settling } from '../feedShape';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import type { ProblemOnFile } from '../sourceProblems';
+import { settled as until } from '../../test/eventually';
 
 const at = { line: 0, character: 0 };
 const problem = (message: string): ProblemOnFile => ({ message, start: at, end: at });
@@ -64,7 +65,7 @@ describe('a feed\'s settling', () => {
     feed.asking(body)();
 
     expect(await idle(feed.settled())).toBe(false);
-    await vi.waitFor(() => { expect(ends).toHaveLength(1); });
+    await until(() => { expect(ends).toHaveLength(1); });
     ends[0]?.();
 
     await feed.settled();
@@ -75,11 +76,11 @@ describe('a feed\'s settling', () => {
     const { body, ends } = gated();
     const ask = feed.asking(body);
     ask();
-    await vi.waitFor(() => { expect(ends).toHaveLength(1); });
+    await until(() => { expect(ends).toHaveLength(1); });
     ask();
     ends[0]?.();
 
-    await vi.waitFor(() => { expect(ends).toHaveLength(2); });
+    await until(() => { expect(ends).toHaveLength(2); });
     expect(await idle(feed.settled())).toBe(false);
     ends[1]?.();
 

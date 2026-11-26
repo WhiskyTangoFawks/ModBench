@@ -53,6 +53,7 @@ vi.mock('vscode', () => {
 });
 
 import { holdOneTextPerFile } from '../oneTextPerFile';
+import { settled } from '../../test/eventually';
 
 const CELL = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 let made = 0;
@@ -100,7 +101,7 @@ describe('the documents over one file', () => {
 
     changed(file, 'typed', true);
 
-    await vi.waitFor(() => { expect(shown(child, elsewhere)).toEqual([{ text: 'typed', unsaved: true }, { text: 'saved', unsaved: false }]); });
+    await settled(() => { expect(shown(child, elsewhere)).toEqual([{ text: 'typed', unsaved: true }, { text: 'saved', unsaved: false }]); });
   });
 
   it('keep a change typed while another takes the one before it, passing none back', async () => {
@@ -112,7 +113,7 @@ describe('the documents over one file', () => {
 
     changed(file, 'typed', true);
 
-    await vi.waitFor(() => { expect([file.text, child.text]).toEqual(['typed again', 'typed again']); });
+    await settled(() => { expect([file.text, child.text]).toEqual(['typed again', 'typed again']); });
   });
 
   it('keep what is typed in one while another, having taken the change before, reports turning unsaved', async () => {
@@ -125,15 +126,15 @@ describe('the documents over one file', () => {
 
     changed(file, 'typed', true);
 
-    await vi.waitFor(() => { expect([file.text, child.text]).toEqual(['typed again', 'typed again']); });
+    await settled(() => { expect([file.text, child.text]).toEqual(['typed again', 'typed again']); });
   });
 
   it('give a change to the others from one opened again on a text it took before it closed', async () => {
     const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
     changed(file, 'taken', true);
-    await vi.waitFor(() => { expect(child.text).toBe('taken'); });
+    await settled(() => { expect(child.text).toBe('taken'); });
     await file.save();
-    await vi.waitFor(() => { expect(child.isDirty).toBe(false); });
+    await settled(() => { expect(child.isDirty).toBe(false); });
     h.documents.splice(h.documents.indexOf(child), 1);
     heard(h.closed, child);
     changed(file, 'saved again', true);
@@ -144,7 +145,7 @@ describe('the documents over one file', () => {
 
     changed(child, 'taken', true);
 
-    await vi.waitFor(() => { expect(file.text).toBe('taken'); });
+    await settled(() => { expect(file.text).toBe('taken'); });
   });
 
   it('keep an unsaved text when another reads the file again, as a revert does, and that one takes it', async () => {
@@ -152,7 +153,7 @@ describe('the documents over one file', () => {
 
     changed(child, 'saved', false);
 
-    await vi.waitFor(() => { expect(shown(file, child)).toEqual([{ text: 'typed', unsaved: true }, { text: 'typed', unsaved: true }]); });
+    await settled(() => { expect(shown(file, child)).toEqual([{ text: 'typed', unsaved: true }, { text: 'typed', unsaved: true }]); });
   });
 
   it('give an undo back to the saved text to each other document', async () => {
@@ -160,7 +161,7 @@ describe('the documents over one file', () => {
 
     changed(file, 'saved', false, UNDO);
 
-    await vi.waitFor(() => { expect(child.text).toBe('saved'); });
+    await settled(() => { expect(child.text).toBe('saved'); });
   });
 
   it('have one that opens take the unsaved text of another', async () => {
@@ -169,7 +170,7 @@ describe('the documents over one file', () => {
 
     heard(h.opened, child);
 
-    await vi.waitFor(() => { expect(shown(child)).toEqual([{ text: 'typed', unsaved: true }]); });
+    await settled(() => { expect(shown(child)).toEqual([{ text: 'typed', unsaved: true }]); });
   });
 
   it('save with one each other holding the text it saved, and no other', async () => {
@@ -178,6 +179,6 @@ describe('the documents over one file', () => {
 
     void file.save();
 
-    await vi.waitFor(() => { expect(shown(holding, other)).toEqual([{ text: 'typed', unsaved: false }, { text: 'other', unsaved: true }]); });
+    await settled(() => { expect(shown(holding, other)).toEqual([{ text: 'typed', unsaved: false }, { text: 'other', unsaved: true }]); });
   });
 });
