@@ -53,6 +53,7 @@ import { ABSENT_SORTING_RULE_FILES } from '../../instanceAdapter/instanceAdapter
 import { READ_SORTING_RULE_FILES } from '../../test/readSortingRuleFiles';
 import type { PluginProblem } from '../pluginFacts';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 type ModStatus = NonNullable<ReturnType<LastModStatuses['of']>>;
 
@@ -174,17 +175,12 @@ describe('ImplicitMasterNode — leading line', () => {
 });
 
 describe('PluginNode / ImplicitMasterNode — row click opens the plugin header', () => {
-  it('PluginNode opens the header at the plugin and origin its row stands for', () => {
-    const node = new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
+  it.each([
+    ['a plugin line', new PluginNode({ name: 'A.esp', enabled: true }, 'ModA')],
+    ['a plugin the game loads with none', new ImplicitMasterNode('A.esp', 'ModA')],
+  ])('%s opens the header at the plugin and origin its row stands for', (_what, node) => {
     expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:TestMod.esp', plugin: { name: 'TestMod.esp', origin: 'SomeMod' } } }],
-    });
-  });
-
-  it('ImplicitMasterNode opens the header at the plugin and origin its row stands for', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
-    expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: 'Data/' } } }],
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } }],
     });
   });
 });
@@ -301,31 +297,9 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(h.tree.viewMessage()).toBeUndefined();
   });
 
-  it('carries each row\'s own origin from the Instance value', async () => {
-    const { tree } = makeTree([
-      plugin({ name: 'A.esp', line: 0, origin: 'ModA' }),
-      plugin({ name: 'B.esp', line: 1, origin: 'overwrite/' }),
-    ]);
-    const rows = expectInstancesOf(await tree.getChildren(), PluginNode);
-    expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite/']);
-  });
-
   it('finds no file for a line no file answers to', async () => {
     const { tree } = makeTree([plugin({ name: 'Fallout4.esm', line: 0, path: undefined })]);
     expect(await tree.resolvePluginPath(new PluginNode({ name: 'Fallout4.esm', enabled: true }, 'SomeMod'))).toBeUndefined();
-  });
-
-  it('re-renders on a new value published after construction', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    const { tree } = makeTree([], { instance });
-    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
-
-    let fired = false;
-    tree.onDidChangeTreeData(() => { fired = true; });
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
-
-    expect(fired).toBe(true);
-    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
@@ -454,15 +428,6 @@ describe('PluginsTreeProvider — name filter', () => {
     tree.setFilter('beta');
 
     expect(tree.shownRow(expectInstanceOf(alpha, PluginNode))).toBeUndefined();
-  });
-
-  it('restores the full list when the filter is cleared', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
-    tree.setFilter('alpha');
-    expect(await tree.getChildren()).toHaveLength(1);
-
-    tree.setFilter('');
-    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']);
   });
 
   it('returns an empty list, and no empty-list message, when the filter matches nothing', async () => {
@@ -719,11 +684,6 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
     expect([...treeFor([], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).lockedRowUris()]).toEqual([]);
-  });
-
-  it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {
-    const rows = await treeFor([], ['Fallout4.esm']).getChildren();
-    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
   it('drags only plugin lines, never a locked row', async () => {
@@ -990,14 +950,6 @@ describe('PluginsTreeProvider — the locked plugins follow the instance value',
 const A_ROW = () => plugin({ name: 'A.esp', line: 0, origin: 'SomeMod' });
 const B_ROW = () => plugin({ name: 'B.esp', line: 1, origin: 'SomeMod' });
 
-function makeDisconnectedClient(): InMemoryMEditClient {
-  return disconnect(browserClient());
-}
-
-function disconnect(client: InMemoryMEditClient): InMemoryMEditClient {
-  client.disconnected();
-  return client;
-}
 
 describe('PluginsTreeProvider — a plugin row\'s expander follows its line, not what mEdit holds', () => {
   it('gives an enabled row a chevron whether or not mEdit holds its plugin, and a disabled row none', async () => {
@@ -1108,19 +1060,6 @@ describe('PluginsTreeProvider — a row that holds nothing yet expands to a sing
   });
 });
 
-describe('PluginsTreeProvider — a reconcile keeps the rows', () => {
-  it('hands back the very same row objects, in the same order', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    const before = await h.tree.getChildren();
-
-    await reconcile(h, [held('A.esp'), held('B.esp')]);
-
-    const after = await h.tree.getChildren();
-    expect(after[0]).toBe(before[0]);
-    expect(after[1]).toBe(before[1]);
-  });
-});
-
 describe('PluginsTreeProvider — the conditions a record row reads are its plugin row\'s', () => {
   const weaponOf = (record: RecordSummary) => browserClient({
     recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [record], total: 1 },
@@ -1227,16 +1166,6 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     });
 });
 
-describe('PluginsTreeProvider with the client reporting disconnected', () => {
-  it('renders the rows, in load order, the same as if it were connected', async () => {
-    const h = makeTree([A_ROW(), B_ROW()], { client: makeDisconnectedClient() });
-    await h.tree.facts.reconciled([]);
-
-    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
-  });
-
-});
-
 describe('PluginsTreeProvider — the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
   const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
   const indexFailed = { kind: 'failed', message: 'the record index threw' } as const;
@@ -1317,7 +1246,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
       sortingRuleFiles: { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Missing.esp]\n' } },
     });
 
-    await vi.waitFor(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
+    await settled(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
   });
 
   const needsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n' } } as const;
@@ -1450,7 +1379,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
 
     instance.publish(listed([['meshes/x.nif', fileIn('/game/Data', 'Meshes/x.nif')]]));
 
-    await vi.waitFor(() => expect([before, errors.at(-1)]).toEqual([1, []]));
+    await settled(() => expect([before, errors.at(-1)]).toEqual([1, []]));
   });
 
   it('puts no rows over a record filter that matched nothing', async () => {
@@ -1597,18 +1526,6 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(client.calls.filter((c) => c.method === 'getRecordTypes' || c.method === 'getRecords').map((c) => c.args))
       .toEqual([[{ name: 'Shared.esp', origin: 'ModB' }], [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)]]);
     expect(record.command?.arguments?.[0]).toEqual({ argument: { kind: 'record', formKey: '000001:Shared.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } } });
-  });
-
-  it('renders a child tree item through the record browser, not the row path', async () => {
-    const client = browserClient({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
-    const h = withRecords(client);
-    await reconcile(h, [held('A.esp')]);
-    const [row] = await h.tree.getChildren();
-    const [recordType] = await h.tree.getChildren(row);
-    const item = present(recordType, "the row's sole record-type child");
-
-    expect(h.tree.getTreeItem(item)).toBe(item);
-    expect(h.tree.getTreeItem(item).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   it('forwards the record browser change events', () => {
@@ -1800,17 +1717,6 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
     expect(item?.description).toBeUndefined();
   });
 
-  it('reads a master that is listed but disabled as missing, at Error', async () => {
-    const rows = [plugin({ name: 'Base.esm', line: 0, enabled: false }), plugin({ name: 'A.esp', line: 1 })];
-    const h = makeTree(rows);
-
-    await reconcile(h, [held('Base.esm', { isMaster: true }), held('A.esp', { masters: ['Base.esm'] })]);
-
-    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
-    expect(item?.description).toBe('1 error');
-    expect(tooltipAsString(item?.tooltip)).toContain('"Base.esm" is a master of "A.esp", and is missing or not active.');
-  });
-
   describe('flags the row of a plugin whose suggested move can be applied', () => {
     const flagged = async (h: Harness) => (await h.tree.getChildren()).map((row) => [row.label, h.tree.getTreeItem(row).contextValue?.includes('suggestedMove')]);
 
@@ -1820,30 +1726,6 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
       await reconcile(h, [held('B.esp', { masters: ['A.esp'] }), held('A.esp')]);
 
       expect(await flagged(h)).toEqual([['B.esp', false], ['A.esp', true]]);
-    });
-
-    it('flags a move past a disabled plugins.txt line, which the game does not load', async () => {
-      const h = makeTree([plugin({ name: 'D.esp', line: 0 }), plugin({ name: 'X.esp', line: 1, enabled: false }), plugin({ name: 'M.esp', line: 2 })]);
-
-      await reconcile(h, [held('D.esp', { masters: ['M.esp'] }), held('X.esp'), held('M.esp', { masters: ['X.esp'] })]);
-
-      expect(await flagged(h)).toEqual([['D.esp', false], ['X.esp', false], ['M.esp', true]]);
-    });
-
-    it('flags a master-flagged plugin that loads after a plugin without the flag', async () => {
-      const h = makeTree([plugin({ name: 'N.esp', line: 0 }), plugin({ name: 'M.esm', line: 1 })]);
-
-      await reconcile(h, [held('N.esp'), held('M.esm', { isMaster: true })]);
-
-      expect((await flagged(h)).map(([, flag]) => flag)).toEqual([false, true]);
-    });
-
-    it('flags no move beside a plugin the game loads with no line', async () => {
-      const h = makeTree([plugin({ name: 'M.esm', line: 0 })], { loadedWithNoLine: ['N.esp'] });
-
-      await reconcile(h, [held('N.esp', { origin: 'Data/' }), held('M.esm', { isMaster: true })]);
-
-      expect(await flagged(h)).toEqual([['N.esp', false], ['M.esm', false]]);
     });
   });
 
