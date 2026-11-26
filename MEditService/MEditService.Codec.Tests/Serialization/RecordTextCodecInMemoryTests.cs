@@ -1,22 +1,19 @@
 using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Serialization;
 
 public class RecordTextCodecInMemoryTests
 {
-
     [Fact]
     public void WritingAPopulatedContainersText_TouchesNoFilesystem_ThroughTheWorkingDirectoryWhereChildPathsLandBecauseTheyAreRelativeToAnEmptyStreamPackageFolder()
     {
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
-            GameRelease.Fallout4);
-        var quest = ((IFallout4ModGetter)overlay).Quests.First(q => q.DialogTopics.Count > 0);
+        var mod = new Fallout4Mod(ModKey.FromFileName("InMemory.esp"), Fallout4Release.Fallout4);
+        var topic = new DialogTopic(mod) { EditorID = "Topic" };
+        topic.Responses.Add(new DialogResponses(mod));
+        var quest = new Quest(mod) { EditorID = "Quest", DialogTopics = [topic] };
 
         var workingDirectory = Directory.GetCurrentDirectory();
         var before = Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal);

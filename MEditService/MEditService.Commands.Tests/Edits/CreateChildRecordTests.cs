@@ -95,57 +95,17 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(before, SourceModTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
 
-    public static TheoryData<string, CellPlace, Action<Cell>, string, int, string?> CellsAPlacedRecordIsCreatedOn => new()
+    [Fact]
+    public void APlacedRecordCreatedOnACell_LandsInTheGroupTheCodecNames_AsTheCodecMakesIt()
     {
-        { "an exterior cell at a grid", CellPlace.Exterior, cell => cell.Grid = new CellGrid { Point = new P2Int(3, -2) }, PersistentFlag.TemporaryGroup, 0, "14336, -6144, 0" },
-        {
-            "a persistent interior cell at a grid", CellPlace.Interior,
-            cell =>
-            {
-                cell.MajorRecordFlagsRaw = PersistentFlag.Bit;
-                cell.Grid = new CellGrid { Point = new P2Int(3, -2) };
-            },
-            PersistentFlag.PersistentGroup, PersistentFlag.Bit, null
-        },
-        { "an interior cell with no grid", CellPlace.Interior, _ => { }, PersistentFlag.TemporaryGroup, 0, null },
-    };
-
-    [Theory]
-    [MemberData(nameof(CellsAPlacedRecordIsCreatedOn))]
-    public void APlacedRecordCreatedOnACell_LandsInTheGroupItsPersistentFlagNames_AtTheCentreOfATemporaryGroupsGrid(
-        string _, CellPlace place, Action<Cell> shape, string group, int flags, string? position)
-    {
-        using var mod = CellShaped(place, shape, out var cell);
+        using var mod = ExteriorCell(out var cell, (_, exterior) => exterior.Grid = new CellGrid { Point = new P2Int(3, -2) });
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "refr", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var landed = JsonNode.Parse(mod.Body(cell)).Require();
-        var created = Assert.Single(landed[group].Require().AsArray()).Require();
+        var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.TemporaryGroup].Require().AsArray()).Require();
         Assert.Equal(result.NewFormKey, created["FormKey"].Require().GetValue<string>());
-        Assert.Equal(flags, created[RecordHeaderFlags.Member]?.GetValue<int>() ?? 0);
-        Assert.Equal(position, created["Position"]?.GetValue<string>());
-    }
-
-    private static SourceModFixture CellShaped(CellPlace place, Action<Cell> shape, out FormKey cell) => place switch
-    {
-        CellPlace.Interior => InteriorCell(out cell, shape),
-        CellPlace.Exterior => ExteriorCell(out cell, (_, exterior) => shape(exterior)),
-        _ => throw new ArgumentOutOfRangeException(nameof(place), place, "No fixture builds a cell there."),
-    };
-
-    private static SourceModFixture InteriorCell(out FormKey cell, Action<Cell> shape)
-    {
-        var cellKey = FormKey.Null;
-        var mod = SourceModFixture.CompiledPlugin("Interior.esp", "InteriorMod", plugin =>
-        {
-            var interior = new Cell(plugin) { EditorID = "InteriorCell", Flags = Cell.Flag.IsInteriorCell };
-            shape(interior);
-            plugin.AddInteriorCells(interior);
-            cellKey = interior.FormKey;
-        });
-        cell = cellKey;
-        return mod;
+        Assert.Equal("14336, -6144, 0", created["Position"].Require().GetValue<string>());
     }
 
     private static SourceModFixture ExteriorCell(out FormKey cell, Action<Fallout4Mod, Cell>? shape = null)
