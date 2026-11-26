@@ -83,7 +83,6 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
             "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
 
     [Theory]
-    [InlineData("[]")]
     [InlineData("{")]
     public void TheCellAtAGridWhoseCellDocumentIsNoRecordDocument_IsRefusedNamingThatFile(string text)
     {

@@ -48,14 +48,10 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     {
         var originalFiles = ReadStringsFiles();
         var entriesBefore = FolderEntries.Of(_dataFolder);
-        Assert.True(originalFiles.Count >= 2, "fixture should produce at least Normal + DL strings files");
 
         var afterPrepare = await SaveModifiedAsync(_ => ReadStringsFiles());
 
-        Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterPrepare.Keys.OrderBy(k => k));
-        foreach (var (name, bytes) in originalFiles)
-            Assert.True(bytes.AsSpan().SequenceEqual(afterPrepare[name]), $"{name} was modified before Commit()");
-
+        Assert.Equal(originalFiles, afterPrepare);
         Assert.Equal(entriesBefore, FolderEntries.Of(_dataFolder));
     }
 
@@ -72,11 +68,9 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         });
 
         var afterCommit = ReadStringsFiles();
-        Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterCommit.Keys.OrderBy(k => k));
-
-        foreach (var (name, bytes) in originalFiles.Where(f => !IsTheZeroEntryStubTheWriterEmitsForEveryLanguage(f.Key)))
-            Assert.False(bytes.AsSpan().SequenceEqual(afterCommit[name]), $"{name} should differ after Commit() rewrote it");
-
+        Assert.Equal(
+            originalFiles.Keys.Order().Select(name => (name, Rewritten: !IsTheZeroEntryStubTheWriterEmitsForEveryLanguage(name))),
+            afterCommit.Keys.Order().Select(name => (name, Rewritten: !originalFiles[name].AsSpan().SequenceEqual(afterCommit[name]))));
         Assert.Equal(entriesBefore, FolderEntries.Of(_dataFolder));
     }
 

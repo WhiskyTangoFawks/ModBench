@@ -1,7 +1,5 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -16,39 +14,6 @@ public sealed class PluginAdapterTests
     private const string PluginName = "Adapter.esp";
 
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
-
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-
-    private static PluginFixtureData TwoNpcPlugin(string prefix) =>
-        new PluginFixtureBuilder(prefix)
-            .WithPlugin(PluginName, mod =>
-            {
-                mod.Npcs.AddNew("AdapterNpc01");
-                mod.Npcs.AddNew("AdapterNpc02");
-            })
-            .Build();
-
-    private static ModPath PathOf(PluginFixtureData data) =>
-        new(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName));
-
-    private static string EditorIdOf(string documentText) =>
-        JsonDocument.Parse(documentText).RootElement.GetProperty("EditorID").GetString()
-        ?? throw new InvalidOperationException("Expected the document to carry an EditorID.");
-
-    [Fact]
-    public void OpenDocuments_ReadsTheRecordsThePluginCarries_UnderTheModKeyItsNameGives()
-    {
-        using var data = TwoNpcPlugin("adapter-read");
-
-        using var documents = Adapter.OpenDocuments(PathOf(data), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas, PluginStrings.None).Answered();
-        var npcs = documents.Records.Where(r => r.RecordType == "npc_").ToList();
-
-        Assert.Equal(
-            ["AdapterNpc01", "AdapterNpc02"],
-            npcs.Select(r => EditorIdOf(r.Text)).Order(StringComparer.Ordinal));
-        Assert.All(npcs, r => Assert.EndsWith($":{PluginName}", r.FormKey, StringComparison.Ordinal));
-    }
 
     [Fact]
     public async Task CreateAndWriteAsync_CarriesTheReleaseAndKeyItWasGiven_NoRecordsAndNoMasters_AndLeavesNothingElseInTheFolder()

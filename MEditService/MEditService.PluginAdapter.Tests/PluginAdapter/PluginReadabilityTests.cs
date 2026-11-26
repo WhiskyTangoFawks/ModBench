@@ -31,27 +31,23 @@ public sealed class PluginReadabilityTests : IDisposable
             new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null, HandedStrings.Of(path)),
             EmptyLoadOrder.Of(GameRelease.Fallout4));
 
-    [Fact]
-    public async Task APluginThatIsNotThere_IsInaccessible() =>
-        Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(Path.Combine(_data.DataFolder, "Absent.esp"))).Failure());
-
-    [Fact]
-    public void TheContentOfAPluginThatIsNotThere_IsInaccessible()
+    public static TheoryData<string, Func<string, string>, Type> Unreadable => new()
     {
-        var path = Path.Combine(_data.DataFolder, "Absent.esp");
+        { "no file", folder => Path.Combine(folder, "Absent.esp"), typeof(PluginFailure.Inaccessible) },
+        { "a directory", folder => Directory.CreateDirectory(Path.Combine(folder, "Folder.esp")).FullName, typeof(PluginFailure.Inaccessible) },
+        { "an empty file", folder => WrittenAt(Path.Combine(folder, "Empty.esp"), []), typeof(PluginFailure.Unparsed) },
+        { "a record that cannot inflate", WithARecordDeclaringALengthItsBytesCannotInflateTo, typeof(PluginFailure.Unparsed) },
+    };
 
-        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None);
+    [Theory]
+    [MemberData(nameof(Unreadable))]
+    public async Task TheSourceOfAPluginThatCannotBeRead_NamesWhy(string _, Func<string, string> pluginIn, Type failure) =>
+        Assert.IsType(failure, (await ReadSourceAt(pluginIn(_data.DataFolder))).Failure());
 
-        Assert.IsType<PluginFailure.Inaccessible>(read.Failure());
-    }
-
-    [Fact]
-    public async Task AnEmptyFile_OpensAndIsUnparsed()
+    private static string WrittenAt(string path, byte[] bytes)
     {
-        var path = Path.Combine(_data.DataFolder, "Empty.esp");
-        File.WriteAllBytes(path, []);
-
-        Assert.IsType<PluginFailure.Unparsed>((await ReadSourceAt(path)).Failure());
+        File.WriteAllBytes(path, bytes);
+        return path;
     }
 
     [Fact]
@@ -65,31 +61,20 @@ public sealed class PluginReadabilityTests : IDisposable
         Assert.NotEmpty((await ReadSourceAt(PluginPath)).Answered().Files);
     }
 
-    [Fact]
-    public async Task ADirectoryAtThePluginsPath_IsInaccessible()
-    {
-        var path = Path.Combine(_data.DataFolder, "Folder.esp");
-        Directory.CreateDirectory(path);
-
-        Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(path)).Failure());
-    }
-
     private const string UninflatablePlugin = "Uninflatable.esp";
 
-    private string WithARecordDeclaringALengthItsBytesCannotInflateTo()
+    private static string WithARecordDeclaringALengthItsBytesCannotInflateTo(string folder)
     {
         const int MoreThanAnArrayHolds = 0x7FFFFFD0;
         var npc = DeflatedRecord("NPC_", 0x800, CompressionLevel.Optimal, EditorId("Npc"));
         BinaryPrimitives.WriteInt32LittleEndian(npc.AsSpan(24), MoreThanAnArrayHolds);
-        var path = Path.Combine(_data.DataFolder, UninflatablePlugin);
-        File.WriteAllBytes(path, Plugin(Tes4(), Group("NPC_", npc)));
-        return path;
+        return WrittenAt(Path.Combine(folder, UninflatablePlugin), Plugin(Tes4(), Group("NPC_", npc)));
     }
 
     [Fact]
     public void TheDocumentsOfAPluginWhoseRecordCannotInflate_CarryItAsTheTypesFailure()
     {
-        var path = WithARecordDeclaringALengthItsBytesCannotInflateTo();
+        var path = WithARecordDeclaringALengthItsBytesCannotInflateTo(_data.DataFolder);
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(UninflatablePlugin), path), EmptyLoadOrder.Of(GameRelease.Fallout4),
@@ -98,10 +83,6 @@ public sealed class PluginReadabilityTests : IDisposable
         Assert.Empty(documents.Records);
         Assert.Equal("npc_", Assert.Single(documents.Failures).RecordType);
     }
-
-    [Fact]
-    public async Task TheSourceOfAPluginWhoseRecordCannotInflate_IsUnparsed() =>
-        Assert.IsType<PluginFailure.Unparsed>((await ReadSourceAt(WithARecordDeclaringALengthItsBytesCannotInflateTo())).Failure());
 
     [Fact]
     public void ARecordReadStoppedByRunningOutOfMemory_ThrowsThatCause_HoweverItIsWrapped()

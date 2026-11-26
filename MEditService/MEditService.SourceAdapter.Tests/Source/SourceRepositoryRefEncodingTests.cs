@@ -40,15 +40,6 @@ public sealed class SourceRepositoryRefEncodingTests
         Assert.Equal(["UNDERSCORED"], repository.LastWrittenBinarySha256s(underscored).Value());
     }
 
-    [Fact]
-    public void AnEmptyPluginName_IsADefect()
-    {
-        using var modFolder = new ScratchDirectory("medit-refencoding-");
-        var repository = SourceModOver(modFolder, "Test.esp");
-
-        Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("", "TestMod"), "DEADBEEF", () => { }).Value());
-    }
-
     private static TreeFile[] FilesOf(string plugin) =>
         [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
 

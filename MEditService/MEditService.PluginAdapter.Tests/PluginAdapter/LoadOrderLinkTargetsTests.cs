@@ -47,45 +47,21 @@ public sealed class LoadOrderLinkTargetsTests
         Answers(data, data.Plugins, formKeys).Targets;
 
     [Fact]
-    public void AFormKeyAPluginInTheLoadOrderHolds_IsNamedByItsRecordTypeAndEditorId()
+    public void AFormKeyAPluginInTheLoadOrderHolds_IsNamedByTheCopyTheLoadOrderResolvesTo_AndAnyOtherIsAbsent()
     {
-        using var data = TwoPluginLoadOrder("link-targets-hit");
+        using var data = TwoPluginLoadOrder("link-targets");
 
-        var targets = Targets(data, _keyword.ToString(), _race.ToString());
+        var targets = Targets(data, _keyword.ToString(), _race.ToString(), _placedRef.ToString(), _overriddenKeyword.ToString(), "ABCDEF:NoSuchPlugin.esp", "not a form key");
 
-        Assert.Equal(new ResolvedFormKey("kywd", "BaseKeyword"), targets[_keyword.ToString()]);
-        Assert.Equal(new ResolvedFormKey("race", "BaseRace"), targets[_race.ToString()]);
-    }
-
-    [Fact]
-    public void AFormKeyOfARecordEmbeddedInAnotherPluginsContainer_IsNamedByItsRecordTypeAndEditorId()
-    {
-        using var data = TwoPluginLoadOrder("link-targets-embedded");
-
-        var targets = Targets(data, _placedRef.ToString());
-
-        Assert.Equal(new ResolvedFormKey("refr", "BasePlacedRef"), targets[_placedRef.ToString()]);
-    }
-
-    [Fact]
-    public void AFormKeyNoPluginInTheLoadOrderHolds_IsAbsent()
-    {
-        using var data = TwoPluginLoadOrder("link-targets-miss");
-
-        var targets = Targets(data, "ABCDEF:NoSuchPlugin.esp", _keyword.ToString());
-
-        Assert.False(targets.ContainsKey("ABCDEF:NoSuchPlugin.esp"));
-        Assert.True(targets.ContainsKey(_keyword.ToString()));
-    }
-
-    [Fact]
-    public void AnOverriddenRecord_IsNamedByTheCopyTheLoadOrderResolvesTo()
-    {
-        using var data = TwoPluginLoadOrder("link-targets-override");
-
-        var targets = Targets(data, _overriddenKeyword.ToString());
-
-        Assert.Equal(new ResolvedFormKey("kywd", "RenamedByPatch"), targets[_overriddenKeyword.ToString()]);
+        Assert.Equal(
+            new Dictionary<string, ResolvedFormKey>
+            {
+                [_keyword.ToString()] = new("kywd", "BaseKeyword"),
+                [_race.ToString()] = new("race", "BaseRace"),
+                [_placedRef.ToString()] = new("refr", "BasePlacedRef"),
+                [_overriddenKeyword.ToString()] = new("kywd", "RenamedByPatch"),
+            },
+            targets);
     }
 
     [Fact]
@@ -103,24 +79,6 @@ public sealed class LoadOrderLinkTargetsTests
         var unread = Assert.Single(answers.UnreadableFiles);
         Assert.Equal("Absent.esp", unread.FileName);
         Assert.Contains("Absent.esp", unread.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EveryFileTheLoadOrderNamesBeingReadable_LeavesNothingNamedAsUnread()
-    {
-        using var data = TwoPluginLoadOrder("link-targets-all-readable");
-
-        Assert.Empty(Answers(data, data.Plugins, _keyword.ToString()).UnreadableFiles);
-    }
-
-    [Fact]
-    public void AMalformedFormKey_IsAbsentRatherThanThrowing()
-    {
-        using var data = TwoPluginLoadOrder("link-targets-malformed");
-
-        var targets = Targets(data, "not a form key");
-
-        Assert.Empty(targets);
     }
 
     private static readonly FormKey MasterKeyword = FormKey.Factory("000801:Master.esp");

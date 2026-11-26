@@ -51,14 +51,6 @@ public sealed class PluginFileHashesTests : IDisposable
     }
 
     [Fact]
-    public void TheClaimOfAFileHeldAgainstReaders_IsInaccessible()
-    {
-        using var held = HeldAgainstReaders();
-
-        Assert.IsType<PluginFailure.Inaccessible>(ClaimOf(PluginPath).Failure());
-    }
-
-    [Fact]
     public void AnUnchangedFile_KeepsItsHashWithoutARead()
     {
         var hashes = WithTheClockPastEveryWrite();

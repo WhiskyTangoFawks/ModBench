@@ -19,129 +19,62 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
         _sourceFolder.Dispose();
     }
 
-    [Fact]
-    public void APluginOfAModWhoseOwnFolderRatherThanItsSourceFolderHoldsARepository_IsOfNoSourceMod()
+    public static TheoryData<string, Func<string, string>, bool> Folders => new()
     {
-        CommitOnMain(_modFolder);
+        { "no git directory", source => source, false },
+        { "a repository with no main", source => Git(source, "init", "-q", "-b", "main"), false },
+        { "a repository with main", CommitOnMain, true },
+        { "a repository whose main git packed", source => Git(CommitOnMain(source), "pack-refs", "--all"), true },
+        { "a repository with main but no build file", source => { File.Delete(Path.Combine(CommitOnMain(source), "build.json")); return source; }, false },
+        { "a folder that does not exist", source => Path.Combine(source, "Gone"), false },
+    };
 
-        Assert.False(TestAdapters.Source().IsSourceMod(Registered));
+    [Theory]
+    [MemberData(nameof(Folders))]
+    public void AFolder_IsASourceMod_OnlyWhenItsRepositoryHoldsMainAndTheBuildFile(string _, Func<string, string> made, bool isSourceMod)
+    {
+        Assert.Equal(isSourceMod, TestAdapters.Source().IsSourceMod(made(_sourceFolder)));
+    }
+
+    public static TheoryData<string, Action<string, string>, bool, bool> Plugins => new()
+    {
+        { "its source folder holds a repository and its tree", (_, source) => MakeTree(CommitOnMain(source)), true, true },
+        { "its source folder holds a repository and no tree for it", (_, source) => CommitOnMain(source), true, false },
+        { "its source folder holds a tree and no repository", (_, source) => MakeTree(source), false, false },
+        { "its mod's own folder holds the repository and the tree", (mod, _) => MakeTree(CommitOnMain(mod)), false, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(Plugins))]
+    public void APlugin_IsOfASourceMod_AndItsSourceReads_OnlyFromItsModsSourceFolder(
+        string _, Action<string, string> made, bool isSourceMod, bool reads)
+    {
+        made(_modFolder, _sourceFolder);
+
+        Assert.Equal((isSourceMod, reads), (TestAdapters.Source().IsSourceMod(Registered), TestAdapters.Source().SourceReads(Registered)));
     }
 
     [Fact]
-    public void ATreeInTheModsOwnFolderRatherThanItsSourceFolder_DoesNotRead()
+    public void APluginTheGameProvides_IsOfNoSourceMod_AndItsSourceDoesNotRead()
     {
-        CommitOnMain(_modFolder);
-        MakeTree(_modFolder);
+        MakeTree(CommitOnMain(_sourceFolder));
+        var plugin = Registered with { Provider = PluginProvider.Game };
 
-        Assert.False(TestAdapters.Source().SourceReads(Registered));
+        Assert.Equal((false, false), (TestAdapters.Source().IsSourceMod(plugin), TestAdapters.Source().SourceReads(plugin)));
     }
 
-    [Fact]
-    public void AFolderWithNoGitDirectory_IsNoSourceMod()
+    private static void MakeTree(string folder) => Directory.CreateDirectory(Path.Combine(folder, "plugin-source", PluginAt.Name));
+
+    private static string CommitOnMain(string folder)
     {
-        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
+        File.WriteAllText(Path.Combine(folder, "build.json"), "{}");
+        Git(folder, "init", "-q", "-b", "main");
+        return Git(folder, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "-q", "--allow-empty", "-m", "First");
     }
 
-    [Fact]
-    public void ARepositoryWithNoMain_IsNoSourceMod()
+    private static string Git(string folder, params string[] args)
     {
-        Git(_sourceFolder, "init", "-q", "-b", "main");
-
-        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
+        GitProbe.Run(Path.Combine(folder, ".git"), folder, args);
+        return folder;
     }
-
-    [Fact]
-    public void ARepositoryWithMain_IsASourceMod()
-    {
-        CommitOnMain();
-
-        Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
-    }
-
-    [Fact]
-    public void ARepositoryWhoseMainGitPacked_IsASourceMod()
-    {
-        CommitOnMain();
-        Git(_sourceFolder, "pack-refs", "--all");
-
-        Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
-    }
-
-    [Fact]
-    public void AFolderThatDoesNotExist_IsNoSourceMod_NotAThrow()
-    {
-        Assert.False(TestAdapters.Source().IsSourceMod(Path.Combine(_sourceFolder, "Gone")));
-    }
-
-    [Fact]
-    public void APluginOfAModWhoseSourceFolderHoldsARepository_IsOfASourceMod()
-    {
-        CommitOnMain();
-
-        Assert.True(TestAdapters.Source().IsSourceMod(Registered));
-    }
-
-    [Fact]
-    public void APluginOfAModWithNoRepository_IsOfNoSourceMod()
-    {
-        Assert.False(TestAdapters.Source().IsSourceMod(Registered));
-    }
-
-    [Fact]
-    public void APluginTheGameProvides_IsOfNoSourceMod()
-    {
-        Assert.False(TestAdapters.Source().IsSourceMod(Registered with { Provider = PluginProvider.Game }));
-    }
-
-    [Fact]
-    public void APluginsSource_ReadsFromASourceModHoldingItsTree()
-    {
-        CommitOnMain();
-        MakeTree();
-
-        Assert.True(TestAdapters.Source().SourceReads(Registered));
-    }
-
-    [Fact]
-    public void APluginsSource_DoesNotReadFromASourceModHoldingNoTreeForIt()
-    {
-        CommitOnMain();
-
-        Assert.True(TestAdapters.Source().IsSourceMod(Registered));
-        Assert.False(TestAdapters.Source().SourceReads(Registered));
-    }
-
-    [Fact]
-    public void ATreeInAModThatIsNoSourceMod_DoesNotRead()
-    {
-        MakeTree();
-
-        Assert.False(TestAdapters.Source().SourceReads(Registered));
-    }
-
-    [Fact]
-    public void TheSourceOfAPluginTheGameProvides_DoesNotRead()
-    {
-        Assert.False(TestAdapters.Source().SourceReads(Registered with { Provider = PluginProvider.Game }));
-    }
-
-    private void MakeTree(string? folder = null) => Directory.CreateDirectory(Path.Combine(folder ?? _sourceFolder, "plugin-source", PluginAt.Name));
-
-    [Fact]
-    public void ARepositoryWithMainButNoBuildFile_IsNoSourceMod()
-    {
-        CommitOnMain();
-        File.Delete(Path.Combine(_sourceFolder, "build.json"));
-
-        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
-    }
-
-    private void CommitOnMain(string? folder = null)
-    {
-        File.WriteAllText(Path.Combine(folder ?? _sourceFolder, "build.json"), "{}");
-        Git(folder ?? _sourceFolder, "init", "-q", "-b", "main");
-        Git(folder ?? _sourceFolder, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "-q", "--allow-empty", "-m", "First");
-    }
-
-    private static void Git(string folder, params string[] args) => GitProbe.Run(Path.Combine(folder, ".git"), folder, args);
 }

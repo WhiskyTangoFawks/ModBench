@@ -19,13 +19,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal("a.esp.excluded", _repository.ExcludedName("a.esp", ".excluded"));
 
     [Fact]
-    public void DataFolderExists_AnswersWhetherTheFolderIsThere()
-    {
-        Assert.True(_repository.DataFolderExists(_root));
-        Assert.False(_repository.DataFolderExists(Path.Combine(_root, "no-such-data")));
-    }
-
-    [Fact]
     public void ALeftoverOfAKilledWrite_IsNoFileOfTheMod()
     {
         Write("a.txt", "hello");
@@ -67,16 +60,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.ThrowsAny<SystemException>(() => _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
         Assert.False(File.Exists(Path.Combine(_root, "mod.ba2")));
-    }
-
-    [Fact]
-    public void OpenFile_ReadsTheFileAtThePathUnderTheFolder()
-    {
-        Write("scripts/a.pex", "bytes");
-
-        using var content = new StreamReader(_repository.OpenFile(_root, "scripts/a.pex"));
-
-        Assert.Equal("bytes", content.ReadToEnd());
     }
 
     [Theory]

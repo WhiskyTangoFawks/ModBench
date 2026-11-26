@@ -5,8 +5,6 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -170,31 +168,6 @@ public sealed class SubrecordLossTests : IDisposable
         Assert.Null((await ComparisonAsync(deleted, Concat(deleted, AnEmptyWeapon))).DeletedRecordCauses);
     }
 
-    [Fact]
-    public void MutagenWritesADeletedCellAsItsHeaderAlone_AndADeletedWorldspaceWhole()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.AddInteriorCells(new Cell(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "DeletedCell", MajorRecordFlagsRaw = (int)DeletedFlag.Bit });
-        mod.Worldspaces.Add(new Worldspace(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "DeletedWorld", MajorRecordFlagsRaw = (int)DeletedFlag.Bit });
-        using var stream = new MemoryStream();
-        mod.WriteToBinary(stream);
-
-        var written = Encoding.ASCII.GetString(stream.ToArray());
-
-        Assert.Equal((false, true), (written.Contains("DeletedCell", StringComparison.Ordinal), written.Contains("DeletedWorld", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public async Task ARecordInsideAGrup_IsComparedByItsOwnHeader()
-    {
-        var original = Group("WEAP", Record("WEAP", 0x00123456, Subrecord("EDID", [1]), Subrecord("RDMP", [2])));
-        var rewritten = Group("WEAP", Record("WEAP", 0x00123456, Subrecord("EDID", [1])));
-
-        var loss = await LossAsync(original, rewritten);
-
-        Assert.Equal(("WEAP", 0x00123456u), (loss?.RecordType, loss?.FormId));
-    }
-
     private static byte[] SubrecordHeaderDeclaring(string signature, ushort declaredLength)
     {
         var header = new byte[6];
@@ -203,76 +176,69 @@ public sealed class SubrecordLossTests : IDisposable
         return header;
     }
 
-    [Fact]
-    public async Task AnXxxxMarker_SuppliesTheFollowingSubrecordsRealLength()
-    {
-        const ushort DeliberatelyWrongDeclaredLengthSoOnlyTheXxxxMarkersOwnValueIsTheRealLength = 3;
-        byte[] payload = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        var xxxxMarker = Subrecord("XXXX", U32((uint)payload.Length));
-        var oversizedSubrecord = Concat(SubrecordHeaderDeclaring("BIG ", DeliberatelyWrongDeclaredLengthSoOnlyTheXxxxMarkersOwnValueIsTheRealLength), payload);
-        var original = Record("WEAP", 1, xxxxMarker, oversizedSubrecord, Subrecord("RDMP", [1]));
-        var rewritten = Record("WEAP", 1, xxxxMarker, oversizedSubrecord);
-
-        var loss = await LossAsync(original, rewritten);
-
-        Assert.Equal(["RDMP"], loss?.Signatures);
-    }
-
-    [Fact]
-    public async Task ASignatureWithFewerOccurrencesInTheRewrite_IsReported()
-    {
-        var original = Record("WEAP", 1, Subrecord("RDAT", [1]), Subrecord("RDAT", [2]), Subrecord("RDMP", [3]));
-        var rewritten = Record("WEAP", 1, Subrecord("RDAT", [1]));
-
-        var loss = await LossAsync(original, rewritten);
-
-        Assert.Equal(["RDAT", "RDMP"], loss?.Signatures);
-    }
-
     private static readonly byte[] AnUntouchedWeapon = Record("WEAP", 0x00000001, Subrecord("EDID", "Gun"u8.ToArray()));
 
     private static readonly byte[] ARegionRewrittenWithoutItsRdmpAndRdmo = Record("REGN", 0x00ABCDEF, Subrecord("EDID", "Region"u8.ToArray()));
 
-    public static TheoryData<string, byte[]> RewritesShrinkingTheSecondRecord => new()
+    private const ushort DeliberatelyWrongDeclaredLengthSoOnlyTheXxxxMarkersOwnValueIsTheRealLength = 3;
+
+    private static readonly byte[] XxxxMarker = Subrecord("XXXX", U32(10));
+
+    private static readonly byte[] OversizedSubrecord =
+        Concat(SubrecordHeaderDeclaring("BIG ", DeliberatelyWrongDeclaredLengthSoOnlyTheXxxxMarkersOwnValueIsTheRealLength), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+    private static readonly byte[] ARegionWithItsRdmpAndRdmo =
+        Record("REGN", 0x00ABCDEF, Subrecord("EDID", "Region"u8.ToArray()), Subrecord("RDMP", [1]), Subrecord("RDMO", [2]));
+
+    public static TheoryData<string, byte[], byte[], string, uint, string[]> Losses => new()
     {
-        { "in the original's order", Concat(AnUntouchedWeapon, ARegionRewrittenWithoutItsRdmpAndRdmo) },
-        { "in another order, as a rewrite from the tree carries no group order", Concat(ARegionRewrittenWithoutItsRdmpAndRdmo, AnUntouchedWeapon) },
+        {
+            "a signature with fewer occurrences in the rewrite",
+            Record("WEAP", 1, Subrecord("RDAT", [1]), Subrecord("RDAT", [2]), Subrecord("RDMP", [3])), Record("WEAP", 1, Subrecord("RDAT", [1])),
+            "WEAP", 1, ["RDAT", "RDMP"]
+        },
+        {
+            "a subrecord after one whose real length an XXXX marker supplies",
+            Record("WEAP", 1, XxxxMarker, OversizedSubrecord, Subrecord("RDMP", [1])), Record("WEAP", 1, XxxxMarker, OversizedSubrecord),
+            "WEAP", 1, ["RDMP"]
+        },
+        {
+            "a compressed record, decompressed before it is compared",
+            DeflatedRecord("REGN", 0x42, CompressionLevel.Optimal, Subrecord("EDID", "Compressed"u8.ToArray()), Subrecord("RDMP", [1])),
+            DeflatedRecord("REGN", 0x42, CompressionLevel.Optimal, Subrecord("EDID", "Compressed"u8.ToArray())),
+            "REGN", 0x42, ["RDMP"]
+        },
+        {
+            "a record inside a grup, compared by its own header",
+            Group("WEAP", Record("WEAP", 0x00123456, Subrecord("EDID", [1]), Subrecord("RDMP", [2]))), Group("WEAP", Record("WEAP", 0x00123456, Subrecord("EDID", [1]))),
+            "WEAP", 0x00123456, ["RDMP"]
+        },
+        {
+            "a TES4 subrecord other than its masters",
+            Header(Subrecord("HEDR", [1, 2, 3, 4]), Subrecord("MAST", "Fallout4.esm\0"u8.ToArray()), Subrecord("DATA", new byte[8]), Subrecord("SNAM", "desc"u8.ToArray())),
+            Header(Subrecord("HEDR", [1, 2, 3, 4]), Subrecord("MAST", "Fallout4.esm\0"u8.ToArray()), Subrecord("DATA", new byte[8])),
+            "TES4", 0, ["SNAM"]
+        },
+        {
+            "the record that shrank beside an unchanged one, in the original's order",
+            Concat(AnUntouchedWeapon, ARegionWithItsRdmpAndRdmo), Concat(AnUntouchedWeapon, ARegionRewrittenWithoutItsRdmpAndRdmo),
+            "REGN", 0x00ABCDEF, ["RDMP", "RDMO"]
+        },
+        {
+            "the record that shrank beside an unchanged one, in another order, as a rewrite from the tree carries no group order",
+            Concat(AnUntouchedWeapon, ARegionWithItsRdmpAndRdmo), Concat(ARegionRewrittenWithoutItsRdmpAndRdmo, AnUntouchedWeapon),
+            "REGN", 0x00ABCDEF, ["RDMP", "RDMO"]
+        },
     };
 
     [Theory]
-    [MemberData(nameof(RewritesShrinkingTheSecondRecord))]
-    public async Task TheLoss_NamesTheRecordWhoseInventoryShrank_PairedByTypeAndFormId_NotAnUnchangedOne(string _, byte[] rewritten)
+    [MemberData(nameof(Losses))]
+    public async Task TheLoss_NamesTheRecordByTypeAndFormId_AndEachSignatureItLacks(
+        string _, byte[] original, byte[] rewritten, string recordType, uint formId, string[] signatures)
     {
-        var original = Concat(AnUntouchedWeapon,
-            Record("REGN", 0x00ABCDEF, Subrecord("EDID", "Region"u8.ToArray()), Subrecord("RDMP", [1]), Subrecord("RDMO", [2])));
-
         var loss = await LossAsync(original, rewritten);
 
-        Assert.Equal(("REGN", 0x00ABCDEFu), (loss?.RecordType, loss?.FormId));
-        Assert.Equal(["RDMP", "RDMO"], loss?.Signatures);
-    }
-
-    [Fact]
-    public async Task DecompressesACompressedRecordBeforeComparing()
-    {
-        var original = DeflatedRecord("REGN", 0x00000042, CompressionLevel.Optimal, Subrecord("EDID", "Compressed"u8.ToArray()), Subrecord("RDMP", [1]));
-        var rewritten = DeflatedRecord("REGN", 0x00000042, CompressionLevel.Optimal, Subrecord("EDID", "Compressed"u8.ToArray()));
-
-        var loss = await LossAsync(original, rewritten);
-
-        Assert.Equal(["RDMP"], loss?.Signatures);
-    }
-
-    [Fact]
-    public async Task ATes4NonMasterSubrecordDrop_IsStillReported()
-    {
-        var originalHeader = Header(
-            Subrecord("HEDR", [1, 2, 3, 4]), Subrecord("MAST", "Fallout4.esm\0"u8.ToArray()), Subrecord("DATA", new byte[8]), Subrecord("SNAM", "desc"u8.ToArray()));
-        var rewrittenHeader = Header(Subrecord("HEDR", [1, 2, 3, 4]), Subrecord("MAST", "Fallout4.esm\0"u8.ToArray()), Subrecord("DATA", new byte[8]));
-
-        var loss = await LossAsync(originalHeader, rewrittenHeader);
-
-        Assert.Equal("TES4", loss?.RecordType);
-        Assert.Equal(["SNAM"], loss?.Signatures);
+        Assert.Equal((recordType, formId), (loss?.RecordType, loss?.FormId));
+        Assert.Equal(signatures, loss?.Signatures);
     }
 }

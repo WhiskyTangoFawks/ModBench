@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -233,15 +234,6 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     }
 
     [Fact]
-    public void AGroupsMetadataFile_HoldsNoRecord_UnderASourceTheLoadOrderDoesNotName()
-    {
-        using var other = new ScratchDirectory("medit-file-of-a-record-unlisted-");
-        InitFiledIn(other);
-
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(TestAdapters.Source().RecordOfFile(LoadOrder(), Path.Combine(other, GroupMetadata)));
-    }
-
-    [Fact]
     public void AFileThatIsNoJsonDocument_HoldsNoRecord_WhateverItsText()
     {
         var notes = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", "notes.txt");
@@ -250,12 +242,20 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         Assert.IsType<RecordOfFileAnswer.HoldsNone>(TestAdapters.Source().RecordOfFile(LoadOrder(), Path.Combine(_modFolder, notes)));
     }
 
-    [Fact]
-    public void AFileWhoseTextIsNoRecordDocument_IsRefused_InTheReadersWords()
+    public static TheoryData<Action<string>, string> Refusals => new()
     {
-        File.WriteAllText(NpcFile, "[1, 2]");
+        { file => File.WriteAllText(file, "[1, 2]"), "{0} is no record document: its root is not a JSON object." },
+        { file => File.WriteAllText(file, "{\"EditorID\": \"FiledNpc\"}"), "{0} declares no FormKey, so it is no record's document." },
+        { File.Delete, "{0} is gone." },
+    };
 
-        Assert.Equal($"{NpcFile} is no record document: its root is not a JSON object.", WhyRefused(NpcFile));
+    [Theory]
+    [MemberData(nameof(Refusals))]
+    public void AFileThatHoldsNoRecordDocument_IsRefused_InTheReadersWords(Action<string> made, string why)
+    {
+        made(NpcFile);
+
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture, why, NpcFile), WhyRefused(NpcFile));
     }
 
     [Fact, Kind(Kinds.Posix)]
@@ -266,19 +266,4 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         Assert.StartsWith($"{NpcFile} could not be read: ", WhyRefused(NpcFile));
     }
 
-    [Fact]
-    public void AFileThatIsGone_IsRefused()
-    {
-        File.Delete(NpcFile);
-
-        Assert.Equal($"{NpcFile} is gone.", WhyRefused(NpcFile));
-    }
-
-    [Fact]
-    public void ADocumentDeclaringNoFormKey_IsRefused()
-    {
-        File.WriteAllText(NpcFile, "{\"EditorID\": \"FiledNpc\"}");
-
-        Assert.Equal($"{NpcFile} declares no FormKey, so it is no record's document.", WhyRefused(NpcFile));
-    }
 }

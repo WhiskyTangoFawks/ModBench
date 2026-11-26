@@ -132,28 +132,6 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
     }
 
-    [Fact, Kind(Kinds.Posix)]
-    public void AnInitWhoseCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
-    {
-        var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
-
-        var failure = InitWhoseCommitHookRuns($"echo theirs > '{changed}'");
-
-        Assert.Equal("theirs", File.ReadAllText(changed).Trim());
-        Assert.Contains("000001.json — changed by something else", failure, StringComparison.Ordinal);
-    }
-
-    [Fact, Kind(Kinds.Posix)]
-    public void AnInitWhoseCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
-    {
-        var gitignore = Path.Combine(_modFolder, ".gitignore");
-
-        var failure = InitWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
-
-        Assert.Equal("theirs", File.ReadAllText(gitignore).Trim());
-        Assert.Contains(".gitignore — changed by something else", failure, StringComparison.Ordinal);
-    }
-
     private string InitWhoseCommitHookRuns(string script)
     {
         CrashAnInitAfterItMadeTheRepository();

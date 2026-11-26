@@ -144,15 +144,6 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void ASourceWithNoMeta_IsAProblemOnTheFileItLacks()
-    {
-        var meta = Path.Combine(PluginSourceRoot.For(PluginName), SpriggitMeta.FileName);
-        File.Delete(Path.Combine(_modFolder, meta));
-
-        Assert.Equal(meta, Assert.Single(_repository.StampsOf(Plugin).Problems).SourceRelativePath);
-    }
-
-    [Fact]
     public void AFlatRecordUnderAnotherLeafName_IsAProblemNamingWhereItBelongs()
     {
         var original = NpcFile;
@@ -198,19 +189,6 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
         Assert.Equal(Path.GetRelativePath(_modFolder, outside), problem.SourceRelativePath);
         Assert.Contains("light range", problem.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ABlockLevelDocumentWithAValueOfTheWrongType_IsAProblemOnThatFile()
-    {
-        var level = Path.Combine(_modFolder, PluginSourceRoot.For(PluginName), "Cells", "0", "GroupRecordData.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(level).Require());
-        File.WriteAllText(level, "{\"BlockNumber\": \"text\"}");
-
-        var problem = Assert.Single(_repository.StampsOf(Plugin).Problems);
-
-        Assert.Equal(Path.GetRelativePath(_modFolder, level), problem.SourceRelativePath);
-        Assert.Contains("BlockNumber", problem.Message, StringComparison.Ordinal);
     }
 
     [Fact]

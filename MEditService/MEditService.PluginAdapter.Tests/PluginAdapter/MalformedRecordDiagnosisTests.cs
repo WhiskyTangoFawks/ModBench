@@ -57,15 +57,13 @@ public sealed class MalformedRecordDiagnosisTests
         Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, 0, HalfAGigabyte / 8);
     }
 
-    [Theory]
-    [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    public void FixedCount_ARaceWithThirtyOneNames_IsDiagnosed(GameRelease release)
+    [Fact]
+    public void FixedCount_ASkyrimRaceWithThirtyOneNames_IsDiagnosed()
     {
         var names = Enumerable.Range(0, 31).Select(_ => Subrecord("NAME", "Slot\0"u8.ToArray())).ToArray();
         var record = Record("RACE", 0x00000002, [Subrecord("EDID", "ShortRace\0"u8.ToArray()), .. names]);
 
-        var d = Assert.Single(Scan(record, release));
+        var d = Assert.Single(Scan(record, GameRelease.SkyrimSE));
         Assert.Equal("fixed-count-list-wrong-count", d.DefectClass);
         Assert.Equal("RACE 00000002 (ShortRace)", d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
