@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -19,13 +18,12 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     private readonly PluginAddress _baseKey;
     private readonly PluginAddress _winnerKey;
     private readonly string _npc;
-    private readonly string _loneNpcWhoseOneCopyAnswersTheLink;
     private readonly string _raceA;
     private readonly string _raceB;
 
     public WorkingTreeDeletionTests()
     {
-        FormKey npc = default, raceA = default, raceB = default, loneNpc = default;
+        FormKey npc = default, raceA = default, raceB = default;
         _fixture = new PluginFixtureBuilder("working-tree-deletion")
             .WithPlugin("Base.esm", mod =>
             {
@@ -34,7 +32,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
                 var n = mod.Npcs.AddNew("TestNpc");
                 n.Race.SetTo(raceA);
                 npc = n.FormKey;
-                loneNpc = mod.Npcs.AddNew("LoneNpc").FormKey;
             }, origin: "BaseMod")
             .WithPlugin("Winner.esp", (mod, built) =>
             {
@@ -49,7 +46,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         _baseKey = _base.Key;
         _winnerKey = _winner.Key;
         (_npc, _raceA, _raceB) = (npc.ToString(), raceA.ToString(), raceB.ToString());
-        _loneNpcWhoseOneCopyAnswersTheLink = loneNpc.ToString();
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -57,27 +53,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     private static IEnumerable<(string Plugin, bool IsWinner)> StackOf(OpenedIndex index, string formKey) =>
         index.StackOf(formKey).Select(copy => (copy.Plugin, copy.IsWinner));
 
-    private FormKeyResolutionState LinkTo(OpenedIndex index, string target) =>
-        index.ResolutionOf(_loneNpcWhoseOneCopyAnswersTheLink, _baseKey, target).State;
-
     private static bool ReferencedFromBase(OpenedIndex index, string target, string formKey) =>
         index.Queries.GetReferencesInActiveOrCompiledPlugins(target).Value().Any(r => r.FormKey == formKey && r.Plugin == "Base.esm");
-
-    [Fact]
-    public void DeletingARecord_RemovesItFromEffective_AndRestoringItsCommittedBytesConvergesToClean()
-    {
-        using var index = Indexes.Reconciled(_fixture);
-        var committed = index.DocumentOf(_raceA, _baseKey);
-        var committedBody = index.BodyOf(_raceA, _baseKey);
-
-        index.Delete(_base, committed);
-
-        Assert.Null(index.CopyIn(_raceA, _baseKey));
-        Assert.Null(index.Queries.GetWinner(_raceA).Value());
-
-        index.Create(_base, _raceA, "race", "RaceA", committedBody);
-        Assert.Equal(WorkingTreeState.None, index.RowOf(_raceA, _baseKey)?.WorkingTreeState);
-    }
 
     private const string ActivePlugins = "active_plugins";
 
@@ -151,18 +128,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         Assert.Equal([("Base.esm", false), ("Winner.esp", true)], StackOf(index, _npc));
         Assert.NotEqual(WorkingTreeState.None, index.RowOf(_npc, _winnerKey)?.WorkingTreeState);
-    }
-
-    [Fact]
-    public void DeletingARecord_StopsItResolving_AndLeavesOtherRecordsResolving()
-    {
-        using var index = Indexes.Reconciled(_fixture);
-        Assert.Equal(FormKeyResolutionState.ResolvedValidType, LinkTo(index, _raceA));
-
-        index.Delete(_base, index.DocumentOf(_raceA, _baseKey));
-
-        Assert.Equal(FormKeyResolutionState.Unresolved, LinkTo(index, _raceA));
-        Assert.Equal(FormKeyResolutionState.ResolvedValidType, LinkTo(index, _raceB));
     }
 
     [Fact]

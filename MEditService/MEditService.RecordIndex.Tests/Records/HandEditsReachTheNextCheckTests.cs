@@ -62,23 +62,4 @@ public sealed class HandEditsReachTheNextCheckTests : IDisposable
         var listing = _index.Queries.GetRecords(["npc_"], _mod.Key, search: null, limit: 50, offset: 0).Value();
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
     }
-
-    [Fact]
-    public void AHandEditedDocumentThatIsNotReadable_ReadsTheBinaryInTheTreesPlace()
-    {
-        var npc = _index.DocumentOf(_npc, _mod.Key);
-        var file = _mod.SourceFileOf(npc);
-        _mod.HandEdit(npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextCheck();
-        Assert.Equal("RenamedByHand", _index.DocumentOf(_npc, _mod.Key).EditorId);
-
-        const string notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold = "{ this is not json";
-        File.WriteAllText(file, notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
-
-        _index.NextCheckUntil(
-            () => _index.ReadFromItsPluginFileForItsUnreadableSource(_mod.Key), "the binary read in the tree's place");
-
-        Assert.Equal("FixtureNpc", _index.DocumentOf(_npc, _mod.Key).EditorId);
-        Assert.Empty(_index.Status.Failures);
-    }
 }

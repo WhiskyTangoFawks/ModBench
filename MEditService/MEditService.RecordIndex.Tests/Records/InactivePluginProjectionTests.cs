@@ -42,7 +42,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
         _index.Reconcile(_holder, _fixture.DataFolder, [_mod with { Enabled = active }, _partner], GameRelease.Fallout4);
 
     [Fact]
-    public void APluginRow_IsInTheLoadOrderExactlyWhenItIsActive()
+    public void APluginRow_IsInTheLoadOrderExactlyWhenItIsActive_AndACompiledPluginStillReadsAsCompiled()
     {
         PluginResponse Row() => Assert.IsType<PluginResponse>(_index.PluginResponseOf(_mod.Key));
         Assert.True(Row().InLoadOrder);
@@ -52,23 +52,11 @@ public sealed class InactivePluginProjectionTests : IDisposable
 
         Assert.False(Row().InLoadOrder);
         Assert.Null(Row().LoadOrderIndex);
+        Assert.True(_index.ReadFromItsPluginSource(_mod.Key));
     }
 
     [Fact]
-    public void AHandEditWhileNotActive_IsTheRecordTheReadsSeeOnceActive()
-    {
-        var document = _index.DocumentOf(_npc, _mod.Key);
-        Reconcile(active: false);
-
-        _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextCheck();
-        Reconcile(active: true);
-
-        Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.Key)?.EditorId);
-    }
-
-    [Fact]
-    public void AHandEditWhileNotActive_IsProjectedOnce()
+    public void AHandEditWhileNotActive_IsProjectedOnce_AndIsTheRecordTheReadsSeeOnceActive()
     {
         var document = _index.DocumentOf(_npc, _mod.Key);
         Reconcile(active: false);
@@ -76,8 +64,11 @@ public sealed class InactivePluginProjectionTests : IDisposable
         _index.NextCheck();
 
         var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
+        Reconcile(active: true);
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
+        Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
+        Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.Key)?.EditorId);
     }
 
     [Fact]
@@ -90,42 +81,15 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Assert.NotNull(_index.Queries.GetCompare(_npc, new CopyText(_mod.Key, text)).Value());
     }
 
-    [Fact]
-    public void ASearchOfOnePlugin_FindsARecordOfAPluginThatIsNotActive()
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public void ASearch_FindsARecordOfAPluginThatIsNotActive_OnlyWhenItSearchesThatPlugin(bool ofThatPlugin, int found)
     {
         Reconcile(active: false);
 
-        var found = _index.Queries.GetRecords(types: null, _mod.Key, search: "FixtureNpc", limit: 100, offset: 0).Value();
+        var answer = _index.Queries.GetRecords(types: null, ofThatPlugin ? _mod.Key : null, search: "FixtureNpc", limit: 100, offset: 0).Value();
 
-        Assert.Equal(_npc, Assert.Single(found.Items).FormKey);
-    }
-
-    [Fact]
-    public void ASearchAcrossPlugins_LeavesOutAPluginThatIsNotActive()
-    {
-        Reconcile(active: false);
-
-        var found = _index.Queries.GetRecords(types: null, plugin: null, search: "FixtureNpc", limit: 100, offset: 0).Value();
-
-        Assert.Empty(found.Items);
-    }
-
-    [Fact]
-    public void ACompiledPluginThatIsNotActive_IsStillReadAsCompiledPlugin()
-    {
-        Reconcile(active: false);
-
-        Assert.True(_index.ReadFromItsPluginSource(_mod.Key));
-    }
-
-    [Fact]
-    public void ASnapshotThatMovesNothing_ProjectsNothingForACompiledPluginThatIsNotActive()
-    {
-        Reconcile(active: false);
-
-        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
-
-        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
-        Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
+        Assert.Equal(found, answer.Items.Count(item => item.FormKey == _npc));
     }
 }

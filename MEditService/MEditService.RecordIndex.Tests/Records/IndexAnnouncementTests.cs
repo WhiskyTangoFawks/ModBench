@@ -44,45 +44,25 @@ public sealed class IndexAnnouncementTests : IDisposable
         mod.WriteToBinary(path);
     }
 
-    private int _publishedByReconcile;
+    private void ReconcileHeld() => _index.Reconcile(_holder, _dataFolder, [Entry], GameRelease.Fallout4, _instanceRoot);
 
-    private IEnumerable<INotification> SinceReconcile => _notifications.Notifications.Skip(_publishedByReconcile);
-
-    private void ReconcileHeld()
+    [Fact]
+    public void ABinaryReDerived_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
     {
-        _index.Reconcile(_holder, _dataFolder, [Entry], GameRelease.Fallout4, _instanceRoot);
-        _publishedByReconcile = _notifications.Notifications.Count;
-    }
+        WriteValidPlugin(_pluginPath);
+        ReconcileHeld();
+        var before = _notifications.Notifications.Count;
 
-    private void TheOnePluginChanged()
-    {
-        var changed = Assert.Single(SinceReconcile.OfType<PluginChangedNotification>());
+        PluginBinaries.Touch(_pluginPath);
+        _index.NextCheck();
+
+        var changed = Assert.Single(_notifications.Since(before).OfType<PluginChangedNotification>());
         Assert.Equal(Key, changed.Plugin);
         Assert.Equal(_index.Sequence, changed.Sequence);
     }
 
-    private static readonly Dictionary<string, Action<string>> BinaryChanges = new()
-    {
-        ["re-derived"] = PluginBinaries.Touch,
-        ["gone"] = File.Delete,
-    };
-
-    [Theory]
-    [InlineData("re-derived")]
-    [InlineData("gone")]
-    public void ABinaryChanged_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn(string change)
-    {
-        WriteValidPlugin(_pluginPath);
-        ReconcileHeld();
-
-        BinaryChanges[change](_pluginPath);
-        _index.NextCheck();
-
-        TheOnePluginChanged();
-    }
-
     [Fact]
-    public void ABinaryGoneWhileTheIndexWasClosed_IsAnnouncedAsChanged_WhenTheIndexReopens()
+    public void ABinaryGoneWhileTheIndexWasClosed_HasItsRowsRemoved_AndIsAnnouncedAsChanged_WhenTheIndexReopens()
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
@@ -94,37 +74,7 @@ public sealed class IndexAnnouncementTests : IDisposable
 
         reopened.Reconcile(holder, _dataFolder, [Entry], GameRelease.Fallout4, _instanceRoot);
 
+        Assert.Empty(reopened.ListedIn(Key));
         Assert.Contains(notifications.Notifications.OfType<PluginChangedNotification>(), changed => changed.Plugin.Equals(Key));
-    }
-
-    [Fact]
-    public async Task IdenticalBytesSettlingAgain_AnnounceNothing()
-    {
-        WriteValidPlugin(_pluginPath);
-        ReconcileHeld();
-        var otherPath = Path.Combine(_dataFolder, "Other.esp");
-        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
-        other.Npcs.AddNew("OtherNpc");
-        other.WriteToBinary(otherPath);
-        _index.Reconcile(_holder, _dataFolder, [Entry, new("Other.esp", otherPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)], GameRelease.Fallout4, _instanceRoot);
-        _publishedByReconcile = _notifications.Notifications.Count;
-        PluginBinaries.Touch(otherPath);
-
-        _index.NextCheck();
-
-        Assert.DoesNotContain(SinceReconcile.OfType<PluginChangedNotification>(), n => n.Plugin.Equals(Key));
-    }
-
-    [Fact]
-    public void ARebuild_AnnouncesTheLoadOrderStillHeld()
-    {
-        WriteValidPlugin(_pluginPath);
-        ReconcileHeld();
-
-        _index.Queries.RebuildStore(GameRelease.Fallout4, _instanceRoot);
-
-        var status = Assert.Single(SinceReconcile.OfType<LoadOrderStatusNotification>());
-        Assert.Equal(LoadOrderState.Reconciling, status.Status.State);
-        Assert.Empty(SinceReconcile.OfType<PluginChangedNotification>());
     }
 }

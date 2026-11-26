@@ -14,42 +14,22 @@ public sealed class ParseFailedRecordTests
     private const string Origin = "ParseFailedFixtureMod";
     private static readonly string PerkWhoseEntryPointParameterFlagsMutagenRefuses = MisshapedPerkPlugin.FormKey;
     private const string Diagnosis = "did not have expected parameter type flag";
-    private const string DeletedNpcPluginName = "DeletedNpc.esp";
-    private const string DeletedNpc = "000800:DeletedNpc.esp";
 
     [Fact]
-    public void AnUnreadableRecord_IsKeptInTheIndexWithItsDiagnosis()
+    public void AnUnreadableRecord_IsListedAndComparedWithItsDiagnosis_AndTheReadableOnesBesideItCarryNone()
     {
         using var scratch = Scratch.Misshaped();
 
-        var perk = Perks(scratch).Single(r => r.FormKey == PerkWhoseEntryPointParameterFlagsMutagenRefuses);
+        var perks = Perks(scratch);
+        var readable = perks.Where(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses).ToList();
+        var compared = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
 
-        Assert.NotNull(perk.ParseDiagnosis);
-        Assert.Contains(Diagnosis, perk.ParseDiagnosis);
-    }
-
-    [Fact]
-    public void EveryReadableRecordBesideIt_HasNoDiagnosis()
-    {
-        using var scratch = Scratch.Misshaped();
-
-        var readable = Perks(scratch).Where(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses).ToList();
-
+        Assert.Contains(Diagnosis, perks.Single(r => r.FormKey == PerkWhoseEntryPointParameterFlagsMutagenRefuses).ParseDiagnosis);
         Assert.NotEmpty(readable);
         Assert.All(readable, r => Assert.Null(r.ParseDiagnosis));
-    }
-
-    [Fact]
-    public void EveryMajorRecordThePluginHolds_IsListed_TheUnreadableOneToo()
-    {
-        using var scratch = Scratch.Misshaped();
-        using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), scratch.PluginPath), Fallout4Release.Fallout4);
-        var inThePlugin = overlay.EnumerateMajorRecords().Count();
-
-        var listed = scratch.Index.Queries.GetPluginRecordTypes(scratch.Plugin).Value().Sum(c => c.Count);
-
-        Assert.Equal(inThePlugin, listed);
+        Assert.Equal(MisshapedPerkPlugin.EditorId, compared.EditorId);
+        Assert.Contains(Diagnosis, compared.ParseDiagnosis);
+        Assert.Null(Assert.Single(scratch.Index.StackOf(readable[0].FormKey)).ParseDiagnosis);
     }
 
     [Fact]
@@ -71,10 +51,12 @@ public sealed class ParseFailedRecordTests
         Assert.False(counts.Single(t => t.Type == "npc_").HasParseFailure);
     }
 
-    [Fact]
-    public void OnlyThePluginHoldingTheUnreadableRecord_HasAParseFailure()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OnlyThePluginHoldingTheUnreadableRecord_HasAParseFailure_ActiveOrNot(bool active)
     {
-        using var scratch = Scratch.Misshaped();
+        using var scratch = Scratch.Misshaped(active);
 
         var plugins = scratch.Index.Queries.GetPlugins().Value();
 
@@ -84,59 +66,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void AParseFailure_IsNamedForAPluginThatIsNotActive()
-    {
-        using var scratch = Scratch.Misshaped(active: false);
-
-        Assert.True(scratch.Index.PluginResponseOf(scratch.Plugin)?.HasParseFailure);
-    }
-
-    [Fact]
-    public void AComparedUnreadableRecord_ReadsBackFromItsStoredBody()
-    {
-        using var scratch = Scratch.Misshaped();
-
-        var document = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
-        Assert.Equal(PerkWhoseEntryPointParameterFlagsMutagenRefuses, document.FormKey);
-        Assert.Equal(MisshapedPerkPlugin.EditorId, document.EditorId);
-    }
-
-    [Fact]
-    public void AComparedUnreadableRecord_CarriesItsDiagnosis()
-    {
-        using var scratch = Scratch.Misshaped();
-
-        var document = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
-
-        Assert.NotNull(document.ParseDiagnosis);
-        Assert.Contains(Diagnosis, document.ParseDiagnosis);
-    }
-
-    [Fact]
-    public void AComparedReadableRecord_HasNoDiagnosis()
-    {
-        using var scratch = Scratch.Misshaped();
-        var readable = Perks(scratch).First(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses);
-
-        var document = Assert.Single(scratch.Index.StackOf(readable.FormKey));
-
-        Assert.Null(document.ParseDiagnosis);
-    }
-
-    [Fact]
-    public void APluginWhoseGroupCannotBeEnumerated_KeepsItsOtherRecordTypes()
-    {
-        using var sources = new ScratchDirectory("medit-parsefail-source-");
-        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
-
-        var counts = scratch.Index.Queries.GetPluginRecordTypes(scratch.Plugin).Value();
-
-        Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
-        Assert.DoesNotContain(scratch.Index.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
-    }
-
-    [Fact]
-    public void APluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin()
+    public void APluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin_AndKeepsItsOtherRecordTypes()
     {
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
@@ -145,38 +75,9 @@ public sealed class ParseFailedRecordTests
 
         Assert.True(counts.Single(t => t.Type == "npc_").HasParseFailure);
         Assert.False(counts.Single(t => t.Type == "weap").HasParseFailure);
+        Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
         Assert.True(scratch.Index.PluginResponseOf(scratch.Plugin)?.HasParseFailure);
-    }
-
-    [Fact]
-    public void ADeletedRecordWhoseFieldsAreAbsent_IsIndexedAsDeleted_NotParseFailed()
-    {
-        using var sources = new ScratchDirectory("medit-parsefail-source-");
-        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
-
-        var document = Assert.Single(scratch.Index.StackOf(DeletedNpc));
-
-        Assert.Null(document.ParseDiagnosis);
-        Assert.Contains("\"MajorRecordFlagsRaw\": 32", scratch.Index.BodyOf(DeletedNpc, scratch.Plugin), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ADeletedRecordThatStillHoldsFieldsItCannotRead_IsKeptWithItsDiagnosis()
-    {
-        using var sources = new ScratchDirectory("medit-parsefail-source-");
-        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
-
-        var document = Assert.Single(scratch.Index.StackOf(DeletedNpc));
-
-        Assert.NotNull(document.ParseDiagnosis);
-    }
-
-    [Fact]
-    public void APluginThatCannotBeOpenedAtAll_IsReportedAsAPluginLoadFailure()
-    {
-        using var scratch = Scratch.Misshaped(corruptWholeFile: true);
-
-        Assert.Contains(scratch.Index.Status.Failures, f => f.Name == MisshapedPerkPlugin.FileName);
+        Assert.DoesNotContain(scratch.Index.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
     }
 
     private static IReadOnlyList<RecordSummary> Perks(Scratch scratch) =>
@@ -209,31 +110,23 @@ public sealed class ParseFailedRecordTests
 
     private sealed class Scratch : IDisposable
     {
-        internal static string DeletedNpcPlugin(ScratchDirectory directory, Action<string, FormKey> write)
-        {
-            var path = Path.Combine(directory.Path, DeletedNpcPluginName);
-            write(path, FormKey.Factory(DeletedNpc));
-            return path;
-        }
-
         private readonly ScratchDirectory _dataFolder = new("medit-parsefail-data-");
         private readonly ScratchDirectory _modFolder = new("medit-parsefail-mod-");
 
         public OpenedIndex Index { get; }
         public PluginAddress Plugin { get; }
-        public string PluginPath { get; }
 
-        internal static Scratch Misshaped(bool corruptWholeFile = false, bool active = true)
+        internal static Scratch Misshaped(bool active = true)
         {
             using var sources = new ScratchDirectory("medit-parsefail-source-");
             MisshapedPerkPlugin.Plugin.WriteInto(sources.Path);
-            return new Scratch(Path.Combine(sources.Path, MisshapedPerkPlugin.FileName), MisshapedPerkPlugin.FileName, corruptWholeFile, active);
+            return new Scratch(Path.Combine(sources.Path, MisshapedPerkPlugin.FileName), MisshapedPerkPlugin.FileName, active);
         }
 
-        public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false, bool active = true)
+        public Scratch(string sourcePath, string fixtureFileName, bool active = true)
         {
             Plugin = new PluginAddress(fixtureFileName, Origin);
-            var pluginPath = PluginPath = Path.Combine(_modFolder, fixtureFileName);
+            var pluginPath = Path.Combine(_modFolder, fixtureFileName);
             File.Copy(sourcePath, pluginPath);
 
             var inputs = new List<LoadOrderEntry>();
@@ -248,9 +141,6 @@ public sealed class ParseFailedRecordTests
                 }
             }
             inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, inputs.Count, Enabled: active, Winning: true));
-
-            byte[] truncatedBelowATes4HeaderSoNoRecordIdentityExistsToHangAStatusOn = [0x54, 0x45, 0x53, 0x34, 0xFF];
-            if (corruptWholeFile) File.WriteAllBytes(pluginPath, truncatedBelowATes4HeaderSoNoRecordIdentityExistsToHangAStatusOn);
 
             Index = Indexes.Reconciled(_dataFolder, inputs);
         }

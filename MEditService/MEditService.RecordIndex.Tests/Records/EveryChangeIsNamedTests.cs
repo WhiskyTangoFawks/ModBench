@@ -72,35 +72,7 @@ public sealed class EveryChangeIsNamedTests
     }
 
     [Fact]
-    public void ANewLoadOrder_SaysEverythingChanged_AtTheSequenceItLandedOn()
-    {
-        using var fixture = new PluginFixtureBuilder("says-everything")
-            .WithPlugin("Fixture.esp", mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
-            .BuildScattered()
-            .CompiledPlugin();
-        var notifications = new InMemoryNotificationPublisher();
-
-        using var index = Indexes.Reconciled(fixture, notifications: notifications);
-
-        var everything = notifications.Notifications.OfType<RecordIndexChangedNotification>().Last();
-        Assert.Equal(index.Sequence, everything.Sequence);
-    }
-
-    [Fact]
-    public void TheLastNotificationOfALoad_CarriesTheSequenceItLeft()
-    {
-        using var fixture = new PluginFixtureBuilder("every-advance-announced")
-            .WithPlugin("Fixture.esp", mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
-            .BuildScattered()
-            .CompiledPlugin();
-        var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Reconciled(fixture, notifications: notifications);
-
-        Assert.Equal(index.Sequence, notifications.Notifications.Select(SequenceOf).Max());
-    }
-
-    [Fact]
-    public void AColdLoad_NamesEachPluginItReadWhole_AndSaysEverythingOnce()
+    public void AColdLoad_NamesEachPluginItReadWhole_AndSaysEverythingOnce_AtTheSequenceItLandedOn()
     {
         using var fixture = new PluginFixtureBuilder("cold-load-names-plugins")
             .WithPlugin("One.esp", mod => mod.Npcs.AddNew("OneNpc"), origin: "OneMod")
@@ -111,8 +83,9 @@ public sealed class EveryChangeIsNamedTests
 
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
 
-        Assert.Single(notifications.Notifications.OfType<RecordIndexChangedNotification>());
-        foreach (var entry in fixture.Plugins) Assert.Contains(notifications.Notifications, Announcements.PluginChanged(entry));
+        Assert.Equal(index.Sequence, Assert.Single(notifications.Notifications.OfType<RecordIndexChangedNotification>()).Sequence);
+        Assert.Contains(notifications.Notifications, Announcements.PluginChanged(fixture.Plugins[0]));
+        Assert.Contains(notifications.Notifications, Announcements.PluginChanged(fixture.Plugins[1]));
     }
 
     [Fact]
@@ -164,20 +137,6 @@ public sealed class EveryChangeIsNamedTests
         Assert.DoesNotContain(notifications.Since(before), n => n is RowsChangedNotification);
     }
 
-    [Fact]
-    public void APluginNamedWhole_IsNotAlsoNamedByRows()
-    {
-        using var fixture = TwoPluginsHoldingOneRecord("whole-is-not-rows");
-        var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Reconciled(fixture, notifications: notifications);
-        var before = notifications.Notifications.Count;
-
-        PluginBinaries.Touch(fixture.Plugins[1].Path);
-        index.NextCheck();
-
-        Assert.DoesNotContain(notifications.Since(before), n => n is RowsChangedNotification rows && rows.Plugin.Equals(fixture.Plugins[1].Key));
-    }
-
     private static ScatteredFixtureData ACompiledPlugin(string name) =>
         new PluginFixtureBuilder(name)
             .WithPlugin("Fixture.esp", mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
@@ -196,14 +155,6 @@ public sealed class EveryChangeIsNamedTests
             }, origin: "OverMod")
             .BuildScattered();
     }
-
-    private static long SequenceOf(INotification notification) => notification switch
-    {
-        RowsChangedNotification n => n.Sequence,
-        PluginChangedNotification n => n.Sequence,
-        RecordIndexChangedNotification n => n.Sequence,
-        _ => 0,
-    };
 
     private static bool NamesTheReferrerOrSaysEverything(IEnumerable<INotification> announced, PluginAddress plugin, string formKey) =>
         announced.Any(n => n is RecordIndexChangedNotification

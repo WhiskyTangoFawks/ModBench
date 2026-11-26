@@ -61,9 +61,8 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         ISourceAdapter? source = null,
-        long? memoryLimit = null,
-        TimeSpan? patience = null) =>
-        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source, memoryLimit, patience);
+        long? memoryLimit = null) =>
+        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source, memoryLimit);
 
     internal static OpenedIndex Reconciled(
         ScatteredFixtureData fixture,

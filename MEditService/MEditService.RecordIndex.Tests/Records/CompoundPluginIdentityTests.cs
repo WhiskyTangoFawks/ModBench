@@ -120,7 +120,7 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_ThroughModAThenModBOnOneIndex()
+    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_EachNamingItsOrigin_ThroughModAThenModBOnOneIndex()
     {
         using var fixture = StructuralFixture("identity-structural", out var worldspaceKey, out var cellKey, out var placedKey, out var raceKey);
         using var index = Indexes.Open(_holder);
@@ -138,26 +138,11 @@ public class CompoundPluginIdentityTests
             Assert.Null(index.PlacementGroupIn(other, cell, placed));
             Assert.False(CellIsLocatedIn(ModC));
             Assert.Null(index.PlacementGroupIn(ModC, cell, placed));
-            Assert.Single(index.Queries.GetReferencesInActiveOrCompiledPlugins(raceKey.ToString()).Value(), r => r.FieldPath == "Race");
+            var reference = Assert.Single(index.Queries.GetReferencesInActiveOrCompiledPlugins(raceKey.ToString()).Value());
+            Assert.Equal(("Race", winner.Origin), (reference.FieldPath, reference.Origin));
         }
 
         AssertOnlyTheWinningOriginHoldsTheRows(winner: ModA, other: ModB);
         AssertOnlyTheWinningOriginHoldsTheRows(winner: ModB, other: ModA);
-    }
-
-    [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_EachReferenceNamesItsOrigin_ThroughModAThenModBOnOneIndex()
-    {
-        using var fixture = StructuralFixture("identity-references", out _, out _, out _, out var raceKey);
-        using var index = Indexes.Open(_holder);
-
-        void AssertTheReferenceCarriesTheWinningOrigin(PluginAddress winner)
-        {
-            var reference = Assert.Single(WithWinner(index, fixture, winner).Queries.GetReferencesInActiveOrCompiledPlugins(raceKey.ToString()).Value());
-            Assert.Equal(winner.Origin, reference.Origin);
-        }
-
-        AssertTheReferenceCarriesTheWinningOrigin(ModA);
-        AssertTheReferenceCarriesTheWinningOrigin(ModB);
     }
 }

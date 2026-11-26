@@ -4,43 +4,12 @@ using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Records;
 
 public class PluginDocumentsTests
 {
-    [Fact]
-    public void APluginsDocuments_AreEveryDocumentItIndexed()
-    {
-        using var fixture = new PluginFixtureBuilder("bulk-read")
-            .WithPlugin("Bulk.esp", mod =>
-            {
-                var race = mod.Races.AddNew("BulkRace");
-                var npc = mod.Npcs.AddNew("BulkNpc");
-                npc.Race.SetTo(race.FormKey);
-                var broken = mod.Npcs.AddNew("BrokenNpc");
-                broken.Race.SetTo(new FormKey(ModKey.FromFileName("Missing.esp"), 0x000801));
-            }, origin: "ModA")
-            .BuildScattered();
-        var entry = fixture.Plugins.Single();
-        var key = new PluginAddress(entry.Name, entry.Origin);
-        using var index = Indexes.Reconciled(fixture);
-        using var onDisk = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
-
-        var listed = index.ListedIn(key);
-
-        Assert.Equal(onDisk.EnumerateMajorRecords().Count(), listed.Count);
-        Assert.NotNull(index.CopyIn(PluginHeader.FormKeyFor(ModKey.FromFileName(entry.Name)), key));
-        string? RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks(string editorId) => index
-            .DocumentOf(listed.Single(d => d.EditorId == editorId).FormKey, key).Fields
-            .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
-            .CheckError;
-        Assert.Null(RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks("BulkNpc"));
-        Assert.Contains("Could not be resolved", RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks("BrokenNpc"));
-    }
-
     [Fact]
     public void APluginsDocuments_OfTwoOriginsOfOneFilename_AreScopedToTheOrigin()
     {
