@@ -162,6 +162,8 @@ beforeEach(() => {
   h.picked.length = 0;
 });
 
+const settled = (check: () => void): Promise<void> => vi.waitFor(check, { interval: 1 });
+
 describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', () => {
   it('publishes a publisher tag that names no path to the Problems panel', () => {
     const file = '/instance/compiler_settings.json';
@@ -391,7 +393,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
 
   it('reveals it expanded, neither selecting nor focusing it', async () => {
     mountFiltered('source');
-    await vi.waitFor(() => expect(treeViews.view().reveals).not.toEqual([]));
+    await settled(() => expect(treeViews.view().reveals).not.toEqual([]));
 
     expect(treeViews.view().reveals).toEqual([
       { label: 'Unassigned (Modlist Development)', options: { select: false, focus: false, expand: true } },
@@ -409,12 +411,12 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
     const lines: string[] = [];
     let release = (): void => undefined;
     mountFiltered('source', (line) => lines.push(line), (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
-    await vi.waitFor(() => expect(treeViews.view().revealsHeld).toEqual(['Unassigned (Modlist Development)']));
+    await settled(() => expect(treeViews.view().revealsHeld).toEqual(['Unassigned (Modlist Development)']));
     instance.publish(instance.value);
-    await vi.waitFor(() => expect(treeViews.view().revealsHeld).toHaveLength(2));
+    await settled(() => expect(treeViews.view().revealsHeld).toHaveLength(2));
     treeViews.view().revealRefusal = new Error('Cannot resolve tree item');
     release();
-    await vi.waitFor(() => expect(lines).not.toEqual([]));
+    await settled(() => expect(lines).not.toEqual([]));
 
     expect(lines).toEqual([
       '[modList] Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
@@ -424,7 +426,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
     const lines: string[] = [];
     mountFiltered('source', (line) => lines.push(line), (view) => { view.revealRefusal = new Error('Cannot resolve tree item'); });
-    await vi.waitFor(() => expect(lines).not.toEqual([]));
+    await settled(() => expect(lines).not.toEqual([]));
 
     expect(lines).toEqual([
       '[modList] Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
@@ -437,7 +439,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
     const whileHidden = [...treeViews.view().reveals];
 
     treeViews.view().setVisible(true);
-    await vi.waitFor(() => expect(treeViews.view().reveals).not.toEqual([]));
+    await settled(() => expect(treeViews.view().reveals).not.toEqual([]));
 
     expect([whileHidden, treeViews.view().reveals.map((r) => r.label)]).toEqual([[], ['Unassigned (Modlist Development)']]);
   });
@@ -540,7 +542,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
 
   it('reveals, expanded, each row it shows for its matches: the separator, the mod and each folder', async () => {
     mountFiltered('b.dds');
-    await vi.waitFor(() => expect(revealed()).toContain('armour'));
+    await settled(() => expect(revealed()).toContain('armour'));
 
     expect(treeViews.view().reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
   });
@@ -548,17 +550,17 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   it('ends a walk the tree changed under after the reveal in hand, so only the walk of the tree as it is goes deeper', async () => {
     let release = (): void => undefined;
     mountFiltered('b.dds', false, (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
-    await vi.waitFor(() => expect(treeViews.view().revealsHeld).toEqual(['Gear']));
+    await settled(() => expect(treeViews.view().revealsHeld).toEqual(['Gear']));
     instance.publish(instance.value);
     release();
-    await vi.waitFor(() => expect(revealed()).toContain('armour'));
+    await settled(() => expect(revealed()).toContain('armour'));
 
     expect(revealed()).toEqual(['Gear', 'Gear', 'Armour', 'textures', 'armour']);
   });
 
   it('does not reveal a row shown for its own name, nor the rows under it, while it reveals one shown for a match', async () => {
     const view = mountFiltered('gear');
-    await vi.waitFor(() => expect(revealed()).toContain('Boots'));
+    await settled(() => expect(revealed()).toContain('Boots'));
 
     expect(view.description).toContain('"gear"');
     expect(revealed()).toEqual(['Other', 'Boots']);
@@ -566,7 +568,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
 
   it('is not told no match by a term that only an Overwrite file matches, and reveals Overwrite open', async () => {
     const view = mountFiltered('a.log', true);
-    await vi.waitFor(() => expect(revealed()).toContain('F4SE'));
+    await settled(() => expect(revealed()).toContain('F4SE'));
 
     expect(view.message).toBeUndefined();
     expect(revealed()).toEqual(['Overwrite', 'F4SE']);
@@ -617,7 +619,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
 
     statuses.derive(holdingModA);
 
-    await vi.waitFor(() => { expect(view.badge).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' }); });
+    await settled(() => { expect(view.badge).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' }); });
   });
 
   it('says on the message line that a status could not be read, while the instance holds a repository', async () => {
