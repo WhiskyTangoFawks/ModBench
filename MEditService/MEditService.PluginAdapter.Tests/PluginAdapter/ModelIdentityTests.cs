@@ -67,16 +67,19 @@ public sealed class ModelIdentityTests
 
     [Theory]
     [MemberData(nameof(Recompiles))]
-    public async Task DivergenceFrom_NamesWhatARecompileChanged(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, string named)
+    public async Task ARecompilesDivergence_NamesWhatItChanged(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, string named)
     {
         var (original, recompiled) = mods();
 
-        Assert.Contains(named, await DivergenceAsync(original, recompiled) ?? "", StringComparison.Ordinal);
+        var divergence = await DivergenceAsync(original, recompiled);
+
+        Assert.NotNull(divergence);
+        Assert.Contains(named, divergence, StringComparison.Ordinal);
     }
 
     [Theory]
     [MemberData(nameof(Normalized))]
-    public async Task DivergenceFrom_NamesNothingARecompilesFormatNormalizes(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods)
+    public async Task ARecompile_DivergesInNothingItsFormatNormalizes(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods)
     {
         var (original, recompiled) = mods();
 
@@ -116,7 +119,8 @@ public sealed class ModelIdentityTests
             PluginWithARecipeCondition(HasPerk(PerkInLastMaster), UnreferencedMaster, PerkInLastMaster.ModKey),
             PluginWithARecipeCondition(HasPerk(new FormKey(PerkInLastMaster.ModKey, 0x801))));
 
-        Assert.Contains("ParameterOneRecord", divergence ?? "", StringComparison.Ordinal);
+        Assert.NotNull(divergence);
+        Assert.Contains("ParameterOneRecord", divergence, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -144,7 +144,7 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
-    public async Task Save_ReadsTheStylesOfTheMastersTheTreeReferencesAlone_SoAnUnrelatedPluginWhoseHeaderDoesNotReadIsNoFailure()
+    public async Task ATreeSaved_ReadsTheStylesOfTheMastersItReferencesAlone_SoAnUnrelatedPluginWhoseHeaderDoesNotReadIsNoFailure()
     {
         using var folder = new ScratchDirectory("pw-save-unrelated-unreadable");
         var (masterPath, childPath) = LightMasterAndChild.Write(folder);

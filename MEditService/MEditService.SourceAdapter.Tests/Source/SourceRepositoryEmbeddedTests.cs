@@ -494,12 +494,20 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("00FFFF:Embedded.esp", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AChildItsOwnersTextNamesWhereItsTypeHoldsNone_IsRefusedAsNoDocumentHoldingIt()
+    public static TheoryData<string, Func<ISourceRepository, SourceDocument, RepositoriesLib.Answer<SourceChanges, SourceFailure>>> ChangesToAChildNoTypeHolds => new()
+    {
+        { "a rewrite", (repository, child) => repository.ChangesToRewrite(Plugin, child) },
+        { "a rekey", (repository, child) => repository.ChangesToRekey(Plugin, child.Identity, FreeFormKey) },
+    };
+
+    [Theory]
+    [MemberData(nameof(ChangesToAChildNoTypeHolds))]
+    public void AChildItsOwnersTextNamesWhereItsTypeHoldsNone_IsRefusedAsNoDocumentHoldingIt(
+        string _, Func<ISourceRepository, SourceDocument, RepositoriesLib.Answer<SourceChanges, SourceFailure>> changesTo)
     {
         var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
 
-        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRewrite(Plugin, child).Stopped()));
+        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(Assert.IsType<SourceFailure.NotCarried>(changesTo(Repository, child).Stopped()));
     }
 
     private SourceDocument WriteAChildInASlotItsOwnerTypeHoldsNone()
@@ -512,14 +520,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
             "  \"Temporary\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
         return new SourceDocument("00A001:Embedded.esp", "refr", null, "{\n  \"FormKey\": \"00A001:Embedded.esp\"\n}");
-    }
-
-    [Fact]
-    public void RekeyingAChildItsOwnersTextNamesWhereItsTypeHoldsNone_IsRefusedAsNoDocumentHoldingIt()
-    {
-        var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
-
-        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, child.Identity, FreeFormKey).Stopped()));
     }
 
     [Fact]

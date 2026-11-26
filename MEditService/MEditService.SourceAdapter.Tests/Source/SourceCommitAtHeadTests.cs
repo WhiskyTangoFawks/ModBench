@@ -333,13 +333,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.Equal(moved, Path.GetFullPath(GitProbe.Run(gitDir, moved, "config", "core.worktree").Trim(), gitDir));
     }
 
-    private RepositoriesLib.Answer<SubmoduleHead, SourceFailure> CommitAtHead(string pin, CancellationToken cancel = default)
-    {
-        _submodule.Pin(pin);
-        return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, _submodule.Branch), cancel);
-    }
-
-
     [Fact]
     public void AClone_OfASubmoduleWhoseFollowedBranchHoldsOtherCommits_StaysDetached_AndNamesIt_WhateverTheRemotesDefaultHolds()
     {
@@ -354,5 +347,12 @@ public sealed class SourceCommitAtHeadTests : IDisposable
             (new SubmoduleHead(_commits["second"], $"its branch 'dev' is at {_commits["first"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
             (head, Branch()));
     }
+
+    private RepositoriesLib.Answer<SubmoduleHead, SourceFailure> CommitAtHead(string pin, CancellationToken cancel = default)
+    {
+        _submodule.Pin(pin);
+        return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, _submodule.Branch), cancel);
+    }
+
     private static string Git(string folder, params string[] args) => PinnedSubmodule.Git(folder, args);
 }
