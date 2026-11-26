@@ -26,9 +26,9 @@ class Result(NamedTuple):
 
 
 def in_trx(text: str) -> list[Result]:
-    """A result's time runs from its start or its assembly's first result, whichever is later: the
-    one-off warm-up blocks every thread. So the first result to finish is charged nothing, and a
-    fixture's setup is in no result's duration."""
+    """Time runs from the result's start or the assembly's first result, whichever is later, since
+    the one-off warm-up blocks every thread. So the first result to finish is charged nothing, and a
+    fixture's setup is in no result."""
     elements = list(ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX))
     ends = [datetime.fromisoformat(element.attrib['endTime']) if 'endTime' in element.attrib else None
             for element in elements]
