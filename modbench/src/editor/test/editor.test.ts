@@ -18,6 +18,7 @@ import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { DATA_DIRECTORY_ORIGIN, samePluginAddress } from '../../wire/pluginAddress';
 import { columnKey } from '../../wire/columnKey';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
@@ -25,7 +26,7 @@ const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
 });
 const isShowColumns = (message: unknown) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'showColumns';
 const aMacrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
-const readAnswered = (tab: FakePanel, requestId = 'r1') => vi.waitFor(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(
+const readAnswered = (tab: FakePanel, requestId = 'r1') => settled(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(
   expect.objectContaining({ type: 'recordLoadAnswered', requestId })));
 
 interface RecordEditorProvider {
@@ -363,7 +364,7 @@ describe('a record file\'s tab', () => {
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
 
-    await vi.waitFor(() => expect(tab.title).toBe('Gun'));
+    await settled(() => expect(tab.title).toBe('Gun'));
   });
 
   it('shows "Failed to load:" and mEdit\'s reason when mEdit refuses the file, and adds no Output line of its own', async () => {
@@ -392,7 +393,7 @@ describe('a record file\'s tab', () => {
 
     client.change(undefined);
 
-    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
+    await settled(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
   });
 
   it('shows "Failed to load:" and adds no Output line of its own when mEdit refuses and no load order is on its way', async () => {
@@ -418,7 +419,7 @@ describe('a record file\'s tab', () => {
 
     client.change(undefined);
 
-    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined());
+    await settled(() => expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined());
   });
 
   it('asks again on mEdit\'s next load-order status, and shows the record once mEdit answers', async () => {
@@ -431,7 +432,7 @@ describe('a record file\'s tab', () => {
 
     client.change(undefined);
 
-    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
+    await settled(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
   });
 
@@ -784,7 +785,7 @@ describe('what a record tab\'s webview posts', () => {
       loadOrder.coming = false;
       loadOrder.changed();
 
-      await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
+      await settled(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
       tab.receive({ ...loadRequest, requestId: 'r2' });
       await readAnswered(tab, 'r2');
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
@@ -798,7 +799,7 @@ describe('what a record tab\'s webview posts', () => {
       loadOrder.coming = false;
       holdsLoadOrder(mEdit, { settled: false, refusal: { kind: 'failed', message: 'indexing failed' } });
 
-      await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
+      await settled(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
     });
 
     it('reads again once the load order\'s reconcile settles, and lands the record', async () => {
@@ -812,7 +813,7 @@ describe('what a record tab\'s webview posts', () => {
 
       holdsLoadOrder(mEdit);
 
-      await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
+      await settled(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
       tab.receive({ ...loadRequest, requestId: 'r2' });
       await readAnswered(tab, 'r2');
       expect(lastLoadAnswer(tab)).toMatchObject({ requestId: 'r2', ok: true });
@@ -838,7 +839,7 @@ describe('what a record tab\'s webview posts', () => {
 
       open(FORM_KEY).receive({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', envelope });
 
-      await vi.waitFor(() => expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, envelope]]));
+      await settled(() => expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, envelope]]));
     });
 
     it('is sent with the value a drop supplies, for an element added', async () => {
@@ -848,7 +849,7 @@ describe('what a record tab\'s webview posts', () => {
 
       open(FORM_KEY).receive({ type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context, value: { Keyword: GUN } });
 
-      await vi.waitFor(() => expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, { op: 'add', path, value: { Keyword: GUN } }]]));
+      await settled(() => expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, { op: 'add', path, value: { Keyword: GUN } }]]));
     });
 
     it('from a right-click, on a record the tab\'s last edit moved, is sent to the FormKey the record is at now', async () => {
@@ -880,7 +881,7 @@ describe('what a record tab\'s webview posts', () => {
       const [executed, asked] = [executeCommand.mock.calls.length, mEdit.calls.length];
 
       tab.receive(message);
-      await vi.waitFor(() => expect(outputChannel.warn).toHaveBeenCalled());
+      await settled(() => expect(outputChannel.warn).toHaveBeenCalled());
 
       expect([executeCommand.mock.calls.length, mEdit.calls.length]).toEqual([executed, asked]);
       expect(tab.webview.postMessage).not.toHaveBeenCalled();
@@ -895,7 +896,7 @@ describe('what a record tab\'s webview posts', () => {
 
       tab.receive({ type: 'sentByAnotherExtension', count: BigInt(1) });
 
-      await vi.waitFor(() => expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringMatching(/^Dropped a message from a record tab's page: /)));
+      await settled(() => expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringMatching(/^Dropped a message from a record tab's page: /)));
     });
   });
 
@@ -910,7 +911,7 @@ describe('what a record tab\'s webview posts', () => {
 
     tab.receive(request);
 
-    await vi.waitFor(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(answer));
+    await settled(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(answer));
   });
 
   describe('a request for the record', () => {
@@ -983,7 +984,7 @@ describe('what a record tab\'s webview posts', () => {
 
         answerSignal();
 
-        await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
+        await settled(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
         await aMacrotask();
         expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
       });
@@ -999,7 +1000,7 @@ describe('what a record tab\'s webview posts', () => {
         const postsBefore = loadRecordPosts(tab).length;
 
         answerSignal();
-        await vi.waitFor(() => expect(mEdit.recordIndexMayBeLate).toBe(false));
+        await settled(() => expect(mEdit.recordIndexMayBeLate).toBe(false));
         await aMacrotask();
 
         expect(loadRecordPosts(tab)).toHaveLength(postsBefore);
@@ -1154,7 +1155,7 @@ describe('a non-compiled plugin copy\'s tab', () => {
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
 
-    await vi.waitFor(() => expect(tab.title).toBe('Gun'));
+    await settled(() => expect(tab.title).toBe('Gun'));
   });
 
   async function readOf(plugins: typeof activeA): Promise<unknown[][]> {
@@ -1196,7 +1197,7 @@ describe('a child record\'s tab', () => {
     expect(tab.title).toBe(PLACED);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
 
-    await vi.waitFor(() => expect(tab.title).toBe('SharedRef'));
+    await settled(() => expect(tab.title).toBe('SharedRef'));
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 
@@ -1274,7 +1275,7 @@ describe('several records opened at once', () => {
 
     await openSeveral();
 
-    await vi.waitFor(() => expect(pageGlobal(tabOn(gunDocument) ?? fakePanel(), 'mEditColumns'))
+    await settled(() => expect(pageGlobal(tabOn(gunDocument) ?? fakePanel(), 'mEditColumns'))
       .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]));
   });
 
@@ -1309,7 +1310,7 @@ describe('several records opened at once', () => {
     page.push('read asked');
     tab.receive(firstRead);
 
-    await vi.waitFor(() => expect(page).toEqual(['read asked', 'columns shown']));
+    await settled(() => expect(page).toEqual(['read asked', 'columns shown']));
   });
 
   it('show their columns on a file\'s tab already open, once mEdit says which record its file holds', async () => {
@@ -1323,11 +1324,11 @@ describe('several records opened at once', () => {
 
     await openSeveral();
     client.change(undefined);
-    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
+    await settled(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(columnsPosted(tab)).toEqual([]);
     tab.receive(firstRead);
 
-    await vi.waitFor(() => expect(columnsPosted(tab)).toEqual([[{
+    await settled(() => expect(columnsPosted(tab)).toEqual([[{
       type: 'showColumns', columns: [{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }],
     }]]));
   });
@@ -1536,7 +1537,7 @@ describe('Collapse No Conflict reaches every record panel', () => {
     expect(lens(later)).toEqual([]);
     pageAsksItsFirstRead(later);
 
-    await vi.waitFor(() => expect(lens(later)).toEqual([{ type: 'collapseNoConflict', lens: 'on' }]));
+    await settled(() => expect(lens(later)).toEqual([{ type: 'collapseNoConflict', lens: 'on' }]));
   });
 
   it('opens a tab showing every row when it is off, and says nothing to its page', async () => {

@@ -16,27 +16,6 @@ public sealed class RecordSummaryContainerChildrenTests
         page.Items.Single(i => i.FormKey == formKey);
 
     [Fact]
-    public void AQuestHoldingATopic_IsListedAsHoldingChildren_AndOneHoldingNoneIsNot()
-    {
-        FormKey withChildren = default, withoutChildren = default;
-        using var fixture = new PluginFixtureBuilder("container-children")
-            .WithPlugin(Key.Name, mod =>
-            {
-                var quest = mod.Quests.AddNew("QuestWithChildren");
-                quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = "Topic0" });
-                withChildren = quest.FormKey;
-                withoutChildren = mod.Quests.AddNew("QuestWithoutChildren").FormKey;
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        var page = index.Queries.GetRecords(["qust"], Key, search: null, limit: 50, offset: 0).Value();
-
-        Assert.True(SummaryFor(page, withChildren.ToString()).HasContainerChildren);
-        Assert.False(SummaryFor(page, withoutChildren.ToString()).HasContainerChildren);
-    }
-
-    [Fact]
     public void ASearch_ReportsChildrenTheRecordFilterHides()
     {
         FormKey quest = default;

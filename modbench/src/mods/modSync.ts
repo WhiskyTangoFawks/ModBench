@@ -29,9 +29,6 @@ export function modSyncOn({ instance, syncMods, channel }: ModSyncDeps): ModSync
   return { modSync, dispose: () => { for (const subscription of subscriptions) subscription.dispose(); onChange.dispose(); onFailure.dispose(); } };
 }
 
-export function registerModSyncCommand(
-  modSync: Pick<Sync, 'run'>,
-  register: (command: string, handler: () => unknown) => vscode.Disposable = (command, handler) => vscode.commands.registerCommand(command, handler),
-): vscode.Disposable {
-  return register('modbench.mod.sync', () => modSync.run());
+export function registerModSyncCommand(modSync: Pick<Sync, 'run'>): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.mod.sync', () => modSync.run());
 }

@@ -1,4 +1,6 @@
+using System.Globalization;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
@@ -26,39 +28,23 @@ public sealed class SourceContentProblemTests : IDisposable
         Assert.True(index.ReadFromItsPluginSource(_fixture.Plugin));
     }
 
-    [Fact]
-    public void AFileRenamedOutsideModbench_MovesItsProblemToTheNewPath_AtTheNextCheck_AndBackClearsIt()
-    {
-        using var index = Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
-        Assert.Empty(index.SourceProblems());
-        var file = NpcFile;
-        var renamed = Path.Combine(Path.GetDirectoryName(file) ?? "", "Renamed.json");
-
-        File.Move(file, renamed);
-        index.NextCheckUntil(() => index.SourceProblems().Count > 0, "the problem on the new path");
-
-        Assert.Equal(Relative(renamed), Assert.Single(index.SourceProblems()).SourceRelativePath);
-
-        File.Move(renamed, file);
-        index.NextCheckUntil(() => index.SourceProblems().Count == 0, "the problem cleared");
-
-        Assert.Empty(index.SourceProblems());
-    }
-
-    [Fact]
-    public void AFileMovedOutsideModbenchIntoAnotherTypesFolder_IsAProblemOnItsNewPath_AndMovedBackClearsIt()
+    [Theory]
+    [InlineData("Renamed.json")]
+    [InlineData("../Globals/{0}")]
+    public void AFileMisplacedOutsideModbench_IsAProblemOnItsNewPath_AtTheNextCheck_AndPutBackClearsIt(string movedTo)
     {
         using var index = Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
         var file = NpcFile;
-        var misfiled = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "", "Globals", Path.GetFileName(file));
-        _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
+        var moved = Path.GetFullPath(Path.Combine(
+            Path.GetDirectoryName(file).Require(), string.Format(CultureInfo.InvariantCulture, movedTo, Path.GetFileName(file))));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(moved).Require());
 
-        File.Move(file, misfiled);
+        File.Move(file, moved);
         index.NextCheckUntil(() => index.SourceProblems().Count > 0, "the problem on the new path");
 
-        Assert.Equal(Relative(misfiled), Assert.Single(index.SourceProblems()).SourceRelativePath);
+        Assert.Equal(Relative(moved), Assert.Single(index.SourceProblems()).SourceRelativePath);
 
-        File.Move(misfiled, file);
+        File.Move(moved, file);
         index.NextCheckUntil(() => index.SourceProblems().Count == 0, "the problem cleared");
     }
 }

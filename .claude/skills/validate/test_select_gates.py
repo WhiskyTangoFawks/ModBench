@@ -15,11 +15,10 @@ def selected(*changed):
 
 
 class SelectGates(unittest.TestCase):
-    def test_backend_source_selects_backend_api_drift_scripts_and_frontend(self):
+    def test_backend_source_selects_backend_api_drift_and_frontend(self):
         self.assertEqual(selected('MEditService/MEditService.Http/Program.cs'), [
             '--backend MEditService/MEditService.Http/Program.cs',
             '--api-drift MEditService/MEditService.Http/Program.cs',
-            '--scripts MEditService/MEditService.Http/Program.cs',
             '--frontend MEditService/MEditService.Http/Program.cs',
         ])
 
@@ -29,12 +28,17 @@ class SelectGates(unittest.TestCase):
         self.assertEqual(selected('MEditService/MEditService.TestSupport/KindAttribute.cs'),
                          ['--backend MEditService/MEditService.TestSupport/KindAttribute.cs'])
 
-    def test_scripts_and_the_fixture_instance_their_harness_loads_select_scripts(self):
+    def test_scripts_select_scripts(self):
         self.assertEqual(selected('scripts/medit.py'), ['--scripts scripts/medit.py'])
-        self.assertEqual(selected('DevListFallout/profiles/Dev/plugins.txt'), ['--scripts DevListFallout/profiles/Dev/plugins.txt'])
 
-    def test_another_fixture_instance_selects_nothing(self):
-        self.assertEqual(selected('DevListSkyrim/profiles/Dev/plugins.txt'), [])
+    def test_the_generated_api_selects_scripts_and_frontend(self):
+        self.assertEqual(selected('modbench/src/wire/generated/api.ts'), [
+            '--scripts modbench/src/wire/generated/api.ts',
+            '--frontend modbench/src/wire/generated/api.ts',
+        ])
+
+    def test_a_fixture_instance_selects_nothing(self):
+        self.assertEqual(selected('DevListFallout/profiles/Dev/plugins.txt', 'DevListSkyrim/profiles/Dev/plugins.txt'), [])
 
     def test_frontend_source_selects_frontend(self):
         self.assertEqual(selected('modbench/src/extension.ts'), ['--frontend modbench/src/extension.ts'])
@@ -55,7 +59,6 @@ class SelectGates(unittest.TestCase):
             '--frontend modbench/src/a.ts',
             '--backend MEditService/X/A.cs',
             '--api-drift MEditService/X/A.cs',
-            '--scripts MEditService/X/A.cs',
             '--docs docs/x.md',
         ])
 

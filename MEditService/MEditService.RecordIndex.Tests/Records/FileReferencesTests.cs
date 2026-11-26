@@ -24,10 +24,7 @@ public class FileReferencesTests
                 mod.TextureSets.AddNew("SameName").Diffuse = @"Other\Stain_d.dds";
             }, origin: Holding.Origin)
             .BuildScattered();
-        var holder = new LoadOrderHolder();
-        using var opens = new GatedPluginAdapter();
-        using var index = Indexes.Open(holder, opens);
-        index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
+        using var index = Indexes.Reconciled(plugins);
 
         var placed = index.Queries.GetPlacedFileReferences("textures/DECALS/stain_d.dds").Value();
 
@@ -38,8 +35,9 @@ public class FileReferencesTests
     }
 
     [Fact]
-    public void ACopyThatCannotBeRead_IsNamedAsUnread_AndTheCopiesBesideItStillAnswer()
+    public void ACopyThatCannotBeRead_IsNamedAsUnread_WhateverMessageMutagenGivesIt_AndTheCopiesBesideItStillAnswer()
     {
+        var rootedSoMutagensMessageNamesNoFile = OperatingSystem.IsWindows() ? "C:/Other/Stain_d.dds" : "/Other/Stain_d.dds";
         FormKey naming = default, unreadable = default;
         using var fixture = new PluginFixtureBuilder("file-references-unread")
             .WithPlugin(Holding.Name, mod =>
@@ -54,7 +52,7 @@ public class FileReferencesTests
             .CompiledPlugin();
         var entry = fixture.Plugins.Single();
         using (var live = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins))
-            entry.HandEdit(live.DocumentOf(unreadable.ToString(), entry.Key), @"Other\\Stain_d.dds", "Data/Stain_d.dds");
+            entry.HandEdit(live.DocumentOf(unreadable.ToString(), entry.Key), @"Other\\Stain_d.dds", rootedSoMutagensMessageNamesNoFile);
         using var index = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
 
         var placed = index.Queries.GetPlacedFileReferences("Textures/Decals/Stain_d.dds").Value();
@@ -62,31 +60,6 @@ public class FileReferencesTests
         var copy = Assert.Single(placed.Copies);
         Assert.Equal(naming.ToString(), copy.FormKey);
         Assert.Equal(@"Decals\\Stain_d.dds", PlacedText.TextAt(File.ReadAllText(copy.Document.Location), Assert.Single(copy.Ranges)));
-        Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(placed.LeftOut));
-    }
-
-    [Fact]
-    public void ACopyWhoseRootedPathNamesNoDataFolder_IsNamedAsUnread_WhateverMessageMutagenGivesIt()
-    {
-        var rooted = OperatingSystem.IsWindows() ? "C:/Other/Stain_d.dds" : "/Other/Stain_d.dds";
-        FormKey unreadable = default;
-        using var fixture = new PluginFixtureBuilder("file-references-rooted")
-            .WithPlugin(Holding.Name, mod =>
-            {
-                var holder = mod.TextureSets.AddNew("Holder");
-                holder.Diffuse = @"Decals\Stain_d.dds";
-                unreadable = holder.FormKey;
-            }, origin: Holding.Origin)
-            .BuildScattered()
-            .CompiledPlugin();
-        var entry = fixture.Plugins.Single();
-        using (var live = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins))
-            entry.HandEdit(live.DocumentOf(unreadable.ToString(), entry.Key), @"Decals\\Stain_d.dds", rooted);
-        using var index = Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
-
-        var placed = index.Queries.GetPlacedFileReferences("Textures/Decals/Stain_d.dds").Value();
-
-        Assert.Empty(placed.Copies);
         Assert.StartsWith($"{unreadable} in {Holding.Name} ({Holding.Origin}): ", Assert.Single(placed.LeftOut));
     }
 }

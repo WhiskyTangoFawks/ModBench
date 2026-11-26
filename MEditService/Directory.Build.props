@@ -25,7 +25,7 @@
        ones. A virtual machine, MEDIT_VIRTUAL_MACHINE=true, leaves out the measured ones. A filter on the command line
        replaces this one. -->
   <PropertyGroup>
-    <VSTestTestCaseFilter>Kind!=RealSize&amp;Kind!=Smoke</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter>Kind!=Tool</VSTestTestCaseFilter>
     <VSTestTestCaseFilter Condition="'$(OS)' == 'Windows_NT'">$(VSTestTestCaseFilter)&amp;Kind!=Posix</VSTestTestCaseFilter>
     <VSTestTestCaseFilter Condition="'$(MEDIT_VIRTUAL_MACHINE)' == 'true'">$(VSTestTestCaseFilter)&amp;Kind!=Measured</VSTestTestCaseFilter>
   </PropertyGroup>

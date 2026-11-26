@@ -101,20 +101,27 @@ const held = (root: string, path: string): string => {
 };
 
 describe('the MO2 adapter\'s path tokens', () => {
-  it.each([
-    ['spelt with forward slashes', (root: string) => `path=${onWineDrive(root, '/')}/tools/xEdit.exe`, 'path={instance folder:/}/tools/xEdit.exe'],
-    ['spelt with backslashes', (root: string) => `path=${onWineDrive(root, '\\')}\\tools`, 'path={instance folder:\\}\\tools'],
-    ['spelt with escaped backslashes', (root: string) => `path=\\"${onWineDrive(root, '\\\\')}\\\\\\"`, 'path=\\"{instance folder:\\\\}\\\\\\"'],
-    ['spelt as the folder itself', (root: string) => `path=${onWineDrive(root, '\\\\')}`, 'path={instance folder:\\\\}'],
-    ['spelt with its drive\'s separator doubled', (root: string) => `path=@ByteArray(${onWineDrive(root, '\\\\').replace('\\\\', '\\\\\\\\')}\\\\Stock Game)`, 'path=@ByteArray({instance folder:\\\\\\\\}\\\\Stock Game)'],
-    ['after a comma', (root: string) => `paths=${onWineDrive(root, '/')}/a,${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a,{instance folder:/}/b'],
-  ])('holds the instance folder by a token, %s', async (_spelling, written, token) => {
-    const { root, adapter } = await instanceRepository([]);
-    await put(root, 'ModOrganizer.ini', SETTINGS([written(root)]));
+  it('holds the instance folder by a token, however MO2 spells it, though its name holds letters outside ASCII', async () => {
+    const { root, adapter } = await instanceRepository([], undefined, 'Jörg');
+    await put(root, 'ModOrganizer.ini', SETTINGS([
+      `forward=${onWineDrive(root, '/')}/tools/xEdit.exe`,
+      `back=${onWineDrive(root, '\\')}\\tools`,
+      `escaped=\\"${onWineDrive(root, '\\\\')}\\\\\\"`,
+      `itself=${onWineDrive(root, '\\\\')}`,
+      `doubled=@ByteArray(${onWineDrive(root, '\\\\').replace('\\\\', '\\\\\\\\')}\\\\Stock Game)`,
+      `paths=${onWineDrive(root, '/')}/a,${onWineDrive(root, '/')}/b`,
+    ]));
 
     await adapter.writePathTokens();
 
-    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([token]));
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([
+      'forward={instance folder:/}/tools/xEdit.exe',
+      'back={instance folder:\\}\\tools',
+      'escaped=\\"{instance folder:\\\\}\\\\\\"',
+      'itself={instance folder:\\\\}',
+      'doubled=@ByteArray({instance folder:\\\\\\\\}\\\\Stock Game)',
+      'paths={instance folder:/}/a,{instance folder:/}/b',
+    ]));
   });
 
   it('holds a mod\'s meta.ini by its tokens, for a mod whose whole folder the repository holds', async () => {
@@ -291,16 +298,15 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(git(root, 'status', '--porcelain', '--', 'ModOrganizer.ini')).toBe(' M ModOrganizer.ini\n');
   });
 
-  it.each(['username', 'password', 'steam_username', 'steam_password', 'nexus_username', 'nexus_password', 'nexus_login', 'nexus_api_key'])(
-    'holds the account MO2 writes as %s by a token', async (key) => {
-      const { root, adapter } = await instanceRepository([]);
-      await put(root, 'ModOrganizer.ini', SETTINGS(['[Settings]', `${key}=Wayne`]));
+  it('holds each account MO2 writes in its settings by a token, and a username= line of another section as it is', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    const keys = ['username', 'password', 'steam_username', 'steam_password', 'nexus_username', 'nexus_password', 'nexus_login', 'nexus_api_key'];
+    await put(root, 'ModOrganizer.ini', SETTINGS(['username=x', '[Settings]', ...keys.map((key) => `${key}=Wayne`)]));
 
-      await adapter.writePathTokens();
+    await adapter.writePathTokens();
 
-      expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', `${key}={account}`]));
-    },
-  );
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['username=x', '[Settings]', ...keys.map((key) => `${key}={account}`)]));
+  });
 
   it('holds a downloads folder outside the instance folder by its own token', async () => {
     const outside = await folder('downloads');
@@ -352,25 +358,13 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', 'style=dark']));
   });
 
-  it.each([
-    ['a profile\'s INI', 'profiles/Default/Fallout4Custom.ini', '[Settings]\r\nusername=x\r\n'],
-    ['another section of ModOrganizer.ini', 'ModOrganizer.ini', SETTINGS(['username=x', '[Settings]', 'style=dark'])],
-  ])('holds a username= line in %s as it is', async (_place, file, written) => {
+  it('holds a username= line in a profile\'s INI as it is', async () => {
     const { root, adapter } = await instanceRepository([]);
-    await put(root, file, written);
+    await put(root, 'profiles/Default/Fallout4Custom.ini', '[Settings]\r\nusername=x\r\n');
 
     await adapter.writePathTokens();
 
-    expect(held(root, file)).toBe(written);
-  });
-
-  it('holds the instance folder by a token when its name holds letters outside ASCII', async () => {
-    const { root, adapter } = await instanceRepository([], undefined, 'Jörg');
-    await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(root, '/')}/tools`]));
-
-    await adapter.writePathTokens();
-
-    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['path={instance folder:/}/tools']));
+    expect(held(root, 'profiles/Default/Fallout4Custom.ini')).toBe('[Settings]\r\nusername=x\r\n');
   });
 
   it('keeps its filter programs where every worktree of the repository finds them', async () => {
@@ -591,13 +585,6 @@ describe('the MO2 adapter\'s path tokens', () => {
       const { clone, adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`]);
       const ini = join(clone, 'ModOrganizer.ini');
       smudge.beforeRun.mockImplementationOnce(() => undefined).mockImplementationOnce(() => { appendFileSync(ini, 'outside=1\r\n'); });
-
-      expect(await adapter.writePathTokens())
-        .toBe('ModOrganizer.ini still holds a path token in place of this machine\'s path, because the game folder was not found');
-    });
-
-    it('answers the files that still hold a path token while the game folder is not found', async () => {
-      const { adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`]);
 
       expect(await adapter.writePathTokens())
         .toBe('ModOrganizer.ini still holds a path token in place of this machine\'s path, because the game folder was not found');

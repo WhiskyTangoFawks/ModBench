@@ -81,19 +81,6 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
-    public async Task Commit_LeavesTheDataFolderHoldingTheSameFiles()
-    {
-        using var data = new PluginFixtureBuilder("pw-save-no-tmpdir")
-            .WithPlugin("TestPlugin.esp")
-            .Build();
-        var before = FolderEntries.Of(data.DataFolder);
-
-        await RewriteAsync(Path.Combine(data.DataFolder, "TestPlugin.esp"));
-
-        Assert.Equal(before, FolderEntries.Of(data.DataFolder));
-    }
-
-    [Fact]
     public async Task ASave_RemovesALeftoverOfAWriterThatIsGone()
     {
         using var data = new PluginFixtureBuilder("pw-save-leftover")
@@ -154,6 +141,30 @@ public sealed class PluginWriterSaveTests
         Assert.False(saved.Holds(out _, out var failure));
         Assert.Equal("it references Master.esm, which the load order does not hold", Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure).Reason);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
+
+    [Fact]
+    public async Task ATreeSaved_ReadsTheStylesOfTheMastersItReferencesAlone_SoAnUnrelatedPluginWhoseHeaderDoesNotReadIsNoFailure()
+    {
+        using var folder = new ScratchDirectory("pw-save-unrelated-unreadable");
+        var (masterPath, childPath) = LightMasterAndChild.Write(folder);
+        var unrelatedPath = Path.Combine(folder, "Unrelated.esm");
+        File.WriteAllBytes(unrelatedPath, "not a plugin"u8.ToArray());
+        var loadOrder = SnapshotPlugins.Snapshot(folder, null, GameRelease.Starfield,
+        [
+            new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Unrelated.esm", unrelatedPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
+            new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 2, Enabled: true, Winning: true),
+        ]);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder)).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        (await tree.SaveAsync(childPath, [LightMasterAndChild.Master.FileName, "Unrelated.esm"], [LightMasterAndChild.Master.FileName], save =>
+        {
+            save.Commit(_ => false);
+            return true;
+        })).Answered();
     }
 
     public static TheoryData<string, Action<Fallout4Mod, ModKey>> TreesNamingAPluginInAnotherCase => new()

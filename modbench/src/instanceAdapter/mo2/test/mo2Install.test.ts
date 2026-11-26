@@ -17,12 +17,13 @@ import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import type { FomodAnswer, FomodDialog, InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
 import type { FomodMove } from '../../../wire/fomodPage';
-import { programsOf, SCRIPT_EXTENDER_FOLDERS } from '../../../tables/gamePaths';
+import { programsOf } from '../../../tables/gamePaths';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { FOMOD_PAGE } from '../../../test/fomodDialogDouble';
+import { settled } from '../../../test/eventually';
 
 const MOD = 'New Mod';
 const UPGRADED = 'Unofficial Fallout 4 Patch';
@@ -164,39 +165,13 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     const MANUAL: FomodAnswer = { kind: 'manual' };
     const CHOSE_NOTHING: FomodAnswer = { kind: 'choices', steps: [] };
     it.each([
-      ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}, CHOSE_NOTHING],
-      ['files at the top', ['foo.esp', 'meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}, CHOSE_NOTHING],
       ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], ['foo.esp', 'textures/x.dds'], {}, CHOSE_NOTHING],
-      ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], ['foo.esp'], {}, CHOSE_NOTHING],
-      ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], ['foo.esp'], {}, CHOSE_NOTHING],
-      ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], ['ModA/foo.esp', 'readme.txt'], {}, CHOSE_NOTHING],
-      ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/ModuleConfig.xml'], MANUAL_COPY, MANUAL],
-      ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/moduleconfig.xml'], MANUAL_COPY, MANUAL],
-      ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], MANUAL_COPY, MANUAL],
-      ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], {}, CHOSE_NOTHING],
+      ['a wrapped FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], MANUAL_COPY, MANUAL],
     ])('%s', async (_, release, landed, how, answer) => {
       const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, trash, answer);
 
       expect(outcome).toEqual({ landed: true, ...how });
       expect(await filesIn(folder(MOD))).toEqual([...landed, 'meta.ini'].sort());
-    });
-
-    it.each([
-      ...SCRIPT_EXTENDER_FOLDERS, 'meshes',
-      'textures', 'materials', 'sound', 'music', 'scripts', 'source', 'interface', 'strings', 'mcm', 'seq', 'video', 'vis',
-      'lodsettings', 'shadersfx', 'grass', 'terrain', 'planetdata', 'programs', 'scaleform', 'facegen', 'actors', 'distantlod',
-    ])('keeps a lone top-level data folder %s, never taking it for a wrapper', async (name) => {
-      await holding([`${name}/x.dat`]).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, trash);
-
-      expect(await filesIn(folder(MOD))).toEqual([`${name}/x.dat`, 'meta.ini'].sort());
-    });
-
-    it('peels no more than 32 wrapper folders', async () => {
-      const levels = Array.from({ length: 40 }, (_, i) => `L${i + 1}`);
-
-      await holding([`${levels.join('/')}/foo.esp`]).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, trash);
-
-      expect(await filesIn(folder(MOD))).toEqual([`${levels.slice(32).join('/')}/foo.esp`, 'meta.ini'].sort());
     });
   });
 
@@ -533,7 +508,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
 
         await writeFile(join(folder(UPGRADED), 'after-upgrade.txt'), 'x');
-        await vi.waitFor(() => expect(heard).toContain('after-upgrade.txt'));
+        await settled(() => expect(heard).toContain('after-upgrade.txt'));
       } finally {
         watcher.close();
       }

@@ -50,3 +50,9 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         Dispose();
     }
 }
+
+[CollectionDefinition(Name)]
+public sealed class LoadedApiCollection : ICollectionFixture<LoadedApiFixture<TestPluginFixture>>
+{
+    public const string Name = "Loaded API collection";
+}

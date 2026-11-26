@@ -62,6 +62,7 @@ import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { present } from '../../ports/present';
 import { aWriteInFlight } from '../../test/writeInFlight';
+import { settled } from '../../test/eventually';
 
 function registered(secretsFail?: 'get' | 'delete', account?: Response) {
   const over = nexusAnswering(account === undefined ? acceptingGoodKey : () => account);
@@ -145,7 +146,7 @@ describe('Log in', () => {
 
     await Promise.all([box.accept(), box.accept()]);
 
-    await vi.waitFor(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
+    await settled(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
     expect(sent).toHaveLength(2);
   });
 
@@ -157,8 +158,8 @@ describe('Log in', () => {
     await box.accept();
     await done;
 
-    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
-    await vi.waitFor(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
+    await settled(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
+    await settled(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
     expect(sent).toHaveLength(2);
   });
 });
@@ -187,7 +188,7 @@ describe('Premium', () => {
     const { nexus } = registered(undefined, json({ is_premium: premium }));
     await nexus.keep(GOOD_KEY);
 
-    await vi.waitFor(() => expect(contextKeys.get(PREMIUM_KEY)).toBe(premium));
+    await settled(() => expect(contextKeys.get(PREMIUM_KEY)).toBe(premium));
   });
 });
 
@@ -195,11 +196,11 @@ describe('Log out', () => {
   it('forgets the key and marks the user logged out, asking nothing', async () => {
     const { nexus } = registered();
     await nexus.keep(GOOD_KEY);
-    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
+    await settled(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
 
     await run('modbench.instance.logOut');
 
-    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
+    await settled(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
     expect(boxes).toEqual([]);
   });
 
@@ -232,19 +233,19 @@ describe('Log out, called by an agent', () => {
 describe('The logged-in context key', () => {
   it('follows a key kept or forgotten elsewhere, since the secret store tells every window', async () => {
     const { secrets } = registered();
-    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
+    await settled(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
 
     await secrets.store('modbench.nexus.apiKey', GOOD_KEY);
-    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
+    await settled(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
 
     await secrets.delete('modbench.nexus.apiKey');
-    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
+    await settled(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
   });
 
   it('is reported, not thrown, when the secret store cannot be read', async () => {
     const { reporter } = registered('get');
 
-    await vi.waitFor(() => expect(reporter.reports).toEqual([
+    await settled(() => expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not read whether you are logged in to Nexus.', detail: 'keyring locked' },
     ]));
   });

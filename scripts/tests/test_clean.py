@@ -1,188 +1,171 @@
-import itertools
+import contextlib
+import copy
+import io
+import json
+import sqlite3
 import unittest
-from collections.abc import Iterator
+from collections.abc import Generator
+from unittest import mock
 
 import medit
-from default.clean import clean
-from tests.fixture_medit import (
-    CONDITIONS,
-    CONFLICT_A,
-    PLUGINS,
-    Fixture,
-    fixture_medit,
-    hand_load_order,
-    plugin_entry,
-    version_in_git,
-    window_of,
-)
+from default.clean import Cleaned, clean
 
-PATCH = medit.Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')
-ITEM_A = '000800:MBDevConflictA.esp'
+MASTER = medit.Plugin('Master.esm', 'Master Mod')
+PATCH = medit.Plugin('Patch.esp', 'Patch Mod')
+CELL = '000800:Master.esm'
+REFERENCE = '000801:Master.esm'
+ITEM = '000802:Master.esm'
+OTHER = medit.Plugin('Other.esp', 'Other Mod')
 DELETED = 0x20
 PERSISTENT = 0x400
 INITIALLY_DISABLED = 0x800
 FLAGS = 'MajorRecordFlagsRaw'
+TELEPORT = 'TeleportDestination'
 ENABLE_PARENT = 'EnableParent'
+IDENTICAL_TO_MASTER = 'IdenticalToMaster'
+OVERRIDE = 'Override'
 
 
-class Created:
-    """Each plugin created, then the load order Modbench's watcher hands mEdit once it sees the plugin."""
+class FakeIndex:
+    """mEdit's record index as clean reads and writes it through medit: each copy with its document and the state
+    mEdit judges it in against its master, the plugins active, and the copies each holds."""
 
-    def __init__(self, fixture: Fixture) -> None:
-        self.fixture = fixture
-        self.enabled: list[medit.Plugin] = []
-        self.disabled: list[medit.Plugin] = []
+    def __init__(self, *active: medit.Plugin) -> None:
+        self.active = set(active)
+        self.documents: dict[tuple[medit.Plugin, str], tuple[str, medit.JsonRecord]] = {}
+        self.parents: dict[tuple[medit.Plugin, str], str] = {}
+        self.states: dict[tuple[medit.Plugin, str], str] = {}
 
-    def create(self, name: str, origin: str, active: bool) -> medit.Plugin:
-        plugin = medit.create_plugin(name, origin, flags=[])
-        (self.enabled if active else self.disabled).append(plugin)
-        enabled = [plugin_entry(self.fixture.instance, plugin, len(PLUGINS) + at) for at, plugin in enumerate(self.enabled)]
-        disabled = [plugin_entry(self.fixture.instance, plugin, None) for plugin in self.disabled]
-        hand_load_order(self.fixture.url, {
-            **self.fixture.load_order, 'plugins': self.fixture.load_order['plugins'] + enabled + disabled,
-            'active': self.fixture.load_order['active'] + [plugin._asdict() for plugin in self.enabled]})
-        return plugin
+    def hold(
+            self, plugin: medit.Plugin, form_key: str, record_type: str, document: medit.JsonRecord | None = None,
+            parent: str | None = None, state: str = OVERRIDE) -> None:
+        self.documents[plugin, form_key] = (record_type, {'FormKey': form_key, **(document or {})})
+        if parent is not None:
+            self.parents[plugin, form_key] = parent
+        self.states[plugin, form_key] = state
+
+    def select(self, sql: str) -> medit.Rows:
+        plugins = self.active | {plugin for plugin, _ in self.documents}
+        with contextlib.closing(sqlite3.connect(':memory:')) as index:
+            index.row_factory = sqlite3.Row
+            index.execute('CREATE TABLE records (form_key, plugin, origin, record_type, body, is_active, form_key_plugin)')
+            index.execute('CREATE TABLE holdings (plugin, origin, parent, child)')
+            index.execute('CREATE TABLE view_columns (view_name, column_name)')
+            index.executemany('INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?)', [
+                *((f'000000:{plugin.name}', plugin.name, plugin.origin, 'header', '{}', plugin in self.active, plugin.name)
+                  for plugin in plugins),
+                *((form_key, plugin.name, plugin.origin, record_type, json.dumps(document), plugin in self.active, form_key.split(':')[1])
+                  for (plugin, form_key), (record_type, document) in self.documents.items())])
+            index.executemany('INSERT INTO holdings VALUES (?, ?, ?, ?)', [
+                (plugin.name, plugin.origin, parent, child) for (plugin, child), parent in self.parents.items()])
+            index.executemany('INSERT INTO view_columns VALUES (?, ?)', {
+                (record_type, column) for record_type, document in self.documents.values() for column in document})
+            rows = [json.dumps({'row': dict(row)}) for row in index.execute(sql)]
+        return medit.Rows(io.BytesIO('\n'.join([*rows, json.dumps({'end': True})]).encode()))
+
+    def compare(self, form_keys: list[str], plugin: medit.Plugin) -> dict[str, list[medit.RecordCopy]]:
+        return {
+            form_key: [medit.RecordCopy(holder, state) for (holder, held), state in self.states.items() if held == form_key]
+            for form_key in form_keys}
+
+    def read(self, plugin: medit.Plugin, form_key: str) -> medit.JsonRecord:
+        return copy.deepcopy(self.documents[plugin, form_key][1])
+
+    def edit(self, plugin: medit.Plugin, form_key: str, op: medit.EditOp, path: str, value: object) -> None:
+        *members, last = path.split('.')
+        document = self.documents[plugin, form_key][1]
+        for member in members:
+            document = document[member]
+        if value is None:
+            document.pop(last)
+        else:
+            document[last] = value
+
+    def delete(self, plugin: medit.Plugin, form_key: str) -> None:
+        del self.documents[plugin, form_key]
+        del self.states[plugin, form_key]
+        for held in [held for held, parent in self.parents.items() if held[0] == plugin and parent == form_key]:
+            del self.parents[held]
+            self.delete(*held)
+
+    def form_keys(self, plugin: medit.Plugin) -> set[str]:
+        return {form_key for held, form_key in self.documents if held == plugin}
 
 
-class CleanAgainstTheFixtureInstance(unittest.TestCase):
-    fixture: Fixture
-    created: Created
-    names: Iterator[int]
+@contextlib.contextmanager
+def faked_index() -> Generator[FakeIndex]:
+    index = FakeIndex(MASTER, PATCH)
+    with mock.patch.multiple(
+            medit, select=index.select, compare=index.compare, read=index.read, edit=index.edit, delete=index.delete):
+        yield index
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.fixture = cls.enterClassContext(fixture_medit())
-        cls.created = Created(cls.fixture)
-        cls.names = itertools.count()
-        version_in_git(cls.fixture, PATCH.origin)
-        version_in_git(cls.fixture, CONDITIONS.origin)
-        cls.enterClassContext(window_of(cls.fixture.url))
 
-    @classmethod
-    def enabled(cls) -> medit.Plugin:
-        return cls.created.create(f'MBDevClean{next(cls.names)}.esp', CONDITIONS.origin, active=True)
+def hold_deleted_reference(index: FakeIndex, flags: int, base: str | None = ITEM) -> None:
+    index.hold(MASTER, REFERENCE, 'refr', {'Base': base})
+    index.hold(PATCH, REFERENCE, 'refr', {
+        FLAGS: flags, 'Position': '1, 2, 3', TELEPORT: {'Door': ITEM}, ENABLE_PARENT: {'Reference': ITEM, 'Flags': []}})
 
-    def keys_of(self, plugin: medit.Plugin) -> set[str]:
-        return {row['form_key'] for row in medit.select(f"SELECT form_key FROM records WHERE plugin = '{plugin.name}'")}
 
-    def cell_and_reference_in(self, plugin: medit.Plugin) -> tuple[str, str]:
-        cell = medit.create_record(plugin, 'cell')
-        return cell, medit.create_record(plugin, 'refr', container=cell)
+class Clean(unittest.TestCase):
+    def test_removes_an_override_only_when_its_own_copy_is_identical_to_its_master(self) -> None:
+        for state, others_state, removed in [
+                (IDENTICAL_TO_MASTER, OVERRIDE, [ITEM]),
+                (OVERRIDE, OVERRIDE, []),
+                ('IdenticalToMasterWinsConflict', OVERRIDE, []),
+                (OVERRIDE, IDENTICAL_TO_MASTER, [])]:
+            with self.subTest(state=state, others_state=others_state), faked_index() as index:
+                index.hold(OTHER, ITEM, 'misc', state=others_state)
+                index.hold(PATCH, ITEM, 'misc', state=state)
+                self.assertEqual(clean(PATCH), Cleaned(removed, []))
+                self.assertEqual(index.form_keys(PATCH), {ITEM} - set(removed))
 
-    def deleted_override(self, base_set: bool = True, flags: int = DELETED) -> tuple[medit.Plugin, str]:
-        master = self.enabled()
-        cell, reference = self.cell_and_reference_in(master)
-        if base_set:
-            medit.edit(master, reference, 'set', 'Base', ITEM_A)
-        medit.edit(master, reference, 'set', 'Position', '1, 2, 3')
-        medit.edit(master, reference, 'set', 'TeleportDestination.Door', ITEM_A)
-        medit.edit(master, reference, 'set', ENABLE_PARENT, {'Reference': medit.create_record(master, 'refr', container=cell), 'Flags': []})
-        override = self.enabled()
-        medit.copy(master, reference, override)
-        medit.edit(override, reference, 'set', FLAGS, flags & PERSISTENT)
-        medit.edit(override, reference, 'set', FLAGS, flags)
-        return override, reference
+    def test_removes_a_cell_identical_to_its_master_with_its_references_only_once_each_is_identical(self) -> None:
+        for reference_state, removed, left in [(IDENTICAL_TO_MASTER, [CELL], set()), (OVERRIDE, [], {CELL, REFERENCE})]:
+            with self.subTest(reference_state=reference_state), faked_index() as index:
+                index.hold(PATCH, CELL, 'cell', state=IDENTICAL_TO_MASTER)
+                index.hold(PATCH, REFERENCE, 'refr', parent=CELL, state=reference_state)
+                self.assertEqual(clean(PATCH).identical_to_master, removed)
+                self.assertEqual(index.form_keys(PATCH), left)
 
-    def test_removes_an_override_identical_to_the_record_it_overrides_and_keeps_the_others(self) -> None:
-        medit.copy(CONFLICT_A, ITEM_A, PATCH, replace=True)
-        before = self.keys_of(PATCH)
-        cleaned = clean(PATCH)
-        self.assertEqual(cleaned.identical_to_master, [ITEM_A])
-        self.assertEqual(cleaned.undeleted_and_disabled, [])
-        self.assertEqual(before - self.keys_of(PATCH), {ITEM_A})
+    def test_undeletes_and_disables_a_deleted_reference_with_no_teleport_or_enable_parent_lowering_it_unless_persistent(self) -> None:
+        for flags, disabled, position in [
+                (DELETED, INITIALLY_DISABLED, '1, 2, -30000'),
+                (DELETED | PERSISTENT, PERSISTENT | INITIALLY_DISABLED, '1, 2, 3')]:
+            with self.subTest(flags=flags), faked_index() as index:
+                hold_deleted_reference(index, flags)
+                self.assertEqual(clean(PATCH), Cleaned([], [REFERENCE]))
+                reference = index.read(PATCH, REFERENCE)
+                self.assertEqual(
+                    [reference[FLAGS], reference['Position'], TELEPORT in reference, ENABLE_PARENT in reference],
+                    [disabled, position, False, False])
 
-    def test_removes_an_override_identical_to_the_master_though_a_plugin_loaded_between_them_changed_the_record(self) -> None:
-        later = self.enabled()
-        medit.copy(CONFLICT_A, ITEM_A, later)
-        self.assertEqual(clean(later).identical_to_master, [ITEM_A])
+    def test_skips_a_deleted_reference_whose_master_places_no_base_saying_so(self) -> None:
+        with faked_index() as index, self.assertLogs('clean') as logged:
+            hold_deleted_reference(index, DELETED, base=None)
+            self.assertEqual(clean(PATCH), Cleaned([], []))
+            self.assertEqual(index.read(PATCH, REFERENCE)[FLAGS], DELETED)
+        self.assertEqual(logged.output, [
+            f'INFO:clean:Skipping: {REFERENCE}', 'WARNING:clean:<Warning: Plugin contains 1 deleted references which can not be undeleted>'])
 
-    def test_keeps_an_override_identical_to_the_previous_override_but_not_to_the_master(self) -> None:
-        master = self.enabled()
-        record = medit.create_record(master, 'misc')
-        previous = self.enabled()
-        medit.copy(master, record, previous)
-        medit.edit(previous, record, 'set', 'EditorID', 'MBDevCleanPrevious')
-        later = self.enabled()
-        medit.copy(previous, record, later)
-        self.assertEqual(clean(later).identical_to_master, [])
-        self.assertIn(record, self.keys_of(later))
-
-    def test_keeps_an_override_identical_to_its_master_when_a_master_of_the_plugin_between_them_changed_the_record(self) -> None:
-        master = self.enabled()
-        record = medit.create_record(master, 'misc')
-        between = self.enabled()
-        medit.copy(master, record, between)
-        medit.edit(between, record, 'set', 'EditorID', 'MBDevCleanBetween')
-        override = self.enabled()
-        medit.copy(master, record, override)
-        _, reference = self.cell_and_reference_in(override)
-        medit.edit(override, reference, 'set', 'Base', medit.create_record(between, 'misc'))
-        self.assertEqual(clean(override).identical_to_master, [])
-        self.assertIn(record, self.keys_of(override))
-
-    def test_removes_a_cell_identical_to_its_master_once_its_references_are_removed(self) -> None:
-        master = self.enabled()
-        cell, reference = self.cell_and_reference_in(master)
-        override = self.enabled()
-        medit.copy(master, cell, override)
-        medit.copy(master, reference, override)
-        clean(override)
-        self.assertEqual(self.keys_of(override) & {cell, reference}, set())
-
-    def test_keeps_a_cell_identical_to_its_master_while_one_of_its_references_differs(self) -> None:
-        master = self.enabled()
-        cell, reference = self.cell_and_reference_in(master)
-        override = self.enabled()
-        medit.copy(master, cell, override)
-        medit.copy(master, reference, override)
-        medit.edit(override, reference, 'set', 'Scale', 2)
-        clean(override)
-        self.assertEqual(self.keys_of(override) & {cell, reference}, {cell, reference})
-
-    def test_undeletes_disables_and_lowers_a_deleted_reference_keeping_x_and_y_with_no_teleport_or_enable_parent(self) -> None:
-        override, reference = self.deleted_override()
-        self.assertEqual(clean(override).undeleted_and_disabled, [reference])
-        record = medit.read(override, reference)
-        self.assertEqual(
-            [record[FLAGS], record['Position'], 'TeleportDestination' in record, ENABLE_PARENT in record],
-            [INITIALLY_DISABLED, '1, 2, -30000', False, False])
-
-    def test_leaves_the_position_of_a_persistent_deleted_reference(self) -> None:
-        override, reference = self.deleted_override(flags=DELETED | PERSISTENT)
-        clean(override)
-        self.assertEqual(medit.read(override, reference)['Position'], '1, 2, 3')
-
-    def test_skips_a_deleted_reference_whose_master_holds_no_base_saying_so(self) -> None:
-        override, reference = self.deleted_override(base_set=False)
-        with self.assertLogs('clean') as logged:
-            self.assertEqual(clean(override).undeleted_and_disabled, [])
-        self.assertEqual(
-            [logged.output[0], logged.output[1]],
-            [f'INFO:clean:Skipping: {reference}', 'WARNING:clean:<Warning: Plugin contains 1 deleted references which can not be undeleted>'])
-        self.assertEqual(medit.read(override, reference)[FLAGS], DELETED)
-
-    def test_reads_the_base_of_the_master_in_the_load_order_not_of_a_plugin_of_the_same_name_that_is_not_active(self) -> None:
-        master = self.enabled()
-        _, reference = self.cell_and_reference_in(master)
-        inactive = self.created.create(master.name, PATCH.origin, active=False)
-        self.cell_and_reference_in(inactive)
-        medit.edit(inactive, reference, 'set', 'Base', ITEM_A)
-        override = self.enabled()
-        medit.copy(master, reference, override)
-        medit.edit(override, reference, 'set', FLAGS, DELETED)
-        self.assertEqual(clean(override).undeleted_and_disabled, [])
+    def test_reads_the_base_of_the_active_master_not_of_a_plugin_of_its_name_that_is_not_active(self) -> None:
+        with faked_index() as index, self.assertLogs('clean'):
+            hold_deleted_reference(index, DELETED, base=None)
+            index.hold(medit.Plugin(MASTER.name, 'Inactive Mod'), REFERENCE, 'refr', {'Base': ITEM})
+            self.assertEqual(clean(PATCH).undeleted_and_disabled, [])
 
     def test_warns_of_a_deleted_navmesh_and_leaves_it(self) -> None:
-        plugin = self.enabled()
-        cell, _ = self.cell_and_reference_in(plugin)
-        navmesh = medit.create_record(plugin, 'navm', container=cell)
-        medit.edit(plugin, navmesh, 'set', FLAGS, DELETED)
-        with self.assertLogs('clean', 'WARNING') as logged:
-            clean(plugin)
+        with faked_index() as index, self.assertLogs('clean', 'WARNING') as logged:
+            index.hold(PATCH, ITEM, 'navm', {FLAGS: DELETED})
+            clean(PATCH)
+            self.assertEqual(index.read(PATCH, ITEM)[FLAGS], DELETED)
         self.assertEqual(logged.output, ['WARNING:clean:<Warning: Plugin contains 1 deleted NavMeshes which can not be undeleted>'])
-        self.assertEqual(medit.read(plugin, navmesh)[FLAGS], DELETED)
 
     def test_refuses_a_plugin_that_is_not_active(self) -> None:
-        inactive = self.created.create('MBDevCleanInactive.esp', CONDITIONS.origin, active=False)
-        with self.assertRaisesRegex(medit.MEditError, 'is not active'):
+        inactive = medit.Plugin('Inactive.esp', 'Inactive Mod')
+        with faked_index() as index, self.assertRaisesRegex(medit.MEditError, '^Inactive.esp is not active'):
+            index.hold(inactive, '000800:Inactive.esp', 'misc')
             clean(inactive)
+
+
+if __name__ == '__main__':
+    unittest.main()

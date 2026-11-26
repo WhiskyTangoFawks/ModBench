@@ -1,6 +1,8 @@
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Starfield;
 
 namespace MEditService.Codec.Tests.Serialization;
 
@@ -10,22 +12,29 @@ public sealed class FormIdLimitTests
     private static readonly ModKey Master = ModKey.FromFileName("Master.esm");
     private static readonly FormIdLimit Light = new("light", 0x800, 0xFFF, ByFlag: true, ByExtension: false);
 
-    public static TheoryData<string, Fallout4ModHeader.HeaderFlag, FormIdLimit?> LightLimits => new()
+    private static Fallout4Mod Fallout4(string fileName, Fallout4ModHeader.HeaderFlag flags) =>
+        new(ModKey.FromFileName(fileName), Fallout4Release.Fallout4) { ModHeader = { Flags = flags } };
+
+    public static TheoryData<IModGetter, FormIdLimit?> Limits => new()
     {
-        { "NamedEsl.esl", 0, new FormIdLimit("light", 0x0, 0xFFF, ByFlag: false, ByExtension: true) },
-        { "Flagged.esp", Fallout4ModHeader.HeaderFlag.Small, new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: false) },
-        { "FlaggedAndNamedEsl.esl", Fallout4ModHeader.HeaderFlag.Small, new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: true) },
-        { "Neither.esp", 0, null },
+        { Fallout4("NamedEsl.esl", 0), new FormIdLimit("light", 0x0, 0xFFF, ByFlag: false, ByExtension: true) },
+        { Fallout4("Flagged.esp", Fallout4ModHeader.HeaderFlag.Small), new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: false) },
+        {
+            Fallout4("FlaggedAndNamedEsl.esl", Fallout4ModHeader.HeaderFlag.Small),
+            new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: true)
+        },
+        { Fallout4("Neither.esp", 0), null },
+        {
+            new StarfieldMod(ModKey.FromFileName("Medium.esm"), StarfieldRelease.Starfield) { ModHeader = { Flags = StarfieldModHeader.HeaderFlag.Medium } },
+            new FormIdLimit("medium", 0x0, 0xFFFF, ByFlag: true, ByExtension: false)
+        },
     };
 
     [Theory]
-    [MemberData(nameof(LightLimits))]
-    public void APluginsLightLimit_IsSetByItsFlag_OrByItsEslName(string fileName, Fallout4ModHeader.HeaderFlag flags, FormIdLimit? limit)
+    [MemberData(nameof(Limits))]
+    public void APluginsLimit_IsSetByItsLightOrMediumFlag_OrByItsEslName(IModGetter mod, FormIdLimit? limit)
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
-        mod.ModHeader.Flags = flags;
-
-        Assert.Equal(limit, PluginFlags.LimitOf(mod, fileName));
+        Assert.Equal(limit, PluginFlags.LimitOf(mod, mod.ModKey.FileName));
     }
 
     [Fact]

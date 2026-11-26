@@ -65,27 +65,27 @@ public sealed class ChangeSignalPathsTests : IDisposable
 
     [Theory]
     [InlineData("plugin file")]
-    [InlineData("plugin file,asset")]
     [InlineData("plugin file,plugin source")]
-    public void ThePluginsOwnFileNamed_HasTheRecordIndexReadThatPluginWhole(string kinds)
+    public void ThePluginsOwnFileNamed_HasTheRecordIndexReadThatPluginWhole_AndChecksOnlyItsMod(string kinds)
     {
         Signal(kinds);
 
         Assert.Equal((new PluginAddress(PluginOf(NamedMod), NamedMod), null), (Relayed.Plugin, Relayed.Files));
+        Assert.Equal([NamedMod], ToldExternalChangeOf());
     }
 
     [Fact]
-    public void ASourceFileNamed_HasTheRecordIndexReadThatFile()
+    public void ASourceFileNamed_HasTheRecordIndexReadThatFile_AndChecksNoMod()
     {
         Signal("plugin source");
 
         Assert.Equal(new PluginAddress(PluginOf(NamedMod), NamedMod), Relayed.Plugin);
         Assert.Equal([PathNamed("plugin source")], Relayed.Files);
+        Assert.Empty(ToldExternalChangeOf());
     }
 
     [Theory]
     [InlineData("")]
-    [InlineData("build file")]
     [InlineData("plugin file,build file")]
     public void NoPath_OrOneReadForPluginsItsAdapterCannotName_HasTheRecordIndexCheckTheDisk_AndEveryModChecked(string kinds)
     {
@@ -101,22 +101,6 @@ public sealed class ChangeSignalPathsTests : IDisposable
         Signal("asset");
 
         Assert.Empty(_relayed);
-        Assert.Empty(ToldExternalChangeOf());
-    }
-
-    [Fact]
-    public void APluginFileNamed_ChecksOnlyItsModForAnExternalChange()
-    {
-        Signal("plugin file");
-
-        Assert.Equal([NamedMod], ToldExternalChangeOf());
-    }
-
-    [Fact]
-    public void PluginSourceNamed_ChecksNoModForAnExternalChange()
-    {
-        Signal("plugin source");
-
         Assert.Empty(ToldExternalChangeOf());
     }
 

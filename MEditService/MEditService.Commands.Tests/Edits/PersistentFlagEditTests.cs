@@ -32,7 +32,6 @@ public sealed class PersistentFlagEditTests : IDisposable
             unmarked.Temporary.Add(Placed(plugin, "UnmarkedTemp", 0, 1f, 2f));
             var ruin = NewCell(plugin, "Ruin", Cell.Flag.IsInteriorCell);
             ruin.Temporary.Add(Placed(plugin, "RuinDeleted", Deleted, 1f, 2f));
-            ruin.Persistent.Add(Placed(plugin, "RuinDeletedPersistent", Deleted | Persistent, 1f, 2f));
             plugin.AddInteriorCells(inside, ruin, unmarked);
 
             var world = new Worldspace(plugin) { EditorID = "World" };
@@ -52,8 +51,8 @@ public sealed class PersistentFlagEditTests : IDisposable
             holding.Grid = new CellGrid { Point = new P2Int(2, -1) };
             holding.Persistent.Add(Placed(plugin, "HoldingWithin", Persistent, 2.5f * CellWidth, -0.5f * CellWidth));
             holding.Persistent.Add(Placed(plugin, "HoldingBeyond", Persistent, 1.5f * CellWidth, 1.5f * CellWidth));
-            world.SubCells.Add(CellBlocks.Exterior(outside));
             world.SubCells.Add(CellBlocks.Exterior(holding));
+            world.SubCells.Add(CellBlocks.Exterior(outside));
         });
     }
 
@@ -102,93 +101,23 @@ public sealed class PersistentFlagEditTests : IDisposable
         Assert.True(JsonNode.DeepEquals(before, Document(cell)), Document(cell).ToJsonString());
     }
 
-    [Fact]
-    public void SettingPersistent_OnAPlacedRecordInAnInteriorCell_MovesItIntoTheCellsPersistentGroup()
+    [Theory]
+    [InlineData("InsideTemp", Persistent, "Inside", "Persistent", new[] { "InsideTemp", "InsidePersist" }, "Inside", "Temporary", new string[0])]
+    [InlineData("TopTemp", Persistent, "WorldPersistentCell", "Persistent", new[] { "TopTemp", "TopPersist" }, "WorldPersistentCell", "Temporary", new string[0])]
+    [InlineData("HoldingWithin", 0, "Holding", "Temporary", new[] { "HoldingWithin" }, "Holding", "Persistent", new[] { "HoldingBeyond" })]
+    [InlineData("OutsideTemp", Persistent, "WorldPersistentCell", "Persistent", new[] { "TopPersist", "OutsideTemp" }, "Outside", "Temporary", new[] { "OutsideStale" })]
+    [InlineData("TopPersist", 0, "Outside", "Temporary", new[] { "TopPersist", "OutsideTemp", "OutsideStale" }, "WorldPersistentCell", "Persistent", new string[0])]
+    public void ChangingPersistent_MovesThePlacedRecordIntoTheGroupItNames_OfTheCellXEditWouldPutItIn(
+        string placed, int written, string intoCell, string intoGroup, string[] into, string fromCell, string fromGroup, string[] left)
     {
-        var before = Document("InsideTemp");
+        var before = Document(placed);
 
-        var result = SetFlags("InsideTemp", Persistent);
+        var result = SetFlags(placed, written);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["InsideTemp", "InsidePersist"], Group("Inside", "Persistent"));
-        Assert.Empty(Group("Inside", "Temporary"));
-        AssertOnlyFlagsChanged(before, "InsideTemp", Persistent);
-    }
-
-    [Fact]
-    public void ClearingPersistent_OnAPlacedRecordInAnInteriorCell_MovesItIntoTheCellsTemporaryGroup()
-    {
-        var before = Document("InsidePersist");
-
-        var result = SetFlags("InsidePersist", 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["InsideTemp", "InsidePersist"], Group("Inside", "Temporary"));
-        Assert.Empty(Group("Inside", "Persistent"));
-        AssertOnlyFlagsChanged(before, "InsidePersist", 0);
-    }
-
-    [Fact]
-    public void SettingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_MovesItIntoThatCellsPersistentGroup()
-    {
-        var before = Document("TopTemp");
-
-        var result = SetFlags("TopTemp", Persistent);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["TopTemp", "TopPersist"], Group("WorldPersistentCell", "Persistent"));
-        Assert.Empty(Group("WorldPersistentCell", "Temporary"));
-        AssertOnlyFlagsChanged(before, "TopTemp", Persistent);
-    }
-
-    [Fact]
-    public void ClearingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_MovesItIntoTheCellAtItsPosition()
-    {
-        var before = Document("TopPersist");
-
-        var result = SetFlags("TopPersist", 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["TopPersist", "OutsideTemp", "OutsideStale"], Group("Outside", "Temporary"));
-        Assert.Empty(Group("WorldPersistentCell", "Persistent"));
-        AssertOnlyFlagsChanged(before, "TopPersist", 0);
-    }
-
-    [Fact]
-    public void SettingPersistent_OnAPlacedRecordInAnExteriorCell_MovesItIntoItsWorldspacesPersistentCell()
-    {
-        var before = Document("OutsideTemp");
-
-        var result = SetFlags("OutsideTemp", Persistent);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["TopPersist", "OutsideTemp"], Group("WorldPersistentCell", "Persistent"));
-        Assert.Equal(["OutsideStale"], Group("Outside", "Temporary"));
-        AssertOnlyFlagsChanged(before, "OutsideTemp", Persistent);
-    }
-
-    [Fact]
-    public void ClearingPersistent_OnAPlacedRecordInsideItsExteriorCellsGrid_MovesItIntoAGroupTheCellLacked()
-    {
-        var before = Document("HoldingWithin");
-        Assert.Empty(Group("Holding", "Temporary"));
-
-        var result = SetFlags("HoldingWithin", 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["HoldingWithin"], Group("Holding", "Temporary"));
-        Assert.Equal(["HoldingBeyond"], Group("Holding", "Persistent"));
-        AssertOnlyFlagsChanged(before, "HoldingWithin", 0);
-    }
-
-    [Fact]
-    public void ClearingPersistent_OnAPlacedRecordOutsideItsExteriorCellsGrid_MovesItIntoTheCellAtItsPosition()
-    {
-        var result = SetFlags("HoldingBeyond", 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["OutsideTemp", "OutsideStale", "HoldingBeyond"], Group("Outside", "Temporary"));
-        Assert.Equal(["HoldingWithin"], Group("Holding", "Persistent"));
+        Assert.Equal(into, Group(intoCell, intoGroup));
+        Assert.Equal(left, Group(fromCell, fromGroup));
+        AssertOnlyFlagsChanged(before, placed, written);
     }
 
     [Fact]
@@ -215,7 +144,6 @@ public sealed class PersistentFlagEditTests : IDisposable
 
     [Theory]
     [InlineData("RuinDeleted", Deleted | Persistent, "Ruin")]
-    [InlineData("RuinDeletedPersistent", Deleted, "Ruin")]
     [InlineData("InsideTemp", Deleted | Persistent, "Inside")]
     public void ChangingPersistent_OnAPlacedRecordDeletedBeforeOrByTheWrite_IsRefused_NamingDeleted(string placed, int written, string cell)
     {

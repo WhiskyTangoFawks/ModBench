@@ -33,3 +33,6 @@ export async function settleWaitArmed(): Promise<void> {
     await new Promise((resolve) => setImmediate(resolve));
   }
 }
+
+/** Settles once `check` passes, checking each millisecond. */
+export const settled = (check: () => void | Promise<void>): Promise<void> => vi.waitFor(check, { interval: 1 });

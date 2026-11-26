@@ -76,6 +76,16 @@ public sealed class ChildRecordTypesTests
         Assert.Equal(Holding(), Of(new Cell(Mod) { MajorRecordFlagsRaw = PersistentFlag.Bit }, place));
     }
 
+    [Theory]
+    [InlineData(PersistentFlag.Bit, PersistentFlag.PersistentGroup)]
+    [InlineData(0, PersistentFlag.TemporaryGroup)]
+    public void APlacedRecord_LandsInTheGroupItsCellsPersistentFlagNames(int flags, string group)
+    {
+        var cell = RecordTextCodec.SerializeToText(new Cell(Mod) { MajorRecordFlagsRaw = flags }, GameRelease.Fallout4);
+
+        Assert.Equal(new ChildSlot.Open(group), ChildRecordTypes.SlotFor("cell", cell, CellPlace.Interior, "refr", GameRelease.Fallout4));
+    }
+
     [Fact]
     public void AWorldspacesPersistentCell_WithoutThePersistentFlag_HoldsNavmeshesToo()
     {

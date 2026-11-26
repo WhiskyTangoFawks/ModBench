@@ -2,19 +2,19 @@ using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>An index of its own for a class that sets the filter, which narrows every listing a
-/// parallel reader of a shared index asks for. What a filter may name is the schema's.</summary>
+/// <summary>An index of the test plugin for one class: its tests share it, and a filter one sets would narrow the
+/// listings of any other class reading it.</summary>
 public sealed class SqlDoorFixture : IDisposable
 {
-    private readonly TestPluginFixture _plugin = new();
+    internal TestPluginFixture Plugin { get; } = new();
 
     internal OpenedIndex Index { get; }
 
-    public SqlDoorFixture() => Index = Indexes.Reconciled(_plugin.DataFolder, _plugin.Plugins);
+    public SqlDoorFixture() => Index = Indexes.Reconciled(Plugin.DataFolder, Plugin.Plugins);
 
     public void Dispose()
     {
         Index.Dispose();
-        _plugin.Dispose();
+        Plugin.Dispose();
     }
 }

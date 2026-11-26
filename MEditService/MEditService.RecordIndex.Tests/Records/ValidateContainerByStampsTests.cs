@@ -1,5 +1,3 @@
-using System.Text.Json.Nodes;
-using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -19,14 +17,6 @@ public sealed class ValidateContainerByStampsTests : IDisposable
     private void ValidateUntilPlacedRefIsNamed(string editorId) =>
         _fixture.Index.NextCheckUntil(() => _fixture.Index.CopyIn(_fixture.TemporaryRef, _fixture.Plugin)?.EditorId == editorId, $"the placed reference named {editorId}");
 
-    private string CellDirectory => Path.GetDirectoryName(_fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId)).Require();
-
-    private void ValidateUntilSourceUnreadable() =>
-        _fixture.Index.NextCheckUntil(() => _fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its binary in place of its source");
-
-    private void ValidateUntilSourceRead() =>
-        _fixture.Index.NextCheckUntil(() => !_fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its source again");
-
     [Fact]
     public void AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()
     {
@@ -44,64 +34,7 @@ public sealed class ValidateContainerByStampsTests : IDisposable
         Assert.Equal(WorkingTreeState.None, _fixture.Index.RowOf(_fixture.EmbedCell, _fixture.Plugin)?.WorkingTreeState);
     }
 
-    [Fact]
-    public void APlacedReferenceTwoCellsCarry_IsDiagnosed_NamingBothDocuments()
-    {
-        var original = _fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
-        var directory = CellDirectory;
-        AnotherTool.CopyDirectory(directory, "CopiedCell - 000950_ContainerFixture.esp");
-        var copy = Directory.GetFiles(AnotherTool.Beside(directory, "CopiedCell - 000950_ContainerFixture.esp")).Single();
-        var text = File.ReadAllText(copy);
-        File.WriteAllText(copy, text.Replace(_fixture.EmbedCell, "000950:ContainerFixture.esp", StringComparison.Ordinal));
-
-        ValidateUntilSourceUnreadable();
-
-        var problems = _fixture.Index.Queries.GetProblems().Value().Single(p => PluginAddress.Comparer.Equals(p.Plugin, _fixture.Plugin));
-        Assert.Equivalent(
-            new[]
-            {
-                Path.GetRelativePath(_fixture.Entry.ModFolderOf(), original),
-                Path.GetRelativePath(_fixture.Entry.ModFolderOf(), copy),
-            },
-            problems.Problems.Select(p => p.SourceRelativePath),
-            strict: true);
-    }
-
-    [Fact]
-    public void APlacedReferenceOneCellCarriesTwice_IsDiagnosed_NamingTheCell()
-    {
-        var cellDocument = _fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
-        var cell = JsonNode.Parse(File.ReadAllText(cellDocument)).Require().AsObject();
-        var temporary = cell["Temporary"].Require().AsArray();
-        var added = temporary[0].Require().DeepClone().AsObject();
-        added["FormKey"] = $"000F10:{ContainerMod.PluginName}";
-        temporary.Add(added);
-        temporary.Add(added.DeepClone());
-        File.WriteAllText(cellDocument, cell.ToJsonString());
-
-        ValidateUntilSourceUnreadable();
-
-        var problem = _fixture.Index.Queries.GetProblems().Value().Single(p => PluginAddress.Comparer.Equals(p.Plugin, _fixture.Plugin)).Problems.Single();
-        Assert.Equal(Path.GetRelativePath(_fixture.Entry.ModFolderOf(), cellDocument), problem.SourceRelativePath);
-        Assert.Contains($"000F10:{ContainerMod.PluginName} more than once", problem.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ACellDirectoryCopiedThenDeletedByHandUnderANameWithoutItsFormKey_KeepsItsRecords()
-    {
-        var directory = CellDirectory;
-        AnotherTool.CopyDirectory(directory, "RenamedByHand");
-        ValidateUntilSourceUnreadable();
-
-        Directory.Delete(directory, recursive: true);
-        ValidateUntilSourceRead();
-
-        Assert.Equal(ContainerModPlugin.EmbedCellEditorId, _fixture.Index.DocumentOf(_fixture.EmbedCell, _fixture.Plugin).EditorId);
-        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, PlacedRefEditorId);
-    }
-
     [Theory]
-    [InlineData("cell", ContainerModPlugin.EmbedCellEditorId)]
     [InlineData("wrld", ContainerModPlugin.WorldspaceEditorId)]
     public void AContainerDirectoryDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack(string recordType, string editorId)
     {

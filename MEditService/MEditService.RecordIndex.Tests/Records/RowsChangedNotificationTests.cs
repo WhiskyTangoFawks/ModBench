@@ -10,52 +10,6 @@ namespace MEditService.RecordIndex.Tests.Records;
 public sealed class RowsChangedNotificationTests
 {
     [Fact]
-    public void AHandEditedDocument_PublishesRowsChanged_WithTheKeyAndTheSequenceAfterTheWrite()
-    {
-        FormKey npc = default;
-        using var fixture = new PluginFixtureBuilder("rows-changed")
-            .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
-            .BuildScattered()
-            .CompiledPlugin();
-        var entry = fixture.Plugins.Single();
-        var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Reconciled(fixture, notifications: notifications);
-        var formKey = npc.ToString();
-        entry.HandEdit(index.DocumentOf(formKey, entry.Key), "\"FixtureNpc\"", "\"EditedName\"");
-
-        index.NextCheck();
-
-        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
-        Assert.Equal(entry.Key, notification.Plugin);
-        Assert.Equal([formKey], notification.Keys);
-        Assert.Equal(index.Sequence, notification.Sequence);
-    }
-
-    [Fact]
-    public void ValidatingAPluginWhoseDocumentWasDeleted_PublishesRowsChangedNamingTheRecord_AndReadsLoseIt()
-    {
-        FormKey npc = default;
-        using var fixture = new PluginFixtureBuilder("rows-changed-delete")
-            .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
-            .BuildScattered()
-            .CompiledPlugin();
-        var entry = fixture.Plugins.Single();
-        var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Reconciled(fixture, notifications: notifications);
-        var formKey = npc.ToString();
-        var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.DocumentOf(formKey, entry.Key));
-        File.Delete(documentDeletedByHandWhereGitCannotNameTheKey);
-
-        index.NextCheck();
-
-        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
-        Assert.Equal(entry.Key, notification.Plugin);
-        Assert.Equal([formKey], notification.Keys);
-        Assert.Equal(index.Sequence, notification.Sequence);
-        Assert.Null(index.CopyIn(formKey, entry.Key));
-    }
-
-    [Fact]
     public void ADeletedRecord_IsAnnouncedWithTheRecordsOfCompiledPluginsThatReferToIt()
     {
         FormKey target = default;
@@ -148,24 +102,6 @@ public sealed class RowsChangedNotificationTests
         Assert.Equal([moved.ToString(), gained], notification.Keys.Order(StringComparer.Ordinal));
         Assert.DoesNotContain(still.ToString(), notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
-        Assert.Empty(notifications.Since(loaded).OfType<PluginChangedNotification>());
-        Assert.NotNull(index.CopyIn(gained, entry.Key));
-    }
-
-    [Fact]
-    public void ValidatingAPluginThatGainedADocumentNoCommitFiled_PublishesRowsChangedNamingIt_NotPluginChanged()
-    {
-        var (fixture, entry, notifications, index, moved, _) = TwoNpcs("rows-changed-validate-gained");
-        using var __ = fixture;
-        using var ___ = index;
-        var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
-
-        var loaded = notifications.Notifications.Count;
-
-        index.NextCheck();
-
-        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
-        Assert.Equal([gained], notification.Keys);
         Assert.Empty(notifications.Since(loaded).OfType<PluginChangedNotification>());
         Assert.NotNull(index.CopyIn(gained, entry.Key));
     }

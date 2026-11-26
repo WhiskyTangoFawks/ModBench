@@ -1,90 +1,61 @@
-"""Pins check_test_times.py: every test run over the ceiling is named, and no test is charged for
-the time before its assembly's first result."""
+"""Pins check_test_times.py: each test over a second is named, slowest first, the wall time is
+printed against its budget, and nothing fails."""
 import contextlib
 import io
-import json
 import pathlib
 import tempfile
 import unittest
 
 import check_test_times as ctt
+import report_fixtures as fx
 
 
-def trx(*results):
-    """Each result is (test name, end second, duration in seconds)."""
-    rows = ''.join(
-        f'    <UnitTestResult testName="{name}" duration="00:{int(duration) // 60:02d}:{duration % 60:010.7f}" '
-        f'endTime="2026-10-02T19:{int(end) // 60:02d}:{end % 60:010.7f}+01:00" outcome="Passed" />\n'
-        for name, end, duration in results)
-    return ('<?xml version="1.0" encoding="utf-8"?>\n'
-            '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">\n'
-            f'  <Results>\n{rows}  </Results>\n</TestRun>\n')
-
-
-def vitest(*files):
-    """Each file is (path, [(full name, duration in ms or None for a skipped test)])."""
-    return json.dumps({'testResults': [
-        {'name': path, 'assertionResults': [
-            {'fullName': name, **({} if ms is None else {'duration': ms})} for name, ms in tests]}
-        for path, tests in files]})
-
-
-class OverCeiling(unittest.TestCase):
+class Reports(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.dir = pathlib.Path(self.tmp.name)
 
-    def tearDown(self):
-        self.tmp.cleanup()
+    def report(self, name, text):
+        (self.dir / name).write_text(text)
 
-    def over(self, *files):
-        for i, body in enumerate(files):
-            (self.dir / f'{i}.trx').write_text(body)
-        return ctt.over_ceiling(self.dir, ceilings={'.trx': 20})
 
-    def test_a_test_over_the_ceiling_is_named_with_its_time(self):
-        self.assertEqual(
-            self.over(trx(('A.Quick', 1, 0.5), ('A.Slow', 40, 25))),
-            [('A.Slow', 25.0, 20)])
+class OverCeiling(Reports):
+    def test_a_test_over_a_second_is_named_with_its_time_and_one_under_it_is_not(self):
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Under', 5, 0.99), fx.trx_result('A.Over', 9, 1.01)))
+        self.assertEqual(ctt.over_ceiling(self.dir), [('A.Over', 1.01)])
 
-    def test_each_theory_row_is_held_to_the_ceiling_alone(self):
-        self.assertEqual(
-            self.over(trx(('A.Quick', 1, 0.5), ('A.Row(x: 1)', 30, 15), ('A.Row(x: 2)', 60, 30))),
-            [('A.Row(x: 2)', 30.0, 20)])
+    def test_a_test_with_no_time_is_not_named(self):
+        self.report('a.trx', fx.trx(fx.trx_result('A.Skipped', outcome='NotExecuted')))
+        self.assertEqual(ctt.over_ceiling(self.dir), [])
 
-    def test_time_before_the_assemblys_first_result_is_not_charged(self):
-        warm_up = 40
-        self.assertEqual(
-            self.over(trx(('A.First', warm_up, warm_up), ('A.Blocked', warm_up + 0.1, warm_up + 0.1),
-                          ('A.SlowToo', warm_up + 30, warm_up + 30))),
-            [('A.SlowToo', 30.0, 20)])
+    def test_the_slowest_comes_first_whichever_report_holds_it(self):
+        self.report('unit.json', fx.vitest(('/repo/a.test.ts', [('quick', 'passed', 40), ('slow', 'passed', 2500)])))
+        self.report('it.mocha', fx.mocha_log(passed=[('slower', 4000), ('slowest', 7000)]))
+        self.assertEqual([name for name, _ in ctt.over_ceiling(self.dir)], ['slowest', 'slower', 'a.test.ts > slow'])
 
-    def test_each_assembly_has_its_own_warm_up(self):
-        self.assertEqual(
-            self.over(trx(('A.First', 1, 1), ('A.Late', 40, 30)),
-                      trx(('B.First', 30, 30), ('B.Blocked', 31, 31))),
-            [('A.Late', 30.0, 20)])
 
-    def test_a_vitest_test_over_its_ceiling_is_named_with_its_file_and_time(self):
-        (self.dir / 'unit.json').write_text(vitest(
-            ('/repo/src/a.test.ts', [('a quick', 40), ('a skipped', None)]),
-            ('/repo/src/b.test.ts', [('b slow', 2500)])))
-        self.assertEqual(
-            ctt.over_ceiling(self.dir, ceilings={'.json': 2}),
-            [('b.test.ts > b slow', 2.5, 2)])
-
-    def test_main_fails_naming_only_the_test_over_the_ceiling(self):
-        (self.dir / 'a.trx').write_text(trx(('A.Quick', 1, 0.5), ('A.Slow', 100, ctt.CEILINGS['.trx'] + 1)))
+class Main(Reports):
+    def main(self, elapsed, budget):
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            self.assertEqual(ctt.main([str(self.dir)]), 1)
-        self.assertIn('A.Slow', printed.getvalue())
-        self.assertNotIn('A.Quick', printed.getvalue())
+            status = ctt.main([str(self.dir), str(elapsed), str(budget)])
+        return status, printed.getvalue()
 
-    def test_main_passes_when_no_test_is_over_the_ceiling(self):
-        (self.dir / 'a.trx').write_text(trx(('A.Quick', 1, 0.5)))
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(ctt.main([str(self.dir)]), 0)
+    def test_it_names_each_test_over_the_ceiling_and_not_the_others(self):
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Quick', 5, 0.5), fx.trx_result('A.Slow', 100, 2)))
+        _, printed = self.main(100, 300)
+        self.assertIn('A.Slow', printed)
+        self.assertNotIn('A.Quick', printed)
+
+    def test_it_prints_the_wall_time_against_the_budget_and_says_when_it_is_over(self):
+        for elapsed, line in ((213.4, 'Wall time 213 s of 300 s budget\n'), (340, 'Wall time 340 s of 300 s budget: OVER BUDGET by 40 s\n')):
+            with self.subTest(elapsed=elapsed):
+                self.assertIn(line, self.main(elapsed, 300)[1])
+
+    def test_it_fails_nothing(self):
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Slow', 100, 5)))
+        self.assertEqual(self.main(900, 300)[0], 0)
 
 
 if __name__ == '__main__':

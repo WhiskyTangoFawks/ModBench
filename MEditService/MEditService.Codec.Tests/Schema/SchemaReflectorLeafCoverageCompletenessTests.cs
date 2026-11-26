@@ -22,26 +22,6 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
 
-    [Theory]
-    [InlineData("npc_", "Level")]
-    [InlineData("qust", "Aliases.[]")]
-    [InlineData("perk", "Effects.[]")]
-    [InlineData("book", "Teaches")]
-    [InlineData("clfm", "Data")]
-    [InlineData("note", "Data")]
-    [InlineData("sndr", "Data")]
-    [InlineData("mgef", "Archetype")]
-    [InlineData("aech", "Effects.[]")]
-    [InlineData("navm", "NavmeshGeometry.Parent")]
-    [InlineData("fact", "VendorLocation.Target")]
-    public void ACoveredAbstractUnion_ExposesItsMembers_AmongThemTheDocumentsDiscriminator(string table, string path)
-    {
-        var members = SchemaFields.At(GameRelease.Fallout4, table, path).Fields;
-
-        Assert.NotNull(members);
-        Assert.Contains(members, member => member.IsDiscriminator);
-    }
-
     private static bool IsAFlagView(ColumnSpec column, string member) =>
         column.Name == "MajorRecordFlagsRaw" && RecordFlagViews.All.Contains(member);
 

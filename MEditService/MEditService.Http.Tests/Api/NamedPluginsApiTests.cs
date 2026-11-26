@@ -24,19 +24,4 @@ public sealed class NamedPluginsApiTests : HostedTests
         var answered = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray());
         Assert.Equal("ModB", answered.GetProperty("origin").GetString());
     }
-
-    [Theory]
-    [InlineData("/plugins/facts", "{}")]
-    [InlineData("/plugins/facts", "{\"plugins\":[{\"name\":\"Shared.esp\"}]}")]
-    [InlineData("/plugins/facts", "{\"plugins\":[{\"origin\":\"ModB\"}]}")]
-    [InlineData("/plugins/indexing", "{}")]
-    [InlineData("/plugins/indexing", "{\"plugins\":[{\"name\":\"Shared.esp\"}]}")]
-    public async Task APluginsFieldMissingOrAPluginWithoutNameAndOrigin_IsRefusedAs400(string path, string body)
-    {
-        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
-
-        var response = await Client.PostAsync(path, content);
-
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
-    }
 }

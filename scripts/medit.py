@@ -1,4 +1,5 @@
 import http.client
+import io
 import json
 import os
 import re
@@ -87,7 +88,7 @@ _STOPPED_SHORT = "mEdit's rows stopped before their last line, so they may not b
 class Rows:
     """The rows of one SELECT, each a dict of its columns, read once as mEdit sends them. list() keeps them."""
 
-    def __init__(self, response: http.client.HTTPResponse) -> None:
+    def __init__(self, response: io.BufferedIOBase) -> None:
         self._response = response
         self._taken = False
 

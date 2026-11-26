@@ -34,6 +34,8 @@ export const productionFiles = (root: string): string[] =>
 export const rootFiles = (src: string = SRC): string[] =>
   productionFiles(src).filter((path) => basename(path) === relative(src, path));
 
+export const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const sourceFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 

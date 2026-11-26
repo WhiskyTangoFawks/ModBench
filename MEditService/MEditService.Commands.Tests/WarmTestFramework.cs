@@ -1,4 +1,5 @@
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Xunit.Abstractions;
@@ -7,14 +8,18 @@ using Xunit.Abstractions;
 
 namespace MEditService.Commands.Tests;
 
-/// <summary>Mutagen's first write costs seconds once per process, so it runs before any test does
-/// rather than inside whichever tests happen to start first.</summary>
+/// <summary>Mutagen's first write, and the whole-mod door's first write and read, cost seconds once per process,
+/// so they run before any test does rather than inside whichever tests happen to start first.</summary>
 public sealed class WarmTestFramework(IMessageSink messageSink) : SchemaWarmedTestFramework(messageSink)
 {
     protected override void Warm()
     {
         base.Warm();
-        using var stream = new MemoryStream();
-        new Fallout4Mod(ModKey.FromFileName("WarmUp.esp"), Fallout4Release.Fallout4).WriteToBinary(stream);
+        var mod = new Fallout4Mod(ModKey.FromFileName("WarmUp.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("WarmUpNpc");
+        using var wholeMod = new ScratchDirectory("medit-warm-up-");
+        Fallout4WholeMod.Serialize(mod, wholeMod).GetAwaiter().GetResult();
+        Fallout4WholeMod.Deserialize(wholeMod).GetAwaiter().GetResult()
+            .BeginWrite.ToPath(Path.Combine(wholeMod, "WarmUp.esp")).WithLoadOrder(Array.Empty<ModKey>()).WithNoDataFolder().WriteAsync().GetAwaiter().GetResult();
     }
 }

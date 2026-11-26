@@ -83,12 +83,6 @@ public sealed class WriteReadBackTests : IDisposable
     }
 
     [Fact]
-    public async Task AWriteReadBack_IsAnsweredOnceTheRecordIndexHoldsWhatItWrote_WithNoChangeSignalled()
-    {
-        await AssertHeldAndWritten(ReadBack());
-    }
-
-    [Fact]
     public async Task AReadBackOfTheSourceOfAPluginTheLoadOrderNamesNoSourceOf_IsAnsweredThatItsRowsAreItsBinarys()
     {
         var other = _fixture.Plugins.Single(plugin => plugin.Name == OtherPlugin).Key;
@@ -118,14 +112,6 @@ public sealed class WriteReadBackTests : IDisposable
     }
 
     [Fact]
-    public async Task AnUnnamedWriteWhoseCheckFails_IsAnsweredWithTheFailure()
-    {
-        _checks.FailNext();
-
-        Assert.Contains("made to fail", await CheckOfTheDisk().WaitAsync(Generous), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task AReadBack_IsAnsweredOnlyOnceItsReadLands()
     {
         var hand = await ReadBackParked();
@@ -148,18 +134,10 @@ public sealed class WriteReadBackTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadBackThatFails_IsAnsweredWithTheFailure()
-    {
-        IndexFiles.Invalidate(_fixture.InstanceRoot);
-
-        Assert.StartsWith("mEdit's record index has not read", await ReadBack().WaitAsync(Generous), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AWriteThatFollowsAFailedCheck_WaitsForItsOwnCheck()
+    public async Task AnUnnamedWriteWhoseCheckFails_IsAnsweredWithTheFailure_AndTheNextWaitsForItsOwnCheck()
     {
         _checks.FailNext();
-        await CheckOfTheDisk().WaitAsync(Generous);
+        Assert.Contains("made to fail", await CheckOfTheDisk().WaitAsync(Generous), StringComparison.Ordinal);
 
         await WorkerParkedInAReconcile();
         var check = CheckOfTheDisk();
@@ -182,28 +160,16 @@ public sealed class WriteReadBackTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadBackThatFollowsAFailedOne_WaitsForItsOwnRead()
+    public async Task AReadBackThatFails_IsAnsweredWithTheFailure_AndTheNextWaitsForItsOwnRead()
     {
         IndexFiles.Invalidate(_fixture.InstanceRoot);
-        await ReadBack().WaitAsync(Generous);
+        Assert.StartsWith("mEdit's record index has not read", await ReadBack().WaitAsync(Generous), StringComparison.Ordinal);
         Waits.Reached(() => !_index.Status.Validating, "the failed read back's turn ending");
 
         var hand = await ReadBackParked();
 
         Assert.False(hand.IsCompleted);
         _source.Release();
-        await AssertHeldAndWritten(hand);
-    }
-
-    [Fact]
-    public async Task AReadBackAskedWhileACheckAskedBeforeItWaits_IsStillAnswered()
-    {
-        await WorkerParkedInAReconcile();
-        _index.SignalChange();
-        var hand = ReadBack();
-
-        _gate.Release();
-
         await AssertHeldAndWritten(hand);
     }
 

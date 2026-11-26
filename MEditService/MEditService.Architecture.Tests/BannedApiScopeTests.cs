@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
-using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using MEditService.TestSupport;
 using Microsoft.CodeAnalysis;
 
 namespace MEditService.Architecture.Tests;
@@ -9,42 +9,10 @@ namespace MEditService.Architecture.Tests;
 public sealed class BannedApiScopeTests
 {
     private const string Rs0030 = "RS0030";
-
-    [Fact]
-    public void RS0030_IsAnErrorForEveryHandWrittenFile_AndNoProjectSilencesIt()
-    {
-        var solution = ServiceProjects.SolutionDirectory();
-        var configured = ConfiguredSeverities();
-        var files = ServiceProjects.All(solution)
-            .SelectMany(project => SourceTree.CSharpFiles(ServiceProjects.Folder(solution, project)))
-            .ToList();
-
-        Assert.True(files.Count > 500, $"The severity check read only {files.Count} files.");
-        Assert.Empty(files.Where(file => configured.For(file) != ReportDiagnostic.Error).Select(file => SourceTree.Relative(solution, file)));
-        Assert.Empty(ServiceProjects.All(solution)
-            .Select(project => ServiceProjects.Csproj(solution, project))
-            .Append(Path.Combine(solution, "Directory.Build.props"))
-            .Where(file => XDocument.Load(file).Descendants("NoWarn").Any(noWarn => noWarn.Value.Contains(Rs0030, StringComparison.Ordinal)))
-            .Select(file => SourceTree.Relative(solution, file)));
-    }
-
-    [Fact]
-    public void TheGlobalConfig_SilencesRS0030_ForTheOutputNoEditorConfigSectionReaches()
-    {
-        Assert.Equal(ReportDiagnostic.Suppress, ConfiguredSeverities().Global);
-    }
-
+    private const string Analyzer = "Microsoft.CodeAnalysis.BannedApiAnalyzers";
     private const string MutagenBan = "BannedSymbols.Mutagen.txt";
     private const string SyncOverAsyncBan = "BannedSymbols.SyncOverAsync.txt";
     private const string TimeAndBlockingBan = "BannedSymbols.txt";
-
-    public static IEnumerable<object[]> EveryProjectAndTheBanFilesItCompilesAgainst =>
-        ServiceProjects.All(ServiceProjects.SolutionDirectory()).Select(project => new object[] { project, BanFilesFor(project) });
-
-    private static string[] BanFilesFor(string project) =>
-        ServiceProjects.IsTestSide(project) ? [TimeAndBlockingBan]
-        : HoldersOfLiveMutagenObjects.Contains(project) ? [SyncOverAsyncBan, TimeAndBlockingBan]
-        : [MutagenBan, SyncOverAsyncBan, TimeAndBlockingBan];
 
     private static readonly string[] HoldersOfLiveMutagenObjects =
     [
@@ -58,102 +26,203 @@ public sealed class BannedApiScopeTests
         "MEditService.PluginAdapter",
     ];
 
-    private static readonly TimeSpan EvaluationTimeout = TimeSpan.FromSeconds(15);
+    private static readonly string[] ProjectBanNeedles = ["BannedSymbols", "BanIncluded", "BannedApiAnalyzers", "AdditionalFiles", "<Import", "@("];
 
-    [Theory]
-    [MemberData(nameof(EveryProjectAndTheBanFilesItCompilesAgainst))]
-    public async Task AProject_CompilesAgainstTheBanFilesOfItsSide_WithTheAnalyzerAndTheGlobalConfig(string project, string[] banFiles)
-    {
-        var items = await EvaluatedItems(project, "AdditionalFiles", "PackageReference", "EditorConfigFiles");
-
-        Assert.Equal(banFiles, items["AdditionalFiles"].Where(file => file.StartsWith("BannedSymbols", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
-        Assert.Contains("Microsoft.CodeAnalysis.BannedApiAnalyzers", items["PackageReference"]);
-        Assert.Contains("BannedSymbols.globalconfig", items["EditorConfigFiles"]);
-    }
-
-    private static async Task<Dictionary<string, List<string>>> EvaluatedItems(string project, params string[] itemTypes)
-    {
-        var solution = ServiceProjects.SolutionDirectory();
-        var evaluation = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        evaluation.ArgumentList.Add("msbuild");
-        evaluation.ArgumentList.Add(ServiceProjects.Csproj(solution, project));
-        evaluation.ArgumentList.Add("-nodeReuse:false");
-        foreach (var itemType in itemTypes) evaluation.ArgumentList.Add($"-getItem:{itemType}");
-        using var process = Process.Start(evaluation) ?? throw new InvalidOperationException("dotnet did not start.");
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        using var deadline = new CancellationTokenSource(EvaluationTimeout);
-        try
-        {
-            await process.WaitForExitAsync(deadline.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Fail($"dotnet msbuild did not evaluate {project} within {EvaluationTimeout.TotalSeconds} s.");
-        }
-        Assert.True(process.ExitCode == 0, $"dotnet msbuild could not evaluate {project}:\n{await output}\n{await error}");
-
-        using var json = JsonDocument.Parse(await output);
-        return itemTypes.ToDictionary(
-            itemType => itemType,
-            itemType => json.RootElement.GetProperty("Items").GetProperty(itemType).EnumerateArray()
-                .Select(item => Path.GetFileName(item.GetProperty("Identity").GetString() ?? string.Empty))
-                .ToList());
-    }
-
-    private static bool HoldsAGameAssembly(string project) =>
-        XDocument.Load(ServiceProjects.Csproj(ServiceProjects.SolutionDirectory(), project))
-            .Descendants("PackageReference")
-            .Select(e => (string?)e.Attribute("Include") ?? "")
-            .Any(IsAPerGameMutagenPackage);
-
-    private static bool IsAPerGameMutagenPackage(string id) =>
-        id.StartsWith("Mutagen.Bethesda.", StringComparison.Ordinal)
-        && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
-        && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal);
+    private static readonly Regex InSourceSuppression = new(
+        @"#pragma\s+warning\s+disable(?:[ \t]*(?://[^\r\n]*)?\r?$|\b[^\n]*\bRS0030\b)|SuppressMessage\([^)]*\bRS0030\b",
+        RegexOptions.Compiled | RegexOptions.Multiline);
 
     [Fact]
-    public void TheGameAssemblies_AreTheCodecsGameProjectsOnly()
+    public void RS0030_IsAnErrorForEveryHandWrittenFile_AndNoProjectSilencesIt()
     {
-        var projects = ServiceProjects.Production(ServiceProjects.SolutionDirectory());
+        var solution = ServiceProjects.SolutionDirectory();
+        var configured = AnalyzerConfigSet.Create(SourceTree.Files(solution, ".editorconfig")
+            .Select(path => AnalyzerConfig.Parse(File.ReadAllText(path), path))
+            .ToImmutableArray());
+        var files = ServiceProjects.All(solution)
+            .SelectMany(project => SourceTree.CSharpFiles(ServiceProjects.Folder(solution, project)))
+            .ToList();
 
-        var holders = projects.Where(HoldsAGameAssembly).ToList();
+        Assert.True(files.Count > 500, $"The severity check read only {files.Count} files.");
+        Assert.Empty(files.Where(file => SeverityFor(configured, file) != ReportDiagnostic.Error).Select(file => SourceTree.Relative(solution, file)));
+        Assert.Empty(files.Where(file => InSourceSuppression.IsMatch(File.ReadAllText(file))).Select(file => SourceTree.Relative(solution, file)));
+        Assert.Empty(ServiceProjects.All(solution)
+            .Select(project => ServiceProjects.Csproj(solution, project))
+            .Append(Path.Combine(solution, "Directory.Build.props"))
+            .Where(file => XDocument.Load(file).Descendants("NoWarn").Any(noWarn => noWarn.Value.Contains(Rs0030, StringComparison.Ordinal)))
+            .Select(file => SourceTree.Relative(solution, file)));
+    }
+
+    [Theory]
+    [InlineData("#pragma warning disable RS" + "0030 // a banned call")]
+    [InlineData("#pragma warning disable\nvar now = DateTime.Now;")]
+    [InlineData("[SuppressMessage(\"ApiDesign\", \"RS" + "0030:Do not use banned APIs\")]")]
+    public void TheSuppressionScan_NamesEachWayASourceFileSilencesRS0030(string source)
+    {
+        Assert.Matches(InSourceSuppression, source);
+    }
+
+    [Fact]
+    public void EveryProject_CompilesAgainstTheAnalyzerAndTheBanFilesOfItsSide()
+    {
+        var solution = ServiceProjects.SolutionDirectory();
+
+        Assert.Empty(BanOffenders(solution, ServiceProjects.All(solution)));
+    }
+
+    private const string AllBound = $"{Analyzer}, BannedSymbols.Mutagen.txt, BannedSymbols.SyncOverAsync.txt, BannedSymbols.txt";
+    private const string PlantedSkipped = $"MEditService.Codec.Planted compiles against {Analyzer}, BannedSymbols.SyncOverAsync.txt, BannedSymbols.txt, not {AllBound}";
+
+    public static TheoryData<string, string, string[]> PlantedBanEscapes => new()
+    {
+        {
+            "<AdditionalFiles Include=\"$(MSBuildThisFileDirectory)BannedSymbols.Mutagen.txt\" />",
+            "<AdditionalFiles Include=\"$(MSBuildThisFileDirectory)BannedSymbols.Mutagen.txt\" Condition=\"'$(MSBuildProjectName)' != 'meditservice.commands'\" />",
+            [PlantedSkipped, $"MEditService.Commands compiles against {Analyzer}, BannedSymbols.SyncOverAsync.txt, BannedSymbols.txt, not {AllBound}"]
+        },
+        {
+            $"<PackageReference Include=\"{Analyzer}\" Version=",
+            $"<PackageReference Include=\"{Analyzer}\" Condition=\"'$(MSBuildProjectName)' != 'MEditService.Commands'\" Version=",
+            [PlantedSkipped, $"MEditService.Commands compiles against BannedSymbols.Mutagen.txt, BannedSymbols.SyncOverAsync.txt, BannedSymbols.txt, not {AllBound}"]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(PlantedBanEscapes))]
+    public void TheBanCheck_NamesAProjectTheBansSkip_ByThePropsPrefixOrByAConditionOnABanItem(string inProps, string replacedBy, string[] offences)
+    {
+        using var repository = new ScratchDirectory("medit-ban-check-");
+        var solution = Directory.CreateDirectory(Path.Combine(repository, "MEditService")).FullName;
+        var props = File.ReadAllText(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"));
+        File.WriteAllText(Path.Combine(solution, "Directory.Build.props"), props.Replace(inProps, replacedBy, StringComparison.Ordinal));
+
+        Assert.Equal(offences, BanOffenders(solution, ["MEditService.Codec", "MEditService.Codec.Planted", "MEditService.Commands"]));
+    }
+
+    [Fact]
+    public void TheBanCheck_NamesAProjectThatSetsItsOwnBans_AndABuildFileOtherThanTheRootProps()
+    {
+        using var repository = new ScratchDirectory("medit-ban-check-");
+        var solution = Directory.CreateDirectory(Path.Combine(repository, "MEditService")).FullName;
+        File.Copy(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"), Path.Combine(solution, "Directory.Build.props"));
+        ScratchFiles.Plant(solution, "MEditService.Box.Tests/MEditService.Box.Tests.csproj",
+            $"<Project><ItemGroup><PackageReference Remove=\"{Analyzer}\" /></ItemGroup></Project>");
+        ScratchFiles.Plant(solution, "Directory.Build.targets", "<Project />");
+        ScratchFiles.Plant(repository, "Directory.Build.targets", "<Project />");
 
         Assert.Equal(
             [
-                "MEditService.Codec.Fallout4", "MEditService.Codec.Fallout4.Proof", "MEditService.Codec.Skyrim",
-                "MEditService.Codec.Skyrim.Proof", "MEditService.Codec.Starfield", "MEditService.Codec.Starfield.Proof",
+                "../Directory.Build.targets is a build file other than the root props",
+                "Directory.Build.targets is a build file other than the root props",
+                "MEditService.Box.Tests sets its own bans",
             ],
-            holders);
+            BanOffenders(solution, ["MEditService.Box.Tests"]).Order(StringComparer.Ordinal));
     }
 
-    private sealed record ConfiguredSeverity(AnalyzerConfigSet Set)
+    [Theory]
+    [InlineData("<ItemGroup><AdditionalFiles Remove=\"@(AdditionalFiles)\" /></ItemGroup>")]
+    [InlineData("<ItemGroup><PackageReference Remove=\"@(PackageReference)\" /></ItemGroup>")]
+    [InlineData("<Import Project=\"Bans.props\" />")]
+    [InlineData("<Choose><When Condition=\"'$(OS)' == 'Windows_NT'\"><PropertyGroup><MutagenBanIncluded>false</MutagenBanIncluded></PropertyGroup></When></Choose>")]
+    [InlineData("<Target Name=\"Late\"><ItemGroup><AdditionalFiles Include=\"BannedSymbols.txt\" /></ItemGroup></Target>")]
+    public void TheBanCheck_RefusesPropsItCannotRead(string planted)
     {
-        internal ReportDiagnostic Global =>
-            Set.GlobalConfigOptions.TreeOptions.TryGetValue(Rs0030, out var severity)
-                ? severity
-                : ReportDiagnostic.Default;
+        using var solution = new ScratchDirectory("medit-ban-check-");
+        ScratchFiles.Plant(solution, "Directory.Build.props", $"<Project>{planted}</Project>");
 
-        public ReportDiagnostic For(string path) =>
-            Set.GetOptionsForSourcePath(path).TreeOptions
-                .TryGetValue(Rs0030, out var severity)
-                ? severity
-                : ReportDiagnostic.Default;
+        Assert.StartsWith(
+            "Directory.Build.props imports, chooses",
+            Assert.Throws<InvalidOperationException>(() => BanOffenders(solution, ["MEditService.Commands"])).Message,
+            StringComparison.Ordinal);
     }
 
-    private static ConfiguredSeverity ConfiguredSeverities()
+    private static string[] BanFilesFor(string project) =>
+        ServiceProjects.IsTestSide(project) ? [TimeAndBlockingBan]
+        : HoldersOfLiveMutagenObjects.Contains(project) ? [SyncOverAsyncBan, TimeAndBlockingBan]
+        : [MutagenBan, SyncOverAsyncBan, TimeAndBlockingBan];
+
+    private static List<string> BanOffenders(string solution, IReadOnlyList<string> projects)
     {
-        var solutionDirectory = ServiceProjects.SolutionDirectory();
-        var globalConfigPath = Path.Combine(solutionDirectory, "BannedSymbols.globalconfig");
-
-        return new ConfiguredSeverity(
-            AnalyzerConfigSet.Create(EditorConfigs(solutionDirectory)
-                .Append(globalConfigPath)
-                .Select(path => AnalyzerConfig.Parse(File.ReadAllText(path), path))
-                .ToImmutableArray()));
+        var props = XDocument.Load(Path.Combine(solution, "Directory.Build.props"));
+        if (props.Descendants("Import").Concat(props.Descendants("Choose")).Any()
+            || props.Descendants("AdditionalFiles").Concat(props.Descendants("PackageReference"))
+                .Any(item => item.Attribute("Include") is null || item.Parent?.Parent != props.Root))
+            throw new InvalidOperationException(
+                "Directory.Build.props imports, chooses, removes or updates an item, or adds one inside a target; the ban check reads only an Include in a top-level item group.");
+        return
+        [
+            .. projects
+                .Select(project => (Project: project, Expected: BanFilesFor(project), Bound: BindingIn(props, project)))
+                .Where(bound => !bound.Bound.SequenceEqual([Analyzer, .. bound.Expected]))
+                .Select(bound => $"{bound.Project} compiles against {string.Join(", ", bound.Bound)}, not {string.Join(", ", [Analyzer, .. bound.Expected])}"),
+            .. projects
+                .Where(project => File.Exists(ServiceProjects.Csproj(solution, project))
+                    && File.ReadAllText(ServiceProjects.Csproj(solution, project)) is var csproj
+                    && ProjectBanNeedles.Any(needle => csproj.Contains(needle, StringComparison.Ordinal)))
+                .Select(project => $"{project} sets its own bans"),
+            .. SourceTree.Files(solution, "Directory.Build.*")
+                .Select(file => SourceTree.Relative(solution, file))
+                .Where(file => file != "Directory.Build.props" && !file.StartsWith("vendor/", StringComparison.Ordinal))
+                .Concat(Directory.GetFiles(Path.GetDirectoryName(solution).Require(), "Directory.Build.*").Select(file => $"../{Path.GetFileName(file)}"))
+                .Select(file => $"{file} is a build file other than the root props"),
+        ];
     }
 
-    private static IEnumerable<string> EditorConfigs(string solutionDirectory) =>
-        SourceTree.Files(solutionDirectory, ".editorconfig");
+    private static List<string> BindingIn(XDocument props, string project)
+    {
+        var properties = PropertiesOf(props, project);
+        bool Binds(XElement item) => Holds(item, properties) && Holds(item.Parent.Require(), properties);
+        return
+        [
+            .. props.Descendants("PackageReference").Where(item => (string?)item.Attribute("Include") == Analyzer && Binds(item)).Select(_ => Analyzer),
+            .. props.Descendants("AdditionalFiles").Where(Binds)
+                .Select(item => Path.GetFileName(Expand(item.Attribute("Include").Require().Value, properties)))
+                .Where(file => file.StartsWith("BannedSymbols", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    private static Dictionary<string, string> PropertiesOf(XDocument props, string project)
+    {
+        var properties = new Dictionary<string, string>(StringComparer.Ordinal) { ["MSBuildProjectName"] = project };
+        foreach (var property in props.Root.Require().Elements("PropertyGroup").Where(group => Holds(group, properties)).SelectMany(group => group.Elements()))
+        {
+            if (Holds(property, properties)) properties[property.Name.LocalName] = property.Value;
+        }
+        return properties;
+    }
+
+    private static readonly Regex Comparison = new(@"^'(?<left>[^']*)'\s*(?<op>==|!=)\s*'(?<right>[^']*)'$", RegexOptions.Compiled);
+    private static readonly Regex NameTest = new(@"^(?<not>!)?\$\(MSBuildProjectName\.(?<test>StartsWith|EndsWith)\('(?<arg>[^']*)'\)\)$", RegexOptions.Compiled);
+    private static readonly Regex Property = new(@"\$\((?<name>\w+)\)", RegexOptions.Compiled);
+
+    private static bool Holds(XElement element, IReadOnlyDictionary<string, string> properties) =>
+        (string?)element.Attribute("Condition") is not { } condition
+        || Regex.Split(condition, @"\s+And\s+").All(term => TermHolds(term.Trim(), properties));
+
+    private static bool TermHolds(string term, IReadOnlyDictionary<string, string> properties)
+    {
+        if (Comparison.Match(term) is { Success: true } comparison)
+        {
+            var equal = string.Equals(
+                Expand(comparison.Groups["left"].Value, properties), Expand(comparison.Groups["right"].Value, properties), StringComparison.OrdinalIgnoreCase);
+            return comparison.Groups["op"].Value == "==" ? equal : !equal;
+        }
+        if (NameTest.Match(term) is { Success: true } test)
+        {
+            var name = properties["MSBuildProjectName"];
+            var arg = test.Groups["arg"].Value;
+            var holds = test.Groups["test"].Value == "StartsWith"
+                ? name.StartsWith(arg, StringComparison.Ordinal)
+                : name.EndsWith(arg, StringComparison.Ordinal);
+            return holds != test.Groups["not"].Success;
+        }
+        throw new InvalidOperationException($"The ban check reads no condition of the form '{term}'; teach it, or keep the props' conditions to the forms it reads.");
+    }
+
+    private static string Expand(string text, IReadOnlyDictionary<string, string> properties) =>
+        Property.Replace(text, match => properties.GetValueOrDefault(match.Groups["name"].Value, ""));
+
+    private static ReportDiagnostic SeverityFor(AnalyzerConfigSet configured, string path) =>
+        configured.GetOptionsForSourcePath(path).TreeOptions.TryGetValue(Rs0030, out var severity) ? severity : ReportDiagnostic.Default;
 }

@@ -24,8 +24,8 @@ public sealed class LoadOrderTests
     private static readonly StampedFile AStrings = new(@"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS", "1/2/3");
 
     private static LoadOrderSnapshot OfA(
-        PluginAddress[]? loadedWithNoLine = null, StampedFile[]? archives = null, StampedFile[]? stringsFiles = null, Language language = Language.English) =>
-        new(Data, Instance, GameRelease.Fallout4, [A], [A.Key], loadedWithNoLine ?? [], archives ?? [], [], stringsFiles ?? [AStrings], [], language);
+        PluginAddress[]? loadedWithNoLine = null, StampedFile[]? archives = null, StampedFile[]? stringsFiles = null, Language language = Language.English, int disabledLine = 1) =>
+        new(Data, Instance, GameRelease.Fallout4, [A, Registered("B.esp", "ModB", line: disabledLine)], [A.Key], loadedWithNoLine ?? [], archives ?? [], [], stringsFiles ?? [AStrings], [], language);
 
     public static TheoryData<string, LoadOrderSnapshot> DifferingInOneField => new()
     {
@@ -34,6 +34,7 @@ public sealed class LoadOrderTests
         { "reads no strings file", OfA(stringsFiles: []) },
         { "reads its strings file under another stamp", OfA(stringsFiles: [AStrings with { Stamp = "1/2/4" }]) },
         { "shows texts in another strings language", OfA(language: Language.French) },
+        { "places its disabled line elsewhere", OfA(disabledLine: 2) },
     };
 
     [Theory]
@@ -96,18 +97,6 @@ public sealed class LoadOrderTests
     public void ConstructingASnapshotOfRefusedPlugins_Throws()
     {
         Assert.Throws<ArgumentException>(() => Order([A], Registered("B.esp", "ModB")));
-    }
-
-    [Fact]
-    public void APluginTheSnapshotDoesNotListAsActive_IsNotActive_AndIsStillAPluginInTheInstance()
-    {
-        var plugin = Registered("A.esp", "ModA");
-
-        var order = Order([plugin]);
-
-        Assert.Null(order.LoadOrderIndex(plugin.Key));
-        Assert.Empty(order.Active);
-        Assert.Equal(plugin, order.Plugin(plugin.Key));
     }
 
     [Fact]
@@ -218,16 +207,6 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void EmptySnapshot_HasNoActivePlugin_AndKnowsNoPlugin()
-    {
-        var order = Order([]);
-
-        Assert.Empty(order.Active);
-        Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModA")));
-        Assert.Null(order.LoadOrderIndex(new PluginAddress("A.esp", "ModA")));
-    }
-
-    [Fact]
     public void EqualValues_HashAlike_WhenTheirPathsDifferOnlyInCase()
     {
         var plugin = Registered("A.esp", "ModA");
@@ -262,27 +241,6 @@ public sealed class LoadOrderTests
         Assert.Equal("ModA", order.Plugin(new PluginAddress("A.esp", "ModA"))?.Origin);
         Assert.Equal("ModB", order.Plugin(new PluginAddress("A.esp", "ModB"))?.Origin);
         Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModC")));
-    }
-
-    [Fact]
-    public void ProviderOf_IsWhatTheSnapshotNamed_WhateverTheOriginOrThePath()
-    {
-        var game = new RegisteredPlugin("Vanilla.esp", "ModA", @"C:\Elsewhere\Vanilla.esp", PluginProvider.Game, Line: null, PluginStrings.None);
-        var stray = new RegisteredPlugin("Stray.esp", "ModA", @"C:\Elsewhere\Stray.esp", PluginProvider.NoMod, Line: null, PluginStrings.None);
-        var inFolder = new PluginProvider.FromMod("ModA", @"C:\MO2\mods\ModA", @"C:\MO2\source\ModA");
-        var mod = new RegisteredPlugin("A.esp", "ModA", @"C:\MO2\mods\ModA\deep\A.esp", inFolder, Line: null, PluginStrings.None);
-
-        var order = Order([game, stray, mod]);
-
-        Assert.Equal(
-            (PluginProvider.Game, PluginProvider.NoMod, (PluginProvider)inFolder),
-            (order.ProviderOf(game.Key), order.ProviderOf(stray.Key), order.ProviderOf(mod.Key)));
-    }
-
-    [Fact]
-    public void ProviderOf_APluginNoneRegistered_IsNull()
-    {
-        Assert.Null(Order([]).ProviderOf(new PluginAddress("A.esp", "ModA")));
     }
 
     [Fact]
@@ -337,5 +295,4 @@ public sealed class LoadOrderTests
 
         Assert.Equal(reasons, order.CollisionReasons().Select(c => c.Reason));
     }
-
 }

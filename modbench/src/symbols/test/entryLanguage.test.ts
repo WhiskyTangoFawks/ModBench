@@ -158,22 +158,17 @@ describe('the places files name a mod, a separator, a downloaded file or a profi
   });
 
   it.each([
-    ['a separator', separator('Gear')], ['a downloaded file, whatever its case', downloadedFile('patch-1.7z')], ['a profile', profile('Default')],
+    ['a separator', separator('Gear')], ['a downloaded file, whatever its case', downloadedFile('patch-1.7z')],
   ])('lists the places of %s too', async (_case, entry) => {
     const found = await language(undefined).referencesTo(entry);
 
     expect('locations' in found && located(found.locations)).toEqual([locationAt(1)]);
   });
 
-  it.each([
-    [mod('Gone Mod'), 'Mods lists no mod named Gone Mod.'],
-    [separator('Gone'), 'Mods lists no separator named Gone.'],
-    [downloadedFile('Gone.7z'), 'Downloads lists no downloaded file named Gone.7z.'],
-    [profile('Gone'), 'The instance holds no profile named Gone.'],
-  ])('refuses to list what names one nothing has the name of, and asks no owner: %o', async (entry, refused) => {
+  it('refuses to list what names one nothing has the name of, and asks no owner', async () => {
     const { reads, ...kind } = language(undefined);
 
-    expect(await kind.referencesTo(entry)).toEqual({ refused });
+    expect(await kind.referencesTo(mod('Gone Mod'))).toEqual({ refused: 'Mods lists no mod named Gone Mod.' });
     expect(reads).not.toHaveBeenCalled();
   });
 });

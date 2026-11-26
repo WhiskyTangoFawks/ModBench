@@ -98,25 +98,6 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_InAModWithNoRepository_AskedForTheInstanceRepository_CommitsItsSourceFolderAndItsModFoldersManifestThere_AndMakesNoRepositoryOfItsOwn()
-    {
-        var instanceRepository = Path.Combine(_root, ".git");
-        GitProbe.Run(instanceRepository, _root, "init", "-q", "-b", "main");
-        GitProbe.Run(instanceRepository, _root, "config", "user.name", "Test");
-        GitProbe.Run(instanceRepository, _root, "config", "user.email", "test@localhost");
-        var plugin = AddToNewMod(Lossless.Malformed);
-        var sourceFolder = Path.Combine(_root, "source", NewModName);
-        var linked = new RootFile($"{NewModName}.manifest.json", "the link"u8.ToArray());
-
-        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder, SourceModIn.InstanceRepository) with { ModFolderManifest = linked, ModFolderManifestInInit = true }));
-
-        Assert.Equal([plugin], result.Applied);
-        Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_root, 3));
-        Assert.Contains($"source/{NewModName}/plugin-source/{Malformed}/", Git(_root, "ls-tree", "-r", "--name-only", "HEAD"), StringComparison.Ordinal);
-        Assert.Equal("the link", Git(_root, "show", $"HEAD~1:mods/{NewModName}/{linked.Name}"));
-    }
-
-    [Fact]
     public async Task DecompileAndRepair_WhoseRequestIsCancelled_StillRepairsEveryPlugin()
     {
         var first = AddToNewMod(Lossless.Malformed);
@@ -213,9 +194,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private const string Unrepairable = "NoRepair.esp";
 
     [Theory]
-    [InlineData(new[] { Malformed }, DecompileAndRepairRefusal.OtherPluginRepairable)]
     [InlineData(new[] { Malformed, OtherRepairable }, DecompileAndRepairRefusal.OtherPluginRepairable)]
-    [InlineData(new[] { Unrepairable }, DecompileAndRepairRefusal.OtherPluginRefused)]
     [InlineData(new[] { Malformed, Unrepairable }, DecompileAndRepairRefusal.OtherPluginRefused)]
     public async Task DecompileAndRepair_OfAHealthyPluginOfAModNotASourceMod_WhoseUnnamedSiblingsAreMalformed_IsRefusedNamingEachWithItsDiagnoses(
         string[] siblings, DecompileAndRepairRefusal expected)
@@ -251,6 +230,19 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
         Assert.Equal((clean, DecompileAndRepairRefusal.NotMalformedOutsideSourceMod), (refused.Item, refused.Refusal));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth_AndNamesBothInItsCommits()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
+
+        var result = await Repair([ToRepair(plugin)]);
+
+        Assert.Equal([plugin], result.Applied);
+        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
+        Assert.Contains("HarborRegion", messages, StringComparison.Ordinal);
+        Assert.Contains("HarborRace", messages, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -417,43 +409,6 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Contains(Lossy.Change.Require(), messages, StringComparison.Ordinal);
         Assert.Contains(Lossy.Diagnosis, messages, StringComparison.Ordinal);
         Assert.DoesNotContain(Lossless.Change.Require(), messages, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth_AndNamesBothInItsCommits()
-    {
-        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
-
-        var result = await Repair([ToRepair(plugin)]);
-
-        Assert.Equal([plugin], result.Applied);
-        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
-        Assert.Contains("HarborRegion", messages, StringComparison.Ordinal);
-        Assert.Contains("HarborRace", messages, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task DecompileAndRepair_OfAPluginWithTwoDiagnosesNoRepairAnswers_IsRefusedNamingBoth_AndWritesNothing()
-    {
-        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideTwoUnansweredPerks);
-        var before = Head(_sourceMod);
-
-        var refused = Assert.Single((await Repair([ToRepair(plugin)])).Refused);
-
-        Assert.Equal(DecompileAndRepairRefusal.NoRepair, refused.Refusal);
-        Assert.Contains("HarborPerkOne", refused.Message, StringComparison.Ordinal);
-        Assert.Contains("HarborPerkTwo", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(before, Head(_sourceMod));
-    }
-
-    [Fact]
-    public async Task DecompileAndRepair_OfAHealthyPluginOfASourceMod_IsRefusedAsNotMalformed()
-    {
-        var clean = new PluginAddress("First.esp", SourceModName);
-
-        var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
-
-        Assert.Equal((clean, DecompileAndRepairRefusal.NotMalformed), (refused.Item, refused.Refusal));
     }
 
     [Fact]

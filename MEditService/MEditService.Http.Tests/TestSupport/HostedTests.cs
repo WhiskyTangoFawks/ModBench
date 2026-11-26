@@ -4,7 +4,7 @@ namespace MEditService.Http.Tests.TestSupport;
 
 public abstract class HostedTests : IDisposable
 {
-    private MEditHost _app;
+    private readonly MEditHost _app;
 
     protected HostedTests()
     {
@@ -12,7 +12,7 @@ public abstract class HostedTests : IDisposable
         Client = _app.CreateClient();
     }
 
-    protected HttpClient Client { get; private set; }
+    protected HttpClient Client { get; }
 
     protected IReadOnlyList<LogEntry> Logged
     {
@@ -30,13 +30,6 @@ public abstract class HostedTests : IDisposable
     {
         _fixturesDisposedAfterTheHostStops.Add(fixture);
         return fixture;
-    }
-
-    protected void Restart()
-    {
-        StopTheService();
-        _app = CreateHost();
-        Client = _app.CreateClient();
     }
 
     protected virtual void DisposeFixtures() { }

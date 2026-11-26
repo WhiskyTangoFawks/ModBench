@@ -11,6 +11,7 @@ import { PluginFactsFeed, type PluginFactsFeedDeps } from '../pluginFactsFeed';
 import { rulesReader, type SortingRuleFiles } from '../../sortingRules/lootMetadata';
 import { holdsLoadOrder, holdsNoLoadOrder } from '../../client/test/says';
 import type { NamedPlugins } from '../pluginAddress';
+import { settled } from '../../test/eventually';
 
 const USERLIST = '/instance/userlist.yaml';
 const filesWith = (masterlist: string, userlist = ''): SortingRuleFiles => ({
@@ -654,7 +655,7 @@ describe('PluginFactsFeed', () => {
     client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
 
     await feed.reconciled([]);
-    await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
+    await settled(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
     expect(diagnoses.items).toEqual([]);
   });
@@ -667,7 +668,7 @@ describe('PluginFactsFeed', () => {
     client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
 
     await feed.reconciled([]);
-    await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
+    await settled(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
     expect(feed.rows.description(A)).toBe('malformed');
   });
@@ -678,11 +679,11 @@ describe('PluginFactsFeed', () => {
     client.setQueryAnswer('getDiagnoses', []);
     client.setQueryFailureOnce('getDiagnoses', { failed: 'refused', refusal: '503' });
     await feed.reconciled([]);
-    await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
+    await settled(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
     const before = changes.mock.calls.length;
     await feed.reconciled([]);
-    await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
+    await settled(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
 
     expect(feed.rows.readFailureMessage()).toBeUndefined();
   });

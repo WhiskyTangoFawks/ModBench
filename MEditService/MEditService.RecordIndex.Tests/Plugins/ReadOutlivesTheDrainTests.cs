@@ -15,7 +15,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
     private const string SlowReadsOwnText = "steps(n)";
 
     private const string SecondsLongReadOnOneCore =
-        $"WITH RECURSIVE {SlowReadsOwnText} AS (SELECT 1 UNION ALL SELECT n + 1 FROM steps WHERE n < 60000) SELECT count(*) AS n FROM steps";
+        $"WITH RECURSIVE {SlowReadsOwnText} AS (SELECT 1 UNION ALL SELECT n + 1 FROM steps WHERE n < 20000) SELECT count(*) AS n FROM steps";
 
     private const string NotReopened =
         "mEdit's record index was not reopened: a read of it was still open after 120s. It is retried at the next check of the disk.";

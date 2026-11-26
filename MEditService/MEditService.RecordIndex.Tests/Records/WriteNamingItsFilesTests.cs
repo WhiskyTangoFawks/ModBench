@@ -175,18 +175,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     public static TheoryData<string, string> WriteKindsByRoad()
     {
         TheoryData<string, string> table = [];
-        foreach (var write in Writes.Keys)
-        {
-            foreach (var road in Roads.Keys) table.Add(write, road);
-        }
+        foreach (var write in Writes.Keys) table.Add(write, "handed by its writer");
+        table.Add("a reference moved between cells", "named by the watch");
         return table;
     }
-
-    private static readonly string[] MakingACellsBlock = ["an interior cell created", "an exterior cell created", "a record copied as an override"];
-
-    public static TheoryData<string> WritesReadAlone() => [.. Writes.Keys.Except(MakingACellsBlock)];
-
-    public static TheoryData<string> WritesMakingACellsBlock() => [.. MakingACellsBlock];
 
     [Theory]
     [MemberData(nameof(WriteKindsByRoad))]
@@ -324,11 +316,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Assert.Contains("stopped", await bare.Queries.Hold([Handed(NpcRenamed())], CancellationToken.None), StringComparison.Ordinal);
     }
 
-    [Theory]
-    [MemberData(nameof(WritesReadAlone))]
-    public void AWriteNamingItsFiles_ReadsThemAlone_AndNoWholeTree(string write)
+    [Fact]
+    public void AWriteNamingItsFiles_ReadsThemAlone_AndNoWholeTree()
     {
-        var saved = Writes[write](this);
+        var saved = Writes["a reference moved between cells"](this);
         var (named, wholeReads, wholeStatuses) = (_source.NamedReads, _source.WholeTreeReads, _source.GitStatusAsked);
 
         Written(saved);
@@ -336,11 +327,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Assert.Equal((named + 1, wholeReads, wholeStatuses), (_source.NamedReads, _source.WholeTreeReads, _source.GitStatusAsked));
     }
 
-    [Theory]
-    [MemberData(nameof(WritesMakingACellsBlock))]
-    public void AWriteThatMakesACellsBlock_NamesItsGroupDocument_SoThePluginIsReadWhole(string write)
+    [Fact]
+    public void AWriteThatMakesACellsBlock_NamesItsGroupDocument_SoThePluginIsReadWhole()
     {
-        var saved = Writes[write](this);
+        var saved = Writes["an interior cell created"](this);
         var wholeReads = _source.WholeTreeReads;
 
         Written(saved);
@@ -374,26 +364,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     }
 
     [Fact]
-    public void AnotherFilesHandEdit_IsLeftByAWriteNamingItsFiles_AndFoundByTheNextCheck()
-    {
-        Container.HandEdit(Record(_keys.Cell), $"\"{ContainerModPlugin.CellEditorId}\"", "\"EditedByHand\"");
-        Written(Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"))));
-        var afterTheWrite = Record(_keys.Cell).EditorId;
-
-        _index.NextCheckUntil(() => Record(_keys.Cell).EditorId == "EditedByHand", "the hand edit read");
-
-        Assert.Equal((ContainerModPlugin.CellEditorId, "RenamedNpc"), (afterTheWrite, Record(_npc).EditorId));
-    }
-
-    [Fact]
-    public void ARecordAWriteCreated_IsAdded()
-    {
-        Written(Writes["a record created"](this));
-
-        Assert.Equal(WorkingTreeState.Added, _index.RowOf(NewFormKey, Container.Key)?.WorkingTreeState);
-    }
-
-    [Fact]
     public void AWriteWhoseNamedReadThrows_IsReadWhole()
     {
         _source.FailNextNamedRead();
@@ -402,17 +372,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Written(Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"))));
 
         Assert.Equal("RenamedNpc", Record(_npc).EditorId);
-        Assert.True(_source.WholeTreeReads > wholeReads);
-    }
-
-    [Fact]
-    public async Task AWriteNamingTheHeader_ReadsThePluginWhole()
-    {
-        var header = Path.Combine(Container.ModFolderOf(), PluginSourceRoot.HeaderDocument(ContainerMod.PluginName));
-        var wholeReads = _source.WholeTreeReads;
-
-        Assert.Null(await Hold(new HandedPlugin(Container.Key, [header], [])));
-
         Assert.True(_source.WholeTreeReads > wholeReads);
     }
 

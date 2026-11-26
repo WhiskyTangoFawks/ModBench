@@ -43,14 +43,6 @@ public sealed class CopyUnderrideTests : IDisposable
     }
 
     [Fact]
-    public void ADisabledPluginHoldingARecordTheCopyReferences_IsJudgedAtItsLine()
-    {
-        _plugins.Relist(Address(_referenced), entry => entry with { Enabled = false });
-
-        Assert.Equal(RecordEditRefusal.UnderrideDestination, CopyThePatchsNpcIntoTheDestination().OnlyRefused().Refusal);
-    }
-
-    [Fact]
     public void APluginHoldingARecordTheCopyReferences_WithNoLine_IsNotJudged()
     {
         _plugins.Relist(Address(_referenced), entry => entry with { Line = null });

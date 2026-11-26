@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { toldAfter, toldOnceSettled, writesToldTo } from '../writesTold';
+import { settled as until } from '../../test/eventually';
 
 const told: (readonly string[])[] = [];
 
@@ -48,7 +49,7 @@ describe('a write the loader is told of', () => {
       await toldOnceSettled(() => toldAfter(['/b'], () => Promise.resolve()));
       steps.push(`work done, told ${told.length}`);
     }).then(() => steps.push('answered'));
-    await vi.waitFor(() => { expect(told).toEqual([['/a', '/b']]); });
+    await until(() => { expect(told).toEqual([['/a', '/b']]); });
     steps.push('loader answers');
     answerTold();
     await settled;

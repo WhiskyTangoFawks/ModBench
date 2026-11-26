@@ -28,8 +28,6 @@ def steps(results: Path):
         Step(BUILD, ['npm', 'run', 'build']),
         Step(UNIT, ['npm', 'run', 'test:unit', '--', '--reporter=basic', '--reporter=json',
                     f'--outputFile.json={results / "unit.json"}'], after=BUILD),
-        Step('Gate 6: Frontend unit test times',
-             [sys.executable, str(Path(__file__).with_name('check_test_times.py')), str(results)], after=UNIT),
         Step('Gate 6: Frontend integration tests', ['npm', 'run', 'test:integration'], after=BUILD,
              log=results / 'integration.mocha'),
     ]

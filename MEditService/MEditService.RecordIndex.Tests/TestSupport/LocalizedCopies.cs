@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>A.esp, localized in English and French, and B.esp, not localized, copying A's records unchanged
-/// into the strings language the index reads in.</summary>
+/// <summary>A.esp, localized in English and French, and B.esp, not localized, copying A's records unchanged into French, the
+/// index's strings language: English is the texts' default, so only another proves the index reads in it.</summary>
 internal sealed class LocalizedCopies : IDisposable
 {
     internal static readonly PluginAddress Master = new("A.esp", PluginOrigin.DataDirectory);
@@ -26,8 +26,9 @@ internal sealed class LocalizedCopies : IDisposable
 
     internal OpenedIndex Index { get; }
 
-    internal LocalizedCopies(Language stringsLanguage)
+    internal LocalizedCopies()
     {
+        const Language stringsLanguage = Language.French;
         var copied = Texts[stringsLanguage];
         _fixture = new PluginFixtureBuilder("medit-localized-copies")
             .WithPlugin(Master.Name, mod =>

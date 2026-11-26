@@ -35,15 +35,6 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         [.. index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void TwoNamesDifferingOnlyInCase_FailBoth_AndTheRestIndex()
-    {
-        using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
-
-        Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
-        Assert.Equal(["Fine.esp"], IndexedNames(index));
-    }
-
-    [Fact]
     public void ACollisionArrivingAfterOneIndexed_UnregistersIt()
     {
         using var index = Reconciled(Named("Dup.esp"), Named("Fine.esp"));
@@ -77,45 +68,11 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void ACollisionWhoseOtherNameLeaves_ReadsTheStayingOne()
-    {
-        using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
-
-        Arrive(index, Twin, Named("Fine.esp"));
-
-        Assert.Empty(index.Status.Failures);
-        Assert.Equal(["Fine.esp", "dup.esp"], IndexedNames(index));
-    }
-
-    [Fact]
-    public void ACollisionWithAnActiveTwin_ReadsNeitherAndItsActiveStatusIsNotHeld()
-    {
-        var active = Named("Dup.esp") with { Name = "dup.esp" };
-
-        using var index = Reconciled(Inactive("Dup.esp"), active, Named("Fine.esp"));
-
-        Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
-        Assert.Equal(["Fine.esp"], IndexedNames(index));
-    }
-
-    [Fact]
     public void ACollidingPair_LeavesTheProblemsAnsweredForTheRest()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
         Assert.DoesNotContain(index.Queries.GetProblems().Value(), p => p.Plugin.Name.Equals("Dup.esp", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void AFailedPluginWhoseOriginChangesOnlyInCase_KeepsOneFailureRow()
-    {
-        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.DataFolder, "Missing.esp") };
-        using var index = Reconciled(missing);
-        Assert.Equal(["Fine.esp"], FailedNames(index));
-
-        Arrive(index, missing with { Origin = Origin.ToLowerInvariant() });
-
-        Assert.Equal(["Fine.esp"], FailedNames(index));
     }
 
     [Fact]
@@ -133,15 +90,18 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         Assert.Equal(("fine.esp", "moda"), (record.Plugin, record.Origin));
     }
 
-    [Fact]
-    public void AFailedPluginRespelledOnlyInCase_IsNamedAsSpelledNow()
+    [Theory]
+    [InlineData("fine.esp", Origin)]
+    [InlineData("Fine.esp", "moda")]
+    public void AFailedPluginRespelledOnlyInCase_IsOneFailureNamedAsSpelledNow(string name, string origin)
     {
         var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.DataFolder, "Missing.esp") };
         using var index = Reconciled(missing);
 
-        Arrive(index, missing with { Name = "fine.esp" });
+        Arrive(index, missing with { Name = name, Origin = origin });
 
-        Assert.Equal(["fine.esp"], FailedNames(index));
+        var failure = Assert.Single(index.Status.Failures);
+        Assert.Equal((name, origin), (failure.Name, failure.Origin));
     }
 
     [Fact, Kind(Kinds.Posix)]

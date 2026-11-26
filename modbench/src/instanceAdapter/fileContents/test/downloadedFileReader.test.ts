@@ -65,9 +65,9 @@ describe('downloadedFileReader, spawning the binary itself', () => {
   });
 
   onPosix.it('(Windows has no signals) names the signal that killed the binary', async () => {
-    fakeNodeAs7zPreloadedToDieBy('SIGSEGV');
+    fakeNodeAs7zPreloadedToDieBy('SIGKILL');
 
-    await expect(downloadedFileReader.extract('/tmp/mod.rar', '/tmp/stage')).rejects.toThrow('Failed to extract /tmp/mod.rar: 7z was killed by signal SIGSEGV');
+    await expect(downloadedFileReader.extract('/tmp/mod.rar', '/tmp/stage')).rejects.toThrow('Failed to extract /tmp/mod.rar: 7z was killed by signal SIGKILL');
   });
 
   it('names every candidate, and the archives install extracts, when no binary is on the path', async () => {

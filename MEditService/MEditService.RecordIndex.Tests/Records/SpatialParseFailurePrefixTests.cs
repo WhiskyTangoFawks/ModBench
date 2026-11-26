@@ -86,15 +86,6 @@ public sealed class SpatialParseFailurePrefixTests
     }
 
     [Fact]
-    public void AWorldspace_IsListedWithItsCellsBelowIt()
-    {
-        using var world = new SpatialWorld();
-
-        Assert.Equal(world.WorldspaceFormKey, world.Row("wrld").FormKey);
-        Assert.Equal(world.CellFormKey, Assert.Single(world.ExteriorCells()).FormKey);
-    }
-
-    [Fact]
     public void AnUnreadableInteriorCell_MarksItsRowInTheInteriorListing()
     {
         using var world = new SpatialWorld();

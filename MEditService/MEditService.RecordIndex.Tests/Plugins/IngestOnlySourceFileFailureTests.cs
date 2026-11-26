@@ -9,70 +9,18 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
-
-    private static bool AProblemIsNamed(OpenedIndex index) => index.Queries.GetProblems().Value() is [{ Problems: [_, ..] }];
-
-    private string Relative(string path) => Path.GetRelativePath(_fixture.Entry.ModFolderOf(), path);
-
-    private string CellFile => _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-
-    private string TemporaryRef => _fixture.TemporaryRef.ToString();
-
-    private void EditTheCell(string from, string to)
-    {
-        var file = CellFile;
-        var text = File.ReadAllText(file);
-        var edited = text.Replace(from, to, StringComparison.Ordinal);
-        Assert.NotEqual(text, edited);
-        File.WriteAllText(file, edited);
-    }
-
-    [Fact]
-    public void AnEmbeddedChildsFormKeyAnotherFileAlsoClaims_NamesBothFiles()
-    {
-        var cell = CellFile;
-        var npc = _fixture.SourceFileContaining(ContainerMod.NpcEditorId);
-        var impostor = Path.Combine(Path.GetDirectoryName(npc).Require(), "Impostor.json");
-        File.WriteAllText(impostor, File.ReadAllText(npc).Replace(_fixture.Npc.ToString(), TemporaryRef, StringComparison.Ordinal));
-
-        using var index = Reloaded();
-
-        Assert.Equivalent(
-            new[] { (Relative(cell), TemporaryRef), (Relative(impostor), TemporaryRef) },
-            index.SourceProblems().Select(f => (f.SourceRelativePath, f.FormKey)), strict: true);
-    }
-
-    private string CellFileWithItsEditorIdANumber(string editorId)
-    {
-        var cell = CellFile;
-        EditTheCell($"\"{editorId}\"", "5");
-        return cell;
-    }
-
     [Fact]
     public void ATreeRefusedAtItsFirstRead_NamesTheFileAndItsFormKey_WithTheRefusalsReason()
     {
-        var cell = CellFileWithItsEditorIdANumber(ContainerModPlugin.EmbedCellEditorId);
+        var cell = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        File.WriteAllText(cell, File.ReadAllText(cell).Replace($"\"{ContainerModPlugin.EmbedCellEditorId}\"", "5", StringComparison.Ordinal));
 
-        using var index = Reloaded();
+        using var index = Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
 
         var failure = Assert.Single(index.SourceProblems());
-        Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
+        Assert.Equal(
+            (Path.GetRelativePath(_fixture.Entry.ModFolderOf(), cell), _fixture.EmbedCell.ToString()),
+            (failure.SourceRelativePath, failure.FormKey));
         Assert.Contains("'EditorID' is not a string", failure.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AChildEditedToCarryItsOwnersFormKeyOnceRead_NamesTheOwnersFile_WhileItsLastGoodRowsStand()
-    {
-        using var index = Reloaded();
-        var cell = CellFile;
-        EditTheCell(TemporaryRef, _fixture.EmbedCell.ToString());
-
-        index.NextCheckUntil(() => AProblemIsNamed(index), "the re-read's failure");
-
-        var failure = Assert.Single(index.SourceProblems());
-        Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
-        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, index.CopyIn(TemporaryRef, _fixture.Plugin)?.EditorId);
     }
 }

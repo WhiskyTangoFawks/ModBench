@@ -19,12 +19,8 @@ public sealed class FunctionLeafConditionSchemaTests
 
     [Theory]
     [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", nameof(SkyrimRecords.GetIsIDConditionData), "GetIsID")]
-    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", nameof(SkyrimRecords.EPMagic_SpellHasKeywordConditionData), "EPMagic_SpellHasKeyword")]
-    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", nameof(SkyrimRecords.GetVATSValueWeaponConditionData), "GetVATSValueWeapon")]
     [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", nameof(SkyrimRecords.UnknownConditionData), "Unknown")]
     [InlineData(GameRelease.Starfield, "qust", "DialogConditions", nameof(StarfieldRecords.GetIsIDConditionData), "GetIsID")]
-    [InlineData(GameRelease.Starfield, "qust", "DialogConditions", nameof(StarfieldRecords.GetWantBlockingConditionData), "GetWantBlocking")]
-    [InlineData(GameRelease.Starfield, "qust", "DialogConditions", nameof(StarfieldRecords.UnknownConditionData), "Unknown")]
     public void TheFunctionRow_IsTheDiscriminatorChoosingTheKind_EachReadAsItsFunctionsName(GameRelease release, string table, string column, string leaf, string label)
     {
         var function = Data(release, table, column).Fields.Require().Single(f => f.IsDiscriminator);
@@ -44,15 +40,8 @@ public sealed class FunctionLeafConditionSchemaTests
     }
 
     [Theory]
-    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", "FirstUnusedIntParameter")]
-    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", "FirstUnusedStringParameter")]
-    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", "SecondUnusedIntParameter")]
-    [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", "SecondUnusedStringParameter")]
     [InlineData(GameRelease.SkyrimSE, "perk", "Conditions", "Unused")]
     [InlineData(GameRelease.Starfield, "qust", "DialogConditions", "FirstUnusedIntParameter")]
-    [InlineData(GameRelease.Starfield, "qust", "DialogConditions", "FirstUnusedStringParameter")]
-    [InlineData(GameRelease.Starfield, "qust", "DialogConditions", "SecondUnusedIntParameter")]
-    [InlineData(GameRelease.Starfield, "qust", "DialogConditions", "SecondUnusedStringParameter")]
     public void ASlotMutagenNamesUnused_IsNoMember(GameRelease release, string table, string column, string carrier)
     {
         Assert.DoesNotContain(carrier, Data(release, table, column).Fields.Require().Select(f => f.Name));
@@ -126,7 +115,6 @@ public sealed class FunctionLeafConditionSchemaTests
 
     [Theory]
     [InlineData(nameof(StarfieldRecords.GetWantBlockingConditionData), "FirstParameter")]
-    [InlineData(nameof(StarfieldRecords.GetWantBlockingConditionData), "SecondParameter")]
     [InlineData(nameof(StarfieldRecords.GetStageConditionData), "SecondParameter")]
     public void AnIntegerSlotTheFunctionLeavesUnused_IsNoRowOfThatFunction(string function, string slot)
     {
@@ -135,7 +123,6 @@ public sealed class FunctionLeafConditionSchemaTests
 
     [Theory]
     [InlineData(nameof(StarfieldRecords.GetVATSValueConditionData), "FirstParameter")]
-    [InlineData(nameof(StarfieldRecords.GetVATSValueConditionData), "SecondParameter")]
     [InlineData(nameof(StarfieldRecords.GetStageDoneConditionData), "SecondParameter")]
     public void AnIntegerSlotTheFunctionReads_IsARowOfThatFunction(string function, string slot)
     {

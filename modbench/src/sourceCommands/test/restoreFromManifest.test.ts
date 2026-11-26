@@ -14,6 +14,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
 import { restoreFromManifest, type RestoreStatus } from '../restoreFromManifest';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 const HA = 'AAAAAAAAAAA=';
 const HB = 'BBBBBBBBBBA=';
@@ -632,7 +633,7 @@ describe('restore from manifest', () => {
       return setup;
     }
 
-    const waiting = (client: InMemoryMEditClient) => vi.waitFor(() => { expect(client.calls.map(({ method }) => method)).toContain('getPluginIndexing'); });
+    const waiting = (client: InMemoryMEditClient) => settled(() => { expect(client.calls.map(({ method }) => method)).toContain('getPluginIndexing'); });
 
     it('waits until the record index holds the plugins of each mod restored before it', async () => {
       const { restore, client } = await aSourceModAfterTwoMods();

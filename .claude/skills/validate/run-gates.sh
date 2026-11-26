@@ -76,29 +76,34 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
   exec bash "$0" ${flags:---comments}
 fi
 
-# Every gate but the comment gate builds or tests: api-drift and scripts build and boot a backend,
-# and docs runs both stacks' scans.
+# Every gate but the comment gate builds or tests: api-drift builds and boots a backend, scripts
+# lints and tests, and docs runs both stacks' scans.
 HOLDS_SLOT=false
 { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS || $SCRIPTS; } && HOLDS_SLOT=true
 if $HOLDS_SLOT && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
   exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
 
-# The logs and reports a skip is read from, under --merge-to-main. A run beside the comment gate's
-# own would delete them, so only a run in the slot clears them. MAIN_RESULTS has a folder of its own,
-# since check_test_times.py reads all of the folder it is given.
+# Every test run writes its report here, for the time report and a merge to main's skips. A run
+# that holds no slot has a folder of its own, since it can run beside one that does and each clears
+# its folder. SECONDS counts from here, in the process that holds the slot, so the wait for the slot
+# is not in it.
 REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
-SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend MAIN_RESULTS=$REPORTS/main UNIT_RESULTS=$REPORTS/unit
-! $HOLDS_SLOT || { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+$HOLDS_SLOT || REPORTS=$REPORTS.comments
+SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
+{ rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+BUDGET_SECONDS=300
+! $MERGE_REQUESTED || BUDGET_SECONDS=600
+SECONDS=0
 
-# A merge to main fails on a skipped test, so each unittest run leaves its verbose log for skips.py.
+# Each unittest run leaves its verbose log, with every test's time, for skips.py and
+# check_test_times.py.
 unittest_discover() {
   local log=$1 status
   shift
-  $MERGE_TO_MAIN || { python3 -m unittest discover -q "$@"; return; }
-  python3 -m unittest discover -v "$@" > "$SKIP_LOGS/$log.unittest" 2>&1
+  python3 -m unittest discover -v --durations 0 "$@" > "$SKIP_LOGS/$log.unittest" 2>&1
   status=$?
-  grep -Ev ' \.\.\. ok$' "$SKIP_LOGS/$log.unittest"
+  grep -Ev ' \.\.\. ok$|^Slowest test durations$|^[0-9]+\.[0-9]+s ' "$SKIP_LOGS/$log.unittest"
   return $status
 }
 
@@ -167,20 +172,6 @@ backend_tests() {
   if { [[ -n $selected ]] || $DOCS; } && ! grep -qx MEditService.Architecture.Tests <<< "$selected"; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
   fi
-  echo "=== Gate 3: Backend test times ==="
-  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results" || return
-  ! $MERGE_TO_MAIN || tests_on_the_users_world
-}
-
-# The kinds a branch leaves out, run at a merge to main, one project at a time so a budget never
-# shares the machine with another project's tests. A filter that selects nothing is no test, so a
-# run with no passing test fails.
-tests_on_the_users_world() {
-  echo "=== Gate 3: Backend tests of real size, soak and smoke ==="
-  mkdir -p "$MAIN_RESULTS" || return
-  (cd "$ROOT/MEditService" && dotnet test --no-build -m:1 -v minimal --logger trx --results-directory "$MAIN_RESULTS" \
-    --filter 'Kind=RealSize|Kind=Smoke') || return
-  grep -qs 'outcome="Passed"' "$MAIN_RESULTS"/*.trx || { echo "No test of real size or smoke ran."; return 1; }
 }
 
 if $BACKEND; then
@@ -193,23 +184,31 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
+# A fresh worktree carries no node_modules, so install rather than fail on a missing binary.
+frontend_dependencies() {
+  local installed
+  [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] && return
+  echo "No local frontend dependencies: installing them (npm ci)..."
+  installed=$(cd "$ROOT/modbench" && npm ci 2>&1) \
+    || { echo "$installed" | tail -n 20 >&2; echo "ERROR: npm ci failed; the frontend has no dependencies." >&2; return 1; }
+}
+
 # The tests that read docs/ and spec/: the backend's architecture scans, and every frontend test
 # importing one of the two modules that read spec/. The backend and frontend runs already hold them.
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
-    (cd "$ROOT/MEditService" && dotnet test -v minimal "${ARCHITECTURE_SCANS[@]}") \
+    (cd "$ROOT/MEditService" && dotnet test -v minimal --logger trx --results-directory "$BACKEND_RESULTS" "${ARCHITECTURE_SCANS[@]}") \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
-    [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] || (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1)
-    (cd "$ROOT/modbench" && npx vitest related --run --reporter=basic --reporter=json --outputFile.json="$SKIP_LOGS/docs.json" eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
+    frontend_dependencies && (cd "$ROOT/modbench" && npx vitest related --run --reporter=basic --reporter=json --outputFile.json="$SKIP_LOGS/docs.json" eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
 fi
 
 if $FRONTEND; then
-  python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" "$UNIT_RESULTS" \
+  frontend_dependencies && python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" "$UNIT_RESULTS" \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 
@@ -227,6 +226,19 @@ fi
 if $MERGE_TO_MAIN; then
   echo "=== Skipped tests ==="
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
+fi
+
+echo "=== Test times and budget ==="
+python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" \
+  || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
+
+if $HOLDS_SLOT; then
+  echo "=== Test data over its size ==="
+  python3 "$ROOT/.claude/skills/validate/check_test_data.py" "$ROOT" \
+  || { echo "--- TEST DATA REPORT FAILED ---"; FAILED=true; }
+  echo "=== Backend code only tests reach ==="
+  python3 "$ROOT/.claude/skills/validate/check_test_only_code.py" "$ROOT/MEditService" \
+  || { echo "--- BACKEND TEST-ONLY CODE REPORT FAILED ---"; FAILED=true; }
 fi
 
 if $FAILED; then

@@ -51,6 +51,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter, tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { downloadedFilesOf, fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
+import { settled } from '../../test/eventually';
 
 type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 
@@ -94,13 +95,13 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
-    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
+    await settled(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
 
     instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('zzznomatch.7z')] } }));
-    await vi.waitFor(() => expect(downloadsView.message).toBeUndefined());
+    await settled(() => expect(downloadsView.message).toBeUndefined());
 
     instance.publish(instanceValueFixture());
-    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
+    await settled(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
   });
 });
 
@@ -111,13 +112,13 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
-    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
+    await settled(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
 
     await command('modbench.downloadedFile.showExcluded')();
-    await vi.waitFor(() => expect(downloadsView.message).toBeUndefined());
+    await settled(() => expect(downloadsView.message).toBeUndefined());
 
     await command('modbench.downloadedFile.hideExcluded')();
-    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
+    await settled(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
   });
 });
 
@@ -128,19 +129,19 @@ describe('the Downloads view sets the all-excluded context key', () => {
   it('is true once the one downloaded file is excluded, and follows Show excluded both ways', async () => {
     viewOver(instanceOver(downloadedFileRowFixture('a.7z', { excluded: true })));
 
-    await vi.waitFor(() => expect(contextValue()).toBe(true));
+    await settled(() => expect(contextValue()).toBe(true));
 
     await command('modbench.downloadedFile.showExcluded')();
-    await vi.waitFor(() => expect(contextValue()).toBe(false));
+    await settled(() => expect(contextValue()).toBe(false));
 
     await command('modbench.downloadedFile.hideExcluded')();
-    await vi.waitFor(() => expect(contextValue()).toBe(true));
+    await settled(() => expect(contextValue()).toBe(true));
   });
 
   it('stays false while at least one downloaded file is not excluded', async () => {
     viewOver(instanceOver(downloadedFileRowFixture('a.7z'), downloadedFileRowFixture('b.7z', { excluded: true })));
 
-    await vi.waitFor(() => expect(contextValue()).toBe(false));
+    await settled(() => expect(contextValue()).toBe(false));
   });
 });
 
@@ -154,7 +155,7 @@ describe('the Downloads decoration provider follows a rows change', () => {
 
     instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('zzznew.7z')] } }));
 
-    await vi.waitFor(() => expect(fired).toHaveBeenCalled());
+    await settled(() => expect(fired).toHaveBeenCalled());
   });
 });
 

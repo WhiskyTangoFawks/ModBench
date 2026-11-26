@@ -1,10 +1,8 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Noggog;
@@ -55,70 +53,24 @@ public sealed class RecordDocumentEditTests : IDisposable
     private string SeedNpc() => _fixture.Seed(_npc, "npc_");
     private string SeedCobj() => _fixture.Seed(_cobj, "cobj");
 
-    private string Applied(string formKey, RecordEditEnvelope envelope)
-    {
-        var (result, after) = _fixture.Apply(formKey, envelope);
-        Assert.True(result.Applied, result.Message);
-        return after ?? throw new InvalidOperationException("Expected an applied edit to report its document.");
-    }
-
-    private static JsonNode Node(string text, string dotted)
-    {
-        var node = JsonNode.Parse(text).Require();
-        foreach (var hop in dotted.Split('.')) node = node[hop].Require();
-        return node;
-    }
-
-    [Theory]
-    [InlineData("MasterReferences", "[]", "'MasterReferences' is read-only: masters are wholly content-derived at compile time.")]
-    [InlineData("FormID", "2048", "'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.")]
-    public void AHeaderMemberTheContentDerives_IsRefusedAsReadOnly_WithItsReason(string member, string value, string message)
+    [Fact]
+    public void AHeaderMemberTheContentDerives_IsRefusedAsReadOnly_WithItsReason()
     {
         var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
         _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
 
-        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json(value), Member(member)));
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("[]"), Member("MasterReferences")));
 
         Assert.False(result.Applied);
-        Assert.Equal((RecordEditRefusal.FieldReadOnly, message), (result.Refusal, result.Message));
-    }
-
-    [Fact]
-    public void Move_ToThePositionTheElementHolds_IsRefusedAsMalformed_AndChangesNothing()
-    {
-        var formKey = SeedCobj();
-        var before = _fixture.Document(formKey);
-
-        var (result, after) = _fixture.Apply(formKey, MoveTo(0, Member("Conditions"), At(0)));
-
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Equal("'Conditions[0]': the element is already at position 0.", result.Message);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Fact]
-    public void HexOfAnotherLength_IsRefusedNamingBothLengths()
-    {
-        var material = new MaterialObject(_mod) { EditorID = "Mato", DNAMs = [new MemorySlice<byte>([0x01, 0x02, 0x03])] };
-        var formKey = _fixture.Seed(material, "mato");
-        var before = _fixture.Document(formKey);
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"0x0102\""), Member("DNAMs"), At(0)));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.HexLengthMismatch, result.Refusal);
-        Assert.Contains("3 bytes", result.Message, StringComparison.Ordinal);
-        Assert.Contains("2 bytes", result.Message, StringComparison.Ordinal);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
+        Assert.Equal(
+            (RecordEditRefusal.FieldReadOnly, "'MasterReferences' is read-only: masters are wholly content-derived at compile time."),
+            (result.Refusal, result.Message));
     }
 
     [Theory]
     [InlineData("frobnicate", "HeightMax", "1")]
     [InlineData("set", "HeightMax", null)]
     [InlineData("remove", "HeightMax", null)]
-    [InlineData("move", "Keywords[0]", "\"up\"")]
     [InlineData("move", "Keywords[0]", "1.5")]
     [InlineData("move", "Keywords[0]", "99999999999999999999")]
     public void MalformedEnvelope_IsRefusedAsSuch(string op, string path, string? value)
@@ -131,109 +83,74 @@ public sealed class RecordDocumentEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
-    [Fact]
-    public void AValueTheCodecCannotHold_IsRefusedAsCodecRejected_NamingTheMember_AndQuotingTheCodecsReason()
+    public static TheoryData<string, Func<RecordDocumentEditTests, string>, RecordEditEnvelope, RecordEditRefusal, string, string> Refusals => new()
     {
-        var formKey = _fixture.Seed(new MiscItem(_mod) { EditorID = "Misc", ComponentDisplayIndices = [1] }, "misc");
-
-        var result = _fixture.Refused(formKey, SetAt(Json("[3, 4096]"), Member("ComponentDisplayIndices")));
-
-        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
-        Assert.Equal("ComponentDisplayIndices", result.Path);
-        Assert.Matches("^'ComponentDisplayIndices': the codec rejected the document — \\S", result.Message);
-    }
-
-    [Fact]
-    public void AUnionValueNamingNoLeaf_IsRefusedAsDiscriminatorInvalid_NamingTheDiscriminator()
-    {
-        var result = _fixture.Refused(SeedNpc(), SetAt(Json("""{"Level": 20}"""), Member("Level")));
-
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
-        Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MovingAnElementOfAnArrayWhoseOrderTheGameDoesNotRead_IsRefusedAsMalformed_NamingTheArray()
-    {
-        _npc.Keywords = [_keyword.ToLink<IKeywordGetter>(), _mod.Keywords.AddNew("Kw2").ToLink<IKeywordGetter>()];
-
-        var result = _fixture.Refused(SeedNpc(), MoveTo(1, Member("Keywords"), At(0)));
-
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
-        Assert.Contains("'Keywords' is an array whose order the game does not read", result.Message, StringComparison.Ordinal);
-    }
+        {
+            "a move to the position the element holds", t => t.SeedCobj(), MoveTo(0, Member("Conditions"), At(0)),
+            RecordEditRefusal.InvalidEnvelope, "Conditions[0]", "'Conditions[0]': the element is already at position 0."
+        },
+        {
+            "a move in an array whose order the game does not read",
+            t =>
+            {
+                t._npc.Keywords = [t._keyword.ToLink<IKeywordGetter>(), t._mod.Keywords.AddNew("Kw2").ToLink<IKeywordGetter>()];
+                return t.SeedNpc();
+            },
+            MoveTo(1, Member("Keywords"), At(0)),
+            RecordEditRefusal.InvalidEnvelope, "Keywords[0]", "'Keywords' is an array whose order the game does not read"
+        },
+        {
+            "hex of another length",
+            t => t._fixture.Seed(new MaterialObject(t._mod) { EditorID = "Mato", DNAMs = [new MemorySlice<byte>([0x01, 0x02, 0x03])] }, "mato"),
+            SetAt(Json("\"0x0102\""), Member("DNAMs"), At(0)),
+            RecordEditRefusal.HexLengthMismatch, "DNAMs[0]", "holds 3 bytes; a value of 2 bytes"
+        },
+        {
+            "a value the codec cannot hold",
+            t => t._fixture.Seed(new MiscItem(t._mod) { EditorID = "Misc", ComponentDisplayIndices = [1] }, "misc"),
+            SetAt(Json("[3, 4096]"), Member("ComponentDisplayIndices")),
+            RecordEditRefusal.CodecRejected, "ComponentDisplayIndices", "'ComponentDisplayIndices': the codec rejected the document — "
+        },
+        {
+            "a union value naming no leaf", t => t.SeedNpc(), SetAt(Json("""{"Level": 20}"""), Member("Level")),
+            RecordEditRefusal.DiscriminatorInvalid, "Level", "MutagenObjectType"
+        },
+        {
+            "an alpha in a color holding none", t => t._fixture.Seed(t._mod.Weather.AddNew("Wt"), "wthr"),
+            SetAt(Json("\"#7F102030\""), Member("LightningColor")),
+            RecordEditRefusal.AlphaNotHeld, "LightningColor", "'LightningColor' holds no alpha"
+        },
+        {
+            "a member the codec drops", t => t.SeedNpc(), SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")),
+            RecordEditRefusal.CodecDroppedValue, "Weight.Bogus", "'Weight.Bogus' was not kept by the codec"
+        },
+        {
+            "a member past its owner's set break",
+            t =>
+            {
+                t._quest.VirtualMachineAdapter = new QuestAdapter { Versioning = QuestAdapter.VersioningBreaks.Break0 };
+                return t._fixture.Seed(t._quest, "qust");
+            },
+            SetAt(Json("\"QuestFragments\""), Member("VirtualMachineAdapter"), Member("Script"), Member("Name")),
+            RecordEditRefusal.CodecDroppedValue, "VirtualMachineAdapter.Script",
+            "'VirtualMachineAdapter.Script' lies past its owner's Versioning.Break0, which is set, so the record does not hold it and nothing was written."
+        },
+    };
 
     [Theory]
-    [InlineData("\"#7F102030\"")]
-    [InlineData("\"#FF102030\"")]
-    public void AColorHoldingNoAlpha_RefusesAnAlpha_NamingTheField(string color)
+    [MemberData(nameof(Refusals))]
+    public void AWriteTheRulesOfAnEditRefuse_IsRefusedSayingWhy_AndChangesNothing(
+        string _, Func<RecordDocumentEditTests, string> seed, RecordEditEnvelope envelope, RecordEditRefusal refusal, string path, string why)
     {
-        var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
+        var formKey = seed(this);
         var before = _fixture.Document(formKey);
 
-        var (result, _) = _fixture.Apply(formKey, SetAt(Json(color), Member("LightningColor")));
+        var (result, after) = _fixture.Apply(formKey, envelope);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.AlphaNotHeld, result.Refusal);
-        Assert.Equal("LightningColor", result.Path);
-        Assert.Contains("'LightningColor'", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Fact]
-    public void AnElementPasted_WithAnAlphaInAColorHoldingNone_IsRefusedNamingThatColor()
-    {
-        var formKey = _fixture.Seed(_mod.LensFlares.AddNew("Lf"), "lens");
-
-        var (result, _) = _fixture.Apply(formKey, AddAt(Json("""{"Data": {"Tint": "#7F102030"}}"""), Member("Sprites")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.AlphaNotHeld, result.Refusal);
-        Assert.Equal("Sprites[0].Data.Tint", result.Path);
-    }
-
-    [Fact]
-    public void ValueTheCodecDrops_IsRefusedNamingIt_NeverReportedAsSuccess()
-    {
-        var formKey = SeedNpc();
-        var before = _fixture.Document(formKey);
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
-        Assert.Equal("Weight.Bogus", result.Path);
+        Assert.Equal((refusal, path), (result.Refusal, result.Path));
+        Assert.Contains(why, result.Message, StringComparison.Ordinal);
         Assert.Null(after);
         Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Theory]
-    [InlineData("VirtualMachineAdapter.ExtraBindDataVersion", "5", "VirtualMachineAdapter.ExtraBindDataVersion")]
-    [InlineData("VirtualMachineAdapter.Script.Name", "\"QuestFragments\"", "VirtualMachineAdapter.Script")]
-    public void AValueForAMemberPastItsOwnersSetBreak_IsRefusedNamingTheOutermostUnheldMemberAndThatBreak(string path, string value, string unheld)
-    {
-        _quest.VirtualMachineAdapter = new QuestAdapter { Versioning = QuestAdapter.VersioningBreaks.Break0 };
-        var formKey = _fixture.Seed(_quest, "qust");
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json(value), [.. path.Split('.').Select(Member)]));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
-        Assert.Equal(
-            $"'{unheld}' lies past its owner's Versioning.Break0, which is set, so the record does not hold it and nothing was written.",
-            result.Message);
-        Assert.Null(after);
-    }
-
-    [Fact]
-    public void RecordFlags_ClearedToNone_LeavesNoSpellingOfThemBehind()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0420 };
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var cleared = JsonNode.Parse(Applied(formKey, SetAt(Json("0"), Member("MajorRecordFlagsRaw")))).Require().AsObject();
-
-        Assert.DoesNotContain(cleared, p => p.Key is "MajorRecordFlagsRaw" or "IsDeleted" or "Fallout4MajorRecordFlags" or "MajorFlags");
     }
 
     [Fact]

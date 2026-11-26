@@ -22,6 +22,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { fakeQuickPick } from '../drivingLib/test/quickPickDouble';
 import { recordingReporter } from './surfacingDoubles';
 import { downloadedFileRowFixture } from './mo2/downloadedFileRowFixture';
+import { settled } from './eventually';
 
 describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', () => {
   it('offers the upgrades the Instance value lists for the file of a real DownloadedFileNode', async () => {
@@ -38,7 +39,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
 
     const handler = registerCommand.mock.calls.find((c) => c[0] === 'modbench.mod.install')?.[1];
     const running = handler?.(node);
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    await settled(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;
 

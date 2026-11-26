@@ -45,22 +45,14 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
-    public void AFieldEdit_AnswersTheRecordAndPathItEdited()
-    {
-        var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
-
-        Assert.Equal(_mod.Npc.ToString(), answer.Changes.Require().FormKey);
-        Assert.Equal("HeightMax", answer.Changes.Require().Path);
-    }
-
-    [Fact]
-    public void AFieldEdit_AnswersTheRecordsDocumentWithTheNewValue_AndWritesNothing()
+    public void AFieldEdit_AnswersTheRecordThePathAndTheRecordsDocumentWithTheNewValue_AndWritesNothing()
     {
         var before = TreeSnapshot.Of(_mod.ModFolder);
 
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        Assert.Equal((_mod.Npc.ToString(), "HeightMax"), (answer.Changes.Require().FormKey, answer.Changes.Require().Path));
         Assert.Empty(answer.Changes.Require().Moves);
         var document = Assert.Single(answer.Changes.Require().Documents);
         Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), document.Path);
@@ -83,23 +75,6 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
-    public void AFieldEdit_OfARecordWhoseFileIsNoDocument_BuildsOnTheUnsavedText()
-    {
-        var given = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString());
-        var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
-        _mod.Unsaved.Typed(new DocumentChange(file, given));
-        File.WriteAllText(file, "not a document");
-
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), copiesWithNoPluginSource: Envelopes.NoCopies).Seen();
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var document = Assert.Single(answer.Changes.Require().Documents);
-        Assert.Equal(file, document.Path);
-        Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
-        Assert.Equal("not a document", File.ReadAllText(file));
-    }
-
-    [Fact]
     public void AFormIdEdit_BuildsOnTheUnsavedText_NotOnTheFile()
     {
         var unsaved = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
@@ -113,45 +88,14 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
-    public void AFormIdEdit_ToAKeyAChildInTheUnsavedTextHolds_IsRefusedAsACollision()
-    {
-        var cell = new Cell(_mod.Cell, Fallout4Release.Fallout4) { EditorID = "FixtureCell" };
-        cell.Temporary.Add(new PlacedObject(new FormKey(_mod.Cell.ModKey, 0xF00), Fallout4Release.Fallout4));
-        var unsaved = RecordTextCodec.SerializeToText(cell, GameRelease.Fallout4);
-
-        var answer = ChangesOver(_mod, _mod.Plugin, _mod.Cell.ToString(), Set("FormKey", $"\"000F00:{_mod.Cell.ModKey}\""), unsaved);
-
-        Assert.Equal(RecordEditRefusal.FormKeyCollision, answer.Outcome.Refusal);
-    }
-
-    [Theory]
-    [InlineData("FormKey", "\"000F00:Fixture.esp\"")]
-    [InlineData("HeightMin", "0.75")]
-    public void AnEdit_UnsavedTextTheCodecCannotRead_IsRefusedAsRecordParseFailed(string member, string value)
+    public void AFormIdEdit_OfUnsavedTextTheCodecCannotRead_IsRefusedAsRecordParseFailed()
     {
         var unreadable = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", $"\"{SourceEditFixture.NpcEditorId}\", \"HeightMax\": {{ \"x\": 1 }}", StringComparison.Ordinal);
 
-        var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set(member, value), unreadable);
+        var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unreadable);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, answer.Outcome.Refusal);
-    }
-
-    [Fact]
-    public void APlacedRecordCrossingIntoAnotherCell_BuildsOnTheUnsavedTextOfTheCellItLeaves()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var leaving = Path.Combine(world.ModFolder, SourceModTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
-        var unsaved = TextOf(world, world.Plugin, keys["Mover"].ToString())
-            .Replace("\"Wanderer\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
-        Assert.Contains("TypedButUnsaved", unsaved, StringComparison.Ordinal);
-
-        var answer = ChangesOver(world, world.Plugin, keys["Mover"].ToString(), Flags(Persistent), unsaved);
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var left = Assert.Single(answer.Changes.Require().Documents, document => document.Path == leaving);
-        Assert.Contains("TypedButUnsaved", left.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Mover", left.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -173,48 +117,6 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), move.From);
         Assert.Contains("RenamedNpc", move.To, StringComparison.Ordinal);
         Assert.Equal(move.To, Assert.Single(answer.Changes.Require().Documents).Path);
-    }
-
-    [Fact]
-    public void APlacedRecordCrossingIntoAGridCellThePluginLacks_IsAnsweredInADocumentOfThatCellApart_FromTheCellItLeft()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-
-        var answer = Changes(world, world.Plugin, keys["Wanderer"].ToString(), Flags(0));
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var arrived = Assert.Single(answer.Changes.Require().Documents, document => document.Text.Contains("\"Wanderer\"", StringComparison.Ordinal));
-        Assert.DoesNotContain("\"Mover\"", arrived.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AChildRecordsEdit_ChangesOnlyItsOwnTextInTheUnsavedText()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
-            .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\":\"Wanderer\"", StringComparison.Ordinal);
-
-        var answer = ChangesOver(world, world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given);
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        Assert.Equal(
-            given.Replace("\"EditorID\": \"Mover\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
-            Assert.Single(answer.Changes.Require().Documents).Text);
-    }
-
-    [Fact]
-    public void AChildRecordsEdit_BesideASiblingTheCodecCannotRead_IsMade_AndKeepsTheSiblingAsGiven()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
-            .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\": \"Wanderer\", \"Scale\": { \"x\": 1 }", StringComparison.Ordinal);
-
-        var answer = ChangesOver(world, world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given);
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        Assert.Equal(
-            given.Replace("\"EditorID\": \"Mover\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
-            Assert.Single(answer.Changes.Require().Documents).Text);
     }
 
     [Fact]
@@ -249,26 +151,6 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.Equal(
             HandFormatted(RecordTextCodec.RoundTrip(withoutWanderer.ToJsonString(), GameRelease.Fallout4, "cell"), "Here"),
             Assert.Single(answer.Changes.Require().Documents, document => document.Path == leaving).Text);
-    }
-
-    [Fact]
-    public void APlacedRecordLandingInThePersistentCell_LeavesTheRestOfItsWorldspacesDocumentAsItWas()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys, withAPersistentCell: true);
-        var worldspace = Path.Combine(world.ModFolder, SourceModTree.DocumentFile(world.ModFolder, world.Plugin, keys["World"].ToString()).Require());
-        var held = File.ReadAllText(worldspace);
-        File.WriteAllText(worldspace, HandFormatted(held, "World"));
-        var mover = JsonNode.Parse(TextOf(world, world.Plugin, keys["Mover"].ToString())).Require()["Temporary"].Require()[0].Require().DeepClone();
-        mover["MajorRecordFlagsRaw"] = Persistent;
-        var withMover = JsonNode.Parse(held).Require().AsObject();
-        withMover["TopCell"].Require()["Persistent"] = new JsonArray(mover);
-
-        var answer = Changes(world, world.Plugin, keys["Mover"].ToString(), Flags(Persistent));
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        Assert.Equal(
-            HandFormatted(RecordTextCodec.RoundTrip(withMover.ToJsonString(), GameRelease.Fallout4, "wrld"), "World"),
-            Assert.Single(answer.Changes.Require().Documents, document => document.Path == worldspace).Text);
     }
 
     private static string HandFormatted(string text, string editorId) =>

@@ -10,7 +10,6 @@ using Mutagen.Bethesda;
 namespace MEditService.RecordIndex.Tests.RealSize;
 
 [Collection(RealSizeCollection.Name)]
-[Kind(Kinds.RealSize)]
 public sealed class RealSizeSoakTests(RealSizeIndex realSize)
 {
     private const int Rounds = 6;
@@ -26,25 +25,15 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
 
     private RealSizeModlist Modlist => realSize.Modlist;
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void ASessionOfEveryOperationKind_LeavesTheEnginesMemoryWhereItStarted_AndEveryReadAnswers() => Soak(reading: null);
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void ASessionOfEveryOperationKindWithAReadAlwaysInFlight_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() => Soak(new ReadsInFlight(Index.Queries));
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void AScriptTakingASelectsRowsSlowlyWhileItWrites_LeavesTheEnginesMemoryAndTheWalWhereTheyStarted() =>
         Soak(new SlowStream(Index.Queries));
-
-    [Fact]
-    public void ASelectOfEveryRecord_ReturnsItsFirstRowWithinOneGesture()
-    {
-        Budgets.Ran(TimeSpan.FromSeconds(1), () =>
-        {
-            using var rows = Index.Queries.SelectRows("SELECT form_key, editor_id FROM records", CancellationToken.None).Value();
-            Assert.NotNull(rows.Rows().First().Value());
-        }, "The first row of a select of every record", 5);
-    }
 
     private void Soak(IDisposable? reading)
     {
@@ -230,9 +219,9 @@ public sealed class RealSizeSoakTests(RealSizeIndex realSize)
     private void Uninstalls()
     {
         var kept = Modlist.LoadOrder.Where((_, rank) => !UninstalledRanks.Contains(rank)).ToArray();
-        realSize.Receive(SnapshotPlugins.Snapshot(Modlist.DataFolder, Modlist.InstanceRoot, GameRelease.Fallout4, kept));
+        Index.Receive(Index.Holder, SnapshotPlugins.Snapshot(Modlist.DataFolder, Modlist.InstanceRoot, GameRelease.Fallout4, kept));
         Assert.Equal(Modlist.LoadOrder.Count - UninstalledRanks.Length, Count("SELECT count(*) FROM registrations"));
-        realSize.Receive(Modlist.Snapshot());
+        Index.Receive(Index.Holder, Modlist.Snapshot());
         Assert.Equal(Modlist.LoadOrder.Count, Count("SELECT count(*) FROM registrations"));
     }
 

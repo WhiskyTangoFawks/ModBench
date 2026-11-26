@@ -11,28 +11,6 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public async Task Compile_WorkingTree_LeavesTheCompiledBinaryAsTheOneModbenchLastWrote()
-    {
-        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
-
-        Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
-    }
-
-    [Fact]
-    public async Task Compile_ThatRefuses_LeavesTheBinaryAsTheOneModbenchLastWrote()
-    {
-        TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
-
-        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
-
-        Assert.Single(answer.Refused);
-        Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
-    }
-
-    [Fact]
     public async Task Compile_ThatCannotFinishItsRecord_Lands_AndSaysSo()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);

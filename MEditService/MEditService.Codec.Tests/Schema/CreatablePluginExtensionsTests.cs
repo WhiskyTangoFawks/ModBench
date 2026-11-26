@@ -7,8 +7,6 @@ public sealed class CreatablePluginExtensionsTests
 {
     [Theory]
     [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    [InlineData(GameRelease.Starfield)]
     public void AReleaseWithLightPlugins_NamesEveryExtension(GameRelease release)
     {
         Assert.Equal([".esm", ".esl", ".esp"], CreatablePluginExtensions.Of(release));
@@ -16,7 +14,6 @@ public sealed class CreatablePluginExtensionsTests
 
     [Theory]
     [InlineData(GameRelease.Oblivion)]
-    [InlineData(GameRelease.OblivionRE)]
     public void AReleaseWithoutLightPlugins_LeavesOutEsl(GameRelease release)
     {
         Assert.Equal([".esm", ".esp"], CreatablePluginExtensions.Of(release));

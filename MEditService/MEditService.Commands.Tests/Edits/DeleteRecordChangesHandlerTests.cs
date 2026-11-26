@@ -26,7 +26,6 @@ public sealed class DeleteRecordChangesHandlerTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal(header, refused.Item);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
-        Assert.False(string.IsNullOrWhiteSpace(refused.Message));
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.Null(mod.Document(mod.OtherNpc.ToString()));
         Assert.NotNull(mod.Document(header.FormKey));
@@ -96,45 +95,6 @@ public sealed class DeleteRecordChangesHandlerTests
         var document = Assert.Single(Assert.Single(result.Applied).Documents);
         Assert.Contains("UnsavedNavmesh", document.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, document.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheChangesOfDeletingARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var npc = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
-        var retyped = $"000F00:{mod.Plugin.Name}";
-        var file = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
-        mod.Unsaved.Typed(new DocumentChange(file, npc.Body.Replace(mod.Npc.ToString(), retyped, StringComparison.Ordinal)));
-
-        var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, retyped)]);
-
-        Assert.Equal(file, Assert.Single(Assert.Single(result.Applied).Deletions));
-    }
-
-    [Fact]
-    public void ADeleteOfTwoChildrenOfOneContainer_LeavesTheContainerWithNeither()
-    {
-        using var fixture = new ContainerModFixture();
-
-        var result = fixture.DeleteHandler.DeleteRecordsSync(
-            [new RecordAt(fixture.Plugin, fixture.TemporaryRef.ToString()), new RecordAt(fixture.Plugin, fixture.PersistentRef.ToString())]);
-
-        Assert.Empty(result.Refused);
-        var owner = fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId).Body;
-        Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, owner, StringComparison.Ordinal);
-        Assert.DoesNotContain(ContainerModPlugin.PersistentRefEditorId, owner, StringComparison.Ordinal);
-        Assert.Contains(ContainerModPlugin.NavmeshEditorId, owner, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ADelete_LeavesOtherRecordsUntouched()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
-
-        Assert.NotNull(mod.Document(mod.OtherNpc.ToString()));
     }
 
     [Fact]

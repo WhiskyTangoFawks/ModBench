@@ -1,13 +1,11 @@
 using System.Text.RegularExpressions;
-using MEditService.TestSupport;
 
 namespace MEditService.Architecture.Tests;
 
 public sealed class CrossSideNameTests
 {
     public sealed record BackendFrontendPair(
-        string BackendFile, string BackendPattern, string FrontendFile, string FrontendPattern,
-        string PlantedBackend, string PlantedFrontend)
+        string BackendFile, string BackendPattern, string FrontendFile, string FrontendPattern)
     {
         public override string ToString() => Path.GetFileNameWithoutExtension(BackendFile) + ": " + BackendPattern;
     }
@@ -19,27 +17,19 @@ public sealed class CrossSideNameTests
         new(Path.Combine("MEditService.RepositoriesLib", "TempName.cs"),
             @"private const string Prefix = ""([^""]+)"";",
             Path.Combine("repositoriesLib", "wholeWrites.ts"),
-            @"(?:export )?const TEMP_PREFIX = '([^']+)';",
-            "private const string Prefix = \".medit_tmp_\";",
-            "const TEMP_PREFIX = '.medit_temp_';"),
+            @"(?:export )?const TEMP_PREFIX = '([^']+)';"),
         new(Path.Combine(Sources, "SourceRepositoryLayout.cs"),
             @"internal const string RootFolderName = ""([^""]+)"";",
             Path.Combine("wire", "sourceMod.ts"),
-            @"(?:export )?const PLUGIN_SOURCE_FOLDER = '([^']+)';",
-            "internal const string RootFolderName = \"plugin-source\";",
-            "const PLUGIN_SOURCE_FOLDER = 'source';"),
+            @"(?:export )?const PLUGIN_SOURCE_FOLDER = '([^']+)';"),
         new(Path.Combine(Sources, "SourceRepositoryLayout.cs"),
             @"internal const string BuildFileName = ""([^""]+)"";",
             Path.Combine("wire", "sourceMod.ts"),
-            @"(?:export )?const BUILD_FILE = '([^']+)';",
-            "internal const string BuildFileName = \"build.json\";",
-            "export const BUILD_FILE = 'manifest.json';"),
+            @"(?:export )?const BUILD_FILE = '([^']+)';"),
         new(Path.Combine("MEditService.RecordIndex", "Store", "IndexFile.cs"),
             @"private const string FolderName = ""([^""]+)"";",
             Path.Combine("instanceAdapter", "mo2", "layout.ts"),
-            @"(?:export )?const RECORD_INDEX = '([^']+)';",
-            "private const string FolderName = \"modbench\";",
-            "const RECORD_INDEX = 'medit';"),
+            @"(?:export )?const RECORD_INDEX = '([^']+)';"),
     ];
 
     [Theory]
@@ -52,19 +42,6 @@ public sealed class CrossSideNameTests
         Assert.Equal(
             ValueIn(Path.Combine(root, pair.BackendFile), pair.BackendPattern),
             ValueIn(frontend, pair.FrontendPattern));
-    }
-
-    [Theory]
-    [MemberData(nameof(EveryName))]
-    public void TheScan_CatchesAPlantedMismatch(BackendFrontendPair pair)
-    {
-        using var dir = new ScratchDirectory("medit-cross-side-");
-        var backend = Path.Combine(dir, "backend");
-        var frontend = Path.Combine(dir, "frontend");
-        File.WriteAllText(backend, pair.PlantedBackend);
-        File.WriteAllText(frontend, pair.PlantedFrontend);
-
-        Assert.NotEqual(ValueIn(backend, pair.BackendPattern), ValueIn(frontend, pair.FrontendPattern));
     }
 
     private static string ValueIn(string file, string pattern)

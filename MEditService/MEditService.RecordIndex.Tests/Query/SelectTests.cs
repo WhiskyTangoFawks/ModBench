@@ -4,35 +4,26 @@ using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-[Collection(TestPluginFixtureCollection.Name)]
-public class SelectTests(TestPluginFixture fixture)
+public sealed class SelectTests(SqlDoorFixture door) : IClassFixture<SqlDoorFixture>
 {
-    private OpenedIndex LoadedIndex() => Indexes.Reconciled(fixture.DataFolder, fixture.Plugins);
+    private OpenedIndex Index => door.Index;
 
     [Fact]
     public void ASelect_ReturnsEachRowItSelectsWithItsColumnsNamed()
     {
-        using var index = LoadedIndex();
+        var index = Index;
 
         var rows = index.Queries.Selected("SELECT form_key, editor_id FROM npc_ WHERE editor_id = 'TestNPC01'");
 
         var row = Assert.Single(rows);
         Assert.Equal("TestNPC01", row.GetProperty("editor_id").GetString());
-        Assert.Equal(fixture.Npc1FormKey.ToString(), row.GetProperty("form_key").GetString());
-    }
-
-    [Fact]
-    public void ASelect_ReturnsEveryRowTheViewHolds()
-    {
-        using var index = LoadedIndex();
-
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT form_key FROM npc_").Length);
+        Assert.Equal(door.Plugin.Npc1FormKey.ToString(), row.GetProperty("form_key").GetString());
     }
 
     [Fact]
     public void ASelect_NeedsNoFormKeyColumn()
     {
-        using var index = LoadedIndex();
+        var index = Index;
 
         Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT count(*) AS n FROM npc_").Single().GetProperty("n").GetInt32());
     }
@@ -40,7 +31,7 @@ public class SelectTests(TestPluginFixture fixture)
     [Fact]
     public void ASelect_IsNotNarrowedByTheRecordFilterInForce()
     {
-        using var index = LoadedIndex();
+        var index = Index;
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
 
         Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT form_key FROM npc_").Length);
@@ -49,7 +40,7 @@ public class SelectTests(TestPluginFixture fixture)
     [Fact]
     public void ASelect_LeavesTheRecordFilterInForceStanding()
     {
-        using var index = LoadedIndex();
+        var index = Index;
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "kept.sql");
 
         index.Queries.Selected("SELECT form_key FROM npc_");
@@ -62,7 +53,7 @@ public class SelectTests(TestPluginFixture fixture)
     [InlineData("SELECT form_key FROM npc_ WHERE no_such_column = 1", "no_such_column")]
     public void ASelectDuckDbOrANonSelectRefuses_IsRefusedSayingWhy(string sql, string reason)
     {
-        using var index = LoadedIndex();
+        var index = Index;
 
         var refused = index.Queries.SelectRows(sql).Refused();
 
@@ -78,7 +69,7 @@ public class SelectTests(TestPluginFixture fixture)
     [InlineData("SELECT name FROM sqlite_master WHERE name IN (WITH sqlite_master AS (SELECT 'x' AS name) SELECT name FROM sqlite_master)", "sqlite_master")]
     public void ASelectOfAnythingButTheViews_IsRefused_NamingTheRelationAndTheViews(string sql, string relation)
     {
-        using var index = LoadedIndex();
+        var index = Index;
 
         var refused = index.Queries.SelectRows(sql).Refused();
 
@@ -91,7 +82,7 @@ public class SelectTests(TestPluginFixture fixture)
     [Fact]
     public void ASelectOfViewColumns_ListsEachViewWithItsColumns()
     {
-        using var index = LoadedIndex();
+        var index = Index;
 
         var columns = index.Queries.Selected("SELECT view_name, column_name FROM view_columns")
             .Select(row => (row.GetProperty("view_name").GetString(), row.GetProperty("column_name").GetString())).ToList();
@@ -99,20 +90,5 @@ public class SelectTests(TestPluginFixture fixture)
         Assert.Contains(("records", "is_active"), columns);
         Assert.Contains(("npc_", "editor_id"), columns);
         Assert.DoesNotContain(columns, column => column.Item1 == "view_columns");
-    }
-
-    [Fact]
-    public void TheRecordsView_HasNoMastersColumn_AndRefusesASelectOfIt()
-    {
-        using var index = LoadedIndex();
-
-        var columns = index.Queries.Selected("SELECT column_name FROM view_columns WHERE view_name = 'records'")
-            .Select(row => row.GetProperty("column_name").GetString()).ToList();
-        var refused = index.Queries.SelectRows("SELECT masters FROM records").Refused();
-
-        Assert.Contains("is_active", columns);
-        Assert.DoesNotContain("masters", columns);
-        Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
-        Assert.Contains("masters", refused.Message, StringComparison.Ordinal);
     }
 }

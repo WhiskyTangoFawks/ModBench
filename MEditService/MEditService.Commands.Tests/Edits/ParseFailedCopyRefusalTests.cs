@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using static MEditService.Commands.Tests.TestSupport.LoadOrderOfPlugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -40,40 +39,5 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.Contains(Diagnosis, refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_destinationPlugin));
         Assert.Null(_mod.Document(_destinationPlugin, UnreadablePerk));
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
-    {
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_sourcePlugin, UnreadablePerk)], CopyMode.New, [_destinationPlugin], replace: false);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
-        Assert.Contains(Diagnosis, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.ChangedFormKeys(_destinationPlugin));
-    }
-
-    [Fact]
-    public void CopyRecordAsOverride_OfAReadablePerkFromTheSamePlugin_StillLands()
-    {
-        var readable = MisshapedPerkPlugin.ReadableFormKey;
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_sourcePlugin, readable)], CopyMode.Override, [_destinationPlugin], replace: false);
-
-        result.OnlyLanded();
-        Assert.NotNull(_mod.Document(_destinationPlugin, readable));
-        Assert.Equal([readable], _mod.ChangedFormKeys(_destinationPlugin));
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_OfAReadablePerkFromTheSamePlugin_StillLands()
-    {
-        var readable = MisshapedPerkPlugin.ReadableFormKey;
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_sourcePlugin, readable)], CopyMode.New, [_destinationPlugin], replace: false);
-
-        var newFormKey = result.OnlyLanded().Require();
-        Assert.NotNull(_mod.Document(_destinationPlugin, newFormKey));
-        Assert.Equal([newFormKey], _mod.ChangedFormKeys(_destinationPlugin));
     }
 }

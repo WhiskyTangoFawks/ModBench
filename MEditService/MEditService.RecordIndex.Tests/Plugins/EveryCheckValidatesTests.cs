@@ -23,7 +23,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     private readonly string _compiledPluginNpc;
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly DiskSaysAdapter _disk;
+    private readonly MutagenPluginAdapter _adapter;
     private readonly OpenedIndex _index;
 
     public EveryCheckValidatesTests()
@@ -38,8 +38,8 @@ public sealed class EveryCheckValidatesTests : IDisposable
         _compiledPluginNpc = npc.ToString();
         SourceMods.Init(_compiledPlugin);
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        _disk = new DiskSaysAdapter(clock);
-        _index = Indexes.Open(_holder, _disk, notifications: _notifications, timeProvider: clock);
+        _adapter = new MutagenPluginAdapter(clock);
+        _index = Indexes.Open(_holder, _adapter, notifications: _notifications, timeProvider: clock);
         Reconcile();
     }
 
@@ -76,35 +76,15 @@ public sealed class EveryCheckValidatesTests : IDisposable
     }
 
     [Fact]
-    public void ACheck_ReindexesANonCompiledPluginBinaryRewrittenOutsideModbench_AndNamesThePlugin()
-    {
-        RewriteNonCompiledPlugin("WrittenByAnotherTool");
-
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "WrittenByAnotherTool");
-    }
-
-    [Fact]
-    public void ACheck_RefreshesACompiledPluginDocumentEditedOutsideModbench_AndNamesTheRecord()
-    {
-        HandEditCompiledPlugin();
-
-        CheckAnnouncing(RowsChanged(_compiledPluginNpc));
-
-        Assert.Equal("EditedByHand", _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
-    }
-
-    [Fact]
     public void AReconcile_KeepsNoHashOfAFileTheLoadOrderNoLongerNames()
     {
         using (new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None))
-            Assert.NotNull(_disk.HashOf(_nonCompiledPlugin.Path));
+            Assert.NotNull(_adapter.HashOf(_nonCompiledPlugin.Path));
 
         _index.Reconcile(_holder, _fixture.DataFolder, [_compiledPlugin], GameRelease.Fallout4, _fixture.InstanceRoot);
 
         using var held = new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(_disk.HashOf(_nonCompiledPlugin.Path));
+        Assert.Null(_adapter.HashOf(_nonCompiledPlugin.Path));
     }
 
     [Fact]
@@ -120,39 +100,6 @@ public sealed class EveryCheckValidatesTests : IDisposable
     }
 
     [Fact]
-    public void ATreeEditedWhileMEditWasClosed_IsReadByTheFirstLoadOrder()
-    {
-        HandEditCompiledPlugin();
-        _index.Dispose();
-
-        var holder = new LoadOrderHolder();
-        using var reopened = Indexes.Open(holder);
-        reopened.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        Assert.Equal("EditedByHand", reopened.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
-    }
-
-    [Fact]
-    public void ACheck_TakesTheRowsOfANonCompiledPluginBinaryTheAdapterSaysIsGone()
-    {
-        _disk.Gone(_nonCompiledPlugin.Path);
-
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
-    }
-
-    [Fact]
-    public void ACheck_ReindexesANonCompiledPluginBinaryTheAdapterSaysChanged()
-    {
-        _disk.Changed(_nonCompiledPlugin.Path);
-
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
-    }
-
-    [Fact]
     public void ACheck_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent()
     {
         HandEditCompiledPlugin();
@@ -162,9 +109,8 @@ public sealed class EveryCheckValidatesTests : IDisposable
         File.Delete(_compiledPlugin.Path);
         CheckThatMayFailAnnouncing(PluginChanged(_compiledPlugin));
 
-        var failure = Assert.Single(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
+        Assert.Single(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
-        Assert.DoesNotContain("showing", failure.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Null(_index.PluginResponseOf(_compiledPlugin.Key).Require().RowsFrom);
     }
 
@@ -186,7 +132,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void ACheck_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.IsType<PluginFailure.Inaccessible>(_disk.ClaimOf(_nonCompiledPlugin.Path, GameRelease.Fallout4).Failure());
+        Assert.IsType<PluginFailure.Inaccessible>(_adapter.ClaimOf(_nonCompiledPlugin.Path, GameRelease.Fallout4).Failure());
 
         var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 

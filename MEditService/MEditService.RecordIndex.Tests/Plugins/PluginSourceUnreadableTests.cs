@@ -60,7 +60,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     }
 
     [Fact, Kind(Kinds.Posix)]
-    public void APluginSourceWithTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
+    public async Task APluginSourceWithTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders_AndSoDoesItsReadBack()
     {
         var sources = Path.GetDirectoryName(SourceRoot).Require();
         Directory.Move(SourceRoot, Path.Combine(sources, PluginName.ToUpperInvariant()));
@@ -72,18 +72,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Assert.Contains(PluginName.ToUpperInvariant(), unreadable?.Reason, StringComparison.Ordinal);
         Assert.Contains(PluginName.ToLowerInvariant(), unreadable?.Reason, StringComparison.Ordinal);
         Assert.False(unreadable?.DecompileRepairs);
-    }
-
-    [Fact, Kind(Kinds.Posix)]
-    public async Task AReadBackOfAPluginSourceWithTwinFolders_IsAnsweredNamingBothFolders()
-    {
-        var sources = Path.GetDirectoryName(SourceRoot).Require();
-        Directory.Move(SourceRoot, Path.Combine(sources, PluginName.ToUpperInvariant()));
-        Directory.CreateDirectory(Path.Combine(sources, PluginName.ToLowerInvariant()));
-        using var index = Reconciled();
-
         var unread = await index.Queries.Hold([HandedPlugin.ReadBackSource(Plugin)], CancellationToken.None);
-
         Assert.Contains(PluginName.ToUpperInvariant(), unread, StringComparison.Ordinal);
         Assert.Contains(PluginName.ToLowerInvariant(), unread, StringComparison.Ordinal);
     }
@@ -110,30 +99,17 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     }
 
     [Fact]
-    public void APluginSourceThatFailsOnceRead_ReadsItsPluginFile_NotTheTreesLastRows_MarkedAsSuch()
+    public void APluginSourceThatFailsOnceRead_ReadsItsPluginFile_NotTheTreesLastRows_AndOnceMendedItsTreeAgain()
     {
         using var index = Reconciled();
         var npc = index.DocumentOf(_npc, Plugin);
         index.Edit(_entry, npc, index.BodyOf(_npc, Plugin).Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
         Assert.Equal("EditedInTheTree", index.DocumentOf(_npc, Plugin).EditorId);
-
-        BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
-        index.NextCheckUntil(
-            () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
-
-        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
-        Assert.Empty(index.Status.Failures);
-    }
-
-    [Fact]
-    public void APluginSourceMended_IsReadFromItsTreeAgain_AtTheNextCheck()
-    {
-        using var index = Reconciled();
-        var npc = index.DocumentOf(_npc, Plugin);
-        index.Edit(_entry, npc, index.BodyOf(_npc, Plugin).Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
         var backup = BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
         index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
+        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
+        Assert.Empty(index.Status.Failures);
 
         File.Delete(backup);
         index.NextCheckUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read again");

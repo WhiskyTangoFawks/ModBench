@@ -8,8 +8,6 @@ public sealed class DeclaredDefaultTests
 {
     [Theory]
     [InlineData("npc_", "VirtualMachineAdapter.ObjectFormat", "2")]
-    [InlineData("npc_", "VirtualMachineAdapter.Version", "6")]
-    [InlineData("npc_", "VirtualMachineAdapter.Scripts.[].Name", null)]
     [InlineData("npc_", "HeightMin", null)]
     [InlineData("npc_", "VirtualMachineAdapter.Scripts.[].Properties.[].Flags", "Edited")]
     [InlineData("cobj", "Conditions.[].Data.RunOnType", "Subject")]

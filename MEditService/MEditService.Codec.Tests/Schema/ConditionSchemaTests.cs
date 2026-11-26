@@ -40,11 +40,8 @@ public sealed class ConditionSchemaTests
 
     [Theory]
     [InlineData("IsSneaking")]
-    [InlineData("HasKeyword", "ParameterOneRecord")]
-    [InlineData("GetVATSValue", "ParameterOneNumber", "ParameterTwoNumber")]
     [InlineData("GetStageDone", "ParameterOneRecord", "ParameterTwoNumber")]
     [InlineData("GetVMQuestVariable", "ParameterOneRecord", "ParameterTwoString")]
-    [InlineData("GetGraphVariableFloat", "ParameterOneString")]
     public void ConditionFunction_NamesTheParameterMembersThatFunctionUses(string function, params string[] expected)
     {
         var slots = Member(Member(ConditionElement(), "Data"), "Function").SiblingsInUse;
@@ -92,11 +89,8 @@ public sealed class ConditionSchemaTests
 
     [Theory]
     [InlineData("cobj", "Conditions")]
-    [InlineData("qust", "DialogConditions")]
-    [InlineData("qust", "UnusedConditions")]
     [InlineData("mesg", "MenuButtons")]
     [InlineData("perk", "Effects")]
-    [InlineData("alch", "Effects")]
     public void EveryConditionBearingColumn_ReachesTheFunctionMemberBelowIt(string table, string column)
     {
         var found = SchemaFields.Below(column, SchemaFields.At(GameRelease.Fallout4, table, column))

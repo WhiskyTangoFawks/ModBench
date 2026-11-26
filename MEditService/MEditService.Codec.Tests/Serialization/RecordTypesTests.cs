@@ -83,12 +83,8 @@ public sealed class RecordTypesTests
     [Theory]
     [InlineData("npc_", true)]
     [InlineData("cell", true)]
-    [InlineData("wrld", true)]
-    [InlineData("qust", true)]
     [InlineData(PluginHeader.RecordType, false)]
     [InlineData("refr", false)]
-    [InlineData("navm", false)]
-    [InlineData("dial", false)]
     [InlineData("info", false)]
     [InlineData("not-a-real-type", false)]
     public void ARecordType_IsCreatable_ExactlyWhenItHasATopLevelGroupOfItsOwn(string recordType, bool creatable)

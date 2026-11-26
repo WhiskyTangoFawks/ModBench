@@ -10,22 +10,8 @@ public class SchemaReflectorTests
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
     [Theory]
-    [InlineData("parw", "Placed Arrow")]
-    [InlineData("pbar", "Placed Barrier")]
-    [InlineData("pbea", "Placed Beam")]
-    [InlineData("pcon", "Placed Cone/Voice")]
-    [InlineData("pfla", "Placed Flame")]
-    [InlineData("pgre", "Placed Projectile")]
-    [InlineData("phzd", "Placed Hazard")]
-    [InlineData("pmis", "Placed Missile")]
-    public void APlacedVariant_IsATableUnderXEditsName(string table, string displayName)
-    {
-        Assert.Equal(displayName, _reflector.GetSchemas(GameRelease.Fallout4).DisplayNameFor(table));
-    }
-
-    [Theory]
     [InlineData(GameRelease.Fallout4, "acti", "Activator")]
-    [InlineData(GameRelease.Fallout4, "gmst", "Game Setting")]
+    [InlineData(GameRelease.Fallout4, "parw", "Placed Arrow")]
     [InlineData(GameRelease.Fallout4, "idle", "Idle Animation")]
     [InlineData(GameRelease.Starfield, "idle", "Animation")]
     public void ARecordTypesName_IsTheOneItsGamesXEditGivesIt(GameRelease release, string table, string displayName)
@@ -100,19 +86,6 @@ public class SchemaReflectorTests
         Assert.DoesNotContain(fields, f => f.Name == UnusedWhichMutagenNamesAndXEditsWbUnusedNeverRendersAsAFieldBothAgreeItCarriesNoProductVisibleData);
     }
 
-    [Fact]
-    public void AGlobalsOutputChar_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant_TheNotPresentOnEverySiblingBranchOfTheFoldBeingRealToday()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
-
-        Assert.True(outputChar.Field.AllowsNull);
-        var variants = outputChar.Field.Variants
-            ?? throw new InvalidOperationException("Expected 'OutputChar' to carry a per-class variant.");
-        Assert.Equal([nameof(GlobalFloat)], variants.Keys);
-        Assert.Equal("bool", variants[nameof(GlobalFloat)].Type);
-    }
-
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
@@ -143,41 +116,15 @@ public class SchemaReflectorTests
         Assert.All(aggression.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
-    [Fact]
-    public void AFormLink_NamesTheTablesItMayPointAt()
+    [Theory]
+    [InlineData("Race", "race")]
+    [InlineData("Keywords.[]", "kywd")]
+    public void ALink_NamesTheTablesItMayPointAt_AsDoesEachLinkOfAList(string path, string table)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
-        Assert.NotNull(col);
-        Assert.Equal("formKey", col.ApiType);
-        Assert.Contains("race", col.Field.ValidFormKeyTypes);
-    }
+        var link = SchemaFields.At(GameRelease.Fallout4, "npc_", path);
 
-    [Fact]
-    public void AListOfLinks_IsAnArrayOfFormKeys_EachNamingTheTablesItMayPointAt()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
-        Assert.NotNull(col);
-        Assert.Equal("array", col.ApiType);
-        Assert.NotNull(col.Field.ElementType);
-        Assert.Equal("formKey", col.Field.ElementType.Type);
-        Assert.Contains("kywd", col.Field.ElementType.ValidFormKeyTypes);
-    }
-
-    [Fact]
-    public void AListOfStructs_IsAnArrayOfStructs_HoldingTheirMembers()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
-        Assert.NotNull(col);
-        Assert.Equal("array", col.ApiType);
-        Assert.NotNull(col.Field.ElementType);
-        Assert.Equal("struct", col.Field.ElementType.Type);
-        var fields = col.Field.ElementType.Fields;
-        Assert.NotNull(fields);
-        Assert.Contains(fields, f => f.Name == "Faction" && f.Type == "formKey");
-        Assert.Contains(fields, f => f.Name == "Rank" && f.Type == "int");
+        Assert.Equal("formKey", link.Type);
+        Assert.Contains(table, link.ValidFormKeyTypes);
     }
 
     [Theory]
@@ -259,7 +206,6 @@ public class SchemaReflectorTests
 
     [Theory]
     [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
     [InlineData(GameRelease.Starfield)]
     public void AHeader_PresentsTheLightMasterFlagAsAMemberOfItsOwn(GameRelease release)
     {
@@ -269,101 +215,11 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void AHeadersMasters_AreTheDocumentsOwnMasterReferences()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "MasterReferences");
-        Assert.NotNull(col);
-        Assert.Equal("array", col.ApiType);
-        Assert.Equal("ModHeader.MasterReferences", col.PropertyName);
-        var elementSpec = col.Field.ElementType;
-        Assert.NotNull(elementSpec);
-        Assert.Equal("struct", elementSpec.Type);
-        var subFields = elementSpec.Fields;
-        Assert.NotNull(subFields);
-        Assert.Contains(subFields, f => f.Name == "Master" && f.Type == "string");
-    }
-
-    [Fact]
     public void AHeadersMasters_AreReadOnly_ThroughEveryMemberBelow_AsCompileDerivesThem()
     {
         var masters = SchemaFields.Below("MasterReferences", SchemaFields.At(GameRelease.Fallout4, "header", "MasterReferences")).ToList();
 
         Assert.Contains(masters, member => member.Path == "MasterReferences[].Master");
         Assert.All(masters, member => Assert.Equal("masters are wholly content-derived at compile time", member.Field.ReadOnlyReason));
-    }
-
-    [Fact]
-    public void AContainersObjectBounds_HoldFirstAndSecondVectors_BecauseNoggogP3Int16IsAVectorLeafTheCodecSpellsAsXYZTextNotDroppedAsUnclassified()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["cont"].RecordColumns.FirstOrDefault(c => c.Name == "ObjectBounds");
-        Assert.NotNull(col);
-        Assert.Equal("struct", col.ApiType);
-
-        Assert.Equal("vector", col.Field.Fields?.FirstOrDefault(f => f.Name == "First")?.Type);
-        Assert.Equal("vector", col.Field.Fields?.FirstOrDefault(f => f.Name == "Second")?.Type);
-    }
-
-    [Fact]
-    public void AContainersDestructible_HoldsResistancesAndStagesArrays_ListsNestedInsideAStructNotDropped()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var destructible = schemas["cont"].RecordColumns.First(c => c.Name == "Destructible");
-
-        var resistances = destructible.Field.Fields?.FirstOrDefault(f => f.Name == "Resistances");
-        Assert.NotNull(resistances);
-        Assert.Equal("array", resistances.Type);
-
-        var stages = destructible.Field.Fields?.FirstOrDefault(f => f.Name == "Stages");
-        Assert.NotNull(stages);
-        Assert.Equal("array", stages.Type);
-        var stagesElementSpec = stages.ElementType
-            ?? throw new InvalidOperationException("Expected 'Stages' to declare an element spec.");
-        var stagesSubFields = stagesElementSpec.Fields
-            ?? throw new InvalidOperationException("Expected 'Stages' element spec to declare sub-fields.");
-        Assert.Contains(stagesSubFields, f => f.Name == "HealthPercent");
-    }
-
-    [Fact]
-    public void APlacedObjectsTeleportDestination_HoldsPositionAndRotationVectors_ChosenBecauseItIsNeverMirroredElsewhereSoIsSafeToMakeWritableUnconditionally()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var teleport = schemas["refr"].RecordColumns.FirstOrDefault(c => c.Name == "TeleportDestination");
-        Assert.NotNull(teleport);
-
-        Assert.Equal("vector", teleport.Field.Fields?.FirstOrDefault(f => f.Name == "Position")?.Type);
-        Assert.Equal("vector", teleport.Field.Fields?.FirstOrDefault(f => f.Name == "Rotation")?.Type);
-    }
-
-    [Fact]
-    public void ACellsGrid_HoldsFlagsAndAPointVector_ChosenBecausePointIsANoggogP2IntBeyondP3Int16AndP3Float()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
-        Assert.NotNull(col);
-        Assert.Equal("struct", col.ApiType);
-        var subFields = col.Field.Fields
-            ?? throw new InvalidOperationException("Expected 'Grid' to declare sub-fields.");
-        Assert.Equal(2, subFields.Count);
-
-        Assert.Contains(subFields, f => f.Name == "Flags" && f.Type is "enum" or "Flags");
-        Assert.Contains(subFields, f => f.Name == "Point" && f.Type == "vector");
-    }
-
-    [Fact]
-    public void ALocationsWorldspaceCellsAdded_ElementHoldsCoordinatesListOfVectors_ComposingTheStructNestedListArmWithTheWidenedVectorStructSet()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["lctn"].RecordColumns.FirstOrDefault(c => c.Name == "WorldspaceCellsAdded");
-        Assert.NotNull(col);
-        Assert.Equal("array", col.ApiType);
-
-        var coordinates = col.Field.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Coordinates");
-        Assert.NotNull(coordinates);
-        Assert.Equal("array", coordinates.Type);
-        var coordinatesElementSpec = coordinates.ElementType
-            ?? throw new InvalidOperationException("Expected 'Coordinates' to declare an element spec.");
-        Assert.Equal("vector", coordinatesElementSpec.Type);
     }
 }

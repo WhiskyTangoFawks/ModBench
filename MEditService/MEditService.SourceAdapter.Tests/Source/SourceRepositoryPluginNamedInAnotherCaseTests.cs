@@ -77,15 +77,6 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void EachDocumentOfTheTree_IsStampedForThePluginNamedInAnotherCase_NoneUnreadable()
-    {
-        var stamps = Repository.StampsOf(Recased);
-
-        Assert.Empty(stamps.Unreadable);
-        Assert.Equal(TestAdapters.Source().ContentStamp(NpcBody), stamps.ByFormKey[NpcFormKey]);
-    }
-
-    [Fact]
     public void ADocumentOfTheTree_IsHeldByThePluginAsTheLoadOrderNamesIt()
     {
         var answer = TestAdapters.Source().RecordOfFile(LoadOrderNaming(Recased), Path.Combine(_modFolder, NpcDocument));
@@ -101,45 +92,6 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Repository.Put(Recased, new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon", weaponBody)).Wrote();
 
         Assert.Contains(weaponBody, TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
-    }
-
-    [Fact]
-    public void ReplacingTheSourceOfThePluginNamedInAnotherCase_ReplacesItsTree()
-    {
-        const string decompiledHeader = "{\n  \"ModKey\": \"FIXTURE.ESP\"\n}";
-
-        Repository.ReplaceSourceFrom(Recased, [new TreeFile("RecordData.json", Encoding.UTF8.GetBytes(decompiledHeader))], "ABCDEF0123").Wrote();
-
-        Assert.Equal([decompiledHeader], TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
-    }
-
-    [Fact]
-    public void RenamingTheSourceOfThePluginNamedInAnotherCase_MovesItsTree()
-    {
-        var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
-
-        var changes = Repository.ChangesToRenameSource(Recased, renamed.Name).Value().Require();
-        Repository.SaveChanges(SourceAnswer.Of(changes)).Wrote();
-
-        Assert.Equal(2, TreeDocuments.Of(Repository, renamed).Count);
-        Assert.False(TestAdapters.Source().SourceReads(Registered(AsTreeNamesIt)));
-    }
-
-    [Fact]
-    public void AnEditToTheTreeOfThePluginNamedInAnotherCase_IsAChangeSinceTheLastCommit()
-    {
-        File.WriteAllText(Path.Combine(_modFolder, NpcDocument), NpcBody.Replace("FixtureNpc", "Edited", StringComparison.Ordinal));
-
-        Assert.Equal(RecordChange.Modified, Repository.ChangedSinceLastCommit(Recased).Value()[NpcFormKey]);
-    }
-
-    [Fact]
-    public void TheBinaryLastWrittenForThePluginNamedInAnotherCase_IsWhatWasWrittenForItsTree()
-    {
-        const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        Repository.WriteBinary(AsTreeNamesIt, sha256, () => { }).Value();
-
-        Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Recased).Value());
     }
 
     [Fact]

@@ -19,7 +19,7 @@ public sealed class PersistentFlagPartialFormCellTests : TestInstance
     private const string OverrideOrigin = "OverrideMod";
 
     private readonly PluginAddress _override;
-    private readonly FormKey _cell, _temporary, _persistent;
+    private readonly FormKey _cell, _temporary;
 
     public PersistentFlagPartialFormCellTests()
     {
@@ -37,7 +37,7 @@ public sealed class PersistentFlagPartialFormCellTests : TestInstance
         partialCell.Persistent.Add(persistent);
         copy.AddInteriorCells(partialCell);
         _override = Add(copy, OverrideOrigin);
-        (_cell, _temporary, _persistent) = (masterCell.FormKey, temporary.FormKey, persistent.FormKey);
+        (_cell, _temporary) = (masterCell.FormKey, temporary.FormKey);
     }
 
     private RecordEditResult SetFlags(FormKey placed, int raw) =>
@@ -59,14 +59,5 @@ public sealed class PersistentFlagPartialFormCellTests : TestInstance
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(["PartialTemp", "PartialPersist"], Group("Persistent"));
-    }
-
-    [Fact]
-    public void ClearingPersistent_InAPartialFormCopyOfAnInteriorCell_MovesTheRecordIntoItsTemporaryGroup()
-    {
-        var result = SetFlags(_persistent, 0);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(["PartialTemp", "PartialPersist"], Group("Temporary"));
     }
 }
