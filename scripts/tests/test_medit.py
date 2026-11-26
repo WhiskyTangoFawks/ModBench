@@ -1,6 +1,5 @@
 import json
 import os
-import socket
 import unittest
 from unittest import mock
 
@@ -45,10 +44,10 @@ class Reaching(unittest.TestCase):
                 medit.resolve(PLUGIN.name)
 
     def test_raises_naming_the_port_when_nothing_answers_on_it(self) -> None:
-        with socket.socket() as closed:
-            closed.bind(('127.0.0.1', 0))
-            port = str(closed.getsockname()[1])
-        with mock.patch.dict(os.environ, {'MEDIT_PORT': port}), self.assertRaisesRegex(medit.MEditError, f'port {port}'):
+        port_failing_at_once = '0'
+        with (
+                mock.patch.dict(os.environ, {'MEDIT_PORT': port_failing_at_once}),
+                self.assertRaisesRegex(medit.MEditError, f'port {port_failing_at_once}:')):
             medit.select('SELECT 1')
 
 
