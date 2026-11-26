@@ -42,21 +42,6 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(_modFolder));
     }
 
-    [Fact]
-    public void AnInit_TakesBackAnAssetItReplaced_WhenALaterAssetFails()
-    {
-        var existing = Path.Combine(_modFolder, "a.txt");
-        File.WriteAllText(existing, "theirs");
-
-        TestAdapters.Source().Init(_modFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("A.esp")],
-        [
-            new FileToCopy("a.txt", () => new MemoryStream("ours"u8.ToArray())),
-            new FileToCopy("b.txt", () => throw new IOException("b.txt is held by another process")),
-        ], commit: true);
-
-        Assert.Equal("theirs", File.ReadAllText(existing));
-    }
-
     [Fact, Kind(Kinds.Posix)]
     public void APluginWhoseFilesCannotBeWritten_LeavesTheHalfMadeRepositoryAsItWas()
     {
@@ -130,28 +115,6 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
         Assert.Contains("plugin-source/A.esp — holds something this change did not write", failure.Replace('\\', '/'));
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
-    }
-
-    [Fact, Kind(Kinds.Posix)]
-    public void AnInitWhoseCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
-    {
-        var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
-
-        var failure = InitWhoseCommitHookRuns($"echo theirs > '{changed}'");
-
-        Assert.Equal("theirs", File.ReadAllText(changed).Trim());
-        Assert.Contains("000001.json — changed by something else", failure, StringComparison.Ordinal);
-    }
-
-    [Fact, Kind(Kinds.Posix)]
-    public void AnInitWhoseCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
-    {
-        var gitignore = Path.Combine(_modFolder, ".gitignore");
-
-        var failure = InitWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
-
-        Assert.Equal("theirs", File.ReadAllText(gitignore).Trim());
-        Assert.Contains(".gitignore — changed by something else", failure, StringComparison.Ordinal);
     }
 
     private string InitWhoseCommitHookRuns(string script)

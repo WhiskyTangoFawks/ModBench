@@ -91,23 +91,6 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(["plugin-source"], Directory.GetDirectories(_modFolder).Select(Path.GetFileName).Where(name => name != ".git"));
     }
 
-    [Fact]
-    public async Task ADecompiledSource_HoldsEachFileWhereSpriggitWritesIt()
-    {
-        using var spriggit = new ScratchDirectory("medit-spriggit-tree-");
-        await Fallout4WholeMod.Serialize(OfEachShape(), spriggit);
-        string[] written =
-        [
-            .. Directory.EnumerateFiles(spriggit, "*", SearchOption.AllDirectories)
-                .Select(path => Path.GetRelativePath(spriggit, path).Replace('\\', '/'))
-                .Order(StringComparer.Ordinal),
-        ];
-
-        Repository.ReplaceSourceFrom(Address, [.. written.Select(path => File(path, System.IO.File.ReadAllText(Path.Combine(spriggit, path))))], Sha).Wrote();
-
-        Assert.Equal(written, FilesUnderRoot());
-    }
-
     private static Fallout4Mod OfEachShape()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);

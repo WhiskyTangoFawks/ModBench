@@ -263,15 +263,6 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     }
 
     [Fact]
-    public void WhatModbenchLastWrote_MovesToTheNewName()
-    {
-        Assert.Null(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
-
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
-        Assert.Empty(Repository.LastWrittenBinarySha256s(Old).Value());
-    }
-
-    [Fact]
     public void WhatModbenchLastWrote_AfterTheTreeMoved_MovesFromTheNameTheTreeWasWrittenUnder()
     {
         Rename("New.esp");
@@ -279,6 +270,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Null(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
+        Assert.Empty(Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
     [Theory]

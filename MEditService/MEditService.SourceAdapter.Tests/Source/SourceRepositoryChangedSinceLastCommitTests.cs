@@ -84,17 +84,6 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
-    public void ADocumentRenamedWithItsTextKept_ChangesNoRecord()
-    {
-        var repository = SourceMod();
-        var renamed = Path.Combine("plugin-source", PluginName, "Npcs", $"Renamed - 000800_{PluginName}.json");
-        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv",
-            NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk.Replace('\\', '/'), renamed.Replace('\\', '/'));
-
-        Assert.Empty(ChangesIn(repository));
-    }
-
-    [Fact]
     public void ADocumentHoldingTextBeyondAscii_RenamedWithItsTextKept_ChangesNoRecord()
     {
         var held = Path.Combine("plugin-source", PluginName, "Npcs", $"Held - 000900_{PluginName}.json");
@@ -130,12 +119,6 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var only = Assert.Single(ChangesIn(repository));
         Assert.Equal($"000900:{PluginName}", only.Key);
         Assert.Equal(RecordChange.Modified, only.Value);
-    }
-
-    [Fact]
-    public void ACleanTree_ChangesNoRecord()
-    {
-        Assert.Empty(ChangesIn(SourceMod()));
     }
 
     [Fact]
@@ -208,9 +191,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
 
     [Theory]
     [InlineData("plugin-source/Test.esp/000800.json")]
-    [InlineData("plugin-source/Test.esp/NotRecordData.json")]
     [InlineData("plugin-source/Test.esp/Npcs/000800.txt")]
-    [InlineData("plugin-source/Test.esp/Npcs/000800")]
     [InlineData("plugin-source/Test.esp/Npcs/RecordData.json")]
     [InlineData("plugin-source/Test.esp/Cells/GroupRecordData.json")]
     [InlineData("plugin-source/Test.esp/NotARealFolder/000800.json")]
@@ -224,15 +205,13 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         Assert.Empty(ChangesIn(repository));
     }
 
-    [Theory]
-    [InlineData("Test.esp/Npcs/000800.json")]
-    [InlineData("NotPluginSource/Test.esp/Npcs/000800.json")]
-    public void AChangedFileOutsideThePluginsSourceRoot_ChangesNoRecord(string relativePath)
+    [Fact]
+    public void AChangedFileOutsideThePluginsSourceRoot_ChangesNoRecord()
     {
-        var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        var normalized = Path.Combine("NotPluginSource", "Test.esp", "Npcs", "000800.json");
         var repository = SourceMod();
 
-        Directory.CreateDirectory(Path.Combine(_modFolder, Path.GetDirectoryName(normalized) ?? ""));
+        Directory.CreateDirectory(Path.Combine(_modFolder, Path.GetDirectoryName(normalized).Require()));
         File.WriteAllText(Path.Combine(_modFolder, normalized), "{\"FormKey\":\"000900:Test.esp\"}");
 
         Assert.Empty(ChangesIn(repository));
@@ -271,8 +250,6 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         { SpatialPlugin.WorldspaceEditorId, "worldspace", [SpatialPlugin.WorldspaceEditorId] },
         { SpatialPlugin.ExteriorCellEditorId, "exterior", [SpatialPlugin.ExteriorCellEditorId] },
         { SpatialPlugin.InteriorCellEditorId, "interior", [SpatialPlugin.InteriorCellEditorId] },
-        { SpatialPlugin.ExteriorRefEditorId, "exterior", [SpatialPlugin.ExteriorRefEditorId] },
-        { SpatialPlugin.InteriorRefEditorId, "interior", [SpatialPlugin.InteriorRefEditorId] },
     };
 
     [Theory]

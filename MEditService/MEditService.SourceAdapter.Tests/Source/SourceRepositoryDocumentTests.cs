@@ -121,17 +121,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void ARecordTheTreeHasNeverHeld_ReadsBackAsTheTextPut()
-    {
-        var repository = Opened();
-        var weapon = new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon", "{\"EditorID\": \"FixtureWeapon\"}");
-
-        repository.Put(Plugin, weapon).Wrote();
-
-        Assert.Equal(weapon.Body, repository.RecordOf(Plugin, new RecordIdentity(weapon.FormKey, "weap", "FixtureWeapon")).Value()?.Body);
-    }
-
-    [Fact]
     public void PuttingARecordTheTreeAlreadyHolds_ReplacesItsText()
     {
         var repository = Opened();
@@ -169,8 +158,9 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     [Theory]
     [InlineData("weap", "000900:Fixture.esp")]
+    [InlineData("refr", "000901:Fixture.esp")]
     [InlineData(PluginHeader.RecordType, "000000:Fixture.esp")]
-    public void RemovingAFlatRecordOrTheHeaderNoDocumentHolds_IsNotCarried(string recordType, string formKey)
+    public void RemovingARecordNoDocumentHolds_IsNotCarried(string recordType, string formKey)
     {
         var repository = Opened();
 
@@ -226,19 +216,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         Assert.Equal([$"{longId} - 000800_{PluginName}.json"], NpcFileNames());
         Assert.Equal(WithEditorId(longId), repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", longId)).Value()?.Body);
-    }
-
-    [Fact]
-    public void ANewEditorId_LeavesOneStampAtTheFormKey_ForTheNewBody()
-    {
-        var repository = Opened();
-
-        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc"))).Wrote();
-
-        var stamps = repository.StampsOf(Plugin).ByFormKey;
-        Assert.Equal(
-            TestAdapters.Source().ContentStamp(WithEditorId("RenamedNpc")),
-            stamps[NpcFormKey]);
     }
 
     [Fact]

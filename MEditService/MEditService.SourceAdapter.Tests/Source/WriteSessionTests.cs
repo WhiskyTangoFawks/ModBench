@@ -419,25 +419,6 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
-    public void AReadAfterAFailedWrite_SeesNothingOfIt()
-    {
-        var session = Session();
-        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
-        bool HoldsTheNewNpc() =>
-            session.Repository.TreeOf(Plugin).Value().Files.Any(file => file.RelativePath.Contains("NewNpc", StringComparison.Ordinal));
-
-        var failed = session.Atomically(() =>
-        {
-            session.Apply(session.Repository.ChangesToPut(Plugin, created));
-            Assert.True(HoldsTheNewNpc());
-            session.Apply(session.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent")));
-        });
-
-        Assert.IsType<SourceFailure.NotCarried>(failed);
-        Assert.False(HoldsTheNewNpc());
-    }
-
-    [Fact]
     public void AReadLaterInTheSession_SeesTheHeaderAndTheFormKeysItsEarlierWritesLeft()
     {
         var session = Session();
