@@ -40,19 +40,6 @@ internal static class SourceModTree
             .ChangedSinceLastCommit(plugin).Value()
             .Keys.Order(StringComparer.Ordinal)];
 
-    /// <summary>The files holding a record the tree changed since the last commit: an embedded child
-    /// answers with its owner's file.</summary>
-    internal static IReadOnlyList<string> ChangedDocumentFiles(string modFolder, PluginAddress plugin)
-    {
-        var repository = Repository(modFolder, plugin);
-        return
-        [
-            .. repository.ChangedSinceLastCommit(plugin).Value()
-                .Select(change => DocumentFile(modFolder, plugin, change.Key))
-                .OfType<string>().Distinct().Order(StringComparer.Ordinal),
-        ];
-    }
-
     /// <summary>The file holding the record: its own document, or its owner's when it is embedded.</summary>
     internal static string? DocumentFile(string modFolder, PluginAddress plugin, string formKey)
     {
@@ -96,15 +83,6 @@ internal static class SourceModTree
     internal static void Remove(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Repository(modFolder, plugin).Remove(plugin, identity).Wrote();
 
-    /// <summary>Commits the working tree as it stands, so what it holds now is what HEAD holds.
-    /// The adapter commits only baselines; a state with more at HEAD is built here.</summary>
-    internal static void Commit(string modFolder)
-    {
-        var gitDirectory = Path.Combine(modFolder, ".git");
-        GitProbe.Run(gitDirectory, modFolder, "add", "-A");
-        GitProbe.Run(gitDirectory, modFolder, "commit", "-q", "-m", "seed");
-    }
-
     internal static ISourceRepository Repository(string modFolder, PluginAddress plugin) =>
         TestAdapters.Source().Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require();
 }
@@ -123,13 +101,6 @@ public static class CompiledPluginTree
 
     public static SourceDocument DocumentCarrying(this ICompiledPlugin compiledPlugin, string editorId) =>
         SourceModTree.DocumentCarrying(compiledPlugin.ModFolder, compiledPlugin.Plugin, editorId);
-
-    /// <summary>The FormKeys the tree changed since the last commit.</summary>
-    public static IReadOnlyList<string> ChangedFormKeys(this ICompiledPlugin compiledPlugin) =>
-        SourceModTree.ChangedFormKeys(compiledPlugin.ModFolder, compiledPlugin.Plugin);
-
-    public static IReadOnlyList<string> ChangedDocumentFiles(this ICompiledPlugin compiledPlugin) =>
-        SourceModTree.ChangedDocumentFiles(compiledPlugin.ModFolder, compiledPlugin.Plugin);
 
     public static string? DocumentFile(this ICompiledPlugin compiledPlugin, string formKey) =>
         SourceModTree.DocumentFile(compiledPlugin.ModFolder, compiledPlugin.Plugin, formKey);

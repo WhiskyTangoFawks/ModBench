@@ -208,7 +208,10 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void FE_IsAFullIndex_WhereNoActivePluginIsLight()
     {
-        var index = Roster([.. Enumerable.Range(0, 255).Select(i => ($"P{i:D3}.esp", false, true))]);
+        var fixture = Built(new PluginFixtureBuilder("record-query-full-index")
+            .WithPlugin("P254.esp", mod => mod.Npcs.Add(new Npc(new FormKey(mod.ModKey, 0x800), Fallout4Release.Fallout4))));
+        fixture.Plugins = [.. Enumerable.Range(0, 254).Select(i => UnwrittenActivePlugin(fixture.DataFolder, i)), fixture.Plugins.Single() with { Line = 254 }];
+        var index = Reconciled(fixture);
 
         var page = index.Queries.GetRecords(types: null, plugin: null, search: "FE000800", limit: 20, offset: 0).Value();
 
@@ -224,6 +227,9 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.Equal(["Npc7F000800"], EditorIds(page));
     }
+
+    private static LoadOrderEntry UnwrittenActivePlugin(string dataFolder, int line) =>
+        new($"P{line:D3}.esp", Path.Combine(dataFolder, $"P{line:D3}.esp"), PluginOrigin.DataDirectory, line, Enabled: true, Winning: true);
 
     private static IReadOnlyList<string> FormKeys(PagedResult<RecordSummary> page) => [.. page.Items.Select(r => r.FormKey)];
 

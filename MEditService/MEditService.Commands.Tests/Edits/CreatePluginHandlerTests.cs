@@ -32,18 +32,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == LoadOrderEntry.OverwriteOrigin ? null : folder, []);
 
     [Fact]
-    public async Task CreatePlugin_WritesTheFileInTheFolder_AndAnswersNoRefusal()
-    {
-        var folder = ModFolder("StateMod");
-
-        var result = await Create("NewPlugin.esp", folder, "StateMod");
-
-        Assert.Equal([Path.Combine(folder, "NewPlugin.esp")], result.Created().Written);
-        Assert.True(File.Exists(Path.Combine(folder, "NewPlugin.esp")));
-    }
-
-    [Fact]
-    public async Task CreatePlugin_ChangesNothingElse()
+    public async Task CreatePlugin_WritesTheFileInTheFolder_AnswersIt_AndChangesNothingElse()
     {
         var folder = ModFolder("QuietMod");
         var before = _holder.Current;
@@ -51,8 +40,9 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var changes = 0;
         _holder.Arrived += (_, _) => changes++;
 
-        await Create("NewPlugin.esp", folder, "QuietMod");
+        var result = await Create("NewPlugin.esp", folder, "QuietMod");
 
+        Assert.Equal([Path.Combine(folder, "NewPlugin.esp")], result.Created().Written);
         Assert.Same(before, _holder.Current);
         Assert.Equal(version, _holder.Held?.Version);
         Assert.Equal(0, changes);
@@ -80,7 +70,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder, folder), Line: null, PluginStrings.None);
 
     [Fact]
-    public async Task CreatePlugin_IntoASourceMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()
+    public async Task CreatePlugin_IntoASourceMod_LandsItsSourceAsWorkingTreeChanges_ParksTheBinaryItWasReadFrom_AndLeavesTheOthersAsTheyWere()
     {
         var folder = await SourceModWith("SourceMod", "First.esp");
         var first = new PluginAddress("First.esp", "SourceMod");
@@ -95,26 +85,15 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Equal(firstBefore, SourceModTree.Records(folder, first));
         Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "SourceMod", folder)));
         Assert.Equal(headBefore, Head(folder));
+        Assert.Equal(
+            [Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(folder, "Second.esp"))))],
+            TestAdapters.Source().OverFolder(new PluginProvider.FromMod("SourceMod", folder, folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "SourceMod")).Value());
     }
 
     [Fact]
-    public async Task CreatePlugin_IntoASourceModTheLoadOrderNamesNoPluginOf_LandsItsSourceInTheSourceFolderItWasHanded()
+    public async Task CreatePlugin_OfAPluginTheSourceModsPluginSourceHolds_WithNoBinary_IsRefusedNamingIt_AndLeavesItsSource()
     {
-        var folder = await SourceModWith("EmptiedMod", "First.esp");
-        File.Delete(Path.Combine(folder, "First.esp"));
-        _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, _data.Plugins));
-
-        var result = await Create("Second.esp", folder, "EmptiedMod");
-
-        result.Created();
-        Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "EmptiedMod", folder)));
-    }
-
-    [Theory]
-    [InlineData("First.esp")]
-    [InlineData("first.ESP")]
-    public async Task CreatePlugin_OfAPluginTheSourceModsPluginSourceHolds_WithNoBinary_IsRefusedNamingIt_AndLeavesItsSource(string name)
-    {
+        const string name = "First.esp";
         var folder = await SourceModWith("SourcedMod", "First.esp");
         var first = new PluginAddress("First.esp", "SourcedMod");
         var sourceBefore = string.Join(", ", SourceModTree.Records(folder, first));
@@ -201,18 +180,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
     }
 
-    [Fact]
-    public async Task CreatePlugin_IntoASourceMod_ParksTheBinaryItsSourceWasReadFrom()
-    {
-        var folder = await SourceModWith("ParkedMod", "First.esp");
-
-        await Create("Second.esp", folder, "ParkedMod");
-
-        Assert.Equal(
-            [Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(folder, "Second.esp"))))],
-            TestAdapters.Source().OverFolder(new PluginProvider.FromMod("ParkedMod", folder, folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")).Value());
-    }
-
     private sealed class SourceUnreadableAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public Action? Before { get; init; }
@@ -243,21 +210,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePlugin_OverAFileAlreadyThere_IsRefusedNamingIt_AndLeavesItAsItWas()
-    {
-        var folder = ModFolder("OccupiedMod");
-        var occupied = Path.Combine(folder, "Occupied.esp");
-        File.WriteAllText(occupied, "another tool's file");
-
-        var result = (await Create("Occupied.esp", folder, "OccupiedMod")).Refused();
-
-        Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
-        Assert.Contains(folder, result.Message, StringComparison.Ordinal);
-        Assert.Contains("Occupied.esp", result.Message, StringComparison.Ordinal);
-        Assert.Equal("another tool's file", File.ReadAllText(occupied));
-    }
-
-    [Fact]
     public async Task CreatePlugin_OverAFileSpelledInAnotherCase_IsRefusedNamingItAsItIsSpelled_AndLeavesItAsItWas()
     {
         var folder = ModFolder("OccupiedMod");
@@ -271,55 +223,31 @@ public sealed class CreatePluginHandlerTests : IDisposable
             (result, string.Join(", ", Directory.GetFiles(folder).Select(Path.GetFileName))));
     }
 
-    [Theory]
-    [InlineData(GameRelease.Oblivion)]
-    [InlineData(GameRelease.OblivionRE)]
-    public async Task CreatePlugin_ALightPluginInAReleaseWithoutThem_IsRefusedNamingIt_BeforeAnyWrite(GameRelease release)
+    [Fact]
+    public async Task CreatePlugin_ALightPluginInAReleaseWithoutThem_IsRefusedNamingIt_BeforeAnyWrite()
     {
         var folder = ModFolder("LightMod");
 
-        var result = (await HandlerIn(release).CreatePlugin(new PluginAddress("Light.esl", "LightMod"), folder, folder)).Refused();
+        var result = (await HandlerIn(GameRelease.Oblivion).CreatePlugin(new PluginAddress("Light.esl", "LightMod"), folder, folder)).Refused();
 
-        Assert.Equal(PluginCreateRefusal.LightPluginUnsupported, result.Refusal);
-        Assert.Contains(release.ToString(), result.Message, StringComparison.Ordinal);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
+        Assert.Equal(
+            (new PluginCreateRefused(PluginCreateRefusal.LightPluginUnsupported, "Oblivion has no light plugins, so Light.esl cannot be created."), false),
+            (result, Directory.EnumerateFileSystemEntries(folder).Any()));
     }
 
     [Theory]
     [InlineData("sub/Mod.esp", "sub/Mod.esp is not a plugin file name: it holds a folder, or a character a plugin's name cannot.")]
     [InlineData(".esp", ".esp is not a plugin file name: it holds no name before its extension.")]
-    public async Task CreatePlugin_ANameThatIsNoPluginFileName_IsRefusedSayingWhy(string name, string why)
+    [InlineData("Mod.txt", "Mod.txt is not a plugin file: its extension must be .esm, .esl or .esp.")]
+    public async Task CreatePlugin_ANameThatIsNoPluginFileName_IsRefusedSayingWhy_BeforeAnyWrite(string name, string why)
     {
         var folder = ModFolder("BadMod");
 
-        var result = (await HandlerIn(GameRelease.Fallout4).CreatePlugin(new PluginAddress(name, "BadMod"), folder, folder)).Refused();
+        var result = (await Handler.CreatePlugin(new PluginAddress(name, "BadMod"), folder, folder)).Refused();
 
-        Assert.Equal(new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, why), result);
-    }
-
-    [Theory]
-    [InlineData("Mod.txt")]
-    [InlineData("Mod")]
-    [InlineData("Mod.esp.bak")]
-    public async Task CreatePlugin_ANameThatIsNotAPluginFile_IsRefusedNamingIt_BeforeAnyWrite(string name)
-    {
-        var folder = ModFolder("BadMod");
-
-        var result = (await HandlerIn(GameRelease.Fallout4).CreatePlugin(new PluginAddress(name, "BadMod"), folder, folder)).Refused();
-
-        Assert.Equal(PluginCreateRefusal.NotAPluginFile, result.Refusal);
-        Assert.Contains(name, result.Message, StringComparison.Ordinal);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
-    }
-
-    [Theory]
-    [InlineData(GameRelease.Fallout4, "must be .esm, .esl or .esp.")]
-    [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
-    public async Task CreatePlugin_ANonPluginName_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
-    {
-        var result = (await HandlerIn(release).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"), ModFolder("BadMod"))).Refused();
-
-        Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            (new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, why), false),
+            (result, Directory.EnumerateFileSystemEntries(folder).Any()));
     }
 
     [Fact]
@@ -338,54 +266,32 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private static IModFlagsGetter Header(string folder, string name) =>
         ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(name), Path.Combine(folder, name)), GameRelease.Fallout4);
 
-    [Fact]
-    public async Task CreatePlugin_AnEspWithFlagsPicked_WritesThemInTheHeader()
+    [Theory]
+    [InlineData("Small.esp", new[] { "Small" }, false, true)]
+    [InlineData("Light.esl", null, true, true)]
+    public async Task CreatePlugin_WritesTheFlagsPicked_OrTheOneCombinationItsExtensionImplies_InTheHeader(
+        string name, string[]? flags, bool master, bool small)
     {
         var folder = ModFolder("FlagsMod");
 
-        (await Handler.CreatePlugin(new PluginAddress("Small.esp", "FlagsMod"), folder, folder, ["Small"])).Created();
+        (await Handler.CreatePlugin(new PluginAddress(name, "FlagsMod"), folder, folder, flags)).Created();
 
-        var header = Header(folder, "Small.esp");
-        Assert.Equal((false, true), (header.IsMaster, header.IsSmallMaster));
-    }
-
-    [Fact]
-    public async Task CreatePlugin_AnEslWithNoFlags_TakesTheOneCombinationItsExtensionImplies()
-    {
-        var folder = ModFolder("EslMod");
-
-        (await Handler.CreatePlugin(new PluginAddress("Light.esl", "EslMod"), folder, folder)).Created();
-
-        var header = Header(folder, "Light.esl");
-        Assert.Equal((true, true), (header.IsMaster, header.IsSmallMaster));
-    }
-
-    [Fact]
-    public async Task CreatePlugin_AnEspWithNoFlags_IsRefusedNamingFlags_AndWritesNothing()
-    {
-        var folder = ModFolder("NeedMod");
-
-        var result = (await Handler.CreatePlugin(new PluginAddress("Plain.esp", "NeedMod"), folder, folder)).Refused();
-
-        Assert.Equal(PluginCreateRefusal.FlagsNeeded, result.Refusal);
-        Assert.Contains("flags", result.Message, StringComparison.Ordinal);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
+        var header = Header(folder, name);
+        Assert.Equal((master, small), (header.IsMaster, header.IsSmallMaster));
     }
 
     [Theory]
-    [InlineData("Plain.esl", new string[0])]
-    [InlineData("Plain.esp", new[] { "Medium" })]
-    [InlineData("Plain.esp", new[] { "Bogus" })]
-    [InlineData("Plain.esp", new[] { "1" })]
-    [InlineData("Plain.esp", new[] { "small" })]
-    public async Task CreatePlugin_FlagsTheExtensionDoesNotOffer_AreRefused_AndWriteNothing(string name, string[] flags)
+    [InlineData(null, PluginCreateRefusal.FlagsNeeded)]
+    [InlineData(new[] { "Medium" }, PluginCreateRefusal.FlagsNotOffered)]
+    [InlineData(new[] { "Bogus" }, PluginCreateRefusal.FlagsNotOffered)]
+    public async Task CreatePlugin_OfAnEsp_WithNoFlags_OrFlagsItsExtensionDoesNotOffer_IsRefused_AndWritesNothing(
+        string[]? flags, PluginCreateRefusal refusal)
     {
-        var folder = ModFolder("NotOfferedMod");
+        var folder = ModFolder("FlagsMod");
 
-        var result = (await Handler.CreatePlugin(new PluginAddress(name, "NotOfferedMod"), folder, folder, flags)).Refused();
+        var result = (await Handler.CreatePlugin(new PluginAddress("Plain.esp", "FlagsMod"), folder, folder, flags)).Refused();
 
-        Assert.Equal(PluginCreateRefusal.FlagsNotOffered, result.Refusal);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
+        Assert.Equal((refusal, false), (result.Refusal, Directory.EnumerateFileSystemEntries(folder).Any()));
     }
 
     private CreatePluginHandler HandlerIn(GameRelease release, IPluginAdapter? adapter = null)

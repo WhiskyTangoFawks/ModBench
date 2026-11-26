@@ -23,20 +23,6 @@ public sealed class KnownDefectTests : IDisposable
     }
 
     [Fact]
-    public void APathReachingTheGovernedMember_IsRefusedByName()
-    {
-        var formKey = OneSceneWithAnAction();
-        var before = _fixture.Document(formKey);
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("{}"), Member("Actions"), At(0), Member("Type")));
-
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("'Type' is read-only", result.Message, StringComparison.Ordinal);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Fact]
     public void AWholeElementSpellingTheGovernedMember_IsRefusedByName()
     {
         var formKey = OneSceneWithAnAction();

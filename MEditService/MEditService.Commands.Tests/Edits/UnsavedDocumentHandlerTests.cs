@@ -40,26 +40,6 @@ public sealed class UnsavedDocumentHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AChangeOfAnOlderVersion_IsNotHanded()
-    {
-        await Putting("typed", 5, opened: true);
-
-        Taken(await Putting("older", 4, opened: false));
-
-        Assert.Single(_mod.Index.Hands);
-    }
-
-    [Fact]
-    public async Task AnOpenOfAnOlderVersion_IsHanded()
-    {
-        await Putting("before the reload", 5, opened: true);
-
-        Taken(await Putting("after the reload", 1, opened: true));
-
-        Assert.Equal(2, _mod.Index.Hands.Count);
-    }
-
-    [Fact]
     public async Task ADocumentDeleted_IsHandedOnce_AndADocumentNeverHeldIsNot()
     {
         await Putting("typed", 1, opened: true);

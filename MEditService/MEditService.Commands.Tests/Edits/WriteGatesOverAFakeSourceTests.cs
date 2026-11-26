@@ -29,26 +29,18 @@ public sealed class WriteGatesOverAFakeSourceTests
         return TestEditService.Over(holder, source: source);
     }
 
-    private static IServiceProvider OverADiskThatInitsWhatTheFakeDoesNot(FakeSourceAdapter source, out SourceEditFixture disk)
-    {
-        disk = SourceEditFixture.CompiledPlugin();
-        return TestEditService.Over(disk.Holder, source: source);
-    }
-
     private static (RecordEditResult Outcome, EditRecordChanges? Changes) SetHeight(IServiceProvider services, string formKey) =>
         services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies).Seen();
 
     [Fact]
-    public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_StillRefusesAsNonCompiledPlugin()
+    public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_RefusesAsNonCompiledPlugin_OfferingVersionInGitNotAPatch()
     {
-        var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
-        using var _ = disk;
-
-        var result = services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies).AsResult();
+        var result = SetHeight(Over(new FakeSourceAdapter()), $"ABCDEF:{Plugin.Name}").Outcome;
 
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
+        Assert.Contains("version in git on its mod", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("patch", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

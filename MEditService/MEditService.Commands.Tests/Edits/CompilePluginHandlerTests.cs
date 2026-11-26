@@ -23,15 +23,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompile_HandsTheRecordIndexItsPluginToReadBack()
-    {
-        (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
-
-        Assert.Equal([HandedPlugin.ReadBack(_mod.Plugin)], Assert.Single(_mod.Index.Hands).Require());
-    }
-
-    [Fact]
-    public async Task ACompile_IsAnsweredOnlyOnceTheRecordIndexHasReadItBack()
+    public async Task ACompile_HandsTheRecordIndexItsPluginToReadBack_AndIsAnsweredOnlyOnceItHas()
     {
         var (handed, held) = (new TaskCompletionSource(), new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously));
         _mod.Index.Answer = () =>
@@ -43,7 +35,8 @@ public sealed class CompilePluginHandlerTests : IDisposable
         var compiling = _mod.CompileHandler.CompileAsync([_mod.Plugin]);
 
         await handed.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        Assert.NotSame(compiling, await Task.WhenAny(compiling, Task.Delay(TimeSpan.FromMilliseconds(200))));
+        Assert.Equal([HandedPlugin.ReadBack(_mod.Plugin)], Assert.Single(_mod.Index.Hands).Require());
+        Assert.False(compiling.IsCompleted);
         held.SetResult(null);
         Assert.Single((await compiling).Value().Applied);
     }

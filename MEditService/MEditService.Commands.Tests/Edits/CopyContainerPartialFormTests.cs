@@ -34,29 +34,6 @@ public sealed class CopyContainerPartialFormTests : IDisposable
         return JsonNode.Parse(_plugins.Text(destination, container)).Require().AsObject();
     }
 
-    [Fact]
-    public void AnInteriorCellOfFallout4Esm_CopiedInAroundAChild_IsAPartialFormWithOnlyItsEditorIdAndTheChild()
-    {
-        FormKey cell = default, placed = default;
-        var source = Plugin("Fallout4.esm", mod =>
-        {
-            var interior = Cell(mod, "InteriorCell", CompressedFlag.Bit);
-            var reference = Placed(mod);
-            interior.Persistent.Add(reference);
-            mod.AddInteriorCells(interior);
-            (cell, placed) = (interior.FormKey, reference.FormKey);
-        });
-
-        var copied = CopyIn(source, placed, cell);
-
-        Assert.Equal("InteriorCell", copied["EditorID"].Require().GetValue<string>());
-        Assert.False(copied.ContainsKey("WaterHeight"));
-        var flags = copied["MajorRecordFlagsRaw"].Require().GetValue<int>();
-        Assert.NotEqual(0, flags & PartialFormFlag.Bit);
-        Assert.Equal(0, flags & CompressedFlag.Bit);
-        Assert.Equal(placed.ToString(), Assert.Single(copied["Persistent"].Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
-    }
-
     private static (Fallout4Mod Source, FormKey Placed, FormKey Document, FormKey Cell) Interior(string plugin, int flags)
     {
         FormKey cell = default, placed = default;
@@ -112,7 +89,7 @@ public sealed class CopyContainerPartialFormTests : IDisposable
             "a worldspace's persistent cell of Fallout4.esm without the persistent flag, a partial form",
             PersistentCellOfAWorldspace, worldspace => worldspace["TopCell"].Require().AsObject(), null, PartialFormFlag.Bit
         },
-        { "a partial form cell of Fallout4.esm, still a partial form", () => Interior("Fallout4.esm", PartialFormFlag.Bit), cell => cell, null, PartialFormFlag.Bit },
+        { "an interior cell of Fallout4.esm, a partial form", () => Interior("Fallout4.esm", CompressedFlag.Bit), cell => cell, null, PartialFormFlag.Bit },
         { "an interior cell of another plugin, a full override", () => Interior("DLCRobot.esm", 0), cell => cell, WaterHeight, null },
     };
 

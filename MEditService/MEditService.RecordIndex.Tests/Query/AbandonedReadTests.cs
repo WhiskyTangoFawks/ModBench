@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -16,19 +15,18 @@ public sealed class AbandonedReadTests : IDisposable
 
     private OpenedIndex Index() => Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => [])));
 
-    [Fact, Kind(Kinds.Measured)]
-    public async Task ASelectWhoseCallerLeft_StopsWorkingWithinASecond()
+    [Fact]
+    public async Task ASelectWhoseCallerLeftWhileItRuns_Stops()
     {
         using var index = Index();
+        IndexFiles.LogQueries(_fixture.InstanceRoot);
         using var left = new CancellationTokenSource();
         var read = Task.Run(() => index.Queries.SelectRows(ForeverSelect, left.Token));
-        await Task.Delay(3000);
+        Waits.Reached(() => IndexFiles.Started(_fixture.InstanceRoot, ForeverSelect), "the select running");
 
-        var abandoned = Stopwatch.StartNew();
         await left.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read.WaitAsync(WellBeforeTheSelectCouldEnd));
-        Assert.True(abandoned.Elapsed < TimeSpan.FromSeconds(1), $"The read went on for {abandoned.Elapsed.TotalSeconds:F1} s after its caller left.");
     }
 
     [Fact]

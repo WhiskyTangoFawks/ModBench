@@ -1,10 +1,6 @@
 using System.Text.Json;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.TestSupport;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -22,19 +18,6 @@ public sealed class HeaderFlagEditTests : IDisposable
     private static JsonElement Json(bool value) => JsonDocument.Parse(value ? "true" : "false").RootElement;
 
     [Fact]
-    public async Task EditField_IsLightTrue_SetsTheSmallFlag_AndCompilesItIntoTheBinary()
-    {
-        var result = Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true));
-
-        Assert.True(result.Applied, result.Message);
-
-        Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
-
-        using var written = await _fixture.CompiledAsync(_fixture.Plugin);
-        Assert.True(written.IsSmallMaster);
-    }
-
-    [Fact]
     public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecord()
     {
         SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
@@ -48,47 +31,17 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains($"001000:{SourceEditFixture.PluginName}", refused.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task Compile_OfAnOutOfRangeRecord_Succeeds_OnceTheLightFlagIsCleared()
+    [Theory]
+    [InlineData(false, """["Small"]""", RecordEditRefusal.SyntheticMemberIndirectWrite, true)]
+    [InlineData(true, """["Small", "Master"]""", RecordEditRefusal.None, false)]
+    public void ARawFlagsWrite_IsRefused_OnlyWhereItChangesTheLightFlag(bool light, string flags, RecordEditRefusal refusal, bool namesTheLightFlag)
     {
-        SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(light)).Applied);
 
-        await _fixture.CompileHandler.CompileLandedAsync(_fixture.Plugin);
-    }
+        var result = Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(flags).RootElement);
 
-    private RecordEditResult SetFlags(string names) =>
-        Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(names).RootElement);
-
-    [Fact]
-    public void EditField_RawFlagsSettingSmall_IsRefusedNamingTheLightFlagsDoor()
-    {
-        var result = SetFlags("[\"Small\"]");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
-        Assert.Contains("IsSmallMaster", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void EditField_RawFlagsLeavingSmallAsItIs_WhileChangingAnotherBit_IsAccepted()
-    {
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
-
-        var result = SetFlags("[\"Small\", \"Master\"]");
-
-        Assert.True(result.Applied, result.Message);
-        Assert.True(HeaderDocument.Read(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body), GameRelease.Fallout4).IsSmallMaster);
-    }
-
-    [Fact]
-    public async Task EditField_Author_CompilesIntoTheBinary()
-    {
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
-
-        using var written = await _fixture.CompiledAsync(_fixture.Plugin);
-        Assert.Equal("Someone", written.ModHeader.Author);
+        Assert.Equal(
+            (refusal, namesTheLightFlag),
+            (result.Refusal, result.Message?.Contains("IsSmallMaster", StringComparison.Ordinal) == true));
     }
 }

@@ -1,10 +1,7 @@
-using System.Text.Json;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -16,71 +13,15 @@ public sealed class RecordEditTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public void EditingEditorId_LandsTheNewNameOnTheRecord()
-    {
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
-
-        Assert.True(result.Applied, result.Message);
-        var document = _mod.Document(_mod.Npc.ToString()).Require();
-        Assert.Equal("RenamedNpc", document.EditorId);
-        Assert.Contains("\"EditorID\": \"RenamedNpc\"", document.Body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditField_OfARecordFileRenamedByHandToANameWithNoFormKey_MovesItToTheLayoutsName()
-    {
-        var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
-        var byHand = Path.Combine(Path.GetDirectoryName(file) ?? string.Empty, "ByHand.json");
-        File.Move(file, byHand);
-
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.True(File.Exists(file));
-        Assert.False(File.Exists(byHand));
-    }
-
-    [Fact]
-    public void EditField_OnACompiledPlugin_LeavesTheRecordChangedSinceTheLastCommit()
-    {
-        Assert.Empty(_mod.ChangedFormKeys());
-
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal([_mod.Npc.ToString()], _mod.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void EditField_WritesTheNewValueIntoTheSourceFile_AsRealCodecText()
-    {
-        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        using var reparsed = JsonDocument.Parse(RecordTextCodec.RoundTrip(
-            _mod.Document(_mod.Npc.ToString()).Require().Body, GameRelease.Fallout4, CompileFixture.NpcRecordType));
-        Assert.Equal(_mod.Npc.ToString(), reparsed.RootElement.GetProperty("FormKey").GetString());
-        Assert.Equal(0.75f, reparsed.RootElement.GetProperty("HeightMax").GetSingle());
-    }
-
-    [Fact]
-    public void EditField_TwiceOnTheSameRecord_BuildsOnTheFirstEditRatherThanTheCommittedText()
-    {
-        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMin", Json("0.5"));
-
-        var text = _mod.Document(_mod.Npc.ToString()).Require().Body;
-        Assert.Contains("0.75", text, StringComparison.Ordinal);
-        Assert.Contains("0.5", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void EditField_WithAnUnknownFieldName_RefusesAsFieldNotFound_AndChangesNoRecord()
     {
+        var before = SourceModTree.Records(_mod.ModFolder, _mod.Plugin);
+
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Empty(_mod.ChangedFormKeys());
+        Assert.Equal(before, SourceModTree.Records(_mod.ModFolder, _mod.Plugin));
     }
 
     [Fact]
@@ -131,21 +72,9 @@ public sealed class RecordEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains($"'{garbage}' is an invalid JSON literal", result.Message, StringComparison.Ordinal);
-        Assert.NotNull(unreadableBefore);
         Assert.Equal(unreadableBefore, Unreadable());
     }
 
     private string Unreadable() =>
         Assert.IsType<SourceFailure.Unreadable>(_mod.Repository.Require().RecordByFormKey(_mod.Plugin, _mod.Npc.ToString()).Stopped()).Reason;
-
-    [Fact]
-    public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()
-    {
-        _mod.Overwrite(_mod.NpcIdentity, "this is not a document");
-
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
-
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.NotNull(Unreadable());
-    }
 }

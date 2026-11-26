@@ -11,177 +11,120 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public abstract class LocalizedSourceCopyScenario : TestInstance
+public sealed class CopyAsOverrideLocalizedTests
 {
-    protected const string EnglishName = "The Big Door";
-    protected const string FrenchName = "La Grande Porte";
+    private const string EnglishName = "The Big Door";
+    private const string FrenchName = "La Grande Porte";
 
-    private readonly PluginAddress _source;
-    private readonly PluginAddress _destination;
-    private readonly FormKey _door;
-    private readonly FormKey _cell;
-    private readonly FormKey _placedObject;
-
-    protected LocalizedSourceCopyScenario(bool destinationLocalized, bool doorNamedInStringsLanguage = true, bool cellNamedInStringsLanguage = true)
-        : base(stringsLanguage: Language.French)
+    public sealed class LocalizedSourceCopy : TestInstance
     {
-        var sourceMod = new Fallout4Mod(ModKey.FromFileName("Localized.esm"), Fallout4Release.Fallout4) { UsingLocalization = true };
-        var door = sourceMod.Doors.AddNew("MainDoor");
-        door.Name = new TranslatedString(Language.English, [
-            new KeyValuePair<Language, string>(Language.English, EnglishName),
-            new KeyValuePair<Language, string>(doorNamedInStringsLanguage ? Language.French : Language.German, doorNamedInStringsLanguage ? FrenchName : "Das Grosse Tor"),
-        ]);
-        var cell = new Cell(sourceMod)
+        private readonly PluginAddress _source;
+        private readonly PluginAddress _destination;
+
+        internal LocalizedSourceCopy(bool destinationLocalized, bool doorNamedInStringsLanguage = true, bool cellNamedInStringsLanguage = true)
+            : base(stringsLanguage: Language.French)
         {
-            EditorID = "MainCell",
-            Name = new TranslatedString(Language.English, [
+            var sourceMod = new Fallout4Mod(ModKey.FromFileName("Localized.esm"), Fallout4Release.Fallout4) { UsingLocalization = true };
+            var door = sourceMod.Doors.AddNew("MainDoor");
+            door.Name = new TranslatedString(Language.English, [
                 new KeyValuePair<Language, string>(Language.English, EnglishName),
-                new KeyValuePair<Language, string>(cellNamedInStringsLanguage ? Language.French : Language.German, FrenchName),
-            ]),
-        };
-        var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
-        cell.Persistent.Add(placedObject);
-        sourceMod.AddInteriorCells(cell);
-        (_door, _cell, _placedObject) = (door.FormKey, cell.FormKey, placedObject.FormKey);
-        _source = Add(sourceMod, "LocalizedMod", compiledPlugin: false);
+                doorNamedInStringsLanguage
+                    ? new KeyValuePair<Language, string>(Language.French, FrenchName)
+                    : new KeyValuePair<Language, string>(Language.German, "Das Grosse Tor"),
+            ]);
+            var cell = new Cell(sourceMod)
+            {
+                EditorID = "MainCell",
+                Name = new TranslatedString(Language.English, [
+                    new KeyValuePair<Language, string>(Language.English, EnglishName),
+                    cellNamedInStringsLanguage
+                        ? new KeyValuePair<Language, string>(Language.French, FrenchName)
+                        : new KeyValuePair<Language, string>(Language.German, "Die Grosse Zelle"),
+                ]),
+            };
+            var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
+            cell.Persistent.Add(placedObject);
+            sourceMod.AddInteriorCells(cell);
+            (MainDoor, MainCell, MainRef) = (door.FormKey, cell.FormKey, placedObject.FormKey);
+            _source = Add(sourceMod, "LocalizedMod", compiledPlugin: false);
 
-        var destinationMod = new Fallout4Mod(ModKey.FromFileName("Destination.esp"), Fallout4Release.Fallout4)
-        {
-            UsingLocalization = destinationLocalized,
-        };
-        if (destinationLocalized) destinationMod.Doors.AddNew("OtherDoor").Name = new TranslatedString(Language.French, "Une Autre Porte");
-        _destination = Add(destinationMod, "DestinationMod");
+            var destinationMod = new Fallout4Mod(ModKey.FromFileName("Destination.esp"), Fallout4Release.Fallout4)
+            {
+                UsingLocalization = destinationLocalized,
+            };
+            if (destinationLocalized) destinationMod.Doors.AddNew("OtherDoor").Name = new TranslatedString(Language.French, "Une Autre Porte");
+            _destination = Add(destinationMod, "DestinationMod");
+        }
+
+        internal FormKey MainDoor { get; }
+        internal FormKey MainCell { get; }
+        internal FormKey MainRef { get; }
+
+        internal CopyRecordResult CopyOverride(params FormKey[] records) =>
+            CopyHandler.CopySync([.. records.Select(record => new RecordAt(_source, record.ToString()))], CopyMode.Override, [_destination], replace: false);
+
+        internal void DeleteTheSourcesStringsFiles() => Directory.Delete(Path.Combine(ModFolderOf(_source), "Strings"), recursive: true);
+
+        internal SourceDocument? InDestination(FormKey record) => SourceModTree.Document(ModFolderOf(_destination), _destination, record.ToString());
     }
 
-    protected async Task<string> CopiedDoorBody()
+    public static TheoryData<string, bool, Func<LocalizedSourceCopy, (FormKey Copied, FormKey Landed)>> Copies => new()
     {
-        var body = CopiedBody(_door, _door);
-        await CompileHandler.CompileLandedAsync(_destination);
-        return body;
-    }
+        { "a record into a plugin that is not localized", false, copy => (copy.MainDoor, copy.MainDoor) },
+        { "a child into a plugin that is not localized, its copied-in container", false, copy => (copy.MainRef, copy.MainCell) },
+        { "a record into a localized plugin", true, copy => (copy.MainDoor, copy.MainDoor) },
+    };
 
-    protected async Task<string> CopiedCellBody()
+    [Theory]
+    [MemberData(nameof(Copies))]
+    public void CopyRecordAsOverride_FromALocalizedSource_LandsTheStringsLanguageValueAlone_UnlessTheDestinationIsLocalized(
+        string _, bool destinationLocalized, Func<LocalizedSourceCopy, (FormKey Copied, FormKey Landed)> records)
     {
-        var body = CopiedBody(_placedObject, _cell);
-        await CompileHandler.CompileLandedAsync(_destination);
-        return body;
+        using var copy = new LocalizedSourceCopy(destinationLocalized);
+        var (copied, landed) = records(copy);
+
+        copy.CopyOverride(copied).OnlyLanded();
+
+        var body = copy.InDestination(landed).Require().Body;
+        Assert.Equal(
+            (true, destinationLocalized, destinationLocalized),
+            (body.Contains(FrenchName, StringComparison.Ordinal), body.Contains(EnglishName, StringComparison.Ordinal), body.Contains("\"Values\"", StringComparison.Ordinal)));
     }
 
-    protected CopyRecordResult CopyCellThenDoor() =>
-        CopyHandler.CopySync([new RecordAt(_source, _cell.ToString()), new RecordAt(_source, _door.ToString())], CopyMode.Override, [_destination], replace: false);
-
-    protected CopyRecordResult CopyDoorWhoseSourceLostItsStringsFiles()
-    {
-        Directory.Delete(Path.Combine(ModFolderOf(_source), "Strings"), recursive: true);
-        return CopyHandler.CopySync([new RecordAt(_source, _door.ToString())], CopyMode.Override, [_destination], replace: false);
-    }
-
-    protected CopyRecordResult CopyPlacedObject() =>
-        CopyHandler.CopySync([new RecordAt(_source, _placedObject.ToString())], CopyMode.Override, [_destination], replace: false);
-
-    protected SourceDocument? DoorInDestination() => SourceModTree.Document(ModFolderOf(_destination), _destination, _door.ToString());
-
-    protected SourceDocument? CellInDestination() => SourceModTree.Document(ModFolderOf(_destination), _destination, _cell.ToString());
-
-    private string CopiedBody(FormKey copied, FormKey landed)
-    {
-        CopyHandler.CopySync([new RecordAt(_source, copied.ToString())], CopyMode.Override, [_destination], replace: false).OnlyLanded();
-        return SourceModTree.Document(ModFolderOf(_destination), _destination, landed.ToString()).Require().Body;
-    }
-}
-
-public sealed class CopyAsOverrideLocalizedTests() : LocalizedSourceCopyScenario(destinationLocalized: false)
-{
-    [Fact]
-    public async Task CopyRecordAsOverride_FromALocalizedSourceIntoAPluginThatIsNot_WritesTheStringsLanguageValueAndCompiles()
-    {
-        var body = await CopiedDoorBody();
-
-        Assert.Contains(FrenchName, body, StringComparison.Ordinal);
-        Assert.DoesNotContain(EnglishName, body, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Values\"", body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task CopyRecordAsOverride_OfAChildIntoAPluginThatIsNot_WritesTheCopiedInContainersStringsLanguageValue()
-    {
-        var body = await CopiedCellBody();
-
-        Assert.Contains(FrenchName, body, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Values\"", body, StringComparison.Ordinal);
-    }
-}
-
-public sealed class CopyAsOverrideWithoutStringsLanguageTextTests() : LocalizedSourceCopyScenario(destinationLocalized: false, doorNamedInStringsLanguage: false)
-{
     [Fact]
     public void CopyRecordAsOverride_OfAStringWithNoTextInTheStringsLanguage_RefusesNamingTheFieldAndWritesNothing()
     {
-        var result = CopyCellThenDoor();
+        using var copy = new LocalizedSourceCopy(destinationLocalized: false, doorNamedInStringsLanguage: false);
 
-        var refused = Assert.Single(result.Refused);
+        var refused = Assert.Single(copy.CopyOverride(copy.MainCell, copy.MainDoor).Refused);
+
         Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, refused.Refusal);
         Assert.Contains("Name", refused.Message, StringComparison.Ordinal);
         Assert.Contains("French", refused.Message, StringComparison.Ordinal);
-        Assert.Null(DoorInDestination());
+        Assert.Null(copy.InDestination(copy.MainDoor));
     }
 
-    [Fact]
-    public void CopyRecordAsOverride_OfASelectionWithOneStringWithNoTextInTheStringsLanguage_LandsTheOthers()
-    {
-        var result = CopyCellThenDoor();
-
-        Assert.Single(result.Applied);
-        Assert.NotNull(CellInDestination());
-    }
-}
-
-public sealed class CopyAsOverrideOfAChildWithoutStringsLanguageTextInItsContainerTests()
-    : LocalizedSourceCopyScenario(destinationLocalized: false, cellNamedInStringsLanguage: false)
-{
     [Fact]
     public void CopyRecordAsOverride_OfAChildWhoseContainerHasAStringWithNoTextInTheStringsLanguage_RefusesTheChildAndWritesNothing()
     {
-        var result = CopyPlacedObject();
+        using var copy = new LocalizedSourceCopy(destinationLocalized: false, cellNamedInStringsLanguage: false);
 
-        Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, Assert.Single(result.Refused).Refusal);
-        Assert.Null(CellInDestination());
+        var refused = Assert.Single(copy.CopyOverride(copy.MainRef).Refused);
+
+        Assert.Equal(RecordEditRefusal.NoTextInStringsLanguage, refused.Refusal);
+        Assert.Null(copy.InDestination(copy.MainCell));
     }
-}
 
-public sealed class CopyAsOverrideIntoLocalizedTests() : LocalizedSourceCopyScenario(destinationLocalized: true)
-{
     [Fact]
-    public async Task CopyRecordAsOverride_FromALocalizedSourceIntoALocalizedPlugin_KeepsEveryLanguage()
+    public void CopyRecordAsOverride_FromASourceMissingItsStringsFiles_RefusesNamingTheMissingFileAndWritesNothing()
     {
-        var body = await CopiedDoorBody();
+        using var copy = new LocalizedSourceCopy(destinationLocalized: false);
+        copy.DeleteTheSourcesStringsFiles();
 
-        Assert.Contains(FrenchName, body, StringComparison.Ordinal);
-        Assert.Contains(EnglishName, body, StringComparison.Ordinal);
-    }
-}
-
-public sealed class CopyAsOverrideFromASourceMissingItsStringsFilesTests() : LocalizedSourceCopyScenario(destinationLocalized: false)
-{
-    [Fact]
-    public void CopyRecordAsOverride_IntoAPluginThatIsNotLocalized_RefusesNamingTheMissingFileAndWritesNothing()
-    {
-        var refused = Assert.Single(CopyDoorWhoseSourceLostItsStringsFiles().Refused);
+        var refused = Assert.Single(copy.CopyOverride(copy.MainDoor).Refused);
 
         Assert.Contains("Localized.esm", refused.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("strings file", refused.Message, StringComparison.Ordinal);
-        Assert.Null(DoorInDestination());
-    }
-}
-
-public sealed class CopyAsOverrideIntoLocalizedFromASourceMissingItsStringsFilesTests() : LocalizedSourceCopyScenario(destinationLocalized: true)
-{
-    [Fact]
-    public void CopyRecordAsOverride_IntoALocalizedPlugin_RefusesNamingTheMissingFileAndWritesNothing()
-    {
-        var refused = Assert.Single(CopyDoorWhoseSourceLostItsStringsFiles().Refused);
-
-        Assert.Contains("strings file", refused.Message, StringComparison.Ordinal);
-        Assert.Null(DoorInDestination());
+        Assert.Null(copy.InDestination(copy.MainDoor));
     }
 }
