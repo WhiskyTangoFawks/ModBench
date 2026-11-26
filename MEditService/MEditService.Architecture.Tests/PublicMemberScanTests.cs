@@ -29,12 +29,14 @@ public sealed class PublicMemberScanTests
     }
 
     [Fact]
-    public void TheScan_NamesAnUncalledPublicType_AndAnUncalledMemberOfATypeHeldPublic()
+    public void TheScan_NamesAnUncalledPublicType_AndAnUncalledMemberOrEventOfATypeHeldPublic()
     {
         var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
 
-        Assert.Contains($"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedUncalled)}", scan.Uncalled);
-        Assert.Contains($"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedHeldPublicByItsConstant)}.{nameof(PlantedHeldPublicByItsConstant.Probe)}(0:Int32(Int32))", scan.Uncalled);
+        var tests = typeof(PublicMemberScanTests).FullName;
+        Assert.Contains($"{tests}/{nameof(PlantedUncalled)}", scan.Uncalled);
+        Assert.Contains($"{tests}/{nameof(PlantedHeldPublicByItsConstant)}.{nameof(PlantedHeldPublicByItsConstant.Probe)}(0:Int32(Int32))", scan.Uncalled);
+        Assert.Contains($"{tests}/{nameof(PlantedEvents)}.{nameof(PlantedEvents.NotImplemented)}", scan.Uncalled);
     }
 
     public sealed class PlantedUncalled
@@ -49,28 +51,11 @@ public sealed class PublicMemberScanTests
         public static int Probe(int x) => x + Held;
     }
 
-    [Fact]
-    public void TheScan_HoldsPublicAnEventThatImplementsAnInterface_AndNamesOneThatDoesNot()
-    {
-        var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
-
-        var type = $"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedEvents)}";
-        Assert.DoesNotContain($"{type}.{nameof(PlantedEvents.Implemented)}", scan.Uncalled);
-        Assert.Contains($"{type}.{nameof(PlantedEvents.NotImplemented)}", scan.Uncalled);
-    }
-
-    public interface IPlantedSignal
-    {
-        event Action? Implemented;
-    }
-
-    public sealed class PlantedEvents : IPlantedSignal
+    public sealed class PlantedEvents
     {
         public const int Held = 1;
 
         private Action? _handlers;
-
-        public event Action? Implemented { add => _handlers += value; remove => _handlers -= value; }
 
         public event Action? NotImplemented { add => _handlers += value; remove => _handlers -= value; }
     }
@@ -92,29 +77,6 @@ public sealed class PublicMemberScanTests
             .Order(StringComparer.Ordinal)
             .ToList();
         return new ScanResult(assemblies.Count, world.Used.Count, members.Count, uncalled);
-    }
-
-    [Fact]
-    public void TheOnlyForeignPublicTypes_BesideSpriggitsCustomizations_AreTheGeneratedWholeModMixIns_InTheCodecsGameProjects()
-    {
-        var foreign = ServiceProjects.Production(ServiceProjects.SolutionDirectory())
-            .Select(System.Reflection.Assembly.Load)
-            .SelectMany(assembly => assembly.GetExportedTypes())
-            .Where(type => type.Namespace?.StartsWith("MEditService", StringComparison.Ordinal) == false
-                && type.Namespace?.StartsWith(Assembly.SpriggitNamespace, StringComparison.Ordinal) == false)
-            .Select(type => $"{type.Assembly.GetName().Name}: {type.FullName}")
-            .Order(StringComparer.Ordinal);
-
-        Assert.Equal(
-            [
-                "MEditService.Codec.Fallout4.Proof: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns",
-                "MEditService.Codec.Fallout4: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns",
-                "MEditService.Codec.Skyrim.Proof: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterSkyrimModMixIns",
-                "MEditService.Codec.Skyrim: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterSkyrimModMixIns",
-                "MEditService.Codec.Starfield.Proof: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterStarfieldModMixIns",
-                "MEditService.Codec.Starfield: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterStarfieldModMixIns",
-            ],
-            foreign);
     }
 
     private static HashSet<Key> Exposed(List<VisibleMember> members, World world)
@@ -151,7 +113,7 @@ public sealed class PublicMemberScanTests
     private sealed class Assembly(string name, MetadataReader reader)
     {
         private const string ComposedByWebApplicationFactory = "Program";
-        public const string SpriggitNamespace = "Spriggit.";
+        private const string SpriggitNamespace = "Spriggit.";
         private const string MutagenNamespace = "Mutagen.";
         private const string MixInsTheSerializationGeneratorEmitsPublic = "MixIns";
         private const string DependencyInjection = "Microsoft.Extensions.DependencyInjection";

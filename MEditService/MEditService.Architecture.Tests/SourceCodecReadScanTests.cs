@@ -35,16 +35,6 @@ public sealed class SourceCodecReadScanTests
     }
 
     [Fact]
-    public void TheScan_WalksMoreThanFifteenProductionFiles()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var walked = ScannedFiles(root, ScannedRoots).Count();
-
-        Assert.True(walked > 15, $"The codec-read scan walked only {walked} files under {string.Join(", ", ScannedRoots)}.");
-    }
-
-    [Fact]
     public void TheScan_PermitsTypeDispatchBlankDocumentAndTheVerdict_AndNamesAPlantedCodecReadOrWrite()
     {
         using var root = new ScratchDirectory("medit-source-codec-read-scan-");

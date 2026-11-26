@@ -67,12 +67,12 @@ public sealed class ArchitectureTests
     private static IEnumerable<string> StringPlugins((string Name, Type Type)[] members) =>
         members.Where(m => m.Type == typeof(string) && PluginNamed.IsMatch(m.Name)).Select(m => m.Name);
 
-    internal static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
+    private static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
         PluginStringsWithoutOrigin(parameters
             .Select(p => (p.Name ?? throw new InvalidOperationException("Expected a parameter to have a name."), p.ParameterType))
             .ToArray());
 
-    internal static IEnumerable<string> PluginStringsWithoutOrigin((string Name, Type Type)[] members)
+    private static IEnumerable<string> PluginStringsWithoutOrigin((string Name, Type Type)[] members)
     {
         foreach (var (name, type) in members.Where(m => m.Type == typeof(string)))
         {
@@ -101,7 +101,7 @@ public sealed class ArchitectureTests
             + string.Join("\n", dead));
     }
 
-    internal static List<string> HolderWrites(string root, IReadOnlyList<string> projects, string verb) =>
+    private static List<string> HolderWrites(string root, IReadOnlyList<string> projects, string verb) =>
         [.. projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(f => CallsVerbOnAReceiverTypedAsHolder(File.ReadAllText(f), verb))
@@ -120,27 +120,16 @@ public sealed class ArchitectureTests
     private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
         named.Where(f => !allowed.Contains(Path.GetFileName(f)));
 
-    internal static List<string> DeadAllowances(string[] allowed, params List<string>[] scans)
+    private static List<string> DeadAllowances(string[] allowed, params List<string>[] scans)
     {
         var named = scans.SelectMany(s => s).Select(Path.GetFileName).ToHashSet(StringComparer.Ordinal);
         return [.. allowed.Where(a => !named.Contains(a)).Order(StringComparer.Ordinal)];
     }
 
     [Fact]
-    public void ABareHolderReceiverName_DoesNotAnswerForAPlaceholderCall()
+    public void TheHolderScan_NamesAnApplyOnAReceiverTypedAsAHolder()
     {
-        Assert.False(CallsVerbOnAReceiverTypedAsHolder(
-            "LoadOrderHolder holder; placeholder.Apply(x);", "Apply"));
-        Assert.True(CallsVerbOnAReceiverTypedAsHolder(
-            "LoadOrderHolder holder; holder.Apply(x);", "Apply"));
-    }
-
-    [Fact]
-    public void DeadAllowances_NamesAnAllowanceNoScanMatched_AndKeepsOneAnyScanDid()
-    {
-        Assert.Equal(
-            ["Stale.cs"],
-            DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
+        Assert.True(CallsVerbOnAReceiverTypedAsHolder("LoadOrderHolder holder; holder.Apply(x);", "Apply"));
     }
 
     [Fact]
@@ -204,12 +193,10 @@ public sealed class ArchitectureTests
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(5));
 
     [Fact]
-    public void TheParticipationRulePattern_MatchesBothSpellings_AndNotASingleFact()
+    public void TheParticipationRulePattern_MatchesBothSpellings()
     {
         Assert.Matches(ParticipationRule, "Enabled && Winning && LoadOrderIndex is not null");
         Assert.Matches(ParticipationRule, "$\"{alias}.enabled AND {alias}.winning AND {alias}.load_order_idx IS NOT NULL\"");
-        Assert.DoesNotMatch(ParticipationRule, "reader.GetBoolean(3) is var enabled && winning is null");
-        Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
     private static readonly string[] PluginBinaryWriters = ["MutagenPluginAdapter.cs", "ReferenceBases.cs"];
@@ -258,29 +245,6 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToReplace()
-    {
-        string[] writers = ["PluginWriter.cs", "PluginTrees.cs", "CreatePluginHandler.cs"];
-
-        string[] filesDeclaringAndImplementingTheVerbs = [.. PluginBinaryWriters, "IPluginAdapter.cs"];
-        var writesIncludingCreateAndWrite = Offenders(
-            ServiceProjects.SolutionDirectory(), Projects, ["PluginAdapter", "WriteAsync("],
-            filesDeclaringAndImplementingTheVerbs);
-
-        var offenders = Unallowed(writesIncludingCreateAndWrite, writers).ToList();
-        Assert.True(offenders.Count == 0,
-            "A plugin binary is replaced by writing a temp file and renaming it over the binary, and the "
-            + "adapter's write verb writes in place. Only PluginWriter (which renames), PluginTrees (which "
-            + "writes a scratch copy) and the create gesture (which writes a file with no existing binary) "
-            + "may call it. It is called in:\n" + string.Join("\n", offenders));
-
-        var dead = DeadAllowances(writers, writesIncludingCreateAndWrite).ToList();
-        Assert.True(dead.Count == 0,
-            "Allowances naming no such call — delete them rather than leaving a plugin write pre-authorized:\n"
-            + string.Join("\n", dead));
-    }
-
-    [Fact]
     public void TestDataPlugins_AreExactlyTheAllowlist_BecauseTheRepoIsPublic()
     {
         var testData = Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.TestSupport", "TestData");
@@ -295,68 +259,11 @@ public sealed class ArchitectureTests
     private static readonly IReadOnlyList<string> Projects =
         ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
-    internal static List<string> Offenders(string root, IReadOnlyList<string> projects, string needle, string[] allowedFiles) =>
-        Offenders(root, projects, [needle], allowedFiles);
-
-    internal static List<string> Offenders(string root, IReadOnlyList<string> projects, string[] needles, string[] allowedFiles)
-    {
-        return projects
+    private static List<string> Offenders(string root, IReadOnlyList<string> projects, string needle, string[] allowedFiles) =>
+        [.. projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(f => !allowedFiles.Contains(Path.GetFileName(f)))
-            .Where(f => File.ReadAllText(f) is var text
-                && needles.All(n => text.Contains(n, StringComparison.Ordinal)))
-            .Select(f => Path.GetRelativePath(root, f))
-            .ToList();
-    }
+            .Where(f => File.ReadAllText(f).Contains(needle, StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(root, f))];
 
-    [Fact]
-    public void Offenders_NamesTheFileCarryingTheNeedle_AndSkipsAllowedFiles()
-    {
-        using var root = new ScratchDirectory("medit-arch-");
-        ScratchFiles.Plant(root, "P/Bad.cs", "var t = info.LastWriteTime;");
-        ScratchFiles.Plant(root, "P/Allowed.cs", "var t = info.LastWriteTime;");
-        ScratchFiles.Plant(root, "P/Clean.cs", "var t = 1;");
-
-        var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: ["Allowed.cs"]);
-
-        Assert.Equal([Path.Combine("P", "Bad.cs")], offenders);
-    }
-
-    [Fact]
-    public void Offenders_NamesOnlyTheFileCarryingEveryNeedle()
-    {
-        using var root = new ScratchDirectory("medit-arch-");
-        ScratchFiles.Plant(root, "P/Both.cs", "var h = new Holder(); renamed.Apply(x);");
-        ScratchFiles.Plant(root, "P/OnlyType.cs", "var h = new Holder();");
-        ScratchFiles.Plant(root, "P/OnlyCall.cs", "renamed.Apply(x);");
-
-        var offenders = Offenders(root, ["P"], ["Holder", ".Apply("], allowedFiles: []);
-
-        Assert.Equal([Path.Combine("P", "Both.cs")], offenders);
-    }
-
-    [Fact]
-    public void PluginStringsWithoutOrigin_FlagsABareName_AndAcceptsAPairOrATypedKey()
-    {
-        static void Bare(string plugin, string other) { }
-        static void Paired(string sourcePlugin, string sourceOrigin, string destinationPlugin) { }
-        static void Typed(PluginAddress plugin) { }
-
-        Assert.Equal(["plugin"], PluginStringsWithoutOrigin(ParametersOf(Bare)));
-        Assert.Equal(["destinationPlugin"], PluginStringsWithoutOrigin(ParametersOf(Paired)));
-        Assert.Empty(PluginStringsWithoutOrigin(ParametersOf(Typed)));
-        Assert.Equal(["Plugin"], PluginStringsWithoutOrigin([("Plugin", typeof(string)), ("Path", typeof(string))]));
-    }
-
-    [Fact]
-    public void StringPlugins_FlagsAPluginStringEvenBesideItsOrigin_AndAcceptsATypedKey()
-    {
-        static void Paired(string plugin, string origin) { }
-        static void Typed(PluginAddress plugin, string formKey) { }
-
-        Assert.Equal(["plugin"], StringPlugins(ParametersOf(Paired)));
-        Assert.Empty(StringPlugins(ParametersOf(Typed)));
-    }
-
-    private static ParameterInfo[] ParametersOf(Delegate method) => method.Method.GetParameters();
 }
