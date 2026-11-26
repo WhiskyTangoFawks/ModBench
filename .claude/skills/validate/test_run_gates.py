@@ -158,7 +158,7 @@ class SelectedByChange(GateRepo):
 
 
 class DeletedTests(GateRepo):
-    def test_a_ticket_that_deletes_a_survivor_its_integration_branch_named_meets_it(self):
+    def test_a_ticket_that_deletes_a_survivor_its_integration_branch_named_meets_it(self) -> None:
         shutil.copy(SCRIPT.parent / "check_deleted_tests.py", self.validate)
         self.write("CODING_STANDARDS.md", "## Tests\n")
         self.write("scripts/tests/test_box.py", "    def test_a(self): ...\n    def test_b(self): ...\n    def test_c(self): ...\n")

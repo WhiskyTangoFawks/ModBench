@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Names each test deleted since the base that no trailer accounts for (CODING_STANDARDS.md § Tests, "A diff
-deletes a test"). A deleted test is a name the merge base holds more often than HEAD, so a moved test is not
-one. The trailers of the commits since the base account for it when one of them names a test at HEAD, or a mark
-of § Tests by its words before the first colon, full stop or arrow:
+"""Names each test deleted since the base that no trailer accounts for, each trailer of a deleted test that
+resolves to nothing, and each trailer without its arrow (CODING_STANDARDS.md § Tests, "A diff deletes a test").
+A deleted test is a name the merge base holds more often than HEAD, so a moved test is not one. The trailers of
+the commits since the base account for it when one of them names a test at HEAD, or a mark of § Tests by its
+words before the first colon, full stop or arrow:
 
     Deleted-test: <deleted> => <survivor>
     Deleted-test: <deleted> => mark: <mark>
@@ -72,6 +73,10 @@ def test_names(repo: Path, rev: str) -> Counter[str]:
     return names
 
 
+def stands(survivor: str, at_tip: Counter[str], marks: set[str]) -> bool:
+    return survivor.removeprefix(MARK) in marks if survivor.startswith(MARK) else at_tip[survivor] > 0
+
+
 def problems(repo: Path, base: str) -> list[str]:
     merge_base = git(repo, 'merge-base', base, 'HEAD').strip()
     at_tip = test_names(repo, 'HEAD')
@@ -86,12 +91,12 @@ def problems(repo: Path, base: str) -> list[str]:
         gone, arrow, survivor = trailer.partition(ARROW)
         if not arrow:
             found.append(f'{KEY}: {trailer}: reads {FORM}')
-        elif survivor.removeprefix(MARK) in marks if survivor.startswith(MARK) else at_tip[survivor]:
+        elif stands(survivor, at_tip, marks):
             accounted.add(gone)
         else:
             unresolved.setdefault(gone, []).append(trailer)
     found += [f'{trailer}: no test at the tip and no mark of {STANDARDS} § Tests reads so'
-              for gone, trailers in unresolved.items() if gone not in accounted for trailer in trailers]
+              for gone, named_by in unresolved.items() if gone in deleted and gone not in accounted for trailer in named_by]
     found += [f'{name}: deleted, and no trailer names its survivor: {FORM}'
               for name in sorted(deleted) if name not in accounted and name not in unresolved]
     return found

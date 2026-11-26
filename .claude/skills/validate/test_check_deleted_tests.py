@@ -106,16 +106,16 @@ class Deleted(Repo):
 
 
 class Trailer(Repo):
-    def test_each_deletion_is_accounted_for_by_a_survivor_at_the_tip_or_a_mark_of_tests_and_each_other_trailer_is_named(self) -> None:
+    def test_each_deletion_is_accounted_for_by_a_survivor_at_the_tip_or_a_mark_of_tests_and_each_other_trailer_of_a_deletion_is_named(self) -> None:
         self.keep_only_the_kept_tests()
         self.commit('delete\n\nDeleted-test: test_removed => Kept\nDeleted-test: Removed_fact => test_gone\n'
                     'Deleted-test: Removed_theory => mark: A test proves an absence\n'
                     'Deleted-test: Removed_custom => mark: A comment restates an ADR\nDeleted-test: rows %s => mark: A test\n'
-                    'Deleted-test: skipped')
+                    'Deleted-test: skipped\nDeleted-test: test_kept => test_gone')
         self.commit("name the rest from a later commit\n\nDeleted-test: templated => kept\n"
                     "Deleted-test: says the editor's name => test_kept\nCo-Authored-By: t <t@t>")
         self.assertEqual(cdt.problems(self.root, 'main'), [
-            f"Deleted-test: skipped: reads {cdt.FORM}",
+            "Deleted-test: skipped: reads 'Deleted-test: <deleted> => <survivor>' or 'Deleted-test: <deleted> => mark: <mark>'",
             'Removed_fact => test_gone: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
             'Removed_custom => mark: A comment restates an ADR: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
             'rows %s => mark: A test: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
