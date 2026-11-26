@@ -18,14 +18,14 @@ class Readers(unittest.TestCase):
             [Result('A.First', RAN, 0, 'A.Tests'), Result('A.Blocked', RAN, 0.1, 'A.Tests'), Result('A.Slow', RAN, 3, 'A.Tests'),
              Result('A.Skipped(x: 1)', SKIPPED, None, 'A.Tests')])
 
-    def test_a_trx_results_box_is_the_test_project_whose_assembly_ran_it(self):
+    def test_a_trx_results_box_is_the_test_project_whose_assembly_ran_it(self) -> None:
         self.assertEqual(
             [result.box for result in reports.in_trx(fx.trx(
                 fx.trx_result('A.One', 1, 1, project='MEditService.Http.Tests'),
                 fx.trx_result('B.Two', 2, 1, project='MEditService.TestSupport')))],
             ['MEditService.Http.Tests', 'MEditService.TestSupport'])
 
-    def test_a_vitest_tests_box_is_its_folder_under_src_or_else_under_modbench(self):
+    def test_a_vitest_tests_box_is_its_folder_under_src_or_else_under_modbench(self) -> None:
         ran: list[tuple[str, str, float | None]] = [('t', 'passed', 1)]
         files = [(f'/home/me/modbench/modbench/{path}', ran) for path in (
             'src/instanceAdapter/a.test.ts', 'src/test/b.test.ts', 'webview/src/c.test.tsx', 'src/d.test.ts')]
