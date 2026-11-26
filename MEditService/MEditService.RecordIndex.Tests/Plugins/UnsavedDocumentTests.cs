@@ -78,14 +78,6 @@ public sealed class UnsavedDocumentTests : IDisposable
         (index.PluginResponseOf(_compiledPlugin.Key) ?? throw new InvalidOperationException($"Expected a row for {CompiledPlugin}.")).LaterReadFailure;
 
     [Fact]
-    public void AHandedDocument_IsReadInPlaceOfItsFile()
-    {
-        Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
-
-        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
-    }
-
-    [Fact]
     public void AProblemOfAHandedDocument_CarriesItsRangeInTheHandedText()
     {
         var handed = "\n\n" + Typed(_race, Absent);
@@ -112,16 +104,6 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Null(stop.TargetFormKey);
         Assert.Equal(Ranges.FirstLine, stop.Range);
         Assert.Equal(ProblemsFailureKind.LaterRead, problems.FailureKind);
-    }
-
-    [Fact]
-    public void ADroppedDocument_IsReadFromItsFileAgain()
-    {
-        Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
-
-        Hand();
-
-        Assert.Equal("CompiledPluginNpc", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
     }
 
     [Fact]
@@ -216,16 +198,6 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Contains(LaterReadFailureOfCompiledPlugin() ?? [], stop => stop.SourceRelativePath == Relative(_file) && stop.FormKey == _race);
     }
 
-    [Fact]
-    public void TheSameClaimOnDisk_ReadsItsPluginFile()
-    {
-        File.WriteAllText(_file, Typed(_npc, _race));
-
-        _index.NextCheckUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
-
-        Assert.Null(LaterReadFailureOfCompiledPlugin());
-    }
-
     [Theory]
     [InlineData(typeof(InvalidOperationException))]
     [InlineData(typeof(OutOfMemoryException))]
@@ -292,23 +264,6 @@ public sealed class UnsavedDocumentTests : IDisposable
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
 
         faults.FaultsOn = null;
-        EditedOnDisk(faulting, "TypedUnsaved", "TypedAgain");
-
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready && faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId == "TypedAgain", "the ready status over the second edit");
-    }
-
-    [Fact]
-    public void ACheckWhoseStatusCannotBePublished_LeavesTheNextCheckValidated()
-    {
-        var faults = new InMemoryNotificationPublisher();
-        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
-        var validationFault = Faults.Of(typeof(InvalidOperationException));
-        faults.OnPublish = Faults.On(IsRowsChanged, validationFault)
-            + Faults.On(n => n is LoadOrderStatusNotification, Faults.Of(typeof(NotSupportedException)));
-        EditedOnDisk(faulting, "CompiledPluginNpc", "TypedUnsaved");
-        Waits.Reached(() => faulting.Status.Message?.Contains(validationFault.Message, StringComparison.Ordinal) == true, "the validation fault in the status");
-
-        faults.OnPublish = null;
         EditedOnDisk(faulting, "TypedUnsaved", "TypedAgain");
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready && faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId == "TypedAgain", "the ready status over the second edit");

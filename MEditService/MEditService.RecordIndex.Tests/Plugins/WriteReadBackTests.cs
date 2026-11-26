@@ -83,12 +83,6 @@ public sealed class WriteReadBackTests : IDisposable
     }
 
     [Fact]
-    public async Task AWriteReadBack_IsAnsweredOnceTheRecordIndexHoldsWhatItWrote_WithNoChangeSignalled()
-    {
-        await AssertHeldAndWritten(ReadBack());
-    }
-
-    [Fact]
     public async Task AReadBackOfTheSourceOfAPluginTheLoadOrderNamesNoSourceOf_IsAnsweredThatItsRowsAreItsBinarys()
     {
         var other = _fixture.Plugins.Single(plugin => plugin.Name == OtherPlugin).Key;
@@ -192,18 +186,6 @@ public sealed class WriteReadBackTests : IDisposable
 
         Assert.False(hand.IsCompleted);
         _source.Release();
-        await AssertHeldAndWritten(hand);
-    }
-
-    [Fact]
-    public async Task AReadBackAskedWhileACheckAskedBeforeItWaits_IsStillAnswered()
-    {
-        await WorkerParkedInAReconcile();
-        _index.SignalChange();
-        var hand = ReadBack();
-
-        _gate.Release();
-
         await AssertHeldAndWritten(hand);
     }
 

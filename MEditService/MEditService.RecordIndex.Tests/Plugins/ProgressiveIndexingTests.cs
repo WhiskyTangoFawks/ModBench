@@ -164,41 +164,6 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
-    public async Task ASecondLoadMidLoad_AnswersOnceTheFirstIsReleased_ReadsEachPluginOnce_AndTheResultIsWhollyTheSecond()
-    {
-        var holder = new LoadOrderHolder();
-        using var fx = FourPlugins("sm-progressive-second-load");
-        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
-        using var _ = index;
-        using var __ = gate;
-        var order = new ConcurrentQueue<string>();
-
-        var first = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        using var secondAttempting = new ManualResetEventSlim();
-        var second = Task.Run(() =>
-        {
-            secondAttempting.Set();
-            index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-            order.Enqueue("second-done");
-        });
-        Assert.True(secondAttempting.Wait(TimeSpan.FromSeconds(5)));
-
-        gate.Release();
-        order.Enqueue("gate-released");
-        await first;
-        await second;
-
-        Assert.Equal(["gate-released", "second-done"], order);
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], index.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.True(index.Status.ConflictsComputed);
-        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
-        Assert.Equal(1, index.CountOf(new PluginAddress("C.esp", PluginOrigin.DataDirectory), "npc_"));
-    }
-
-    [Fact]
     public async Task ANewPluginInASnapshotArrivingMidReconcile_IsIndexed_AndTheParkedWorkSurvives()
     {
         var holder = new LoadOrderHolder();

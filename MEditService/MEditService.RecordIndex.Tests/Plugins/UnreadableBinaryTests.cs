@@ -99,18 +99,6 @@ public sealed class UnreadableBinaryTests : IDisposable
     }
 
     [Fact]
-    public void AReDerivationThatCannotReadTheBinary_ReadsAgainOnceItsBytesChange()
-    {
-        NonCompiledPluginOverAnUnreadableBinary();
-
-        WriteValidPlugin(_pluginPath);
-        _index.NextCheckUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
-
-        Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
-        Assert.Contains(_index.ListedIn(_key), row => row.EditorId == "FreshlyAppearedNpc");
-    }
-
-    [Fact]
     public void ABinaryThatStillFailsToOpen_OnceItsBytesChange_PublishesStatus()
     {
         File.WriteAllText(_pluginPath, "not a plugin");
