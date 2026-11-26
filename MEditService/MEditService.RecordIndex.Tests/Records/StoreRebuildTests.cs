@@ -338,7 +338,7 @@ public sealed class StoreRebuildTests : IDisposable
             if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
             holder.Apply(holder.Current);
             parked = gate.WaitUntilParkedAsync();
-            readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));
+            readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromMilliseconds(200));
         };
 
         Assert.Null(await Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot)));

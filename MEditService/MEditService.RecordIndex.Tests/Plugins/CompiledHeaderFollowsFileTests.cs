@@ -81,7 +81,7 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
         Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_built)(n)), "the built plugin's announcement");
     }
 
-    private static readonly Dictionary<string, Action<string>> Unreadable = new()
+    private static readonly Dictionary<string, Action<string>> BreakingTheCompiledFile = new()
     {
         ["gone"] = File.Delete,
         ["unreadable"] = path => File.WriteAllText(path, "not a plugin"),
@@ -90,11 +90,11 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
     [Theory]
     [InlineData("gone")]
     [InlineData("unreadable")]
-    public void ACompiledFileThatIsGoneOrUnreadable_LeavesItsPluginListedWithTheMastersLastRead(string made)
+    public void ACompiledFileThatIsGoneOrUnreadable_LeavesItsPluginListedWithTheMastersLastRead(string breaking)
     {
         WriteBuilt(referencingMaster: true);
         ReadWrittenBuilt([Master]);
-        Unreadable[made](_built.Path);
+        BreakingTheCompiledFile[breaking](_built.Path);
 
         SignalNamingBuiltAndTheBystanderUntilTheBystanderIsRead();
 

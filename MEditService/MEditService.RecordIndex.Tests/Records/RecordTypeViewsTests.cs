@@ -99,7 +99,7 @@ public sealed class RecordTypeViewsTests
         public async Task<Task<Answer<SelectedRows, IndexRefused>>> SecondSelectSeenWaiting(CancellationToken cancel)
         {
             var waiting = Task.Run(() => Index.Queries.SelectRows("SELECT 1", cancel));
-            await Task.Delay(TimeSpan.FromSeconds(0.5), CancellationToken.None);
+            await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);
             Assert.False(waiting.IsCompleted, "The second SELECT answered while the first was creating the views.");
             return waiting;
         }
