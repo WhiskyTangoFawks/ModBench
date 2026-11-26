@@ -91,17 +91,18 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void ARebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
+    public void ARebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld_AndMovesTheSequenceOnFromWhereItWas()
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
-        var held = _holder.Held?.Version;
+        var (held, sequence) = (_holder.Held?.Version, _index.Sequence);
 
         Rebuilt(_index, _fixture.InstanceRoot);
 
         Assert.Equal(2, _opens.OpenedTotal);
         Assert.Equal(held, _index.Status.Version);
         Assert.NotEmpty(_index.ListedIn(Key));
+        Assert.True(_index.Sequence > sequence, $"The rebuilt sequence {_index.Sequence} did not move on from {sequence}.");
     }
 
     [Fact]
@@ -354,21 +355,8 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(next.ListedIn(Key));
     }
 
-    [Fact]
-    public void ARebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
-    {
-        Reconcile(_fixture.InstanceRoot);
-        var priorSequence = _index.Sequence;
-        Assert.True(priorSequence > 0, "sanity: indexing must have advanced the sequence past 0");
-
-        Rebuilt(_index, _fixture.InstanceRoot);
-
-        Assert.True(_index.Sequence > priorSequence,
-            $"rebuilt sequence {_index.Sequence} regressed below the prior process value {priorSequence}");
-    }
-
     [ForeignIndexHolderFact]
-    public void ARebuildWhileAnotherProcessHoldsTheFile_IsRefused_AndLeavesTheFileInPlace()
+    public void ARebuildWhileAnotherProcessHoldsTheFile_IsRefused_LeavesTheFileInPlace_AndTheStatusHeldElsewhere()
     {
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder, _opens))
@@ -385,20 +373,8 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.True(File.Exists(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex), "the file must still exist — a refusal must never delete it");
         Assert.Equal(bytesBeforeHold, bytesOnceTheHolderIsGoneAsWindowsLetsNothingReadAFileDuckDbHolds);
-    }
-
-    [ForeignIndexHolderFact]
-    public void ARebuildRefusedBecauseAnotherProcessHoldsIt_LeavesTheStatusHeldElsewhere_NamingTheFile()
-    {
-        var earlierHolder = new LoadOrderHolder();
-        using (var earlier = Indexes.Open(earlierHolder, _opens))
-            earlier.Reconcile(earlierHolder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var indexPath = IndexFiles.In(_fixture.InstanceRoot);
-        using (ForeignIndexHolder.Hold(indexPath))
-            _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
-
         Assert.Equal(LoadOrderState.HeldElsewhere, _index.Status.State);
-        Assert.Contains(indexPath, _index.Status.Message);
+        Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, _index.Status.Message);
     }
 
     private static bool ReadMetARefusal(Exception ex) => ex is InvalidOperationException && ex.Message.StartsWith("Expected the Index to answer here", StringComparison.Ordinal);

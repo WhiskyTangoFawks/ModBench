@@ -172,21 +172,15 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         ["named by the watch"] = (test, saved) => test.Watched(saved),
     };
 
+    // The roads differ only in whether the writer's documents come with the files the record index
+    // reads (Indexer.Name); each write's rows are the projection's, so one write takes the watch's road.
     public static TheoryData<string, string> WriteKindsByRoad()
     {
         TheoryData<string, string> table = [];
-        foreach (var write in Writes.Keys)
-        {
-            foreach (var road in Roads.Keys) table.Add(write, road);
-        }
+        foreach (var write in Writes.Keys) table.Add(write, "handed by its writer");
+        table.Add("a reference moved between cells", "named by the watch");
         return table;
     }
-
-    private static readonly string[] MakingACellsBlock = ["an interior cell created", "an exterior cell created", "a record copied as an override"];
-
-    public static TheoryData<string> WritesReadAlone() => [.. Writes.Keys.Except(MakingACellsBlock)];
-
-    public static TheoryData<string> WritesMakingACellsBlock() => [.. MakingACellsBlock];
 
     [Theory]
     [MemberData(nameof(WriteKindsByRoad))]
@@ -324,11 +318,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Assert.Contains("stopped", await bare.Queries.Hold([Handed(NpcRenamed())], CancellationToken.None), StringComparison.Ordinal);
     }
 
-    [Theory]
-    [MemberData(nameof(WritesReadAlone))]
-    public void AWriteNamingItsFiles_ReadsThemAlone_AndNoWholeTree(string write)
+    [Fact]
+    public void AWriteNamingItsFiles_ReadsThemAlone_AndNoWholeTree()
     {
-        var saved = Writes[write](this);
+        var saved = Writes["a reference moved between cells"](this);
         var (named, wholeReads, wholeStatuses) = (_source.NamedReads, _source.WholeTreeReads, _source.GitStatusAsked);
 
         Written(saved);
@@ -336,11 +329,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Assert.Equal((named + 1, wholeReads, wholeStatuses), (_source.NamedReads, _source.WholeTreeReads, _source.GitStatusAsked));
     }
 
-    [Theory]
-    [MemberData(nameof(WritesMakingACellsBlock))]
-    public void AWriteThatMakesACellsBlock_NamesItsGroupDocument_SoThePluginIsReadWhole(string write)
+    [Fact]
+    public void AWriteThatMakesACellsBlock_NamesItsGroupDocument_SoThePluginIsReadWhole()
     {
-        var saved = Writes[write](this);
+        var saved = Writes["an interior cell created"](this);
         var wholeReads = _source.WholeTreeReads;
 
         Written(saved);

@@ -255,21 +255,15 @@ public class RegistrationScopingTests
         fx.Index.Queries.GetPluginNameReferences(name).Value();
 
     [Fact]
-    public void ACopyInAnotherPluginWhoseTextNamesAPlugin_IsAReferenceToItsFileNameInAnyCase()
+    public void APluginsName_InAnyCase_IsReferencedByItsOwnRecords_AnotherPluginsCopyNamingIt_AndTheHeaderOfAPluginListingItAsMaster()
     {
-        using var fx = Build("plugin-name-references-override");
+        using var fx = Build("plugin-name-references");
 
         var copies = NamingAlpha(fx, "alpha.ESP");
 
+        Assert.Contains(copies, c => c.FormKey == fx.SharedNpcFk && PluginAddress.Comparer.Equals(c.Plugin, AlphaKey));
         Assert.Contains(copies, c => c.FormKey == fx.SharedNpcFk && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
-    }
-
-    [Fact]
-    public void ThePluginsOwnRecords_AreReferencesToIt_TheirFormKeysNamingIt()
-    {
-        using var fx = Build("plugin-name-references-own");
-
-        Assert.Contains(NamingAlpha(fx), c => c.FormKey == fx.SharedNpcFk && PluginAddress.Comparer.Equals(c.Plugin, AlphaKey));
+        Assert.Contains(copies, c => c.FormKey == "000000:Beta.esp" && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
     }
 
     [Fact]
@@ -331,14 +325,6 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void APluginWithNoPluginSourceThatListsAMaster_NamesItAtItsPluginHeader()
-    {
-        using var fx = Build("plugin-name-references-master");
-
-        Assert.Contains(NamingAlpha(fx), c => c.FormKey == "000000:Beta.esp" && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
-    }
-
-    [Fact]
     public void ACopyNamingAPlugin_SaysWhetherItsPluginHasPluginSource()
     {
         using var fx = Build("plugin-name-references-in-source");
@@ -376,22 +362,25 @@ public class RegistrationScopingTests
         Assert.DoesNotContain(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
     }
 
-    [Theory]
-    [InlineData("records", "plugin")]
-    [InlineData("form_lookup", "plugin")]
-    [InlineData("form_references", "source_plugin")]
-    [InlineData("holdings", "plugin")]
-    [InlineData("document_names", "plugin")]
-    [InlineData("cell_location", "plugin")]
-    public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads(string relation, string pluginColumn)
+    private static readonly string[] HoldingBetaInEachRelationTheSqlDoorReads =
+    [
+        $"EXISTS (SELECT 1 FROM records WHERE plugin = '{BetaKey.Name}')",
+        $"EXISTS (SELECT 1 FROM form_lookup WHERE plugin = '{BetaKey.Name}')",
+        $"EXISTS (SELECT 1 FROM form_references WHERE source_plugin = '{BetaKey.Name}')",
+        $"EXISTS (SELECT 1 FROM holdings WHERE plugin = '{BetaKey.Name}')",
+        $"EXISTS (SELECT 1 FROM document_names WHERE plugin = '{BetaKey.Name}')",
+        $"EXISTS (SELECT 1 FROM cell_location WHERE plugin = '{BetaKey.Name}')",
+    ];
+
+    [Fact]
+    public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
     {
         using var fx = Build("registration-inactive-door");
-        var holdingBeta = $"SELECT form_key FROM records WHERE EXISTS (SELECT 1 FROM \"{relation}\" WHERE {pluginColumn} = '{BetaKey.Name}')";
-        Assert.True(fx.Index.Matching(holdingBeta) > 0);
+        Assert.True(fx.Index.Matching($"SELECT form_key FROM records WHERE {string.Join(" AND ", HoldingBetaInEachRelationTheSqlDoorReads)}") > 0);
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.Equal(0, fx.Index.Matching(holdingBeta));
+        Assert.Equal(0, fx.Index.Matching($"SELECT form_key FROM records WHERE {string.Join(" OR ", HoldingBetaInEachRelationTheSqlDoorReads)}"));
     }
 
     [Fact]
