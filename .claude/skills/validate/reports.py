@@ -1,6 +1,6 @@
-"""Reads the test reports under a directory into one list of results: TRX, Vitest JSON, and unittest
-and mocha logs. A result's box is its backend test project, its folder under modbench/src/ or else
-modbench/, or its log's name."""
+"""Reads every test report under a directory: TRX, Vitest JSON, and unittest and mocha logs. A
+result's box is its backend test project, its folder under modbench/src/ or else modbench/, or its log's
+name."""
 import json
 import re
 import xml.etree.ElementTree as ET
