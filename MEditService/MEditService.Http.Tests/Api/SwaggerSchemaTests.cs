@@ -12,7 +12,11 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class SwaggerSchemaTests
 {
-    private static async Task<JsonElement> GetSchemaAsync()
+    private static readonly Lazy<Task<JsonElement>> Schema = new(ReadSchemaAsync);
+
+    private static Task<JsonElement> GetSchemaAsync() => Schema.Value;
+
+    private static async Task<JsonElement> ReadSchemaAsync()
     {
         await using var app = new MEditHost();
         var client = app.CreateClient();
@@ -224,33 +228,22 @@ public sealed class SwaggerSchemaTests
     }
 
     [Theory]
-    [InlineData("PluginResponse", "name")]
-    [InlineData("PluginResponse", "origin")]
-    [InlineData("PluginResponse", "masters")]
-    [InlineData("RecordSummary", "plugin")]
-    public async Task NonNullableReferenceProperty_IsNotDescribedAsNullable(string schemaName, string propertyName)
+    [InlineData("PluginResponse", "name", false)]
+    [InlineData("PluginResponse", "origin", false)]
+    [InlineData("PluginResponse", "masters", false)]
+    [InlineData("RecordSummary", "plugin", false)]
+    [InlineData("CellSummary", "editorId", true)]
+    [InlineData("RecordSummary", "editorId", true)]
+    [InlineData("PluginResponse", "laterReadFailure", true)]
+    public async Task AReferenceProperty_IsDescribedAsNullable_ExactlyWhenItsMemberIs(string schemaName, string propertyName, bool nullable)
     {
         var root = await GetSchemaAsync();
         var prop = root.GetProperty("components").GetProperty("schemas")
             .GetProperty(schemaName).GetProperty("properties").GetProperty(propertyName);
 
-        Assert.False(
-            prop.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean(),
-            $"{schemaName}.{propertyName} is a non-nullable C# member but the schema says nullable.");
-    }
-
-    [Theory]
-    [InlineData("CellSummary", "editorId")]
-    [InlineData("RecordSummary", "editorId")]
-    [InlineData("PluginResponse", "laterReadFailure")]
-    public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
-    {
-        var root = await GetSchemaAsync();
-        var prop = root.GetProperty("components").GetProperty("schemas")
-            .GetProperty(schemaName).GetProperty("properties").GetProperty(propertyName);
-
-        Assert.True(prop.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean(),
-            $"{schemaName}.{propertyName} is a nullable C# member but the schema does not say so.");
+        Assert.Equal(
+            (schemaName, propertyName, nullable),
+            (schemaName, propertyName, prop.TryGetProperty("nullable", out var described) && described.GetBoolean()));
     }
 
     [Theory]

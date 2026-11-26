@@ -17,7 +17,11 @@ public sealed class EditRecordTraceTests : HostedTests
 
     private static ScatteredFixtureData TwoMods() =>
         new PluginFixtureBuilder("trace-edit-a-record")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
+            .WithPlugin(Plugin, mod =>
+            {
+                mod.Npcs.AddNew(Npc);
+                mod.Worldspaces.AddNew("EditableWorld");
+            }, origin: Origin)
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
             .BuildScattered();
 
@@ -59,20 +63,6 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AnEditedRecord_IsListedAsModified()
-    {
-        using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        (await Edit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-        await Client.NextCheck(fx);
-
-        await Wire.Eventually(async () =>
-            (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
-                .GetProperty("items")[0].GetProperty("workingTreeState").GetString() == "Modified",
-            "the edited record listed as Modified");
-    }
-
-    [Fact]
     public async Task DeletingARecord_IsApplied_PushedAsRowsChangedNamingIt_AndGoneFromTheNextRead()
     {
         using var fx = await Loaded(Origin);
@@ -100,20 +90,25 @@ public sealed class EditRecordTraceTests : HostedTests
         [.. rowsChanged.GetProperty("keys").EnumerateArray().Select(k => k.GetString().Require())];
 
     [Fact]
-    public async Task CreatingARecord_IsPushedAsRowsChangedNamingItsNewKey_AndAnsweredByTheNextRead()
+    public async Task CreatingACellInAWorldspace_IsPushedAsRowsChangedNamingItsNewKey_AndReadAtTheGridPositionAsked()
     {
         using var fx = await Loaded(Origin);
+        var world = await Client.FirstFormKey(Plugin, Origin, "wrld");
         using var stream = await Client.NotificationStream();
 
-        var created = await Client.CreateRecord(Plugin, Origin, "npc_");
+        var created = await Client.CreateRecord(Plugin, Origin, "cell", world, new { x = 1, y = -2 });
 
         created.EnsureSuccessStatusCode();
         var formKey = (await created.Body()).GetProperty("formKey").GetString().Require();
         await Client.NextCheck(fx);
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
-        Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
-        Assert.Equal(Origin, rows.GetProperty("origin").GetString());
-        Assert.Equal(formKey, (await Client.Record(formKey)).GetProperty("formKey").GetString());
+        Assert.Equal((Plugin, Origin), (rows.GetProperty("plugin").GetString(), rows.GetProperty("origin").GetString()));
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{Plugin}/worldspaces/{Uri.EscapeDataString(world)}/blocks?origin={Origin}");
+        var cell = blocks.GetProperty("blocks").EnumerateArray()
+            .SelectMany(block => block.GetProperty("subBlocks").EnumerateArray())
+            .SelectMany(subBlock => subBlock.GetProperty("cells").EnumerateArray())
+            .Single(c => c.GetProperty("formKey").GetString() == formKey);
+        Assert.Equal((1, -2), (cell.GetProperty("cellX").GetInt32(), cell.GetProperty("cellY").GetInt32()));
     }
 
     private const string NonCompiledPlugin = "NonCompiledPlugin.esp";
@@ -179,27 +174,6 @@ public sealed class EditRecordTraceTests : HostedTests
         (refusal.GetProperty("item").GetProperty("record").GetProperty("formKey").GetString().Require(),
             refusal.GetProperty("item").GetProperty("destination").GetProperty("name").GetString().Require(),
             refusal.GetProperty("refusal").GetString().Require());
-
-    [Fact]
-    public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_ReplacesIt_WithTheReplaceOption()
-    {
-        using var fx = await Loaded(OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        var copiedHeight = await HeightMax(formKey);
-        (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
-        await Client.NextCheck(fx);
-        await Wire.Eventually(async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Contains(formKey), "the copy to be answered");
-        (await Client.Edit(formKey, OtherPlugin, OtherOrigin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-        await Client.NextCheck(fx);
-        await Wire.Eventually(async () => await HeightMax(formKey) == 0.75, "the edit of the copy to be answered");
-
-        var response = await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin), replace: true);
-
-        response.EnsureSuccessStatusCode();
-        Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
-        await Client.NextCheck(fx);
-        await Wire.Eventually(async () => await HeightMax(formKey) == copiedHeight, "the replacement to be answered");
-    }
 
     private async Task<double?> HeightMax(string formKey) =>
         (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()

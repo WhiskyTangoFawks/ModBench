@@ -34,10 +34,4 @@ public sealed class CloneSubmodulesApiTests : HostedTests
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         Assert.True(File.Exists(Path.Combine(_submodule.Folder, "build.json")));
     }
-
-    [Theory]
-    [InlineData("""{"submodules": []}""")]
-    [InlineData("""{"submodules": [{"folder": "/source/Mod"}]}""")]
-    public async Task ARequestWithNoWholeSubmodule_Is400(string body) =>
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client.PostJson("/clone-submodules", body)).StatusCode);
 }

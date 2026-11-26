@@ -66,9 +66,6 @@ internal static class Wire
             ? fx.Plugins
             : fx.Plugins.Where(p => p.LoadedWithNoLine || origins.Contains(p.Origin, StringComparer.Ordinal));
 
-    internal static Task<HttpResponseMessage> PutLoadOrderIn(this HttpClient client, ScatteredFixtureData fx, string stringsLanguage) =>
-        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins, stringsLanguage: stringsLanguage));
-
     internal static Task<HttpResponseMessage> SetFilter(this HttpClient client) =>
         client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
 
@@ -196,14 +193,6 @@ internal static class Wire
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
             new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
 
-    /// <summary>The unsaved documents Modbench hands mEdit, one at a time, which every changes request after it reads.</summary>
-    internal static async Task HandUnsaved(this HttpClient client, params (string Path, string Text)[] unsaved)
-    {
-        foreach (var (path, text) in unsaved)
-            (await client.PutAsJsonAsync("/unsaved-document", new { path, text, version = UnsavedDocumentsTyping.NextVersion(), opened = false }))
-                .EnsureSuccessStatusCode();
-    }
-
     /// <summary>A copy as Modbench makes one: mEdit answers the changes each copy makes, and each landed item's are
     /// saved in the order answered. The answer is mEdit's.</summary>
     internal static async Task<HttpResponseMessage> Copy(
@@ -250,12 +239,6 @@ internal static class Wire
     {
         using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
         return await client.PostAsync(new Uri(route, UriKind.Relative), content);
-    }
-
-    internal static async Task<HttpResponseMessage> PutJson(this HttpClient client, string route, string json)
-    {
-        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-        return await client.PutAsync(new Uri(route, UriKind.Relative), content);
     }
 
     internal static async Task<JsonElement> Answer(HttpResponseMessage response)

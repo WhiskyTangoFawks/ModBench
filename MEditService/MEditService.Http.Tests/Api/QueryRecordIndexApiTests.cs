@@ -131,4 +131,115 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Fact]
+    public async Task APluginTheRecordIndexHasRead_IsIndexedAsOnDisk()
+    {
+        var indexed = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/indexed-as-on-disk?origin={UserMod}");
+
+        Assert.Equal("AsOnDisk", indexed.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task ThePluginsListingAFileNameAsAMaster_AreItsDependants()
+    {
+        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/dependants?origin={UserMod}");
+
+        var dependant = Assert.Single(answer.GetProperty("dependants").EnumerateArray());
+        Assert.Equal((ChildPlugin, ChildMod), (dependant.GetProperty("name").GetString(), dependant.GetProperty("origin").GetString()));
+    }
+
+    [Fact]
+    public async Task TheReferencesToAPluginName_AreEachCopyThatNamesIt()
+    {
+        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugin-names/{UserPlugin}/references");
+
+        Assert.Contains(answer.EnumerateArray(), NamesTheChildsHeader);
+    }
+
+    [Fact]
+    public async Task ThePlacedReferencesToAPluginName_AreEachCopyThatNamesIt()
+    {
+        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugin-names/{UserPlugin}/placed-references");
+
+        Assert.Contains(answer.GetProperty("copies").EnumerateArray(), NamesTheChildsHeader);
+    }
+
+    private static bool NamesTheChildsHeader(JsonElement copy) =>
+        copy.GetProperty("formKey").GetString() == $"000000:{ChildPlugin}" && copy.GetProperty("plugin").GetProperty("origin").GetString() == ChildMod;
+
+    [Fact]
+    public async Task TheReferencesToAScript_AreEachCopyThatAttachesIt_AtItsFieldPath()
+    {
+        var answer = await Client.GetFromJsonAsync<JsonElement>("/script-names/Attached/references");
+
+        Assert.Contains(answer.GetProperty("copies").EnumerateArray(), copy => copy.GetProperty("plugin").GetProperty("origin").GetString() == UserMod
+            && copy.GetProperty("fieldPaths").EnumerateArray().Select(path => path.GetString()).SequenceEqual(["VirtualMachineAdapter.Scripts[0].Name"]));
+    }
+
+    [Theory]
+    [InlineData("/script-names/Attached/placed-references")]
+    [InlineData("/file-paths/placed-references?path=Textures/Decals/Stain_d.dds")]
+    public async Task ThePlacedReferencesToAScriptOrAFile_AreEachCopyThatNamesItAtItsRanges(string route)
+    {
+        var answer = await Client.GetFromJsonAsync<JsonElement>(route);
+
+        Assert.Contains(answer.GetProperty("copies").EnumerateArray(), copy => copy.GetProperty("plugin").GetProperty("origin").GetString() == UserMod
+            && copy.GetProperty("ranges").GetArrayLength() == 1);
+    }
+
+    private async Task<string> FormKeyOf(string type) =>
+        (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type={type}"))
+            .GetProperty("items")[0].GetProperty("formKey").GetString().Require();
+
+    private static object CopyIn(string formKey) => new { formKey, plugin = new { name = UserPlugin, origin = UserMod } };
+
+    [Fact]
+    public async Task SeveralRecords_AreOneColumnEach_InTheOrderGiven_WithNoConflictState()
+    {
+        var (keyword, npc) = (await FormKeyOf("kywd"), await FormKeyOf("npc_"));
+
+        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { CopyIn(keyword), CopyIn(npc) } });
+
+        var answer = (await Wire.Answer(response)).GetProperty("compare");
+        var columns = answer.GetProperty("overrides").EnumerateArray().ToList();
+        Assert.Equal([keyword, npc], columns.Select(c => c.GetProperty("formKey").GetString()));
+        Assert.All(columns, c => Assert.False(c.TryGetProperty("conflictThis", out var state) && state.ValueKind != JsonValueKind.Null));
+    }
+
+    [Fact]
+    public async Task ManyRecords_AreAnsweredWithEachCopysState_AndNoFields()
+    {
+        var (keyword, npc) = (await FormKeyOf("kywd"), await FormKeyOf("npc_"));
+
+        var response = await Client.PostAsJsonAsync("/records/copy-states", new { formKeys = new[] { keyword, npc } });
+
+        var records = (await Wire.Answer(response)).EnumerateArray().ToList();
+        Assert.Equal([keyword, npc], records.Select(r => r.GetProperty("formKey").GetString()));
+        var copy = Assert.Single(records[0].GetProperty("copies").EnumerateArray());
+        Assert.Equal((UserPlugin, "OnlyOne"), (copy.GetProperty("plugin").GetProperty("name").GetString(), copy.GetProperty("conflictThis").GetString()));
+        Assert.Equal(["conflictThis", "plugin"], copy.EnumerateObject().Select(p => p.Name).Order());
+    }
+
+    [Fact]
+    public async Task OneRecordWithAPluginsText_IsThatPluginsColumnReadFromIt()
+    {
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(await FormKeyOf("kywd"))}/compare",
+            new { plugin = new { name = UserPlugin, origin = UserMod }, documentText = "{ not json" });
+
+        var column = (await Wire.Answer(response)).GetProperty("overrides").EnumerateArray().Single();
+        Assert.Equal((UserPlugin, UserMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
+    }
+
+    [Fact]
+    public async Task OneRecordNoPluginIndexes_WithAText_Is404()
+    {
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString("00DEAD:Nowhere.esp")}/compare",
+            new { plugin = new { name = UserPlugin, origin = UserMod }, documentText = "{}" });
+
+        await response.AssertIsProblem(HttpStatusCode.NotFound);
+    }
 }

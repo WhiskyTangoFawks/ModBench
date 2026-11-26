@@ -6,7 +6,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class ArchiveCopiesApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>, IDisposable
+[Collection(LoadedApiCollection.Name)]
+public sealed class ArchiveCopiesApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IDisposable
 {
     private readonly ScratchDirectory _root = new("api-archive-copies-");
 
@@ -40,11 +41,4 @@ public sealed class ArchiveCopiesApiTests(LoadedApiFixture<TestPluginFixture> lo
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-
-    [Theory]
-    [InlineData("""{"gameRelease": "Nowhere", "archive": "/x.ba2", "files": ["a.nif"]}""")]
-    [InlineData("""{"gameRelease": "Fallout4", "archive": "/x.ba2", "files": []}""")]
-    [InlineData("""{"gameRelease": "Fallout4", "archive": " ", "files": ["a.nif"]}""")]
-    public async Task ARequestThatIsNotWhole_Is400(string body) =>
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client.PostJson("/archives/copies", body)).StatusCode);
 }

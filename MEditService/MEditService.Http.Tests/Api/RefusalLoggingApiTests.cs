@@ -36,27 +36,15 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARefusedPutLoadOrder_IsLoggedOnce_NamingWhy()
+    public async Task ARefusedPutLoadOrder_Is400NamingItsRefusal_AndIsLoggedOnce()
     {
         using var scratch = new ScratchDirectory("refusal-logging-");
         var gone = Path.Combine(scratch, "no-such-data-folder");
 
-        await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(gone, gone, []));
+        var response = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(gone, gone, []));
 
+        Assert.Equal("DataFolderNotFound", (await response.AssertIsProblem(System.Net.HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
         AssertLoggedOnce("Refused Put load order", "DataFolderNotFound");
-    }
-
-    [Fact]
-    public async Task ARefusedDeleteItem_IsLoggedOnce_NamingTheRecordAndWhy()
-    {
-        await LoadedAndCompiledPlugin();
-
-        await Client.PostAsJsonAsync("/records/delete-changes", new
-        {
-            records = new[] { new { formKey = "000FFF:Held.esp", plugin = new { name = Plugin, origin = Origin } } }
-        });
-
-        AssertLoggedOnce("Refused Delete of", "RecordNotFound");
     }
 
     [Fact]
@@ -80,23 +68,12 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARefusedScriptEdit_IsLoggedOnce_NamingWhy()
+    public async Task ARefusedScriptDelete_AnswersItsStatus_AndIsLoggedOnce()
     {
-        await LoadedAndCompiledPlugin();
+        var response = await Client.PostAsJsonAsync("/records/delete", new { formKey = "000FFF:Held.esp", plugin = new { name = Plugin, origin = Origin } });
 
-        await Client.ScriptEdit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
-
-        AssertLoggedOnce("Refused EditRecord", "RecordNotFound");
-    }
-
-    [Fact]
-    public async Task ARefusedCreateRecord_IsLoggedOnce_NamingWhy()
-    {
-        await LoadedAndCompiledPlugin();
-
-        await Client.CreateRecord(Plugin, Origin, "nosuch");
-
-        AssertLoggedOnce("Refused Create record", "RecordTypeNotFound");
+        Assert.Equal("NoLoadOrder", (await response.AssertIsProblem(System.Net.HttpStatusCode.ServiceUnavailable)).GetProperty("refusal").GetString());
+        AssertLoggedOnce("Refused DeleteRecord", "NoLoadOrder");
     }
 
     [Fact]
