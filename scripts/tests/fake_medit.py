@@ -88,6 +88,7 @@ def _mismatches(value: object, type: str, where: str) -> list[str]:
         return [mismatch for at, item in enumerate(value) for mismatch in _mismatches(item, type, f'{where}[{at}]')]
     name = ref[1]
     if name in API.enums:
+        # mEdit binds an enum's name in any case, and medit sends them in lower case.
         return [] if str(value).lower() in {member.lower() for member in API.enums[name]} else [f'{where} {value!r} is no {name}']
     members = API.objects[name]
     if not isinstance(value, dict):
@@ -96,6 +97,12 @@ def _mismatches(value: object, type: str, where: str) -> list[str]:
         *(f'{where}.{key} is no member of {name}' for key in value if key not in members),
         *(f'{where}.{key} is missing, and {name} requires it' for key, member in members.items() if member.required and key not in value),
         *(mismatch for key, item in value.items() if key in members for mismatch in _mismatches(item, members[key].type, f'{where}.{key}'))]
+
+
+def _typed(value: object, type: str | None, where: str) -> list[str]:
+    if type is None:
+        return [] if value is None else [f'{where} is JSON where api.ts has none']
+    return _mismatches(value, type, where)
 
 
 def _route(method: str, path: str) -> Route | None:
@@ -107,7 +114,7 @@ def _route(method: str, path: str) -> Route | None:
 class Sent(NamedTuple):
     method: str
     path: str
-    body: Any
+    body: object
 
 
 class Reply(NamedTuple):
@@ -123,9 +130,8 @@ def drift(sent: Sent, reply: Reply) -> list[str]:
         return [f'{sent.method} {path} is no route of api.ts']
     return [
         *(f'{path} takes no query parameter {key}' for key in urllib.parse.parse_qs(query) if key not in route.operation.query),
-        *(_mismatches(sent.body, route.operation.request, 'the body') if route.operation.request else []),
-        *(_mismatches(reply.body, route.operation.answer, 'the answer')
-          if route.operation.answer and reply.status == 200 and not isinstance(reply.body, bytes) else [])]
+        *_typed(sent.body, route.operation.request, 'the body'),
+        *(_typed(reply.body, route.operation.answer, 'the answer') if reply.status == 200 and not isinstance(reply.body, bytes) else [])]
 
 
 @contextlib.contextmanager

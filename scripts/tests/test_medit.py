@@ -12,14 +12,15 @@ ADDRESS = {'name': PLUGIN.name, 'origin': PLUGIN.origin}
 FORM_KEY = '000800:My Mod.esp'
 QUOTED_FORM_KEY = '000800%3AMy%20Mod.esp'
 RESOLVED = [{'plugin': ADDRESS}]
+NAMED_RECORD = {'plugin': None, 'formKey': FORM_KEY, 'editorId': 'Recipe'}
 SENT_RESOLVE = Sent('POST', '/names/resolve', {'names': [{'name': PLUGIN.name}]})
 RECIPE = {'FormKey': FORM_KEY, 'EditorID': 'Recipe'}
 STOPPED_SHORT = "mEdit's rows stopped before their last line, so they may not be every row the SELECT selects."
 SELECTED = Sent('POST', '/records/select', {'sql': 'SELECT 1'})
 
 
-def lines(*sent: medit.JsonRecord) -> bytes:
-    return b''.join(json.dumps(line).encode() + b'\n' for line in sent)
+def lines(*answered: medit.JsonRecord) -> bytes:
+    return b''.join(json.dumps(line).encode() + b'\n' for line in answered)
 
 
 class Reaching(unittest.TestCase):
@@ -78,14 +79,14 @@ class Select(unittest.TestCase):
 
 class Resolve(unittest.TestCase):
     def test_sends_each_name_with_the_origin_given_and_answers_each_as_a_plugin_or_a_record(self) -> None:
-        with medit_answering([*RESOLVED, *RESOLVED, {'plugin': None, 'formKey': FORM_KEY, 'editorId': 'Recipe'}]) as sent:
+        with medit_answering([*RESOLVED, *RESOLVED, NAMED_RECORD]) as sent:
             named = medit.resolve(PLUGIN.name, PLUGIN, 'Recipe')
         self.assertEqual(sent, [Sent('POST', '/names/resolve', {'names': [{'name': PLUGIN.name}, ADDRESS, {'name': 'Recipe'}]})])
         self.assertEqual(named, [PLUGIN, PLUGIN, medit.RecordName(FORM_KEY, 'Recipe')])
 
     def test_raises_naming_a_name_given_as_a_plugin_that_names_a_record_and_sends_nothing_more(self) -> None:
         with (
-                medit_answering([{'plugin': None, 'formKey': FORM_KEY, 'editorId': 'Recipe'}]) as sent,
+                medit_answering([NAMED_RECORD]) as sent,
                 self.assertRaisesRegex(medit.MEditError, '^Recipe is not a plugin.$')):
             medit.read('Recipe', FORM_KEY)
         self.assertEqual(len(sent), 1)

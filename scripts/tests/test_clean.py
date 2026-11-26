@@ -3,7 +3,7 @@ import copy
 import json
 import sqlite3
 import unittest
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from unittest import mock
 
 import medit
@@ -14,8 +14,7 @@ PATCH = medit.Plugin('Patch.esp', 'Patch Mod')
 CELL = '000800:Master.esm'
 REFERENCE = '000801:Master.esm'
 ITEM = '000802:Master.esm'
-OTHER = '000803:Master.esm'
-OWN = '000800:Patch.esp'
+OTHER = medit.Plugin('Other.esp', 'Other Mod')
 DELETED = 0x20
 PERSISTENT = 0x400
 INITIALLY_DISABLED = 0x800
@@ -23,28 +22,28 @@ FLAGS = 'MajorRecordFlagsRaw'
 TELEPORT = 'TeleportDestination'
 ENABLE_PARENT = 'EnableParent'
 IDENTICAL_TO_MASTER = 'IdenticalToMaster'
+OVERRIDE = 'Override'
 
 
 class FakeIndex:
-    """mEdit's record index as clean reads and writes it through medit: each copy with its document, the plugins
-    active, the copies each holds, and the copies mEdit judges identical to their master."""
+    """mEdit's record index as clean reads and writes it through medit: each copy with its document and the state
+    mEdit judges it in against its master, the plugins active, and the copies each holds."""
 
     def __init__(self, *active: medit.Plugin) -> None:
         self.active = set(active)
         self.documents: dict[tuple[medit.Plugin, str], tuple[str, medit.JsonRecord]] = {}
         self.parents: dict[tuple[medit.Plugin, str], str] = {}
-        self.identical: set[tuple[medit.Plugin, str]] = set()
+        self.states: dict[tuple[medit.Plugin, str], str] = {}
 
     def hold(
             self, plugin: medit.Plugin, form_key: str, record_type: str, document: medit.JsonRecord | None = None,
-            parent: str | None = None, identical_to_master: bool = False) -> None:
+            parent: str | None = None, state: str = OVERRIDE) -> None:
         self.documents[plugin, form_key] = (record_type, {'FormKey': form_key, **(document or {})})
         if parent is not None:
             self.parents[plugin, form_key] = parent
-        if identical_to_master:
-            self.identical.add((plugin, form_key))
+        self.states[plugin, form_key] = state
 
-    def select(self, sql: str) -> list[medit.JsonRecord]:
+    def select(self, sql: str) -> Iterator[medit.JsonRecord]:
         plugins = self.active | {plugin for plugin, _ in self.documents}
         with contextlib.closing(sqlite3.connect(':memory:')) as index:
             index.row_factory = sqlite3.Row
@@ -60,11 +59,11 @@ class FakeIndex:
                 (plugin.name, plugin.origin, parent, child) for (plugin, child), parent in self.parents.items()])
             index.executemany('INSERT INTO view_columns VALUES (?, ?)', {
                 (record_type, column) for record_type, document in self.documents.values() for column in document})
-            return [dict(row) for row in index.execute(sql)]
+            return iter([dict(row) for row in index.execute(sql)])
 
     def compare(self, form_keys: list[str], plugin: medit.Plugin) -> dict[str, list[medit.RecordCopy]]:
         return {
-            form_key: [medit.RecordCopy(plugin, IDENTICAL_TO_MASTER if (plugin, form_key) in self.identical else 'Override')]
+            form_key: [medit.RecordCopy(holder, state) for (holder, held), state in self.states.items() if held == form_key]
             for form_key in form_keys}
 
     def read(self, plugin: medit.Plugin, form_key: str) -> medit.JsonRecord:
@@ -82,6 +81,7 @@ class FakeIndex:
 
     def delete(self, plugin: medit.Plugin, form_key: str) -> None:
         del self.documents[plugin, form_key]
+        del self.states[plugin, form_key]
         for held in [held for held, parent in self.parents.items() if held[0] == plugin and parent == form_key]:
             del self.parents[held]
             self.delete(*held)
@@ -105,19 +105,24 @@ def hold_deleted_reference(index: FakeIndex, flags: int, base: str | None = ITEM
 
 
 class Clean(unittest.TestCase):
-    def test_removes_each_override_identical_to_its_master_and_keeps_the_others(self) -> None:
-        with faked_index() as index:
-            index.hold(PATCH, ITEM, 'misc', identical_to_master=True)
-            index.hold(PATCH, OTHER, 'misc')
-            index.hold(PATCH, OWN, 'misc')
-            self.assertEqual(clean(PATCH), Cleaned([ITEM], []))
-            self.assertEqual(index.form_keys(PATCH), {OTHER, OWN})
+    def test_removes_an_override_only_when_its_own_copy_is_identical_to_its_master(self) -> None:
+        for state, others_state, removed in [
+                (IDENTICAL_TO_MASTER, OVERRIDE, [ITEM]),
+                (OVERRIDE, OVERRIDE, []),
+                ('IdenticalToMasterWinsConflict', OVERRIDE, []),
+                (OVERRIDE, IDENTICAL_TO_MASTER, [])]:
+            with self.subTest(state=state, others_state=others_state), faked_index() as index:
+                index.hold(MASTER, ITEM, 'misc', state='Master')
+                index.hold(OTHER, ITEM, 'misc', state=others_state)
+                index.hold(PATCH, ITEM, 'misc', state=state)
+                self.assertEqual(clean(PATCH), Cleaned(removed, []))
+                self.assertEqual(index.form_keys(PATCH), {ITEM} - set(removed))
 
     def test_removes_a_cell_identical_to_its_master_with_its_references_only_once_each_is_identical(self) -> None:
-        for reference_identical, removed, left in [(True, [CELL], set()), (False, [], {CELL, REFERENCE})]:
-            with self.subTest(reference_identical=reference_identical), faked_index() as index:
-                index.hold(PATCH, CELL, 'cell', identical_to_master=True)
-                index.hold(PATCH, REFERENCE, 'refr', parent=CELL, identical_to_master=reference_identical)
+        for reference_state, removed, left in [(IDENTICAL_TO_MASTER, [CELL], set()), (OVERRIDE, [], {CELL, REFERENCE})]:
+            with self.subTest(reference_state), faked_index() as index:
+                index.hold(PATCH, CELL, 'cell', state=IDENTICAL_TO_MASTER)
+                index.hold(PATCH, REFERENCE, 'refr', parent=CELL, state=reference_state)
                 self.assertEqual(clean(PATCH).identical_to_master, removed)
                 self.assertEqual(index.form_keys(PATCH), left)
 
