@@ -29,7 +29,7 @@ public sealed class ReconcileDoorTests
         [.. notifications.Notifications.OfType<LoadOrderStatusNotification>()];
 
     [ForeignIndexHolderFact]
-    public void AnotherWindowHoldsTheInstance_IsAnsweredAsHeldElsewhereStatus_ReadsNothing_MintsNoFile_AndLoadsOnceReleased()
+    public void AnotherWindowHoldsTheInstance_IsAnsweredAsHeldElsewhereStatus_ReadsNothing_MintsNoFile_AndARefreshOnceItClosesLoads()
     {
         using var data = new PluginFixtureBuilder("held-elsewhere-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
         var earlierHolder = new LoadOrderHolder();
@@ -48,6 +48,7 @@ public sealed class ReconcileDoorTests
         Assert.Equal(version, index.Status.Version);
         Assert.NotNull(index.Status.Message);
         Assert.Contains("another Modbench window", index.Status.Message, StringComparison.Ordinal);
+        Assert.Contains("Close that window, then refresh.", index.Status.Message, StringComparison.Ordinal);
         var published = Assert.Single(StatusesPublished(notifications));
         Assert.Equal(LoadOrderState.HeldElsewhere, published.Status.State);
         Assert.Equal(index.Status.Message, published.Status.Message);
@@ -55,27 +56,11 @@ public sealed class ReconcileDoorTests
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexFolder).Order(StringComparer.Ordinal));
 
         otherWindow.Dispose();
-        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refresh's ready status");
+        Assert.Null(index.Status.Message);
         Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
-    }
-
-    [Fact]
-    public void AReconcileThatFails_IsAnsweredAsFailedStatus_WithTheReason_NotThrown()
-    {
-        using var data = new PluginFixtureBuilder("failed-door").WithPlugin("A.esp").Build();
-        var notifications = new InMemoryNotificationPublisher();
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: notifications);
-
-        var version = index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins));
-
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
-        Assert.Equal(version, index.Status.Version);
-        Assert.Contains("Oblivion", index.Status.Message, StringComparison.Ordinal);
-        var published = Assert.Single(StatusesPublished(notifications)).Status;
-        Assert.Equal(LoadOrderState.Failed, published.State);
-        Assert.Equal(version, published.Version);
-        Assert.Equal(index.Status.Message, published.Message);
     }
 
     private static PluginFixtureData AReadThenB() => new PluginFixtureBuilder("cut-short-door")
@@ -91,32 +76,21 @@ public sealed class ReconcileDoorTests
     private static readonly PluginAddress B = new("B.esp", PluginOrigin.DataDirectory);
 
     [Fact]
-    public void APluginWhoseReadRunsOutOfMemory_FailsToRead_AndTheRestLand()
+    public void APluginWhoseReadRunsOutOfMemory_FailsToRead_WhileTheRestLand_AndIsNotReadAgainWhileItsBytesHold()
     {
         using var data = AReadThenB();
         var thrown = Faults.Of(typeof(OutOfMemoryException));
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () => throw thrown));
-
-        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
-
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.Contains(thrown.Message, Assert.Single(index.Status.Failures, f => f.Name == "B.esp").Reason, StringComparison.Ordinal);
-        Assert.NotEmpty(index.ListedIn(A));
-    }
-
-    [Fact]
-    public void APluginWhoseReadRanOutOfMemory_IsNotReadAgain_WhileItsBytesHold()
-    {
-        using var data = AReadThenB();
         var readsOfB = 0;
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () =>
         {
             Interlocked.Increment(ref readsOfB);
-            throw Faults.Of(typeof(OutOfMemoryException));
+            throw thrown;
         }));
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Contains(thrown.Message, Assert.Single(index.Status.Failures, f => f.Name == B.Name).Reason, StringComparison.Ordinal);
+        Assert.NotEmpty(index.ListedIn(A));
 
         var rewrittenA = new Fallout4Mod(ModKey.FromFileName(A.Name), Fallout4Release.Fallout4);
         rewrittenA.Npcs.AddNew("FromARewritten");
@@ -250,15 +224,19 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
-    public void AReconcileThatStillFails_IsTriedOncePerEqualSnapshot()
+    public void AReconcileThatFails_IsAnsweredAsFailedStatus_WithTheReason_NotThrown_AndTriedOncePerEqualSnapshot()
     {
-        using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();
+        using var data = new PluginFixtureBuilder("failed-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var opens = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, opens, notifications: notifications);
-        var snapshot = SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins);
-        index.Receive(holder, snapshot);
+        var version = index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins));
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        Assert.Equal(version, index.Status.Version);
+        Assert.Contains("Oblivion", index.Status.Message, StringComparison.Ordinal);
+        var published = Assert.Single(StatusesPublished(notifications)).Status;
+        Assert.Equal((LoadOrderState.Failed, version, index.Status.Message), (published.State, published.Version, published.Message));
         var before = StatusesPublished(notifications).Length;
 
         index.NextCheckThatMayFailUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
@@ -268,28 +246,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(2, retried.Length);
         Assert.All(retried, n => Assert.Equal(LoadOrderState.Failed, n.Status.State));
         Assert.Equal(0, opens.OpenedTotal);
-    }
-
-    [ForeignIndexHolderFact]
-    public void ARefreshAfterTheOtherWindowCloses_TakesTheRecordIndex_AndClearsTheRefusal()
-    {
-        using var data = new PluginFixtureBuilder("takeover-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
-        var earlierHolder = new LoadOrderHolder();
-        using (var earlier = Indexes.Open(earlierHolder))
-            earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-        using var otherWindow = ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
-        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
-        Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
-        Assert.Contains("Close that window, then refresh.", index.Status.Message, StringComparison.Ordinal);
-
-        otherWindow.Dispose();
-        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
-
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refresh's ready status");
-        Assert.Null(index.Status.Message);
-        Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
     }
 
     [Fact]

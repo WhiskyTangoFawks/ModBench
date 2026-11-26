@@ -21,7 +21,6 @@ public sealed class UnreadableBinaryTests : IDisposable
     private const string Origin = "NonSourceMod";
     private readonly string _modFolder;
     private readonly string _pluginPath;
-    private readonly PluginAddress _key = new(PluginName, Origin);
 
     public UnreadableBinaryTests()
     {
@@ -67,7 +66,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     }
 
     [Fact]
-    public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand()
+    public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand_AndIsNotReadAgainWhileItsBytesHold()
     {
         NonCompiledPluginOverAnUnreadableBinary();
 
@@ -75,12 +74,6 @@ public sealed class UnreadableBinaryTests : IDisposable
         Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
         Assert.Contains(_index.ListedIn(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
             row => row.EditorId == "OtherNpc");
-    }
-
-    [Fact]
-    public void AReDerivationThatCannotReadTheBinary_IsNotReadAgain_WhileItsBytesHold()
-    {
-        NonCompiledPluginOverAnUnreadableBinary();
         var before = _notifications.Notifications.Count;
         var standing = _index.Status;
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
