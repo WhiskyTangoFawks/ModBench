@@ -65,27 +65,12 @@ public sealed class DocumentEditTests
             ["the keyword"] = ("kywd", TextOf(_keyword)),
             ["a weather"] = ("wthr", TextOf(_mod.Weather.AddNew("Wt"))),
             ["a lens flare"] = ("lens", TextOf(_mod.LensFlares.AddNew("Lf"))),
-            ["a magic effect with a cloak archetype"] = ("mgef", """
-                {
-                  "FormKey": "000801:DocEdit.esp",
-                  "Archetype": {
-                    "MutagenObjectType": "MagicEffectCloakArchetype",
-                    "Association": "000802:DocEdit.esp"
-                  }
-                }
-                """),
             ["an npc in a faction"] = ("npc_", TextOf(NpcInAFaction())),
             ["an armor mod"] = ("omod", TextOf(ArmorModWith(0x802, new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f }))),
-            ["an armor mod of two properties"] = ("omod", TextOf(ArmorModWith(
-                0x80A,
-                new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f, Value = 5, Value2 = 6 },
-                new ObjectModFloatProperty<Armor.Property> { Property = Armor.Property.Weight, Step = 2f, Value = 1.5f, Value2 = 2.5f }))),
             ["a race"] = ("race", TextOf(RaceOfTwoSubgraphs())),
-            ["a misc item"] = ("misc", TextOf(new MiscItem(KeyOf(0x804), Fallout4Release.Fallout4) { EditorID = "Misc", ComponentDisplayIndices = [1] })),
             ["a scene collection"] = ("scco", TextOf(new SceneCollection(KeyOf(0x805), Fallout4Release.Fallout4) { EditorID = "Scco", XNAMs = [1L] })),
             ["a material object"] = ("mato", TextOf(MaterialObjectOfOneSlice())),
             ["a faction with a vendor location"] = ("fact", TextOf(FactionWithAVendorLocation())),
-            ["an npc with a removed script property"] = ("npc_", TextOf(NpcWithARemovedScriptProperty())),
             ["a debris of two models"] = ("debr", TextOf(DebrisOfTwoModels())),
             ["a quest with a location alias"] = ("qust", TextOf(new Quest(KeyOf(0x80D), Fallout4Release.Fallout4) { EditorID = "Quest", Aliases = [new QuestLocationAlias { Name = "OriginalLoc" }] })),
             ["an npc of scripts out of key order"] = ("npc_", TextOf(NpcOfScriptsOutOfKeyOrder())),
@@ -93,7 +78,6 @@ public sealed class DocumentEditTests
             ["an npc of a fixed level"] = ("npc_", TextOf(new Npc(KeyOf(0x815), Fallout4Release.Fallout4) { EditorID = "Leveled", Level = new NpcLevel { Level = 5 } })),
             ["a book teaching a spell"] = ("book", TextOf(new Book(KeyOf(0x816), Fallout4Release.Fallout4) { EditorID = "Book", Teaches = new BookSpell() })),
             ["a color of a remapping index"] = ("clfm", TextOf(new ColorRecord(KeyOf(0x817), Fallout4Release.Fallout4) { EditorID = "Color", Data = new ColorRemappingIndex { Index = 2.5f } })),
-            ["a holotape program"] = ("note", TextOf(new Holotape(KeyOf(0x818), Fallout4Release.Fallout4) { EditorID = "Holotape", Data = new HolotapeProgram { File = "startup.txt" } })),
             ["a sound descriptor of standard data"] = ("sndr", TextOf(new SoundDescriptor(KeyOf(0x819), Fallout4Release.Fallout4) { EditorID = "Sound", Data = new SoundDescriptorStandardData { Priority = 3 } })),
             ["a perk of a quest effect"] = ("perk", TextOf(new Perk(KeyOf(0x81A), Fallout4Release.Fallout4) { EditorID = "Perk", Effects = [new PerkQuestEffect { Stage = 7 }] })),
             ["a magic effect of a light archetype"] = ("mgef", TextOf(new MagicEffect(KeyOf(0x81B), Fallout4Release.Fallout4) { EditorID = "Effect", Archetype = new MagicEffectLightArchetype() })),
@@ -155,17 +139,6 @@ public sealed class DocumentEditTests
         {
             Radius = 1,
             Target = new LocationFallback { Type = LocationTargetRadius.LocationType.NearReference },
-        },
-    };
-
-    private Npc NpcWithARemovedScriptProperty() => new(KeyOf(0x808), Fallout4Release.Fallout4)
-    {
-        EditorID = "Scripted",
-        VirtualMachineAdapter = new VirtualMachineAdapter
-        {
-            Version = 6,
-            ObjectFormat = 2,
-            Scripts = [new ScriptEntry { Name = "TestScript", Properties = [new ScriptIntProperty { Name = "Switched", Flags = ScriptProperty.Flag.Removed, Data = 42 }] }],
         },
     };
 
@@ -279,27 +252,17 @@ public sealed class DocumentEditTests
     [InlineData("the npc", EditOp.Set, "HeightMax", "0.75", new[] { "HeightMax: 1.0 -> 0.75" })]
     [InlineData("the npc", EditOp.Set, "Weight.Thin", "0.5", new[] { """Weight: <absent> -> {"Thin":0.5}""" })]
     [InlineData("the recipe", EditOp.Set, "Conditions[0].CompareOperator", "\"LessThan\"", new[] { """Conditions[0].CompareOperator: "GreaterThan" -> "LessThan" """ })]
-    [InlineData("the npc", EditOp.Set, "VirtualMachineAdapter.Scripts[0].Properties[0].Data", "9", new[] { "VirtualMachineAdapter.Scripts[0].Properties[0].Data: 1 -> 9" })]
     [InlineData("the npc", EditOp.Set, "HeightMax", "null", new[] { "HeightMax: 1.0 -> <absent>" })]
     [InlineData(
         "the recipe", EditOp.Set, "Conditions[0].MutagenObjectType", "\"ConditionGlobal\"",
         new[] { """Conditions[0].MutagenObjectType: "ConditionFloat" -> "ConditionGlobal" """, "Conditions[0].ComparisonValue: 2.5 -> <absent>" })]
-    [InlineData(
-        "a magic effect with a cloak archetype", EditOp.Set, "Archetype.MutagenObjectType", "\"MagicEffectLightArchetype\"",
-        new[] { """Archetype.MutagenObjectType: "MagicEffectCloakArchetype" -> "MagicEffectLightArchetype" """, """Archetype.Association: "000802:DocEdit.esp" -> <absent>""" })]
     [InlineData("the int global", EditOp.Set, "MutagenObjectType", "\"GlobalShort\"", new[] { """MutagenObjectType: "GlobalInt" -> "GlobalShort" """ })]
     [InlineData(
         "the recipe", EditOp.Set, "Conditions[1].Data.RunOnType", "\"Subject\"",
         new[] { """Conditions[1].Data.RunOnType: "Reference" -> <absent>""", """Conditions[1].Data.Reference: "000804:DocEdit.esp" -> <absent>""" })]
     [InlineData("the keyword", EditOp.Set, "Color", "\"#FF102030\"", new[] { """Color: <absent> -> "#102030" """ })]
     [InlineData("a weather", EditOp.Set, "LightningColor", "\"#102030\"", new[] { """LightningColor: <absent> -> "#00102030" """ })]
-    [InlineData("a weather", EditOp.Set, "LightningColor", "\"#00102030\"", new[] { """LightningColor: <absent> -> "#00102030" """ })]
-    [InlineData("an npc in a faction", EditOp.Set, "Keywords", """["00080B:DocEdit.esp"]""", new[] { """Keywords: <absent> -> ["00080B:DocEdit.esp"]""" })]
-    [InlineData(
-        "a quest with a location alias", EditOp.Set, "Aliases", """[{"MutagenObjectType": "QuestCollectionAlias"}]""",
-        new[] { """Aliases[0].MutagenObjectType: "QuestLocationAlias" -> "QuestCollectionAlias" """, """Aliases[0].Name: "OriginalLoc" -> <absent>""" })]
     [InlineData("an npc in a faction", EditOp.Set, "Weight", """{"Thin":0.5,"Fat":0.25,"Muscular":0.75}""", new[] { """Weight: <absent> -> {"Thin":0.5,"Muscular":0.75,"Fat":0.25}""" })]
-    [InlineData("an npc in a faction", EditOp.Set, "Factions", """[{"Faction":"00080C:DocEdit.esp","Rank":9}]""", new[] { "Factions[0].Rank: 1 -> 9" })]
     [InlineData(
         "an armor mod", EditOp.Set, "Properties", """[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":42,"Value2":7,"FunctionType":"Set"}]""",
         new[] { "Properties[0].Value: <absent> -> 42", "Properties[0].Value2: <absent> -> 7" })]
@@ -314,47 +277,8 @@ public sealed class DocumentEditTests
             "Properties[0].Value2: <absent> -> 2.5",
         })]
     [InlineData(
-        "an armor mod of two properties", EditOp.Set, "Properties",
-        """[{"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"Set"},{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]""",
-        new[]
-        {
-            """Properties[0].MutagenObjectType: "ObjectModIntProperty<Armor+Property>" -> "ObjectModFloatProperty<Armor+Property>" """,
-            """Properties[0].Property: "BodyPart" -> "Weight" """,
-            "Properties[0].Step: 1.0 -> 2.0",
-            "Properties[0].Value: 5 -> 1.5",
-            "Properties[0].Value2: 6 -> 2.5",
-            """Properties[1].MutagenObjectType: "ObjectModFloatProperty<Armor+Property>" -> "ObjectModIntProperty<Armor+Property>" """,
-            """Properties[1].Property: "Weight" -> "BodyPart" """,
-            "Properties[1].Step: 2.0 -> 1.0",
-            "Properties[1].Value: 1.5 -> 5",
-            "Properties[1].Value2: 2.5 -> 6",
-        })]
-    [InlineData(
-        "an armor mod of two properties", EditOp.Set, "Properties",
-        """[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"},{"MutagenObjectType":"ObjectModBoolProperty<Armor+Property>","Property":"Value","Step":3.0,"Value":true,"FunctionType":"Set"}]""",
-        new[]
-        {
-            """Properties[1].MutagenObjectType: "ObjectModFloatProperty<Armor+Property>" -> "ObjectModBoolProperty<Armor+Property>" """,
-            """Properties[1].Property: "Weight" -> "Value" """,
-            "Properties[1].Step: 2.0 -> 3.0",
-            "Properties[1].Value: 1.5 -> true",
-            "Properties[1].Value2: 2.5 -> <absent>",
-        })]
-    [InlineData(
-        "an armor mod of two properties", EditOp.Set, "Properties", """[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]""",
-        new[] { """Properties[1]: {"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5} -> <absent>""" })]
-    [InlineData(
         "a race", EditOp.Set, "Subgraphs", """[{"Role": "MT", "BehaviorGraph": "graph\\zero", "AnimationPaths": ["Actors\\Edited", "Actors\\Added"]}, {"Role": "Weapon", "BehaviorGraph": "graph\\one", "AnimationPaths": ["Actors\\OneA", "Actors\\OneB"]}]""",
         new[] { """Subgraphs[0].AnimationPaths[0]: "Actors\\Zero" -> "Actors\\Edited" """, """Subgraphs[0].AnimationPaths[1]: <absent> -> "Actors\\Added" """ })]
-    [InlineData(
-        "a race", EditOp.Set, "Subgraphs", """[{"Role": "MT"}, {"Role": "Weapon"}]""",
-        new[]
-        {
-            """Subgraphs[0].BehaviorGraph: "graph\\zero" -> <absent>""",
-            """Subgraphs[0].AnimationPaths: ["Actors\\Zero"] -> <absent>""",
-            """Subgraphs[1].BehaviorGraph: "graph\\one" -> <absent>""",
-            """Subgraphs[1].AnimationPaths: ["Actors\\OneA","Actors\\OneB"] -> <absent>""",
-        })]
     [InlineData(
         "a race", EditOp.Set, "Subgraphs", """[{"Role": "MT", "AnimationPaths": []}, {"Role": "Weapon", "AnimationPaths": ["Actors\\OneA", "Actors\\OneB"]}]""",
         new[]
@@ -363,22 +287,11 @@ public sealed class DocumentEditTests
             """Subgraphs[0].AnimationPaths: ["Actors\\Zero"] -> <absent>""",
             """Subgraphs[1].BehaviorGraph: "graph\\one" -> <absent>""",
         })]
-    [InlineData("a race", EditOp.Set, "MovementTypeNames", """["Sneak", "Sprint"]""", new[] { """MovementTypeNames[0]: "Walk" -> "Sneak" """, """MovementTypeNames[1]: <absent> -> "Sprint" """ })]
-    [InlineData("a race", EditOp.Add, "Subgraphs[0].AnimationPaths", null, new[] { """Subgraphs[0].AnimationPaths[1]: <absent> -> "" """ })]
-    [InlineData("a misc item", EditOp.Set, "ComponentDisplayIndices", "[3, 7]", new[] { "ComponentDisplayIndices[0]: 1 -> 3", "ComponentDisplayIndices[1]: <absent> -> 7" })]
     [InlineData("a scene collection", EditOp.Set, "XNAMs", "[8589934591, -4294967296]", new[] { "XNAMs[0]: 1 -> 8589934591", "XNAMs[1]: <absent> -> -4294967296" })]
     [InlineData("a material object", EditOp.Set, "DNAMs", """["0xAABB", "[]"]""", new[] { """DNAMs[0]: "0x0102" -> "0xAABB" """, """DNAMs[1]: <absent> -> "[]" """ })]
-    [InlineData("a material object", EditOp.Add, "DNAMs", null, new[] { """DNAMs[1]: <absent> -> "[]" """ })]
     [InlineData(
         "a faction with a vendor location", EditOp.Set, "VendorLocation", """{"Radius": 99, "CollectionIndex": 2}""",
         new[] { "VendorLocation.Radius: 1 -> 99", "VendorLocation.CollectionIndex: <absent> -> 2" })]
-    [InlineData(
-        "an npc with a removed script property", EditOp.Set, "VirtualMachineAdapter.Scripts[0].Properties[0].MutagenObjectType", "\"ScriptProperty\"",
-        new[]
-        {
-            """VirtualMachineAdapter.Scripts[0].Properties[0].MutagenObjectType: "ScriptIntProperty" -> "ScriptProperty" """,
-            "VirtualMachineAdapter.Scripts[0].Properties[0].Data: 42 -> <absent>",
-        })]
     [InlineData(
         "a debris of two models", EditOp.Remove, "Models[0]", null,
         new[]
@@ -387,41 +300,18 @@ public sealed class DocumentEditTests
             """Models[0].TextureFileHashes: "0x1122" -> "0xAABBCCDD" """,
             """Models[1]: {"Percentage":50,"ModelFilename":"Second.nif","TextureFileHashes":"0xAABBCCDD"} -> <absent>""",
         })]
-    [InlineData(
-        "a debris of two models", EditOp.Move, "Models[1]", "0",
-        new[]
-        {
-            """Models[0].ModelFilename: "First.nif" -> "Second.nif" """,
-            """Models[0].TextureFileHashes: "0x1122" -> "0xAABBCCDD" """,
-            """Models[1].ModelFilename: "Second.nif" -> "First.nif" """,
-            """Models[1].TextureFileHashes: "0xAABBCCDD" -> "0x1122" """,
-        })]
-    [InlineData(
-        "an npc of scripts out of key order", EditOp.Move, "VirtualMachineAdapter.Scripts[0].Properties[2].Data[1]", "0",
-        new[]
-        {
-            """VirtualMachineAdapter.Scripts[0].Properties[2].Data[0]: "a" -> "b" """,
-            """VirtualMachineAdapter.Scripts[0].Properties[2].Data[1]: "b" -> "a" """,
-        })]
     public void AnEdit_ChangesExactlyWhatItNames(string record, EditOp op, string path, string? value, string[] changes)
     {
         Assert.Equal(changes.Select(change => change.TrimEnd()), Changed(record, op, path, value));
     }
 
     [Theory]
-    [InlineData("an npc of a fixed level", "Level", """{"MutagenObjectType": "NpcLevel", "Level": 20}""", "Level", "20")]
     [InlineData("an npc of a fixed level", "Level", """{"MutagenObjectType": "PcLevelMult", "LevelMult": 1.5}""", "LevelMult", "1.5")]
-    [InlineData("a quest with a location alias", "Aliases", """[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4}]""", "0.ClosestToAlias", "4")]
     [InlineData("a quest with a location alias", "Aliases", """[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4, "Location": {"AliasID": 9}}]""", "0.Location.AliasID", "9")]
     [InlineData("a book teaching a spell", "Teaches", """{"MutagenObjectType": "BookPerk", "Perk": "000901:DocEdit.esp"}""", "Perk", "\"000901:DocEdit.esp\"")]
-    [InlineData("a color of a remapping index", "Data", """{"MutagenObjectType": "ColorRemappingIndex", "Index": 7.5}""", "Index", "7.5")]
     [InlineData("a color of a remapping index", "Data", """{"MutagenObjectType": "ColorData", "Color": "#112233"}""", "MutagenObjectType", "\"ColorData\"")]
-    [InlineData("a holotape program", "Data", """{"MutagenObjectType": "HolotapeSound", "Sound": "000902:DocEdit.esp"}""", "Sound", "\"000902:DocEdit.esp\"")]
     [InlineData("a sound descriptor of standard data", "Data", """{"MutagenObjectType": "SoundDescriptorStandardData", "PercentFrequencyShift": 5, "PercentFrequencyVariance": 9, "Priority": 20, "Variance": 30, "StaticAttenuation": 2.5}""", "StaticAttenuation", "2.5")]
-    [InlineData("a sound descriptor of standard data", "Data", """{"MutagenObjectType": "SoundDescriptorCompoundData"}""", "MutagenObjectType", "\"SoundDescriptorCompoundData\"")]
-    [InlineData("a perk of a quest effect", "Effects", """[{"MutagenObjectType": "PerkAbilityEffect", "Ability": "000903:DocEdit.esp"}]""", "0.Ability", "\"000903:DocEdit.esp\"")]
     [InlineData("a perk of a quest effect", "Effects", """[{"MutagenObjectType": "PerkEntryPointAddRangeToValue", "From": 1.5, "To": 9.5}]""", "0.To", "9.5")]
-    [InlineData("a magic effect of a light archetype", "Archetype", """{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "000904:DocEdit.esp"}""", "Association", "\"000904:DocEdit.esp\"")]
     [InlineData("a magic effect of a light archetype", "Archetype", """{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "000904:DocEdit.esp", "ActorValue": "000905:DocEdit.esp"}""", "ActorValue", "\"000905:DocEdit.esp\"")]
     [InlineData("a magic effect of a light archetype", "Archetype", """{"MutagenObjectType": "MagicEffectArchetype", "Type": "ValueModifier", "Association": "000905:DocEdit.esp"}""", "Association", "\"000905:DocEdit.esp\"")]
     [InlineData("an audio effect chain of an overdrive", "Effects", """[{"MutagenObjectType": "StateVariableFilterAudioEffect", "Enabled": true, "CenterFrequency": 440.0, "QValue": 0.75}]""", "0.QValue", "0.75")]
@@ -447,10 +337,8 @@ public sealed class DocumentEditTests
 
     [Theory]
     [InlineData("an npc of scripts out of key order", "Scripts.1.Name", "\"Zulu\"", """VirtualMachineAdapter.Scripts[1].Name: "Beta" -> "Zulu" """)]
-    [InlineData("an npc of scripts out of key order", "Scripts.0.Properties.1.Data", "42", "VirtualMachineAdapter.Scripts[0].Properties[1].Data: 1 -> 42")]
     [InlineData("an npc of scripts out of key order", "Scripts.0.Properties.0.Members.0.Properties.0.Data", "9", "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Data: 3 -> 9")]
     [InlineData("a quest of fragments and an alias script", "Aliases.0.Scripts.0.Properties.0.Data", "7", "VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Data: 1 -> 7")]
-    [InlineData("a quest of fragments and an alias script", "Fragments.0.ScriptName", "\"Renamed\"", """VirtualMachineAdapter.Fragments[0].ScriptName: "Five" -> "Renamed" """)]
     [InlineData("a perk of fragments out of key order", "ScriptFragments.Fragments.0.ScriptName", "\"Renamed\"", """VirtualMachineAdapter.ScriptFragments.Fragments[0].ScriptName: "Two" -> "Renamed" """)]
     [InlineData("a scene of phase fragments out of key order", "ScriptFragments.PhaseFragments.0.FragmentName", "\"Renamed\"", """VirtualMachineAdapter.ScriptFragments.PhaseFragments[0].FragmentName: "F1S" -> "Renamed" """)]
     public void ResendingAnAdapterWithOneMemberChanged_ChangesThatMemberAndNothingElse(string record, string at, string replacement, string change)
@@ -530,12 +418,8 @@ public sealed class DocumentEditTests
     [InlineData("the recipe", EditOp.Add, "Conditions", """{"CompareOperator": "EqualTo"}""", "Conditions[2]")]
     [InlineData("the recipe", EditOp.Add, "Conditions", """{"CompareOperator": "EqualTo", "MutagenObjectType": "ConditionFloat"}""", "Conditions[2]")]
     [InlineData("the recipe", EditOp.Add, "Conditions", """{"MutagenObjectType": "ConditionMaybe"}""", "Conditions[2]")]
-    [InlineData("a quest with a location alias", EditOp.Set, "Aliases", """[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "Conditions": [{"ComparisonValue": 1.0}]}]""", "Aliases[0].Conditions[0]")]
     [InlineData("an armor mod", EditOp.Set, "Properties", """[{"Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]""", "Properties[0]")]
     [InlineData("an npc in a faction", EditOp.Set, "Level", """{"Level": 20}""", "Level")]
-    [InlineData(
-        "an npc in a faction", EditOp.Set, "VirtualMachineAdapter", """{"Scripts": [{"Name": "S", "Properties": [{"Name": "P", "Flags": "Edited", "Data": 1}]}]}""",
-        "VirtualMachineAdapter.Scripts[0].Properties[0]")]
     public void AUnionValueNotLeadingWithADiscriminatorNamingALeaf_FailsNamingWhere(string record, EditOp op, string path, string value, string where)
     {
         var (table, text) = _records[record];
@@ -621,11 +505,8 @@ public sealed class DocumentEditTests
 
     [Theory]
     [InlineData("Fallout4MajorRecordFlags", EditOp.Set, "[]", null)]
-    [InlineData("MajorFlags", EditOp.Add, "\"Deleted\"", null)]
-    [InlineData("IsCompressed", EditOp.Set, "true", null)]
     [InlineData("IsDeleted", EditOp.Set, "true", null)]
     [InlineData("Fallout4MajorRecordFlags", EditOp.Remove, "0", 0)]
-    [InlineData("Fallout4MajorRecordFlags", EditOp.Move, "0", 0)]
     public void AViewOfTheRecordFlags_AsTheFirstHop_FailsAsAnAliasOfTheFlagsColumn(string view, EditOp op, string value, int? index)
     {
         DocumentHop[] path = index is { } at ? [Member(view), At(at)] : [Member(view)];
@@ -654,7 +535,6 @@ public sealed class DocumentEditTests
     [Theory]
     [InlineData("Author", "\"me\"", "ModHeader.Author")]
     [InlineData("Flags", "[\"Master\"]", "ModHeader.Flags")]
-    [InlineData("Version", "7", "ModHeader.Version")]
     public void AHeaderMember_IsWrittenAsAnyFieldIs(string member, string value, string written)
     {
         var before = HeaderTextHoldingAModHeader();

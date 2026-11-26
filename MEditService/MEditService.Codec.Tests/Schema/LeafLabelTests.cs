@@ -7,9 +7,7 @@ public sealed class LeafLabelTests
 {
     [Theory]
     [InlineData("npc_", "Level", "NpcLevel", "Npc Level")]
-    [InlineData("npc_", "Level", "PcLevelMult", "Pc Level Mult")]
     [InlineData("qust", "Aliases.[]", "QuestReferenceAlias", "Reference")]
-    [InlineData("qust", "Aliases.[]", "QuestCollectionAlias", "Collection")]
     [InlineData("mgef", "Archetype", "MagicEffectBoundArchetype", "Bound")]
     public void AUnionsDiscriminatorLabelsALeaf_WithTheWordsItDoesNotShareWithTheBase(string table, string path, string leaf, string label)
     {

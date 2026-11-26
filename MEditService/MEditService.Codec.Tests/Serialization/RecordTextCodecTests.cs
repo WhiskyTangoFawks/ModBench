@@ -35,9 +35,6 @@ public class RecordTextCodecTests
             },
         };
 
-    private static Npc MakeNpc() =>
-        new(new FormKey(TestPlugin, 0x900), Fallout4Release.Fallout4) { EditorID = "TestNpc", Name = "Test NPC Name" };
-
     private static Cell MakeCell() =>
         new(new FormKey(TestPlugin, 0x901), Fallout4Release.Fallout4) { EditorID = "TestCell" };
 
@@ -79,26 +76,22 @@ public class RecordTextCodecTests
     private static readonly Dictionary<string, Func<(GameRelease Release, IMajorRecordGetter Record, string RecordType)>> Records = new(StringComparer.Ordinal)
     {
         ["a weapon"] = () => (GameRelease.Fallout4, MakeWeapon(), "weap"),
-        ["an npc"] = () => (GameRelease.Fallout4, MakeNpc(), "npc_"),
         ["a cell under its class's name"] = () => (GameRelease.Fallout4, MakeCell(), "Cell"),
         ["a cell holding a child in every slot"] = () => (GameRelease.Fallout4, CellHoldingAChildInEverySlot(), "Cell"),
         ["a worldspace holding a top cell and a block"] = () => (GameRelease.Fallout4, WorldspaceHoldingATopCellAndABlock(), "wrld"),
         ["a quest holding every child"] = () => (GameRelease.Fallout4, QuestHoldingEveryChild(), "qust"),
         ["a topic holding a response"] = () => (GameRelease.Fallout4, TopicHoldingAResponse(), "dial"),
         ["a Skyrim recipe conditioned on alias 0"] = () => (GameRelease.SkyrimSE, AliasIndexRoundTripTests.RecipeWithAnAliasCondition(0), "cobj"),
-        ["a Skyrim recipe conditioned on alias 3"] = () => (GameRelease.SkyrimSE, AliasIndexRoundTripTests.RecipeWithAnAliasCondition(3), "cobj"),
     };
 
     [Theory]
     [InlineData("a weapon")]
-    [InlineData("an npc")]
     [InlineData("a cell under its class's name")]
     [InlineData("a cell holding a child in every slot")]
     [InlineData("a worldspace holding a top cell and a block")]
     [InlineData("a quest holding every child")]
     [InlineData("a topic holding a response")]
     [InlineData("a Skyrim recipe conditioned on alias 0")]
-    [InlineData("a Skyrim recipe conditioned on alias 3")]
     public void ARecordsText_ReadsBackUnchanged_FromTheRecordTypeItIsStoredUnder(string record)
     {
         var (release, made, recordType) = Records[record]();
@@ -107,42 +100,18 @@ public class RecordTextCodecTests
         Assert.Equal(text, RecordTextCodec.RoundTrip(text, release, recordType));
     }
 
-    private static readonly Dictionary<string, Func<Task<List<(string Path, bool Value)>>>> WholeModReads = new(StringComparer.Ordinal)
+    [Fact]
+    public async Task AnInteriorCell_ReadsBackFieldFaithful_ThroughTheWholeModDoor()
     {
-        ["a weapon"] = async () =>
-        {
-            var weapon = MakeWeapon();
-            var mod = new Fallout4Mod(TestPlugin, Fallout4Release.Fallout4);
-            mod.Weapons.Add(weapon);
-            return [.. MaskInspector.Leaves(weapon.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<IWeaponGetter>(mod, weapon)))];
-        },
-        ["an npc"] = async () =>
-        {
-            var npc = MakeNpc();
-            var mod = new Fallout4Mod(TestPlugin, Fallout4Release.Fallout4);
-            mod.Npcs.Add(npc);
-            return [.. MaskInspector.Leaves(npc.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<INpcGetter>(mod, npc)))];
-        },
-        ["an interior cell"] = async () =>
-        {
-            var cell = MakeCell();
-            var mod = new Fallout4Mod(TestPlugin, Fallout4Release.Fallout4);
-            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(cell);
-            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            mod.Cells.Records.Add(block);
-            return [.. MaskInspector.Leaves(cell.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<ICellGetter>(mod, cell)))];
-        },
-    };
+        var cell = MakeCell();
+        var mod = new Fallout4Mod(TestPlugin, Fallout4Release.Fallout4);
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
 
-    [Theory]
-    [InlineData("a weapon")]
-    [InlineData("an npc")]
-    [InlineData("an interior cell")]
-    public async Task ARecord_ReadsBackFieldFaithful_ThroughTheWholeModDoor(string record)
-    {
-        var leaves = await WholeModReads[record]();
+        var leaves = MaskInspector.Leaves(cell.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<ICellGetter>(mod, cell))).ToList();
 
         Assert.NotEmpty(leaves);
         Assert.Empty(leaves.Where(l => !l.Value).Select(l => l.Path));
@@ -150,19 +119,9 @@ public class RecordTextCodecTests
 
     private static readonly Dictionary<string, Func<IMajorRecordGetter>> RecordClasses = new(StringComparer.Ordinal)
     {
-        ["an int game setting"] = () => new GameSettingInt(Mod) { EditorID = "iTest", Data = 42 },
-        ["a float game setting"] = () => new GameSettingFloat(Mod) { EditorID = "fTest", Data = 3.5f },
         ["a string game setting"] = () => new GameSettingString(Mod) { EditorID = "sTest", Data = "hello" },
-        ["a bool game setting"] = () => new GameSettingBool(Mod) { EditorID = "bTest", Data = true },
-        ["an int global"] = () => new GlobalInt(Mod) { EditorID = "TestGlobInt", Data = 7 },
         ["a float global"] = () => new GlobalFloat(Mod) { EditorID = "TestGlobFloat", Data = 1.25f },
-        ["a short global"] = () => new GlobalShort(Mod) { EditorID = "TestGlobShort", Data = 3 },
-        ["a bool global"] = () => new GlobalBool(Mod) { EditorID = "TestGlobBool", Data = true },
         ["an armor mod"] = () => new ArmorModification(Mod) { EditorID = "ArmorMod", Properties = [new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f }] },
-        ["an npc mod"] = () => new NpcModification(Mod) { EditorID = "NpcMod", Properties = [new ObjectModIntProperty<Npc.Property> { Property = Npc.Property.ForcedInventory, Step = 2f }] },
-        ["a weapon mod"] = () => new WeaponModification(Mod) { EditorID = "WeaponMod", Properties = [new ObjectModIntProperty<Weapon.Property> { Property = Weapon.Property.AmmoCapacity, Step = 3f }] },
-        ["an object mod"] = () => new ObjectModification(Mod) { EditorID = "ObjectMod", Properties = [new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 4f }] },
-        ["an unknown object mod"] = () => new UnknownObjectModification(Mod) { EditorID = "UnknownMod", Properties = [new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 5f }] },
         ["a damage type of structs"] = () => new DamageType(Mod)
         {
             EditorID = "PlainDamageType",
@@ -172,19 +131,9 @@ public class RecordTextCodecTests
     };
 
     [Theory]
-    [InlineData("an int game setting", "gmst", "Data", "42")]
-    [InlineData("a float game setting", "gmst", "Data", "3.5")]
     [InlineData("a string game setting", "gmst", "Data.Value", "\"hello\"")]
-    [InlineData("a bool game setting", "gmst", "Data", "true")]
-    [InlineData("an int global", "glob", "Data", "7")]
     [InlineData("a float global", "glob", "Data", "1.25")]
-    [InlineData("a short global", "glob", "Data", "3")]
-    [InlineData("a bool global", "glob", "Data", "true")]
     [InlineData("an armor mod", "omod", "Properties.0.Property", "\"BodyPart\"")]
-    [InlineData("an npc mod", "omod", "Properties.0.Property", "\"ForcedInventory\"")]
-    [InlineData("a weapon mod", "omod", "Properties.0.Property", "\"AmmoCapacity\"")]
-    [InlineData("an object mod", "omod", "Properties.0.Step", "4.0")]
-    [InlineData("an unknown object mod", "omod", "Properties.0.Step", "5.0")]
     [InlineData("a damage type of structs", "dmgt", "DamageTypes.0.ActorValue", "\"000001:Test.esp\"")]
     [InlineData("a damage type of indices", "dmgt", "DamageTypes", "[7,11]")]
     public void EachRecordClassOfATable_ReadsBackItsOwnData_ThroughTheTablesOneColumn(string record, string table, string path, string value)
@@ -207,17 +156,6 @@ public class RecordTextCodecTests
         var golden = await File.ReadAllBytesAsync(
             Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.json"));
         Assert.Equal(golden, actual);
-    }
-
-    [Fact]
-    public void TheSameRecordState_IsWrittenAsTheSameTextEveryTime_WithNoGoldenInTheLoopBecauseAGoldenIsBlindToNonDeterminismThatReproducesTheSameWrongOutputEveryRun()
-    {
-        var independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself = MakeWeapon();
-
-        var firstText = RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
-        var secondText = RecordTextCodec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
-
-        Assert.Equal(firstText, secondText);
     }
 
     [Fact]

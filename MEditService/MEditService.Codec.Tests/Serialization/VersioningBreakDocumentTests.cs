@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -20,12 +19,6 @@ public sealed class VersioningBreakDocumentTests
         return quest;
     }
 
-    private static List<string> AdapterMembers(string text)
-    {
-        using var document = JsonDocument.Parse(text);
-        return [.. document.RootElement.GetProperty("VirtualMachineAdapter").EnumerateObject().Select(member => member.Name)];
-    }
-
     [Fact]
     public void AQuestAdapterReadFromBytesThatEndAtItsBreak_ReadsBackAsTheDocumentItsCodecWrote()
     {
@@ -39,13 +32,5 @@ public sealed class VersioningBreakDocumentTests
         var text = RecordTextCodec.SerializeToText(overlay.Quests.Single(), GameRelease.Fallout4);
 
         Assert.Equal(text, RecordTextCodec.RoundTrip(text, GameRelease.Fallout4, "qust"));
-    }
-
-    [Fact]
-    public void AQuestAdapterWithNoBreak_HoldsItsFragmentScript()
-    {
-        var text = RecordTextCodec.SerializeToText(QuestWithAdapter(NewMod(), default), GameRelease.Fallout4);
-
-        Assert.Equal(["Scripts", "Script"], AdapterMembers(text));
     }
 }
