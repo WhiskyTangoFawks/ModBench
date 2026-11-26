@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Reads the test reports under a directory (see reports.py), names each test over 100 ms, and prints
-each box's summed test time and the wall time. Given a budget file, a box over its budget or without
-one, and a test over the 1 s ceiling the file does not approve, fail the run once FAILS_THE_RUN is on.
-An approval whose tests all ran under the ceiling is reported as lapsed and fails nothing."""
+"""Reads the test reports under a directory (see reports.py), names each test over 100 ms, and prints each
+box's summed test time and the run's wall time against its budget in the budget file. Once FAILS_THE_RUN is on,
+a Linux run fails on a box over its budget or without one, and on a test over the 1 s ceiling the file does
+not approve; the Windows run fails only on its wall time. An approval whose tests all ran under the ceiling
+is reported as lapsed and fails nothing."""
 import sys
 import tomllib
 from pathlib import Path
@@ -15,6 +16,7 @@ FAILS_THE_RUN = False
 # The source scans, the gates' own tests and the integration tests: the budget file's `other` holds them.
 NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
 OTHER = 'the tests of no box'
+WINDOWS = 'windows'
 
 
 def slow_tests(results: list[reports.Result]) -> list[tuple[str, float]]:
@@ -82,9 +84,10 @@ def report_budgets(times: list[tuple[str, float]], boxes: dict[str, float], othe
 
 
 def main(argv: list[str] | None = None) -> int:
-    directory, elapsed_argument, budget_argument, *optional = sys.argv[1:] if argv is None else argv
-    (budgets_file,) = optional or [None]
-    elapsed, budget = float(elapsed_argument), float(budget_argument)
+    """The run is a budget file's key under [wall]: branch, merge or windows."""
+    directory, elapsed_argument, budgets_file, run = sys.argv[1:] if argv is None else argv
+    elapsed = float(elapsed_argument)
+    budgets = tomllib.loads(Path(budgets_file).read_text())
     results = reports.results(Path(directory))
     slow = slow_tests(results)
     for name, seconds in slow:
@@ -92,17 +95,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f'--- {len(slow)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
     times = box_times(results)
     failing = 0
-    if budgets_file:
-        budgets = tomllib.loads(Path(budgets_file).read_text())
-        failing = (report_ceiling(results, slow, budgets.get('approved', {}))
-                   + report_budgets(times, budgets['boxes'], budgets['other']))
-    else:
+    if run == WINDOWS:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
-    late = f': OVER BUDGET by {elapsed - budget:.0f} s' if elapsed > budget else ''
-    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget{late}')
+    else:
+        failing = (report_ceiling(results, slow, budgets.get('approved', {}))
+                   + report_budgets(times, budgets['boxes'], budgets['other']))
+    wall = budgets['wall'][run]
+    over = elapsed > wall
+    late = f': OVER BUDGET by {elapsed - wall:.0f} s' if over else ''
+    print(f'Wall time {elapsed:.0f} s of {wall:.0f} s budget{late}')
+    failing += run == WINDOWS and over
     return int(FAILS_THE_RUN and bool(failing))
-
 
 if __name__ == '__main__':
     sys.exit(main())
