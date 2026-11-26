@@ -1,6 +1,5 @@
-"""Pins check_test_times.py: each test over 100 ms is named, each box's summed time is printed against its
-budget, and, given budgets, a box over it or without one and a test over the 1 s ceiling no approval names
-fail the run once the switch is on, while a lapsed approval is reported and fails nothing."""
+"""Pins check_test_times.py: given budgets, a box over its budget or without one and an unapproved test
+over 1 s fail the run once the switch is on, and a lapsed approval fails nothing."""
 import contextlib
 import io
 import pathlib
@@ -72,17 +71,12 @@ class Ceiling(Reports):
                                     fx.trx_result('A.Theory(case: 1)', 6, 2.5), fx.trx_result('A.Theory(case: 2)', 6, 0.5),
                                     fx.trx_result('A.Lapsed', 6, 0.4)))
 
-    def test_a_test_over_the_ceiling_is_marked_unless_its_name_or_its_theorys_is_approved(self) -> None:
-        _, printed = self.with_budgets(self.APPROVALS)
-        self.assertIn('   2.00 s  A.Unapproved: OVER THE 1 s CEILING, NOT APPROVED\n', printed)
-        self.assertIn('   3.00 s  A.Approved\n', printed)
-        self.assertIn('   2.50 s  A.Theory(case: 1)\n', printed)
-
-    def test_an_approval_whose_tests_all_ran_under_the_ceiling_is_said_to_have_lapsed_and_one_that_did_not_run_is_not(self) -> None:
-        _, printed = self.with_budgets(self.APPROVALS)
-        self.assertIn('   0.40 s  A.Lapsed: APPROVAL LAPSED\n'
-                      '--- 1 TESTS OVER THE 1 s CEILING NOT APPROVED, 1 APPROVALS LAPSED ---\n', printed)
-        self.assertNotIn('A.NotRun', printed)
+    def test_it_names_each_test_over_the_ceiling_no_approval_names_by_its_own_or_its_theorys_and_each_approval_that_lapsed(self) -> None:
+        """A.NotRun's approval did not run, so it did not lapse; A.Theory's lapses only once all its cases run under 1 s."""
+        self.assertIn('--- 5 TESTS OVER 100 ms ---\n'
+                      '   2.00 s  A.Unapproved: OVER THE 1 s CEILING, NOT APPROVED\n'
+                      '   0.40 s  A.Lapsed: APPROVAL LAPSED\n'
+                      '--- 1 TESTS OVER THE 1 s CEILING NOT APPROVED, 1 APPROVALS LAPSED ---\n', self.with_budgets(self.APPROVALS)[1])
 
     def test_an_unapproved_test_over_the_ceiling_fails_the_run_once_the_switch_is_on_and_a_lapse_never_does(self) -> None:
         all_approved = self.APPROVALS + '"A.Unapproved" = "r"\n'
