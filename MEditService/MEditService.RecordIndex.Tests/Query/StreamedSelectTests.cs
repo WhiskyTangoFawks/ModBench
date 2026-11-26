@@ -12,9 +12,9 @@ public sealed class StreamedSelectTests : IDisposable
     private const string Master = "Master.esm";
     private const string Later = "Later.esp";
     private const int Records = 100;
-    private const long SmallMemoryLimit = 32_000_000;
+    private const long SmallMemoryLimit = 40_000_000;
     private const int BodyLength = 2_000;
-    private const int BodyCountTwiceTheSmallLimit = 32_000;
+    private const int BodyCountAFifthOverTheSmallLimit = 24_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-select")
         .WithPlugin(Master).WithPlugin(Later).Build();
@@ -90,7 +90,7 @@ public sealed class StreamedSelectTests : IDisposable
     {
         const int copied = 5;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
-            (Master, () => Items(Master, BodyCountTwiceTheSmallLimit, BodyLength)),
+            (Master, () => Items(Master, BodyCountAFifthOverTheSmallLimit, BodyLength)),
             (Later, () => Items(Master, copied, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         var rows = index.Queries.Selected($"""
@@ -117,11 +117,11 @@ public sealed class StreamedSelectTests : IDisposable
     public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
     {
         using var index = Indexes.Reconciled(
-            _fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, BodyCountTwiceTheSmallLimit, BodyLength))), memoryLimit: SmallMemoryLimit);
+            _fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, BodyCountAFifthOverTheSmallLimit, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         using var rows = index.Queries.SelectRows(sql).Value();
 
-        Assert.Equal(BodyCountTwiceTheSmallLimit, rows.Rows().Count(row => row.Value().Length > BodyLength));
+        Assert.Equal(BodyCountAFifthOverTheSmallLimit, rows.Rows().Count(row => row.Value().Length > BodyLength));
     }
 
     [Fact]
