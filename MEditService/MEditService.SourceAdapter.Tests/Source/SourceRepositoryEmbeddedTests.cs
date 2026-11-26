@@ -522,6 +522,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         return new SourceDocument("00A001:Embedded.esp", "refr", null, "{\n  \"FormKey\": \"00A001:Embedded.esp\"\n}");
     }
 
+    private static void AssertRefusedAsAChildItsOwnersTextDoesNotCarry(SourceFailure.NotCarried refused)
+    {
+        Assert.Contains("its own text does not carry it", refused.Reason, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the record index re-reads the tree.",
+            refused.Reason, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EveryChildAskedInOneOperation_IsFound_EmbeddedOrInAFileOfItsOwn()
     {
@@ -531,14 +539,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var named = children.Select(child => repository.RecordByFormKey(Plugin, child.FormKey.ToString()).Value()?.EditorId);
 
         Assert.Equal(children.Select(child => child.EditorID), named);
-    }
-
-    private static void AssertRefusedAsAChildItsOwnersTextDoesNotCarry(SourceFailure.NotCarried refused)
-    {
-        Assert.Contains("its own text does not carry it", refused.Reason, StringComparison.Ordinal);
-        Assert.EndsWith(
-            "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the record index re-reads the tree.",
-            refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
