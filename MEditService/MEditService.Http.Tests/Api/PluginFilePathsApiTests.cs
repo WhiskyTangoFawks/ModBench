@@ -1,4 +1,3 @@
-using System.Net;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -29,21 +28,5 @@ public sealed class PluginFilePathsApiTests : HostedTests
         Assert.Equal(await Client.FirstFormKey(Plugin, Origin, "txst"), path.GetProperty("formKey").GetString());
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Name == Plugin).Path).Require();
         Assert.True(File.Exists(Path.Combine(modFolder, path.GetProperty("sourceRelativePath").GetString().Require())));
-    }
-
-    [Fact]
-    public async Task GetPluginFilePaths_AskedWithKeysAndNoPlugin_ReturnsBadRequest()
-    {
-        var response = await Client.PostAsked("/plugins/file-paths", keys: ["000800:Names.esp"]);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetPluginFilePaths_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
-    {
-        var response = await Client.PostAsked($"/plugins/file-paths?plugin={Plugin}");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

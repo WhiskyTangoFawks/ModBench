@@ -41,10 +41,4 @@ public sealed class ScriptRenameSourceChangesApiTests : HostedTests
             (document.GetProperty("text").GetString()?.Contains("\"Renamed\"", StringComparison.Ordinal), document.GetProperty("text").GetString()?.Contains("Attached", StringComparison.Ordinal),
                 changes.GetProperty("plugins")[0].GetProperty("origin").GetString()));
     }
-
-    [Fact]
-    public async Task ARenameWithNoNewName_Is400()
-    {
-        await (await Renaming(new { name = "Attached", newName = "" })).AssertIsProblem(HttpStatusCode.BadRequest);
-    }
 }

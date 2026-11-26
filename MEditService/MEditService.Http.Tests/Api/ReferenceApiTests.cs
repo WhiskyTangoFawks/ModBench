@@ -5,7 +5,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class ReferenceApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+[Collection(LoadedApiCollection.Name)]
+public sealed class ReferenceApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 {
     private readonly HttpClient _client = loaded.Client;
 

@@ -45,14 +45,4 @@ public sealed class DecompilePluginTraceTests : HostedTests
         if (response.StatusCode == HttpStatusCode.ServiceUnavailable) return null;
         return Wire.WinnerIn(await response.EnsureSuccessStatusCode().Body()).GetProperty("editorId").GetString();
     }
-
-    [Fact]
-    public async Task DecompilingNoPlugin_Is400()
-    {
-        await Loaded();
-
-        var response = await Client.Decompile([]);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
 }

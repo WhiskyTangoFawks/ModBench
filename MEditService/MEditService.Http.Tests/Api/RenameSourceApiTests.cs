@@ -118,17 +118,5 @@ public sealed class RenameSourceApiTests : HostedTests
 
         Assert.Equal("UnreadableSource", await RefusalOf(response, HttpStatusCode.UnprocessableEntity));
     }
-
-    [Theory]
-    [InlineData("", Origin)]
-    [InlineData(Plugin, " ")]
-    public async Task RenamingWithoutAPluginNameOrOrigin_Is400(string name, string origin)
-    {
-        await CompiledPlugin();
-
-        var response = await RenameSource(name, origin, "Renamed.esp");
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
 }
 

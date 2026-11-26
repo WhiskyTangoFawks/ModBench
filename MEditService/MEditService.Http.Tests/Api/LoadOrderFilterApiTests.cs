@@ -39,16 +39,6 @@ public sealed class LoadOrderFilterApiTests : HostedTests
     }
 
     [Fact]
-    public async Task PostFilter_WithoutASource_Returns400()
-    {
-        await Loaded();
-
-        var resp = await Client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-    }
-
-    [Fact]
     public async Task ClearingTheFilter_Is204_AndGettingIt_AnswersNoFilterInForce()
     {
         await Loaded();

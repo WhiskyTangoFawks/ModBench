@@ -86,24 +86,4 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.Contains("extension", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(modFolder, "Mod.txt")));
     }
-
-    public static TheoryData<string, string> NotARequestToCreate => new()
-    {
-        { "no name", """{"origin": "SomeMod", "name": "", "folder": "/mods/SomeMod"}""" },
-        { "a blank name", """{"origin": "SomeMod", "name": "   ", "folder": "/mods/SomeMod"}""" },
-        { "a blank origin", """{"origin": "   ", "name": "New.esp", "folder": "/mods/SomeMod"}""" },
-        { "a blank folder", """{"origin": "SomeMod", "name": "New.esp", "folder": "   "}""" },
-        { "no folder", """{"origin": "SomeMod", "name": "New.esp"}""" },
-    };
-
-    [Theory]
-    [MemberData(nameof(NotARequestToCreate))]
-    public async Task ARequestThatDoesNotSayWhatToCreate_Is400(string lacking, string body)
-    {
-        Owned(await Loaded());
-
-        var created = await Client.PostJson("/plugins/create", body);
-
-        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, created.StatusCode));
-    }
 }

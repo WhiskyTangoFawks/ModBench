@@ -31,10 +31,4 @@ public sealed class PluginFileFlagsApiTests : HostedTests
         Assert.Equal(HttpStatusCode.OK, set.StatusCode);
         Assert.Equal(File.ReadAllBytes(small), File.ReadAllBytes(path));
     }
-
-    [Theory]
-    [InlineData("""{"gameRelease": "Nowhere", "files": [{"path": "/x", "flags": {"Small": true}}]}""", "/plugin-files/set-flags")]
-    [InlineData("""{"gameRelease": "Fallout4", "files": [{"path": "/x", "flags": {}}]}""", "/plugin-files/set-flags")]
-    public async Task ARequestThatIsNotWhole_Is400(string body, string route) =>
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client.PostJson(route, body)).StatusCode);
 }

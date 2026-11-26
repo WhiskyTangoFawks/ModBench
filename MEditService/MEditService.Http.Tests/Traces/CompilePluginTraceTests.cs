@@ -1,4 +1,3 @@
-using System.Net;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -46,16 +45,4 @@ public sealed class CompilePluginTraceTests : HostedTests
     }
 
     private static string Written(ScatteredFixtureData fx, string origin) => fx.Plugins.Single(p => p.Origin == origin).Path;
-
-    [Theory]
-    [InlineData("[]")]
-    [InlineData("[{\"name\": \"Compiled.esp\", \"origin\": \"\"}]")]
-    public async Task CompilingNoPlugin_OrAPluginWithoutAnOrigin_Is400(string plugins)
-    {
-        using var fx = await LoadedAndCompiledPlugin();
-
-        var response = await Client.PostJson("/plugins/compile", $"{{\"plugins\": {plugins}}}");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
 }

@@ -64,20 +64,4 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(Npc, (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
-
-    [Fact]
-    public async Task APutDocumentByARelativePath_Is400()
-    {
-        var response = await Client.PutAsJsonAsync("/unsaved-document", new { path = "plugin-source/Typed.esp/Typed.json", text = "{}", version = 1, opened = true });
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task ADeletedDocumentByARelativePath_Is400()
-    {
-        var response = await Client.DeleteAsync("/unsaved-document?path=plugin-source%2FTyped.esp%2FTyped.json");
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
 }

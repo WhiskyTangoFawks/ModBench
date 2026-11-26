@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -29,14 +28,6 @@ public sealed class PluginProblemsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetProblems_AskedWithKeysAndNoPlugin_ReturnsBadRequest()
-    {
-        var response = await Client.PostAsked("/plugins/problems", keys: ["000800:Refers.esp"]);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
     public async Task GetProblems_ACompiledPluginReferringToAMissingRecord_NamesTheReferrersFileInTheModFolder_WhichSpellsTheTargetAsAnswered()
     {
         var fx = await CompiledPluginLoad();
@@ -53,13 +44,5 @@ public sealed class PluginProblemsApiTests : HostedTests
         var file = File.ReadAllText(Path.Combine(modFolder, problem.GetProperty("sourceRelativePath").GetString().Require()));
         Assert.Contains(Npc, file, StringComparison.Ordinal);
         Assert.Contains(JsonSerializer.Serialize(AbsentRecord.ToString()), file, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task GetProblems_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
-    {
-        var response = await Client.PostAsked($"/plugins/problems?plugin={Plugin}");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

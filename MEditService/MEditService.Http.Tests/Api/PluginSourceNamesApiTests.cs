@@ -6,7 +6,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class PluginSourceNamesApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+[Collection(LoadedApiCollection.Name)]
+public sealed class PluginSourceNamesApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 {
     private const string Text = """{ "FormKey": "000801:Mod.esp", "Race": "000802:Base.esm" }""";
 
