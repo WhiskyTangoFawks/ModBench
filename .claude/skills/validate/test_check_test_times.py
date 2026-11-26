@@ -1,5 +1,5 @@
 """Pins check_test_times.py: each test over 100 ms is named, each box's summed time is printed against its
-budget, and a box over it or without one fails the run once the switch is on, only where budgets are given."""
+budget, and a box over it or without one fails the run once the switch is on, given budgets."""
 import contextlib
 import io
 import pathlib
