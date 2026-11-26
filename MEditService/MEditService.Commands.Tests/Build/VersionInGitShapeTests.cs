@@ -42,32 +42,17 @@ public sealed class VersionInGitShapeTests : IDisposable
                 .LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)).Value());
     }
 
-    public static TheoryData<string, Func<string, ISourceAdapter>, VersionInGitRefusal, string> FoldersHoldingARepository => new()
-    {
-        {
-            "a source mod", folder => new FakeSourceAdapter().WithSourceMod(folder), VersionInGitRefusal.AlreadyInitialized,
-            "is already a source mod's source folder."
-        },
-        {
-            "a repository with no main", folder => new FakeSourceAdapter().HoldingAnotherRepository(folder), VersionInGitRefusal.AnotherRepository,
-            "already holds a repository with no main branch, made outside Modbench."
-        },
-    };
-
-    [Theory]
-    [MemberData(nameof(FoldersHoldingARepository))]
-    public async Task Init_IntoAFolderThatAlreadyHoldsARepository_RefusesTheMod_AndInitsNothing(
-        string _, Func<string, ISourceAdapter> holding, VersionInGitRefusal refusal, string reason)
+    [Fact]
+    public async Task Init_IntoAFolderThatHoldsAnotherRepository_RefusesTheMod_AndInitsNothing()
     {
         WritePlugin("First.esp", "FirstNpc");
-        WritePlugin("Second.esp", "SecondNpc");
 
-        var result = await Init(TestAdapters.Mutagen(), holding(_modFolder));
+        var result = await Init(TestAdapters.Mutagen(), new FakeSourceAdapter().HoldingAnotherRepository(_modFolder));
 
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(
-            (ModName, refusal, $"'{_modFolder}' {reason}"),
+            (ModName, VersionInGitRefusal.AnotherRepository, $"'{_modFolder}' already holds a repository with no main branch, made outside Modbench."),
             (refused.Item, refused.Refusal, refused.Message));
     }
 

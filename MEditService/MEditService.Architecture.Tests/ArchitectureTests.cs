@@ -245,6 +245,42 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
+    public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToReplace()
+    {
+        string[] writers = ["PluginWriter.cs", "PluginTrees.cs", "CreatePluginHandler.cs"];
+
+        string[] filesDeclaringAndImplementingTheVerbs = [.. PluginBinaryWriters, "IPluginAdapter.cs"];
+        var writesIncludingCreateAndWrite = Offenders(
+            ServiceProjects.SolutionDirectory(), Projects, ["PluginAdapter", "WriteAsync("],
+            filesDeclaringAndImplementingTheVerbs);
+
+        var offenders = Unallowed(writesIncludingCreateAndWrite, writers).ToList();
+        Assert.True(offenders.Count == 0,
+            "A plugin binary is replaced by writing a temp file and renaming it over the binary, and the "
+            + "adapter's write verb writes in place. Only PluginWriter (which renames), PluginTrees (which "
+            + "writes a scratch copy) and the create gesture (which writes a file with no existing binary) "
+            + "may call it. It is called in:\n" + string.Join("\n", offenders));
+
+        var dead = DeadAllowances(writers, writesIncludingCreateAndWrite).ToList();
+        Assert.True(dead.Count == 0,
+            "Allowances naming no such call — delete them rather than leaving a plugin write pre-authorized:\n"
+            + string.Join("\n", dead));
+    }
+
+    [Fact]
+    public void TheWriteVerbScan_NamesOnlyTheFileCarryingEveryNeedle()
+    {
+        using var root = new ScratchDirectory("medit-arch-");
+        ScratchFiles.Plant(root, "P/Both.cs", "var h = new Holder(); renamed.Apply(x);");
+        ScratchFiles.Plant(root, "P/OnlyType.cs", "var h = new Holder();");
+        ScratchFiles.Plant(root, "P/OnlyCall.cs", "renamed.Apply(x);");
+
+        var offenders = Offenders(root, ["P"], ["Holder", ".Apply("], allowedFiles: []);
+
+        Assert.Equal([Path.Combine("P", "Both.cs")], offenders);
+    }
+
+    [Fact]
     public void TestDataPlugins_AreExactlyTheAllowlist_BecauseTheRepoIsPublic()
     {
         var testData = Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.TestSupport", "TestData");
@@ -260,10 +296,13 @@ public sealed class ArchitectureTests
         ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     private static List<string> Offenders(string root, IReadOnlyList<string> projects, string needle, string[] allowedFiles) =>
+        Offenders(root, projects, [needle], allowedFiles);
+
+    private static List<string> Offenders(string root, IReadOnlyList<string> projects, string[] needles, string[] allowedFiles) =>
         [.. projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(f => !allowedFiles.Contains(Path.GetFileName(f)))
-            .Where(f => File.ReadAllText(f).Contains(needle, StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f) is var text && needles.All(n => text.Contains(n, StringComparison.Ordinal)))
             .Select(f => Path.GetRelativePath(root, f))];
 
 }

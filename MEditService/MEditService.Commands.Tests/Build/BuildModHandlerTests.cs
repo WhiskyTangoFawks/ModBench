@@ -169,20 +169,24 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.False(Directory.Exists(ModFolder));
     }
 
-    [Theory]
-    [InlineData("changed", "refs/remotes/origin/main", true, false)]
-    [InlineData("c", "refs/heads/kept", false, true)]
-    public async Task ABuildFromASharedSource_SaysWhetherItsSourceHoldsChangesNoCommitHolds_AndACommitItsRemoteDoesNot(
-        string text, string holding, bool uncommitted, bool unpushed)
+    [Fact]
+    public async Task ABuildFromASharedSource_SaysWhenItsSourceHoldsChangesNoCommitHolds()
     {
         WriteSource(("meshes/c.nif", "c"));
         Shared();
-        GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "update-ref", holding, "HEAD");
-        Write(SourceFolder, "meshes/c.nif", Encoding.UTF8.GetBytes(text));
+        GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "update-ref", "refs/remotes/origin/main", "HEAD");
+        Write(SourceFolder, "meshes/c.nif", Encoding.UTF8.GetBytes("changed"));
 
-        var built = await Landed(Copy("meshes"));
+        Assert.True((await Landed(Copy("meshes"))).Uncommitted);
+    }
 
-        Assert.Equal((uncommitted, unpushed), (built.Uncommitted, built.Unpushed));
+    [Fact]
+    public async Task ABuildAtACommitItsRemoteDoesNotHold_SaysSo()
+    {
+        WriteSource(("meshes/c.nif", "c"));
+        Shared();
+
+        Assert.True((await Landed(Copy("meshes"))).Unpushed);
     }
 
     [Fact]

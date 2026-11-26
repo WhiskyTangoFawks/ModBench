@@ -267,6 +267,16 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     [Fact]
+    public void MoveLastWritten_ForATreeNameSpelledInAnotherCase_IsAccepted()
+    {
+        Directory.Move(PluginSourceRoot.In(_sourceMod, Old.Name), Path.Combine(_sourceMod, "plugin-source", "OLD.ESP"));
+
+        var result = Moving.MoveLastWritten(Old, "OLD.ESP", "New.esp");
+
+        Assert.Null(result.Refusal);
+    }
+
+    [Fact]
     public void MoveLastWritten_ForATreeNameThatIsNoSpellingOfThePlugin_RefusesIt_AndMovesNothing()
     {
         var result = Moving.MoveLastWritten(Old, "Other.esp", "New.esp");

@@ -56,6 +56,27 @@ public sealed class VersionInGitTests
     }
 
     [Fact]
+    public async Task InitMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
+    {
+        using var modFolder = new ScratchDirectory("medit-initservice-alreadysource-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-alreadysource-data-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("SomeNpc");
+        CompiledPluginTemplates.WriteCompiledPlugin(modFolder, mod);
+
+        var loadOrder = SnapshotPlugins.Snapshot(
+            dataFolder, dataFolder, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
+
+        byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
+        File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
+        var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, VersionInGitRefusal.AlreadyInitialized), (result.Applied, result.Refusal));
+    }
+
+    [Fact]
     public async Task InitMod_OfAMod_TakesOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
         using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
@@ -196,8 +217,8 @@ public sealed class VersionInGitTests
         var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new ForgedTreeWriteAdapter(DeserializeThenAddAnNpc))).Only();
 
         Assert.Equal((false, VersionInGitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.StartsWith($"{plugin.FileName} does not round-trip through its own source: ", result.Message, StringComparison.Ordinal);
         Assert.Contains("ExtraNpc", result.Message, StringComparison.Ordinal);
-        Assert.Contains("not present in the original", result.Message, StringComparison.Ordinal);
     }
 
     private static async Task<IMod> DeserializeThenAddAnNpc(string folder, CancellationToken cancel)
