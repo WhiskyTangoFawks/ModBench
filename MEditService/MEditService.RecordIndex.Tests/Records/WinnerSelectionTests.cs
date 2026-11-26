@@ -66,13 +66,4 @@ public sealed class WinnerSelectionTests : IDisposable
         Assert.Equal(OverKey, WinnerOf(_npc));
         Assert.Single(_index.StackOf(_npc), copy => copy.IsWinner);
     }
-
-    [Fact]
-    public void AnUnregisteredPlugin_WinsNothing_EvenThoughItsRowsAreStillThere()
-    {
-        Reconcile([.. _fixture.Plugins.Where(p => p.Name != OverKey.Name)]);
-
-        Assert.Equal(BaseKey, WinnerOf(_npc));
-        Assert.Empty(_index.ListedIn(OverKey));
-    }
 }

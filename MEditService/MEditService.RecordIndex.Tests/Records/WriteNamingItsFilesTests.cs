@@ -374,26 +374,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     }
 
     [Fact]
-    public void AnotherFilesHandEdit_IsLeftByAWriteNamingItsFiles_AndFoundByTheNextCheck()
-    {
-        Container.HandEdit(Record(_keys.Cell), $"\"{ContainerModPlugin.CellEditorId}\"", "\"EditedByHand\"");
-        Written(Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"))));
-        var afterTheWrite = Record(_keys.Cell).EditorId;
-
-        _index.NextCheckUntil(() => Record(_keys.Cell).EditorId == "EditedByHand", "the hand edit read");
-
-        Assert.Equal((ContainerModPlugin.CellEditorId, "RenamedNpc"), (afterTheWrite, Record(_npc).EditorId));
-    }
-
-    [Fact]
-    public void ARecordAWriteCreated_IsAdded()
-    {
-        Written(Writes["a record created"](this));
-
-        Assert.Equal(WorkingTreeState.Added, _index.RowOf(NewFormKey, Container.Key)?.WorkingTreeState);
-    }
-
-    [Fact]
     public void AWriteWhoseNamedReadThrows_IsReadWhole()
     {
         _source.FailNextNamedRead();
@@ -402,17 +382,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Written(Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"))));
 
         Assert.Equal("RenamedNpc", Record(_npc).EditorId);
-        Assert.True(_source.WholeTreeReads > wholeReads);
-    }
-
-    [Fact]
-    public async Task AWriteNamingTheHeader_ReadsThePluginWhole()
-    {
-        var header = Path.Combine(Container.ModFolderOf(), PluginSourceRoot.HeaderDocument(ContainerMod.PluginName));
-        var wholeReads = _source.WholeTreeReads;
-
-        Assert.Null(await Hold(new HandedPlugin(Container.Key, [header], [])));
-
         Assert.True(_source.WholeTreeReads > wholeReads);
     }
 

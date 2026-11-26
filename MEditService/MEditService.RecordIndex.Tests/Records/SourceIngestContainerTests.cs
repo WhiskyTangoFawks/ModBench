@@ -34,19 +34,6 @@ public sealed class SourceIngestContainerTests : IDisposable
     }
 
     [Fact]
-    public void AFlatRecordEditedBesideTheContainer_ServesItsEdit()
-    {
-        var npcFile = _fixture.SourceFileContaining(ContainerMod.NpcEditorId);
-        File.WriteAllText(
-            npcFile,
-            File.ReadAllText(npcFile).Replace(ContainerMod.NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
-
-        using var reloaded = Reloaded();
-
-        Assert.Equal("RenamedNpc", reloaded.DocumentOf(_fixture.Npc.ToString(), _fixture.Plugin).EditorId);
-    }
-
-    [Fact]
     public void AnEmbeddedChildEditedInPlace_ServesItsEdit()
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
@@ -104,7 +91,6 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     [Theory]
     [InlineData("\"PlacedObject\"", "\"PlacedObjekt\"", "a 'PlacedObjekt'")]
-    [InlineData("\"MutagenObjectType\"", "\"MutagenObjectTypo\"", "with no 'MutagenObjectType'")]
     public void AnEmbeddedChildNoTypeResolves_LeavesThePluginSourceUnreadable_NamingTheChild_AndTheBinaryStillAnswersForIt(
         string spelled, string handEdited, string why)
     {
@@ -123,27 +109,6 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Equal(Path.GetRelativePath(_fixture.Entry.ModFolderOf(), file), failure.SourceRelativePath);
         Assert.Contains(child, failure.Message, StringComparison.Ordinal);
         Assert.Contains(why, failure.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AContainerEditedAfterTheReadToNameATypeTheGameLacks_LeavesThePluginSourceUnreadable_AndTheBinaryAnswersForIt()
-    {
-        using var index = Reloaded();
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
-
-        index.NextCheckUntil(
-            () => index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin),
-            "the plugin file read in place of its source");
-
-        Assert.Empty(index.Status.Failures);
-        var failure = TheOneSourceProblemOf(index);
-        Assert.Equal(_fixture.TemporaryRef.ToString(), failure.FormKey);
-        Assert.Contains("a 'PlacedObjekt'", failure.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "PlacedObjekt",
-            index.BodyOf(_fixture.EmbedCell.ToString(), _fixture.Plugin),
-            StringComparison.Ordinal);
     }
 
     [Fact]

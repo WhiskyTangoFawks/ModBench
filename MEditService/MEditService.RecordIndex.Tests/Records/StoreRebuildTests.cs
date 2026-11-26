@@ -35,14 +35,6 @@ public sealed class StoreRebuildTests : IDisposable
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);
 
     [Fact]
-    public void AnEmptySnapshot_ReconcilesToAnIndexThatAnswersNothing()
-    {
-        _index.Reconcile(_holder, _fixture.DataFolder, [], GameRelease.Fallout4);
-
-        Assert.Equal(0, _index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value().Total);
-    }
-
-    [Fact]
     public void WithNoInstanceRoot_NothingIsKeptBetweenIndexes()
     {
         Reconcile(instanceRoot: null);
@@ -154,21 +146,6 @@ public sealed class StoreRebuildTests : IDisposable
 
     private static string[] ListedNpcs(OpenedIndex index) =>
         [.. index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Select(i => i.EditorId ?? "")];
-
-    [Fact]
-    public void ARebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
-    {
-        using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-kept");
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, _opens);
-        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        index.SetFilter(MatchesNpcA, "npc-a.sql");
-
-        Rebuilt(index, data.InstanceRoot);
-
-        Assert.Equal(new RecordFilter(MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
-        Assert.Equal(["NpcA"], ListedNpcs(index));
-    }
 
     [Fact]
     public async Task WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter()

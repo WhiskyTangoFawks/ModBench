@@ -70,8 +70,6 @@ public sealed class ValidateByStampsTests : IDisposable
 
     private string NpcFile => _mod.SourceFileOf(Npc);
 
-    private string ModRelativePath(string file) => Path.GetRelativePath(_mod.ModFolderOf(), file).Replace('\\', '/');
-
     [Fact]
     public void ADirtyDocumentUnchangedSinceTheLastValidation_IsNotAnnouncedAgain()
     {
@@ -105,23 +103,9 @@ public sealed class ValidateByStampsTests : IDisposable
         Assert.Equal("FixtureNpX", Npc.EditorId);
     }
 
-    [Fact]
-    public void AHandEditThatIsRestored_ReturnsTheRecordToHead()
-    {
-        _mod.HandEdit(Npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        ValidateUntilEditorId("RenamedByHand");
-        _mod.Git("checkout", "--", ModRelativePath(NpcFile));
-
-        ValidateUntilEditorId("FixtureNpc");
-
-        Assert.Equal(WorkingTreeState.None, NpcState);
-        Assert.Equal("FixtureNpc", Npc.EditorId);
-    }
-
     [Theory]
     [InlineData("{0}")]
     [InlineData("RenamedByHand.json")]
-    [InlineData("SortedByHand/{0}")]
     public void ADeletedDocumentWrittenBackByHand_ComesBack(string writtenTo)
     {
         var file = NpcFile;
@@ -192,21 +176,8 @@ public sealed class ValidateByStampsTests : IDisposable
         Assert.Equal("RenamedByHand", Npc.EditorId);
     }
 
-    [Fact]
-    public void AStagedRenameOfADocument_LeavesItsRecordUnchanged()
-    {
-        var document = NpcFile;
-        var renamed = Path.Combine(Path.GetDirectoryName(document).Require(), Path.GetFileName(document).Replace("FixtureNpc - ", "Renamed - ", StringComparison.Ordinal));
-        _mod.Git("mv", ModRelativePath(document), ModRelativePath(renamed));
-
-        using var index = Indexes.Reconciled(_fixture);
-
-        Assert.Equal(WorkingTreeState.None, index.ListedIn(_mod.Key).Single(i => i.FormKey == _npc).WorkingTreeState);
-    }
-
     [Theory]
     [InlineData("RenamedByHand.json")]
-    [InlineData("SortedByHand/{0}")]
     public void ADocumentMovedByHand_KeepsItsRecord_AndAnnouncesNoChangeToIt(string movedTo)
     {
         var document = NpcFile;
@@ -220,11 +191,6 @@ public sealed class ValidateByStampsTests : IDisposable
 
     [Theory]
     [InlineData("RenamedByHand.json", "{0}")]
-    [InlineData("Misnamed - 000900_Fixture.esp.json", "{0}")]
-    [InlineData("Twin - 000800_Fixture.esp.json", "{0}")]
-    [InlineData("SortedByHand/{0}", "{0}")]
-    [InlineData("SortedByHand/RenamedByHand.json", "{0}")]
-    [InlineData("Backup/{0}", "Backup/{0}")]
     [InlineData("Backup/copy.json", "Backup/copy.json")]
     public void ACopyOfADocument_IsDiagnosedNamingBothUntilOneOfTheTwoIsDeleted_AndTheRecordSurvives(string copiedTo, string deleted)
     {

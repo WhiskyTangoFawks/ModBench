@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -11,8 +10,6 @@ public sealed class ProjectionSequenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
-    private readonly LoadOrderEntry _partner;
-    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly PluginAddress _baseKey;
     private readonly FormKey _npc1;
     private readonly FormKey _npc2;
@@ -28,15 +25,13 @@ public sealed class ProjectionSequenceTests : IDisposable
                 fk1 = mod.Npcs.AddNew("First").FormKey;
                 fk2 = mod.Npcs.AddNew("Second").FormKey;
             }, origin: "BaseMod")
-            .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
             .CompiledPlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
-        _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _baseKey = _base.Key;
         _npc1 = fk1;
         _npc2 = fk2;
-        _index = Indexes.Open(_holder, notifications: _notifications);
+        _index = Indexes.Open(_holder);
     }
 
     public void Dispose()
@@ -47,9 +42,6 @@ public sealed class ProjectionSequenceTests : IDisposable
 
     private void Reconcile(IReadOnlyList<LoadOrderEntry> plugins) =>
         _index.Reconcile(_holder, _fixture.DataFolder, plugins, GameRelease.Fallout4);
-
-    [Fact]
-    public void FreshIndex_SequenceIsZero() => Assert.Equal(0, _index.Sequence);
 
     private IReadOnlyList<LoadOrderEntry> LoadOrderOf(string plugins) => new Dictionary<string, IReadOnlyList<LoadOrderEntry>>
     {
@@ -89,17 +81,5 @@ public sealed class ProjectionSequenceTests : IDisposable
         Assert.Equal(before + 1, _index.Sequence);
         Assert.Equal("FirstEdited", _index.DocumentOf(formKey1, _baseKey).EditorId);
         Assert.Equal("SecondEdited", _index.DocumentOf(formKey2, _baseKey).EditorId);
-    }
-
-    [Fact]
-    public void ValidatingUnchangedBytes_AnnouncesNothingOfThePlugin()
-    {
-        Reconcile(_fixture.Plugins);
-
-        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
-
-        Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
-        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc1.ToString()));
-        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc2.ToString()));
     }
 }

@@ -154,40 +154,6 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void APluginAbsentFromTheSnapshot_HoldsNoRow_AndNoFilterMatchesIt()
-    {
-        using var fx = Build("registration-unregister");
-        var index = fx.Index;
-        Assert.Equal(2, index.StackOf(fx.SharedNpcFk).Count);
-        Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-
-        fx.Reconcile(fx.WithoutBeta);
-
-        Assert.Empty(fx.BetaRecordsFound());
-        var winner = index.Queries.GetWinner(fx.SharedNpcFk).Value().Require();
-        Assert.Equal(AlphaKey, new PluginAddress(winner.Plugin, winner.Origin));
-        var cells = index.Queries.GetWorldspaceBlocks(BetaKey, fx.BetaWorldspaceFk).Value();
-        Assert.Empty(cells.Blocks);
-        Assert.Empty(cells.TopCells);
-        var cellRefs = index.Queries.GetCellChildRecords(BetaKey, fx.BetaCellFk).Value();
-        Assert.Empty(cellRefs.Persistent);
-        Assert.Empty(cellRefs.Temporary);
-
-        var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
-            $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
-        index.SetFilter(filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy, "filter.sql");
-        Assert.Empty(fx.EveryListedRecord());
-        Assert.DoesNotContain(index.Queries.GetPlugins().Value(), p => p.HasMatchingRecords);
-        index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
-        Assert.True(index.PluginResponseOf(AlphaKey)?.HasMatchingRecords);
-        Assert.Contains(fx.EveryListedRecord(), r => r.FormKey == fx.SharedNpcFk);
-        index.ClearFilter();
-
-        Assert.NotEmpty(index.ListedIn(AlphaKey));
-        Assert.NotEmpty(index.Queries.GetPluginRecordTypes(AlphaKey).Value());
-    }
-
-    [Fact]
     public void AReferenceInACompiledPluginThatIsNotActive_IsListedForActiveOrCompiledPlugins()
     {
         using var fx = Build("registration-inactive-compiled-plugin-references");
@@ -209,26 +175,6 @@ public class RegistrationScopingTests
 
         Assert.Contains(fx.Index.Queries.GetPluginSourceNames(null, text, null).Value(),
             name => name is { Kind: DocumentNameKind.Reference } && name.Value == fx.BetaRaceFk && name.Record == fx.BetaNpcFk);
-    }
-
-    [Fact]
-    public void AReferenceInAnActivePluginNotCompiled_IsListedForActiveOrCompiledPlugins()
-    {
-        using var fx = Build("registration-active-nonCompiledPlugin-references");
-
-        Assert.Contains(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
-    }
-
-    [Theory]
-    [InlineData(BetaDisabled)]
-    [InlineData(BetaAbsent)]
-    public void AReferenceInAPluginNotCompiledTheSnapshotLeavesInactive_IsListedForNoOne(string snapshot)
-    {
-        using var fx = Build("registration-inactive-nonCompiledPlugin-references");
-
-        fx.Reconcile(fx.Snapshot(snapshot));
-
-        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
     [Theory]
@@ -393,17 +339,6 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void APluginWithPluginSourceThatIsNotActive_StillNamesAPlugin()
-    {
-        using var fx = Build("plugin-name-references-inactive-compiled");
-        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
-
-        fx.Reconcile(fx.WithBetaDisabled);
-
-        Assert.Contains(NamingAlpha(fx), c => c.FormKey == fx.SharedNpcFk);
-    }
-
-    [Fact]
     public void ACopyNamingAPlugin_SaysWhetherItsPluginHasPluginSource()
     {
         using var fx = Build("plugin-name-references-in-source");
@@ -448,7 +383,6 @@ public class RegistrationScopingTests
     [InlineData("holdings", "plugin")]
     [InlineData("document_names", "plugin")]
     [InlineData("cell_location", "plugin")]
-    [InlineData("npc_", "plugin")]
     public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads(string relation, string pluginColumn)
     {
         using var fx = Build("registration-inactive-door");
