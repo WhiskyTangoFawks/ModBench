@@ -2,8 +2,8 @@
 """Reads the test reports under a directory (see reports.py), names each test over 100 ms, and prints each
 box's summed test time and the run's wall time against its budget in the budget file. Once FAILS_THE_RUN is on,
 a Linux run fails on a box over its budget or without one, and on a test over the 1 s ceiling the file does
-not approve; the Windows run fails only on its wall time. An approval whose tests all ran under the ceiling
-is reported as lapsed and fails nothing."""
+not approve. Once WINDOWS_FAILS_THE_RUN is on, the Windows run fails on its wall time, and on nothing else.
+An approval whose tests all ran under the ceiling is reported as lapsed and fails nothing."""
 import sys
 import tomllib
 from pathlib import Path
@@ -13,6 +13,7 @@ import reports
 SLOW_SECONDS = 0.1
 CEILING_SECONDS = 1.0
 FAILS_THE_RUN = False
+WINDOWS_FAILS_THE_RUN = False
 # The source scans, the gates' own tests and the integration tests: the budget file's `other` holds them.
 NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
 OTHER = 'the tests of no box'
@@ -83,6 +84,14 @@ def report_budgets(times: list[tuple[str, float]], boxes: dict[str, float], othe
     return failing
 
 
+def report_wall(elapsed: float, budget: float) -> bool:
+    """Whether the run is over its budget."""
+    over = elapsed > budget
+    late = f': OVER BUDGET by {elapsed - budget:.0f} s' if over else ''
+    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget{late}')
+    return over
+
+
 def main(argv: list[str] | None = None) -> int:
     """The run is a budget file's key under [wall]: branch, merge or windows."""
     directory, elapsed_argument, budgets_file, run = sys.argv[1:] if argv is None else argv
@@ -94,19 +103,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f'{seconds:7.2f} s  {name}')
     print(f'--- {len(slow)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
     times = box_times(results)
-    failing = 0
     if run == WINDOWS:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
-    else:
-        failing = (report_ceiling(results, slow, budgets.get('approved', {}))
-                   + report_budgets(times, budgets['boxes'], budgets['other']))
-    wall = budgets['wall'][run]
-    over = elapsed > wall
-    late = f': OVER BUDGET by {elapsed - wall:.0f} s' if over else ''
-    print(f'Wall time {elapsed:.0f} s of {wall:.0f} s budget{late}')
-    failing += run == WINDOWS and over
+        return int(report_wall(elapsed, budgets['wall'][run]) and WINDOWS_FAILS_THE_RUN)
+    failing = (report_ceiling(results, slow, budgets.get('approved', {}))
+               + report_budgets(times, budgets['boxes'], budgets['other']))
+    report_wall(elapsed, budgets['wall'][run])
     return int(FAILS_THE_RUN and bool(failing))
+
 
 if __name__ == '__main__':
     sys.exit(main())

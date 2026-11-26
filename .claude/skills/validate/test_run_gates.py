@@ -221,7 +221,7 @@ fi
         switched = self.validate / script
         switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
 
-    def plant_an_http_tests_budget_of_4_s(self) -> None:
+    def plant_an_http_tests_budget_of_4_s_and_switch_it_on(self) -> None:
         self.write(".claude/skills/validate/test-budgets.toml",
                    'other = 60\n[boxes]\n"MEditService.Http.Tests" = 4\n[wall]\nbranch = 300\nmerge = 600\nwindows = 900\n')
         self.switch_on("check_test_times.py")
@@ -283,7 +283,7 @@ class TimeReport(FakeDotnet):
         self.assertIn("--- BACKEND TEST-ONLY CODE REPORT FAILED ---", self.run_with_the_switch_of("check_test_only_code.py").stdout)
 
     def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self) -> None:
-        self.plant_an_http_tests_budget_of_4_s()
+        self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
         self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
         self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
@@ -339,8 +339,8 @@ class FrontendDependencies(FakeDotnet):
 class MergeToMain(FakeDotnet):
     MODE = "--merge-to-main"
 
-    def test_a_box_over_its_budget_fails_the_run_once_the_switch_is_on_and_the_wall_time_reads_against_ten_minutes(self):
-        self.plant_an_http_tests_budget_of_4_s()
+    def test_a_box_over_its_budget_fails_the_run_once_the_switch_is_on_and_the_wall_time_reads_against_the_merge_budget(self):
+        self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
         run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed", 5))
         self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")

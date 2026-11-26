@@ -65,10 +65,12 @@ class Main(Reports):
             with self.subTest(run=run, elapsed=elapsed):
                 self.assertIn(line, self.main(elapsed, run)[1])
 
-    def test_the_windows_run_over_its_wall_budget_fails_once_the_switch_is_on_and_a_linux_run_over_its_own_never_does(self):
-        for run, elapsed, switch, status in (('windows', 950, False, 0), ('windows', 950, True, 1), ('windows', 850, True, 0),
-                                             ('merge', 700, True, 0), ('branch', 400, True, 0)):
-            with self.subTest(run=run, elapsed=elapsed, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
+    def test_the_windows_run_over_its_wall_budget_fails_once_its_own_switch_is_on_and_a_linux_run_over_its_own_never_does(self):
+        for run, elapsed, switch, windows_switch, status in (('windows', 950, True, False, 0), ('windows', 950, False, True, 1),
+                                                             ('windows', 850, True, True, 0), ('merge', 700, True, True, 0),
+                                                             ('branch', 400, True, True, 0)):
+            with (self.subTest(run=run, elapsed=elapsed, switch=switch, windows_switch=windows_switch),
+                  mock.patch.object(ctt, 'FAILS_THE_RUN', switch), mock.patch.object(ctt, 'WINDOWS_FAILS_THE_RUN', windows_switch)):
                 self.assertEqual(self.main(elapsed, run)[0], status)
 
 
@@ -137,9 +139,9 @@ class Boxes(Reports):
             with self.subTest(budgets=budgets, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
                 self.assertEqual(self.with_budgets(budgets)[0], status)
 
-    def test_the_windows_run_prints_each_boxs_summed_time_most_first_and_fails_on_no_box_and_no_ceiling_though_the_switch_is_on(self) -> None:
+    def test_the_windows_run_prints_each_boxs_summed_time_most_first_and_fails_on_no_box_and_no_ceiling_though_both_switches_are_on(self) -> None:
         overrun = 'other = 1\n[boxes]\n"B.Tests" = 1\n'
-        with mock.patch.object(ctt, 'FAILS_THE_RUN', True):
+        with mock.patch.object(ctt, 'FAILS_THE_RUN', True), mock.patch.object(ctt, 'WINDOWS_FAILS_THE_RUN', True):
             status, printed = self.main(10, 'windows', overrun)
         self.assertIn('--- 4 TESTS OVER 100 ms ---\n    2.0 s  B.Tests\n    1.5 s  plugins\n    1.2 s  hooks\n    0.5 s  webview\n'
                       'Wall time 10 s of 900 s budget\n', printed)
