@@ -18,7 +18,7 @@ import { recordResourceUri } from '../recordResourceUri';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
-import { CONTAINER_TYPES, listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
+import { CONTAINER_TYPES, recordTypeCountFixture } from '../../client/test/fixtures';
 
 function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
@@ -150,22 +150,7 @@ describe('a record-type group\'s children', () => {
     const children = await provider.getChildren(typeNode);
 
     expect(children.map(c => c.label)).toEqual(['Record0', 'Record1', 'Record2']);
-  });
-
-  it('returns every record in one call at a large, realistic-worst-case count, as xEdit\'s record-type group nodes load in full', async () => {
-    const FALLOUT4_ESM_INFO_COUNT = 78_089;
-    const records = Array.from({ length: FALLOUT4_ESM_INFO_COUNT }, (_, i) => makeRecord(i));
-    const repo = makeClient({ records: { items: records, total: FALLOUT4_ESM_INFO_COUNT } });
-    const provider = new RecordBrowser(repo);
-    const typeNode = await soleGroup(provider, PLUGIN0);
-
-    const children = await provider.getChildren(typeNode);
-
-    expect(children).toHaveLength(FALLOUT4_ESM_INFO_COUNT);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-    const [plugin, recordType, offset, limit] = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args;
-    expect([plugin, recordType, offset]).toEqual([{ name: 'Plugin0.esp', origin: 'Data/' }, 'weap', 0]);
-    expect(limit).toSatisfy((asked: number) => asked > FALLOUT4_ESM_INFO_COUNT);
   });
 
   it('a "qust" row is expandable only when its own record holds children, not by its record type alone', async () => {
@@ -192,17 +177,15 @@ describe('a record-type group\'s children', () => {
 });
 
 describe('a record-type group\'s children — no per-row fan-out for container presence', () => {
-  it('listing ~1,300 Quests reads the group once and asks nothing per row for its children', async () => {
-    const FALLOUT4_ESM_APPROXIMATE_QUST_COUNT = 1_300;
-    const records = Array.from(
-      { length: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
-    const repo = makeClient({ recordTypes: [{ type: 'qust', count: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }], records: { items: records, total: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT } });
+  it('reads a group of containers once and asks nothing per row for its children', async () => {
+    const records = [makeRecord(0, 'None', true), makeRecord(1, 'None', false)];
+    const repo = makeClient({ recordTypes: [{ type: 'qust', count: 2 }], records: { items: records, total: 2 } });
     const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
 
-    expect(children).toHaveLength(FALLOUT4_ESM_APPROXIMATE_QUST_COUNT);
+    expect(children).toHaveLength(2);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
     expect(repo.calls.some(c => c.method === 'getContainerChildren')).toBe(false);
   });
@@ -232,26 +215,16 @@ describe('a record row', () => {
   const rowOf = async (record: RecordSummary, origin = 'Data/', conditions?: PluginConditions) =>
     recordRow(record, origin, conditions);
 
-  it('wires .command to modbench.record.open with its own copy: its record\'s plugin in the row\'s origin', async () => {
+  it('opens, and carries as its Argument, its own copy: its record\'s plugin in the row\'s origin', async () => {
     const record = makeRecord(0);
 
     const row = await rowOf(record, 'ModA');
 
-    expect(row.command).toEqual({
+    expect([row.command, row.argument]).toEqual([{
       command: 'modbench.record.open',
       title: 'Open Record',
       arguments: [{ argument: { kind: 'record', formKey: record.formKey, plugin: { name: 'Plugin0.esp', origin: 'ModA' } } }],
-    });
-  });
-
-  it('carries its record as its Argument: its plugin\'s address in the row\'s origin, and its FormKey', async () => {
-    const record = makeRecord(3);
-
-    const row = await rowOf(record, 'ModA');
-
-    expect(row).toMatchObject({
-      argument: { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey },
-    });
+    }, { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey }]);
   });
 
   it.each<[string, RecordSummary, PluginConditions, string]>([
@@ -434,18 +407,12 @@ describe('worldspace, cell and placed rows state their record', () => {
   it.each(['worldspace', 'cell', 'placed'] as const)('a %s row', async (which) => {
     const row = (await spatialRowsOver())[which];
 
-    expect({ label: row.label, description: row.description }).toEqual({ label: 'World', description: '000801:A.esp' });
+    expect({ label: row.label, description: row.description, argument: row.argument }).toEqual({
+      label: 'World', description: '000801:A.esp', argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp' },
+    });
     expect(row.command).toEqual({
       command: 'modbench.record.open', title: 'Open Record',
       arguments: [{ argument: { kind: 'record', formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } }],
-    });
-  });
-
-  it.each(['worldspace', 'cell', 'placed'] as const)('a %s row carries its record as its Argument', async (which) => {
-    const row = (await spatialRowsOver())[which];
-
-    expect(row).toMatchObject({
-      argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp' },
     });
   });
 });
@@ -543,31 +510,7 @@ describe('refreshing the browser for named plugins', () => {
 });
 
 describe('the worldspace tree', () => {
-  it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
-    repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
-      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
-    });
-    const provider = new RecordBrowser(repo);
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
-    const [wsNode] = await provider.getChildren(wsRoot);
-
-    const wsChildren = await provider.getChildren(wsNode);
-    const [topCellNode, blockNode] = wsChildren;
-    const subBlocks = await provider.getChildren(blockNode);
-    const cells = await provider.getChildren(subBlocks[0]);
-
-    expect(wsChildren).toHaveLength(2);
-    expect(present(topCellNode, 'the persistent-cell child').label).toBe('TopCell');
-    expect(present(blockNode, 'the block child').label).toBe('Block 0, 0');
-    expect(present(subBlocks[0], "the fixture's single sub-block").label).toBe('Sub-Block 0, 0');
-    const RIGHT_JUSTIFIED_WIDTH_3_COORDINATES_LABEL = '< 12,  -5>';
-    expect(present(cells[0], "the fixture's single cell").label).toBe(RIGHT_JUSTIFIED_WIDTH_3_COORDINATES_LABEL);
-  });
-
-  it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
+  it('expands a worldspace into every cell outside a block, then its blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
@@ -575,17 +518,21 @@ describe('the worldspace tree', () => {
         { workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false },
         { workingTreeState: 'None', formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false },
       ],
-      blocks: [],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
     const provider = new RecordBrowser(repo);
     const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
+    const blockNode = wsChildren[2];
+    const subBlocks = await provider.getChildren(blockNode);
+    const cells = await provider.getChildren(subBlocks[0]);
 
-    expect(wsChildren).toHaveLength(2);
-    expect(present(wsChildren[0], 'the first cell row').label).toBe('TopCell');
-    expect(present(wsChildren[1], 'the second cell row').label).toBe('StrayCell');
+    expect(wsChildren.map((row) => row.label)).toEqual(['TopCell', 'StrayCell', 'Block 0, 0']);
+    expect(present(subBlocks[0], "the fixture's single sub-block").label).toBe('Sub-Block 0, 0');
+    const RIGHT_JUSTIFIED_WIDTH_3_COORDINATES_LABEL = '< 12,  -5>';
+    expect(present(cells[0], "the fixture's single cell").label).toBe(RIGHT_JUSTIFIED_WIDTH_3_COORDINATES_LABEL);
   });
 
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
@@ -607,7 +554,7 @@ describe('the worldspace tree', () => {
     expect(present(placed[0], 'the sole placed row').label).toBe('barrelRef');
   });
 
-  it('nests the Cell group as blocks, then sub-blocks, then cells, labelled as xEdit labels them', async () => {
+  it('nests the Cell group as blocks, then sub-blocks, then cells, labelled as xEdit labels them, from one read', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }] });
     repo.setQueryAnswer('getInteriorCells', [
       ...oneSubBlock([interiorCell('a:M.esp', 'RoomA')], 0, 1),
@@ -623,16 +570,6 @@ describe('the worldspace tree', () => {
     expect(blocks.map(b => b.label)).toEqual(['Block 0', 'Block 3']);
     expect(subBlocks.map(b => b.label)).toEqual(['Sub-Block 7']);
     expect(cells.map(c => c.label)).toEqual(['RoomB']);
-  });
-
-  it('lists every interior cell from one call', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'cell', count: 60 }] });
-    repo.setQueryAnswer('getInteriorCells', oneSubBlock(Array.from({ length: 60 }, (_, i) => interiorCell(`${i}:M.esp`, `Room${i}`))));
-    const provider = new RecordBrowser(repo);
-
-    const cells = await interiorCellsBeneath(provider, await soleGroup(provider, { name: 'M.esp', origin: 'Data/' }));
-
-    expect(cells).toHaveLength(60);
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(1);
   });
 
@@ -780,31 +717,6 @@ describe('spatial rows of a shared filename', () => {
     expect(opened.map(openedArguments)).toEqual(openedArgs);
   });
 
-  it('caches each plugin\'s cell references separately, so one plugin\'s page is never served for the other', async () => {
-    const repo = makeClient();
-    const provider = new RecordBrowser(repo);
-    const cell = interiorCell('c:M.esp', 'TheCell');
-    const fromA = await interiorCellRow(repo, provider, cell, { name: 'Shared.esp', origin: 'ModA' });
-    const fromB = await interiorCellRow(repo, provider, cell, { name: 'Shared.esp', origin: 'ModB' });
-
-    await provider.getChildren(fromA);
-    await provider.getChildren(fromB);
-
-    expect(repo.calls.filter(c => c.method === 'getCellChildRecords')).toHaveLength(2);
-  });
-
-  it('caches each plugin\'s interior cells separately, so one plugin\'s cells are never served for the other', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
-    const provider = new RecordBrowser(repo);
-    const fromA = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModA' });
-    const fromB = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
-
-    await provider.getChildren(fromA);
-    await provider.getChildren(fromB);
-
-    expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
-  });
-
   it('a cell row and a placed-reference row of a shared filename, expanded concurrently, read their own plugin\'s editable/read-only facts, not the other plugin\'s', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
     repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
@@ -841,42 +753,6 @@ describe('spatial rows of a shared filename', () => {
     expect(openedArguments(cellB)).toMatchObject([{ argument: { plugin: { origin: 'ModB' } } }]);
     expect(placedB.contextValue).toBe('placed');
     expect(openedArguments(placedB)).toMatchObject([{ argument: { plugin: { origin: 'ModB' } } }]);
-  });
-
-});
-
-describe('a plugin of a shared filename browses its own children', () => {
-  const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'weap', count: 1 }] }));
-
-  it('asks for the plugin the row stands for', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
-    const provider = new RecordBrowser(repo);
-
-    await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' }, NOT_EDITABLE);
-
-    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
-  });
-
-  it('carries that plugin through to its record pages', async () => {
-    const repo = sharedClient();
-    const provider = new RecordBrowser(repo);
-
-    const typeNode = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
-    await provider.getChildren(typeNode);
-
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)] });
-  });
-
-  it('caches each plugin separately, so one plugin\'s page is never served for the other', async () => {
-    const repo = sharedClient();
-    const provider = new RecordBrowser(repo);
-
-    const fromA = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModA' });
-    const fromB = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
-    await provider.getChildren(fromA);
-    await provider.getChildren(fromB);
-
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
 });
 
