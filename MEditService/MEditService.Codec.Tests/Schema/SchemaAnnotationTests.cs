@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins.Aspects;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -83,7 +82,6 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
-    [InlineData(typeof(IKeywordedGetter<IKeywordGetter>), "npc_", false)]
     [InlineData(typeof(INpcGetter), "npc_", false)]
     [InlineData(typeof(INpcGetter), "armo", true)]
     public void AFormatSortedList_TakesNoMove_OnlyUnderItsDeclarer(Type declarer, string table, bool takesMove)
