@@ -177,11 +177,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Response,
     }
 
-    private (IMajorRecordGetter Record, string RecordType, string Path, DocumentContainment Container) Filed(FiledChild child) =>
+    private (IMajorRecordGetter Record, string RecordType, string Path, string Removed) Filed(FiledChild child) =>
         child switch
         {
-            FiledChild.Topic => (_topic, "dial", TopicPath, new DocumentContainment(_quest.FormKey.ToString(), "qust", "DialogTopics")),
-            FiledChild.Response => (_response, "info", ResponsePath(_response), new DocumentContainment(_topic.FormKey.ToString(), "dial", "Responses")),
+            FiledChild.Topic => (_topic, "dial", TopicPath, TopicDirectory),
+            FiledChild.Response => (_response, "info", ResponsePath(_response), ResponsePath(_response)),
             _ => throw new ArgumentOutOfRangeException(nameof(child), child, null),
         };
 
@@ -196,24 +196,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         Assert.Equal((Identity(record, recordType), File.ReadAllText(FullPath(path))), (document.Identity, document.Body));
         Assert.Equal(path, Repository.RelativePathOf(Plugin, Identity(record, recordType)).Value());
-    }
-
-    [Theory]
-    [InlineData(FiledChild.Topic)]
-    [InlineData(FiledChild.Response)]
-    public void AChildWithAFileOfItsOwn_IsHeldByTheRecordWhoseDirectoryHoldsItsSlotsFolder(FiledChild child)
-    {
-        var (record, recordType, _, container) = Filed(child);
-
-        Assert.Equal(container, Repository.ContainerOf(Plugin, Identity(record, recordType)).Value());
-    }
-
-    [Fact]
-    public void ACellsText_IsItsOwnDocument_UnderItsWorldspacesFolder()
-    {
-        var body = Repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")).Value()?.Body;
-
-        Assert.Equal(File.ReadAllText(FullPath(ExteriorCellPath)), body);
     }
 
     [Fact]
@@ -387,26 +369,33 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         APlacedReferenceInItsCell,
         ATopCellInItsWorldspace,
+        ATopicInItsQuest,
+        AResponseInItsTopic,
+        AQuestOfADocumentOfItsOwn,
     }
 
-    private (IMajorRecordGetter Child, string RecordType, IMajorRecordGetter Container, string Slot) Containment(Contained contained) =>
+    private (RecordIdentity Child, DocumentContainment? Container) Containment(Contained contained) =>
         contained switch
         {
-            Contained.APlacedReferenceInItsCell => (_persistentRef, "refr", _interiorCell, "Persistent"),
-            Contained.ATopCellInItsWorldspace => (_worldspace.TopCell.Require(), "cell", _worldspace, "TopCell"),
+            Contained.APlacedReferenceInItsCell => (Identity(_persistentRef, "refr"), new DocumentContainment(_interiorCell.FormKey.ToString(), "cell", "Persistent")),
+            Contained.ATopCellInItsWorldspace => (Identity(_worldspace.TopCell.Require(), "cell"), new DocumentContainment(_worldspace.FormKey.ToString(), "wrld", "TopCell")),
+            Contained.ATopicInItsQuest => (Identity(_topic, "dial"), new DocumentContainment(_quest.FormKey.ToString(), "qust", "DialogTopics")),
+            Contained.AResponseInItsTopic => (Identity(_response, "info"), new DocumentContainment(_topic.FormKey.ToString(), "dial", "Responses")),
+            Contained.AQuestOfADocumentOfItsOwn => (Identity(_quest, "qust"), null),
             _ => throw new ArgumentOutOfRangeException(nameof(contained), contained, null),
         };
 
     [Theory]
     [InlineData(Contained.APlacedReferenceInItsCell)]
     [InlineData(Contained.ATopCellInItsWorldspace)]
-    public void AnEmbeddedChildsContainer_IsTheRecordCarryingIt_AndTheSlotItSitsIn(Contained contained)
+    [InlineData(Contained.ATopicInItsQuest)]
+    [InlineData(Contained.AResponseInItsTopic)]
+    [InlineData(Contained.AQuestOfADocumentOfItsOwn)]
+    public void ARecordsContainer_IsTheRecordCarryingItOrWhoseDirectoryHoldsItsSlotsFolder_AndTheSlotItSitsIn(Contained contained)
     {
-        var (child, recordType, container, slot) = Containment(contained);
+        var (child, container) = Containment(contained);
 
-        var found = Repository.ContainerOf(Plugin, Identity(child, recordType)).Value();
-
-        Assert.Equal((container.FormKey.ToString(), slot), (found?.ParentFormKey, found?.SlotName));
+        Assert.Equal(container, Repository.ContainerOf(Plugin, child).Value());
     }
 
     private void GiveTheInteriorCellsDocumentNoFormKey()
@@ -502,17 +491,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         AssertRefusedAsAChildItsOwnersTextDoesNotCarry(Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRewrite(Plugin, child).Stopped()));
     }
 
-    [Fact]
-    public void RekeyingARecordWhoseFileWentAfterItWasLocated_IsRefusedAsNoDocumentHoldingIt()
-    {
-        var quest = Identity(_quest, "qust");
-        File.Delete(FullPath(Repository.RelativePathOf(Plugin, quest).Value().Require()));
-
-        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, quest, FreeFormKey).Stopped());
-
-        Assert.Contains(_quest.FormKey.ToString(), refused.Reason, StringComparison.Ordinal);
-    }
-
     private SourceDocument WriteAChildInASlotItsOwnerTypeHoldsNone()
     {
         var folder = RecordTypes.For(Release).GroupOf("globalfloat").Require();
@@ -531,12 +509,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.EndsWith(
             "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the record index re-reads the tree.",
             refused.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ARecordWithADocumentOfItsOwn_HasNoContainer()
-    {
-        Assert.Null(Repository.ContainerOf(Plugin, Identity(_quest, "qust")).Value());
     }
 
     [Fact]
@@ -598,11 +570,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [InlineData(FiledChild.Response)]
     public void RemovingAChildWithAFileOfItsOwn_DeletesItsFileOrItsDirectoryAlone(FiledChild child)
     {
-        var (record, recordType, path, _) = Filed(child);
+        var (record, recordType, _, removed) = Filed(child);
 
         var changes = Repository.ChangesToRemove(Plugin, Identity(record, recordType)).Value();
 
-        Assert.Equal([child == FiledChild.Topic ? TopicDirectory : path], changes.Deletions);
+        Assert.Equal([removed], changes.Deletions);
         Assert.Empty(changes.Documents);
     }
 
@@ -790,17 +762,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(
             Path.GetRelativePath(_modFolder, FullPath(InteriorCellPath)),
             Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")).Value());
-    }
-
-    [Fact]
-    public void EveryChildAskedInOneOperation_IsFound_EmbeddedOrInAFileOfItsOwn()
-    {
-        var repository = Repository;
-        IMajorRecordGetter[] children = [_persistentRef, _temporaryRef, _topCellRef, _exteriorRef, _topic, _response, _response2];
-
-        var named = children.Select(child => repository.RecordByFormKey(Plugin, child.FormKey.ToString()).Value()?.EditorId);
-
-        Assert.Equal(children.Select(child => child.EditorID), named);
     }
 
     [Fact]

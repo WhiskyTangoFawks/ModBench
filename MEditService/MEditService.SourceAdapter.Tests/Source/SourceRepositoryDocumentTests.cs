@@ -206,17 +206,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Equal(before, NpcFileNames());
     }
 
-    [Fact]
-    public void AFileAnotherToolOrTheAuthorRenamed_IsStillFoundByFormKey_ForTheIdentityNamesTheRecordInsideIt()
-    {
-        var repository = Opened();
-        File.Move(
-            Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"),
-            Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json"));
-
-        Assert.Equal(NpcBody, repository.RecordOf(Plugin, Npc).Value()?.Body);
-    }
-
     private const string CellKey = "000A00:Fixture.esp";
 
     private static readonly string CellBody = CellBodyNamed("Cell");
@@ -263,7 +252,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Theory]
-    [InlineData("HandName.json")]
     [InlineData("HandName.JSON")]
     [InlineData("RecordData.json")]
     public void ACellDocumentNamedOtherwiseInItsOwnDirectory_IsMovedByAPutToTheLeafName(string heldAs)

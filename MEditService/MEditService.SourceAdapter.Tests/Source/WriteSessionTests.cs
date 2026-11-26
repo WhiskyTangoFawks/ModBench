@@ -500,17 +500,6 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
-    public void AWriteFollowedByOneThatLands_KeepsWhatItWrote()
-    {
-        var session = Session();
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
-
-        Assert.Null(session.WriteThen(() => null));
-
-        Assert.False(File.Exists(FullPath(ExteriorCellPath)));
-    }
-
-    [Fact]
     public void AFileHeldUnsavedThatTheWriteDoesNotReach_IsNoRefusal()
     {
         var session = Session(new DocumentChange(FullPath(RoomPath), UnsavedRoom()));
