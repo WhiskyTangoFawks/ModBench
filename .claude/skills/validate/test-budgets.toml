@@ -6,6 +6,8 @@ other = 165
 [wall]
 branch = 300
 merge = 600
+# Proposed: the Windows runs measured 982 to 1,022 s before the time gate moved last, then 995 and 950 s.
+# 1,100 s is about 8% over the slowest.
 windows = 1100
 
 [boxes]
