@@ -246,6 +246,8 @@ public sealed class ArchitectureTests
             offenders.Order(StringComparer.Ordinal));
     }
 
+    private static readonly string[] WriteVerbNeedles = ["PluginAdapter", "WriteAsync("];
+
     [Fact]
     public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToReplace()
     {
@@ -253,7 +255,7 @@ public sealed class ArchitectureTests
 
         string[] filesDeclaringAndImplementingTheVerbs = [.. PluginBinaryWriters, "IPluginAdapter.cs"];
         var writesIncludingCreateAndWrite = Offenders(
-            ServiceProjects.SolutionDirectory(), Projects, ["PluginAdapter", "WriteAsync("],
+            ServiceProjects.SolutionDirectory(), Projects, WriteVerbNeedles,
             filesDeclaringAndImplementingTheVerbs);
 
         var offenders = Unallowed(writesIncludingCreateAndWrite, writers).ToList();
@@ -277,7 +279,7 @@ public sealed class ArchitectureTests
         ScratchFiles.Plant(root, "P/OnlyType.cs", "IPluginAdapter adapter;");
         ScratchFiles.Plant(root, "P/OnlyCall.cs", "await writer.WriteAsync(plugin);");
 
-        var offenders = Offenders(root, ["P"], ["PluginAdapter", "WriteAsync("], allowedFiles: []);
+        var offenders = Offenders(root, ["P"], WriteVerbNeedles, allowedFiles: []);
 
         Assert.Equal([Path.Combine("P", "Both.cs")], offenders);
     }
