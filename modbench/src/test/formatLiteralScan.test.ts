@@ -160,8 +160,11 @@ describe('format literals, scanned over the extension and webview trees against 
 const namesFile = (literal: string, name: string): boolean =>
   literal.split(name).slice(1).some((after) => !/^\w/.test(after));
 
+const namesOf = (within: boolean): string[] => LAYOUT_NAMES.filter((name) => (LAYOUT[name]?.matchedWithinLiterals === true) === within).map(escaped);
+const NAMES_THE_LAYOUT = new RegExp(`[\`'"/\\\\](${namesOf(false).join('|')})[\`'"/\\\\$]|${namesOf(true).join('|')}`);
+
 function layoutLeaks(sourceText: string, fileName: string): string[] {
-  if (!LAYOUT_NAMES.some((name) => sourceText.includes(name))) return [];
+  if (!NAMES_THE_LAYOUT.test(sourceText)) return [];
   const segments = pathSegments(sourceText, fileName);
   const literals = stringLiterals(sourceText, fileName, ts.isTemplateLiteralToken);
   return LAYOUT_NAMES.filter((name) => segments.has(name)
