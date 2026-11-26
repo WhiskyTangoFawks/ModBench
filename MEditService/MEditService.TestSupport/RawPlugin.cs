@@ -125,16 +125,6 @@ public static class RawPlugin
         return edited;
     }
 
-    /// <summary>The plugin with <paramref name="flags"/> set in its record <paramref name="formId"/>'s header and its body
-    /// left as it was, as a deleted record that keeps its fields, which Mutagen never writes.</summary>
-    public static byte[] WithRecordFlags(byte[] plugin, uint formId, uint flags)
-    {
-        var at = RecordAt(plugin, formId, (_, _) => { });
-        var flagged = plugin.ToArray();
-        BinaryPrimitives.WriteUInt32LittleEndian(flagged.AsSpan(at + 8), BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 8)) | flags);
-        return flagged;
-    }
-
     // Where record formId starts, each group the walk enters handed to entered.
     private static int RecordAt(byte[] plugin, uint formId, Action<int, int> entered)
     {
