@@ -2,18 +2,28 @@ using System.Text.Json;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>One plugin in one mod, holding one of every kind of record the queries ask about.</summary>
+/// <summary>One plugin in one mod, holding one of every kind of record the queries ask about, and a plugin of another mod
+/// that lists it as a master and overrides its NPC.</summary>
 public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixture>
 {
     public const string UserPlugin = "UserMod.esp";
     public const string UserMod = "UserModFolder";
+    public const string ChildPlugin = "QueriedChild.esp";
+    public const string ChildMod = "QueriedChildMod";
 
     public ScatteredFixtureData Data { get; } = new PluginFixtureBuilder("query-record-index")
         .WithPlugin(UserPlugin, OneOfEveryKind, origin: UserMod)
+        .WithPlugin(ChildPlugin, (mod, built) =>
+        {
+            mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName(UserPlugin) });
+            mod.Npcs.GetOrAddAsOverride(built.Single(m => m.ModKey.FileName == UserPlugin).Npcs.First());
+        }, origin: ChildMod)
         .BuildScattered();
 
     public string DataFolder => Data.DataFolder;
@@ -29,7 +39,11 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
 
     private static void OneOfEveryKind(Fallout4Mod mod)
     {
-        mod.Npcs.AddNew("QueriedNpc").HeightMax = 0.5f;
+        var npc = mod.Npcs.AddNew("QueriedNpc");
+        npc.HeightMax = 0.5f;
+        npc.VirtualMachineAdapter = new VirtualMachineAdapter();
+        npc.VirtualMachineAdapter.Scripts.Add(new ScriptEntry { Name = "Attached" });
+        mod.TextureSets.AddNew("QueriedTextureSet").Diffuse = @"Decals\Stain_d.dds";
         mod.Keywords.AddNew("QueriedKeyword");
         var lever = mod.Activators.AddNew("QueriedLever");
         lever.Name = "Lever";

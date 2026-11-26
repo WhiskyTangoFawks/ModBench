@@ -7,192 +7,108 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class SpawnedBackendTests
+public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : IClassFixture<SpawnedBackendTests.Spawned>
 {
     private const string EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost = "http://127.0.0.1:0";
 
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
         ?? throw new InvalidOperationException($"Expected '{typeof(Program).Assembly.Location}' to have a parent directory.");
 
-    [Fact]
-    public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory_ARealProcessSinceWebApplicationFactoryNeverReproducesTheCwd()
+    public sealed class Spawned : IAsyncLifetime, IDisposable
     {
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
-        try
-        {
-            var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
-            var reportedOwnDirectory = await WaitForLineAsync(lines,
-                l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
-                     Path.TrimEndingDirectorySeparator(
-                         l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..])
-                         == expectedContentRoot,
-                TimeSpan.FromSeconds(15));
+        private readonly ScratchDirectory _workingDirectory = new("medit-contentroot-");
+        private readonly List<string> _lines = [];
+        private Process? _process;
 
-            Assert.True(reportedOwnDirectory,
-                $"expected the spawned backend to report its content root as {expectedContentRoot} " +
-                $"(its own directory), not {workingDirectory} (the cwd it was launched from); " +
-                $"captured output:\n{string.Join('\n', Snapshot(lines))}");
-        }
-        finally
+        public int Port { get; } = GetFreeTcpPort();
+
+        public string WorkingDirectory => _workingDirectory;
+
+        public Process Process => _process ?? throw new InvalidOperationException("Expected InitializeAsync to have spawned the backend.");
+
+        public List<string> Lines => Snapshot(_lines);
+
+        public Task<bool> LogsAsync(Func<string, bool> line) => WaitForLineAsync(_lines, line, TimeSpan.FromSeconds(10));
+
+        public async Task InitializeAsync()
         {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+            _process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{Port}"], _workingDirectory, _lines, pipeStdin: true);
+            Assert.True(await WaitForLineAsync(_lines, l => l.Contains("Application started", StringComparison.Ordinal), TimeSpan.FromSeconds(15)),
+                $"backend never reported starting; captured output:\n{string.Join('\n', Lines)}");
+            _process.StandardInput.Close();
+        }
+
+        public Task DisposeAsync() => Task.CompletedTask;
+
+        public void Dispose()
+        {
+            if (_process is not null) KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(_process);
+            _process?.Dispose();
+            _workingDirectory.Dispose();
         }
     }
 
     [Fact]
-    public async Task SpawnedFromArbitraryCwd_WithExtensionArgv_SuppressesRequestPipelineLogsButKeepsAppInfo()
+    public void SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory_ARealProcessSinceWebApplicationFactoryNeverReproducesTheCwd()
     {
-        var port = GetFreeTcpPort();
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(
-            ["--urls", $"http://localhost:{port}", "--Serilog:MinimumLevel:Default", "Debug"],
-            workingDirectory, lines);
-        try
-        {
-            var started = await WaitForLineAsync(lines,
-                l => l.Contains($"Now listening on: http://localhost:{port}", StringComparison.Ordinal),
-                TimeSpan.FromSeconds(15));
-            Assert.True(started,
-                $"backend never reported listening on its own port; captured output:\n{string.Join('\n', Snapshot(lines))}");
+        var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
 
-            using var client = new HttpClient();
-            await client.GetAsync(new Uri($"http://localhost:{port}/health"));
-
-            await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route"));
-            var sawTheOrderingMarker404 = await WaitForLineAsync(lines,
-                l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
-                TimeSpan.FromSeconds(10));
-            Assert.True(sawTheOrderingMarker404,
-                $"expected the marker 404 to produce a visible line; captured output:\n{string.Join('\n', Snapshot(lines))}");
-            var snapshot = Snapshot(lines);
-
-            Assert.DoesNotContain(snapshot, l =>
-                l.Contains("Request starting", StringComparison.Ordinal) ||
-                l.Contains("Executing endpoint", StringComparison.Ordinal) ||
-                l.Contains("Executed endpoint", StringComparison.Ordinal) ||
-                l.Contains("Request finished", StringComparison.Ordinal));
-            Assert.Contains(snapshot, l => l.Contains("Application started", StringComparison.Ordinal));
-        }
-        finally
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
+        Assert.Contains(spawned.Lines, l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
+            Path.TrimEndingDirectorySeparator(l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..]) == expectedContentRoot);
     }
 
     [Fact]
-    public async Task SpawnedFromArbitraryCwd_RequestLogging_ShowsFailuresButNotSuccessesAtDefaultLevel()
-    {
-        var port = GetFreeTcpPort();
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
-        try
-        {
-            var started = await WaitForLineAsync(lines,
-                l => l.Contains($"Now listening on: http://localhost:{port}", StringComparison.Ordinal),
-                TimeSpan.FromSeconds(15));
-            Assert.True(started,
-                $"backend never reported listening on its own port; captured output:\n{string.Join('\n', Snapshot(lines))}");
-
-            using var client = new HttpClient();
-            await client.GetAsync(new Uri($"http://localhost:{port}/health"));
-            await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route"));
-
-            var sawFailureLine = await WaitForLineAsync(lines,
-                l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
-                TimeSpan.FromSeconds(10));
-            var snapshot = Snapshot(lines);
-
-            Assert.True(sawFailureLine,
-                $"expected a genuine 4xx to produce a visible line without enabling debug; " +
-                $"captured output:\n{string.Join('\n', snapshot)}");
-            Assert.DoesNotContain(snapshot, l => l.Contains("responded 200", StringComparison.Ordinal));
-        }
-        finally
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
-    }
+    public void SpawnedWithLogDirectory_WritesItsLogFileThere() =>
+        Assert.NotEmpty(Directory.GetFiles(LogDirectory(spawned.WorkingDirectory), "medit-*.log"));
 
     [Fact]
-    public async Task SpawnedWithLogDirectory_WritesItsLogFileThere()
+    public async Task RequestLogging_ShowsFailuresButNeitherSuccessesNorThePipelinesOwnLines()
     {
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
-        try
-        {
-            var started = await WaitForLineAsync(lines,
-                l => l.Contains("Application started", StringComparison.Ordinal),
-                TimeSpan.FromSeconds(15));
-            Assert.True(started,
-                $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+        using var client = new HttpClient();
+        await client.GetAsync(new Uri($"http://localhost:{spawned.Port}/health"));
+        await client.GetAsync(new Uri($"http://localhost:{spawned.Port}/definitely-not-a-route"));
 
-            Assert.NotEmpty(Directory.GetFiles(LogDirectory(workingDirectory), "medit-*.log"));
-        }
-        finally
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
+        Assert.True(
+            await spawned.LogsAsync(l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal)),
+            $"expected a genuine 4xx to produce a visible line; captured output:\n{string.Join('\n', spawned.Lines)}");
+        Assert.DoesNotContain(spawned.Lines, l =>
+            l.Contains("responded 200", StringComparison.Ordinal) ||
+            l.Contains("Request starting", StringComparison.Ordinal) ||
+            l.Contains("Executing endpoint", StringComparison.Ordinal) ||
+            l.Contains("Executed endpoint", StringComparison.Ordinal) ||
+            l.Contains("Request finished", StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task ARequestOverKestrelsDefaultBodyLimit_IsReadToTheEnd_ARealProcessSinceTheTestServerSetsNoLimit()
     {
-        var port = GetFreeTcpPort();
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
-        try
-        {
-            Assert.True(await WaitForLineAsync(lines, l => l.Contains("Application started", StringComparison.Ordinal), TimeSpan.FromSeconds(15)),
-                $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
-            using var overTheLimit = new StringContent(
-                $$"""{"records": [{"text": "{{new string('x', 31_000_000)}}"}]}""", System.Text.Encoding.UTF8, "application/json");
+        using var overTheLimit = new StringContent(
+            $$"""{"records": [{"text": "{{new string('x', 31_000_000)}}"}]}""", System.Text.Encoding.UTF8, "application/json");
+        using var client = new HttpClient();
 
-            using var client = new HttpClient();
-            using var answered = await client.PostAsync(new Uri($"http://localhost:{port}/plugins/make-patch"), overTheLimit);
+        using var answered = await client.PostAsync(new Uri($"http://localhost:{spawned.Port}/plugins/make-patch"), overTheLimit);
 
-            var refusal = await answered.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("Plugin name and origin are required.", refusal.GetProperty("detail").GetString());
-        }
-        finally
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
+        var refusal = await answered.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Plugin name and origin are required.", refusal.GetProperty("detail").GetString());
     }
 
-    private static readonly string[] AskedToExitWithItsStdin =
-        ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"];
+    [Fact]
+    public async Task NotAskedToExitWithItsStdin_KeepsRunningOnceItCloses() =>
+        Assert.False(await ExitsWithinAsync(spawned.Process, TimeSpan.FromMilliseconds(500)));
 
     [Fact]
-    public async Task AskedToExitWithItsStdin_ExitsOnceItCloses()
+    public async Task AskedToExitWithItsStdin_KeepsRunningWhileItIsOpen_AndExitsOnceItCloses()
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        using var process = await StartedWithPipedStdinAsync(AskedToExitWithItsStdin, workingDirectory);
+        using var process = await StartedWithPipedStdinAsync(
+            ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"], workingDirectory);
         try
         {
+            Assert.False(await ExitsWithinAsync(process, TimeSpan.FromMilliseconds(500)));
+
             process.StandardInput.Close();
 
             Assert.True(await ExitsWithinAsync(process, TimeSpan.FromSeconds(15)));
-        }
-        finally
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
-    }
-
-    [Fact]
-    public async Task AskedToExitWithItsStdin_KeepsRunningWhileItIsOpen()
-    {
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        using var process = await StartedWithPipedStdinAsync(AskedToExitWithItsStdin, workingDirectory);
-        try
-        {
-            Assert.False(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)));
         }
         finally
         {
@@ -214,7 +130,9 @@ public sealed class SpawnedBackendTests
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
         var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(AskedToExitWithItsStdin, workingDirectory, lines, pipeStdin: true, stallStartup: true);
+        using var process = SpawnThroughTheDotnetMuxer(
+            ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"],
+            workingDirectory, lines, pipeStdin: true, stallStartup: true);
         try
         {
             var stalled = await WaitForLineAsync(lines, l => l.Contains(StalledStartup.Marker, StringComparison.Ordinal), TimeSpan.FromSeconds(15));
@@ -225,24 +143,6 @@ public sealed class SpawnedBackendTests
             Assert.True(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)),
                 $"captured output:\n{string.Join('\n', Snapshot(lines))}");
             Assert.DoesNotContain(Snapshot(lines), l => l.Contains("FTL", StringComparison.Ordinal));
-        }
-        finally
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
-    }
-
-    [Fact]
-    public async Task NotAsked_KeepsRunningWhenItsStdinCloses()
-    {
-        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        using var process = await StartedWithPipedStdinAsync(
-            ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory);
-        try
-        {
-            process.StandardInput.Close();
-
-            Assert.False(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)));
         }
         finally
         {

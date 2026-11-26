@@ -12,7 +12,11 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class SwaggerSchemaTests
 {
-    private static async Task<JsonElement> GetSchemaAsync()
+    private static readonly Lazy<Task<JsonElement>> Schema = new(ReadSchemaAsync);
+
+    private static Task<JsonElement> GetSchemaAsync() => Schema.Value;
+
+    private static async Task<JsonElement> ReadSchemaAsync()
     {
         await using var app = new MEditHost();
         var client = app.CreateClient();
