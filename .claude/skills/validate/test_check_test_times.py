@@ -1,6 +1,5 @@
-"""Pins check_test_times.py: each test over a second is named, slowest first, each box's summed test
-time is printed against its budget, and the wall time against the run's. A box over its budget fails the
-run once the switch is on, and only where budgets are given."""
+"""Pins check_test_times.py: each test over a second is named, each box's summed time is printed
+against its budget, and a box over it fails the run once the switch is on, only where budgets are given."""
 import contextlib
 import io
 import pathlib
