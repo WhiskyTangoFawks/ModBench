@@ -16,6 +16,7 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
     private static readonly PluginAddress Inactive = new("Off.esp", PluginOrigin.DataDirectory);
     private static readonly FormKey Item = new(ModKey.FromFileName(First.Name), 0x800);
     private static readonly FormKey OtherItem = new(ModKey.FromFileName(First.Name), 0x801);
+    private static readonly FormKey ChangedTwice = new(ModKey.FromFileName(First.Name), 0x802);
 
     public sealed class FourPlugins : IDisposable
     {
@@ -42,15 +43,18 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
             {
                 mod.MiscItems.Add(Named(Item, "Item"));
                 mod.MiscItems.Add(Named(OtherItem, "Other"));
+                mod.MiscItems.Add(Named(ChangedTwice, "Item"));
             })
             .WithPlugin(Second.Name, mod =>
             {
                 mod.MiscItems.Set(Named(Item, "Changed"));
                 mod.MiscItems.Set(Named(OtherItem, "Other"));
+                mod.MiscItems.Set(Named(ChangedTwice, "Changed"));
             })
             .WithPlugin(Third.Name, mod =>
             {
                 mod.MiscItems.Set(Named(Item, "Item"));
+                mod.MiscItems.Set(Named(ChangedTwice, "Changed"));
             })
             .WithPlugin(Inactive.Name, _ => { }, enabled: false)
             .Build();
@@ -71,6 +75,12 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
     public void ACopyIdenticalToTheMaster_OverAModInTheStack_IsIdenticalToMasterWinsConflict_AsXEditSetsIt()
     {
         Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, StatesOf(_index, Item)[Third]);
+    }
+
+    [Fact]
+    public void ACopyIdenticalToThePreviousOverride_ButNotToTheMaster_IsAnOverride()
+    {
+        Assert.Equal(ConflictThis.Override, StatesOf(_index, ChangedTwice)[Third]);
     }
 
     [Fact]
@@ -106,33 +116,6 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
         Assert.Equal(
             [(First, ConflictThis.Master), (master, ConflictThis.ConflictLoses), (judged, ConflictThis.IdenticalToMasterWinsConflict)],
             states.Select(state => (state.Key, state.Value)));
-    }
-
-    [Fact]
-    public void ACopyIdenticalToThePreviousOverride_ButNotToTheMaster_IsAnOverride()
-    {
-        var previous = new PluginAddress("Previous.esp", PluginOrigin.DataDirectory);
-        var judged = new PluginAddress("Judged.esp", PluginOrigin.DataDirectory);
-        var inPrevious = new FormKey(ModKey.FromFileName(previous.Name), 0x900);
-        using var fixture = new PluginFixtureBuilder("medit-copy-states-previous")
-            .WithPlugin(First.Name, mod => mod.MiscItems.Add(Named(Item, "Item")))
-            .WithPlugin(previous.Name, mod =>
-            {
-                mod.MiscItems.Set(Named(Item, "Changed"));
-                mod.MiscItems.Add(Named(inPrevious, "Own"));
-            })
-            .WithPlugin(judged.Name, mod =>
-            {
-                mod.MiscItems.Set(Named(Item, "Changed"));
-                mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(inPrevious)] });
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        var states = StatesOf(index, Item, judged);
-
-        Assert.Equal([First, previous, judged], states.Keys);
-        Assert.Equal(ConflictThis.Override, states[judged]);
     }
 
     [Fact]
