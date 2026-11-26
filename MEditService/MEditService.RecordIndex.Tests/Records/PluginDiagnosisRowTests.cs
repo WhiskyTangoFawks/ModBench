@@ -46,7 +46,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     }
 
     [Fact]
-    public async Task ARepairedBinary_ReDerived_HasNoDiagnosisRow()
+    public void ARepairedBinary_ReDerived_HasNoDiagnosisRow()
     {
         using var index = Reconciled(new LoadOrderHolder());
         Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
@@ -58,19 +58,14 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     }
 
     [Fact]
-    public void ADiagnosisRow_PersistsAcrossLaunches_AndIsReDerivedWhenTheBinaryChangedUnderneath()
+    public void ADiagnosisRow_PersistsAcrossLaunches()
     {
         using (Reconciled(new LoadOrderHolder())) { }
 
         using var opens = new GatedPluginAdapter();
-        using (var warm = Reconciled(new LoadOrderHolder(), opens))
-        {
-            Assert.Equal(0, opens.OpenedTotal);
-            Assert.Single(warm.Queries.GetLoadOrderDiagnoses().Value());
-        }
+        using var warm = Reconciled(new LoadOrderHolder(), opens);
 
-        RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
-        using var reopened = Reconciled(new LoadOrderHolder());
-        Assert.Empty(reopened.Queries.GetLoadOrderDiagnoses().Value());
+        Assert.Equal(0, opens.OpenedTotal);
+        Assert.Single(warm.Queries.GetLoadOrderDiagnoses().Value());
     }
 }

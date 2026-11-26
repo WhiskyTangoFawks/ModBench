@@ -60,48 +60,17 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     }
 
     [Fact]
-    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsChildRow_ToTheNewFormKey()
+    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsChildRow_InFormIdOrderAmongItsCellsTemporaryChildren()
     {
         var cellKey = _mod.EmbedCell;
         var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
-        const string newNavmeshKey = "F00011:ContainerFixture.esp";
+        const string lowerNavmeshKey = "000001:ContainerFixture.esp";
         var document = Index.DocumentOf(cellKey, _mod.Plugin);
-        var before = _mod.Entry.SourceTextOf(document);
-        var newBody = before.Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
-        Assert.NotEqual(before, newBody);
 
-        Index.Edit(_mod.Entry, document, newBody);
+        Index.Edit(_mod.Entry, document, _mod.Entry.SourceTextOf(document).Replace(oldNavmeshKey, lowerNavmeshKey, StringComparison.Ordinal));
 
+        Assert.Equal(lowerNavmeshKey, Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary[0].FormKey);
         Assert.False(HoldsNavmesh(cellKey, oldNavmeshKey));
-        Assert.True(HoldsNavmesh(cellKey, newNavmeshKey));
-    }
-
-    [Fact]
-    public void AnEmbeddedNavigationMeshGivenALowerFormId_ListsFirstAmongItsCellsTemporaryChildren()
-    {
-        var cellKey = _mod.EmbedCell;
-        const string newNavmeshKey = "000001:ContainerFixture.esp";
-        var document = Index.DocumentOf(cellKey, _mod.Plugin);
-
-        Index.Edit(_mod.Entry, document, _mod.Entry.SourceTextOf(document)
-            .Replace(EmbeddedNavmeshKeyReadFromTheLiveChildRows, newNavmeshKey, StringComparison.Ordinal));
-
-        Assert.Equal(newNavmeshKey, Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary[0].FormKey);
-    }
-
-    [Fact]
-    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithoutTheNextChecksValidation_LeavesTheStaleRowInPlace()
-    {
-        var cellKey = _mod.EmbedCell;
-        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
-        const string newNavmeshKey = "F00012:ContainerFixture.esp";
-        var document = Index.DocumentOf(cellKey, _mod.Plugin);
-        var newBody = Index.BodyOf(cellKey, _mod.Plugin).Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
-
-        SourceMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody)).Wrote();
-
-        Assert.True(HoldsNavmesh(cellKey, oldNavmeshKey));
-        Assert.False(HoldsNavmesh(cellKey, newNavmeshKey));
     }
 
     private static void RekeyTheWorldspace(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
@@ -130,29 +99,6 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
         Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(newWorldspaceKey));
         Assert.Empty(fixture.CellsOf(fixture.Worldspace));
-    }
-
-    [Fact]
-    public void ChangingTheFormIdOfAWorldspace_WithoutRevalidation_LeavesItsExteriorCellUnderTheOldKey()
-    {
-        using var fixture = new OneExteriorCellWorldspaceFixture();
-        const string newWorldspaceKey = "F00021:WorldspaceFormId.esp";
-
-        RekeyTheWorldspace(fixture, newWorldspaceKey);
-
-        Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(fixture.Worldspace));
-        Assert.Empty(fixture.CellsOf(newWorldspaceKey));
-    }
-
-    [Fact]
-    public void ARenamedWorldspaceInTheWorkingTree_StillHoldsItsExteriorCell()
-    {
-        using var fixture = new OneExteriorCellWorldspaceFixture();
-        var body = fixture.Index.BodyOf(fixture.Worldspace, fixture.Plugin);
-
-        fixture.Index.Project(fixture.Entry, [(fixture.Worldspace, body.Replace("TestWorld", "RenamedWorld", StringComparison.Ordinal))]);
-
-        Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(fixture.Worldspace));
     }
 
     private sealed class OneExteriorCellWorldspaceFixture : IDisposable

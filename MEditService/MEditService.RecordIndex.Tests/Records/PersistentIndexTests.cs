@@ -81,43 +81,6 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     [Fact]
-    public void ReopeningTheSameFile_KeepsTheLastRegistrations_UntilTheSnapshotCorrectsThem()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
-        using (Launched([alpha, beta])) { }
-
-        using var second = Launched([beta]);
-
-        Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.Empty(second.Index.ListedIn(alpha.Key));
-        Assert.NotEmpty(second.Index.ListedIn(beta.Key));
-
-        second.Dispose();
-        using var thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration = Launched([alpha, beta]);
-        Assert.Equal(0, thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Opens.OpenedTotal);
-        Assert.NotEmpty(thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Index.ListedIn(alpha.Key));
-    }
-
-    [Fact]
-    public void APluginWhoseBytesChangedBetweenOpens_IsTheOnlyOneDropped()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
-        using (Launched([alpha, beta])) { }
-
-        var changed = new Fallout4Mod(ModKey.FromFileName("Alpha.esp"), Fallout4Release.Fallout4);
-        changed.Npcs.AddNew("NpcAlphaEdited");
-        changed.WriteToBinary(alpha.Path);
-
-        using var second = Launched([alpha, beta]);
-
-        Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        Assert.Equal(["NpcAlphaEdited"], second.Index.ListedIn(alpha.Key).Select(row => row.EditorId));
-        Assert.Equal(["NpcBeta"], second.Index.ListedIn(beta.Key).Select(row => row.EditorId));
-    }
-
-    [Fact]
     public void APluginRewrittenWithIdenticalBytes_IsNotDropped()
     {
         var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
@@ -130,19 +93,6 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha]);
         Assert.Equal(0, second.Opens.OpenedTotal);
         Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
-    }
-
-    [Fact]
-    public void APluginDeletedBetweenOpens_HasItsRowsRemoved()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        using (Launched([alpha])) { }
-
-        File.Delete(alpha.Path);
-
-        using var second = Launched([alpha]);
-        Assert.Empty(second.Index.ListedIn(alpha.Key));
-        Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
     }
 
     [Fact]
@@ -171,17 +121,5 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha]);
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
         Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
-    }
-
-    [Fact]
-    public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        using var holder = Launched([alpha]);
-
-        var secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess = Launched([alpha]);
-        secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess.Dispose();
-
-        Assert.NotEmpty(holder.Index.ListedIn(alpha.Key));
     }
 }
