@@ -15,7 +15,7 @@ import { hostWithoutGit } from '../../../test/hostGitDouble';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
-import { onPosix } from '../../../test/platform';
+import { onPosix, onWindows } from '../../../test/platform';
 
 vi.mock('vscode', () => fakeVscodeModule());
 const smudge = vi.hoisted(() => ({ beforeRun: vi.fn<() => void>() }));
@@ -665,5 +665,156 @@ describe('the MO2 adapter\'s path tokens', () => {
     await expect(adapterOver(root, {}).writePathTokens()).rejects.toThrow();
 
     expect(await written()).toEqual(before);
+  });
+
+  describe('the token filter, over the instance\'s own folders', () => {
+    const tokenHeld = async (written: (root: string) => string): Promise<{ root: string; held: string }> => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'ModOrganizer.ini', SETTINGS([written(root)]));
+      await adapter.writePathTokens();
+      return { root, held: held(root, 'ModOrganizer.ini') };
+    };
+
+    it('cleans and smudges folders whose paths no inline program could carry in a Windows command line', async () => {
+      const name = Array.from({ length: 4 }, (_, at) => `instance${at}`.padEnd(40, 'x')).join(sep);
+      const base = await folder('long');
+      const root = join(base, name);
+      await mkdir(root, { recursive: true });
+      await put(root, 'ModOrganizer.ini', SETTINGS([`x=${onWineDrive(root, '\\')}\\a.7z`]));
+      await put(root, 'profiles/Default/modlist.txt', '');
+      await mkdir(join(root, 'mods'));
+      git(root, 'init', '--quiet');
+      git(root, 'config', 'core.autocrlf', 'false');
+
+      await adapterOver(root).writePathTokens();
+
+      const longest = Math.max(...git(root, 'config', '--local', '--list').split('\n').map((line) => line.length));
+      expect([longest < 500, held(root, 'ModOrganizer.ini')]).toEqual([true, SETTINGS(['x={instance folder:\\}\\a.7z'])]);
+    });
+
+    it.each([
+      ['unquoted in a program\'s arguments', (r: string) => `x=-o ${onWineDrive(r, '\\\\')}\\\\out`, 'x=-o {instance folder:\\\\}\\\\out'],
+      ['in a list\'s second entry', (r: string) => `x=${onWineDrive(r, '/')}/a, ${onWineDrive(r, '/')}/b`, 'x={instance folder:/}/a, {instance folder:/}/b'],
+      ['after an option\'s colon', (r: string) => `x="-o:${onWineDrive(r, '\\\\')}\\\\out"`, 'x="-o:{instance folder:\\\\}\\\\out"'],
+      ['after a semicolon', (r: string) => `x=${onWineDrive(r, '/')}/a;${onWineDrive(r, '/')}/b`, 'x={instance folder:/}/a;{instance folder:/}/b'],
+      ['after a comma', (r: string) => `x=${onWineDrive(r, '/')}/a,${onWineDrive(r, '/')}/b`, 'x={instance folder:/}/a,{instance folder:/}/b'],
+      ['at a line\'s start', (r: string) => `${onWineDrive(r, '\\')}\\tools`, '{instance folder:\\}\\tools'],
+    ])('holds a folder by its token %s', async (_place, written, tokens) => {
+      expect((await tokenHeld(written)).held).toBe(SETTINGS([tokens]));
+    });
+
+    it.each([
+      ['a longer name', '2'],
+      ['a space and more', ' Backup'],
+      ['a plus', '+'],
+      ['a parenthesis', '(GOG)'],
+      ['a letter beyond ASCII', 'é'],
+    ])('holds a path whose folder\'s name begins with a folder\'s and goes on with %s as it is', async (_name, more) => {
+      const written = (root: string): string => `x=${onWineDrive(root, '/')}${more}/x.exe`;
+      const { root, held: tokens } = await tokenHeld(written);
+
+      expect(tokens).toBe(SETTINGS([written(root)]));
+    });
+
+    it('holds a downloads folder inside the instance folder by its own token once the repository holds that token', async () => {
+      const outside = await folder('downloads');
+      const { root, adapter } = await instanceRepository(['[Settings]', `download_directory=${onWineDrive(outside, '/')}`]);
+      await adapter.writePathTokens();
+      held(root, 'ModOrganizer.ini');
+      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'downloads');
+      await mkdir(join(root, 'dl'));
+      await put(root, 'ModOrganizer.ini', SETTINGS(['[Settings]', `download_directory=${onWineDrive(join(root, 'dl'), '/')}`]));
+
+      await adapter.writePathTokens();
+
+      expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', 'download_directory={downloads folder:/}']));
+    });
+
+    it.each([
+      ['{instance folder}\\\\downloads', '\\\\downloads'],
+      ['{instance folder}/downloads', '/downloads'],
+    ])('puts the folder\'s path, as this system spells it, in place of its token in a native file a commit on another system holds: %s', async (token, rest) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, PUBLISHER_FILE, `{"x": "${token}"}`);
+
+      await adapter.writePathTokens();
+
+      expect(await readFile(join(root, PUBLISHER_FILE), 'utf8')).toBe(`{"x": ${JSON.stringify(root).slice(0, -1)}${rest}"}`);
+    });
+
+    onPosix.describe('(a Wine prefix and a path from the root are POSIX\'s)', () => {
+      async function gameInPrefix(): Promise<string> {
+        const game = join(await folder('compatdata'), 'pfx', 'drive_c', 'Games', 'Fallout 4');
+        await mkdir(join(game, 'Data'), { recursive: true });
+        return game;
+      }
+
+      it('holds a game folder in a Wine prefix\'s drive C by its token, as a Windows program spells it', async () => {
+        const game = await gameInPrefix();
+        const { root, adapter } = await instanceRepository(['x=C:\\\\Games\\\\Fallout 4\\\\Data'], game);
+
+        await adapter.writePathTokens();
+
+        expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['x={game folder:\\\\}\\\\Data']));
+      });
+
+      it('puts a game folder in a Wine prefix in place of its token, on its drive C', async () => {
+        const game = await gameInPrefix();
+        const { root, adapter } = await instanceRepository(['x={game folder:\\\\}'], game);
+
+        await adapter.writePathTokens();
+
+        expect(await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS(['x=C:\\\\Games\\\\Fallout 4']));
+      });
+
+      it('holds a game folder in a Wine prefix in a native file by its token', async () => {
+        const game = await gameInPrefix();
+        const { root, adapter } = await instanceRepository([], game);
+        await put(root, PUBLISHER_FILE, `{"x": "${game}"}`);
+
+        await adapter.writePathTokens();
+
+        expect(held(root, PUBLISHER_FILE)).toBe('{"x": "{game folder}"}');
+      });
+
+      it.each([
+        ['natively', '/mnt/x'],
+        ['natively, after a name that ends in a parenthesis', '/mnt/backup (old)'],
+      ])('holds a path that only ends in a folder\'s path, spelt %s, as it is', async (_place, before) => {
+        const { root, adapter } = await instanceRepository([]);
+        const written = `{"x": "${before}${root}/downloads"}`;
+        await put(root, PUBLISHER_FILE, written);
+
+        await adapter.writePathTokens();
+
+        expect(held(root, PUBLISHER_FILE)).toBe(written);
+      });
+    });
+
+    onWindows.describe('(a drive\'s case is Windows\')', () => {
+      it('holds a folder on a drive by its token, written in another case', async () => {
+        const { held: tokens } = await tokenHeld((root) => `x=${root.toLowerCase().split(sep).join('/')}/x.exe`);
+
+        expect(tokens).toBe(SETTINGS(['x={instance folder:/}/x.exe']));
+      });
+
+      it('holds a folder on a drive in a native file, with escaped backslashes in another case, by its token', async () => {
+        const { root, adapter } = await instanceRepository([]);
+        await put(root, PUBLISHER_FILE, `{"x": ${JSON.stringify(`${root.toLowerCase()}\\downloads`)}}`);
+
+        await adapter.writePathTokens();
+
+        expect(held(root, PUBLISHER_FILE)).toBe('{"x": "{instance folder}\\\\downloads"}');
+      });
+
+      it('puts the folder\'s path in place of a token a Windows program on Wine wrote in a native file', async () => {
+        const { root, adapter } = await instanceRepository([]);
+        await put(root, PUBLISHER_FILE, '{"x": "{instance folder:\\\\}\\\\downloads"}');
+
+        await adapter.writePathTokens();
+
+        expect(await readFile(join(root, PUBLISHER_FILE), 'utf8')).toBe(`{"x": ${JSON.stringify(`${root}\\downloads`)}}`);
+      });
+    });
   });
 });

@@ -13,8 +13,6 @@ const WINDOWS_PROGRAMS: PathSpelling = {
   ends: '"',
 };
 
-const NATIVE_JSON: PathSpelling = { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] };
-
 const made: string[] = [];
 
 afterEach(async () => {
@@ -41,63 +39,17 @@ async function checkedOutByGit(folders: TokenFolders, platform: NodeJS.Platform,
 }
 
 const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4', downloads: '//nas/share/Downloads', committedOutsideInstance: [] };
-const DRIVE: TokenFolders = { instance: 'C:\\Users\\me\\LitR', game: 'D:\\Games\\Fallout 4', downloads: 'E:\\Downloads', committedOutsideInstance: [] };
-const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4', downloads: '/mnt/data/Downloads', committedOutsideInstance: [] };
 
-describe('the token filter', () => {
-  it('cleans and smudges folders whose paths no inline program could carry in a Windows command line', async () => {
-    const long = (name: string): string => `C:\\${Array.from({ length: 12 }, (_, at) => `${name}${at}`.padEnd(40, 'x')).join('\\')}`;
-    const folders: TokenFolders = { instance: long('instance'), game: long('game'), downloads: long('downloads'), committedOutsideInstance: [] };
-    const config = await filterConfig(folders, 'win32', WINDOWS_PROGRAMS);
-
-    expect(Math.max(...Object.entries(config).map(([key, value]) => `${key} ${value}`.length))).toBeLessThan(500);
-    expect(await heldByGit(folders, 'win32', `x=${folders.downloads}\\a.7z`)).toBe('x={downloads folder:\\}\\a.7z');
-    expect(await checkedOutByGit(folders, 'win32', 'x={game folder:/}/Data')).toBe(`x=${folders.game?.replaceAll('\\', '/')}/Data`);
-  });
-
+describe('the token filter, over a network share no test machine holds', () => {
   it.each([
     ['a network share, with backslashes', SHARE, 'win32', 'x=\\\\nas\\share\\Modlists\\LitR\\tools', 'x={instance folder:\\}\\tools'],
     ['a network share, with forward slashes in another case', SHARE, 'win32', 'x=//NAS/share/modlists/LitR/x.exe', 'x={instance folder:/}/x.exe'],
     ['a network share, with escaped backslashes', SHARE, 'win32', 'x=\\"\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\\\"', 'x=\\"{instance folder:\\\\}\\\\\\"'],
     ['a network share, for the game folder', SHARE, 'win32', 'x=\\\\nas\\share\\Games\\Fallout 4\\Data', 'x={game folder:\\}\\Data'],
     ['a network share, at a line\'s start', SHARE, 'win32', 'x\n\\\\nas\\share\\Modlists\\LitR\\tools', 'x\n{instance folder:\\}\\tools'],
-    ['a Wine prefix\'s drive C', PROTON, 'linux', 'x=C:\\\\Games\\\\Fallout 4\\\\Data', 'x={game folder:\\\\}\\\\Data'],
-    ['a Wine prefix through drive Z', PROTON, 'linux', 'x=Z:/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4/x.exe', 'x={game folder:/}/x.exe'],
     ['a network share, for the downloads folder', SHARE, 'win32', 'x=\\\\nas\\share\\Downloads\\a.7z', 'x={downloads folder:\\}\\a.7z'],
-    ['a drive, for the downloads folder in another case', DRIVE, 'win32', 'x=e:/downloads/a.7z', 'x={downloads folder:/}/a.7z'],
-    ['a Wine prefix through drive Z, for the downloads folder', PROTON, 'linux', 'x=Z:/mnt/data/Downloads', 'x={downloads folder:/}'],
   ] as const)('holds a folder on %s by its token', async (_place, folders, platform, written, held) => {
     expect(await heldByGit(folders, platform, written)).toBe(held);
-  });
-
-  it.each([
-    ['unquoted in a program\'s arguments', 'x=-o C:\\\\Users\\\\me\\\\LitR\\\\out', 'x=-o {instance folder:\\\\}\\\\out'],
-    ['in a list\'s second entry', 'x=C:/Users/me/LitR/a, C:/Users/me/LitR/b', 'x={instance folder:/}/a, {instance folder:/}/b'],
-    ['after an option\'s colon', 'x="-o:C:\\\\Users\\\\me\\\\LitR\\\\out"', 'x="-o:{instance folder:\\\\}\\\\out"'],
-    ['after a semicolon', 'x=C:/Users/me/LitR/a;C:/Users/me/LitR/b', 'x={instance folder:/}/a;{instance folder:/}/b'],
-    ['after a comma', 'x=C:/Users/me/LitR/a,C:/Users/me/LitR/b', 'x={instance folder:/}/a,{instance folder:/}/b'],
-  ])('holds a folder by its token %s', async (_place, written, held) => {
-    expect(await heldByGit(DRIVE, 'win32', written)).toBe(held);
-  });
-
-  it.each([
-    ['a longer name', 'x=C:/Users/me/LitR2/x.exe'],
-    ['a space and more', 'x=C:/Users/me/LitR Backup/x.exe'],
-    ['a plus', 'x=C:/Users/me/LitR+/x.exe'],
-    ['a parenthesis', 'x=C:/Users/me/LitR(GOG)/x.exe'],
-    ['a letter beyond ASCII', 'x=C:/Users/me/LitRé/x.exe'],
-  ])('holds a path whose folder\'s name begins with a folder\'s and goes on with %s as it is', async (_name, written) => {
-    expect(await heldByGit(DRIVE, 'win32', written)).toBe(written);
-  });
-
-  it.each([
-    ['the instance folder\'s token, the commit holding no token of its own', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={instance folder:/}/downloads/a.7z', []],
-    ['the downloads folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={downloads folder:/}/a.7z', ['downloads folder']],
-    ['the game folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/Stock Game/Data', 'x={game folder:/}/Data', ['game folder']],
-  ] as const)('holds a game or downloads folder inside the instance folder by %s', async (_token, written, held, committedOutsideInstance) => {
-    const inside: TokenFolders = { ...DRIVE, game: 'C:\\Users\\me\\LitR\\Stock Game', downloads: 'C:\\Users\\me\\LitR\\downloads', committedOutsideInstance };
-
-    expect(await heldByGit(inside, 'win32', written)).toBe(held);
   });
 
   it.each([
@@ -105,33 +57,11 @@ describe('the token filter', () => {
     ['a network share, with backslashes', SHARE, 'win32', 'x={instance folder:\\}\\tools', 'x=\\\\nas\\share\\Modlists\\LitR\\tools'],
     ['a network share, with escaped backslashes', SHARE, 'win32', 'x={instance folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
     ['a network share, with the doubled separator\'s token', SHARE, 'win32', 'x={instance folder:\\\\\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
-    ['a Wine prefix, on its drive C', PROTON, 'linux', 'x={game folder:\\\\}', 'x=C:\\\\Games\\\\Fallout 4'],
-    ['a drive, for the downloads folder', DRIVE, 'win32', 'x={downloads folder:/}/a.7z', 'x=E:/Downloads/a.7z'],
   ] as const)('puts the path of a folder on %s in place of its token', async (_place, folders, platform, held, written) => {
     expect(await checkedOutByGit(folders, platform, held)).toBe(written);
   });
 
   it.each([
-    ['Linux, from the root', PROTON, 'linux', '"x": "/home/me/LitR/downloads"', '"x": "{instance folder}/downloads"'],
-    ['Linux, for the game folder in a Wine prefix', PROTON, 'linux', '"x": "/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4"', '"x": "{game folder}"'],
-    ['Windows, on a drive with escaped backslashes', DRIVE, 'win32', '"x": "c:\\\\users\\\\me\\\\LitR\\\\downloads"', '"x": "{instance folder}\\\\downloads"'],
-    ['Linux, by a Windows program on Wine', PROTON, 'linux', '"x": "Z:\\\\home\\\\me\\\\LitR\\\\downloads"', '"x": "{instance folder:\\\\}\\\\downloads"'],
-  ] as const)('holds a folder in a native file, spelt on %s, by its token', async (_place, folders, platform, written, held) => {
-    expect(await heldByGit(folders, platform, written, NATIVE_JSON)).toBe(held);
-  });
-
-  it.each([
-    ['Linux, from a commit made on Windows', PROTON, 'linux', '"x": "{instance folder}\\\\downloads"', '"x": "/home/me/LitR\\\\downloads"'],
-    ['Windows, from a commit made on Linux', DRIVE, 'win32', '"x": "{instance folder}/downloads"', '"x": "C:\\\\Users\\\\me\\\\LitR/downloads"'],
-    ['Windows, for the game folder', DRIVE, 'win32', '"x": "{game folder}"', '"x": "D:\\\\Games\\\\Fallout 4"'],
-    ['Windows, from a commit a Windows program made on Wine', DRIVE, 'win32', '"x": "{instance folder:\\\\}\\\\downloads"', '"x": "C:\\\\Users\\\\me\\\\LitR\\\\downloads"'],
-  ] as const)('puts the folder\'s path in place of its token in a native file on %s', async (_place, folders, platform, held, written) => {
-    expect(await checkedOutByGit(folders, platform, held, NATIVE_JSON)).toBe(written);
-  });
-
-  it.each([
-    ['natively on Linux', PROTON, 'linux', NATIVE_JSON, '"x": "/mnt/x/home/me/LitR/downloads"'],
-    ['natively on Linux, after a name that ends in a parenthesis', PROTON, 'linux', NATIVE_JSON, '"x": "/mnt/backup (old)/home/me/LitR/downloads"'],
     ['on Windows, a network share\'s path after a drive', SHARE, 'win32', WINDOWS_PROGRAMS, 'x=D:\\\\nas\\share\\Modlists\\LitR\\tools'],
   ] as const)('holds a path that only ends in a folder\'s path, spelt %s, as it is', async (_place, folders, platform, spelling, written) => {
     expect(await heldByGit(folders, platform, written, spelling)).toBe(written);
