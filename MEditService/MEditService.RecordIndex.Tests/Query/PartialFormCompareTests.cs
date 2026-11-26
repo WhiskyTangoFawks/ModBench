@@ -9,55 +9,68 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-public sealed class PartialFormCompareTests : IDisposable
+public sealed class PartialFormCompareTests(PartialFormCompareTests.ThreeCopies copies) : IClassFixture<PartialFormCompareTests.ThreeCopies>
 {
     private const int PartialFormBit = 0x0000_4000;
     private const float MasterWaterHeight = 100f;
     private const float OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement = 999f;
 
-    private readonly PluginFixtureData _fixture;
-    private readonly OpenedIndex _index;
-    private readonly FormKey _cellKey;
-    private readonly FormKey _contestedCellKey;
-    private readonly FormKey _refKey;
-
-    public PartialFormCompareTests()
+    /// <summary>A master's cells, their partial-form copies and a later winner, indexed once: every test only reads them.</summary>
+    public sealed class ThreeCopies : IDisposable
     {
-        Cell? baseCell = null;
-        Cell? contestedCell = null;
-        PlacedObject? refr = null;
-        _fixture = new PluginFixtureBuilder("medit-partial-form-compare")
-            .WithPlugin("Base.esm", mod =>
-            {
-                var template = mod.LightingTemplates.AddNew("Template");
-                baseCell = new Cell(mod) { EditorID = "TestCell", WaterHeight = MasterWaterHeight };
-                baseCell.LightingTemplate.SetTo(template);
-                contestedCell = new Cell(mod) { EditorID = "ContestedCell", WaterHeight = 1f };
-                mod.AddInteriorCells(baseCell, contestedCell);
-            })
-            .WithPlugin("Partial.esp", mod =>
-            {
-                var partial = PartialCopyOf(baseCell.Require());
-                refr = new PlacedObject(mod) { EditorID = "TestRef", Scale = 1f };
-                partial.Temporary.Add(refr);
-                mod.AddInteriorCells(partial, PartialCopyOf(contestedCell.Require()));
-            })
-            .WithPlugin("Top.esp", mod =>
-            {
-                var winner = contestedCell.Require().DeepCopy();
-                winner.WaterHeight = 5f;
-                mod.AddInteriorCells(winner);
-            })
-            .Build();
-        _index = Indexes.Reconciled(_fixture);
-        (_cellKey, _contestedCellKey, _refKey) = (baseCell.Require().FormKey, contestedCell.Require().FormKey, refr.Require().FormKey);
+        private readonly PluginFixtureData _fixture;
+
+        public ThreeCopies()
+        {
+            Cell? baseCell = null;
+            Cell? contestedCell = null;
+            PlacedObject? refr = null;
+            _fixture = new PluginFixtureBuilder("medit-partial-form-compare")
+                .WithPlugin("Base.esm", mod =>
+                {
+                    var template = mod.LightingTemplates.AddNew("Template");
+                    baseCell = new Cell(mod) { EditorID = "TestCell", WaterHeight = MasterWaterHeight };
+                    baseCell.LightingTemplate.SetTo(template);
+                    contestedCell = new Cell(mod) { EditorID = "ContestedCell", WaterHeight = 1f };
+                    mod.AddInteriorCells(baseCell, contestedCell);
+                })
+                .WithPlugin("Partial.esp", mod =>
+                {
+                    var partial = PartialCopyOf(baseCell.Require());
+                    refr = new PlacedObject(mod) { EditorID = "TestRef", Scale = 1f };
+                    partial.Temporary.Add(refr);
+                    mod.AddInteriorCells(partial, PartialCopyOf(contestedCell.Require()));
+                })
+                .WithPlugin("Top.esp", mod =>
+                {
+                    var winner = contestedCell.Require().DeepCopy();
+                    winner.WaterHeight = 5f;
+                    mod.AddInteriorCells(winner);
+                })
+                .Build();
+            Index = Indexes.Reconciled(_fixture);
+            (CellKey, ContestedCellKey, RefKey) = (baseCell.Require().FormKey, contestedCell.Require().FormKey, refr.Require().FormKey);
+        }
+
+        internal OpenedIndex Index { get; }
+
+        internal FormKey CellKey { get; }
+
+        internal FormKey ContestedCellKey { get; }
+
+        internal FormKey RefKey { get; }
+
+        public void Dispose()
+        {
+            Index.Dispose();
+            _fixture.Dispose();
+        }
     }
 
-    public void Dispose()
-    {
-        _index.Dispose();
-        _fixture.Dispose();
-    }
+    private readonly OpenedIndex _index = copies.Index;
+    private readonly FormKey _cellKey = copies.CellKey;
+    private readonly FormKey _contestedCellKey = copies.ContestedCellKey;
+    private readonly FormKey _refKey = copies.RefKey;
 
     private static Cell PartialCopyOf(Cell cell)
     {
@@ -149,5 +162,35 @@ public sealed class PartialFormCompareTests : IDisposable
 
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.Equal("Partial.esp", Assert.Single(compare.Overrides).Plugin);
+    }
+
+    private static Dictionary<string, FieldDiff> PartialFormOverride() =>
+        ComparedCopies.Of<Worldspace>(
+                world => world.LodWaterHeight = MasterWaterHeight,
+                world =>
+                {
+                    world.MajorRecordFlagsRaw |= PartialFormBit;
+                    world.LodWaterHeight = OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement;
+                })
+            .Diffs.ToDictionary(d => d.FieldName, StringComparer.Ordinal);
+
+    [Fact]
+    public void APartialFormCopysHeaderMembers_TakePart_WhereItsOwnFieldsDoNot()
+    {
+        var diffs = PartialFormOverride();
+
+        var flags = diffs["MajorRecordFlagsRaw"];
+        Assert.Equal(PartialFormBit, Assert.IsType<JsonElement>(flags.Values["B.esp"]).GetInt32());
+        Assert.Equal(ConflictThis.Override, flags.CellStates["B.esp"]);
+        Assert.DoesNotContain("B.esp", diffs["LodWaterHeight"].CellStates.Keys);
+    }
+
+    [Fact]
+    public void AHeaderMemberNoCopySpells_StillHasItsRow()
+    {
+        var version2 = PartialFormOverride()["Version2"];
+
+        Assert.Equal(2, version2.Values.Count);
+        Assert.All(version2.Values.Values, Assert.Null);
     }
 }

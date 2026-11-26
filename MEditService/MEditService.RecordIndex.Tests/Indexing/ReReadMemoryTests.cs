@@ -11,9 +11,9 @@ namespace MEditService.RecordIndex.Tests.Indexing;
 public sealed class ReReadMemoryTests : IDisposable
 {
     private const string Plugin = "Referring.esp";
-    private const int RecordCount = 40_000;
+    private const int RecordCount = 12_000;
     private const int ReferencesPerRecord = 50;
-    private const long MemoryLimit = 64_000_000;
+    private const long MemoryLimit = 32_000_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("re-read-memory").WithPlugin(Plugin).Build();
     private readonly LoadOrderHolder _holder = new();

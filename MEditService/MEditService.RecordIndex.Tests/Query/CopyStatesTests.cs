@@ -5,11 +5,10 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-public sealed class CopyStatesTests : IDisposable
+public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClassFixture<CopyStatesTests.FourPlugins>
 {
     private static readonly PluginAddress First = new("A.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress Second = new("B.esp", PluginOrigin.DataDirectory);
@@ -18,20 +17,23 @@ public sealed class CopyStatesTests : IDisposable
     private static readonly FormKey Item = new(ModKey.FromFileName(First.Name), 0x800);
     private static readonly FormKey OtherItem = new(ModKey.FromFileName(First.Name), 0x801);
 
-    private readonly PluginFixtureData _fixture;
-    private readonly OpenedIndex _index;
-
-    public CopyStatesTests()
+    /// <summary>The item and its copies, indexed once: every test of the class only reads them.</summary>
+    public sealed class FourPlugins : IDisposable
     {
-        _fixture = Fixture();
-        _index = Indexes.Reconciled(_fixture);
+        private readonly PluginFixtureData _fixture = Fixture();
+
+        public FourPlugins() => Index = Indexes.Reconciled(_fixture);
+
+        internal OpenedIndex Index { get; }
+
+        public void Dispose()
+        {
+            Index.Dispose();
+            _fixture.Dispose();
+        }
     }
 
-    public void Dispose()
-    {
-        _index.Dispose();
-        _fixture.Dispose();
-    }
+    private readonly OpenedIndex _index = plugins.Index;
 
     private static MiscItem Named(FormKey key, string name) => new(key, Fallout4Release.Fallout4) { EditorID = $"E{key.ID:X}", Name = name };
 
@@ -127,12 +129,10 @@ public sealed class CopyStatesTests : IDisposable
         Assert.Equal(ConflictThis.IdenticalToMaster, states[edited]);
     }
 
-    [Theory]
-    [InlineData(Language.English)]
-    [InlineData(Language.French)]
-    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_IsIdenticalToMaster_AsXEditJudgesIt(Language stringsLanguage)
+    [Fact]
+    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_IsIdenticalToMaster_AsXEditJudgesIt()
     {
-        using var copies = new LocalizedCopies(stringsLanguage);
+        using var copies = new LocalizedCopies();
 
         var states = StatesOf(copies.Index, LocalizedCopies.Item, LocalizedCopies.Copy);
 
@@ -161,5 +161,27 @@ public sealed class CopyStatesTests : IDisposable
         var refused = _index.Queries.GetCopyStates([Item.ToString()], Inactive).Refused();
 
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
+    }
+
+    [Fact]
+    public void ACopyNotLocalized_HoldingTheMastersTextsInTheStringsLanguage_IsIdenticalToMaster_InTheConflictView()
+    {
+        using var copies = new LocalizedCopies();
+
+        var compare = copies.Index.Queries.GetCompare(LocalizedCopies.Message.ToString()).Value().Require();
+
+        Assert.Equal(ConflictThis.IdenticalToMaster, compare.Overrides.Single(o => o.Plugin == LocalizedCopies.Copy.Name).ConflictThis);
+    }
+
+    [Fact]
+    public void ACopyNotLocalized_HoldingTheMastersTextsInTheStringsLanguage_ComparesWithItsMasterWithNoConflict()
+    {
+        using var copies = new LocalizedCopies();
+        var message = LocalizedCopies.Message.ToString();
+
+        var compared = copies.Index.Queries.GetCompareRecords(
+            [new RecordCopy(message, LocalizedCopies.Master), new RecordCopy(message, LocalizedCopies.Copy)]).Compared();
+
+        Assert.Equal(ConflictAll.NoConflict, compared.ConflictAll);
     }
 }

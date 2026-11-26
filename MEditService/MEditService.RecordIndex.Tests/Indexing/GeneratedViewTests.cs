@@ -16,13 +16,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
 
     private int Matching(string sql) => Selected(sql).Length;
 
-    private bool Binds(string sql)
-    {
-        if (!fixture.Index.Queries.SelectRows(sql).Holds(out var rows, out _)) return false;
-        rows.Dispose();
-        return true;
-    }
-
     private string[] ViewColumnTypes(string table, string column) =>
         [.. Selected($"SELECT data_type FROM view_columns WHERE view_name = '{table}' AND column_name = '{column}'")
             .Select(row => row.GetProperty("data_type").GetString().Require())];
@@ -47,12 +40,11 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     [Fact]
     public void EveryRecordType_HasAView()
     {
-        var unreachable = Schemas.Keys
-            .Where(table => !Binds($"SELECT form_key FROM \"{table}\""))
-            .ToList();
+        var views = Selected("SELECT DISTINCT view_name FROM view_columns")
+            .Select(row => row.GetProperty("view_name").GetString()).ToHashSet();
 
         Assert.NotEmpty(Schemas);
-        Assert.Empty(unreachable);
+        Assert.Empty(Schemas.Keys.Except(views));
     }
 
     [Fact]

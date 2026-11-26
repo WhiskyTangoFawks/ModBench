@@ -94,30 +94,17 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
 
     [Theory]
     [MemberData(nameof(Variants))]
-    public void AVariant_ResolvesUnderItsOwnSignature(string table)
-    {
-        var resolution = built.Index.ResolutionOf(built.Linker, Key, Of(table).FormKey.ToString());
-
-        Assert.Equal((table, Of(table).EditorId), (resolution.RecordType, resolution.EditorId));
-    }
-
-    [Theory]
-    [MemberData(nameof(Variants))]
-    public void AVariant_IsAChildOfItsCell_InItsPlacementGroup(string table)
+    public void AVariant_IsIndexedUnderItsOwnSignature_AsAChildOfItsCell_ReferencingTheRecordItPlaces(string table)
     {
         var formKey = Of(table).FormKey.ToString();
+        var resolution = built.Index.ResolutionOf(built.Linker, Key, formKey);
         var children = built.Index.Queries.GetCellChildRecords(Key, built.Cell.ToString()).Value();
 
+        Assert.Equal((table, Of(table).EditorId), (resolution.RecordType, resolution.EditorId));
         Assert.Equal(Of(table).Group, built.Index.PlacementGroupIn(Key, built.Cell.ToString(), formKey));
         Assert.Equal(table, children.Persistent.Concat(children.Temporary).Single(c => c.FormKey == formKey).RecordType);
-    }
-
-    [Theory]
-    [MemberData(nameof(Variants))]
-    public void AVariant_ReferencesTheRecordItPlaces(string table)
-    {
         Assert.Contains(
             built.Index.Queries.GetReferencesInActiveOrCompiledPlugins(Of(table).Base.ToString()).Value(),
-            r => r.FormKey == Of(table).FormKey.ToString() && r.RecordType == table);
+            r => r.FormKey == formKey && r.RecordType == table);
     }
 }

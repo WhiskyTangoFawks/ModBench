@@ -45,5 +45,6 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     [InlineData("WITH a AS (SELECT form_key FROM records), b AS (SELECT form_key FROM a) SELECT form_key FROM b")]
     [InlineData("WITH RECURSIVE r(form_key) AS (SELECT form_key FROM records UNION SELECT form_key FROM r) SELECT form_key FROM r")]
     [InlineData("SELECT form_key FROM records, unnest([1, 2]) AS t(n)")]
+    [InlineData("SELECT form_key FROM records WHERE EXISTS (SELECT 1 FROM form_references)")]
     public void AFilterOfThePublicRelations_IsAccepted(string sql) => Assert.True(fixture.Index.Accepts(sql));
 }
