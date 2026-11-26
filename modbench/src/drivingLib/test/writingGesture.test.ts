@@ -13,6 +13,7 @@ import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
 import { RedrawEmitter } from '../heldRedraw';
 import { toldAfter, writesToldTo } from '../../repositoriesLib/writesTold';
+import { settled } from '../../test/eventually';
 
 const unnamed = (): Promise<void> => { ambientWrites.leaveUnnamed(); return Promise.resolve(); };
 
@@ -404,7 +405,7 @@ describe('whenNoChangeIsRunning', () => {
       expect(task).not.toHaveBeenCalled();
     });
 
-    await vi.waitFor(() => { expect(task).toHaveBeenCalledTimes(1); });
+    await settled(() => { expect(task).toHaveBeenCalledTimes(1); });
   });
 
   it('runs its task after the outer change of two nested, not the inner', async () => {
@@ -416,7 +417,7 @@ describe('whenNoChangeIsRunning', () => {
       expect(task).not.toHaveBeenCalled();
     });
 
-    await vi.waitFor(() => { expect(task).toHaveBeenCalledTimes(1); });
+    await settled(() => { expect(task).toHaveBeenCalledTimes(1); });
   });
 
   it('runs its task after a change that threw', async () => {
@@ -425,7 +426,7 @@ describe('whenNoChangeIsRunning', () => {
 
     await expect(handingOneChange(idle, async () => { await gated.run(); throw new Error('half written'); })).rejects.toThrow('half written');
 
-    await vi.waitFor(() => { expect(task).toHaveBeenCalledTimes(1); });
+    await settled(() => { expect(task).toHaveBeenCalledTimes(1); });
   });
 
   it('never runs a task disposed while it waited', async () => {
@@ -440,7 +441,7 @@ describe('whenNoChangeIsRunning', () => {
       gated.dispose();
     });
 
-    await vi.waitFor(() => { expect(other).toHaveBeenCalledTimes(1); });
+    await settled(() => { expect(other).toHaveBeenCalledTimes(1); });
     expect(task).not.toHaveBeenCalled();
   });
 
@@ -457,7 +458,7 @@ describe('whenNoChangeIsRunning', () => {
       await stays.run();
     });
 
-    await vi.waitFor(() => { expect(other).toHaveBeenCalledTimes(1); });
+    await settled(() => { expect(other).toHaveBeenCalledTimes(1); });
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'disk full', detail: undefined }]);
   });
 });
