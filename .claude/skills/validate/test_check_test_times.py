@@ -1,6 +1,5 @@
-"""Pins check_test_times.py: every test over a second is named from each kind of report, no
-trx test is charged for the time before its assembly's first result, and the run's wall time is
-printed against its budget. Nothing fails."""
+"""Pins check_test_times.py: each test over a second is named from every kind of report, the wall time
+is printed against its budget, and nothing fails."""
 import contextlib
 import io
 import json
