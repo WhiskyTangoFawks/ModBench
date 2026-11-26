@@ -514,6 +514,25 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         return new SourceDocument("00A001:Embedded.esp", "refr", null, "{\n  \"FormKey\": \"00A001:Embedded.esp\"\n}");
     }
 
+    [Fact]
+    public void RekeyingAChildItsOwnersTextNamesWhereItsTypeHoldsNone_IsRefusedAsNoDocumentHoldingIt()
+    {
+        var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
+
+        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, child.Identity, FreeFormKey).Stopped()));
+    }
+
+    [Fact]
+    public void EveryChildAskedInOneOperation_IsFound_EmbeddedOrInAFileOfItsOwn()
+    {
+        var repository = Repository;
+        IMajorRecordGetter[] children = [_persistentRef, _temporaryRef, _topCellRef, _exteriorRef, _topic, _response, _response2];
+
+        var named = children.Select(child => repository.RecordByFormKey(Plugin, child.FormKey.ToString()).Value()?.EditorId);
+
+        Assert.Equal(children.Select(child => child.EditorID), named);
+    }
+
     private static void AssertRefusedAsAChildItsOwnersTextDoesNotCarry(SourceFailure.NotCarried refused)
     {
         Assert.Contains("its own text does not carry it", refused.Reason, StringComparison.Ordinal);

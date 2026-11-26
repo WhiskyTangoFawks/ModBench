@@ -17,21 +17,13 @@ public sealed class ModelIdentityTests
 
     private static Fallout4Mod NewMod() => new(Fixture, Fallout4Release.Fallout4);
 
-    /// <summary>Each pair a recompile might write, and what the divergence names: null when the pair is model-identical.</summary>
-    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>, string?> Recompiles => new()
+    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>, string> Recompiles => new()
     {
         { "a float that differs", () => (NpcWith(npc => npc.HeightMin = 1.5f), NpcWith(npc => npc.HeightMin = 2.5f)), "field 'HeightMin' changed" },
         { "a float that differs within the epsilon of Mutagen's equals mask", () => (NpcWith(npc => npc.HeightMin = 0f), NpcWith(npc => npc.HeightMin = 5e-10f)), "field 'HeightMin' changed" },
-        { "a worldspace's blocks, sub-blocks and cells in another order, which the tree carries none of", WorldspaceBlocksInAnotherOrder, null },
         { "a cell under a worldspace block that differs", () => (WorldspaceOfACell(0, 0, 0), WorldspaceOfACell(0, 0, 1)), "Point" },
         { "a cell under another block coordinate, which only the worldspace's own comparison guards", () => (WorldspaceOfACell(0, 0, 0), WorldspaceOfACell(5, 0, 0)), "BlockNumberX" },
-        { "a quest's topics and a topic's responses in another order, as the format files them by name", QuestTopicsInAnotherOrder, null },
         { "a topic in another quest", ATopicInAnotherQuest, "Quest 000800:Fixture.esp" },
-        { "only an interior cell's group header fields", AnInteriorCellsStamps, null },
-        { "only a worldspace's top cell's group header fields", AWorldspacesTopCellsStamps, null },
-        { "only a worldspace block's group header fields", AWorldspaceBlocksStamps, null },
-        { "only a quest's nested topic's group header fields", AQuestsNestedTopicsStamps, null },
-        { "the header's allow-listed fields alike", () => (WithHeader(SetOpaqueHeaderFields), WithHeader(SetOpaqueHeaderFields)), null },
         { "the header's TypeOffsets", () => (WithHeader(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), WithHeader(h => h.TypeOffsets = new byte[] { 9, 9, 9 })), "'TypeOffsets'" },
         { "the header's Deleted", () => (WithHeader(h => h.Deleted = new byte[] { 1, 2, 3 }), WithHeader(h => h.Deleted = new byte[] { 9, 9, 9 })), "'Deleted'" },
         { "the header's Screenshot", () => (WithHeader(h => h.Screenshot = new byte[] { 1, 2, 3 }), WithHeader(h => h.Screenshot = new byte[] { 9, 9, 9 })), "'Screenshot'" },
@@ -45,15 +37,11 @@ public sealed class ModelIdentityTests
             "'TransientTypes'"
         },
         { "the count of the header's TransientTypes", () => (WithHeader(h => h.TransientTypes.Add(new TransientType { FormType = 7 })), NewMod()), "'TransientTypes'" },
-        { "only a header field the verdict excludes", () => (WithHeader(h => h.Flags = Fallout4ModHeader.HeaderFlag.Localized), NewMod()), null },
         { "a gendered item's sub-field", () => (ArmorOfWorldModel("male.nif"), ArmorOfWorldModel("DIFFERENT.nif")), "Armor 000800:Fixture.esp" },
         { "a package data int's value", () => (PackageOfAnInt(1), PackageOfAnInt(99)), "field 'Data[0].Data' changed" },
         { "the text of a string in a plugin not localized", () => (DoorNamed("Door"), DoorNamed("Gate")), "field 'Name' changed" },
         { "an ordered key-and-value-shaped list reordered, a real content change", () => (NpcOfMorphs(1, 2), NpcOfMorphs(2, 1)), "Npc 000800:Fixture.esp" },
-        { "a list the format sorts, in its order", () => (NpcInFactions(0x802, 0x801), NpcInFactions(0x801, 0x802)), null },
         { "a list the format does not sort, in another order", () => (NpcOfKeywords(0x802, 0x801), NpcOfKeywords(0x801, 0x802)), "field 'Keywords' changed" },
-        { "only a member the format omits", () => (RecipeOfAConditionPad(0x1D), RecipeOfAConditionPad(0)), null },
-        { "a FormKey whose plugin name differs only in case", () => (HeadPart("Upper.esp", 0x817), HeadPart("UPPER.ESP", 0x817)), null },
         { "a FormKey's id", () => (HeadPart("Upper.esp", 0x817), HeadPart("Upper.esp", 0x818)), "Npc 000800:Fixture.esp" },
         { "a FormKey's plugin beyond case", () => (HeadPart("Upper.esp", 0x817), HeadPart("Other.esp", 0x817)), "Npc 000800:Fixture.esp" },
         { "a string None in another case", () => (ScriptString("None"), ScriptString("none")), "Npc 000800:Fixture.esp" },
@@ -62,55 +50,73 @@ public sealed class ModelIdentityTests
         { "a FormKey string's id in another hex case", () => (ScriptString("00081D:Upper.esp"), ScriptString("00081d:Upper.esp")), "Npc 000800:Fixture.esp" },
     };
 
+    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>> Normalized => new()
+    {
+        { "a worldspace's blocks, sub-blocks and cells in another order, which the tree carries none of", WorldspaceBlocksInAnotherOrder },
+        { "a quest's topics and a topic's responses in another order, as the format files them by name", QuestTopicsInAnotherOrder },
+        { "only an interior cell's group header fields", AnInteriorCellsStamps },
+        { "only a worldspace's top cell's group header fields", AWorldspacesTopCellsStamps },
+        { "only a worldspace block's group header fields", AWorldspaceBlocksStamps },
+        { "only a quest's nested topic's group header fields", AQuestsNestedTopicsStamps },
+        { "the header's allow-listed fields alike", () => (WithHeader(SetOpaqueHeaderFields), WithHeader(SetOpaqueHeaderFields)) },
+        { "only a header field the verdict excludes", () => (WithHeader(h => h.Flags = Fallout4ModHeader.HeaderFlag.Localized), NewMod()) },
+        { "a list the format sorts, in its order", () => (NpcInFactions(0x802, 0x801), NpcInFactions(0x801, 0x802)) },
+        { "only a member the format omits", () => (RecipeOfAConditionPad(0x1D), RecipeOfAConditionPad(0)) },
+        { "a FormKey whose plugin name differs only in case", () => (HeadPart("Upper.esp", 0x817), HeadPart("UPPER.ESP", 0x817)) },
+    };
+
     [Theory]
     [MemberData(nameof(Recompiles))]
-    public async Task DivergenceFrom_NamesWhatARecompileChanged_AndNothingItsFormatNormalizes(
-        string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, string? named)
+    public async Task DivergenceFrom_NamesWhatARecompileChanged(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, string named)
     {
         var (original, recompiled) = mods();
 
-        var divergence = await DivergenceAsync(original, recompiled);
+        Assert.Contains(named, await DivergenceAsync(original, recompiled) ?? "", StringComparison.Ordinal);
+    }
 
-        Assert.Equal(named is not null, divergence is not null);
-        Assert.Contains(named ?? "", divergence ?? "", StringComparison.Ordinal);
+    [Theory]
+    [MemberData(nameof(Normalized))]
+    public async Task DivergenceFrom_NamesNothingARecompilesFormatNormalizes(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods)
+    {
+        var (original, recompiled) = mods();
+
+        Assert.Null(await DivergenceAsync(original, recompiled));
     }
 
     private static readonly ModKey UnreferencedMaster = ModKey.FromFileName("Unreferenced.esm");
     private static readonly FormKey PerkInLastMaster = new(ModKey.FromFileName("Perks.esm"), 0x800);
 
-    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>, string?> MastersPruned => new()
+    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>> MastersPruned => new()
     {
         {
             "a condition's perk parameter the function reads",
-            () => (PluginWithARecipeCondition(HasPerk(PerkInLastMaster), UnreferencedMaster, PerkInLastMaster.ModKey), PluginWithARecipeCondition(HasPerk(PerkInLastMaster))),
-            null
+            () => (PluginWithARecipeCondition(HasPerk(PerkInLastMaster), UnreferencedMaster, PerkInLastMaster.ModKey), PluginWithARecipeCondition(HasPerk(PerkInLastMaster)))
         },
         {
             "a condition's parameter a record would name, which the function does not read",
             () => (PluginWithARecipeCondition(ConditionData(Condition.Function.IsAttacking, 0x0100_0800, FormKey.Null), UnreferencedMaster, PerkInLastMaster.ModKey),
-                PluginWithARecipeCondition(ConditionData(Condition.Function.IsAttacking, 0x0100_0800, FormKey.Null))),
-            null
+                PluginWithARecipeCondition(ConditionData(Condition.Function.IsAttacking, 0x0100_0800, FormKey.Null)))
         },
-        { "a condition in a dialog topic's response", () => (PluginWithATopicCondition(UnreferencedMaster, PerkInLastMaster.ModKey), PluginWithATopicCondition()), null },
-        {
-            "a condition's form parameter naming another record",
-            () => (PluginWithARecipeCondition(HasPerk(PerkInLastMaster), UnreferencedMaster, PerkInLastMaster.ModKey),
-                PluginWithARecipeCondition(HasPerk(new FormKey(PerkInLastMaster.ModKey, 0x801)))),
-            "ParameterOneRecord"
-        },
+        { "a condition in a dialog topic's response", () => (PluginWithATopicCondition(UnreferencedMaster, PerkInLastMaster.ModKey), PluginWithATopicCondition()) },
     };
 
     [Theory]
     [MemberData(nameof(MastersPruned))]
-    public async Task DivergenceFrom_WhenARecompilePrunesAMaster_IsBlindToTheRenumbering_AndNamesARecordChanged(
-        string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, string? named)
+    public async Task DivergenceFrom_WhenARecompilePrunesAMaster_IsBlindToTheRenumbering(string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods)
     {
         var (original, recompiled) = mods();
 
-        var divergence = await DivergenceWithOriginalMastersKeptAsync(original, recompiled);
+        Assert.Null(await DivergenceWithOriginalMastersKeptAsync(original, recompiled));
+    }
 
-        Assert.Equal(named is not null, divergence is not null);
-        Assert.Contains(named ?? "", divergence ?? "", StringComparison.Ordinal);
+    [Fact]
+    public async Task DivergenceFrom_WhenARecompilePrunesAMaster_NamesARecordChanged()
+    {
+        var divergence = await DivergenceWithOriginalMastersKeptAsync(
+            PluginWithARecipeCondition(HasPerk(PerkInLastMaster), UnreferencedMaster, PerkInLastMaster.ModKey),
+            PluginWithARecipeCondition(HasPerk(new FormKey(PerkInLastMaster.ModKey, 0x801))));
+
+        Assert.Contains("ParameterOneRecord", divergence ?? "", StringComparison.Ordinal);
     }
 
     [Fact]

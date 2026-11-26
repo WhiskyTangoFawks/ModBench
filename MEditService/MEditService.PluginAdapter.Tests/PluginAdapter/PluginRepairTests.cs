@@ -63,6 +63,17 @@ public sealed class PluginRepairTests
     }
 
     [Fact]
+    public void ADiagnosisNoRepairAnswers_IsRefusedInWordsNamingIt()
+    {
+        using var folder = new ScratchDirectory("repair-unanswered-one");
+
+        var refused = RepairEverything(Write(folder, MisshapedPerkPlugin.Plugin), Path.Combine(folder.Path, "repaired.esp")).Failure();
+
+        Assert.Equal($"no repair answers {MisshapedPerkPlugin.Anchor} — entry-point-parameter-shape: "
+            + "entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8", refused.Reason);
+    }
+
+    [Fact]
     public void WriteRepaired_APluginWithDiagnosesNoRepairAnswers_IsRefusedNamingEach_AndWritesNothing()
     {
         using var folder = new ScratchDirectory("repair-unanswered");

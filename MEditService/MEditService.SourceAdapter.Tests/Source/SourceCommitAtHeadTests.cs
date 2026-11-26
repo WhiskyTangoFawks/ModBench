@@ -339,5 +339,20 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, _submodule.Branch), cancel);
     }
 
+
+    [Fact]
+    public void AClone_OfASubmoduleWhoseFollowedBranchHoldsOtherCommits_StaysDetached_AndNamesIt_WhateverTheRemotesDefaultHolds()
+    {
+        _submodule.Follow("dev");
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "branch", "dev", _commits["first"]);
+        Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal(
+            (new SubmoduleHead(_commits["second"], $"its branch 'dev' is at {_commits["first"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
+            (head, Branch()));
+    }
     private static string Git(string folder, params string[] args) => PinnedSubmodule.Git(folder, args);
 }

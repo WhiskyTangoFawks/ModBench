@@ -42,6 +42,21 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(_modFolder));
     }
 
+    [Fact]
+    public void AnInit_TakesBackAnAssetItReplaced_WhenALaterAssetFails()
+    {
+        var existing = Path.Combine(_modFolder, "a.txt");
+        File.WriteAllText(existing, "theirs");
+
+        TestAdapters.Source().Init(_modFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("A.esp")],
+        [
+            new FileToCopy("a.txt", () => new MemoryStream("ours"u8.ToArray())),
+            new FileToCopy("b.txt", () => throw new IOException("b.txt is held by another process")),
+        ], commit: true);
+
+        Assert.Equal("theirs", File.ReadAllText(existing));
+    }
+
     [Fact, Kind(Kinds.Posix)]
     public void APluginWhoseFilesCannotBeWritten_LeavesTheHalfMadeRepositoryAsItWas()
     {

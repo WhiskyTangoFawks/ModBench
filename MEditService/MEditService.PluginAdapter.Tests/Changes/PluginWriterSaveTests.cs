@@ -143,6 +143,30 @@ public sealed class PluginWriterSaveTests
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 
+    [Fact]
+    public async Task Save_ReadsTheStylesOfTheMastersTheTreeReferencesAlone_SoAnUnrelatedPluginWhoseHeaderDoesNotReadIsNoFailure()
+    {
+        using var folder = new ScratchDirectory("pw-save-unrelated-unreadable");
+        var (masterPath, childPath) = LightMasterAndChild.Write(folder);
+        var unrelatedPath = Path.Combine(folder, "Unrelated.esm");
+        File.WriteAllBytes(unrelatedPath, "not a plugin"u8.ToArray());
+        var loadOrder = SnapshotPlugins.Snapshot(folder, null, GameRelease.Starfield,
+        [
+            new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Unrelated.esm", unrelatedPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
+            new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 2, Enabled: true, Winning: true),
+        ]);
+        var adapter = TestAdapters.Mutagen();
+        var source = (await adapter.ReadSourceOfAsync(LightMasterAndChild.ChildIn(loadOrder), loadOrder)).Answered();
+        var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
+
+        (await tree.SaveAsync(childPath, [LightMasterAndChild.Master.FileName, "Unrelated.esm"], [LightMasterAndChild.Master.FileName], save =>
+        {
+            save.Commit(_ => false);
+            return true;
+        })).Answered();
+    }
+
     public static TheoryData<string, Action<Fallout4Mod, ModKey>> TreesNamingAPluginInAnotherCase => new()
     {
         { "a reference", (mod, spelled) => mod.Npcs.AddNew("Npc").Race.SetTo(new FormKey(spelled, 0x800)) },

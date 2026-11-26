@@ -137,6 +137,14 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         { "mkdir -p 'ROOT/npc_/A.esp'\necho theirs > 'ROOT/npc_/A.esp/000001.json'", ["armo/A.esp/000003.json"], "npc_/A.esp/000001.json", "theirs", "000001.json — written by something else" },
     };
 
+    [Fact]
+    public void AFailedReplace_TakesBackItsOwnFile_FromADirectoryAnotherProgramAlsoWroteInto()
+    {
+        FailAfterWritingWhile($"echo theirs > '{Path.Combine(Root, "armo", "theirs.txt")}'", [File("npc_/A.esp/000001.json", "{}"), File("armo/A.esp/000003.json", "{}")]);
+
+        Assert.False(System.IO.File.Exists(Path.Combine(Root, "armo", "A.esp", "000003.json")));
+    }
+
     [Theory]
     [MemberData(nameof(WhatAnotherProgramDidDuringTheReplace))]
     public void AFailedReplace_LeavesWhatAnotherProgramDidToAFile_AndNamesIt(string script, string[] written, string path, string? theirs, string named)

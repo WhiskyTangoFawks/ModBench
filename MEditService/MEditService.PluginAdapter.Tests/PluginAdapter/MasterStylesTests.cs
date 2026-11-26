@@ -22,26 +22,6 @@ public sealed class MasterStylesTests
     }
 
     [Fact]
-    public void APluginBesideAnUnrelatedPluginWhoseHeaderDoesNotRead_Reads()
-    {
-        using var scratch = new ScratchDirectory("master-styles-unrelated");
-        var (masterPath, childPath) = LightMasterAndChild.Write(scratch.Path);
-        var unrelatedPath = Path.Combine(scratch.Path, "Unrelated.esm");
-        File.WriteAllBytes(unrelatedPath, "not a plugin"u8.ToArray());
-        var loadOrder = SnapshotPlugins.Snapshot(scratch.Path, null, GameRelease.Starfield,
-        [
-            new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Unrelated.esm", unrelatedPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
-            new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 2, Enabled: true, Winning: true),
-        ]);
-
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(LightMasterAndChild.Child, childPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Answered();
-
-        Assert.Equal([LightMasterAndChild.Weapon.ToString()], documents.Records.Select(r => r.FormKey));
-    }
-
-    [Fact]
     public void APluginWhoseMasterTheLoadOrderDoesNotHold_FailsNamingThatMaster()
     {
         using var scratch = new ScratchDirectory("master-styles-missing");
