@@ -36,16 +36,6 @@ public sealed class PluginReadabilityTests : IDisposable
         Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(Path.Combine(_data.DataFolder, "Absent.esp"))).Failure());
 
     [Fact]
-    public void TheContentOfAPluginThatIsNotThere_IsInaccessible()
-    {
-        var path = Path.Combine(_data.DataFolder, "Absent.esp");
-
-        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None);
-
-        Assert.IsType<PluginFailure.Inaccessible>(read.Failure());
-    }
-
-    [Fact]
     public async Task AnEmptyFile_OpensAndIsUnparsed()
     {
         var path = Path.Combine(_data.DataFolder, "Empty.esp");

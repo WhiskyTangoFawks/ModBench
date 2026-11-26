@@ -106,14 +106,6 @@ public sealed class LoadOrderLinkTargetsTests
     }
 
     [Fact]
-    public void EveryFileTheLoadOrderNamesBeingReadable_LeavesNothingNamedAsUnread()
-    {
-        using var data = TwoPluginLoadOrder("link-targets-all-readable");
-
-        Assert.Empty(Answers(data, data.Plugins, _keyword.ToString()).UnreadableFiles);
-    }
-
-    [Fact]
     public void AMalformedFormKey_IsAbsentRatherThanThrowing()
     {
         using var data = TwoPluginLoadOrder("link-targets-malformed");

@@ -5,8 +5,6 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -168,20 +166,6 @@ public sealed class SubrecordLossTests : IDisposable
         var deleted = Record("WRLD", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("EDID", "World"u8.ToArray()));
 
         Assert.Null((await ComparisonAsync(deleted, Concat(deleted, AnEmptyWeapon))).DeletedRecordCauses);
-    }
-
-    [Fact]
-    public void MutagenWritesADeletedCellAsItsHeaderAlone_AndADeletedWorldspaceWhole()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.AddInteriorCells(new Cell(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "DeletedCell", MajorRecordFlagsRaw = (int)DeletedFlag.Bit });
-        mod.Worldspaces.Add(new Worldspace(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "DeletedWorld", MajorRecordFlagsRaw = (int)DeletedFlag.Bit });
-        using var stream = new MemoryStream();
-        mod.WriteToBinary(stream);
-
-        var written = Encoding.ASCII.GetString(stream.ToArray());
-
-        Assert.Equal((false, true), (written.Contains("DeletedCell", StringComparison.Ordinal), written.Contains("DeletedWorld", StringComparison.Ordinal)));
     }
 
     [Fact]

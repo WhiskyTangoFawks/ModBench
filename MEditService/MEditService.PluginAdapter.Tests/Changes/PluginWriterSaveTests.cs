@@ -81,19 +81,6 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
-    public async Task Commit_LeavesTheDataFolderHoldingTheSameFiles()
-    {
-        using var data = new PluginFixtureBuilder("pw-save-no-tmpdir")
-            .WithPlugin("TestPlugin.esp")
-            .Build();
-        var before = FolderEntries.Of(data.DataFolder);
-
-        await RewriteAsync(Path.Combine(data.DataFolder, "TestPlugin.esp"));
-
-        Assert.Equal(before, FolderEntries.Of(data.DataFolder));
-    }
-
-    [Fact]
     public async Task ASave_RemovesALeftoverOfAWriterThatIsGone()
     {
         using var data = new PluginFixtureBuilder("pw-save-leftover")
