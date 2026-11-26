@@ -1,0 +1,47 @@
+# The developer sets each box's budget, in seconds of its tests' summed time on the machine that runs a
+# branch's gates (spec/architecture/tests.md). `other` is the budget of the tests of no box.
+other = 165
+
+[boxes]
+agent = 10
+client = 5
+coreLib = 5
+deployment = 5
+downloadedFileCommands = 5
+downloads = 5
+drivingLib = 5
+editor = 5
+instanceAdapter = 105
+instanceCommands = 5
+instanceLoader = 5
+loadOrderFileCodec = 5
+lootMetadata = 5
+manifestAdapter = 5
+"MEditService.Codec.Tests" = 60
+"MEditService.Commands.Tests" = 100
+"MEditService.Http.Tests" = 140
+"MEditService.LoadOrder.Tests" = 5
+"MEditService.ModFolderAdapter.Tests" = 5
+"MEditService.PluginAdapter.Tests" = 60
+"MEditService.RecordIndex.Tests" = 505
+"MEditService.SourceAdapter.Tests" = 125
+"MEditService.TestSupport" = 20
+modCommands = 5
+mods = 5
+modStatus = 5
+nexus = 5
+pluginCommands = 5
+plugins = 5
+ports = 5
+repositoriesLib = 5
+scripts = 5
+sortingRules = 5
+sourceCommands = 10
+sourceLanguage = 5
+symbolNames = 5
+symbols = 5
+tables = 5
+textDocuments = 5
+toolbox = 5
+webview = 30
+wire = 5

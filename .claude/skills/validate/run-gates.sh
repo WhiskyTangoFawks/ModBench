@@ -228,8 +228,10 @@ if $MERGE_TO_MAIN; then
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
+# The budgets hold on the machine that runs a branch's gates, and the Windows run is given none.
 echo "=== Test times and budget ==="
 python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" \
+  "$ROOT/.claude/skills/validate/test-budgets.toml" \
   || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
 
 if $HOLDS_SLOT; then
