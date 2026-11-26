@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
+RAN = 'ran'
+SKIPPED = 'skipped'
 TRX = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
 VITEST_SKIPPED = {'pending', 'skipped', 'todo', 'disabled'}
 UNITTEST_SKIP = re.compile(r'^(.+?) \.\.\. skipped\b', re.MULTILINE)
@@ -16,10 +18,6 @@ UNITTEST_DURATION = re.compile(r'^(\d+\.\d+)s +(\S.*)$')
 MOCHA_PENDING_SUMMARY = re.compile(r'^\s+\d+ pending$', re.MULTILINE)
 MOCHA_PENDING_TEST = re.compile(r'^\s+- (.+)$', re.MULTILINE)
 MOCHA_PASSED = re.compile(r'^\s+[✔√] (.+) \((\d+)ms\)$', re.MULTILINE)
-
-
-RAN = 'ran'
-SKIPPED = 'skipped'
 
 
 class Result(NamedTuple):
@@ -33,12 +31,13 @@ def in_trx(text: str) -> list[Result]:
     until a first result arrives, every test thread can be waiting on the one-off warm-up. A TRX
     file holds one assembly. The first result to finish is therefore charged nothing, and a class
     or collection fixture's setup is in no result's duration, so neither reaches the time report."""
-    parsed = [(result, datetime.fromisoformat(result.get('endTime')) if result.get('endTime') else None)
-              for result in ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX)]
-    warmed = min((end for _, end in parsed if end), default=None)
+    elements = list(ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX))
+    ends = [datetime.fromisoformat(element.attrib['endTime']) if 'endTime' in element.attrib else None
+            for element in elements]
+    warmed = min((end for end in ends if end), default=None)
 
     def seconds(result: ET.Element, end: datetime | None) -> float | None:
-        if end is None:
+        if end is None or warmed is None:
             return None
         hours, minutes, secs = result.get('duration', '0:0:0').split(':')
         start = end - timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs))
@@ -46,7 +45,7 @@ def in_trx(text: str) -> list[Result]:
 
     return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
                    seconds(result, end))
-            for result, end in parsed]
+            for result, end in zip(elements, ends)]
 
 
 def in_vitest(text: str) -> list[Result]:

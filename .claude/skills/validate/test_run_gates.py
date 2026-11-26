@@ -291,7 +291,7 @@ class TimeReport(FakeDotnet):
 
     def test_the_docs_scans_beside_no_backend_run_write_a_trx_for_the_report(self):
         _, calls = self.run_after_changing("spec/a.d2", "--docs")
-        self.assertIn("--logger trx", calls[0])
+        self.assertRegex(calls[0], r"--logger trx --results-directory /tmp/medit-reports\.[^/ ]+/backend ")
         self.assertTrue(calls[0].endswith("MEditService.Architecture.Tests"), calls)
 
 

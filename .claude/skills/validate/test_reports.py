@@ -21,7 +21,7 @@ class Readers(unittest.TestCase):
     def test_a_vitest_test_is_named_with_its_file_and_is_skipped_when_pending_or_todo(self):
         self.assertEqual(
             reports.in_vitest(fx.vitest(('/repo/src/a.test.ts', [
-                (RAN, 'passed', 2500), (SKIPPED, 'pending', None), ('todo', 'todo', None)]))),
+                ('ran', 'passed', 2500), ('skipped', 'pending', None), ('todo', 'todo', None)]))),
             [Result('a.test.ts > ran', RAN, 2.5), Result('a.test.ts > skipped', SKIPPED, None),
              Result('a.test.ts > todo', SKIPPED, None)])
 
@@ -36,8 +36,8 @@ class Readers(unittest.TestCase):
                          [Result('1 skipped, unnamed', SKIPPED, None)])
 
     def test_a_mocha_log_holds_each_pending_test_and_each_passed_test_with_its_time(self):
-        self.assertEqual(reports.in_mocha(fx.mocha_log(passed=[('slow', 1234)], pending=[SKIPPED])),
-                         [Result(SKIPPED, SKIPPED, None), Result('slow', RAN, 1.234)])
+        self.assertEqual(reports.in_mocha(fx.mocha_log(passed=[('slow', 1234)], pending=['skipped'])),
+                         [Result('skipped', SKIPPED, None), Result('slow', RAN, 1.234)])
 
     def test_a_mocha_log_without_pending_tests_holds_none_though_a_line_starts_with_a_dash(self):
         self.assertEqual(reports.in_mocha('  - a dash in output\n  2 passing (303ms)\n'), [])

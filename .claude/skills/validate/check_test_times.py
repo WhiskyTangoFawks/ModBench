@@ -17,8 +17,8 @@ def over_ceiling(directory: Path) -> list[tuple[str, float]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    directory, elapsed, budget = (sys.argv[1:] if argv is None else argv)
-    elapsed, budget = float(elapsed), float(budget)
+    directory, elapsed_argument, budget_argument = sys.argv[1:] if argv is None else argv
+    elapsed, budget = float(elapsed_argument), float(budget_argument)
     over = over_ceiling(Path(directory))
     for name, time in over:
         print(f'{time:7.1f} s  {name}')

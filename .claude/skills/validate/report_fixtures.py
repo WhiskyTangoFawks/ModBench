@@ -1,5 +1,6 @@
 """The reports of each stack, as the tests of reports.py, skips.py and check_test_times.py build them."""
 import json
+from collections.abc import Sequence
 
 
 def trx_result(name: str, end: float | None = None, duration: float = 0, outcome: str = 'Passed') -> str:
@@ -25,7 +26,7 @@ def vitest(*files: tuple[str, list[tuple[str, str, float | None]]]) -> str:
         for path, tests in files]})
 
 
-def unittest_log(*, skipped: tuple[str, ...] | list[str] = (), durations: list[tuple[str, float]] = ()) -> str:
+def unittest_log(*, skipped: Sequence[str] = (), durations: Sequence[tuple[str, float]] = ()) -> str:
     """Python 3.12's verbose log of a run with --durations 0. Each duration is (name, seconds)."""
     results = ''.join(f"{name} ... skipped 'no reason'\n" for name in skipped)
     rows = ''.join(f'{seconds:.3f}s     {name}\n' for name, seconds in durations)
@@ -33,7 +34,7 @@ def unittest_log(*, skipped: tuple[str, ...] | list[str] = (), durations: list[t
             f'Ran {len(durations)} tests in 3s\n\nOK{f" (skipped={len(skipped)})" if skipped else ""}\n')
 
 
-def mocha_log(*, passed: list[tuple[str, int]] = (), pending: list[str] = ()) -> str:
+def mocha_log(*, passed: Sequence[tuple[str, int]] = (), pending: Sequence[str] = ()) -> str:
     """Each passed is (name, ms)."""
     rows = ''.join(f'    ✔ {name} ({ms}ms)\n' for name, ms in passed)
     dashes = ''.join(f'    - {name}\n' for name in pending)
