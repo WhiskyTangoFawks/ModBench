@@ -15,7 +15,6 @@ public sealed class PartialFormCompareTests(PartialFormCompareTests.ThreeCopies 
     private const float MasterWaterHeight = 100f;
     private const float OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement = 999f;
 
-    /// <summary>A master's cells, their partial-form copies and a later winner, indexed once: every test only reads them.</summary>
     public sealed class ThreeCopies : IDisposable
     {
         private readonly PluginFixtureData _fixture;

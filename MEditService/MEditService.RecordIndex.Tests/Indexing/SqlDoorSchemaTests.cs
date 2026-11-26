@@ -14,7 +14,6 @@ public sealed class SqlDoorSchemaTests(SqlDoorSchemaTests.TwoCopies copies) : IC
     private static readonly PluginAddress BaseKey = new("Base.esm", PluginOrigin.DataDirectory);
     private static readonly PluginAddress OverKey = new("Over.esp", PluginOrigin.DataDirectory);
 
-    /// <summary>Base.esm's NPC and Over.esp's copy of it, indexed once: each test sets the filter it reads under.</summary>
     public sealed class TwoCopies : IDisposable
     {
         private readonly PluginFixtureData _fixture;

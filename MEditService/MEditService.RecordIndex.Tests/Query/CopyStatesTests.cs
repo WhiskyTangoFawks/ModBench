@@ -17,7 +17,6 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
     private static readonly FormKey Item = new(ModKey.FromFileName(First.Name), 0x800);
     private static readonly FormKey OtherItem = new(ModKey.FromFileName(First.Name), 0x801);
 
-    /// <summary>The item and its copies, indexed once: every test of the class only reads them.</summary>
     public sealed class FourPlugins : IDisposable
     {
         private readonly PluginFixtureData _fixture = Fixture();
