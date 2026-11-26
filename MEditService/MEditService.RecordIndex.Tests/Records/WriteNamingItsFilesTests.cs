@@ -172,8 +172,6 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         ["named by the watch"] = (test, saved) => test.Watched(saved),
     };
 
-    // The roads differ only in whether the writer's documents come with the files the record index
-    // reads (Indexer.Name); each write's rows are the projection's, so one write takes the watch's road.
     public static TheoryData<string, string> WriteKindsByRoad()
     {
         TheoryData<string, string> table = [];

@@ -151,7 +151,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void AfterRestart_ASnapshotWithoutAPlugin_UnregistersIt_WithoutOpeningAPlugin()
+    public void AfterRestart_ASnapshotWithoutAPlugin_UnregistersIt_AndOneWithItAgainAfterTheNext_RegistersItsRows_WithoutOpeningAPlugin()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-restart");
@@ -162,13 +162,23 @@ public sealed class ReconcileDiffTests
             first.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
         }
 
-        var (second, opens) = MakeIndex(holder);
-        using var _ = second;
-        using var __ = opens;
-        second.Reconcile(holder, fx.DataFolder, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
+        var (second, secondOpens) = MakeIndex(holder);
+        using (second)
+        using (secondOpens)
+        {
+            second.Reconcile(holder, fx.DataFolder, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
-        Assert.Equal(0, opens.OpenedTotal);
-        Assert.Empty(second.ListedIn(Key(fx, "B.esp")));
-        Assert.Equal("A.esm", WinnerOf(second, SharedNpc(second, fx)));
+            Assert.Equal(0, secondOpens.OpenedTotal);
+            Assert.Empty(second.ListedIn(Key(fx, "B.esp")));
+            Assert.Equal("A.esm", WinnerOf(second, SharedNpc(second, fx)));
+        }
+
+        var (third, thirdOpens) = MakeIndex(holder);
+        using var _ = third;
+        using var __ = thirdOpens;
+        third.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
+
+        Assert.Equal(0, thirdOpens.OpenedTotal);
+        Assert.Equal("B.esp", WinnerOf(third, SharedNpc(third, fx)));
     }
 }

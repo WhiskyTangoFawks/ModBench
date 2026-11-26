@@ -180,13 +180,4 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
     }
-
-    private void RenameTheNpc(string newEditorId)
-    {
-        using var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-        var document = live.DocumentOf(_npc, Plugin);
-        live.Rename(
-            _entry, document, newEditorId,
-            live.BodyOf(_npc, Plugin).Replace($"\"{NpcEditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
-    }
 }

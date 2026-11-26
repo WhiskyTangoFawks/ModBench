@@ -362,7 +362,7 @@ public class RegistrationScopingTests
         Assert.DoesNotContain(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
     }
 
-    private static readonly string[] HoldingBetaInEachRelationTheSqlDoorReads =
+    private static readonly string[] HoldingBetaInEachRelationAndARecordTypesView =
     [
         $"EXISTS (SELECT 1 FROM records WHERE plugin = '{BetaKey.Name}')",
         $"EXISTS (SELECT 1 FROM form_lookup WHERE plugin = '{BetaKey.Name}')",
@@ -370,17 +370,18 @@ public class RegistrationScopingTests
         $"EXISTS (SELECT 1 FROM holdings WHERE plugin = '{BetaKey.Name}')",
         $"EXISTS (SELECT 1 FROM document_names WHERE plugin = '{BetaKey.Name}')",
         $"EXISTS (SELECT 1 FROM cell_location WHERE plugin = '{BetaKey.Name}')",
+        $"EXISTS (SELECT 1 FROM npc_ WHERE plugin = '{BetaKey.Name}')",
     ];
 
     [Fact]
     public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
     {
         using var fx = Build("registration-inactive-door");
-        Assert.True(fx.Index.Matching($"SELECT form_key FROM records WHERE {string.Join(" AND ", HoldingBetaInEachRelationTheSqlDoorReads)}") > 0);
+        Assert.True(fx.Index.Matching($"SELECT form_key FROM records WHERE {string.Join(" AND ", HoldingBetaInEachRelationAndARecordTypesView)}") > 0);
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.Equal(0, fx.Index.Matching($"SELECT form_key FROM records WHERE {string.Join(" OR ", HoldingBetaInEachRelationTheSqlDoorReads)}"));
+        Assert.Equal(0, fx.Index.Matching($"SELECT form_key FROM records WHERE {string.Join(" OR ", HoldingBetaInEachRelationAndARecordTypesView)}"));
     }
 
     [Fact]

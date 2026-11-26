@@ -66,7 +66,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     }
 
     [Fact]
-    public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand_AndIsNotReadAgainWhileItsBytesHold()
+    public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand()
     {
         NonCompiledPluginOverAnUnreadableBinary();
 
@@ -74,21 +74,6 @@ public sealed class UnreadableBinaryTests : IDisposable
         Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
         Assert.Contains(_index.ListedIn(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
             row => row.EditorId == "OtherNpc");
-        var before = _notifications.Notifications.Count;
-        var standing = _index.Status;
-        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
-        other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
-        other.WriteToBinary(OtherPluginPath);
-
-        _index.NextCheckThatMayFail();
-
-        Assert.All(
-            _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),
-            n =>
-            {
-                Assert.Equal(standing.State, n.Status.State);
-                Assert.Equal(standing.Failures, n.Status.Failures);
-            });
     }
 
     [Fact]

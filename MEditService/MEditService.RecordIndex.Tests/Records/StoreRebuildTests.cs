@@ -167,6 +167,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.Equal(["NpcA"], midRefill);
         Assert.Equal(["NpcA"], ListedNpcs(index));
+        Assert.Equal(new RecordFilter(MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
     }
 
     [Fact]

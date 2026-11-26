@@ -186,6 +186,30 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void ABinaryHeldByAnotherProcessWhenItIsReadAgain_IsReadAtTheNextCheck()
+    {
+        using var index = Reconciled(new FailsToOpen(PluginFailures.Inaccessible(), atOpen: n => n == 2));
+        PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenBeforeTheHold"));
+        index.NextCheckThatMayFailUntil(() => Failed(index), "the held read's failure");
+
+        index.NextCheckUntil(() => !Failed(index), "the binary read again");
+
+        Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "WrittenBeforeTheHold");
+    }
+
+    [Fact]
+    public async Task APluginWhoseStringsFileWasMissing_IsReadAgainOnceItArrivesWithItsBytesUnchanged()
+    {
+        var adapter = new FailsToOpen(await PluginFailures.MissingStringsAsync(), atOpen: n => n == 1);
+        using var index = Reconciled(adapter);
+        Assert.True(adapter.Failed);
+
+        index.NextCheckUntil(() => !Failed(index), "the plugin read again");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    [Fact]
     public void ATreeDocumentHeldOnlyWhileTheTreeIsRead_IsReadAgainWithItsBytesUnchanged()
     {
         SourceMods.Init(Plugin);
@@ -285,6 +309,7 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Theory]
+    [InlineData(typeof(InvalidOperationException), "the codec broke", "the codec broke", true)]
     [InlineData(typeof(InvalidOperationException), "", "could not be read", true)]
     [InlineData(typeof(IOException), "the file is held", "the file is held", false)]
     [InlineData(typeof(UnauthorizedAccessException), "the file is held", "the file is held", false)]

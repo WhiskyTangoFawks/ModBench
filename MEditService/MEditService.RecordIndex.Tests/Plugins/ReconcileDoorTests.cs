@@ -29,7 +29,7 @@ public sealed class ReconcileDoorTests
         [.. notifications.Notifications.OfType<LoadOrderStatusNotification>()];
 
     [ForeignIndexHolderFact]
-    public void AnotherWindowHoldsTheInstance_IsAnsweredAsHeldElsewhereStatus_ReadsNothing_MintsNoFile_AndARefreshOnceItClosesLoads()
+    public void AnotherWindowHoldsTheInstance_IsAnsweredAsHeldElsewhereStatus_ReadsNothing_MintsNoFile_AndLoadsOnceReleased()
     {
         using var data = new PluginFixtureBuilder("held-elsewhere-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
         var earlierHolder = new LoadOrderHolder();
@@ -48,12 +48,30 @@ public sealed class ReconcileDoorTests
         Assert.Equal(version, index.Status.Version);
         Assert.NotNull(index.Status.Message);
         Assert.Contains("another Modbench window", index.Status.Message, StringComparison.Ordinal);
-        Assert.Contains("Close that window, then refresh.", index.Status.Message, StringComparison.Ordinal);
         var published = Assert.Single(StatusesPublished(notifications));
         Assert.Equal(LoadOrderState.HeldElsewhere, published.Status.State);
         Assert.Equal(index.Status.Message, published.Status.Message);
         Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetPlugins().Refused().Refusal);
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexFolder).Order(StringComparer.Ordinal));
+
+        otherWindow.Dispose();
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
+    }
+
+    [ForeignIndexHolderFact]
+    public void ARefreshAfterTheOtherWindowCloses_TakesTheRecordIndex_AndClearsTheRefusal()
+    {
+        using var data = new PluginFixtureBuilder("takeover-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
+        var earlierHolder = new LoadOrderHolder();
+        using (var earlier = Indexes.Open(earlierHolder))
+            earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        using var otherWindow = ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
+        Assert.Contains("Close that window, then refresh.", index.Status.Message, StringComparison.Ordinal);
 
         otherWindow.Dispose();
         Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));

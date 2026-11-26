@@ -23,7 +23,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     private readonly string _compiledPluginNpc;
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly MutagenPluginAdapter _disk;
+    private readonly MutagenPluginAdapter _adapter;
     private readonly OpenedIndex _index;
 
     public EveryCheckValidatesTests()
@@ -38,8 +38,8 @@ public sealed class EveryCheckValidatesTests : IDisposable
         _compiledPluginNpc = npc.ToString();
         SourceMods.Init(_compiledPlugin);
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        _disk = new MutagenPluginAdapter(clock);
-        _index = Indexes.Open(_holder, _disk, notifications: _notifications, timeProvider: clock);
+        _adapter = new MutagenPluginAdapter(clock);
+        _index = Indexes.Open(_holder, _adapter, notifications: _notifications, timeProvider: clock);
         Reconcile();
     }
 
@@ -79,12 +79,12 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void AReconcile_KeepsNoHashOfAFileTheLoadOrderNoLongerNames()
     {
         using (new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None))
-            Assert.NotNull(_disk.HashOf(_nonCompiledPlugin.Path));
+            Assert.NotNull(_adapter.HashOf(_nonCompiledPlugin.Path));
 
         _index.Reconcile(_holder, _fixture.DataFolder, [_compiledPlugin], GameRelease.Fallout4, _fixture.InstanceRoot);
 
         using var held = new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(_disk.HashOf(_nonCompiledPlugin.Path));
+        Assert.Null(_adapter.HashOf(_nonCompiledPlugin.Path));
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public void ACheck_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.IsType<PluginFailure.Inaccessible>(_disk.ClaimOf(_nonCompiledPlugin.Path, GameRelease.Fallout4).Failure());
+        Assert.IsType<PluginFailure.Inaccessible>(_adapter.ClaimOf(_nonCompiledPlugin.Path, GameRelease.Fallout4).Failure());
 
         var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 
@@ -167,7 +167,6 @@ public sealed class EveryCheckValidatesTests : IDisposable
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
-
 
     [Fact]
     public void ACheck_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsNothingOfIt()
