@@ -8,10 +8,6 @@ SCRIPTS=false
 DETACH=false
 WAIT=false
 FAILED=false
-# The merge-to-main tier is paused until epic #2450 lands: a merge run runs the branch gates. #2466 resumes
-# the tier by deleting this switch and PAUSED_NOTICE.
-MERGE_TIER_PAUSED=true
-PAUSED_NOTICE="The merge-to-main tier is paused until epic #2450 lands: these are the branch gates."
 # The mode survives each re-exec in the environment, as BUILD_SLOT_HELD does.
 MERGE_TO_MAIN=false
 [[ ${MEDIT_MERGE_TO_MAIN:-} == true ]] && MERGE_TO_MAIN=true
@@ -32,8 +28,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-MERGE_REQUESTED=$MERGE_TO_MAIN
-! $MERGE_TIER_PAUSED || MERGE_TO_MAIN=false
 ! $MERGE_TO_MAIN || BACKEND=true
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
@@ -92,8 +86,8 @@ REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
 $HOLDS_SLOT || REPORTS=$REPORTS.comments
 SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
 { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
-BUDGET_SECONDS=300
-! $MERGE_REQUESTED || BUDGET_SECONDS=600
+RUN=branch
+! $MERGE_TO_MAIN || RUN=merge
 SECONDS=0
 
 # Each unittest run leaves its verbose log, with every test's time, for skips.py and
@@ -107,7 +101,6 @@ unittest_discover() {
   return $status
 }
 
-! { $MERGE_REQUESTED && $MERGE_TIER_PAUSED; } || echo "$PAUSED_NOTICE"
 echo "=== Gate 1: Comment discipline ==="
 EXCLUDE_RE='^(references/|modbench/src/wire/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
 tracked() { (cd "$ROOT" && git ls-files "$@" | grep -Ev "$EXCLUDE_RE" | while read -r f; do [[ -f "$f" ]] && echo "$f"; done); }
@@ -228,10 +221,9 @@ if $MERGE_TO_MAIN; then
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
-# The budgets hold on the machine that runs a branch's gates, and the Windows run is given none.
 echo "=== Test times and budget ==="
-python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" \
-  "$ROOT/.claude/skills/validate/test-budgets.toml" \
+python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" \
+  "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" \
   || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
 
 if $HOLDS_SLOT; then

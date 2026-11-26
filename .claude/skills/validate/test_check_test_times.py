@@ -1,5 +1,5 @@
-"""Pins check_test_times.py: its 100 ms list, the ceiling and box budgets it reports, and which of them fail
-the run once the switch is on."""
+"""Pins check_test_times.py: its 100 ms list, the ceiling, box budgets and wall time it reports for each run, and
+which of them fail the run once the switch is on."""
 import contextlib
 import io
 import pathlib
@@ -13,6 +13,8 @@ import reports
 
 
 class Reports(unittest.TestCase):
+    WALLS = '[wall]\nbranch = 300\nmerge = 600\nwindows = 900\n'
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -21,16 +23,16 @@ class Reports(unittest.TestCase):
     def report(self, name, text):
         (self.dir / name).write_text(text)
 
-    def main(self, elapsed: float, budget: float, budgets_file: str | None = None) -> tuple[int, str]:
+    def main(self, elapsed: float, run: str = 'branch', budgets: str = 'other = 60\n[boxes]\n') -> tuple[int, str]:
+        file = self.dir / 'budgets.toml'
+        file.write_text(budgets + self.WALLS)
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            status = ctt.main([str(self.dir), str(elapsed), str(budget), *([budgets_file] if budgets_file else [])])
+            status = ctt.main([str(self.dir), str(elapsed), str(file), run])
         return status, printed.getvalue()
 
     def with_budgets(self, text: str) -> tuple[int, str]:
-        budgets = self.dir / 'budgets.toml'
-        budgets.write_text(text)
-        return self.main(10, 300, str(budgets))
+        return self.main(10, budgets=text)
 
 
 class SlowTests(Reports):
@@ -51,14 +53,25 @@ class SlowTests(Reports):
 class Main(Reports):
     def test_it_names_each_test_over_100_ms_with_its_time_and_not_the_others(self) -> None:
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Quick', 5, 0.05), fx.trx_result('A.Slow', 100, 0.25)))
-        _, printed = self.main(100, 300)
+        _, printed = self.main(100)
         self.assertIn('   0.25 s  A.Slow\n--- 1 TESTS OVER 100 ms ---\n', printed)
         self.assertNotIn('A.Quick', printed)
 
-    def test_it_prints_the_wall_time_against_the_budget_and_says_when_it_is_over(self):
-        for elapsed, line in ((213.4, 'Wall time 213 s of 300 s budget\n'), (340, 'Wall time 340 s of 300 s budget: OVER BUDGET by 40 s\n')):
-            with self.subTest(elapsed=elapsed):
-                self.assertIn(line, self.main(elapsed, 300)[1])
+    def test_it_prints_the_wall_time_against_its_runs_budget_and_says_when_it_is_over(self):
+        for run, elapsed, line in (('branch', 213.4, 'Wall time 213 s of 300 s budget\n'),
+                                   ('branch', 340, 'Wall time 340 s of 300 s budget: OVER BUDGET by 40 s\n'),
+                                   ('merge', 640, 'Wall time 640 s of 600 s budget: OVER BUDGET by 40 s\n'),
+                                   ('windows', 950, 'Wall time 950 s of 900 s budget: OVER BUDGET by 50 s\n')):
+            with self.subTest(run=run, elapsed=elapsed):
+                self.assertIn(line, self.main(elapsed, run)[1])
+
+    def test_the_windows_run_over_its_wall_budget_fails_once_its_own_switch_is_on_and_a_linux_run_over_its_own_never_does(self):
+        for run, elapsed, switch, windows_switch, status in (('windows', 950, True, False, 0), ('windows', 950, False, True, 1),
+                                                             ('windows', 850, True, True, 0), ('merge', 700, True, True, 0),
+                                                             ('branch', 400, True, True, 0)):
+            with (self.subTest(run=run, elapsed=elapsed, switch=switch, windows_switch=windows_switch),
+                  mock.patch.object(ctt, 'FAILS_THE_RUN', switch), mock.patch.object(ctt, 'WINDOWS_FAILS_THE_RUN', windows_switch)):
+                self.assertEqual(self.main(elapsed, run)[0], status)
 
 
 class Ceiling(Reports):
@@ -101,8 +114,6 @@ class Boxes(Reports):
     def with_budgets(self, text: str) -> tuple[int, str]:
         return super().with_budgets(text + self.APPROVED)
 
-    def test_with_no_budgets_it_prints_each_boxs_summed_time_most_first(self) -> None:
-        self.assertIn('    2.0 s  B.Tests\n    1.5 s  plugins\n    1.2 s  hooks\n    0.5 s  webview\n', self.main(10, 300)[1])
 
     def test_it_prints_each_box_against_its_budget_and_the_tests_of_no_box_together_against_other(self) -> None:
         self.assertIn('    2.0 s of    4 s  B.Tests\n    1.5 s of    2 s  plugins\n    0.5 s of    1 s  webview\n'
@@ -128,9 +139,13 @@ class Boxes(Reports):
             with self.subTest(budgets=budgets, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
                 self.assertEqual(self.with_budgets(budgets)[0], status)
 
-    def test_a_run_given_no_budgets_fails_on_none_though_the_switch_is_on(self) -> None:
-        with mock.patch.object(ctt, 'FAILS_THE_RUN', True):
-            self.assertEqual(self.main(900, 300)[0], 0)
+    def test_the_windows_run_prints_each_boxs_summed_time_most_first_and_fails_on_no_box_and_no_ceiling_though_both_switches_are_on(self) -> None:
+        overrun = 'other = 1\n[boxes]\n"B.Tests" = 1\n'
+        with mock.patch.object(ctt, 'FAILS_THE_RUN', True), mock.patch.object(ctt, 'WINDOWS_FAILS_THE_RUN', True):
+            status, printed = self.main(10, 'windows', overrun)
+        self.assertIn('--- 4 TESTS OVER 100 ms ---\n    2.0 s  B.Tests\n    1.5 s  plugins\n    1.2 s  hooks\n    0.5 s  webview\n'
+                      'Wall time 10 s of 900 s budget\n', printed)
+        self.assertEqual(status, 0)
 
 
 if __name__ == '__main__':

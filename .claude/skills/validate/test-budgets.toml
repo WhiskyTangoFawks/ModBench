@@ -2,6 +2,13 @@
 # branch's gates (spec/architecture/tests.md). `other` is the budget of the tests of no box.
 other = 165
 
+# Each run's budget on its whole wall time, in seconds.
+[wall]
+branch = 300
+merge = 600
+# The Windows runs measured 950 to 1,022 s, and 1,100 s is about 8% over the slowest.
+windows = 1100
+
 [boxes]
 agent = 10
 client = 5
