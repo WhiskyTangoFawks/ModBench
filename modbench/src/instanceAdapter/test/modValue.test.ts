@@ -49,18 +49,22 @@ describe('a folder as a value', () => {
     expect([...(await adapter.folderValue(folder())).exclude].sort()).toEqual(['a.esp', 'docs']);
   });
 
-  onWindows.it('(Windows\' file system ignores case) says its file system ignores case when it finds a file by a name in another case', async () => {
-    await holding(folder(), ['a.esp']);
+  onWindows.describe('(Windows\' file system ignores case)', () => {
+    it('says its file system ignores case when it finds a file by a name in another case', async () => {
+      await holding(folder(), ['a.esp']);
 
-    expect((await adapter.folderValue(folder())).ignoresCase).toBe(true);
+      expect((await adapter.folderValue(folder())).ignoresCase).toBe(true);
+    });
   });
 
-  onPosix.it('(a Linux file system tells case apart) says its file system does not ignore case when it finds no file by a name in another case, and when it lists two names that differ only in case', async () => {
-    await holding(folder(), ['a.esp']);
-    const one = await adapter.folderValue(folder());
-    await holding(folder(), ['a.txt', 'A.TXT']);
+  onPosix.describe('(a Linux file system tells case apart)', () => {
+    it('says its file system does not ignore case when it finds no file by a name in another case, and when it lists two names that differ only in case', async () => {
+      await holding(folder(), ['a.esp']);
+      const one = await adapter.folderValue(folder());
+      await holding(folder(), ['a.txt', 'A.TXT']);
 
-    expect([one.ignoresCase, (await adapter.folderValue(folder())).ignoresCase]).toEqual([false, false]);
+      expect([one.ignoresCase, (await adapter.folderValue(folder())).ignoresCase]).toEqual([false, false]);
+    });
   });
 
   it('says its file system does not ignore case when no file name has a case to change', async () => {
@@ -112,17 +116,19 @@ describe('a mod as a value', () => {
     expect(await adapter.modValue(folder(), undefined, [])).toEqual({ kind: 'notAsked' });
   });
 
-  onPosix.it('(only POSIX modes refuse a read) is unreadable, saying why, when the game files cannot be read', async () => {
-    const game = await gameOnDisk({ 'Data/a.esp': 'game' });
-    await chmod(join(game, 'Data'), 0o000);
-    try {
-      const value = await adapterOver(root, { gameFolderSettingValue: game }).modValue(folder(), { installationFiles: [], gameFiles: ['a.esp'] }, []);
+  onPosix.describe('(only POSIX modes refuse a read)', () => {
+    it('is unreadable, saying why, when the game files cannot be read', async () => {
+      const game = await gameOnDisk({ 'Data/a.esp': 'game' });
+      await chmod(join(game, 'Data'), 0o000);
+      try {
+        const value = await adapterOver(root, { gameFolderSettingValue: game }).modValue(folder(), { installationFiles: [], gameFiles: ['a.esp'] }, []);
 
-      expect(value).toEqual({ kind: 'unreadable', reason: expect.stringContaining('EACCES') as unknown });
-    } finally {
-      await chmod(join(game, 'Data'), 0o755);
-      await rm(game, { recursive: true, force: true });
-    }
+        expect(value).toEqual({ kind: 'unreadable', reason: expect.stringContaining('EACCES') as unknown });
+      } finally {
+        await chmod(join(game, 'Data'), 0o755);
+        await rm(game, { recursive: true, force: true });
+      }
+    });
   });
 
   it('is unreadable, saying why, when a read rejects', async () => {

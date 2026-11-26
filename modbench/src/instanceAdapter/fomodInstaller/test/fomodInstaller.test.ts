@@ -391,8 +391,10 @@ describe('the FOMOD installer', () => {
       );
     });
 
-    onPosix.it('names the signal an engine died of', async () => {
-      await expect(install([], crashing('killedBySignal.ts'))).rejects.toThrow('its installer cannot be read: it was killed by SIGKILL. Request it again with manual');
+    onPosix.describe('(a signal ends a process on POSIX)', () => {
+      it('names the signal an engine died of', async () => {
+        await expect(install([], crashing('killedBySignal.ts'))).rejects.toThrow('its installer cannot be read: it was killed by SIGKILL. Request it again with manual');
+      });
     });
 
     it('refuses as an installer that cannot be read, naming the fatal error\'s header, and logs the whole stderr', async () => {

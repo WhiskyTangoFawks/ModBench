@@ -71,11 +71,13 @@ describe('the plugins each origin provides', () => {
     expect(await pluginsOf()).toEqual(new Map());
   });
 
-  onPosix.it('(only a file system that tells case apart holds two spellings) answers a Data folder plugin no origin provides, at the first of its spellings in code-point order, and an origin\'s copy over the Data folder\'s', async () => {
-    await holding({ 'mods/M/MASTER.ESM': '' });
-    await Promise.all(['master.esm', 'loose.esp', 'Loose.esp'].map((name) => writeFile(join(game, 'Data', name), '')));
+  onPosix.describe('(only a file system that tells case apart holds two spellings)', () => {
+    it('answers a Data folder plugin no origin provides, at the first of its spellings in code-point order, and an origin\'s copy over the Data folder\'s', async () => {
+      await holding({ 'mods/M/MASTER.ESM': '' });
+      await Promise.all(['master.esm', 'loose.esp', 'Loose.esp'].map((name) => writeFile(join(game, 'Data', name), '')));
 
-    expect(await pluginsOf()).toEqual(new Map([['master.esm', 'MASTER.ESM'], ['loose.esp', 'Loose.esp']]));
+      expect(await pluginsOf()).toEqual(new Map([['master.esm', 'MASTER.ESM'], ['loose.esp', 'Loose.esp']]));
+    });
   });
 
   it('answers why there are none when the Data folder is unresolved', async () => {

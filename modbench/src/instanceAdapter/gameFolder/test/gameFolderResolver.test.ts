@@ -56,26 +56,32 @@ describe('the game folder', () => {
     expect(await resolved(naming(root))).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
   });
 
-  onPosix.it('(a colon is legal in a Linux folder name) is a folder the manager names with a colon inside it, only a leading drive letter being Wine\'s', async () => {
-    const root = await gameFolder('A:B');
+  onPosix.describe('(a colon is legal in a Linux folder name)', () => {
+    it('is a folder the manager names with a colon inside it, only a leading drive letter being Wine\'s', async () => {
+      const root = await gameFolder('A:B');
 
-    expect(await resolved({ gamePath: root })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+      expect(await resolved({ gamePath: root })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
   });
 
-  onPosix.it('(Wine translates a drive letter only on Linux) is the POSIX path of a Z:-drive game path, as a Windows manager under Proton writes it, without asking Steam for the prefix', async () => {
-    const root = await gameFolder();
-    const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.reject(new Error('the prefix was asked')) };
+  onPosix.describe('(Wine translates a drive letter only on Linux)', () => {
+    it('is the POSIX path of a Z:-drive game path, as a Windows manager under Proton writes it, without asking Steam for the prefix', async () => {
+      const root = await gameFolder();
+      const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.reject(new Error('the prefix was asked')) };
 
-    expect(await resolved({ gamePath: `Z:${root.replaceAll('/', '\\')}`, detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+      expect(await resolved({ gamePath: `Z:${root.replaceAll('/', '\\')}`, detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
   });
 
-  onPosix.it("(Wine translates a drive letter only on Linux) is in the Proton prefix's drive_c for a C:-drive game path", async () => {
-    const prefix = await temp();
-    const root = join(prefix, 'drive_c', 'Games', 'Fallout4');
-    await mkdir(join(root, 'Data'), { recursive: true });
-    const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) };
+  onPosix.describe("(Wine translates a drive letter only on Linux)", () => {
+    it("is in the Proton prefix's drive_c for a C:-drive game path", async () => {
+      const prefix = await temp();
+      const root = join(prefix, 'drive_c', 'Games', 'Fallout4');
+      await mkdir(join(root, 'Data'), { recursive: true });
+      const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) };
 
-    expect(await resolved({ gamePath: 'C:\\Games\\Fallout4', detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+      expect(await resolved({ gamePath: 'C:\\Games\\Fallout4', detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
   });
 
   onWindows.describe('on Windows', () => {
