@@ -37,9 +37,9 @@ def lapsed(results: list[reports.Result], approved: dict[str, str]) -> list[tupl
     return [(key, seconds) for key, seconds in slowest.items() if seconds < CEILING_SECONDS]
 
 
-def report_ceiling(results: list[reports.Result], over: list[tuple[str, float]], approved: dict[str, str]) -> int:
-    """The number of tests over the ceiling no approval names. over is slow_tests' list."""
-    unapproved = [(name, seconds) for name, seconds in over
+def report_ceiling(results: list[reports.Result], slow: list[tuple[str, float]], approved: dict[str, str]) -> int:
+    """The number of tests over the ceiling no approval names."""
+    unapproved = [(name, seconds) for name, seconds in slow
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
         print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING, NOT APPROVED')
@@ -86,15 +86,15 @@ def main(argv: list[str] | None = None) -> int:
     (budgets_file,) = optional or [None]
     elapsed, budget = float(elapsed_argument), float(budget_argument)
     results = reports.results(Path(directory))
-    over = slow_tests(results)
-    for name, seconds in over:
+    slow = slow_tests(results)
+    for name, seconds in slow:
         print(f'{seconds:7.2f} s  {name}')
-    print(f'--- {len(over)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
+    print(f'--- {len(slow)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
     times = box_times(results)
     failing = 0
     if budgets_file:
         budgets = tomllib.loads(Path(budgets_file).read_text())
-        failing = (report_ceiling(results, over, budgets.get('approved', {}))
+        failing = (report_ceiling(results, slow, budgets.get('approved', {}))
                    + report_budgets(times, budgets['boxes'], budgets['other']))
     else:
         for box, seconds in times:

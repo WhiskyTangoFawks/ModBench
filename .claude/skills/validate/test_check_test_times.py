@@ -1,5 +1,5 @@
-"""Pins check_test_times.py: given budgets, a box over its budget or without one and an unapproved test
-over 1 s fail the run once the switch is on, and a lapsed approval fails nothing."""
+"""Pins check_test_times.py: its 100 ms list, the ceiling and box budgets it reports, and which of them fail
+the run once the switch is on."""
 import contextlib
 import io
 import pathlib
