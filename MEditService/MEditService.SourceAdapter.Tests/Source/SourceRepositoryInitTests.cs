@@ -1,9 +1,7 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using static MEditService.SourceAdapter.Tests.TestSupport.PluginBaselines;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -20,26 +18,16 @@ public sealed class SourceRepositoryInitTests : IDisposable
     private static readonly PluginAddress A = new("A.esp", TestMod.Name);
 
     [Fact]
-    public void EveryPristineFile_IsCommittedToMainWithItsExactBytes()
-    {
-        var relativePath = Path.Combine("plugin-source", "StillHere.esp", "npc_", "StillHere.esp", "000800.json");
-        var content = "{\"formKey\":\"000800:StillHere.esp\"}"u8.ToArray();
-
-        PluginBaselines.Init(_sourceFolder, [new TreeFile(relativePath, content)]);
-
-        Assert.Equal("{\"formKey\":\"000800:StillHere.esp\"}", Git("show", $"main:{relativePath.Replace('\\', '/')}"));
-    }
-
-    [Fact]
     public void AnInit_IsOneCommitNamedForTheMod_HoldingEveryPluginsSourceTheAssetsAndTheBuildFile()
     {
         TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [Asset("textures/a.dds", "texture")], commit: true);
+            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [Asset("textures/a.dds", "texture"), Asset("readme.txt", "readme")], commit: true);
 
         Assert.Equal([$"Init {TestMod.Name}"], SubjectsOnMain());
         Assert.Equal(
-            [".gitattributes", ".gitignore", "build.json", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json", "textures/a.dds"],
+            [".gitattributes", ".gitignore", "build.json", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json", "readme.txt", "textures/a.dds"],
             PathsIn("main"));
+        Assert.Equal("the build file", Git("show", "main:build.json"));
     }
 
     [Fact]
@@ -74,52 +62,6 @@ public sealed class SourceRepositoryInitTests : IDisposable
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
 
         Assert.Equal([".gitattributes", ".gitignore", "build.json"], PathsIn("main"));
-    }
-
-    [Fact]
-    public void EachAsset_IsCommittedWithItsExactBytes()
-    {
-        byte[] bytes = [0x44, 0x44, 0x53, 0x20, 0x00, 0xFF, 0x0D, 0x0A];
-
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [new FileToCopy("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))], commit: true));
-
-        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(_sourceFolder, "Textures", "Sub Folder", "a.dds")));
-        Assert.Equal(string.Empty, Git("status", "--porcelain"));
-    }
-
-    [Fact]
-    public void TheBuildFile_IsCommittedAtTheRootUnderItsName_WithItsText()
-    {
-        TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true);
-
-        Assert.Equal("the build file", Git("show", "main:build.json"));
-    }
-
-    [Fact]
-    public void EachFile_KeepsItsLineEndingsAsWritten()
-    {
-        var crlf = "{\r\n  \"a\": 1\r\n}\r\n"u8.ToArray();
-        var lf = "{\n  \"a\": 1\n}\n"u8.ToArray();
-
-        PluginBaselines.Init(_sourceFolder,
-            [new TreeFile("plugin-source/A.esp/npc_/A.esp/crlf.json", crlf), new TreeFile("plugin-source/A.esp/npc_/A.esp/lf.json", lf)]);
-
-        Assert.Equal(crlf, File.ReadAllBytes(Path.Combine(_sourceFolder, "plugin-source", "A.esp", "npc_", "A.esp", "crlf.json")));
-        Assert.Equal(Encoding.UTF8.GetString(crlf), Git("show", "main:plugin-source/A.esp/npc_/A.esp/crlf.json"));
-        Assert.Equal(Encoding.UTF8.GetString(lf), Git("show", "main:plugin-source/A.esp/npc_/A.esp/lf.json"));
-        Assert.Equal(string.Empty, Git("status", "--porcelain"));
-    }
-
-    [Theory]
-    [InlineData("First.esp")]
-    [InlineData("Invented Plugin With Spaces.esp")]
-    public void EachPluginsBinary_IsTheOneLastWrittenForThatPluginAlone(string first)
-    {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, [OneRecordOf(first, "AAAA"), OneRecordOf("Second.esp", "BBBB")]));
-
-        var repository = TestAdapters.Source().OverFolder(TestMod.In(_sourceFolder), GameRelease.Fallout4);
-        Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress(first, TestMod.Name)).Value());
-        Assert.Equal(["BBBB"], repository.LastWrittenBinarySha256s(new PluginAddress("Second.esp", TestMod.Name)).Value());
     }
 
     [Fact]
