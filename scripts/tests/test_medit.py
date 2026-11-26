@@ -44,12 +44,10 @@ class Reaching(unittest.TestCase):
                 medit.resolve(PLUGIN.name)
 
     def test_raises_naming_the_port_when_nothing_answers_on_it(self) -> None:
-        # Nothing can listen on port 0, and a connection to it fails at once, where one to a freed port waits on
-        # Windows as fake_medit.LOCALHOST_FAMILY says.
-        unreachable_port = '0'
+        refused_at_once = '0'
         with (
-                mock.patch.dict(os.environ, {'MEDIT_PORT': unreachable_port}),
-                self.assertRaisesRegex(medit.MEditError, f'port {unreachable_port}:')):
+                mock.patch.dict(os.environ, {'MEDIT_PORT': refused_at_once}),
+                self.assertRaisesRegex(medit.MEditError, f'port {refused_at_once}:')):
             medit.select('SELECT 1')
 
 
