@@ -26,7 +26,7 @@ public sealed class BannedApiScopeTests
         "MEditService.PluginAdapter",
     ];
 
-    private static readonly string[] ProjectBanNeedles = ["BannedSymbols", "BanIncluded", "BannedApiAnalyzers", "AdditionalFiles", "<Import", "Remove=\"@("];
+    private static readonly string[] ProjectBanNeedles = ["BannedSymbols", "BanIncluded", "BannedApiAnalyzers", "AdditionalFiles", "<Import", "@("];
 
     private static readonly Regex InSourceSuppression = new(
         @"#pragma\s+warning\s+disable(?:[ \t]*(?://[^\r\n]*)?\r?$|\b[^\n]*\bRS0030\b)|SuppressMessage\([^)]*\bRS0030\b",
@@ -99,7 +99,7 @@ public sealed class BannedApiScopeTests
     }
 
     [Fact]
-    public void TheBanCheck_NamesAProjectThatSetsItsOwnBans_AndABuildFileBesideTheRootProps()
+    public void TheBanCheck_NamesAProjectThatSetsItsOwnBans_AndABuildFileOtherThanTheRootProps()
     {
         using var solution = new ScratchDirectory("medit-ban-check-");
         File.Copy(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"), Path.Combine(solution, "Directory.Build.props"));
@@ -116,14 +116,17 @@ public sealed class BannedApiScopeTests
     [InlineData("<ItemGroup><AdditionalFiles Remove=\"@(AdditionalFiles)\" /></ItemGroup>")]
     [InlineData("<ItemGroup><PackageReference Remove=\"@(PackageReference)\" /></ItemGroup>")]
     [InlineData("<Import Project=\"Bans.props\" />")]
-    [InlineData("<Choose><When Condition=\"'$(OS)' == 'Windows_NT'\"><ItemGroup><AdditionalFiles Include=\"BannedSymbols.txt\" /></ItemGroup></When></Choose>")]
+    [InlineData("<Choose><When Condition=\"'$(OS)' == 'Windows_NT'\"><PropertyGroup><MutagenBanIncluded>false</MutagenBanIncluded></PropertyGroup></When></Choose>")]
     [InlineData("<Target Name=\"Late\"><ItemGroup><AdditionalFiles Include=\"BannedSymbols.txt\" /></ItemGroup></Target>")]
     public void TheBanCheck_RefusesPropsItCannotRead(string planted)
     {
         using var solution = new ScratchDirectory("medit-ban-check-");
         ScratchFiles.Plant(solution, "Directory.Build.props", $"<Project>{planted}</Project>");
 
-        Assert.Throws<InvalidOperationException>(() => BanOffenders(solution, ["MEditService.Commands"]));
+        Assert.StartsWith(
+            "Directory.Build.props imports, chooses",
+            Assert.Throws<InvalidOperationException>(() => BanOffenders(solution, ["MEditService.Commands"])).Message,
+            StringComparison.Ordinal);
     }
 
     private static string[] BanFilesFor(string project) =>
@@ -153,6 +156,7 @@ public sealed class BannedApiScopeTests
             .. SourceTree.Files(solution, "Directory.Build.*")
                 .Select(file => SourceTree.Relative(solution, file))
                 .Where(file => file != "Directory.Build.props" && !file.StartsWith("vendor/", StringComparison.Ordinal))
+                .Concat(Directory.GetFiles(Path.GetDirectoryName(solution).Require(), "Directory.Build.*").Select(file => $"../{Path.GetFileName(file)}"))
                 .Select(file => $"{file} is a build file other than the root props"),
         ];
     }
