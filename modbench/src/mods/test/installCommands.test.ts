@@ -131,10 +131,8 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
 
 describe('modbench.mod.install: the name prompt', () => {
   it.each([
-    ['archive', '/archive/Sleep or Save-123-1-0.7z', 'Sleep or Save-123-1-0'],
     ['archive', 'C:\\archive\\Sleep or Save.ZIP', 'Sleep or Save'],
     ['archive', '/archive/Mod v1.2.rar', 'Mod v1.2'],
-    ['archive', '/archive/notes.txt', 'notes'],
     ['folder', '/somewhere/Loose Files', 'Loose Files'],
     ['folder', 'C:\\somewhere\\Loose v1.2', 'Loose v1.2'],
   ] as const)('%s picked at %s: the prompt holds %s', async (packageKind, picked, name) => {

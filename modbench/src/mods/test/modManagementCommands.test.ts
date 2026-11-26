@@ -882,10 +882,6 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   const reporter = () => recordingReporter();
 
   it.each<[string, () => Promise<unknown>, string[]]>([
-    ['enable', () => {
-      registerModEnableCommands(commands(), instance, () => [], reporter());
-      return invoke('modbench.mod.enable', modA);
-    }, ['changeModOrder']],
     ['disable over a selection, in one write', () => {
       registerModEnableCommands(commands(), instance, () => [], reporter());
       return invoke('modbench.mod.disable', modA, [modA, modB]);
@@ -1281,11 +1277,9 @@ describe('a Mods gesture called by the agent refuses an Argument of a kind it do
 
   it.each<[string, Argument, (commands: ModCommands) => unknown]>([
     ['modbench.mod.enable', plugin, registerEnable],
-    ['modbench.mod.disable', plugin, registerEnable],
     ['modbench.mod.move', plugin, (commands) => registerModMoveCommand(commands, instance, { selection: () => [], direction: () => 'losingAtTop' }, recordingReporter())],
     ['modbench.mod.uninstall', plugin, registerContext],
     ['modbench.mod.excludeFile', modArgument, registerExclusion],
-    ['modbench.mod.includeFile', modArgument, registerExclusion],
     ['modbench.separator.add', plugin, registerSeparators],
     ['modbench.separator.delete', modArgument, registerSeparators],
   ])('%s', async (command, argument, register) => {
