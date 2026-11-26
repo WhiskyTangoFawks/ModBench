@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  type RecordSummary, type CellSummary, type InteriorCellBlock,
+  UNLIMITED_RECORDS, type RecordSummary, type CellSummary, type InteriorCellBlock,
   type ChildRecordSummary, type WorldspaceSummary,
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -141,7 +141,7 @@ describe('a plugin\'s children — an answer that is no failed read', () => {
 });
 
 describe('a record-type group\'s children', () => {
-  it('lists a record row for every record in one call', async () => {
+  it('lists a record row for every record, asking for every record in one call, with no paging', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeClient({ records: { items: records, total: 3 } });
     const provider = new RecordBrowser(repo);
@@ -150,7 +150,7 @@ describe('a record-type group\'s children', () => {
     const children = await provider.getChildren(typeNode);
 
     expect(children.map(c => c.label)).toEqual(['Record0', 'Record1', 'Record2']);
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    expect(repo.calls.filter(c => c.method === 'getRecords').map(c => c.args)).toEqual([[PLUGIN0, 'weap', 0, UNLIMITED_RECORDS]]);
   });
 
   it('a "qust" row is expandable only when its own record holds children, not by its record type alone', async () => {

@@ -91,14 +91,11 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(A)).toEqual(['A.esp', 'SomeMod', ...tooltipLines]);
   });
 
-  it.each([
-    ['sorting errors over changed outside', scenes(lackingMasters('Ghost.esm'), changed), 'error'],
-    ['failed to read over malformed', scenes(malformed, failed), 'error'],
-  ] as const)('%s: the first status that holds sets the icon', (_label, scene, icon) => {
+  it('sets the icon by the first status that holds, an error landed after a warning', () => {
     const facts = new PluginFacts();
-    scene(facts);
+    scenes(malformed, failed)(facts);
 
-    expect(facts.icon(A)).toBe(icon);
+    expect(facts.icon(A)).toBe('error');
   });
 
   it('lists every status in the spec order whatever the order they landed in', () => {

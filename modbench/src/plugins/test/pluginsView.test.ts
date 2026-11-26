@@ -91,13 +91,12 @@ vi.mock('vscode', () => {
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPluginSync, type Sync } from '../../drivingLib/syncFailureReport';
-import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { ImplicitMasterNode, PluginNode } from '../pluginRows';
 import { pluginArgumentOf } from '../../drivingLib/argument';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { soleGroup } from './browserRows';
-import type { LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
+import type { PluginMetadata, RecordSummary } from '../../client';
 import { pluginMetadataFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -332,17 +331,6 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
   });
 });
 
-
-function snapshotOf(...names: string[]): LoadOrderSnapshot {
-  return {
-    plugins: names.map((name) => ({
-      name, path: `/mods/A/${name}`, origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' },
-      lineNamesIt: true, archives: [], stringsFiles: [],
-    })),
-    active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [],
-    dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
-  };
-}
 
 describe('the Plugins view follows mEdit\'s change event', () => {
   const TEST = { name: 'Test.esp', origin: 'ModA' };

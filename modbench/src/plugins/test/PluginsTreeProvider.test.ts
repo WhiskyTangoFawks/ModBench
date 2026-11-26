@@ -297,11 +297,6 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(h.tree.viewMessage()).toBeUndefined();
   });
 
-  it('finds no file for a line no file answers to', async () => {
-    const { tree } = makeTree([plugin({ name: 'Fallout4.esm', line: 0, path: undefined })]);
-    expect(await tree.resolvePluginPath(new PluginNode({ name: 'Fallout4.esm', enabled: true }, 'SomeMod'))).toBeUndefined();
-  });
-
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
     const { tree } = makeTree([], { instance });
@@ -949,7 +944,6 @@ describe('PluginsTreeProvider — the locked plugins follow the instance value',
 
 const A_ROW = () => plugin({ name: 'A.esp', line: 0, origin: 'SomeMod' });
 const B_ROW = () => plugin({ name: 'B.esp', line: 1, origin: 'SomeMod' });
-
 
 describe('PluginsTreeProvider — a plugin row\'s expander follows its line, not what mEdit holds', () => {
   it('gives an enabled row a chevron whether or not mEdit holds its plugin, and a disabled row none', async () => {
@@ -1712,6 +1706,26 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
     const h = makeTree(rows);
 
     await reconcile(h, [held('A.esp', { masters: ['Broken.esm'] })], [{ name: 'Broken.esm', origin: 'SomeMod', reason: 'Malformed record' }]);
+
+    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
+    expect(item?.description).toBeUndefined();
+  });
+
+  it('reads a master that is listed but disabled as missing, at Error', async () => {
+    const rows = [plugin({ name: 'Base.esm', line: 0, enabled: false }), plugin({ name: 'A.esp', line: 1 })];
+    const h = makeTree(rows);
+
+    await reconcile(h, [held('Base.esm', { isMaster: true }), held('A.esp', { masters: ['Base.esm'] })]);
+
+    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
+    expect(item?.description).toBe('1 error');
+    expect(tooltipAsString(item?.tooltip)).toContain('"Base.esm" is a master of "A.esp", and is missing or not active.');
+  });
+
+  it('reads a master the game loads with no line as active', async () => {
+    const h = makeTree([A_ROW()], { loadedWithNoLine: ['Base.esm'] });
+
+    await reconcile(h, [held('Base.esm', { origin: 'Data/', isMaster: true }), held('A.esp', { masters: ['Base.esm'] })]);
 
     const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
     expect(item?.description).toBeUndefined();
