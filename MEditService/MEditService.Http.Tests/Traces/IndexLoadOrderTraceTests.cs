@@ -57,5 +57,4 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal("sevens.sql", cleared.GetProperty("source").GetString());
         Assert.Contains("NotANumber", cleared.GetProperty("reason").GetString(), StringComparison.Ordinal);
     }
-
 }

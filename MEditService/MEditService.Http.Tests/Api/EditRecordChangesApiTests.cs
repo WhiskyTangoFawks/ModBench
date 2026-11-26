@@ -10,7 +10,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     private const string Plugin = "Editable.esp";
     private const string Origin = "EditableMod";
 
-    private async Task<string> Loaded(bool compiledPlugin)
+    private async Task<string> TheNpcLoaded(bool compiledPlugin)
     {
         var fx = Owned(new PluginFixtureBuilder("api-edit-changes")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("EditableNpc"), origin: Origin)
@@ -29,10 +29,10 @@ public sealed class EditRecordChangesApiTests : HostedTests
     [InlineData(true, "no_such_field", 1, HttpStatusCode.NotFound, "FieldNotFound")]
     [InlineData(false, "HeightMax", 0.75, HttpStatusCode.Conflict, "PluginNotCompiledPlugin")]
     [InlineData(true, "FormKey", "not a FormKey", HttpStatusCode.UnprocessableEntity, "CodecRejected")]
-    public async Task ARefusedEdit_AnswersItsArmsStatus_WithItsOwnRefusal(
+    public async Task ARefusedEdit_AnswersItsRefusalsStatus_NamingTheRefusal(
         bool compiledPlugin, string member, object value, HttpStatusCode status, string refusal)
     {
-        var formKey = await Loaded(compiledPlugin);
+        var formKey = await TheNpcLoaded(compiledPlugin);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, member, value);
 
