@@ -1,6 +1,5 @@
-"""Reads the test reports under a directory into one list of results, whatever stack wrote them: a
-TRX file, a Vitest JSON report, and the logs of unittest (.unittest) and mocha (.mocha). skips.py
-and check_test_times.py are filters over it."""
+"""Reads the test reports under a directory into one list of results: TRX, Vitest JSON, and the logs
+of unittest (.unittest) and mocha (.mocha). skips.py and check_test_times.py filter it."""
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -27,10 +26,9 @@ class Result(NamedTuple):
 
 
 def in_trx(text: str) -> list[Result]:
-    """A result's time runs from its start or its assembly's first result, whichever is later:
-    until a first result arrives, every test thread can be waiting on the one-off warm-up. A TRX
-    file holds one assembly. The first result to finish is therefore charged nothing, and a class
-    or collection fixture's setup is in no result's duration, so neither reaches the time report."""
+    """A result's time runs from its start or its assembly's first result, whichever is later: the
+    one-off warm-up blocks every thread. So the first result to finish is charged nothing, and a
+    fixture's setup is in no result's duration."""
     elements = list(ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX))
     ends = [datetime.fromisoformat(element.attrib['endTime']) if 'endTime' in element.attrib else None
             for element in elements]
@@ -58,8 +56,7 @@ def in_vitest(text: str) -> list[Result]:
 
 def in_unittest(text: str) -> list[Result]:
     """A skip comes from the result lines, or from the summary when a test that prints splits its
-    result line from its name. The times come from the section of a run with --durations 0: a rule,
-    then one line per test, up to a blank line."""
+    result line. Times come from the --durations 0 section: a rule, then a line per test."""
     names = UNITTEST_SKIP.findall(text)
     summary = UNITTEST_SKIP_SUMMARY.search(text)
     results = [Result(name, SKIPPED, None) for name in names]
