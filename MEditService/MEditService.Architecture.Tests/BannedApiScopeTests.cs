@@ -91,7 +91,8 @@ public sealed class BannedApiScopeTests
     [MemberData(nameof(PlantedBanEscapes))]
     public void TheBanCheck_NamesAProjectTheBansSkip_ByThePropsPrefixOrByAConditionOnABanItem(string inProps, string replacedBy, string[] offences)
     {
-        using var solution = new ScratchDirectory("medit-ban-check-");
+        using var repository = new ScratchDirectory("medit-ban-check-");
+        var solution = Directory.CreateDirectory(Path.Combine(repository, "MEditService")).FullName;
         var props = File.ReadAllText(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"));
         File.WriteAllText(Path.Combine(solution, "Directory.Build.props"), props.Replace(inProps, replacedBy, StringComparison.Ordinal));
 
@@ -101,14 +102,20 @@ public sealed class BannedApiScopeTests
     [Fact]
     public void TheBanCheck_NamesAProjectThatSetsItsOwnBans_AndABuildFileOtherThanTheRootProps()
     {
-        using var solution = new ScratchDirectory("medit-ban-check-");
+        using var repository = new ScratchDirectory("medit-ban-check-");
+        var solution = Directory.CreateDirectory(Path.Combine(repository, "MEditService")).FullName;
         File.Copy(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"), Path.Combine(solution, "Directory.Build.props"));
         ScratchFiles.Plant(solution, "MEditService.Box.Tests/MEditService.Box.Tests.csproj",
             $"<Project><ItemGroup><PackageReference Remove=\"{Analyzer}\" /></ItemGroup></Project>");
         ScratchFiles.Plant(solution, "Directory.Build.targets", "<Project />");
+        ScratchFiles.Plant(repository, "Directory.Build.targets", "<Project />");
 
         Assert.Equal(
-            ["Directory.Build.targets is a build file other than the root props", "MEditService.Box.Tests sets its own bans"],
+            [
+                "../Directory.Build.targets is a build file other than the root props",
+                "Directory.Build.targets is a build file other than the root props",
+                "MEditService.Box.Tests sets its own bans",
+            ],
             BanOffenders(solution, ["MEditService.Box.Tests"]).Order(StringComparer.Ordinal));
     }
 
