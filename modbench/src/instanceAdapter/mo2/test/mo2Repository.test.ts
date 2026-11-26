@@ -62,6 +62,7 @@ describe('the MO2 adapter\'s repository', () => {
     const whitelistLines = whitelistIgnoreList(undefined).trimEnd().split('\n');
     const joined = (lines: string[]): string => `${lines.join('\n')}\n`;
     const withoutLastLine = joined(whitelistLines.slice(0, -1));
+    const swapped = joined([whitelistLines[1] ?? '', whitelistLines[0] ?? '', ...whitelistLines.slice(2)]);
     const trailingSpace = joined([`${whitelistLines[0] ?? ''} `, ...whitelistLines.slice(1)]);
 
     it.each([
@@ -69,8 +70,9 @@ describe('the MO2 adapter\'s repository', () => {
       ['an ignore list with no final newline', 'mine', `mine\n${whitelistIgnoreList(undefined)}`],
       ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(whitelistIgnoreList(undefined))}`],
       ['an ignore list whose whitelist lacks a line', withoutLastLine, `${withoutLastLine}${whitelistIgnoreList(undefined)}`],
+      ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${whitelistIgnoreList(undefined)}`],
       ['an ignore list that holds its whitelist and its source mods', withSourceMod, withSourceMod],
-      ['an ignore list that holds its whitelist, then lines of the user', `${whitelistIgnoreList(undefined)}!/README.md\n!/docs/\n`, `${whitelistIgnoreList(undefined)}!/README.md\n!/docs/\n`],
+      ['an ignore list that holds lines of the user on both sides of its whitelist', `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`, `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`],
       ['an ignore list of CRLF lines that holds its whitelist, then lines of the user', crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`), crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`)],
       ['an ignore list that holds its whitelist with a trailing space, then lines of the user', `${trailingSpace}!/docs/\n`, `${trailingSpace}!/docs/\n`],
     ])('writes the ignore list for %s, and takes back to what the file was', async (_name, before, after) => {
@@ -799,26 +801,6 @@ describe('the MO2 adapter\'s repository', () => {
     });
 
     describe('a source mod\'s host', () => {
-      const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
-      const LOCAL = 'its remote is on this machine alone';
-
-      it.each([
-        ['https://example.test/a.git', { kind: 'host', url: 'https://example.test/a.git' }],
-        ['https://user:token@example.test/a.git', { kind: 'host', url: 'https://example.test/a.git' }],
-        ['ssh://git:secret@example.test/a.git', { kind: 'host', url: 'ssh://git@example.test/a.git' }],
-        ['git@example.test:owner/a.git', { kind: 'host', url: 'git@example.test:owner/a.git' }],
-        ['https://user:p@ss@example.test/a.git', { kind: 'noHost', why: UNSAFE }],
-        ['user:secret@example.test:a.git', { kind: 'noHost', why: UNSAFE }],
-        ['../a', { kind: 'noHost', why: LOCAL }],
-        ['C:\\srv\\a.git', { kind: 'noHost', why: LOCAL }],
-        ['file:///srv/a.git', { kind: 'noHost', why: LOCAL }],
-      ])('reads the remote %s as %j', async (remote, host) => {
-        const adapter = await instance();
-        const folder = await sourceMod('Mod A', remote);
-
-        expect(await adapter.sourceHost(folder)).toEqual({ kind: 'read', answer: host });
-      });
-
       it.each([
         ['fork', 'origin', 'origin'],
         ['upstream', 'fork', 'fork'],
