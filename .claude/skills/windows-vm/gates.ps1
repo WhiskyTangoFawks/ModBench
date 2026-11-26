@@ -1,4 +1,5 @@
 $failed = @()
+$clock = [System.Diagnostics.Stopwatch]::StartNew()
 # #2466 resumes the merge-to-main tier and deletes this line.
 Write-Host 'The merge-to-main tier is paused until epic #2450 lands: these are the branch gates.'
 $env:NODE_OPTIONS = '--max-old-space-size=4096'
@@ -35,13 +36,14 @@ if (-not (Test-Path modbench/node_modules/.lock-hash) -or (Get-Content modbench/
 Gate 'Backend format' MEditService 'dotnet format --verify-no-changes'
 Gate 'Backend build' MEditService 'dotnet build -v minimal'
 Gate 'Backend tests' MEditService 'dotnet test -v minimal --logger trx --results-directory "$reports"'
-Gate 'Scripts tests' scripts 'python -m unittest discover -v 2>&1 | Record "$reports\scripts.unittest"'
+Gate 'Scripts tests' scripts 'python -m unittest discover -v --durations 0 2>&1 | Record "$reports\scripts.unittest"'
 Gate 'Frontend lint' modbench 'npm run lint'
 Gate 'Frontend build' modbench 'npm run build'
 Gate 'Frontend unit tests' modbench 'npm run test:unit -- --reporter=default --reporter=json --outputFile.json="$reports\unit.json"'
 Gate 'Frontend integration tests' modbench 'npm run test:integration 2>&1 | Record "$reports\integration.mocha"'
 Gate 'Package' . '& .claude/skills/windows-vm/package-check.ps1'
 Gate 'Skipped tests' . 'python .claude/skills/validate/skips.py "$reports"'
+Gate 'Test times and budget' . 'python .claude/skills/validate/check_test_times.py "$reports" $clock.Elapsed.TotalSeconds 600'
 
 if ($failed) { Write-Host "=== Windows gates FAILED: $($failed -join ', ') ==="; exit 1 }
 Write-Host '=== All Windows gates passed ==='
