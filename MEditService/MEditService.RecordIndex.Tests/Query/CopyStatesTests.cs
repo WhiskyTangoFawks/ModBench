@@ -16,6 +16,7 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
     private static readonly PluginAddress Inactive = new("Off.esp", PluginOrigin.DataDirectory);
     private static readonly FormKey Item = new(ModKey.FromFileName(First.Name), 0x800);
     private static readonly FormKey OtherItem = new(ModKey.FromFileName(First.Name), 0x801);
+    private static readonly FormKey ChangedTwice = new(ModKey.FromFileName(First.Name), 0x802);
 
     public sealed class FourPlugins : IDisposable
     {
@@ -42,15 +43,18 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
             {
                 mod.MiscItems.Add(Named(Item, "Item"));
                 mod.MiscItems.Add(Named(OtherItem, "Other"));
+                mod.MiscItems.Add(Named(ChangedTwice, "Item"));
             })
             .WithPlugin(Second.Name, mod =>
             {
                 mod.MiscItems.Set(Named(Item, "Changed"));
                 mod.MiscItems.Set(Named(OtherItem, "Other"));
+                mod.MiscItems.Set(Named(ChangedTwice, "Changed"));
             })
             .WithPlugin(Third.Name, mod =>
             {
                 mod.MiscItems.Set(Named(Item, "Item"));
+                mod.MiscItems.Set(Named(ChangedTwice, "Changed"));
             })
             .WithPlugin(Inactive.Name, _ => { }, enabled: false)
             .Build();
@@ -71,6 +75,12 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
     public void ACopyIdenticalToTheMaster_OverAModInTheStack_IsIdenticalToMasterWinsConflict_AsXEditSetsIt()
     {
         Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, StatesOf(_index, Item)[Third]);
+    }
+
+    [Fact]
+    public void ACopyIdenticalToThePreviousOverride_ButNotToTheMaster_IsAnOverride()
+    {
+        Assert.Equal(ConflictThis.Override, StatesOf(_index, ChangedTwice)[Third]);
     }
 
     [Fact]
