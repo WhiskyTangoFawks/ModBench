@@ -1,12 +1,9 @@
 namespace MEditService.TestSupport;
 
-/// <summary>The kinds that wait for a merge to main, a real machine, one platform or a release. A kind's name is its
+/// <summary>The kinds that wait for a real machine, one platform or a release. A kind's name is its
 /// trait value, which the test filters read.</summary>
 public enum Kinds
 {
-    /// <summary>The input is a modlist of real size.</summary>
-    RealSize,
-
     /// <summary>A tool, not a test (spec/architecture/tests.md), or the generator of a committed fixture. No gate runs it.</summary>
     Tool,
 

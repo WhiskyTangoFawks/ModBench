@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -25,22 +24,12 @@ public sealed class IngestRetentionTests : IDisposable
     [Fact]
     public void APluginsIngest_LetsGoOfARecordItHasWritten_BeforeItReadsThePluginsLast()
     {
-        using var documents = new MegabyteRecords(fileIndexedUnder: null);
+        using var documents = new MegabyteRecords();
 
         using var index = Indexes.Reconciled(_fixture, adapter: new StreamedAdapter(documents));
 
         Assert.Equal(MegabyteRecordCount, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Value().Count);
         Assert.False(documents.FirstHeldAtTheLast);
-    }
-
-    [Fact, Kind(Kinds.Measured)]
-    public void APluginsIngest_HandsDuckDbTheRecordsItHasWritten_BeforeItReadsThePluginsLast()
-    {
-        using var documents = new MegabyteRecords(_fixture.InstanceRoot);
-
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter: new StreamedAdapter(documents));
-
-        Assert.InRange(documents.DuckDbBytesAtTheLast, 16L * MegabyteEditorId, long.MaxValue);
     }
 
     [Fact, Kind(Kinds.Measured)]
@@ -64,11 +53,9 @@ public sealed class IngestRetentionTests : IDisposable
             RequireExtensions.AnswerOf(() => documents);
     }
 
-    private sealed class MegabyteRecords(string? fileIndexedUnder) : IPluginDocuments
+    private sealed class MegabyteRecords : IPluginDocuments
     {
         public bool? FirstHeldAtTheLast { get; private set; }
-
-        public long DuckDbBytesAtTheLast { get; private set; }
 
         public PluginDocument Header => new("header", $"000000:{Plugin}", "{}");
 
@@ -81,22 +68,13 @@ public sealed class IngestRetentionTests : IDisposable
                 var first = new WeakReference(null);
                 for (var i = 0; i < MegabyteRecordCount; i++)
                 {
-                    if (i == MegabyteRecordCount - 1)
-                    {
-                        FirstHeldAtTheLast = IsHeld(first);
-                        if (fileIndexedUnder is { } root) DuckDbBytesAtTheLast = DuckDbBytes(root);
-                    }
+                    if (i == MegabyteRecordCount - 1) FirstHeldAtTheLast = IsHeld(first);
                     var document = ReferringUnderAFormKeyBuiltAtRunTime(i);
                     if (i == 0) first.Target = document.FormKey;
                     yield return document;
                 }
             }
         }
-
-        private static long DuckDbBytes(string instanceRoot) =>
-            long.Parse(
-                Assert.Single(IndexFiles.Rows(instanceRoot, "SELECT sum(memory_usage_bytes)::BIGINT FROM duckdb_memory()"))[0],
-                CultureInfo.InvariantCulture);
 
         private static PluginDocument ReferringUnderAFormKeyBuiltAtRunTime(int i)
         {

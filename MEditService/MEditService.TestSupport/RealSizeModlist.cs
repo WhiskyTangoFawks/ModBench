@@ -10,12 +10,11 @@ namespace MEditService.TestSupport;
 /// index reads it as it reads any modlist, so the index holds whatever the index derives.</summary>
 public sealed class RealSizeModlist : IDisposable
 {
-    public const int Plugins = 705;
-    public const int SourceTreePlugins = 252;
-    public const int ReferencesInTheBigCell = 4_000;
-    public const int ManyDocuments = 1_000;
-    public const string AttachedScript = "Generated:Attached";
-    public static readonly string AFileTheBigSourcePluginNames = $"Meshes/Generated/Mod{BigSourceRank:D3}/Static0.nif";
+    private const int Plugins = 705;
+    private const int SourceTreePlugins = 252;
+    private const int ReferencesInTheBigCell = 4_000;
+    private const int ManyDocuments = 1_000;
+    private const string AttachedScript = "Generated:Attached";
     private const int NpcsPerAttachedScript = 20;
 
     // LitR's records per plugin, by rank from the largest.
@@ -37,12 +36,11 @@ public sealed class RealSizeModlist : IDisposable
     private const int BigSourceRank = 7;
 
     // LitR's deepest conflict stack.
-    public const int PluginsOverridingOneRecord = 230;
+    private const int PluginsOverridingOneRecord = 230;
 
     private readonly RunFolder _folder;
     private readonly List<(FormKey Key, string EditorId)> _baseStatics = [];
     private readonly List<string> _manyDocuments = [];
-    private LoadOrderEntry? _uncommitted;
 
     public string InstanceRoot => _folder.Path;
 
@@ -50,23 +48,11 @@ public sealed class RealSizeModlist : IDisposable
 
     public IReadOnlyList<LoadOrderEntry> LoadOrder { get; private set; } = [];
 
-    /// <summary>The largest plugin, the master every other plugin names.</summary>
-    public LoadOrderEntry Master => LoadOrder[0];
-
     /// <summary>The record the deepest stack of plugins overrides.</summary>
     public string OverriddenRecord { get; private set; } = "";
 
-    public string MastersBigCell { get; private set; } = "";
-
-    /// <summary>The record each reference in the master's big cell places.</summary>
-    public string MastersBigCellsBase { get; private set; } = "";
-
     /// <summary>A plugin read from its source tree, holding a big cell and many records each a document of its own.</summary>
     public LoadOrderEntry BigSourcePlugin => LoadOrder[BigSourceRank];
-
-    public string BigCell { get; private set; } = "";
-
-    public string AReferenceInTheBigCell { get; private set; } = "";
 
     public IReadOnlyList<string> TheManyDocuments => _manyDocuments;
 
@@ -75,15 +61,9 @@ public sealed class RealSizeModlist : IDisposable
 
     private const int FewRecords = 50;
 
-    /// <summary>A source mod no commit holds the tree of, kept out of the load order until a test brings it in.</summary>
-    public LoadOrderEntry UncommittedPlugin => _uncommitted.Require();
-
-    public string AReferenceInTheUncommittedCell { get; private set; } = "";
-
     public RealSizeModlist() => _folder = RunFolder.Written("medit-real-size", Write);
 
-    public LoadOrderSnapshot Snapshot(params LoadOrderEntry[] added) =>
-        SnapshotPlugins.Snapshot(DataFolder, InstanceRoot, GameRelease.Fallout4, [.. LoadOrder, .. added]);
+    public LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(DataFolder, InstanceRoot, GameRelease.Fallout4, LoadOrder);
 
     private void Write(string root)
     {
@@ -95,7 +75,6 @@ public sealed class RealSizeModlist : IDisposable
             loadOrder.Add(entry);
         }
         LoadOrder = loadOrder;
-        _uncommitted = WriteUncommitted(root);
     }
 
     private static int RecordsOf(int rank)
@@ -134,19 +113,15 @@ public sealed class RealSizeModlist : IDisposable
         return new LoadOrderEntry(name, path, origin, rank, IsActive(rank), Winning: true);
     }
 
-    private int AddMastersBigCell(Fallout4Mod mod)
+    private static int AddMastersBigCell(Fallout4Mod mod)
     {
-        var cell = AddBigCell(mod, "MastersBigCell");
-        MastersBigCell = cell.FormKey.ToString();
-        MastersBigCellsBase = ((PlacedObject)cell.Temporary[0]).Base.FormKey.ToString();
+        AddBigCell(mod, "MastersBigCell");
         return 2 + ReferencesInTheBigCell;
     }
 
     private int AddBigCellAndManyDocuments(Fallout4Mod mod)
     {
-        var cell = AddBigCell(mod, "BigCell");
-        BigCell = cell.FormKey.ToString();
-        AReferenceInTheBigCell = cell.Temporary[ReferencesInTheBigCell / 2].FormKey.ToString();
+        AddBigCell(mod, "BigCell");
         for (var d = 0; d < ManyDocuments; d++)
         {
             var keyword = new Keyword(mod) { EditorID = $"Document{d:D4}" };
@@ -156,7 +131,7 @@ public sealed class RealSizeModlist : IDisposable
         return 2 + ReferencesInTheBigCell + ManyDocuments;
     }
 
-    private static Cell AddBigCell(Fallout4Mod mod, string editorId)
+    private static void AddBigCell(Fallout4Mod mod, string editorId)
     {
         var placed = new Static(mod) { EditorID = $"{editorId}Static" };
         mod.Statics.Add(placed);
@@ -168,24 +143,6 @@ public sealed class RealSizeModlist : IDisposable
             cell.Temporary.Add(reference);
         }
         mod.AddInteriorCells(cell);
-        return cell;
-    }
-
-    private LoadOrderEntry WriteUncommitted(string root)
-    {
-        const string name = "Uncommitted.esp";
-        var folder = Path.Combine(root, "mods", "Uncommitted");
-        Directory.CreateDirectory(folder);
-        var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
-        AReferenceInTheUncommittedCell = AddBigCell(mod, "UncommittedCell").Temporary[0].FormKey.ToString();
-        var path = Path.Combine(folder, name);
-        mod.WriteToBinary(path);
-        var entry = new LoadOrderEntry(name, path, "Uncommitted", Plugins, Enabled: true, Winning: true);
-        PluginSources.Init(entry.Path, entry.Origin);
-        var git = Path.Combine(folder, ".git");
-        GitProbe.Run(git, folder, "rm", "-r", "-q", "--cached", PluginSourceRoot.For(name).Replace('\\', '/'));
-        GitProbe.Run(git, folder, "commit", "-q", "-m", "The tree untracked");
-        return entry;
     }
 
     private int Override(Fallout4Mod mod, int rank, int records)
