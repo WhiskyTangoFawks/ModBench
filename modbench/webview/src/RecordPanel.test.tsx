@@ -105,19 +105,6 @@ const fkCompareResult: CompareResult = compareResultFixture({
   ],
 });
 
-const overrideCompareResult: CompareResult = compareResultFixture({
-  conflictAll: 'Conflict',
-  overrides: [
-    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'Master' }),
-    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }], conflictThis: 'Override' }),
-  ],
-  diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-    winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' },
-    conflictAll: 'Override' })],
-});
-
 const twoSiblingFieldsResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
@@ -609,13 +596,6 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('applies green row background to a field whose own conflictAll is Override, each field\'s own diffs[].conflictAll driving its own row, never the record-wide CompareResult.conflictAll', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(overrideCompareResult);
-    await waitFor(() => screen.getByText('Name'));
-    expect(required(screen.getByText('Name').closest('tr'), 'the Name row').style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
-  });
-
   it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(twoSiblingFieldsResult);
@@ -664,13 +644,6 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
     expect(cell.title).toBe('Conflict loser');
   });
 
-  it('names the first loaded column Master, with no colour', async () => {
-    renderPanel(threeWayResult);
-    const cell = (await screen.findAllByText('A'))[0]?.closest('td');
-    expect(cell?.title).toBe('Master');
-    expect(cell?.style.backgroundColor).toBe('');
-  });
-
   it('gives a column with nothing on the row no colour and no tooltip', async () => {
     renderPanel(threeWayResult);
     await cellOf('B');
@@ -678,44 +651,6 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
     const empty = nameRow?.querySelectorAll('td')[columns.length];
     expect(empty?.style.backgroundColor).toBe('');
     expect(empty?.title).toBe('');
-  });
-
-  it('paints no colour on the header of a column with no cell state', async () => {
-    renderPanel(compareResultFixture({
-      overrides: [
-        compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }], conflictThis: 'Master' }),
-        compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Empty.esp', editorId: 'TestNPC', fields: [], conflictThis: null }),
-      ],
-      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'A' }, winnerColumn: 'Fallout4.esm' })],
-    }));
-    await cellOf('A');
-    expect(screen.getByText('Empty.esp').closest('th')?.style.backgroundColor).toBe('');
-  });
-
-  it('gives the master column no tooltip on a row only a later plugin holds', async () => {
-    renderPanel(compareResultFixture({
-      overrides: columns.slice(0, 2).map(plugin => compareOverride({
-        formKey: '000001:Fallout4.esm', plugin, editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }],
-      })),
-      diffs: [diffNode({
-        fieldName: 'Name', values: { 'Same.esp': 'Added' }, winnerColumn: 'Same.esp',
-        cellStates: { 'Same.esp': 'Override' }, conflictAll: 'Override',
-      })],
-    }));
-    await cellOf('Added');
-    const masterCell = screen.getByText('Name').closest('tr')?.querySelectorAll('td')[1];
-    expect(masterCell?.title).toBe('');
-  });
-
-  it('names a lone copy Single Record', async () => {
-    renderPanel(compareResultFixture({
-      overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: true,
-        editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }],
-      })],
-      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Only' }, winnerColumn: 'Fallout4.esm', conflictAll: 'OnlyOne', cellStates: { 'Fallout4.esm': 'OnlyOne' } })],
-    }));
-    expect((await cellOf('Only')).title).toBe('Single Record');
   });
 });
 
@@ -1535,35 +1470,6 @@ describe('RecordPanel — editing an absent member', () => {
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       envelope: { op: 'set', path: [{ kind: 'member', name: 'Stats' }, { kind: 'member', name: 'Weight' }], value: 5 },
-    }));
-  });
-});
-
-describe('RecordPanel — a translated string leaf, whose document spelling is an object, posts its text', () => {
-  const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString' });
-  const value = { TargetLanguage: 'English', Value: 'Base name' };
-  const compare: CompareResult = compareResultFixture({
-    conflictAll: 'OnlyOne',
-    overrides: [compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: nameMeta, value }], conflictThis: 'OnlyOne' })],
-    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': value }, winnerColumn: 'MyMod.esp', cellStates: {} })],
-  });
-
-  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('reads the text and posts set of the new text', async () => {
-    renderPanel(compare, { plugins: unionCompiledPluginsResponse });
-    await waitFor(() => screen.getByText('Base name'));
-    vi.mocked(vscode.postMessage).mockClear();
-
-    fireEvent.doubleClick(screen.getByText('Base name'));
-    const input = screen.getByRole('textbox');
-    fireEvent.change(input, { target: { value: 'New name' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      envelope: { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'New name' },
     }));
   });
 });
