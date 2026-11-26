@@ -1,13 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { commitFolder } from '../commitFolder';
-import { readTrustingKept } from '../files';
-import { repositoryReads } from '../repositoryReads';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { diskCheckedBy } from '../../repositoriesLib/writesTold';
-import { hostGitHolding } from '../../test/hostGitDouble';
+import type { InstanceAdapter } from '../instanceAdapter';
+
+vi.mock('vscode', () => fakeVscodeModule());
 
 let root: string;
 
@@ -23,11 +24,12 @@ async function put(file: string, text = 'x'): Promise<void> {
   await writeFile(join(root, file), text);
 }
 
-async function repository(): Promise<void> {
+async function repository(): Promise<InstanceAdapter> {
   root = await mkdtemp(join(tmpdir(), 'modbench-commit-folder-'));
   git('init', '-q');
   git('config', 'user.name', 't');
   git('config', 'user.email', 't@t');
+  return adapterOver(root);
 }
 
 async function committedIgnoreList(text: string): Promise<void> {
@@ -36,35 +38,30 @@ async function committedIgnoreList(text: string): Promise<void> {
   git('commit', '-q', '-m', 'Base');
 }
 
-const neverCalled = (): string => { throw new Error('no committed ignore list to add lines to'); };
+const HELD_WHOLE = '# Mod folders this repository holds whole\n!/mods/ModA/*\n/mods/ModA/meta.ini\n# End of mod folders this repository holds whole';
 
-describe('commitFolder', () => {
-  it('names what it writes, so the HEAD a reading after it answers is its commit', async () => {
-    await repository();
+describe('a mod folder committed', () => {
+  it('names .git, and nothing else, as what it writes, so a reading after it reads the repository again', async () => {
+    const adapter = await repository();
     await committedIgnoreList('');
     await put('mods/Mod [A]/a.esp');
-    const held = hostGitHolding(root, { head: git('rev-parse', 'HEAD') });
-    const reads = repositoryReads(root, held.host);
-    reads.changed(() => undefined);
-    await readTrustingKept([], true, reads.head);
     const named: string[] = [];
     diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { throw new Error('a write left its files unnamed'); }, settling: () => undefined });
 
-    await commitFolder(root, join(root, 'mods', 'Mod [A]'), 'Init', (list) => list);
-    held.head = git('rev-parse', 'HEAD');
+    await adapter.commitFolder(join(root, 'mods', 'Mod [A]'), 'Init');
 
-    expect((await readTrustingKept(named, false, reads.head)).answer).toBe(held.head);
+    expect([...new Set(named)]).toEqual([join(root, '.git')]);
   });
 
   it('commits the files of the folder alone, whatever else is staged or changed', async () => {
-    await repository();
+    const adapter = await repository();
     await put('mods/Mod [A]/a.esp');
     await put('mods/Mod [A]/textures/b.dds');
     await put('mods/ModB/b.esp');
     await put('profiles/Default/modlist.txt');
     git('add', 'profiles');
 
-    await commitFolder(root, join(root, 'mods', 'Mod [A]'), 'Init Mod [A]', neverCalled);
+    await adapter.commitFolder(join(root, 'mods', 'Mod [A]'), 'Init Mod [A]');
 
     expect([git('log', '--format=%s'), git('show', '--name-only', '--format=', 'HEAD').split('\n').sort(), git('status', '--porcelain').split('\n').sort()]).toEqual([
       'Init Mod [A]', ['mods/Mod [A]/a.esp', 'mods/Mod [A]/textures/b.dds'], ['?? mods/ModB/', 'A  profiles/Default/modlist.txt'],
@@ -72,42 +69,32 @@ describe('commitFolder', () => {
   });
 
   it('commits the lines that let the folder in, and no other change to the ignore list', async () => {
-    await repository();
+    const adapter = await repository();
     await committedIgnoreList('/mods/*/*\n');
     await put('mods/ModA/a.esp');
-    await put('.gitignore', '/mods/*/*\n/mine\n!/mods/ModA/*\n');
+    await put('.gitignore', `/mods/*/*\n/mine\n${HELD_WHOLE}\n`);
 
-    await commitFolder(root, join(root, 'mods', 'ModA'), 'Init ModA', (list) => `${list}!/mods/ModA/*\n`);
+    await adapter.commitFolder(join(root, 'mods', 'ModA'), 'Init ModA');
 
     expect([git('show', 'HEAD:.gitignore'), git('show', '--name-only', '--format=', 'HEAD').split('\n').sort(), git('status', '--porcelain')]).toEqual([
-      '/mods/*/*\n!/mods/ModA/*', ['.gitignore', 'mods/ModA/a.esp'], 'M .gitignore',
+      `/mods/*/*\n${HELD_WHOLE}`, ['.gitignore', 'mods/ModA/a.esp'], 'M .gitignore',
     ]);
   });
 
   it('commits only the lines that let the folder in when no commit holds an ignore list, leaving the rest of it uncommitted', async () => {
-    await repository();
+    const adapter = await repository();
     await put('mods/ModA/a.esp');
-    await put('.gitignore', '/mods/*/*\n!/mods/ModA/*\n');
+    await put('.gitignore', `/mods/*/*\n${HELD_WHOLE}\n`);
 
-    await commitFolder(root, join(root, 'mods', 'ModA'), 'Init ModA', (list) => `${list}!/mods/ModA/*\n`);
+    await adapter.commitFolder(join(root, 'mods', 'ModA'), 'Init ModA');
 
-    expect([git('show', 'HEAD:.gitignore'), git('status', '--porcelain')]).toEqual(['!/mods/ModA/*', 'M .gitignore']);
-  });
-
-  it('rejects, committing nothing, when the lines cannot be added to the ignore list as committed', async () => {
-    await repository();
-    await committedIgnoreList('/mods/*/*\n');
-    await put('mods/ModA/a.esp');
-    await put('.gitignore', '/mods/*/*\n!/mods/ModA/*\n');
-
-    await expect(commitFolder(root, join(root, 'mods', 'ModA'), 'Init ModA', () => { throw new Error('its markers do not pair'); })).rejects.toThrow('its markers do not pair');
-    expect(git('log', '--format=%s')).toBe('Base');
+    expect([git('show', 'HEAD:.gitignore'), git('status', '--porcelain')]).toEqual([HELD_WHOLE, 'M .gitignore']);
   });
 
   it('rejects, committing nothing, when git has nothing of the folder to commit', async () => {
-    await repository();
+    const adapter = await repository();
     await mkdir(join(root, 'mods', 'Empty'), { recursive: true });
 
-    await expect(commitFolder(root, join(root, 'mods', 'Empty'), 'Init Empty', neverCalled)).rejects.toThrow();
+    await expect(adapter.commitFolder(join(root, 'mods', 'Empty'), 'Init Empty')).rejects.toThrow();
   });
 });

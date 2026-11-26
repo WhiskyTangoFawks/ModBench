@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdir, readFile, rename as fsRename, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename as fsRename, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { PathLike } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
@@ -8,25 +9,19 @@ import { present } from '../../../ports/present';
 vi.mock('vscode', () => fakeVscodeModule());
 const real = vi.hoisted(() => ({
   rename: undefined as typeof import('node:fs/promises').rename | undefined,
-  listEntries: undefined as typeof import('../../files').listEntries | undefined,
+  readdir: undefined as typeof import('node:fs/promises').readdir | undefined,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
-  return { ...actual, rename: vi.fn(actual.rename) };
+  real.readdir = actual.readdir;
+  return { ...actual, rename: vi.fn(actual.rename), readdir: vi.fn(actual.readdir) };
 });
-vi.mock('../../files', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../files')>();
-  real.listEntries = actual.listEntries;
-  return { ...actual, listEntries: vi.fn(actual.listEntries) };
-});
-const actualListEntries: typeof listEntries = (path, skippedLink) => present(real.listEntries, 'the real listEntries')(path, skippedLink);
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
+const actualReaddir = present(real.readdir, 'the real readdir');
 
-import { listEntries } from '../../files';
-import type { FileOrigin } from '../../instanceAdapter';
-import type { ManagerAdapter } from '../../publisher';
-import { managerOver, readPluginLines } from '../../../test/mo2/adapterOver';
+import type { FileOrigin, InstanceAdapter } from '../../instanceAdapter';
+import { adapterOver } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree, textsUnder } from '../../../test/mo2/corpusFixture';
 import { renamePlanOf, renamedPlugin } from '../../../test/renamedPlugin';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
@@ -60,9 +55,10 @@ const NOT_NAMED_FOR_IT = [
 
 describe('the MO2 Instance adapter renaming a plugin', () => {
   let root: string;
-  let adapter: ManagerAdapter;
+  let adapter: InstanceAdapter;
   const at = (relative: string): string => join(root, relative);
   const text = (relative: string): Promise<string> => readFile(at(relative), 'utf8');
+  const pluginLines = async () => (await adapter.reading()).pluginOrder;
   const rename = (to = 'Renamed Patch.esp'): Promise<void> => renamedPlugin(adapter, PATCH, to);
 
   async function settingsNameGame(gameName: string): Promise<void> {
@@ -77,14 +73,14 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
   beforeEach(async () => {
     root = cloneCorpusFixture();
-    adapter = managerOver(root);
+    adapter = adapterOver(root);
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);
     await put(SECONDARY_PLUGINS, '*Unofficial Fallout 4 Patch.esp\r\nPatch Mod.esp\r\n*Last.esp\r\n');
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
-    vi.mocked(listEntries).mockImplementation(actualListEntries);
+    vi.mocked(readdir).mockImplementation(actualReaddir);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -116,7 +112,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
     it('answers for the game\'s Data folder', async () => {
       await put('game/Data/Scripts/Actor.pex');
-      const withGame = managerOver(root, { gameFolder: { kind: 'found', root: at('game'), dataFolder: at('game/Data') } });
+      const withGame = adapterOver(root, { gameFolder: { kind: 'found', root: at('game'), dataFolder: at('game/Data') } });
 
       expect(await withGame.originHoldsFile({ kind: 'dataFolder' }, 'scripts/actor.pex')).toBe(true);
       expect(await withGame.originHoldsFile({ kind: 'dataFolder' }, 'Scripts/Quest.pex')).toBe(false);
@@ -144,7 +140,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       [`${MOD}/plugin-source/Patch Mod.esp/record.json`]: `${MOD}/plugin-source/Patch Mod.esp/record.json`,
       [`${MOD}/Other Archive - Main.ba2`]: `${MOD}/Other Archive - Main.ba2`,
     });
-    expect(await readPluginLines(root)).toEqual([
+    expect(await pluginLines()).toEqual([
       { name: 'NonAsciiRetexture.esp', enabled: true },
       { name: 'Renamed Patch.esp', enabled: true },
       { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
@@ -210,7 +206,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     const after = await snapshotTree(root);
     expect(after.has(`${MOD}/PATCH MOD.esp`)).toBe(true);
     expect(after.has(`${MOD}/PATCH MOD - Main.ba2`)).toBe(true);
-    expect((await readPluginLines(root)).map((p) => p.name)).toContain('PATCH MOD.esp');
+    expect((await pluginLines()).map((p) => p.name)).toContain('PATCH MOD.esp');
   });
 
   it('renames a plugin of Overwrite, which holds files as a mod does', async () => {
@@ -339,9 +335,14 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     });
 
     it('refuses two files that the rename would put on one name, which on a file system that tells case apart would overwrite one with the other', async () => {
-      const twinIni = { name: 'patch mod.ini', isFile: true, isDirectory: false };
-      vi.mocked(listEntries).mockImplementation(async (path, skippedLink) => [...await actualListEntries(path, skippedLink), ...(path === at(MOD) ? [twinIni] : [])]);
-      await refused(() => rename().finally(() => vi.mocked(listEntries).mockImplementation(actualListEntries)), /is in the way/);
+      const beside = await mkdtemp(join(tmpdir(), 'medit-twin-'));
+      await writeFile(join(beside, 'patch mod.ini'), '');
+      const listingTheTwin = async (path: PathLike, options: Parameters<typeof actualReaddir>[1]) =>
+        [...await actualReaddir(path, options), ...(String(path) === at(MOD) ? await actualReaddir(beside, options) : [])];
+      await refused(() => {
+        vi.mocked(readdir).mockImplementation(listingTheTwin);
+        return rename().finally(() => vi.mocked(readdir).mockImplementation(actualReaddir));
+      }, /is in the way/).finally(() => rm(beside, { recursive: true }));
     });
 
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>
