@@ -20,7 +20,7 @@ internal static class CompiledPluginTemplates
                 folder.Value.Dispose();
         };
 
-    // Fills modFolder as make fills an empty mod folder. The key names everything make writes, which runs once per key.
+    // The key names everything make writes, which runs once per key.
     private static void CopyInto(string modFolder, string key, Action<string> make)
     {
         var template = Folders.GetOrAdd(key, _ => new Lazy<ScratchDirectory>(() =>
@@ -48,7 +48,6 @@ internal static class CompiledPluginTemplates
         });
     }
 
-    // Inits the mod of the one plugin modFolder holds, in a load order of that plugin alone.
     private static void InitAlone(string modFolder, string pluginName, GameRelease release)
     {
         const string origin = "TemplateMod";
