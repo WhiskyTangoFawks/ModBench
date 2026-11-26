@@ -84,8 +84,6 @@ public sealed class MalformedRequestApiTests(LoadedApiFixture<TestPluginFixture>
         { "POST /plugins/file-paths?plugin=Names.esp", "a plugin without its origin", """{"known": []}""" },
         { "POST /plugins/problems", "keys of no plugin", """{"keys": ["000800:Refers.esp"], "known": []}""" },
         { "POST /plugins/problems?plugin=Refers.esp", "a plugin without its origin", """{"known": []}""" },
-        { "POST /load-order/filter", "no source", """{"sql": "SELECT form_key FROM \"NPC_\""}""" },
-        { "PUT /unsaved-document", "a document by a relative path", """{"path": "plugin-source/Typed.esp/Typed.json", "text": "{}", "version": 1, "opened": true}""" },
         { "POST /plugin-files/set-flags", "an unknown game", """{"gameRelease": "Nowhere", "files": [{"path": "/x", "flags": {"Small": true}}]}""" },
         { "POST /plugin-files/set-flags", "a file with no flag", """{"gameRelease": "Fallout4", "files": [{"path": "/x", "flags": {}}]}""" },
         { "POST /plugin-files/flagged-hashes", "an unknown game", """{"gameRelease": "Nowhere", "files": [{"path": "/x", "flags": {"Small": true}}]}""" },

@@ -30,4 +30,12 @@ public sealed class LoadOrderFilterApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.NoContent, (await Client.GetAsync("/load-order/filter")).StatusCode);
     }
+
+    [Fact]
+    public async Task AFilterNamingNoSource_Is400()
+    {
+        var response = await Client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
