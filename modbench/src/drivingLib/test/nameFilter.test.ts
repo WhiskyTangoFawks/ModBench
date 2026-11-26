@@ -24,6 +24,7 @@ vi.mock('vscode', () => ({
 
 import { registerFilterCommands, registerNameFilter } from '../nameFilter';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 
 const OBJECT = 'test.thing';
 const KEY = `${OBJECT}.filterActive`;
@@ -65,14 +66,14 @@ function fakeRowsChangedEvent() {
 }
 const currentBox = currentBoxOf(h.state);
 const fixedWindow = () => new Promise((resolve) => setImmediate(resolve));
-const shows = (view: { message?: string }, message: string | undefined) => vi.waitFor(() => { expect(view.message).toBe(message); });
+const shows = (view: { message?: string }, message: string | undefined) => settled(() => { expect(view.message).toBe(message); });
 
 function probedMessages(viewMessage?: string) {
   const probe = { asked: 0 };
   const ask = () => { probe.asked++; return viewMessage; };
   return { probe, viewMessage: ask, standingMessage: () => { probe.asked++; return undefined; } };
 }
-const rendered = (probe: { asked: number }, times: number) => vi.waitFor(() => { expect(probe.asked).toBe(times); });
+const rendered = (probe: { asked: number }, times: number) => settled(() => { expect(probe.asked).toBe(times); });
 
 beforeEach(() => {
   h.state.commands.clear();

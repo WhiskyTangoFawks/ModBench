@@ -133,19 +133,19 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
   });
 
   it('lists at most a thousand files on a modlist of many, placing no more, and says in the Output how many more match (principles.md, Usable first; Never silently wrong)', async () => {
-    const { reporter, copyOf, ...kind } = language(NONE, { rocks: 200_000 });
+    const { reporter, copyOf, ...kind } = language(NONE, { rocks: 1001 });
 
     expect([(await kind.symbolsFor('rocks/', SEARCH)).length, copyOf.mock.calls.length]).toEqual([1000, 1000]);
     expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
-      'Go to Symbol in Workspace lists 1000 of the 200000 files whose path holds "rocks/".',
+      'Go to Symbol in Workspace lists 1000 of the 1001 files whose path holds "rocks/".',
       'It lists at most 1000, and none whose copy the game gets is outside the workspace. Type more of the path to narrow the list.',
     ]]);
   });
 
   it('lists every match, saying nothing, where no more match than it lists', async () => {
-    const { reporter, ...kind } = language(NONE, { rocks: 200_000 });
+    const { reporter, ...kind } = language(NONE, { rocks: 2 });
 
-    expect([(await kind.symbolsFor('rock199999.', SEARCH)).map(({ name }) => name), reporter.shownFailures]).toEqual([['meshes/rocks/rock199999.nif'], []]);
+    expect([(await kind.symbolsFor('rocks/', SEARCH)).map(({ name }) => name), reporter.shownFailures]).toEqual([['meshes/rocks/rock0.nif', 'meshes/rocks/rock1.nif'], []]);
   });
 
   it('reads an instance value\'s files once, however many keystrokes ask', async () => {
@@ -197,10 +197,10 @@ describe('completion at a path (symbols.md, The features, story 5)', () => {
   });
 
   it.each([
-    ['nothing is typed', '', 'Completion lists 1000 of the 200001 files in Meshes.'],
-    ['some of the path is typed', 's', 'Completion lists 1000 of the 200000 files in Meshes whose path holds "s".'],
+    ['nothing is typed', '', 'Completion lists 1000 of the 1002 files in Meshes.'],
+    ['some of the path is typed', 's', 'Completion lists 1000 of the 1001 files in Meshes whose path holds "s".'],
   ])('offers at most a thousand files where %s, so VS Code asks again as the user types, and says in the Output how many more match (principles.md, Never silently wrong)', async (_case, typed, message) => {
-    const { reporter, found } = offeredFor(typed, MESHES, 200_000);
+    const { reporter, found } = offeredFor(typed, MESHES, 1001);
 
     expect(await found.then((offered) => [offered?.items.length, offered?.isIncomplete])).toEqual([1000, true]);
     expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[message, 'It lists at most 1000. Type more of the path to narrow the list.']]);

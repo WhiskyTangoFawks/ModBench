@@ -24,6 +24,7 @@ import type { PluginRecords } from '../../drivingLib/namedPlugins';
 import type { ScriptSymbol } from '../../symbolNames/symbolNames';
 import { fakeKind, fakeKinds } from './fakeKinds';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { settled } from '../../test/eventually';
 
 const FILE = '/instance/source/Mod/plugin-source/Mod.esp/Quest.json';
 const CLOSED = '/instance/source/Other/plugin-source/Other.esp/Npc.json';
@@ -104,7 +105,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
       return [];
     });
     start(script({ filesNamingNothing: () => Promise.resolve(files), namesNothingIn: judgedFiles }), Object.fromEntries(files.map((file) => [file, ''])));
-    await vi.waitFor(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
+    await settled(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
 
     expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
   });
@@ -122,7 +123,7 @@ describe('the problem a name that names nothing raises (symbols.md, The features
       return [];
     });
     start(script({ namesNothingIn: judgedFiles }));
-    await vi.waitFor(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
+    await settled(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
 
     expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
   });
@@ -147,12 +148,12 @@ describe('the problem a name that names nothing raises (symbols.md, The features
       return new Promise<never[]>((resolve) => { finish.push(() => { resolve([]); }); });
     });
     start(script({ filesNamingNothing: () => Promise.resolve(closed), namesNothingIn: judgedFile }), Object.fromEntries(closed.map((file) => [file, ''])));
-    await vi.waitFor(() => { expect(order).toHaveLength(REQUESTS_AT_ONCE); });
+    await settled(() => { expect(order).toHaveLength(REQUESTS_AT_ONCE); });
 
     world.handlers.get('change')?.({ document: document('typed', FILE) });
     await settle();
     finish[0]?.();
-    await vi.waitFor(() => { expect(order).toHaveLength(REQUESTS_AT_ONCE + 1); });
+    await settled(() => { expect(order).toHaveLength(REQUESTS_AT_ONCE + 1); });
 
     expect(order.at(-1)).toBe(FILE);
   });
