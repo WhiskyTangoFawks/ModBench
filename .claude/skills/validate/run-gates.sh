@@ -84,22 +84,23 @@ if $HOLDS_SLOT && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
   exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
 
-# The logs and reports the time report reads, and a merge to main's skips. A run beside the comment
-# gate's own would delete them, so only a run in the slot clears them. SECONDS counts from here, in
-# the process that holds the slot, so the wait for the slot is not in it.
+# Every test run writes its report here, for the time report and a merge to main's skips. A run
+# that holds no slot has a folder of its own, since it can run beside one that does and each clears
+# its folder. SECONDS counts from here, in the process that holds the slot, so the wait for the slot
+# is not in it.
 REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
+$HOLDS_SLOT || REPORTS=$REPORTS.comments
 SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
-! $HOLDS_SLOT || { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+{ rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
 BUDGET_SECONDS=300
 ! $MERGE_REQUESTED || BUDGET_SECONDS=600
 SECONDS=0
 
-# Each unittest run in the slot leaves its verbose log, with every test's time, for skips.py and
+# Each unittest run leaves its verbose log, with every test's time, for skips.py and
 # check_test_times.py.
 unittest_discover() {
   local log=$1 status
   shift
-  $HOLDS_SLOT || { python3 -m unittest discover -q "$@"; return; }
   python3 -m unittest discover -v --durations 0 "$@" > "$SKIP_LOGS/$log.unittest" 2>&1
   status=$?
   grep -Ev ' \.\.\. ok$|^Slowest test durations$|^[0-9]+\.[0-9]+s ' "$SKIP_LOGS/$log.unittest"
@@ -183,23 +184,29 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
+# A detached review worktree carries no node_modules, so install rather than fail on a missing binary.
+frontend_dependencies() {
+  [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] && return
+  echo "No local frontend dependencies: installing them (npm ci)..."
+  (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1) || { echo "ERROR: npm ci failed; the frontend has no dependencies." >&2; return 1; }
+}
+
 # The tests that read docs/ and spec/: the backend's architecture scans, and every frontend test
 # importing one of the two modules that read spec/. The backend and frontend runs already hold them.
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
-    (cd "$ROOT/MEditService" && dotnet test -v minimal "${ARCHITECTURE_SCANS[@]}") \
+    (cd "$ROOT/MEditService" && dotnet test -v minimal --logger trx --results-directory "$BACKEND_RESULTS" "${ARCHITECTURE_SCANS[@]}") \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
-    [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] || (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1)
-    (cd "$ROOT/modbench" && npx vitest related --run --reporter=basic --reporter=json --outputFile.json="$SKIP_LOGS/docs.json" eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
+    frontend_dependencies && (cd "$ROOT/modbench" && npx vitest related --run --reporter=basic --reporter=json --outputFile.json="$SKIP_LOGS/docs.json" eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
 fi
 
 if $FRONTEND; then
-  python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" "$UNIT_RESULTS" \
+  frontend_dependencies && python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" "$UNIT_RESULTS" \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 
@@ -219,9 +226,10 @@ if $MERGE_TO_MAIN; then
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
+echo "=== Test times and budget ==="
+python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" || FAILED=true
+
 if $HOLDS_SLOT; then
-  echo "=== Test times and budget ==="
-  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS"
   echo "=== Test data over its size ==="
   python3 "$ROOT/.claude/skills/validate/check_test_data.py" "$ROOT" \
   || { echo "--- TEST DATA REPORT FAILED ---"; FAILED=true; }

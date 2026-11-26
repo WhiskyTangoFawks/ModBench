@@ -4,6 +4,8 @@ $clock = [System.Diagnostics.Stopwatch]::StartNew()
 Write-Host 'The merge-to-main tier is paused until epic #2450 lands: these are the branch gates.'
 $env:NODE_OPTIONS = '--max-old-space-size=4096'
 $env:PYTHONUTF8 = 1
+# Windows PowerShell 5.1 decodes a program's output in the OEM code page, which turns mocha's tick into other characters in each log.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $env:MEDIT_VIRTUAL_MACHINE = 'true'
 $reports = Join-Path $env:TEMP 'modbench-gates'
 Remove-Item -Recurse -Force $reports -ErrorAction SilentlyContinue
