@@ -304,14 +304,19 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.Equal(Ignores(newLine), document.Text);
     }
 
+    public static TheoryData<string, Action<string>> WithoutTheManifestsLine => new()
+    {
+        { "no ignore list", _ => { } },
+        { "an ignore list without the line", folder => File.WriteAllText(Path.Combine(folder, ".gitignore"), "*\n!/build.json\n") },
+    };
+
     [Theory]
-    [InlineData(null)]
-    [InlineData("*\n!/build.json\n")]
-    public void AMoveOfASourceFolder_ChangesNoIgnoreList_WhenItLacksTheLine_OrThereIsNone(string? ignoreList)
+    [MemberData(nameof(WithoutTheManifestsLine))]
+    public void AMoveOfASourceFolder_ChangesNoIgnoreList_WhenItLacksTheLine_OrThereIsNone(string _, Action<string> ignoreListIn)
     {
         Directory.CreateDirectory(_sourceFolder);
         File.WriteAllText(Path.Combine(_sourceFolder, "TestMod.manifest.json"), "{}");
-        if (ignoreList is not null) File.WriteAllText(Path.Combine(_sourceFolder, ".gitignore"), ignoreList);
+        ignoreListIn(_sourceFolder);
 
         var changes = TestAdapters.Source().ChangesToMoveSourceFolder(
             _sourceFolder, SourceFolderOf("Renamed"), [new SourceMove("TestMod.manifest.json", "Renamed.manifest.json")]).Value();

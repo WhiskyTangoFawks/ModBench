@@ -43,16 +43,21 @@ public sealed class ArchivePackerTests : IDisposable
 
     public void Dispose() => _scratch.Dispose();
 
-    private (byte[]? Archive, ArchiveStepRefusal? Refusal) Pack(IArchiveVariant variant, params string[] files)
+    private (byte[]? Archive, ArchiveStepRefusal? Refusal) Pack(IArchiveVariant variant, IEnumerable<ArchiveFile> files)
     {
         var modFolder = Path.Combine(_scratch, Mod);
-        var refusal = new ArchivePacker(new ModFolderRepository())
-            .Pack(modFolder, Archive, [.. files.Select(file => new ArchiveFile(file, _assets[file]))], variant);
+        var refusal = new ArchivePacker(new ModFolderRepository()).Pack(modFolder, Archive, [.. files], variant);
         var written = Path.Combine(modFolder, Archive);
         return (File.Exists(written) ? File.ReadAllBytes(written) : null, refusal);
     }
 
-    private byte[] Packed(IArchiveVariant variant, params string[] files)
+    private (byte[]? Archive, ArchiveStepRefusal? Refusal) Pack(IArchiveVariant variant, params string[] files) =>
+        Pack(variant, files.Select(file => new ArchiveFile(file, _assets[file])));
+
+    private byte[] Packed(IArchiveVariant variant, params string[] files) =>
+        Packed(variant, files.Select(file => new ArchiveFile(file, _assets[file])));
+
+    private byte[] Packed(IArchiveVariant variant, IEnumerable<ArchiveFile> files)
     {
         var (archive, refusal) = Pack(variant, files);
         Assert.Null(refusal);
@@ -245,9 +250,7 @@ public sealed class ArchivePackerTests : IDisposable
     [InlineData(104u, new[] { "meshes/actors/a.nif" }, 0x87u, 0x1u, true)]
     public void ABsa_FlagsWhatItsFilesAre(uint version, string[] files, uint archiveFlags, uint fileFlags, bool compressed)
     {
-        foreach (var file in files) WithBytes(file, Script);
-
-        var archive = Packed(new BsaVariant(version, compressed), files);
+        var archive = Packed(new BsaVariant(version, compressed), files.Select(file => new ArchiveFile(file, () => new MemoryStream(Script))));
 
         Assert.Equal((archiveFlags, fileFlags), (U32(archive, 12), U32(archive, 32)));
     }
