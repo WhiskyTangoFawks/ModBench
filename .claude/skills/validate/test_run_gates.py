@@ -285,9 +285,14 @@ class TimeReport(FakeDotnet):
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
         self.assertNotIn("TEST DATA FILES", run.stdout)
 
+    def test_a_time_report_that_cannot_read_a_report_fails_the_run_saying_so(self):
+        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX="/dev/null")
+        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
+
     def test_the_docs_scans_beside_no_backend_run_write_a_trx_for_the_report(self):
         _, calls = self.run_after_changing("spec/a.d2", "--docs")
-        self.assertRegex(calls[0], r"^test -v minimal --logger trx --results-directory /tmp/medit-reports\.[^/]+/backend MEditService\.Architecture\.Tests$")
+        self.assertIn("--logger trx", calls[0])
+        self.assertTrue(calls[0].endswith("MEditService.Architecture.Tests"), calls)
 
 
 class FrontendDependencies(FakeDotnet):

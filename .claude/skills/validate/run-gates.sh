@@ -184,11 +184,13 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
-# A detached review worktree carries no node_modules, so install rather than fail on a missing binary.
+# A fresh worktree carries no node_modules, so install rather than fail on a missing binary.
 frontend_dependencies() {
+  local installed
   [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] && return
   echo "No local frontend dependencies: installing them (npm ci)..."
-  (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1) || { echo "ERROR: npm ci failed; the frontend has no dependencies." >&2; return 1; }
+  installed=$(cd "$ROOT/modbench" && npm ci 2>&1) \
+    || { echo "$installed" | tail -n 20 >&2; echo "ERROR: npm ci failed; the frontend has no dependencies." >&2; return 1; }
 }
 
 # The tests that read docs/ and spec/: the backend's architecture scans, and every frontend test
@@ -227,7 +229,8 @@ if $MERGE_TO_MAIN; then
 fi
 
 echo "=== Test times and budget ==="
-python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" || FAILED=true
+python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" \
+  || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
 
 if $HOLDS_SLOT; then
   echo "=== Test data over its size ==="

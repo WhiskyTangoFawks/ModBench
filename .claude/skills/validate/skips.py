@@ -8,7 +8,7 @@ import reports
 
 
 def skipped(directory: Path) -> list[str]:
-    return [result.name for result in reports.results(directory) if result.outcome == 'skipped']
+    return [result.name for result in reports.results(directory) if result.outcome == reports.SKIPPED]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -6,7 +6,7 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 TRX = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
 VITEST_SKIPPED = {'pending', 'skipped', 'todo', 'disabled'}
@@ -18,33 +18,41 @@ MOCHA_PENDING_TEST = re.compile(r'^\s+- (.+)$', re.MULTILINE)
 MOCHA_PASSED = re.compile(r'^\s+[✔√] (.+) \((\d+)ms\)$', re.MULTILINE)
 
 
+RAN = 'ran'
+SKIPPED = 'skipped'
+
+
 class Result(NamedTuple):
     name: str
-    outcome: str  # 'ran' or 'skipped'
-    seconds: Optional[float]  # None when the report holds no time for it
+    outcome: str  # RAN or SKIPPED
+    seconds: float | None  # None when the report holds no time for it
 
 
 def in_trx(text: str) -> list[Result]:
     """A result's time runs from its start or its assembly's first result, whichever is later:
     until a first result arrives, every test thread can be waiting on the one-off warm-up. A TRX
-    file holds one assembly."""
-    spans = []
-    for result in ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX):
-        end = result.get('endTime')
-        hours, minutes, secs = (result.get('duration') or '0:0:0').split(':')
-        end = end and datetime.fromisoformat(end)
-        spans.append((result.get('testName', ''), result.get('outcome'), end,
-                      int(hours) * 3600 + int(minutes) * 60 + float(secs)))
-    warmed = min((end for _, _, end, _ in spans if end), default=None)
-    return [Result(name, 'skipped' if outcome == 'NotExecuted' else 'ran',
-                   end and (end - max(end - timedelta(seconds=duration), warmed)).total_seconds())
-            for name, outcome, end, duration in spans]
+    file holds one assembly. The first result to finish is therefore charged nothing, and a class
+    or collection fixture's setup is in no result's duration, so neither reaches the time report."""
+    parsed = [(result, datetime.fromisoformat(result.get('endTime')) if result.get('endTime') else None)
+              for result in ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX)]
+    warmed = min((end for _, end in parsed if end), default=None)
+
+    def seconds(result: ET.Element, end: datetime | None) -> float | None:
+        if end is None:
+            return None
+        hours, minutes, secs = result.get('duration', '0:0:0').split(':')
+        start = end - timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs))
+        return (end - max(start, warmed)).total_seconds()
+
+    return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
+                   seconds(result, end))
+            for result, end in parsed]
 
 
 def in_vitest(text: str) -> list[Result]:
     """A skipped test has no duration. Vitest times a file's imports apart from its tests."""
     return [Result(f'{Path(file["name"]).name} > {test["fullName"]}',
-                   'skipped' if test['status'] in VITEST_SKIPPED else 'ran',
+                   SKIPPED if test['status'] in VITEST_SKIPPED else RAN,
                    test['duration'] / 1000 if 'duration' in test else None)
             for file in json.loads(text)['testResults'] for test in file['assertionResults']]
 
@@ -52,18 +60,19 @@ def in_vitest(text: str) -> list[Result]:
 def in_unittest(text: str) -> list[Result]:
     """A skip comes from the result lines, or from the summary when a test that prints splits its
     result line from its name. The times come from the section of a run with --durations 0: a rule,
-    then one line per test, up to a blank line. A skipped test is in both."""
+    then one line per test, up to a blank line."""
     names = UNITTEST_SKIP.findall(text)
     summary = UNITTEST_SKIP_SUMMARY.search(text)
-    results = [Result(name, 'skipped', None) for name in names]
+    results = [Result(name, SKIPPED, None) for name in names]
     if not names and summary:
-        results.append(Result(f'{summary[1]} skipped, unnamed', 'skipped', None))
+        results.append(Result(f'{summary[1]} skipped, unnamed', SKIPPED, None))
     in_section = False
     for line in text.splitlines():
         if line == 'Slowest test durations':
             in_section = True
         elif in_section and (row := UNITTEST_DURATION.match(line)):
-            results.append(Result(row[2], 'ran', float(row[1])))
+            if row[2] not in names:
+                results.append(Result(row[2], RAN, float(row[1])))
         elif not line:
             in_section = False
     return results
@@ -73,15 +82,16 @@ def in_mocha(text: str) -> list[Result]:
     """Mocha prints a passing test's time when it is over half its slow threshold, so a test over a
     second always shows."""
     pending = MOCHA_PENDING_TEST.findall(text) if MOCHA_PENDING_SUMMARY.search(text) else []
-    return ([Result(name, 'skipped', None) for name in pending]
-            + [Result(name, 'ran', int(ms) / 1000) for name, ms in MOCHA_PASSED.findall(text)])
+    return ([Result(name, SKIPPED, None) for name in pending]
+            + [Result(name, RAN, int(ms) / 1000) for name, ms in MOCHA_PASSED.findall(text)])
 
 
 READERS = {'.trx': in_trx, '.json': in_vitest, '.unittest': in_unittest, '.mocha': in_mocha}
 
 
 def results(directory: Path) -> list[Result]:
-    """UTF-8 with or without the byte order mark that PowerShell's Add-Content writes."""
+    """Every result of every report below the folder, which must exist. A log is UTF-8, with or
+    without the byte order mark that PowerShell's Add-Content writes."""
     if not directory.is_dir():
         raise SystemExit(f'No reports folder {directory}.')
     return [result for report in sorted(directory.rglob('*')) if report.is_file() and report.suffix in READERS
