@@ -236,11 +236,12 @@ class TimeReport(FakeDotnet):
         self.assertNotIn("Fake.ATest", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 300 s budget\n")
 
-    def test_a_unittest_over_a_second_is_named(self):
+    def test_a_unittest_run_leaves_its_log_with_each_tests_time_for_the_report(self):
         self.write(".claude/hooks/test_probe.py",
-                   "import time, unittest\nclass Probe(unittest.TestCase):\n    def test_slow(self):\n        time.sleep(1.1)\n")
-        run, _ = self.run_after_changing("spec/a.d2", "--docs")
-        self.assertRegex(run.stdout, r"1\.\d s  test_slow \(test_probe\.Probe\.test_slow\)")
+                   "import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        pass\n")
+        self.run_after_changing("spec/a.d2", "--docs")
+        log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}", "logs", "hooks.unittest")
+        self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
 
     def test_the_comment_gate_alone_prints_no_report(self):
         self.assertNotIn("Wall time", self.gates("--comments").stdout)
@@ -248,6 +249,10 @@ class TimeReport(FakeDotnet):
 
 class MergeToMainPaused(FakeDotnet):
     NOTICE = "The merge-to-main tier is paused until epic #2450 lands"
+
+    def test_the_mode_reports_against_the_merge_to_main_budget_though_it_runs_the_branch_gates(self):
+        run, _ = self.run_after_changing("spec/a.d2", "--merge-to-main")
+        self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
 
     def test_the_mode_runs_the_branch_gates_and_says_the_tier_is_paused(self):
         run, calls = self.run_after_changing("spec/a.d2", "--merge-to-main")

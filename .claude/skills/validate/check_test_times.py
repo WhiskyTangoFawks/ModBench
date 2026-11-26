@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Reads every test report under a directory (a TRX file, a Vitest JSON report, and the logs of
-unittest, .unittest, and mocha, .mocha), names each test that took over a second, and prints the
+unittest (.unittest) and mocha (.mocha)), names each test that took over a second, and prints the
 run's wall time against its budget. Reports only: exit 0."""
 import json
 import re

@@ -91,11 +91,11 @@ REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
 SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
 ! $HOLDS_SLOT || { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
 BUDGET_SECONDS=300
-! $MERGE_TO_MAIN || BUDGET_SECONDS=600
+! $MERGE_REQUESTED || BUDGET_SECONDS=600
 SECONDS=0
 
 # Each unittest run in the slot leaves its verbose log, with every test's time, for skips.py and
-# check_test_times.py. The console shows what neither reads: the failures.
+# check_test_times.py.
 unittest_discover() {
   local log=$1 status
   shift

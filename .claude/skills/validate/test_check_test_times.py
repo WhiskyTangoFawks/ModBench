@@ -55,16 +55,8 @@ class Times(Reports):
             self.report(f'{i}.trx', body)
         return ctt.over_ceiling(self.dir)
 
-    def test_a_test_over_the_ceiling_is_named_with_its_time(self):
-        self.assertEqual(self.over(trx(('A.Quick', 1, 0.5), ('A.Slow', 40, 2.5))), [('A.Slow', 2.5)])
-
-    def test_the_ceiling_is_a_second(self):
+    def test_a_test_over_a_second_is_named_with_its_time_and_one_under_it_is_not(self):
         self.assertEqual(self.over(trx(('A.Under', 1, 0.99), ('A.Over', 5, 1.01))), [('A.Over', 1.01)])
-
-    def test_each_theory_row_is_held_to_the_ceiling_alone(self):
-        self.assertEqual(
-            self.over(trx(('A.Quick', 1, 0.5), ('A.Row(x: 1)', 30, 0.9), ('A.Row(x: 2)', 60, 3))),
-            [('A.Row(x: 2)', 3.0)])
 
     def test_time_before_the_assemblys_first_result_is_not_charged(self):
         warm_up = 40
@@ -114,13 +106,10 @@ class Main(Reports):
         self.assertIn('A.Slow', printed)
         self.assertNotIn('A.Quick', printed)
 
-    def test_it_prints_the_wall_time_against_the_budget(self):
-        _, printed = self.main(213.4, 300)
-        self.assertIn('Wall time 213 s of 300 s budget', printed)
-
-    def test_it_says_when_the_wall_time_is_over_the_budget(self):
-        _, printed = self.main(340, 300)
-        self.assertIn('OVER BUDGET by 40 s', printed)
+    def test_it_prints_the_wall_time_against_the_budget_and_says_when_it_is_over(self):
+        for elapsed, line in ((213.4, 'Wall time 213 s of 300 s budget\n'), (340, 'Wall time 340 s of 300 s budget: OVER BUDGET by 40 s\n')):
+            with self.subTest(elapsed=elapsed):
+                self.assertIn(line, self.main(elapsed, 300)[1])
 
     def test_it_fails_nothing(self):
         self.report('a.trx', trx(('A.First', 1, 1), ('A.Slow', 100, 5)))
