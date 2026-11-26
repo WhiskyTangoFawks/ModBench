@@ -20,9 +20,7 @@ internal static class CompiledPluginTemplates
                 folder.Value.Dispose();
         };
 
-    /// <summary>Fills <paramref name="modFolder"/> as <paramref name="make"/> fills an empty mod
-    /// folder. <paramref name="key"/> names everything <paramref name="make"/> writes, which runs
-    /// once per key.</summary>
+    // The key names everything make writes, which runs once per key.
     private static void CopyInto(string modFolder, string key, Action<string> make)
     {
         var template = Folders.GetOrAdd(key, _ => new Lazy<ScratchDirectory>(() =>
@@ -50,8 +48,6 @@ internal static class CompiledPluginTemplates
         });
     }
 
-    /// <summary>Inits the mod of the one plugin <paramref name="modFolder"/> holds, in a load order of that
-    /// plugin alone.</summary>
     private static void InitAlone(string modFolder, string pluginName, GameRelease release)
     {
         const string origin = "TemplateMod";

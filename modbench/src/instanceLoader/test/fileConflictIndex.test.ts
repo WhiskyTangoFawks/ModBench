@@ -233,13 +233,12 @@ describe('a lookup changed from the one before it', () => {
     for (const entry of entries) lookup.set(entry);
     return lookup;
   };
-  // More paths than the trie's root slots times what a leaf holds, so a leaf splits and an emptied branch goes.
-  const SPLITS_A_LEAF = 1100;
+  const PAST_32_ROOT_SLOTS_OF_32_PATHS_A_LEAF_SPLITS = 1100;
   const pathsUpTo = (count: number): string[] => Array.from({ length: count }, (_, at) => `meshes/${at}.nif`);
 
   it('holds what a lookup built afresh holds, and leaves the one before it as it was', () => {
-    const paths = pathsUpTo(SPLITS_A_LEAF);
-    const added = pathsUpTo(SPLITS_A_LEAF + 300).slice(SPLITS_A_LEAF);
+    const paths = pathsUpTo(PAST_32_ROOT_SLOTS_OF_32_PATHS_A_LEAF_SPLITS);
+    const added = pathsUpTo(PAST_32_ROOT_SLOTS_OF_32_PATHS_A_LEAF_SPLITS + 300).slice(PAST_32_ROOT_SLOTS_OF_32_PATHS_A_LEAF_SPLITS);
     const was = lookupOf(paths.map((path) => entryAt(path)));
     const now = was.changed(new Map<string, ConflictEntry | undefined>([
       ...paths.slice(0, 300).map((path) => [path, undefined] as const),
@@ -252,7 +251,7 @@ describe('a lookup changed from the one before it', () => {
   });
 
   it('holds no more than an empty lookup once every path it held is taken out', () => {
-    const paths = pathsUpTo(SPLITS_A_LEAF);
+    const paths = pathsUpTo(PAST_32_ROOT_SLOTS_OF_32_PATHS_A_LEAF_SPLITS);
     const emptied = lookupOf(paths.map((path) => entryAt(path))).changed(new Map(paths.map((path) => [path, undefined])));
 
     expect(reachableObjects(emptied).size).toBe(reachableObjects(new FileConflictLookup()).size);

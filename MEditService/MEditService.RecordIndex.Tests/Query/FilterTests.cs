@@ -12,7 +12,6 @@ public sealed class FilterTests : IClassFixture<SqlDoorFixture>
 
     private readonly SqlDoorFixture _door;
 
-    /// <summary>Each test starts from no filter in force, whatever the test before it set on the shared index.</summary>
     public FilterTests(SqlDoorFixture door)
     {
         _door = door;

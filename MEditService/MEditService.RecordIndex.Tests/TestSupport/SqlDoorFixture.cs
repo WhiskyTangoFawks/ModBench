@@ -2,8 +2,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>An index of the test plugin, of its own for each class that reads it: a class's tests share it, and the
-/// filter one sets narrows every listing a parallel reader of an index shared wider would ask for.</summary>
+/// <summary>An index of the test plugin for one class: its tests share it, and a filter one sets would narrow the
+/// listings of any other class reading it.</summary>
 public sealed class SqlDoorFixture : IDisposable
 {
     internal TestPluginFixture Plugin { get; } = new();

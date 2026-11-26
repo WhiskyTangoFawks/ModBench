@@ -209,7 +209,6 @@ public sealed class WarmReconcileTests
         Assert.Equal(["NpcBAgain"], warm.ListedIn(b.Key).Select(r => r.EditorId));
     }
 
-    /// <summary>Each plugin hashed, counted and opened, over a clock past every write, so a stamp vouches for its file.</summary>
     private sealed class CountingAdapter() : DelegatingPluginAdapter(new MutagenPluginAdapter(ClockPastEveryWrite))
     {
         public List<string> Hashed { get; } = [];
