@@ -174,6 +174,8 @@ fi
         super().setUp()
         shutil.copy(SCRIPT.parent / "select_backend_tests.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_times.py", self.validate)
+        shutil.copy(SCRIPT.parent / "check_test_data.py", self.validate)
+        shutil.copy(SCRIPT.parent / "check_test_only_code.py", self.validate)
         shutil.copy(SCRIPT.parent / "skips.py", self.validate)
         self.project("RecordIndex")
         self.project("RecordIndex.Tests", "RecordIndex")
@@ -243,8 +245,36 @@ class TimeReport(FakeDotnet):
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
 
+    def test_a_run_in_the_slot_names_committed_test_data_over_its_size_and_backend_code_only_tests_reach(self):
+        self.write("MEditService/MEditService.Http/Source.cs", "public class Http {\n    public int OnlyTests() => 1;\n}\nclass Uses { Http http; }")
+        self.write("MEditService/MEditService.Http.Tests/Source.cs", "class T { int n = new Http().OnlyTests(); }")
+        self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * 65537)
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "data and code")
+        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
+        self.assertIn("64.0 KB  MEditService/MEditService.Http.Tests/TestData/big.bin", run.stdout)
+        self.assertIn("--- 1 TEST DATA FILES OVER 64 KB ---", run.stdout)
+        self.assertIn("OnlyTests  MEditService.Http/Source.cs", run.stdout)
+        self.assertIn("--- 1 MEMBERS ONLY TESTS REACH ---", run.stdout)
+        self.assertNotIn("REPORT FAILED", run.stdout)
+
+    def run_with_the_switch_of(self, script):
+        self.write("MEditService/MEditService.Http/Source.cs", "public class Http {\n    public int OnlyTests() => 1;\n}\nclass Uses { Http http; }")
+        self.write("MEditService/MEditService.Http.Tests/Source.cs", "class T { int n = new Http().OnlyTests(); }")
+        self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * 65537)
+        switched = self.validate / script
+        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+        return self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")[0]
+
+    def test_the_switch_of_the_test_data_report_fails_the_run(self):
+        self.assertIn("--- TEST DATA REPORT FAILED ---", self.run_with_the_switch_of("check_test_data.py").stdout)
+
+    def test_the_switch_of_the_backend_report_fails_the_run(self):
+        self.assertIn("--- BACKEND TEST-ONLY CODE REPORT FAILED ---", self.run_with_the_switch_of("check_test_only_code.py").stdout)
+
     def test_the_comment_gate_alone_prints_no_report(self):
         self.assertNotIn("Wall time", self.gates("--comments").stdout)
+        self.assertNotIn("TEST DATA FILES", self.gates("--comments").stdout)
 
 
 class MergeToMainPaused(FakeDotnet):
