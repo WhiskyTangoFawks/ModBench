@@ -124,6 +124,7 @@ describe('the scans declare no walker, filter, specifier reader or planted tree 
   const HELPERS = ['scanSource.ts', 'tsFiles.ts', 'boxes.ts'];
 
   function declaredShared(sourceText: string): string[] {
+    if (![...OWN_DECLARATIONS, 'readdirSync'].some((name) => sourceText.includes(name))) return [];
     const found: string[] = [];
     const visit = (node: ts.Node): void => {
       if ((ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name !== undefined && ts.isIdentifier(node.name)

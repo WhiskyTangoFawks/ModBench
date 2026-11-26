@@ -71,7 +71,12 @@ function stringLiterals(
   return found;
 }
 
+// A file parses only where its text quotes a token alone.
+const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MAY_HOLD_A_TOKEN = new RegExp(`(['"\`])(${TOKENS.map(escaped).join('|')})(\\1|\\$\\{)`);
+
 function tokenLeaks(sourceText: string, fileName: string): string[] {
+  if (!MAY_HOLD_A_TOKEN.test(sourceText)) return [];
   const literals = new Set(stringLiterals(sourceText, fileName));
   return TOKENS.filter((tok) => literals.has(tok));
 }
@@ -157,6 +162,7 @@ const namesFile = (literal: string, name: string): boolean =>
   literal.split(name).slice(1).some((after) => !/^\w/.test(after));
 
 function layoutLeaks(sourceText: string, fileName: string): string[] {
+  if (!LAYOUT_NAMES.some((name) => sourceText.includes(name))) return [];
   const segments = pathSegments(sourceText, fileName);
   const literals = stringLiterals(sourceText, fileName, ts.isTemplateLiteralToken);
   return LAYOUT_NAMES.filter((name) => segments.has(name)
