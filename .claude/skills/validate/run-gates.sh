@@ -146,8 +146,9 @@ echo "=== Gate runner tests ==="
 (cd "$ROOT" && unset MEDIT_MERGE_TO_MAIN && unittest_discover validate -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
+# Since main, not the base: a ticket that deletes a survivor its integration branch named meets it here.
 echo "=== Deleted tests and their survivors ==="
-python3 "$ROOT/.claude/skills/validate/check_deleted_tests.py" "$ROOT" "$BASE" \
+python3 "$ROOT/.claude/skills/validate/check_deleted_tests.py" "$ROOT" main \
   || { echo "--- DELETED TEST GATE FAILED ---"; FAILED=true; }
 
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)

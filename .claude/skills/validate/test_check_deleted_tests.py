@@ -1,5 +1,5 @@
 """Pins check_deleted_tests.py: a test the branch deletes needs a trailer that names its survivor at the tip, or
-a mark of CODING_STANDARDS.md."""
+a mark of CODING_STANDARDS.md § Tests."""
 import contextlib
 import io
 import pathlib
@@ -9,7 +9,8 @@ import unittest
 
 import check_deleted_tests as cdt
 
-STANDARDS = '- A test proves an absence: a removed method. → Delete it.\n'
+STANDARDS = ('## Comments\n- A comment restates an ADR. → Cite it.\n'
+             '## Tests\n- A test proves an absence: a removed method. → Delete it.\n## Naming\n')
 CS = '''public class Tests
 {
     [Fact]
@@ -84,15 +85,9 @@ class Deleted(Repo):
         self.keep_only_the_kept_tests()
         self.commit('delete')
         self.assertEqual(cdt.problems(self.root, 'main'), [
-            "Removed_custom: deleted, and no 'Deleted-test:' trailer names it",
-            "Removed_fact: deleted, and no 'Deleted-test:' trailer names it",
-            "Removed_theory: deleted, and no 'Deleted-test:' trailer names it",
-            "rows %s: deleted, and no 'Deleted-test:' trailer names it",
-            "says the editor's name: deleted, and no 'Deleted-test:' trailer names it",
-            "skipped: deleted, and no 'Deleted-test:' trailer names it",
-            "templated: deleted, and no 'Deleted-test:' trailer names it",
-            "test_removed: deleted, and no 'Deleted-test:' trailer names it",
-        ])
+            f"{name}: deleted, and no trailer names its survivor: {cdt.FORM}"
+            for name in ('Removed_custom', 'Removed_fact', 'Removed_theory', 'rows %s', "says the editor's name", 'skipped',
+                         'templated', 'test_removed')])
 
     def test_a_test_moved_to_another_file_or_added_and_deleted_on_the_branch_is_not_deleted(self) -> None:
         self.write('Other.Tests/Tests.cs', '[Fact]\npublic void Added() { }\n')
@@ -111,51 +106,39 @@ class Deleted(Repo):
 
 
 class Trailer(Repo):
-    def delete_test_removed(self, *trailers: str) -> None:
+    def test_each_deletion_is_accounted_for_by_a_survivor_at_the_tip_or_a_mark_of_tests_and_each_other_trailer_is_named(self) -> None:
+        self.keep_only_the_kept_tests()
+        self.commit('delete\n\nDeleted-test: test_removed => Kept\nDeleted-test: Removed_fact => test_gone\n'
+                    'Deleted-test: Removed_theory => mark: A test proves an absence\n'
+                    'Deleted-test: Removed_custom => mark: A comment restates an ADR\nDeleted-test: rows %s => mark: A test\n'
+                    'Deleted-test: skipped')
+        self.commit("name the rest from a later commit\n\nDeleted-test: templated => kept\n"
+                    "Deleted-test: says the editor's name => test_kept\nCo-Authored-By: t <t@t>")
+        self.assertEqual(cdt.problems(self.root, 'main'), [
+            f"Deleted-test: skipped: reads {cdt.FORM}",
+            'Removed_fact => test_gone: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
+            'Removed_custom => mark: A comment restates an ADR: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
+            'rows %s => mark: A test: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
+            f'skipped: deleted, and no trailer names its survivor: {cdt.FORM}',
+        ])
+
+    def test_a_survivor_deleted_later_on_the_branch_is_named_until_a_later_trailer_names_one_that_stands(self) -> None:
         self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
-        self.commit('delete\n\n' + '\n'.join(trailers))
-
-    def test_a_survivor_that_stands_at_the_tip_clears_the_deletion_from_any_commit_on_the_branch(self) -> None:
-        self.delete_test_removed()
-        self.commit('name it\n\nDeleted-test: test_removed => test_kept\nCo-Authored-By: t <t@t>')
-        self.assertEqual(cdt.problems(self.root, 'main'), [])
-
-    def test_a_survivor_that_is_no_test_at_the_tip_is_named(self) -> None:
-        self.delete_test_removed('Deleted-test: test_removed => test_gone')
-        self.assertEqual(cdt.problems(self.root, 'main'),
-                         ['test_removed => test_gone: the survivor is no test at the tip'])
-
-    def test_a_survivor_deleted_later_on_the_branch_is_named(self) -> None:
-        self.delete_test_removed('Deleted-test: test_removed => Kept')
+        self.commit('delete\n\nDeleted-test: test_removed => Kept')
         self.write('Box.Tests/Tests.cs', CS.replace('Kept', 'Renamed'))
         self.commit('rename\n\nDeleted-test: Kept => Renamed')
-        self.assertEqual(cdt.problems(self.root, 'main'),
-                         ['test_removed => Kept: the survivor is no test at the tip'])
-
-    def test_a_mark_clears_the_deletion_when_a_mark_of_coding_standards_begins_with_it(self) -> None:
-        self.delete_test_removed('Deleted-test: test_removed => mark: A test proves an absence')
-        self.assertEqual(cdt.problems(self.root, 'main'), [])
-
-    def test_a_mark_coding_standards_does_not_hold_is_named(self) -> None:
-        self.delete_test_removed('Deleted-test: test_removed => mark: removed an absence')
-        self.assertEqual(cdt.problems(self.root, 'main'),
-                         ['test_removed => mark: removed an absence: no mark in CODING_STANDARDS.md begins so'])
-
-    def test_a_trailer_without_its_arrow_is_named(self) -> None:
-        self.delete_test_removed('Deleted-test: test_removed')
-        self.assertEqual(cdt.problems(self.root, 'main'), [
-            "Deleted-test: test_removed: reads '<deleted> => <survivor>' or '<deleted> => mark: <mark>'",
-            "test_removed: deleted, and no 'Deleted-test:' trailer names it",
-        ])
+        named = cdt.problems(self.root, 'main')
+        self.commit('repair\n\nDeleted-test: test_removed => Renamed')
+        self.assertEqual((named, cdt.problems(self.root, 'main')), (
+            ['test_removed => Kept: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so'], []))
 
 
 class Main(Repo):
-    def test_it_prints_each_problem_with_the_count_and_fails_the_run(self) -> None:
+    def test_it_ends_with_the_count_of_findings_and_fails_the_run_on_any(self) -> None:
         self.keep_only_the_kept_tests()
-        self.write('scripts/tests/test_box.py', PY)
         self.commit('delete')
         status, printed = self.main()
-        self.assertEqual((status, printed.splitlines()[-1]), (1, '--- 7 FINDINGS ON DELETED TESTS ---'))
+        self.assertEqual((status, printed.splitlines()[-1]), (1, '--- 8 FINDINGS ON DELETED TESTS ---'))
 
     def test_it_passes_a_branch_that_deletes_nothing(self) -> None:
         self.assertEqual(self.main(), (0, '--- 0 FINDINGS ON DELETED TESTS ---\n'))
