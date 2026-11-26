@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import ts from 'typescript';
-import { isTestSupport, plantedTree, SRC } from './scanSource';
+import { isTestSupport, plantedTree, resolved, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 function erasedAsTypes(clause: ts.ImportClause | ts.NamedExportBindings | undefined, declarationIsTypeOnly: boolean): boolean {
@@ -16,12 +16,6 @@ function erasedAsTypes(clause: ts.ImportClause | ts.NamedExportBindings | undefi
       && bindings.elements.every((element) => element.isTypeOnly);
   }
   return ts.isNamedExports(clause) && clause.elements.length > 0 && clause.elements.every((element) => element.isTypeOnly);
-}
-
-function resolved(from: string, specifier: string): string | undefined {
-  if (!specifier.startsWith('.')) return undefined;
-  const base = resolve(dirname(from), specifier);
-  return [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')].find((candidate) => existsSync(candidate));
 }
 
 function modulesEvaluatedFirst(path: string): string[] {
