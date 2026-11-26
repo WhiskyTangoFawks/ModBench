@@ -43,4 +43,12 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
         Assert.Equal(HttpStatusCode.NoContent, closed.StatusCode);
         Assert.Equal(Npc, (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
+
+    [Fact]
+    public async Task AnUnsavedDocumentByARelativePath_Is400()
+    {
+        var response = await Client.PutAsJsonAsync("/unsaved-document", new { path = "plugin-source/Typed.esp/Typed.json", text = "{}", version = 1, opened = true });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
