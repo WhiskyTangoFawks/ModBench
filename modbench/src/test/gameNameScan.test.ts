@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { GAME_RELEASES, gamePathInfoForRelease } from '../tables/gamePaths';
-import { isTestSupport, plantedTree, sourceFiles, SOURCE_ROOTS, WEBVIEW_SRC } from './scanSource';
+import { isTestSupport, plantedTree, sourceFiles, SOURCE_ROOTS, WEBVIEW_SRC, escapeRegex } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const THIS_FILE_QUOTING_THE_LITERALS = 'gameNameScan.test.ts';
@@ -29,8 +29,6 @@ function knownGameNameLiterals(): string[] {
   }
   return [...literals];
 }
-
-const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function gameNameLiteralsIn(text: string): string[] {
   const found = new Set<string>();

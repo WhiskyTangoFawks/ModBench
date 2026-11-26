@@ -6,7 +6,7 @@ import { plantedTree, productionFiles, SRC } from './scanSource';
 
 const GATES = new Set(['holdingTheWrite', 'runWritingGesture', 'runModsWriting', 'runDownloadsWriting', 'movePlugins']);
 
-const sourceOf = (text: string): ts.SourceFile => ts.createSourceFile('scanned.ts', text, ts.ScriptTarget.Latest, true);
+const sourceOf = ([path, text]: readonly [string, string]): ts.SourceFile => ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
 
 function stringConstants(files: readonly ts.SourceFile[]): Map<string, Set<string>> {
   const constants = new Map<string, Set<string>>();
@@ -45,7 +45,7 @@ function gatedCommands(files: readonly ts.SourceFile[]): Set<string> {
 const NAMES_A_COMMAND_ID_OR_A_GATE = new RegExp(`modbench\\.|${[...GATES].join('|')}`);
 
 const ungatedWrites = (root: string, writes: Iterable<string>): string[] => {
-  const gated = gatedCommands(productionFiles(root).map((path) => readFileSync(path, 'utf8')).filter((text) => NAMES_A_COMMAND_ID_OR_A_GATE.test(text)).map(sourceOf));
+  const gated = gatedCommands(productionFiles(root).map((path) => [path, readFileSync(path, 'utf8')] as const).filter(([, text]) => NAMES_A_COMMAND_ID_OR_A_GATE.test(text)).map(sourceOf));
   return [...writes].filter((id) => !gated.has(id)).sort();
 };
 

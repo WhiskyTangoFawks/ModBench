@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, basename, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { isAgentText, pathSegments, plantedTree, productionFiles, sourceFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { escapeRegex, isAgentText, pathSegments, plantedTree, productionFiles, sourceFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 
 interface Codec {
   file: string;
@@ -71,8 +71,7 @@ function stringLiterals(
   return found;
 }
 
-const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const QUOTES_A_TOKEN_ALONE = new RegExp(`(['"\`])(${TOKENS.map(escaped).join('|')})(\\1|\\$\\{)`);
+const QUOTES_A_TOKEN_ALONE = new RegExp(`(['"\`])(${TOKENS.map(escapeRegex).join('|')})(\\1|\\$\\{)`);
 
 function tokenLeaks(sourceText: string, fileName: string): string[] {
   if (!QUOTES_A_TOKEN_ALONE.test(sourceText)) return [];
@@ -160,7 +159,7 @@ describe('format literals, scanned over the extension and webview trees against 
 const namesFile = (literal: string, name: string): boolean =>
   literal.split(name).slice(1).some((after) => !/^\w/.test(after));
 
-const namesOf = (within: boolean): string[] => LAYOUT_NAMES.filter((name) => (LAYOUT[name]?.matchedWithinLiterals === true) === within).map(escaped);
+const namesOf = (within: boolean): string[] => LAYOUT_NAMES.filter((name) => (LAYOUT[name]?.matchedWithinLiterals === true) === within).map(escapeRegex);
 const NAMES_THE_LAYOUT = new RegExp(`[\`'"/\\\\](${namesOf(false).join('|')})[\`'"/\\\\$]|${namesOf(true).join('|')}`);
 
 function layoutLeaks(sourceText: string, fileName: string): string[] {

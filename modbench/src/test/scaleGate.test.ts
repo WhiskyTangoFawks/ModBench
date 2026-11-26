@@ -21,18 +21,11 @@ const SMALL = 3;
 const LARGE = 12;
 
 type Measured = Awaited<ReturnType<typeof costOf>>;
-const measured = new Map<Gesture, Map<number, Promise<Measured>>>();
-function measuredOnce(mods: number, gesture: Gesture): Promise<Measured> {
-  const sizes = measured.get(gesture) ?? new Map<number, Promise<Measured>>();
-  measured.set(gesture, sizes);
-  const cost = sizes.get(mods) ?? costOf(mods, gesture);
-  sizes.set(mods, cost);
-  return cost;
-}
-
-async function smallThenLarge(gesture: Gesture): Promise<[Measured, Measured]> {
-  const small = await measuredOnce(SMALL, gesture);
-  return [small, await measuredOnce(LARGE, gesture)];
+const measured = new Map<Gesture, Promise<[Measured, Measured]>>();
+function smallThenLarge(gesture: Gesture): Promise<[Measured, Measured]> {
+  const costs = measured.get(gesture) ?? costOf(SMALL, gesture).then(async (small) => [small, await costOf(LARGE, gesture)] as [Measured, Measured]);
+  measured.set(gesture, costs);
+  return costs;
 }
 
 const at = (cost: Cost, layers: readonly (keyof Cost)[]): Partial<Cost> => Object.fromEntries(layers.map((layer) => [layer, cost[layer]]));
@@ -57,7 +50,7 @@ describe('a change costs the same on a small and a large instance (ADR-0029, Con
 
 describe('a new loose file in one mod', () => {
   it('derives only the facts that hold the file, so the load order snapshot mEdit is handed stays as it was (commands.md, Commands Modbench runs itself, row 1)', async () => {
-    const { derivedIn } = await measuredOnce(SMALL, A_NEW_LOOSE_FILE);
+    const [{ derivedIn }] = await smallThenLarge(A_NEW_LOOSE_FILE);
 
     expect(Object.keys(derivedIn).filter((fact) => (derivedIn[fact] ?? 0) > 0)).toEqual(['files', 'filesByMod', 'stackedCopies']);
   });

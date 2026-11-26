@@ -35,4 +35,4 @@ export async function settleWaitArmed(): Promise<void> {
 }
 
 /** Settles once `check` passes, checking each millisecond. */
-export const settled = <T>(check: () => T | Promise<T>): Promise<T> => vi.waitFor(check, { interval: 1 });
+export const settled = (check: () => void | Promise<void>): Promise<void> => vi.waitFor(check, { interval: 1 });

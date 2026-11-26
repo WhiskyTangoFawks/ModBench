@@ -1,6 +1,7 @@
 import { vi, expect } from 'vitest';
 import { EventEmitter } from './vscodeMock';
 import { present } from '../ports/present';
+import { settled } from './eventually';
 
 interface Terminal { onDidWrite: (listener: (text: string) => void) => void; onDidClose: (listener: (code: number) => void) => void; open: () => void; close: () => void }
 interface TaskStandIn { execution: { start: () => Promise<Terminal> } }
@@ -40,6 +41,6 @@ export async function runRegisteredTask(
   terminal.onDidWrite((text) => { written += text; });
   terminal.onDidClose((code) => { closedWith.push(code); });
   terminal.open();
-  await vi.waitFor(() => { expect(closedWith).toHaveLength(1); });
+  await settled(() => { expect(closedWith).toHaveLength(1); });
   return { written, closedWith };
 }
