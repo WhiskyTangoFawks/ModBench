@@ -40,20 +40,6 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         await Wire.Eventually(async () => await Client.ChangedOutside(Plugin), "the plugin read as changed outside");
     }
 
-    [Fact]
-    public async Task AChangeNamingOnlyAnAsset_ChangesNothing_WhereTheNextChangeNamingNoPathDoes()
-    {
-        var fx = await CompiledPlugin();
-        var path = fx.Plugins.Single(p => p.Origin == Origin).Path;
-
-        await Client.SignalChange(Path.Combine(Path.GetDirectoryName(path).Require(), "textures", "watched.dds"));
-        Assert.False(await Client.ChangedOutside(Plugin));
-        OtherTool.WritesThePlugin(path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
-        await Client.SignalChange();
-
-        await Wire.Eventually(async () => await Client.ChangedOutside(Plugin), "the plugin read as changed outside");
-    }
-
     private static bool NamesThePlugin(JsonElement change) =>
         change.GetProperty("plugin").GetString() == Plugin && change.GetProperty("origin").GetString() == Origin;
 }

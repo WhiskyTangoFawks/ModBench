@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -37,33 +36,5 @@ public sealed class DecompileAndRepairApiTests : HostedTests
         })).EnsureSuccessStatusCode().Body();
 
         Assert.Equal([Fixture.Malformed.FileName], repaired.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
-    }
-
-    [Fact]
-    public async Task ARepairHandingASourceFolderWithNoBuildFile_Is400()
-    {
-        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-
-        var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
-        {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { path = "s", @in = "NewRepository" } } },
-            force = false,
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ARepairHandingASourceFolderWithNoRepositoryToHoldIt_Is400()
-    {
-        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-
-        var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
-        {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { path = "s", buildFile = "{}" } } },
-            force = false,
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

@@ -63,4 +63,17 @@ public sealed class CreatePluginTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.NotFound, created.StatusCode);
         Assert.Equal("FolderGone", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
     }
+
+    [Fact]
+    public async Task CreatingAPluginWhereAFolderOfItsNameStands_Is422WriteFailed()
+    {
+        var fx = Owned(await Loaded());
+        var folder = OtherTool.ModFolderOf(fx, Origin);
+        Directory.CreateDirectory(Path.Combine(folder, "Blocked.esp"));
+
+        var created = await Create(Client, "Blocked.esp", folder);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, created.StatusCode);
+        Assert.Equal("WriteFailed", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
+    }
 }

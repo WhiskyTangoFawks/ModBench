@@ -4,8 +4,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
+[Collection(LoadedApiCollection.Name)]
 public sealed class OriginRequiredApiTests(LoadedApiFixture<TestPluginFixture> loaded)
-    : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 

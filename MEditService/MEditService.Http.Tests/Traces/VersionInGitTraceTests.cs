@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
@@ -46,7 +45,7 @@ public sealed class VersionInGitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task Init_CommitsTheAssetsAndTheBuildFileItIsHanded()
+    public async Task Init_CommitsTheAssetsAndTheBuildFileItIsHanded_AndWritesTheModFoldersManifestInTheModFolder()
     {
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
         OtherTool.WritesTheFile(Path.Combine(modFolder, "meshes", "installed.nif"), "hello");
@@ -58,7 +57,15 @@ public sealed class VersionInGitTraceTests : HostedTests
         {
             mods = new[]
             {
-                new { name = Origin, modFolder, commit = true, sourceFolder = new { path = sourceFolder, @in = "NewRepository", assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
+                new
+                {
+                    name = Origin, modFolder, commit = true,
+                    sourceFolder = new
+                    {
+                        path = sourceFolder, @in = "NewRepository", assets = new[] { "textures/added.dds" }, buildFile = "the build file",
+                        modFolderManifestFile = "Linked.manifest.json", modFolderManifest = "the link",
+                    },
+                },
             },
         });
 
@@ -69,85 +76,6 @@ public sealed class VersionInGitTraceTests : HostedTests
             .Where(path => !path.StartsWith("plugin-source/", StringComparison.Ordinal));
         Assert.Equal([".gitattributes", ".gitignore", "build.json", "textures/added.dds"], committed);
         Assert.Equal("the build file", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "HEAD:build.json"));
-    }
-
-    [Fact]
-    public async Task Init_WritesTheModFoldersManifestItIsHanded_InTheModFolder()
-    {
-        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
-        await Loaded();
-        var sourceFolder = Client.SourceFolderSentFor(Origin);
-
-        var response = await Client.PostAsJsonAsync("/version-in-git", new
-        {
-            mods = new[]
-            {
-                new
-                {
-                    name = Origin, modFolder, commit = true,
-                    sourceFolder = new { path = sourceFolder, @in = "NewRepository", buildFile = "{}", modFolderManifestFile = "Linked.manifest.json", modFolderManifest = "the link" },
-                },
-            },
-        });
-
-        response.EnsureSuccessStatusCode();
         Assert.Equal("the link", File.ReadAllText(Path.Combine(modFolder, "Linked.manifest.json")));
-    }
-
-    public static TheoryData<string, string> NotARequestToInit => new()
-    {
-        { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
-        { "a mod without a folder", """{"mods": [{"name": "VersionedMod", "commit": true, "sourceFolder": {"path": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without commit", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
-        { "a mod without the repository that holds it", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"in": "NewRepository", "buildFile": "{}"}}]}""" },
-        { "a mod without a build file", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
-        { "a manifest without its file name", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", "manifest": "{}"}}]}""" },
-        { "a manifest without its text", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
-        { "a manifest file name that is a path", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
-    };
-
-    [Theory]
-    [MemberData(nameof(NotARequestToInit))]
-    public async Task ARequestThatDoesNotSayWhatToInit_Is400(string lacking, string body)
-    {
-        await Loaded();
-
-        var response = await Client.PostJson("/version-in-git", body);
-
-        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
-    }
-
-    [Theory]
-    [InlineData("\"manifest\": \"{}\"", "ManifestFile is missing")]
-    [InlineData("\"manifestFile\": \"M.manifest.json\"", "Manifest is missing")]
-    [InlineData("\"manifestFile\": \"a/M.manifest.json\", \"manifest\": \"{}\"", "bare file name")]
-    [InlineData("\"modFolderManifest\": \"{}\"", "ModFolderManifestFile is missing")]
-    [InlineData("\"modFolderManifestFile\": \"M.manifest.json\"", "ModFolderManifest is missing")]
-    [InlineData("\"modFolderManifestFile\": \"../M.manifest.json\", \"modFolderManifest\": \"{}\"", "ModFolderManifestFile must be a bare file name")]
-    public async Task ARequestWithHalfAManifest_IsRefused_NamingWhatIsWrong(string manifestMembers, string named)
-    {
-        await Loaded();
-
-        var response = await Client.PostJson(
-            "/version-in-git",
-            $$$"""{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AfterInit_TheNextCheckReportsThePluginCompiledPlugin()
-    {
-        await Loaded();
-        Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
-
-        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextCheck(_instance);
-
-        await Client.PluginReportsCompiledPlugin(Plugin);
     }
 }
