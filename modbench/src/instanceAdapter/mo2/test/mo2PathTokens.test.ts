@@ -667,20 +667,20 @@ describe('the MO2 adapter\'s path tokens', () => {
     };
 
     it('cleans and smudges folders whose paths no inline program could carry in a Windows command line', async () => {
-      const name = Array.from({ length: 4 }, (_, at) => `instance${at}`.padEnd(40, 'x')).join(sep);
-      const base = await folder('long');
-      const root = join(base, name);
-      await mkdir(root, { recursive: true });
-      await put(root, 'ModOrganizer.ini', SETTINGS([`x=${onWineDrive(root, '\\')}\\a.7z`]));
-      await put(root, 'profiles/Default/modlist.txt', '');
-      await mkdir(join(root, 'mods'));
-      git(root, 'init', '--quiet');
-      git(root, 'config', 'core.autocrlf', 'false');
+      const long = (name: string): string => join(tmpdir(), ...Array.from({ length: 12 }, (_, at) => `${name}${at}`.padEnd(40, 'x')));
+      const [game, downloads] = [long('game'), long('downloads')];
+      const { root } = await instanceRepository([`x=${onWineDrive(downloads, '\\')}\\a.7z`, 'y={game folder:/}/Data']);
 
-      await adapterOver(root).writePathTokens();
+      await adapterOver(root, {
+        gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') }, downloadsFolder: { kind: 'resolved', downloadsDir: downloads },
+      }).writePathTokens();
 
       const longest = Math.max(...git(root, 'config', '--local', '--list').split('\n').map((line) => line.length));
-      expect([longest < 500, held(root, 'ModOrganizer.ini')]).toEqual([true, SETTINGS(['x={instance folder:\\}\\a.7z'])]);
+      expect([longest < 500, await readFile(join(root, 'ModOrganizer.ini'), 'utf8'), held(root, 'ModOrganizer.ini')]).toEqual([
+        true,
+        SETTINGS([`x=${onWineDrive(downloads, '\\')}\\a.7z`, `y=${onWineDrive(game, '/')}/Data`]),
+        SETTINGS(['x={downloads folder:\\}\\a.7z', 'y={game folder:/}/Data']),
+      ]);
     });
 
     it.each([
