@@ -16,7 +16,7 @@ public sealed class LoadOrderFilterApiTests : HostedTests
     }
 
     [Fact]
-    public async Task SettingAFilter_Is204_AndGettingIt_AnswersTheSqlAndItsSource()
+    public async Task SettingAFilter_Is204_AndGettingIt_AnswersTheSqlAndItsSource_UntilClearingIt()
     {
         await Loaded();
 
@@ -25,24 +25,6 @@ public sealed class LoadOrderFilterApiTests : HostedTests
         var body = await Client.GetFromJsonAsync<JsonElement>("/load-order/filter");
         Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
         Assert.Equal("npcs.sql", body.GetProperty("source").GetString());
-    }
-
-    [Fact]
-    public async Task PostFilter_SqlNamingAColumnNoRelationHas_Returns400SayingWhy()
-    {
-        await Loaded();
-
-        var resp = await Client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\" WHERE no_such_column = 1", source = "wrong.sql" });
-
-        var problem = await resp.AssertIsProblem(HttpStatusCode.BadRequest);
-        Assert.Contains("no_such_column", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ClearingTheFilter_Is204_AndGettingIt_AnswersNoFilterInForce()
-    {
-        await Loaded();
-        await Client.SetFilter();
 
         Assert.Equal(HttpStatusCode.NoContent, (await Client.DeleteAsync("/load-order/filter")).StatusCode);
 

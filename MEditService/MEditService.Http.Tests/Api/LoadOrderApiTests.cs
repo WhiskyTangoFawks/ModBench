@@ -18,17 +18,6 @@ public sealed class LoadOrderApiTests : HostedTests
     private Dictionary<string, object> Body() => SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, _fixture.Plugins);
 
     [Fact]
-    public async Task PutLoadOrder_MissingDataFolder_Returns400()
-    {
-        var body = Body();
-        body["dataFolder"] = "/no-such-dir";
-
-        var response = await Client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal("DataFolderNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
-    }
-
-    [Fact]
     public async Task PutLoadOrder_AModsPluginNamingNoSourceFolder_IsAccepted()
     {
         var body = Body();

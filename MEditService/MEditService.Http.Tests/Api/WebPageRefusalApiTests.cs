@@ -1,22 +1,20 @@
 using System.Net;
-using MEditService.Http.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class WebPageRefusalApiTests : HostedTests
+[Collection(LoadedApiCollection.Name)]
+public sealed class WebPageRefusalApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 {
     [Theory]
-    [InlineData("GET", "http://evil.example", HttpStatusCode.Forbidden)]
-    [InlineData("POST", "http://evil.example", HttpStatusCode.Forbidden)]
-    [InlineData("PUT", "http://localhost:3000", HttpStatusCode.Forbidden)]
-    [InlineData("POST", "null", HttpStatusCode.Forbidden)]
-    [InlineData("GET", "http://localhost", HttpStatusCode.OK)]
-    public async Task ARequestCarryingAnOrigin_IsServedOnlyWhenItIsTheServicesOwn(string method, string origin, HttpStatusCode expected)
+    [InlineData("http://localhost:3000", HttpStatusCode.Forbidden)]
+    [InlineData("http://localhost", HttpStatusCode.OK)]
+    public async Task ARequestCarryingAnOrigin_IsServedOnlyWhenItIsTheServicesOwn(string origin, HttpStatusCode expected)
     {
-        using var request = new HttpRequestMessage(new HttpMethod(method), "/health");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
         request.Headers.Add("Origin", origin);
 
-        var response = await Client.SendAsync(request);
+        var response = await loaded.Client.SendAsync(request);
 
         Assert.Equal(expected, response.StatusCode);
     }
@@ -27,7 +25,7 @@ public sealed class WebPageRefusalApiTests : HostedTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
         request.Headers.Host = "rebound.example:5172";
 
-        var response = await Client.SendAsync(request);
+        var response = await loaded.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

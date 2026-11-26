@@ -6,11 +6,14 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class SourceFolderMoveApiTests : HostedTests
+[Collection(LoadedApiCollection.Name)]
+public sealed class SourceFolderMoveApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IDisposable
 {
     private readonly ScratchDirectory _source = new("api-source-folder-move-");
 
-    protected override void DisposeFixtures() => _source.Dispose();
+    public void Dispose() => _source.Dispose();
+
+    private HttpClient Client => loaded.Client;
 
     private string Old => Path.Combine(_source, "Old");
 

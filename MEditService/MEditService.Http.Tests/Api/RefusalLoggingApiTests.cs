@@ -36,13 +36,14 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARefusedPutLoadOrder_IsLoggedOnce_NamingWhy()
+    public async Task ARefusedPutLoadOrder_Is400NamingItsRefusal_AndIsLoggedOnce()
     {
         using var scratch = new ScratchDirectory("refusal-logging-");
         var gone = Path.Combine(scratch, "no-such-data-folder");
 
-        await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(gone, gone, []));
+        var response = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(gone, gone, []));
 
+        Assert.Equal("DataFolderNotFound", (await response.AssertIsProblem(System.Net.HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
         AssertLoggedOnce("Refused Put load order", "DataFolderNotFound");
     }
 
