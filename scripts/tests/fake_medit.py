@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import re
+import socket
 import threading
 import urllib.parse
 from collections.abc import Generator, Iterator
@@ -13,6 +14,9 @@ from unittest import mock
 # The API as the api-drift gate holds it to a backend built from this checkout.
 API_TS = pathlib.Path(__file__).resolve().parents[2] / 'modbench' / 'src' / 'wire' / 'generated' / 'api.ts'
 SCHEMA_REF = re.compile(r'components\["schemas"\]\["(\w+)"\]')
+# medit reaches mEdit at localhost, where mEdit listens on every loopback address. The fake listens on the first
+# address localhost resolves to, ::1 on Windows, which refuses a connection to another only after 2 s.
+LOCALHOST_FAMILY, *_, LOCALHOST_ADDRESS = socket.getaddrinfo('localhost', 0, type=socket.SOCK_STREAM)[0]
 
 
 class Member(NamedTuple):
@@ -146,8 +150,11 @@ def medit_answering(*replies: object) -> Generator[list[Sent]]:
         def answer(self) -> None:
             length = int(self.headers.get('Content-Length', 0))
             request = Sent(self.command, self.path, json.loads(self.rfile.read(length)) if length else None)
-            reply = next(pending)
             sent.append(request)
+            reply = next(pending, None)
+            if reply is None:
+                drifted.append(f'{request.method} {request.path} came after the last reply')
+                reply = Reply(None, 500)
             drifted.extend(drift(request, reply))
             payload = (
                 reply.body if isinstance(reply.body, bytes) else b'' if reply.body is None else json.dumps(reply.body).encode())
@@ -162,7 +169,10 @@ def medit_answering(*replies: object) -> Generator[list[Sent]]:
         def log_message(self, format: str, *args: Any) -> None:
             pass
 
-    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+    class LocalhostServer(http.server.ThreadingHTTPServer):
+        address_family = LOCALHOST_FAMILY
+
+    with LocalhostServer((str(LOCALHOST_ADDRESS[0]), 0), Handler) as server:
         threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
         try:
             with mock.patch.dict(os.environ, {'MEDIT_PORT': str(server.server_port)}):
