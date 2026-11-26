@@ -219,7 +219,7 @@ fi
 
     def switch_on(self, script: str) -> None:
         switched = self.validate / script
-        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+        switched.write_text(switched.read_text().replace("\nFAILS_THE_RUN = False", "\nFAILS_THE_RUN = True"))
 
     def plant_an_http_tests_budget_of_4_s_and_switch_it_on(self) -> None:
         self.write(".claude/skills/validate/test-budgets.toml",
