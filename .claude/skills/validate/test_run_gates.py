@@ -56,7 +56,8 @@ class GateRepo(unittest.TestCase):
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo)
-        self.addCleanup(shutil.rmtree, pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}"), ignore_errors=True)
+        for kind in ("", ".comments"):
+            self.addCleanup(shutil.rmtree, pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}{kind}"), ignore_errors=True)
         self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
         self.validate.mkdir(parents=True)
         script = self.validate / "run-gates.sh"
@@ -173,6 +174,7 @@ fi
     def setUp(self):
         super().setUp()
         shutil.copy(SCRIPT.parent / "select_backend_tests.py", self.validate)
+        shutil.copy(SCRIPT.parent / "reports.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_times.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_data.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_only_code.py", self.validate)
@@ -272,9 +274,48 @@ class TimeReport(FakeDotnet):
     def test_the_switch_of_the_backend_report_fails_the_run(self):
         self.assertIn("--- BACKEND TEST-ONLY CODE REPORT FAILED ---", self.run_with_the_switch_of("check_test_only_code.py").stdout)
 
-    def test_the_comment_gate_alone_prints_no_report(self):
-        self.assertNotIn("Wall time", self.gates("--comments").stdout)
-        self.assertNotIn("TEST DATA FILES", self.gates("--comments").stdout)
+    def test_the_comment_gate_alone_prints_the_time_report_of_its_unittests_and_no_other(self):
+        self.write(".claude/hooks/test_probe.py",
+                   "import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        pass\n")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "probe")
+        run = self.gates("--comments")
+        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 1 s ---\nWall time \d+ s of 300 s budget\n")
+        log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
+        self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
+        self.assertNotIn("TEST DATA FILES", run.stdout)
+
+    def test_a_time_report_that_cannot_read_a_report_fails_the_run_saying_so(self):
+        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX="/dev/null")
+        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
+
+    def test_the_docs_scans_beside_no_backend_run_write_a_trx_for_the_report(self):
+        _, calls = self.run_after_changing("spec/a.d2", "--docs")
+        self.assertRegex(calls[0], r"--logger trx --results-directory /tmp/medit-reports\.[^/ ]+/backend ")
+        self.assertTrue(calls[0].endswith("MEditService.Architecture.Tests"), calls)
+
+
+class FrontendDependencies(FakeDotnet):
+    def setUp(self):
+        super().setUp()
+        npm = self.bin / "npm"
+        npm.write_text(f'#!/bin/sh\necho "npm $*" >> {self.calls}\n[ "$FAKE_NPM_FAILS" ] && exit 1\nexit 0\n')
+        npm.chmod(0o755)
+
+    def test_a_checkout_with_no_node_modules_installs_them_before_the_frontend_gates(self):
+        _, calls = self.run_after_changing("modbench/src/a.ts", "--frontend")
+        self.assertEqual(calls, ["npm ci"])
+
+    def test_a_failed_install_fails_the_frontend_gates_at_once_saying_so(self):
+        run, _ = self.run_after_changing("modbench/src/a.ts", "--frontend", FAKE_NPM_FAILS="1")
+        self.assertIn("npm ci failed", run.stderr)
+        self.assertIn("--- FRONTEND GATES FAILED ---", run.stdout)
+
+    def test_a_checkout_that_has_them_installs_nothing(self):
+        self.write("modbench/node_modules/.bin/vitest", "")
+        pathlib.Path(self.repo, "modbench/node_modules/.bin/vitest").chmod(0o755)
+        _, calls = self.run_after_changing("modbench/src/a.ts", "--frontend")
+        self.assertEqual(calls, [])
 
 
 class MergeToMainPaused(FakeDotnet):
