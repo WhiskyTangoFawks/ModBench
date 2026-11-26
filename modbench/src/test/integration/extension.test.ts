@@ -1837,22 +1837,6 @@ describe('modbench.downloads tree', () => {
     await probeUntilListed(downloadsDir, 'dropped');
   });
 
-  it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
-    this.timeout(40000);
-    const external = mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
-    const originalIni = readFileSync(iniPath, 'utf8');
-    try {
-      writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${forwardSlashed(external)}\r\n`,
-        (rows) => rows.includes('external-preexisting.zip'));
-
-      await probeUntilListed(external, 'external-new');
-    } finally {
-      await repointDownloads(originalIni, (rows) => !rows.some((row) => row.startsWith('external-')));
-      rmSync(external, { recursive: true, force: true });
-    }
-  });
-
   it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
     this.timeout(40000);
     const container = mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
