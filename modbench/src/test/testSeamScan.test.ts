@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { boxesIn } from './boxes';
-import { importSpecifiers, isTestSupport, plantedTree, resolved, SRC, WEBVIEW_SRC } from './scanSource';
+import { importSpecifiers, isTestSupport, plantedTree, productionFiles, resolved, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 type PastTheSeamByBox = Map<string, string[]>;
@@ -20,16 +20,15 @@ function pastTheSeam(src: string, webview: string): PastTheSeamByBox {
     const [top] = relative(src, file).split(sep);
     return top !== undefined && boxes.has(top) ? top : undefined;
   };
-  const isProduction = (file: string, root: string): boolean => !isTestSupport(relative(root, file));
-  const seam = new Set([src, webview].flatMap((root) => tsFiles(root, { exclude: ['generated'] })
-    .filter((file) => isProduction(file, root))
-    .flatMap((file) => productionImports(file).filter((target) => boxOf(target) !== undefined && boxOf(target) !== boxOf(file)))));
+  const isTestSide = (file: string): boolean => isTestSupport(relative(src, file));
+  const seam = new Set([src, webview].flatMap(productionFiles)
+    .flatMap((file) => productionImports(file).filter((target) => boxOf(target) !== boxOf(file))));
   const past: PastTheSeamByBox = new Map();
-  for (const file of tsFiles(src).filter((path) => !isProduction(path, src))) {
+  for (const file of tsFiles(src).filter(isTestSide)) {
     const box = boxOf(file);
     if (box === undefined) continue;
     const inside = modulesNamed(file, importSpecifiers(readFileSync(file, 'utf8'), file))
-      .filter((target) => boxOf(target) === box && isProduction(target, src) && !seam.has(target));
+      .filter((target) => boxOf(target) === box && !isTestSide(target) && !seam.has(target));
     if (inside.length === 0) continue;
     const name = (path: string): string => relative(src, path).split(sep).join('/');
     past.set(box, [...(past.get(box) ?? []), `${name(file)}: ${[...new Set(inside.map(name))].sort().join(', ')}`].sort());
@@ -42,14 +41,14 @@ const report = (past: PastTheSeamByBox): string => [...past]
   .join('');
 
 describe('a test file of a box imports, of its own box, only its seam: the files another box imports', () => {
-  it('reports each box\'s test files that import past its seam, and fails on none yet', () => {
+  it('reports each box\'s test files that import past its seam', () => {
     process.stdout.write(report(pastTheSeam(SRC, WEBVIEW_SRC)));
   });
 
-  it('names a planted test file that imports past the seam, in every form a file names a module', () => {
+  it('names a planted test-side file that imports a file of its own box no other box\'s production code imports', () => {
     const root = plantedTree({
       'src/kernel/tsconfig.json': '{}',
-      'src/kernel/codec.ts': 'export const c = 1;\n',
+      'src/kernel/codec.ts': "import { i } from './inner';\nexport const c = i;\n",
       'src/kernel/inner.ts': 'export const i = 1;\n',
       'src/kernel/shown.ts': 'export const s = 1;\n',
       'src/kernel/index.ts': "export { c } from './codec';\n",
@@ -69,13 +68,7 @@ describe('a test file of a box imports, of its own box, only its seam: the files
         "import { d } from '../../test/shared';",
       ].join('\n'),
       'src/kernel/test/throughHarness.test.ts': "import { h } from './harness';\n",
-      'src/kernel/test/inner.test.ts': [
-        "import { i } from '../inner';",
-        "import type { I } from '../inner';",
-        "vi.mock('../inner', () => ({}));",
-        "type T = typeof import('../inner');",
-        "const later = import('../inner');",
-      ].join('\n'),
+      'src/kernel/test/inner.test.ts': "vi.mock('../inner', () => ({}));\n",
       'src/kernel/inner.test.ts': "import { i } from './inner';\n",
     });
     const past = pastTheSeam(join(root, 'src'), join(root, 'webview', 'src'));

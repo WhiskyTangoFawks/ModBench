@@ -39,7 +39,6 @@ export const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[
 export const sourceFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
-/** The file a relative specifier names, or `undefined` for a package or a file that is not TypeScript. */
 export function resolved(from: string, specifier: string): string | undefined {
   if (!specifier.startsWith('.')) return undefined;
   const base = resolve(dirname(from), specifier);
