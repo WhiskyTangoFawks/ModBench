@@ -373,4 +373,117 @@ public class ConflictByCompareTests
             RequireResolutions(RequireChildren(model).Single(c => c.FieldName == "MaterialSwap"))["A.esp"].State);
         Assert.Null(RequireChildren(model).Single(c => c.FieldName == "File").Resolutions);
     }
+
+    private static void Scripted(Npc npc) => npc.VirtualMachineAdapter = new VirtualMachineAdapter();
+
+    [Theory]
+    [InlineData("""{"ObjectFormat":2}""", ConflictThis.IdenticalToMaster)]
+    [InlineData("""{"ObjectFormat":2.0}""", ConflictThis.IdenticalToMaster)]
+    [InlineData("""{"ObjectFormat":0}""", ConflictThis.Override)]
+    public void AbsentObjectFormatIsTheDeclaredTwo_NotZero(string spelled, ConflictThis expected)
+    {
+        var result = ComparedCopies.Spelled<Npc>(
+            "B.esp", document => document["VirtualMachineAdapter"] = JsonNode.Parse(spelled), Scripted, Scripted);
+
+        var objectFormat = (result.Diffs.Single(d => d.FieldName == "VirtualMachineAdapter").Children
+            ?? throw new InvalidOperationException("Expected the adapter's diff to have children."))
+            .Single(c => c.FieldName == "ObjectFormat");
+        Assert.Equal(expected, objectFormat.CellStates["B.esp"]);
+    }
+
+    private static void Stamped(Keyword keyword)
+    {
+        keyword.Notes = "Unchanged";
+        keyword.VersionControl = 1;
+        keyword.FormVersion = 120;
+        keyword.Version2 = 1;
+    }
+
+    private static void WithDifferingStamps(Keyword keyword)
+    {
+        keyword.Notes = "Unchanged";
+        keyword.VersionControl = 2;
+        keyword.FormVersion = 121;
+        keyword.Version2 = 3;
+    }
+
+    [Theory]
+    [InlineData("VersionControl")]
+    [InlineData("FormVersion")]
+    [InlineData("Version2")]
+    public void AVersionStampTheCopiesDifferIn_IsNoConflict(string stamp)
+    {
+        var diff = ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps).Diffs.Single(d => d.FieldName == stamp);
+
+        Assert.Equal(ConflictAll.NoConflict, diff.ConflictAll);
+        Assert.Empty(diff.CellStates);
+        Assert.Equal(2, diff.Values.Count(v => v.Value != null));
+    }
+
+    [Fact]
+    public void CopiesDifferingInTheVersionStampsAlone_ShowNoConflictOnTheRecordOrThePlugin()
+    {
+        var compare = ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps);
+
+        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+        Assert.Equal(ConflictThis.IdenticalToMaster, compare.Overrides.Single(o => o.Plugin == "B.esp").ConflictThis);
+    }
+
+    [Fact]
+    public void CopiesDifferingInTheVersionStampsAndAnotherField_ConflictOnThatFieldAlone()
+    {
+        var compare = ComparedCopies.Of<Keyword>(Stamped, keyword =>
+        {
+            WithDifferingStamps(keyword);
+            keyword.Notes = "Changed";
+        });
+
+        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
+        Assert.Equal(ConflictThis.Override, compare.Overrides.Single(o => o.Plugin == "B.esp").ConflictThis);
+    }
+
+    private static readonly FormKey Holder = ComparedCopies.InMaster(0x800);
+    private static readonly FormKey Child = ComparedCopies.InMaster(0x801);
+
+    public enum Held { PlacedReference, Navmesh }
+
+    private static void AddContainerHoldingChildNamed(Fallout4Mod mod, Held held, string childEditorId)
+    {
+        switch (held)
+        {
+            case Held.PlacedReference:
+                var room = new Cell(Holder, Fallout4Release.Fallout4) { EditorID = "Room" };
+                room.Temporary.Add(new PlacedObject(Child, Fallout4Release.Fallout4) { EditorID = childEditorId });
+                mod.AddInteriorCells(room);
+                break;
+            case Held.Navmesh:
+                var navigated = new Cell(Holder, Fallout4Release.Fallout4) { EditorID = "Room" };
+                navigated.NavigationMeshes.Add(new NavigationMesh(Child, Fallout4Release.Fallout4) { EditorID = childEditorId });
+                mod.AddInteriorCells(navigated);
+                break;
+        }
+    }
+
+    private static (ConflictThis? Holder, ConflictThis? Child) OverridersConflicts(Held held)
+    {
+        using var fixture = new PluginFixtureBuilder("container-conflict")
+            .WithPlugin("A.esp", mod => AddContainerHoldingChildNamed(mod, held, "HeldByA"))
+            .WithPlugin("B.esp", mod => AddContainerHoldingChildNamed(mod, held, "HeldByB"))
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        return (Overriders(Holder), Overriders(Child));
+
+        ConflictThis? Overriders(FormKey formKey) =>
+            (index.Queries.GetCompare(formKey.ToString()).Value()
+                ?? throw new InvalidOperationException($"Expected {formKey} to compare.")).Overrides.Single(o => o.Plugin == "B.esp").ConflictThis;
+    }
+
+    [Theory]
+    [InlineData(Held.PlacedReference)]
+    [InlineData(Held.Navmesh)]
+    public void TwoCopiesOfAContainer_DifferingOnlyInsideAChild_AreIdentical_AndTheChildShowsTheDifference(Held held)
+    {
+        Assert.Equal((ConflictThis.IdenticalToMaster, ConflictThis.Override), OverridersConflicts(held));
+    }
 }

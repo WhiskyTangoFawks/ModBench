@@ -150,4 +150,34 @@ public sealed class PartialFormCompareTests : IDisposable
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.Equal("Partial.esp", Assert.Single(compare.Overrides).Plugin);
     }
+
+    private static Dictionary<string, FieldDiff> PartialFormOverride() =>
+        ComparedCopies.Of<Worldspace>(
+                world => world.LodWaterHeight = 100f,
+                world =>
+                {
+                    world.MajorRecordFlagsRaw |= PartialFormBit;
+                    world.LodWaterHeight = 999f;
+                })
+            .Diffs.ToDictionary(d => d.FieldName, StringComparer.Ordinal);
+
+    [Fact]
+    public void APartialFormCopysHeaderMembers_TakePart_WhereItsOwnFieldsDoNot()
+    {
+        var diffs = PartialFormOverride();
+
+        var flags = diffs["MajorRecordFlagsRaw"];
+        Assert.Equal(PartialFormBit, Assert.IsType<JsonElement>(flags.Values["B.esp"]).GetInt32());
+        Assert.Equal(ConflictThis.Override, flags.CellStates["B.esp"]);
+        Assert.DoesNotContain("B.esp", diffs["LodWaterHeight"].CellStates.Keys);
+    }
+
+    [Fact]
+    public void AHeaderMemberNoCopySpells_StillHasItsRow()
+    {
+        var version2 = PartialFormOverride()["Version2"];
+
+        Assert.Equal(2, version2.Values.Count);
+        Assert.All(version2.Values.Values, Assert.Null);
+    }
 }
