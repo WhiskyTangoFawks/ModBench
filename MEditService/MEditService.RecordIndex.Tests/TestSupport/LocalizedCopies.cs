@@ -7,9 +7,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>A.esp, localized in English and French, and B.esp, not localized, copying A's records unchanged
-/// into French, the strings language the index reads in: English is the texts' default, so only another language
-/// proves the index reads in it.</summary>
+/// <summary>A.esp, localized in English and French, and B.esp, not localized, copying A's records into French, the
+/// index's strings language: English is the texts' default, so only another language proves the index reads in it.</summary>
 internal sealed class LocalizedCopies : IDisposable
 {
     internal static readonly PluginAddress Master = new("A.esp", PluginOrigin.DataDirectory);

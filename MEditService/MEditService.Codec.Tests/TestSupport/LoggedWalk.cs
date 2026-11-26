@@ -6,8 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.TestSupport;
 
-/// <summary>What a reflector of its own logs: the shared reflector logs nowhere and caches its walk,
-/// and the walk logs at Debug, below the default floor. A game's walk costs ~0.5 s, so it is logged once per run.</summary>
+/// <summary>What a reflector of its own logs: the shared one logs nowhere and caches its walk, which logs at Debug,
+/// below the default floor. A walk costs ~0.5 s, so a game is walked once per run.</summary>
 internal static class LoggedWalk
 {
     private static readonly ConcurrentDictionary<GameRelease, Lazy<List<LogEntry>>> Walks = new();
