@@ -28,7 +28,9 @@ public sealed class CopyAsOverrideLocalizedTests
             var door = sourceMod.Doors.AddNew("MainDoor");
             door.Name = new TranslatedString(Language.English, [
                 new KeyValuePair<Language, string>(Language.English, EnglishName),
-                new KeyValuePair<Language, string>(doorNamedInStringsLanguage ? Language.French : Language.German, doorNamedInStringsLanguage ? FrenchName : "Das Grosse Tor"),
+                doorNamedInStringsLanguage
+                    ? new KeyValuePair<Language, string>(Language.French, FrenchName)
+                    : new KeyValuePair<Language, string>(Language.German, "Das Grosse Tor"),
             ]);
             var cell = new Cell(sourceMod)
             {

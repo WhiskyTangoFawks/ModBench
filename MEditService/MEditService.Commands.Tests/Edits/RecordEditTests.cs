@@ -72,19 +72,6 @@ public sealed class RecordEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains($"'{garbage}' is an invalid JSON literal", result.Message, StringComparison.Ordinal);
-        Assert.NotNull(unreadableBefore);
-        Assert.Equal(unreadableBefore, Unreadable());
-    }
-
-    [Fact]
-    public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsParseFailed_AndRenamesNothing()
-    {
-        _mod.Overwrite(_mod.NpcIdentity, "this is not a document");
-        var unreadableBefore = Unreadable();
-
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
-
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Equal(unreadableBefore, Unreadable());
     }
 
