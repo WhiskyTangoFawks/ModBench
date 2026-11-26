@@ -1,9 +1,10 @@
 import contextlib
 import copy
+import io
 import json
 import sqlite3
 import unittest
-from collections.abc import Generator, Iterator
+from collections.abc import Generator
 from unittest import mock
 
 import medit
@@ -43,7 +44,7 @@ class FakeIndex:
             self.parents[plugin, form_key] = parent
         self.states[plugin, form_key] = state
 
-    def select(self, sql: str) -> Iterator[medit.JsonRecord]:
+    def select(self, sql: str) -> medit.Rows:
         plugins = self.active | {plugin for plugin, _ in self.documents}
         with contextlib.closing(sqlite3.connect(':memory:')) as index:
             index.row_factory = sqlite3.Row
@@ -59,7 +60,8 @@ class FakeIndex:
                 (plugin.name, plugin.origin, parent, child) for (plugin, child), parent in self.parents.items()])
             index.executemany('INSERT INTO view_columns VALUES (?, ?)', {
                 (record_type, column) for record_type, document in self.documents.values() for column in document})
-            return iter([dict(row) for row in index.execute(sql)])
+            rows = [json.dumps({'row': dict(row)}) for row in index.execute(sql)]
+        return medit.Rows(io.BytesIO('\n'.join([*rows, json.dumps({'end': True})]).encode()))
 
     def compare(self, form_keys: list[str], plugin: medit.Plugin) -> dict[str, list[medit.RecordCopy]]:
         return {
@@ -112,7 +114,6 @@ class Clean(unittest.TestCase):
                 ('IdenticalToMasterWinsConflict', OVERRIDE, []),
                 (OVERRIDE, IDENTICAL_TO_MASTER, [])]:
             with self.subTest(state=state, others_state=others_state), faked_index() as index:
-                index.hold(MASTER, ITEM, 'misc', state='Master')
                 index.hold(OTHER, ITEM, 'misc', state=others_state)
                 index.hold(PATCH, ITEM, 'misc', state=state)
                 self.assertEqual(clean(PATCH), Cleaned(removed, []))
@@ -120,7 +121,7 @@ class Clean(unittest.TestCase):
 
     def test_removes_a_cell_identical_to_its_master_with_its_references_only_once_each_is_identical(self) -> None:
         for reference_state, removed, left in [(IDENTICAL_TO_MASTER, [CELL], set()), (OVERRIDE, [], {CELL, REFERENCE})]:
-            with self.subTest(reference_state), faked_index() as index:
+            with self.subTest(reference_state=reference_state), faked_index() as index:
                 index.hold(PATCH, CELL, 'cell', state=IDENTICAL_TO_MASTER)
                 index.hold(PATCH, REFERENCE, 'refr', parent=CELL, state=reference_state)
                 self.assertEqual(clean(PATCH).identical_to_master, removed)

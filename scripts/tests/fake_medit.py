@@ -99,7 +99,7 @@ def _mismatches(value: object, type: str, where: str) -> list[str]:
         *(mismatch for key, item in value.items() if key in members for mismatch in _mismatches(item, members[key].type, f'{where}.{key}'))]
 
 
-def _typed(value: object, type: str | None, where: str) -> list[str]:
+def _drift_of(value: object, type: str | None, where: str) -> list[str]:
     if type is None:
         return [] if value is None else [f'{where} is JSON where api.ts has none']
     return _mismatches(value, type, where)
@@ -130,8 +130,8 @@ def drift(sent: Sent, reply: Reply) -> list[str]:
         return [f'{sent.method} {path} is no route of api.ts']
     return [
         *(f'{path} takes no query parameter {key}' for key in urllib.parse.parse_qs(query) if key not in route.operation.query),
-        *_typed(sent.body, route.operation.request, 'the body'),
-        *(_typed(reply.body, route.operation.answer, 'the answer') if reply.status == 200 and not isinstance(reply.body, bytes) else [])]
+        *_drift_of(sent.body, route.operation.request, 'the body'),
+        *(_drift_of(reply.body, route.operation.answer, 'the answer') if reply.status == 200 and not isinstance(reply.body, bytes) else [])]
 
 
 @contextlib.contextmanager
