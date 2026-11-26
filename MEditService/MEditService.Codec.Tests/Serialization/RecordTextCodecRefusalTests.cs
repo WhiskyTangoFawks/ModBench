@@ -133,7 +133,6 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         return RecordTextCodec.WhyNotARecord(text, Release, "npc_");
     }
 
-
     [Theory]
     [InlineData]
     [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed")]

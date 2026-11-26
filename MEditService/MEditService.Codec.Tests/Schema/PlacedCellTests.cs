@@ -90,15 +90,24 @@ public sealed class PlacedCellTests
         Assert.Equal(centre, positionPath.Aggregate(read, (node, member) => node[member].Require()).GetValue<string>());
     }
 
-    [Theory]
-    [InlineData(PersistentFlag.PersistentGroup, """{ "Grid": { "Point": "3, -2" } }""", PersistentFlag.Bit)]
-    [InlineData(PersistentFlag.TemporaryGroup, "{}", 0)]
-    public void AReferenceCreatedInAPersistentGroup_IsPersistent_AndOneInACellWithNoGrid_HasNoPosition(string group, string cell, int flags)
+    private static JsonNode CreatedIn(string group, string cell) =>
+        JsonNode.Parse(PlacedCell.AsCreatedIn(
+            Document.Parse(RecordTextCodec.SerializeToText(new Mutagen.Bethesda.Fallout4.PlacedObject(Placed, Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4), GameRelease.Fallout4)),
+            group, Cell(cell), GameRelease.Fallout4).Text).Require();
+
+    [Fact]
+    public void AReferenceCreatedInAPersistentGroup_IsPersistent_AndTakesNoPositionFromItsCellsGrid()
     {
-        var bare = Document.Parse(RecordTextCodec.SerializeToText(new Mutagen.Bethesda.Fallout4.PlacedObject(Placed, Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4), GameRelease.Fallout4));
+        var created = CreatedIn(PersistentFlag.PersistentGroup, """{ "Grid": { "Point": "3, -2" } }""");
 
-        var created = JsonNode.Parse(PlacedCell.AsCreatedIn(bare, group, Cell(cell), GameRelease.Fallout4).Text).Require();
+        Assert.Equal<(int?, string?)>((PersistentFlag.Bit, null), (created[RecordHeaderFlags.Member]?.GetValue<int>(), created["Position"]?.GetValue<string>()));
+    }
 
-        Assert.Equal((flags, null), (created[RecordHeaderFlags.Member]?.GetValue<int>() ?? 0, created["Position"]?.GetValue<string>()));
+    [Fact]
+    public void AReferenceCreatedInACellWithNoGrid_IsCreatedBare()
+    {
+        var created = CreatedIn(PersistentFlag.TemporaryGroup, "{}");
+
+        Assert.Equal<(int?, string?)>((null, null), (created[RecordHeaderFlags.Member]?.GetValue<int>(), created["Position"]?.GetValue<string>()));
     }
 }

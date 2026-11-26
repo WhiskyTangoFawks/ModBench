@@ -15,26 +15,26 @@ public sealed class FormIdLimitTests
     private static Fallout4Mod Fallout4(string fileName, Fallout4ModHeader.HeaderFlag flags) =>
         new(ModKey.FromFileName(fileName), Fallout4Release.Fallout4) { ModHeader = { Flags = flags } };
 
-    public static TheoryData<string, IModGetter, FormIdLimit?> Limits => new()
+    public static TheoryData<IModGetter, FormIdLimit?> Limits => new()
     {
-        { "NamedEsl.esl", Fallout4("NamedEsl.esl", 0), new FormIdLimit("light", 0x0, 0xFFF, ByFlag: false, ByExtension: true) },
-        { "Flagged.esp", Fallout4("Flagged.esp", Fallout4ModHeader.HeaderFlag.Small), new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: false) },
+        { Fallout4("NamedEsl.esl", 0), new FormIdLimit("light", 0x0, 0xFFF, ByFlag: false, ByExtension: true) },
+        { Fallout4("Flagged.esp", Fallout4ModHeader.HeaderFlag.Small), new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: false) },
         {
-            "FlaggedAndNamedEsl.esl", Fallout4("FlaggedAndNamedEsl.esl", Fallout4ModHeader.HeaderFlag.Small),
+            Fallout4("FlaggedAndNamedEsl.esl", Fallout4ModHeader.HeaderFlag.Small),
             new FormIdLimit("light", 0x0, 0xFFF, ByFlag: true, ByExtension: true)
         },
-        { "Neither.esp", Fallout4("Neither.esp", 0), null },
+        { Fallout4("Neither.esp", 0), null },
         {
-            "Medium.esm", new StarfieldMod(ModKey.FromFileName("Medium.esm"), StarfieldRelease.Starfield) { ModHeader = { Flags = StarfieldModHeader.HeaderFlag.Medium } },
+            new StarfieldMod(ModKey.FromFileName("Medium.esm"), StarfieldRelease.Starfield) { ModHeader = { Flags = StarfieldModHeader.HeaderFlag.Medium } },
             new FormIdLimit("medium", 0x0, 0xFFFF, ByFlag: true, ByExtension: false)
         },
     };
 
     [Theory]
     [MemberData(nameof(Limits))]
-    public void APluginsLimit_IsSetByItsLightOrMediumFlag_OrByItsEslName(string fileName, IModGetter mod, FormIdLimit? limit)
+    public void APluginsLimit_IsSetByItsLightOrMediumFlag_OrByItsEslName(IModGetter mod, FormIdLimit? limit)
     {
-        Assert.Equal(limit, PluginFlags.LimitOf(mod, fileName));
+        Assert.Equal(limit, PluginFlags.LimitOf(mod, mod.ModKey.FileName));
     }
 
     [Fact]
