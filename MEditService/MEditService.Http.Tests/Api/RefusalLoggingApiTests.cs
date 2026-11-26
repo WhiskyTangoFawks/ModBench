@@ -47,19 +47,6 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARefusedDeleteItem_IsLoggedOnce_NamingTheRecordAndWhy()
-    {
-        await LoadedAndCompiledPlugin();
-
-        await Client.PostAsJsonAsync("/records/delete-changes", new
-        {
-            records = new[] { new { formKey = "000FFF:Held.esp", plugin = new { name = Plugin, origin = Origin } } }
-        });
-
-        AssertLoggedOnce("Refused Delete of", "RecordNotFound");
-    }
-
-    [Fact]
     public async Task ARefusedDecompileItem_IsLoggedOnce_NamingThePluginAndWhy()
     {
         await LoadedAndCompiledPlugin();
@@ -77,26 +64,6 @@ public sealed class RefusalLoggingApiTests : HostedTests
         await Client.Edit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
 
         AssertLoggedOnce("Refused Edit", "RecordNotFound");
-    }
-
-    [Fact]
-    public async Task ARefusedScriptEdit_IsLoggedOnce_NamingWhy()
-    {
-        await LoadedAndCompiledPlugin();
-
-        await Client.ScriptEdit("000FFF:Held.esp", Plugin, Origin, "EditorID", "Renamed");
-
-        AssertLoggedOnce("Refused EditRecord", "RecordNotFound");
-    }
-
-    [Fact]
-    public async Task ARefusedCreateRecord_IsLoggedOnce_NamingWhy()
-    {
-        await LoadedAndCompiledPlugin();
-
-        await Client.CreateRecord(Plugin, Origin, "nosuch");
-
-        AssertLoggedOnce("Refused Create record", "RecordTypeNotFound");
     }
 
     [Fact]

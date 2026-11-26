@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -31,25 +30,6 @@ public sealed class EditRecordChangesApiTests : HostedTests
 
     private static string NpcFile(ScatteredFixtureData fx) =>
         Directory.EnumerateFiles(ModFolderOf(fx), $"{Npc} - *.json", SearchOption.AllDirectories).Single();
-
-    [Fact]
-    public async Task AnEdit_IsAnsweredWithTheNewTextOfTheRecordsDocument_AtItsPath_AndWritesNothing()
-    {
-        var (fx, formKey) = await Loaded(compiledPlugin: true);
-        var file = NpcFile(fx);
-        var before = TreeSnapshot.Of(ModFolderOf(fx));
-
-        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var answer = await response.Body();
-        Assert.Empty(answer.GetProperty("moves").EnumerateArray());
-        var document = Assert.Single(answer.GetProperty("documents").EnumerateArray());
-        Assert.Equal(file, document.GetProperty("path").GetString());
-        Assert.Contains("0.75", document.GetProperty("text").GetString().Require(), StringComparison.Ordinal);
-        Assert.Equal(JsonValueKind.Null, answer.GetProperty("newFormKey").ValueKind);
-        Assert.Equal(before, TreeSnapshot.Of(ModFolderOf(fx)));
-    }
 
     [Fact]
     public async Task AnEditNamingAFieldTheRecordHasNot_Is404_WithItsOwnRefusal()

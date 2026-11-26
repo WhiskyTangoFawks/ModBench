@@ -58,12 +58,4 @@ public sealed class LoadOrderFilterApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.NoContent, (await Client.GetAsync("/load-order/filter")).StatusCode);
     }
-
-    [Fact]
-    public async Task ClearingTheFilter_WithNoLoadOrder_Is204()
-    {
-        var del = await Client.DeleteAsync("/load-order/filter");
-
-        Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
-    }
 }

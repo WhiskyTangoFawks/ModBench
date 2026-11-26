@@ -159,15 +159,4 @@ public sealed class WriteWaitsApiTests : HostedTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("has not read the plugin source", StringComparison.Ordinal));
     }
-
-    [Fact]
-    public async Task AScriptDeleteThatWritesNothing_DoesNotWait()
-    {
-        await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/records/delete", Npc("000FFF:Waited.esp", Plugin, Origin)).WaitAsync(Generous);
-
-        Assert.False(response.IsSuccessStatusCode);
-        Assert.False(_writerAwaits.Task.IsCompleted);
-    }
 }

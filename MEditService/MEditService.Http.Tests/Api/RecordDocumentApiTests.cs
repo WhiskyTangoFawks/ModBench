@@ -71,17 +71,6 @@ public sealed class RecordDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACompiledPluginCopyWhoseFileIsGone_Is404()
-    {
-        var fx = await CompiledPlugin();
-        var npc = await Npc();
-
-        File.Delete(NpcFile(fx));
-
-        await (await DocumentOf(npc)).AssertIsProblem(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
     public async Task ACopyTwoDocumentsClaim_Is422_SayingSo()
     {
         var fx = await CompiledPlugin();

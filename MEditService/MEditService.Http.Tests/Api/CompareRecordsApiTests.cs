@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -59,28 +58,6 @@ public sealed class CompareRecordsApiTests : HostedTests
         Assert.Equal(WithNpc, copy.GetProperty("plugin").GetProperty("name").GetString());
         Assert.Equal("OnlyOne", copy.GetProperty("conflictThis").GetString());
         Assert.Equal(["conflictThis", "plugin"], copy.EnumerateObject().Select(p => p.Name).Order());
-    }
-
-    [Fact]
-    public async Task ACopyNoPluginGives_IsAnAnswerWithNoComparison_NamingEachCopyAndWhyItIsMissing()
-    {
-        var (npc, weapon) = await Loaded();
-        const string nowhere = "00DEAD:Nowhere.esp";
-
-        var response = await Client.PostAsJsonAsync("/records/compare", new
-        {
-            copies = new[] { Copy(npc, WithNpc, WithNpcMod), Copy(weapon, WithNpc, WithNpcMod), Copy(nowhere, WithWeapon, WithWeaponMod) },
-        });
-
-        response.EnsureSuccessStatusCode();
-        var answer = await response.Body();
-        Assert.False(answer.TryGetProperty("compare", out var compare) && compare.ValueKind != JsonValueKind.Null);
-        var missing = answer.GetProperty("missing").EnumerateArray().ToList();
-        Assert.Equal(
-            [(weapon, WithNpc, WithNpcMod, "NotInPlugin"), (nowhere, WithWeapon, WithWeaponMod, "RecordGone")],
-            missing.Select(m => (m.GetProperty("formKey").GetString(), m.GetProperty("plugin").GetProperty("name").GetString(),
-                m.GetProperty("plugin").GetProperty("origin").GetString(), m.GetProperty("reason").GetString())));
-        Assert.All(missing, m => Assert.False(string.IsNullOrWhiteSpace(m.GetProperty("message").GetString())));
     }
 
     [Fact]

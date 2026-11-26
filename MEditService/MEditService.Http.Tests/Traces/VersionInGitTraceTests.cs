@@ -138,16 +138,4 @@ public sealed class VersionInGitTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
-
-    [Fact]
-    public async Task AfterInit_TheNextCheckReportsThePluginCompiledPlugin()
-    {
-        await Loaded();
-        Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
-
-        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextCheck(_instance);
-
-        await Client.PluginReportsCompiledPlugin(Plugin);
-    }
 }

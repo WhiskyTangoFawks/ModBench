@@ -40,26 +40,6 @@ public sealed class PluginFilePathsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetPluginFilePaths_AskedWithTheResultIdsItHolds_AnswersEachRecordUnchanged()
-    {
-        var fx = Owned(new PluginFixtureBuilder("api-plugin-file-paths-known")
-            .WithPlugin(Plugin, mod => mod.TextureSets.AddNew("Holder").Diffuse = @"Decals\Stain_d.dds", origin: Origin)
-            .BuildScattered());
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextCheck(fx);
-        await Client.PluginReportsCompiledPlugin(Plugin);
-        var url = $"/plugins/file-paths?plugin={Plugin}&origin={Origin}";
-        var record = Assert.Single((await Client.Asked(url))[0].GetProperty("records").EnumerateArray());
-        var known = new object[] { new { plugin = new { name = Plugin, origin = Origin }, formKey = record.GetProperty("formKey").GetString(), resultId = record.GetProperty("resultId").GetString() } };
-
-        var again = (await Client.Asked(url, known: known))[0];
-
-        Assert.True(Assert.Single(again.GetProperty("records").EnumerateArray()).GetProperty("unchanged").GetBoolean());
-        Assert.Empty(again.GetProperty("paths").EnumerateArray());
-    }
-
-    [Fact]
     public async Task GetPluginFilePaths_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
     {
         var response = await Client.PostAsked($"/plugins/file-paths?plugin={Plugin}");

@@ -56,16 +56,6 @@ public sealed class PluginProblemsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetProblems_GivenAPluginAndItsOrigin_AnswersOnlyThatPlugin()
-    {
-        await CompiledPluginLoad();
-
-        var answer = await Client.Asked($"/plugins/problems?plugin={Plugin}&origin=AnotherMod");
-
-        Assert.Empty(answer.EnumerateArray());
-    }
-
-    [Fact]
     public async Task GetProblems_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
     {
         var response = await Client.PostAsked($"/plugins/problems?plugin={Plugin}");

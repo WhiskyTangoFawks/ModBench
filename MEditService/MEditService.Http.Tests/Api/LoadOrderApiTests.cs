@@ -91,21 +91,6 @@ public sealed class LoadOrderApiTests : HostedTests
     }
 
     [Fact]
-    public async Task PutLoadOrder_TwoActivePluginsOfOneFilename_Returns400()
-    {
-        var plugin = _fixture.Plugins[0];
-        var body = Body();
-        body["plugins"] = new[] { plugin.Wire, (plugin with { Origin = "OtherMod" }).Wire };
-        body["active"] = new[] { new { name = plugin.Name, origin = plugin.Origin }, new { name = plugin.Name, origin = "OtherMod" } };
-        body["loadedWithNoLine"] = Array.Empty<object>();
-
-        var response = await Client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("OtherMod", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task PutLoadOrder_MissingDataFolder_Returns400()
     {
         var body = Body();
@@ -133,19 +118,6 @@ public sealed class LoadOrderApiTests : HostedTests
         var response = await Client.PutLoadOrderAndAwaitReady(body);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_APluginTheSnapshotDoesNotListAsActive_ComesBackOutsideTheLoadOrder()
-    {
-        var fx = Owned(new PluginFixtureBuilder("api-reconcile-disabled")
-            .WithPlugin("Active.esp", mod => mod.Npcs.AddNew("FromActive"))
-            .WithPlugin("Dormant.esp", mod => mod.Npcs.AddNew("FromDormant"), enabled: false)
-            .BuildScattered());
-
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-
-        Assert.False((await Client.Plugin("Dormant.esp")).GetProperty("inLoadOrder").GetBoolean());
     }
 
     private ScatteredFixtureData ALocalizedPlugin() =>

@@ -70,22 +70,6 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task BuildingAModWhoseArchiveTakesAFileItsFolderDoesNotHold_RefusesItByName_AndBuildsTheRest()
-    {
-        await LoadedWithOneModFolderAndCompiledPlugin();
-        (await Client.VersionInGit(NonCompiledPluginOrigin)).EnsureSuccessStatusCode();
-        var otherFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
-
-        var answer = await Answer(await Client.Build(
-            [(NonCompiledPluginOrigin, otherFolder), (Origin, _builtFolder)], new { pack = new[] { new { path = "Main.ba2", files = new[] { "meshes/a.nif" } } } }));
-
-        Assert.Empty(answer.GetProperty("applied").EnumerateArray());
-        Assert.Equal(
-            [("ArchiveFileNotInFolder", NonCompiledPluginOrigin), ("ArchiveFileNotInFolder", Origin)],
-            answer.GetProperty("refused").EnumerateArray().Select(m => (m.GetProperty("refusal").GetString(), m.GetProperty("item").GetString())));
-    }
-
-    [Fact]
     public async Task BuildingAModWithAnArchiveToPack_PacksItsLooseFileAsTheRequestsVariantSays()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();

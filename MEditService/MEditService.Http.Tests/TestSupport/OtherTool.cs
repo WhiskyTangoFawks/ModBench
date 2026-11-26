@@ -18,8 +18,6 @@ internal static class OtherTool
         mod.WriteToBinary(path);
     }
 
-    internal static void DeletesTheFile(string path) => File.Delete(path);
-
     internal static void WritesTheFile(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
@@ -34,25 +32,6 @@ internal static class OtherTool
         File.WriteAllText(
             document, File.ReadAllText(document).Replace(find, replacement, StringComparison.Ordinal));
     }
-
-    /// <summary>Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416)
-    /// even on a Linux-only runtime, and recursive because a handler writes into subdirectories
-    /// init left writable.</summary>
-    internal static void SetsThePermissions(string path, string mode)
-    {
-        using var chmod = System.Diagnostics.Process.Start(
-            new System.Diagnostics.ProcessStartInfo("chmod", ["-R", mode, path]) { RedirectStandardError = true })
-            ?? throw new InvalidOperationException($"Expected 'chmod {mode} {path}' to start a process.");
-        chmod.WaitForExit();
-        if (chmod.ExitCode != 0)
-            throw new InvalidOperationException($"chmod {mode} {path} failed: {chmod.StandardError.ReadToEnd()}");
-    }
-
-    /// <summary>The first half of a move that copies, then deletes: <paramref name="document"/> copied
-    /// to <paramref name="copiedTo"/>, relative to its folder, <c>{0}</c> standing for its file
-    /// name.</summary>
-    internal static void CopiesASourceDocument(string document, string copiedTo) =>
-        File.Copy(document, AnotherTool.Beside(document, copiedTo));
 
     internal static string SourceDocumentCarrying(string modFolder, string plugin, string text) =>
         Directory

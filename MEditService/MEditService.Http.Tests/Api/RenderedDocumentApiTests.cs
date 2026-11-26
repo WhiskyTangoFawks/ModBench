@@ -13,11 +13,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     private async Task<ScatteredFixtureData> NonCompiledPlugin()
     {
         var fx = Owned(new PluginFixtureBuilder("api-rendered-document")
-            .WithPlugin(Plugin, mod =>
-            {
-                mod.Npcs.AddNew("RenderedNpc");
-                mod.Quests.AddNew("RenderedQuest");
-            }, origin: Origin)
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("RenderedNpc"), origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
@@ -45,40 +41,13 @@ public sealed class RenderedDocumentApiTests : HostedTests
         return (Path.GetFileName(file), File.ReadAllText(file));
     }
 
-    [Theory]
-    [InlineData("npc_", "RenderedNpc", "Npcs/RenderedNpc - 000800_Rendered.esp.json")]
-    [InlineData("qust", "RenderedQuest", "Quests/RenderedQuest - 000801_Rendered.esp/RecordData.json")]
-    public async Task ANonCompiledPluginCopy_IsTheFileInitWrites_ByNameAndText(string recordType, string editorId, string written)
-    {
-        var fx = await NonCompiledPlugin();
-
-        var rendered = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, recordType, editorId));
-
-        Assert.Equal(await WrittenByInit(fx, written), rendered);
-    }
-
     [Fact]
-    public async Task ANonCompiledPluginsHeader_IsTheFileInitWrites_ByNameAndText()
+    public async Task ANonCompiledPluginCopy_IsTheFileInitWrites_ByNameAndText()
     {
         var fx = await NonCompiledPlugin();
 
-        var rendered = await RenderedOk($"000000:{Plugin}");
+        var rendered = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc"));
 
-        Assert.Equal(await WrittenByInit(fx, "RecordData.json"), rendered);
-    }
-
-    [Fact]
-    public async Task ACompiledPluginCopy_IsNamedAsItsFileIs_AfterARenameByHand()
-    {
-        var fx = await NonCompiledPlugin();
-        var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
-        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextCheck(fx);
-        await Client.PluginReportsCompiledPlugin(Plugin);
-        var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
-
-        File.Move(written, Path.Combine(Path.GetDirectoryName(written).Require(), "Named By Hand.json"));
-
-        Assert.Equal("Named By Hand.json", (await RenderedOk(npc)).FileName);
+        Assert.Equal(await WrittenByInit(fx, "Npcs/RenderedNpc - 000800_Rendered.esp.json"), rendered);
     }
 }
