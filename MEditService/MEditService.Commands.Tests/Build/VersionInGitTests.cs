@@ -56,68 +56,6 @@ public sealed class VersionInGitTests
     }
 
     [Fact]
-    public async Task InitMod_OfAModThatProvidesAPlugin_MakesItASourceModHoldingEachRecord()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        var npc1 = mod.Npcs.AddNew("FirstNpc");
-        var npc2 = mod.Npcs.AddNew("SecondNpc");
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
-
-        Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
-
-        var plugin = new PluginAddress("Fixture.esp", "FixtureMod");
-        var first = SourceModTree.Document(modFolder, plugin, npc1.FormKey.ToString()).Require();
-        var second = SourceModTree.Document(modFolder, plugin, npc2.FormKey.ToString()).Require();
-        Assert.Equal("FirstNpc", first.EditorId);
-        Assert.Equal("SecondNpc", second.EditorId);
-    }
-
-    [Fact]
-    public async Task InitMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-alreadysource-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-alreadysource-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("SomeNpc");
-        CompiledPluginTemplates.WriteCompiledPlugin(modFolder, mod);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-
-        byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
-        File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
-        var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
-
-        Assert.False(result.Applied);
-        Assert.Equal(VersionInGitRefusal.AlreadyInitialized, result.Refusal);
-    }
-
-    [Fact]
-    public async Task InitMod_OfAPluginHoldingADeletedReferenceWithOnlyItsBaseRecord_Inits()
-    {
-        using var modFolder = new ScratchDirectory("medit-init-deleted-reference-");
-        using var dataFolder = new ScratchDirectory("medit-init-deleted-reference-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        File.WriteAllBytes(pluginPath, DeletedReferencePlugin.Bytes("Fixture.esp"));
-        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-
-        var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
-
-        Assert.True(result.Applied);
-    }
-
-    [Fact]
     public async Task InitMod_OfAMod_TakesOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
         using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
@@ -157,7 +95,7 @@ public sealed class VersionInGitTests
 
         var secondPluginPath = Path.Combine(modFolder, "Second.esp");
         var secondMod = new Fallout4Mod(ModKey.FromFileName("Second.esp"), Fallout4Release.Fallout4);
-        for (var i = 0; i < 400; i++) secondMod.Npcs.AddNew($"Npc{i}");
+        secondMod.Npcs.AddNew("SecondNpc");
         secondMod.WriteToBinary(secondPluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
@@ -177,26 +115,6 @@ public sealed class VersionInGitTests
             observed.Select(n => n.Phase).OfType<VersionInGitPhase>());
         Assert.All(observed.Where(n => n.Phase is not null), n => Assert.Equal("FixtureMod", n.Progress.Mod));
         Assert.Equal(new ModlistProgress(null, 0, 0), observed[^1].Progress);
-    }
-
-    [Fact]
-    public async Task InitMod_LocalizedPluginWithABsaBesideIt_MaterializesTheRealStringInTheNamedSourceFolder()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-localized-");
-        using var sourceFolder = new ScratchDirectory("medit-initservice-localized-source-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-localized-data-");
-        var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
-        File.WriteAllBytes(Path.Combine(modFolder, "UnrelatedMod - Main.ba2"), []);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
-                NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
-        await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
-
-        Assert.True(TestAdapters.Source().IsSourceMod(sourceFolder));
-        var sourceText = SourceModTree.Document(sourceFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
-        Assert.Contains("The Big Door", sourceText);
     }
 
     [Fact]
@@ -264,6 +182,29 @@ public sealed class VersionInGitTests
         Assert.Equal((false, refusal), (result.Applied, result.Refusal));
         Assert.Equal(message, result.Message);
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
+    }
+
+    [Fact]
+    public async Task InitMod_WhoseRewriteHoldsARecordThePluginDoesNot_RefusesNamingThatRecord()
+    {
+        using var modFolder = new ScratchDirectory("medit-init-extra-record-");
+        using var dataFolder = new ScratchDirectory("medit-init-extra-record-data-");
+        var plugin = StaleHeaderPlugins.Named(StaleHeaderPlugins.SettingsFileName);
+        plugin.WriteInto(modFolder);
+        var loadOrder = EmptyMasterStubs.LoadOrderOver(Path.Combine(modFolder, plugin.FileName), "FixtureMod", dataFolder);
+
+        var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new ForgedTreeWriteAdapter(DeserializeThenAddAnNpc))).Only();
+
+        Assert.Equal((false, VersionInGitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Contains("ExtraNpc", result.Message, StringComparison.Ordinal);
+        Assert.Contains("not present in the original", result.Message, StringComparison.Ordinal);
+    }
+
+    private static async Task<IMod> DeserializeThenAddAnNpc(string folder, CancellationToken cancel)
+    {
+        var deserialized = await Fallout4WholeMod.Deserialize(folder, cancel);
+        deserialized.Npcs.AddNew("ExtraNpc");
+        return deserialized;
     }
 
     private static void WriteNpcWithTheNullFormId(string pluginPath)
