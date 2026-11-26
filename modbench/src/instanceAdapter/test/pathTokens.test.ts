@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { present } from '../../ports/present';
 import { folderTokens, tokenFilter, type PathSpelling, type TokenFolders } from '../pathTokens';
 
 const DRIVER = 'tokens';
@@ -22,7 +23,7 @@ afterEach(async () => {
 
 // Git runs a filter's command in its own shell, as an alias's, which needs no repository.
 const filtered = (command: string | undefined, text: string): string =>
-  execFileSync('git', ['-c', `alias.filtered=!${command ?? ''}`, 'filtered'], { input: text, encoding: 'utf8' });
+  execFileSync('git', ['-c', `alias.filtered=!${present(command, 'the filter\'s command')}`, 'filtered'], { input: text, encoding: 'utf8' });
 
 async function filterConfig(folders: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): Promise<Readonly<Record<string, string>>> {
   const directory = await mkdtemp(join(tmpdir(), 'modbench-token-filter-'));
