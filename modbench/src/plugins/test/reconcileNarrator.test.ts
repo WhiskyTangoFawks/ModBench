@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { LoadOrderRefusal, PluginAddress, PluginLoadFailure } from '../../client';
 import { createReconcileNarrator, type Heard } from '../reconcileNarrator';
+import { settled } from '../../test/eventually';
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 const B = { name: 'B.esp', origin: 'SomeMod' };
@@ -201,16 +202,16 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     let handedOver!: () => void;
     const handOff = new Promise<void>((resolve) => { handedOver = resolve; });
     const { deps, narrator } = narrated(() => handOff);
-    let settled = false;
-    const handed = narrator.settled(3).then(() => { settled = true; });
+    let handedOn = false;
+    const handed = narrator.settled(3).then(() => { handedOn = true; });
 
     narrator.hear(ready(3));
-    await vi.waitFor(() => { expect(deps.settle).toHaveBeenCalledOnce(); });
-    expect(settled).toBe(false);
+    await settled(() => { expect(deps.settle).toHaveBeenCalledOnce(); });
+    expect(handedOn).toBe(false);
 
     handedOver();
     await handed;
-    expect(settled).toBe(true);
+    expect(handedOn).toBe(true);
   });
 
   it('answers settled(version) at once for a version already handed over', async () => {

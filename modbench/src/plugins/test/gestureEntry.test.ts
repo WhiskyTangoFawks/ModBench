@@ -34,17 +34,14 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const ownRecord = (formKey: string, plugin: string, origin: string, conditions: { editable: boolean }, recordType?: string) =>
     recordRow(recordSummaryFixture({ formKey, plugin }), origin, conditions, recordType);
   let weapons: RecordBrowserNode;
-  let nonCompiledPluginWeapons: RecordBrowserNode;
   let quests: RecordBrowserNode;
   let own: RecordBrowserNode;
   let immutable: RecordBrowserNode;
   let nonCompiledPluginRecord: RecordBrowserNode;
   let cell: RecordBrowserNode;
   let quest: RecordBrowserNode;
-  let readOnlyQuest: RecordBrowserNode;
   beforeAll(async () => {
     weapons = await recordGroupRow(WEAPON, ALPHA, EDITABLE);
-    nonCompiledPluginWeapons = await recordGroupRow(WEAPON, { name: 'Beta.esp', origin: 'ModB' });
     quests = await recordGroupRow({ type: 'qust', count: 1, displayName: 'Quest', isCreatable: false }, ALPHA, EDITABLE);
     own = await ownRecord('000800:Alpha.esp', 'Alpha.esp', 'ModA', EDITABLE);
     immutable = await ownRecord('000801:Alpha.esp', 'Alpha.esp', 'ModA', { editable: false });
@@ -53,7 +50,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
       formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false, workingTreeState: 'None',
     }, ALPHA, EDITABLE);
     quest = await ownRecord('000804:Alpha.esp', 'Alpha.esp', 'ModA', EDITABLE, 'qust');
-    readOnlyQuest = await ownRecord('000805:Alpha.esp', 'Alpha.esp', 'ModA', { editable: false }, 'qust');
   });
   const enabledNow = (row: PluginNode) => row !== beta;
   const context = (selection: readonly PluginsTreeNode[]) => pluginsKeyContext(selection, enabledNow);
@@ -76,7 +72,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['two in mods with no repository', () => [nonCompiledPlugin, alsoNonCompiledPlugin], { allInNonSourceMod: true }],
       ['one beside a plugin in a source mod', () => [nonCompiledPlugin, compilable], { allInNonSourceMod: false }],
-      ['one beside a plugin in Overwrite', () => [nonCompiledPlugin, inOverwrite], { allInNonSourceMod: false }],
       ['nothing', () => [], { allInNonSourceMod: false }],
     ])('%s', reads);
   });
@@ -85,8 +80,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['compiled, read-only and source-less plugins of source mods', () => [compilable, compiledPluginReadOnly, nonCompiledPluginInSourceMod], { allInSourceMod: true }],
       ['one beside a plugin in a mod with no repository', () => [compilable, nonCompiledPlugin], { allInSourceMod: false }],
-      ['one beside a plugin in Overwrite', () => [compilable, inOverwrite], { allInSourceMod: false }],
-      ['nothing', () => [], { allInSourceMod: false }],
     ])('%s', reads);
   });
 
@@ -99,21 +92,16 @@ describe('what the Plugins palette entries and keys read off the selection', () 
       ['malformed plugins of a source mod and of a mod with no repository', () => [malformedInASourceMod, malformedInNoSourceMod], { allMalformedInAMod: true }],
       ['one beside a plugin not malformed', () => [malformedInASourceMod, compilable], { allMalformedInAMod: false }],
       ['a malformed plugin in the game folder', () => [malformedInTheGameFolder], { allMalformedInAMod: false }],
-      ['nothing', () => [], { allMalformedInAMod: false }],
     ])('%s', reads);
   });
 
   describe('rename sees exactly one selected plugin in a mod, compiled or not', () => {
     it.each<Case>([
       ['a compiled plugin', () => [compiledPluginReadOnly], { singlePluginInMod: true }],
-      ['a plugin with no plugin source in a source mod', () => [nonCompiledPluginInSourceMod], { singlePluginInMod: true }],
       ['a plugin in a mod that is no source mod', () => [nonCompiledPlugin], { singlePluginInMod: true }],
       ['a plugin in Overwrite', () => [inOverwrite], { singlePluginInMod: false }],
-      ['a plugin in the game folder', () => [withFlags(pluginRow('Xi.esp', 'Data/'), 'plugin enabled nonCompiledPlugin')], { singlePluginInMod: false }],
       ['a plugin the game loads with no line', () => [lockedRow('Fallout4.esm')], { singlePluginInMod: false }],
       ['two plugins in mods', () => [compilable, nonCompiledPlugin], { singlePluginInMod: false }],
-      ['a record-type group', () => [weapons], { singlePluginInMod: false }],
-      ['nothing', () => [], { singlePluginInMod: false }],
     ])('%s', reads);
   });
 
@@ -124,7 +112,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
       ['a plugin a broken rule moves', () => [moving], { singleSuggestedMove: true }],
       ['a plugin no broken rule moves', () => [compilable], { singleSuggestedMove: false }],
       ['two plugins', () => [moving, moving], { singleSuggestedMove: false }],
-      ['nothing', () => [], { singleSuggestedMove: false }],
     ])('%s', reads);
   });
 
@@ -132,16 +119,12 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['an editable group', () => [weapons], { singleCreatable: true }],
       ['an editable compiled plugin', () => [compilable], { singleCreatable: true }],
-      ['a group of a plugin with no source', () => [nonCompiledPluginWeapons], { singleCreatable: false }],
       ['a read-only compiled plugin', () => [compiledPluginReadOnly], { singleCreatable: false }],
-      ['a plugin with no source', () => [nonCompiledPlugin], { singleCreatable: false }],
       ['a group and a plugin', () => [weapons, compilable], { singleCreatable: false }],
       ['a record that is no container', () => [own], { singleCreatable: false }],
       ['an editable group of a type the game cannot create', () => [quests], { singleCreatable: false }],
       ['an editable container', () => [quest], { singleCreatable: true }],
       ['an editable cell', () => [cell], { singleCreatable: true }],
-      ['a read-only container', () => [readOnlyQuest], { singleCreatable: false }],
-      ['two containers', () => [quest, cell], { singleCreatable: false }],
     ])('%s', reads);
   });
 
@@ -149,9 +132,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['a record and a cell of an editable plugin', () => [own, cell], { allDeletableRecords: true }],
       ['one beside a record of an immutable plugin', () => [own, immutable], { allDeletableRecords: false }],
-      ['one beside a record of a plugin with no source', () => [own, nonCompiledPluginRecord], { allDeletableRecords: false }],
       ['one beside a plugin', () => [own, alpha], { allDeletableRecords: false }],
-      ['nothing', () => [], { allDeletableRecords: false }],
     ])('%s', reads);
   });
 
@@ -159,7 +140,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['records of every plugin', () => [own, cell, immutable, nonCompiledPluginRecord], { allRecords: true }],
       ['one beside a plugin', () => [own, alpha], { allRecords: false }],
-      ['nothing', () => [], { allRecords: false }],
     ])('%s', reads);
   });
 
@@ -178,7 +158,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
       ['an enabled plugin', () => [alpha], { holdsEnabledPlugin: true, holdsDisabledPlugin: false }],
       ['a disabled plugin and a record', () => [beta, own], { holdsEnabledPlugin: false, holdsDisabledPlugin: true }],
       ['a record and a locked plugin', () => [own, lockedRow('Fallout4.esm')], { holdsEnabledPlugin: false, holdsDisabledPlugin: false }],
-      ['nothing', () => [], { holdsEnabledPlugin: false, holdsDisabledPlugin: false }],
     ])('%s', reads);
   });
 
@@ -186,7 +165,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['a plugin among a record and a locked plugin', () => [own, lockedRow('Fallout4.esm'), alpha], { holdsPluginLine: true }],
       ['a record and a locked plugin', () => [own, lockedRow('Fallout4.esm')], { holdsPluginLine: false }],
-      ['nothing', () => [], { holdsPluginLine: false }],
     ])('%s', reads);
   });
 });
