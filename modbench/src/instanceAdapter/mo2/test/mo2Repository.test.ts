@@ -224,24 +224,24 @@ describe('the MO2 adapter\'s repository', () => {
     });
 
     it.each([
-      ['a manifest of the mod\'s name, however it is cased', 'MODS\\Gone\\gone.MANIFEST.json', true],
-      ['a manifest a rename left in the folder of another mod', 'mods\\Y\\X.manifest.json', true],
-      ['a mod folder', 'mods\\Gone', false],
-      ['another file in a mod folder', 'mods\\Gone\\notes.txt', false],
-      ['a path below a manifest', 'mods\\A\\A.manifest.json\\x', false],
-      ['a manifest in a folder of a mod', 'mods\\A\\sub\\A.manifest.json', false],
-      ['a source mod\'s manifest', 'source\\A\\A.manifest.json', false],
-      ['a manifest outside the mod folders, named for the folder it is in', 'plugins\\Rootbuilder\\rootbuilder.MANIFEST.json', false],
-      ['a manifest at the instance root', 'instance.manifest.json', false],
-      ['a manifest in a profile\'s folder', 'profiles\\P\\P.manifest.json', false],
-      ['a manifest in the downloads folder', 'my downloads\\D\\D.manifest.json', false],
-      ['a manifest below the folder of another', 'Stock Game\\Data\\Data.manifest.json', false],
-    ])('owns %s: %s', async (_name, entry, owned) => {
+      ['a manifest of the mod\'s name, however it is cased', 'MODS\\Gone\\gone.MANIFEST.json', ['.env']],
+      ['a manifest a rename left in the folder of another mod', 'mods\\Y\\X.manifest.json', ['.env']],
+      ['a mod folder', 'mods\\Gone', ['mods\\Gone', '.env']],
+      ['another file in a mod folder', 'mods\\Gone\\notes.txt', ['mods\\Gone\\notes.txt', '.env']],
+      ['a path below a manifest', 'mods\\A\\A.manifest.json\\x', ['mods\\A\\A.manifest.json\\x', '.env']],
+      ['a manifest in a folder of a mod', 'mods\\A\\sub\\A.manifest.json', ['mods\\A\\sub\\A.manifest.json', '.env']],
+      ['a source mod\'s manifest', 'source\\A\\A.manifest.json', ['source\\A\\A.manifest.json', '.env']],
+      ['a manifest outside the mod folders, named for the folder it is in', 'plugins\\Rootbuilder\\rootbuilder.MANIFEST.json', ['plugins\\Rootbuilder\\rootbuilder.MANIFEST.json', '.env']],
+      ['a manifest at the instance root', 'instance.manifest.json', ['instance.manifest.json', '.env']],
+      ['a manifest in a profile\'s folder', 'profiles\\P\\P.manifest.json', ['profiles\\P\\P.manifest.json', '.env']],
+      ['a manifest in the downloads folder', 'my downloads\\D\\D.manifest.json', ['my downloads\\D\\D.manifest.json', '.env']],
+      ['a manifest below the folder of another', 'Stock Game\\Data\\Data.manifest.json', ['Stock Game\\Data\\Data.manifest.json', '.env']],
+    ])('owns %s: %s', async (_name, entry, ignored) => {
       await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('Stock Game/Stock Game.manifest.json');
 
-      expect(await ignoredAfterReading([entry])).toEqual({ Ignore: owned ? ['.env'] : [entry, '.env'] });
+      expect(await ignoredAfterReading([entry])).toEqual({ Ignore: ignored });
     });
   });
 

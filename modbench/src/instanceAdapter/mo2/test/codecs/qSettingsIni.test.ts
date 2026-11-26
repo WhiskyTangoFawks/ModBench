@@ -31,6 +31,7 @@ describe('a value read from a QSettings INI, a mod\'s meta.ini version', () => {
   it.each([
     ['reads the key in the named section, not the same key in another', '[A]\r\nversion=wrong\r\n[General]\r\nversion=right\r\n', 'right'],
     ['is undefined when the section lacks the key', '[A]\r\nversion=1\r\n[General]\r\n', undefined],
+    ['is undefined when the file lacks the section', '[A]\r\nversion=1\r\n', undefined],
     ['trims padding around the key and the value', '[General]\r\n version = v \r\n', 'v'],
     ['ignores a line with no "=", whose whole text would otherwise pass for a key', '[General]\r\nversion\r\nversion=1\r\n', '1'],
   ])('%s', async (_, meta, version) => {

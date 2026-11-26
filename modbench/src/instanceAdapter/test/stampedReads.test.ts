@@ -330,6 +330,15 @@ describe('the MO2 reading of an instance nothing changed in', () => {
 
   it.each<[string, (adapter: InstanceAdapter, modlist: string) => Promise<unknown>]>([
     ['a reading between them', (adapter, modlist) => adapter.reading({ named: [modlist], disk: false })],
+    ['a reading that then failed', async (adapter, modlist) => {
+      const plugins = join(dirname(modlist), 'plugins.txt');
+      const text = await readFile(plugins);
+      await rm(plugins);
+      await mkdir(plugins);
+      await expect(adapter.reading({ named: [modlist, plugins], disk: false })).rejects.toThrow(/EISDIR/);
+      await rm(plugins, { recursive: true });
+      await writeFile(plugins, text);
+    }],
     ['a read outside a reading', (adapter) => adapter.modOrder()],
   ])('finds a file unchanged only against the landed reading it is handed, never against %s', async (_between, readTheNewText) => {
     const adapter = adapterOver(instance);

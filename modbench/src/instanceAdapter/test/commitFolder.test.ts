@@ -41,18 +41,6 @@ async function committedIgnoreList(text: string): Promise<void> {
 const HELD_WHOLE = '# Mod folders this repository holds whole\n!/mods/ModA/*\n/mods/ModA/meta.ini\n# End of mod folders this repository holds whole';
 
 describe('a mod folder committed', () => {
-  it('names .git, and nothing else, as what it writes, so a reading after it reads the repository again', async () => {
-    const adapter = await repository();
-    await committedIgnoreList('');
-    await put('mods/Mod [A]/a.esp');
-    const named: string[] = [];
-    diskCheckedBy({ name: (paths) => { named.push(...paths); }, leaveUnnamed: () => { throw new Error('a write left its files unnamed'); }, settling: () => undefined });
-
-    await adapter.commitFolder(join(root, 'mods', 'Mod [A]'), 'Init');
-
-    expect([...new Set(named)]).toEqual([join(root, '.git')]);
-  });
-
   it('commits the files of the folder alone, whatever else is staged or changed', async () => {
     const adapter = await repository();
     await put('mods/Mod [A]/a.esp');

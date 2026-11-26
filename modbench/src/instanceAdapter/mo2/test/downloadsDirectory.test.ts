@@ -10,6 +10,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import type { DownloadedFiles } from '../../instanceAdapter';
+import { qSettingsPath } from '../../test/instanceOnDisk';
 
 describe('the downloads directory resolver', () => {
   let root: string;
@@ -21,7 +22,7 @@ describe('the downloads directory resolver', () => {
   const OUTSIDE = join('/mnt', 'storage', 'downloads');
 
   const downloadedFilesWith = async (downloadDirectory: string | undefined, answers: AdapterAnswers = {}): Promise<DownloadedFiles> => {
-    if (downloadDirectory !== undefined) await appendFile(join(root, 'ModOrganizer.ini'), `download_directory=@ByteArray(${downloadDirectory.replaceAll('\\', '\\\\')})\r\n`);
+    if (downloadDirectory !== undefined) await appendFile(join(root, 'ModOrganizer.ini'), `download_directory=${qSettingsPath(downloadDirectory)}\r\n`);
     return (await adapterOver(root, answers).reading()).downloadedFiles;
   };
   const resolved = (downloadsDir: string) => expect.objectContaining({ kind: 'listed', downloadsDir }) as unknown;

@@ -49,10 +49,10 @@ describe('a write through the adapter', () => {
     expect([...told.values()].every(Boolean)).toBe(true);
   });
 
-  it.each(writesUnderALock)('tells the loader once it holds no lock, so the loader may take the lock of each file it is told of, for %s', async (_, write, files, writeTheSameFilesAgain) => {
+  it.each(writesUnderALock)('tells the loader once it holds no lock, so the loader may take the lock of each file it is told of, for %s', async (_, write, files, takeTheSameLocks) => {
     const lockedByLoader: string[] = [];
     writesToldTo({ told: async (paths) => {
-      await writeTheSameFilesAgain(adapter);
+      await takeTheSameLocks(adapter);
       lockedByLoader.push(...paths);
       return { subscribed: Promise.resolve() };
     } });

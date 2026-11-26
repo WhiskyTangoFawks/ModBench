@@ -7,6 +7,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { diskCheckedBy } from '../../repositoriesLib/writesTold';
 import type { InstanceAdapter } from '../instanceAdapter';
+import { settingsNaming } from './instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -26,7 +27,7 @@ beforeEach(async () => {
   git(root, 'init', '--quiet', '--initial-branch=main');
   git(root, 'config', 'user.name', 't');
   git(root, 'config', 'user.email', 't@t');
-  await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n');
+  await put('ModOrganizer.ini', settingsNaming());
   await put('mods/Mod A/a.esp');
   await put('source/Mod A/build.json', '{}');
   const source = join(root, 'source', 'Mod A');
@@ -48,7 +49,12 @@ const listening = (): void => {
 
 describe('the git a gesture runs names each file it writes, and nothing it only reads', () => {
   it.each<[string, (adapter: InstanceAdapter) => Promise<unknown>, (root: string) => string[]]>([
-    ['a commit of a mod folder, staged into an index of its own', (adapter) => adapter.commitFolder(join(root, 'mods', 'Mod A'), 'Init'), (at) => [join(at, '.git')]],
+    ['a commit of a mod folder, staged into an index of its own', async (adapter) => {
+      await put('.gitignore', '');
+      git(root, 'add', '.gitignore');
+      git(root, 'commit', '-q', '-m', 'Base');
+      return adapter.commitFolder(join(root, 'mods', 'Mod A'), 'Init');
+    }, (at) => [join(at, '.git')]],
     ['a source mod\'s submodule entry written by git config -f, its branch read', async (adapter) => adapter.writeSubmodules('every', await adapter.sourceModFolders()), (at) => [join(at, '.gitmodules')]],
     ['the repository\'s own config written for the path tokens', (adapter) => adapter.writePathTokens(), (at) => [join(at, '.git')]],
     ['a source mod\'s remotes read', (adapter) => adapter.sourceHost(join(root, 'source', 'Mod A')), () => []],
@@ -58,6 +64,12 @@ describe('the git a gesture runs names each file it writes, and nothing it only 
       return adapter.submodule('Mod A');
     }, () => []],
     ['the hooks path read', (adapter) => adapter.checkPushRefusalFree(), () => []],
+    ['the stats of a file staged under a path token filter forgotten in the repository\'s own index, its filter already held', async (adapter) => {
+      await adapter.writePathTokens();
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      named.length = 0;
+      return adapter.writePathTokens();
+    }, (at) => [join(at, '.git')]],
     ['a reading\'s check that a file staged under a path token filter was filtered', async (adapter) => {
       await put('profiles/Default/modlist.txt', '');
       await put('profiles/Default/plugins.txt', '');
