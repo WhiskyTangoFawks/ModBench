@@ -15,9 +15,6 @@ NAMED_RECORD = {'plugin': None, 'formKey': FORM_KEY, 'editorId': 'Recipe'}
 SENT_RESOLVE = Sent('POST', '/names/resolve', {'names': [{'name': PLUGIN.name}]})
 RECIPE = {'FormKey': FORM_KEY, 'EditorID': 'Recipe'}
 STOPPED_SHORT = "mEdit's rows stopped before their last line, so they may not be every row the SELECT selects."
-# Nothing listens on port 0, and a connection to it fails at once, where Windows refuses one to a closed port
-# only after 2 s.
-NO_LISTENER = '0'
 SELECTED = Sent('POST', '/records/select', {'sql': 'SELECT 1'})
 
 
@@ -47,7 +44,12 @@ class Reaching(unittest.TestCase):
                 medit.resolve(PLUGIN.name)
 
     def test_raises_naming_the_port_when_nothing_answers_on_it(self) -> None:
-        with mock.patch.dict(os.environ, {'MEDIT_PORT': NO_LISTENER}), self.assertRaisesRegex(medit.MEditError, f'port {NO_LISTENER}:'):
+        # Nothing can listen on port 0, and a connection to it fails at once, where one to a freed port waits on
+        # Windows as fake_medit.LOCALHOST_FAMILY says.
+        unreachable_port = '0'
+        with (
+                mock.patch.dict(os.environ, {'MEDIT_PORT': unreachable_port}),
+                self.assertRaisesRegex(medit.MEditError, f'port {unreachable_port}:')):
             medit.select('SELECT 1')
 
 

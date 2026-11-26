@@ -14,9 +14,13 @@ from unittest import mock
 # The API as the api-drift gate holds it to a backend built from this checkout.
 API_TS = pathlib.Path(__file__).resolve().parents[2] / 'modbench' / 'src' / 'wire' / 'generated' / 'api.ts'
 SCHEMA_REF = re.compile(r'components\["schemas"\]\["(\w+)"\]')
-# medit reaches mEdit at localhost, where mEdit listens on every loopback address. The fake listens on the first
-# address localhost resolves to, ::1 on Windows, which refuses a connection to another only after 2 s.
+# medit reaches localhost, where mEdit listens on every loopback address. Windows resolves localhost to ::1 first,
+# and tries the next address only after a refused connection has waited 2 s.
 LOCALHOST_FAMILY, *_, LOCALHOST_ADDRESS = socket.getaddrinfo('localhost', 0, type=socket.SOCK_STREAM)[0]
+
+
+class LocalhostServer(http.server.ThreadingHTTPServer):
+    address_family = LOCALHOST_FAMILY
 
 
 class Member(NamedTuple):
@@ -153,8 +157,9 @@ def medit_answering(*replies: object) -> Generator[list[Sent]]:
             sent.append(request)
             reply = next(pending, None)
             if reply is None:
-                drifted.append(f'{request.method} {request.path} came after the last reply')
-                reply = Reply(None, 500)
+                past_the_last = f'{request.method} {request.path} came after the last reply'
+                drifted.append(past_the_last)
+                reply = Reply({'detail': past_the_last}, 500)
             drifted.extend(drift(request, reply))
             payload = (
                 reply.body if isinstance(reply.body, bytes) else b'' if reply.body is None else json.dumps(reply.body).encode())
@@ -168,9 +173,6 @@ def medit_answering(*replies: object) -> Generator[list[Sent]]:
 
         def log_message(self, format: str, *args: Any) -> None:
             pass
-
-    class LocalhostServer(http.server.ThreadingHTTPServer):
-        address_family = LOCALHOST_FAMILY
 
     with LocalhostServer((str(LOCALHOST_ADDRESS[0]), 0), Handler) as server:
         threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
