@@ -248,11 +248,11 @@ class TimeReport(FakeDotnet):
     def test_a_run_in_the_slot_names_committed_test_data_over_its_size_and_backend_code_only_tests_reach(self):
         self.write("MEditService/MEditService.Http/Source.cs", "public class Http {\n    public int OnlyTests() => 1;\n}\nclass Uses { Http http; }")
         self.write("MEditService/MEditService.Http.Tests/Source.cs", "class T { int n = new Http().OnlyTests(); }")
-        self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * (1024 * 1024))
+        self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * 65537)
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "data and code")
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")
-        self.assertIn("1024.0 KB  MEditService/MEditService.Http.Tests/TestData/big.bin", run.stdout)
+        self.assertIn("64.0 KB  MEditService/MEditService.Http.Tests/TestData/big.bin", run.stdout)
         self.assertIn("--- 1 TEST DATA FILES OVER 64 KB ---", run.stdout)
         self.assertIn("OnlyTests  MEditService.Http/Source.cs", run.stdout)
         self.assertIn("--- 1 MEMBERS ONLY TESTS REACH ---", run.stdout)
@@ -261,7 +261,7 @@ class TimeReport(FakeDotnet):
     def run_with_the_switch_of(self, script):
         self.write("MEditService/MEditService.Http/Source.cs", "public class Http {\n    public int OnlyTests() => 1;\n}\nclass Uses { Http http; }")
         self.write("MEditService/MEditService.Http.Tests/Source.cs", "class T { int n = new Http().OnlyTests(); }")
-        self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * (1024 * 1024))
+        self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * 65537)
         switched = self.validate / script
         switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
         return self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")[0]

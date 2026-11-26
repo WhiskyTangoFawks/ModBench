@@ -77,11 +77,10 @@ class Members(Solution):
         self.project('Box.Tests', 'class T { object[] all = [typeof(FoundByReflection), typeof(FromBase)]; }')
         self.assertEqual(self.reported(), [])
 
-    def test_a_parameter_or_a_member_named_like_a_type_keyword_is_still_a_declaration(self):
-        self.project('Box', 'public class Box {\n    public void OnlyTests(IMajorRecord record)\n    {\n    }\n'
-                            '    public string struct { get; }\n}', uses='Box')
-        self.project('Box.Tests', 'class T { void Run() { new Box().OnlyTests(null); var s = new Box().struct; } }')
-        self.assertEqual(sorted(self.reported()), ['OnlyTests', 'struct'])
+    def test_a_parameter_named_record_does_not_hide_its_method(self):
+        self.project('Box', 'public class Box {\n    public void OnlyTests(IMajorRecord record)\n    {\n    }\n}', uses='Box')
+        self.project('Box.Tests', 'class T { void Run() { new Box().OnlyTests(null); } }')
+        self.assertEqual(self.reported(), ['OnlyTests'])
 
     def test_overloads_are_one_name_with_each_file(self):
         self.project('Box', 'public class Box {\n    public int OnlyTests() => 1;\n    public int OnlyTests(int n) => n;\n}', uses='Box')

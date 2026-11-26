@@ -15,11 +15,14 @@ TEST_SIDE = {'Tests', 'TestSupport'}
 BUILD_FOLDERS = {'bin', 'obj'}
 COMMENT = re.compile(r'//[^\n]*|/\*.*?\*/', re.DOTALL)
 IDENTIFIER = re.compile(r'(?<![\w@])[A-Za-z_]\w*')
-MODIFIERS = r'(?:(?:public|internal|protected|static|virtual|abstract|sealed|async|readonly|new|required|partial|unsafe|extern|override) +)+'
+MODIFIER_WORDS = 'public|internal|protected|static|virtual|abstract|sealed|async|readonly|new|required|partial|unsafe|extern|override'
+TYPE_WORDS = 'class|record|struct|interface|enum'
+MODIFIERS = rf'(?:(?:{MODIFIER_WORDS}) +)+'
+NOT_A_TYPE_HEAD = rf'(?!(?:{MODIFIER_WORDS}|{TYPE_WORDS})\b)'
 DECLARATION = re.compile(
     r'^[ \t]*(?:\[[^\]\n]*\] *)*(?P<modifiers>' + MODIFIERS + r')'
     r'(?:(?:class|record(?: struct)?|struct|interface|enum) +(?P<type>[A-Za-z_]\w*)\b(?! *(?:<[^>\n]*>)? *(?:\([^)\n]*\))? *:)'
-    r'|(?!(?:public|internal|protected|static|virtual|abstract|sealed|async|readonly|new|required|partial|unsafe|extern|override|class|record|struct|interface|enum)\b)[\w<>\[\],.?() ]+? +(?P<member>[A-Za-z_]\w*) *(?:<[^>\n]*>)? *(?:\(|\{|=>|=|;))', re.MULTILINE)
+    r'|' + NOT_A_TYPE_HEAD + r'[\w<>\[\],.?() ]+? +(?P<member>[A-Za-z_]\w*) *(?:<[^>\n]*>)? *(?:\(|\{|=>|=|;))', re.MULTILINE)
 
 
 @dataclass
