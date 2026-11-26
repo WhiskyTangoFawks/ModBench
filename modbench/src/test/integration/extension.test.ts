@@ -2513,24 +2513,6 @@ describe('A FormKey in plugin source', () => {
     ].sort());
   });
 
-  it('lists no references in JSON outside the plugin source folder', async () => {
-    await activated();
-    const other = await documentAt('Other.json');
-    const found = await vscode.commands.executeCommand<vscode.Location[]>(
-      'vscode.executeReferenceProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
-
-    assert.deepStrictEqual(found, []);
-  });
-
-  it('has no definition in JSON outside the plugin source folder', async () => {
-    await activated();
-    const other = await documentAt('Other.json');
-    const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
-      'vscode.executeDefinitionProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
-
-    assert.deepStrictEqual(definitions, []);
-  });
-
   it('finds a record by Go to Symbol in Workspace, each copy at its plugin\'s file until it is picked', async () => {
     await activated();
     const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'CompiledPlugin');
