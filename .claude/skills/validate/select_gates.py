@@ -23,6 +23,7 @@ def gates(path: str) -> list[str]:
     if path.startswith('scripts/'):
         return ['--scripts']
     if path == API_TS:
+        # The scripts tests check their fake server's routes against it.
         return ['--scripts', '--frontend']
     if path.startswith('modbench/'):
         return ['--frontend']
