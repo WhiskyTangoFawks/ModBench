@@ -51,8 +51,6 @@ class BehindMain(unittest.TestCase):
 
 
 class GateRepo(unittest.TestCase):
-    TIER_PAUSED = "true"
-
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo)
@@ -60,8 +58,7 @@ class GateRepo(unittest.TestCase):
             self.addCleanup(shutil.rmtree, pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}{kind}"), ignore_errors=True)
         self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
         self.validate.mkdir(parents=True)
-        script = self.validate / "run-gates.sh"
-        script.write_text(SCRIPT.read_text().replace("MERGE_TIER_PAUSED=true", f"MERGE_TIER_PAUSED={self.TIER_PAUSED}", 1))
+        shutil.copy(SCRIPT, self.validate)
         shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
         (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
         for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "scripts/a.py", "spec/a.d2"):
@@ -160,6 +157,22 @@ class SelectedByChange(GateRepo):
         self.assertEqual(self.selected(), self.slot_line("--frontend"))
 
 
+class DeletedTests(GateRepo):
+    def test_a_ticket_that_deletes_a_survivor_its_integration_branch_named_meets_it(self) -> None:
+        shutil.copy(SCRIPT.parent / "check_deleted_tests.py", self.validate)
+        self.write("CODING_STANDARDS.md", "## Tests\n")
+        self.write("scripts/tests/test_box.py", "    def test_a(self): ...\n    def test_b(self): ...\n    def test_c(self): ...\n")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "tests")
+        git(self.repo, "checkout", "-q", "-b", "integration")
+        self.write("scripts/tests/test_box.py", "    def test_b(self): ...\n    def test_c(self): ...\n")
+        git(self.repo, "commit", "-q", "-am", "delete a\n\nDeleted-test: test_a => test_b")
+        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
+        self.write("scripts/tests/test_box.py", "    def test_c(self): ...\n")
+        git(self.repo, "commit", "-q", "-am", "delete b\n\nDeleted-test: test_b => test_c")
+        self.assertIn("test_a => test_b: no test at the tip", self.gates("--comments").stdout)
+
+
 class FakeDotnet(GateRepo):
     DOTNET_RECORDING_ITS_ARGUMENTS = """#!/bin/sh
 echo "$*" >> {calls}
@@ -179,6 +192,7 @@ fi
         shutil.copy(SCRIPT.parent / "check_test_data.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_only_code.py", self.validate)
         shutil.copy(SCRIPT.parent / "skips.py", self.validate)
+        shutil.copy(SCRIPT.parent / "test-budgets.toml", self.validate)
         self.project("RecordIndex")
         self.project("RecordIndex.Tests", "RecordIndex")
         self.project("Commands")
@@ -202,11 +216,13 @@ fi
 
     def trx(self, outcome, slow_seconds=0):
         name = pathlib.Path(self.repo, "fake.trx")
-        slow = (f'<UnitTestResult testName="Fake.Slow" duration="00:00:{slow_seconds:02d}" '
+        slow = (f'<UnitTestResult testId="s" testName="Fake.Slow" duration="00:00:{slow_seconds:02d}" '
                 'endTime="2026-10-02T19:01:00+00:00" outcome="Passed" />') if slow_seconds else ""
         name.write_text(
-            '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>'
-            f'<UnitTestResult testName="Fake.ATest" duration="00:00:00.1" endTime="2026-10-02T19:00:01+00:00" outcome="{outcome}" />'
+            '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><TestDefinitions>'
+            + "".join(f'<UnitTest id="{test}"><TestMethod codeBase="/b/MEditService.Http.Tests.dll" /></UnitTest>' for test in "as")
+            + '</TestDefinitions><Results>'
+            f'<UnitTestResult testId="a" testName="Fake.ATest" duration="00:00:00.1" endTime="2026-10-02T19:00:01+00:00" outcome="{outcome}" />'
             f'{slow}</Results></TestRun>')
         return str(name)
 
@@ -216,6 +232,15 @@ fi
         git(self.repo, "commit", "-q", "-m", "edit")
         run = self.gates(*flags, BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
         return run, self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def switch_on(self, script: str) -> None:
+        switched = self.validate / script
+        switched.write_text(switched.read_text().replace("\nFAILS_THE_RUN = False", "\nFAILS_THE_RUN = True"))
+
+    def plant_an_http_tests_budget_of_4_s_and_switch_it_on(self) -> None:
+        self.write(".claude/skills/validate/test-budgets.toml",
+                   'other = 60\n[boxes]\n"MEditService.Http.Tests" = 4\n[wall]\nbranch = 300\nmerge = 600\nwindows = 900\n')
+        self.switch_on("check_test_times.py")
 
 
 class BranchTests(FakeDotnet):
@@ -234,9 +259,9 @@ class BranchTests(FakeDotnet):
 
 
 class TimeReport(FakeDotnet):
-    def test_a_run_in_the_slot_names_each_test_over_a_second_and_the_wall_time_against_the_branch_budget(self):
+    def test_a_run_in_the_slot_names_each_test_over_100_ms_and_the_wall_time_against_the_branch_budget(self) -> None:
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("5.0 s  Fake.Slow", run.stdout)
+        self.assertIn("5.00 s  Fake.Slow", run.stdout)
         self.assertNotIn("Fake.ATest", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 300 s budget\n")
 
@@ -260,12 +285,11 @@ class TimeReport(FakeDotnet):
         self.assertIn("--- 1 MEMBERS ONLY TESTS REACH ---", run.stdout)
         self.assertNotIn("REPORT FAILED", run.stdout)
 
-    def run_with_the_switch_of(self, script):
+    def run_with_the_switch_of(self, script: str) -> subprocess.CompletedProcess[str]:
         self.write("MEditService/MEditService.Http/Source.cs", "public class Http {\n    public int OnlyTests() => 1;\n}\nclass Uses { Http http; }")
         self.write("MEditService/MEditService.Http.Tests/Source.cs", "class T { int n = new Http().OnlyTests(); }")
         self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * 65537)
-        switched = self.validate / script
-        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+        self.switch_on(script)
         return self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")[0]
 
     def test_the_switch_of_the_test_data_report_fails_the_run(self):
@@ -274,13 +298,23 @@ class TimeReport(FakeDotnet):
     def test_the_switch_of_the_backend_report_fails_the_run(self):
         self.assertIn("--- BACKEND TEST-ONLY CODE REPORT FAILED ---", self.run_with_the_switch_of("check_test_only_code.py").stdout)
 
+    def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self) -> None:
+        self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
+        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
+        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
+        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
+        self.assertEqual(run.returncode, 1)
+
     def test_the_comment_gate_alone_prints_the_time_report_of_its_unittests_and_no_other(self):
         self.write(".claude/hooks/test_probe.py",
                    "import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        pass\n")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
-        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 1 s ---\nWall time \d+ s of 300 s budget\n")
+        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n"
+                                     r"--- 0 TESTS OVER THE 1 s CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n"
+                                     r" +0\.0 s of +\d+ s  the tests of no box\n"
+                                     r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN OR MISSING ---\nWall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
         self.assertNotIn("TEST DATA FILES", run.stdout)
@@ -318,44 +352,20 @@ class FrontendDependencies(FakeDotnet):
         self.assertEqual(calls, [])
 
 
-class MergeToMainPaused(FakeDotnet):
-    NOTICE = "The merge-to-main tier is paused until epic #2450 lands"
-
-    def test_the_mode_reports_against_the_merge_to_main_budget_though_it_runs_the_branch_gates(self):
-        run, _ = self.run_after_changing("spec/a.d2", "--merge-to-main")
-        self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
-
-    def test_the_mode_runs_the_branch_gates_and_says_the_tier_is_paused(self):
-        run, calls = self.run_after_changing("spec/a.d2", "--merge-to-main")
-        self.assertIn(self.NOTICE, run.stdout)
-        self.assertEqual([call for call in calls if "--filter" in call], [], calls)
-        self.assertNotIn("=== Skipped tests ===", run.stdout)
-
-    def test_the_environment_form_of_the_mode_says_the_tier_is_paused(self):
-        run, _ = self.run_after_changing("spec/a.d2", MEDIT_MERGE_TO_MAIN="true")
-        self.assertEqual(run.stdout.count(self.NOTICE), 1, run.stdout)
-
-    def test_a_branch_run_does_not_say_it(self):
-        run, _ = self.run_after_changing("spec/a.d2")
-        self.assertNotIn(self.NOTICE, run.stdout)
-
-    def test_the_mode_runs_the_branch_diff_since_the_branch_it_tracks(self):
-        git(self.repo, "checkout", "-q", "-b", "integration")
-        self.write("modbench/src/a.ts", "edited")
-        git(self.repo, "commit", "-q", "-am", "frontend")
-        git(self.repo, "checkout", "-q", "--track", "-b", "ticket", "integration")
-        self.write("spec/a.d2", "edited")
-        git(self.repo, "commit", "-q", "-am", "edit")
-        self.assertEqual(self.gates("--merge-to-main").stdout.splitlines()[-1], self.slot_line("--docs"))
-
-
 class MergeToMain(FakeDotnet):
-    TIER_PAUSED = "false"
     MODE = "--merge-to-main"
 
-    def test_the_report_reads_a_merge_to_main_against_its_budget_of_ten_minutes(self):
-        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+    def test_a_box_over_its_budget_fails_the_run_once_the_switch_is_on_and_the_wall_time_reads_against_the_merge_budget(self):
+        self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed", 5))
+        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
+        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
+        self.assertEqual(run.returncode, 1)
+
+    def test_the_environment_form_of_the_mode_runs_the_tier(self):
+        run, _ = self.run_after_changing("spec/a.d2", MEDIT_MERGE_TO_MAIN="true", FAKE_TRX=self.trx("Passed"))
+        self.assertIn("=== Skipped tests ===", run.stdout)
 
     def test_the_mode_runs_the_gates_the_whole_diff_since_main_can_break_not_the_diff_since_the_branch_it_tracks(self):
         git(self.repo, "checkout", "-q", "-b", "integration")
