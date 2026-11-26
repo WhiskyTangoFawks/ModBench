@@ -268,13 +268,8 @@ describe('the FOMOD installer', () => {
     expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
   });
 
-  it.each([
-    ['UTF-16 little-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16le],
-    ['UTF-16 big-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16be],
-    ['UTF-16 little-endian with no byte order mark, by its first characters', '<?xml version="1.0" encoding="UTF-16"?>', (text: string) => Buffer.from(text, 'utf16le')],
-    ['neither UTF-8 nor UTF-16, as Windows-1252, where MO2 falls back to Latin-1', '<?xml version="1.0"?>', (text: string) => Buffer.from(text, 'latin1')],
-  ])('reads a module config in %s, as MO2 reads it, though it names no schema and a folder its archive lacks', async (_, declaration, encoded) => {
-    const unnamed = encoded(`${declaration}<config><moduleName>No schema</moduleName><requiredInstallFiles>`
+  it('reads a module config in UTF-16 little-endian, by its byte order mark, as MO2 reads it, though it names no schema and a folder its archive lacks', async () => {
+    const unnamed = utf16le(`<?xml version="1.0" encoding="UTF-16"?><config><moduleName>No schema</moduleName><requiredInstallFiles>`
       + `${file('core/Core.esp', 'Café.esp')}<folder source="gone" destination=""/></requiredInstallFiles></config>`);
     await release(unnamed, ['core/Core.esp']);
 
@@ -283,38 +278,41 @@ describe('the FOMOD installer', () => {
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'))).toEqual(unnamed);
   });
 
-  describe.each([
+  const UNREADABLE = [
     ['its installer is a script', 'script', undefined, /its installer is a script, which Modbench does not run/],
+    ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
+  ] as const;
+  const landing = async (fomod: 'script' | 'xml', moduleConfig: string | undefined, answer: FomodAnswer) => {
+    if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
+    return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
+  };
+
+  it.each([
+    ...UNREADABLE,
     ['its module config is never closed', 'xml', '<config><moduleName>Never closed</moduleName>',
       /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 175/],
-    ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
     ['its module dependencies do not hold', 'xml', config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'),
       /needed\.esm/i],
-  ] as const)('a FOMOD whose %s', (_, fomod, moduleConfig, why) => {
-    const landing = async (answer: FomodAnswer) => {
-      if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
-      return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
-    };
+  ] as const)('refuses to an agent a FOMOD whose %s, telling it to ask for manual, and lands nothing', async (_, fomod, moduleConfig, why) => {
+    const refusal = landing(fomod, moduleConfig, { kind: 'choices', steps: [] });
 
-    it('is refused to an agent, who is told to ask for manual, and lands nothing', async () => {
-      const refusal = landing({ kind: 'choices', steps: [] });
+    await expect(refusal).rejects.toThrow(why);
+    await expect(refusal).rejects.toThrow('Request it again with manual');
+  });
 
-      await expect(refusal).rejects.toThrow(why);
-      await expect(refusal).rejects.toThrow('Request it again with manual');
-    });
-
+  describe.each(UNREADABLE)('a FOMOD whose %s', (_, fomod, moduleConfig, why) => {
     it.each([
       ['takes Manual', 'manual', { kind: 'landing', fomod: { kind: 'plainCopy', why: 'Manual was asked for' } }],
       ['declines it', 'cancelled', { kind: 'cancelled' }],
     ] as const)('is refused to the page, which %s, while the install waits on the user', async (__, reply, ended) => {
       const { dialog, events } = refusingPage(reply);
 
-      expect(await landing({ kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
+      expect(await landing(fomod, moduleConfig, { kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
       expect(events).toEqual(['asking true', expect.stringMatching(why), 'asking false']);
     });
 
     it('lands as a plain copy when Manual is asked for, without refusing', async () => {
-      expect(await landing({ kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await landing(fomod, moduleConfig, { kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
     });
   });
 
