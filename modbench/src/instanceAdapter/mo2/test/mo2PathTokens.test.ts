@@ -6,23 +6,32 @@ import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
-import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
-import type { ConfigurationFile } from '../../publisher';
-import { sedReplacement, sedSubstitution } from '../../pathTokens';
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { fileProblemsFake } from '../../../test/fileProblemsFake';
+import { adapterForInstance } from '../../openInstance';
+import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
+import { watcherExcluding } from '../../../test/watcherExclusion';
+import { hostWithoutGit } from '../../../test/hostGitDouble';
+import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
+import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import { onPosix } from '../../../test/platform';
 
 vi.mock('vscode', () => fakeVscodeModule());
 const smudge = vi.hoisted(() => ({ beforeRun: vi.fn<() => void>() }));
-vi.mock('../../git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../git')>();
+// git's own smudge of a text, run through the filter as a checkout would.
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  const { promisify } = await import('node:util');
+  const promised: (file: string, args: string[], options: unknown) => Promise<unknown> = promisify(actual.execFile);
   return {
     ...actual,
-    gitWritingInto: (objects: string) => {
-      const scratch = actual.gitWritingInto(objects);
-      return { ...scratch, git: (folder: string, ...args: string[]) => { smudge.beforeRun(); return scratch.git(folder, ...args); } };
-    },
+    execFile: Object.assign(vi.fn(actual.execFile), {
+      [promisify.custom]: (file: string, args: string[], options: unknown) => {
+        if (args.includes('cat-file') && args.includes('--filters')) smudge.beforeRun();
+        return promised(file, args, options);
+      },
+    }),
   };
 });
 
@@ -49,20 +58,9 @@ async function gameFolder(): Promise<string> {
   return game;
 }
 
-const PUBLISHER: ConfigurationFile = {
-  name: 'publisher.json',
-  spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
-  blanked: (thisMachine) => {
-    const output = /"Output":("[^"]*")/.exec(thisMachine)?.[1];
-    return {
-      clean: [sedSubstitution('"Output":"[^"]*"', '"Output":""')],
-      smudge: output === undefined ? [] : [sedSubstitution('"Output":""', `"Output":${sedReplacement(output)}`)],
-    };
-  },
-};
-const PUBLISHER_FILE = PUBLISHER.name;
+const PUBLISHER_FILE = 'compiler_settings.json';
 
-const steamAt = (game: string): GameDetectors => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(game, 'Data') }) });
+const steamAt = (game: string): NonNullable<AdapterAnswers['detectors']> => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(game, 'Data') }) });
 
 async function put(root: string, path: string, text: string): Promise<void> {
   await mkdir(dirname(join(root, path)), { recursive: true });
@@ -83,7 +81,7 @@ async function instanceRepository(lines: readonly string[], game?: string, name 
   await mkdir(join(root, 'mods'));
   git(root, 'init', '--quiet');
   git(root, 'config', 'core.autocrlf', 'false');
-  return { root, adapter: managerOver(root, { gameFolderSettingValue: game }, PUBLISHER) };
+  return { root, adapter: adapterOver(root, { gameFolderSettingValue: game }) };
 }
 
 const objectsIn = async (root: string): Promise<string[]> => (await readdir(join(root, '.git', 'objects'), { recursive: true })).sort();
@@ -148,7 +146,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
     await put(root, 'profiles/Default/Fallout4Custom.INI', `sPath=${onWineDrive(join(root, 'Stock Game'), '\\')}\r\n`);
 
-    await managerOver(root, { gameFolderSettingValue: join(root, 'Stock Game') }, PUBLISHER).writePathTokens();
+    await adapterOver(root, { gameFolderSettingValue: join(root, 'Stock Game') }).writePathTokens();
 
     expect(held(root, 'profiles/Default/Fallout4Custom.INI')).toBe('sPath={instance folder:\\}\\Stock Game\r\n');
   });
@@ -162,7 +160,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
     await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(join(root, 'Stock Game'), '\\\\')})`]));
 
-    await managerOver(root, { gameFolderSettingValue: join(root, 'Stock Game') }, PUBLISHER).writePathTokens();
+    await adapterOver(root, { gameFolderSettingValue: join(root, 'Stock Game') }).writePathTokens();
 
     expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['gamePath=@ByteArray({game folder:\\\\})']));
   });
@@ -186,7 +184,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const RECENT = ['[recentDirectories]', '1\\name=Mod', '1\\directory=D:/Elsewhere'];
 
     it.each([
-      ['a blanked value', PUBLISHER_FILE, (edit: string) => `{\n"Source":"${edit}",\n"Output":"C:\\\\out\\\\list.out"\n}`],
+      ['a blanked value', PUBLISHER_FILE, (edit: string) => `{\n"Source":"${edit}",\n"OutputFile":"C:\\\\out\\\\list.out"\n}`],
       ['a dropped section before another', 'ModOrganizer.ini', (edit: string) => SETTINGS([...RECENT, '[Settings]', `style=${edit}`])],
       ['a dropped section at the end', 'ModOrganizer.ini', (edit: string) => SETTINGS(['[Settings]', `style=${edit}`, ...RECENT])],
     ])('shows git diff only a change beside %s', async (_what, file, text) => {
@@ -201,7 +199,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     });
 
     it.each([
-      ['a blanked value', PUBLISHER_FILE, () => JSON.stringify({ Source: '{x}', Output: 'C:\\out\\list.out' })],
+      ['a blanked value', PUBLISHER_FILE, () => JSON.stringify({ Source: '{x}', OutputFile: 'C:\\out\\list.out' })],
       ['a dropped section', 'ModOrganizer.ini', () => SETTINGS([...RECENT, '[Settings]', 'style=dark'])],
       ['a dropped section at the end', 'ModOrganizer.ini', () => SETTINGS(['[Settings]', 'style=dark', ...RECENT])],
     ])('puts %s back on checkout as this machine\'s own', async (_what, file, text) => {
@@ -230,7 +228,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     });
 
     it.each([
-      ['a blanked value', PUBLISHER_FILE, (output: string) => JSON.stringify({ Source: '{x}', Output: output })],
+      ['a blanked value', PUBLISHER_FILE, (output: string) => JSON.stringify({ Source: '{x}', OutputFile: output, Ignore: ['.git', '.env'] })],
       ['a dropped section', 'ModOrganizer.ini', (directory: string) => SETTINGS(['[recentDirectories]', `1\\directory=${directory}`, '[Settings]', 'style=dark'])],
     ])('puts %s back as this machine\'s latest after the watch hears it change', async (_what, file, text) => {
       const { root, adapter } = await instanceRepository([]);
@@ -266,7 +264,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const found = { kind: 'found' as const, root: game, dataFolder: join(game, 'Data') };
     let reading: Promise<unknown> | undefined;
     let untouched: boolean | undefined;
-    const adapter = managerOver(root, {
+    const adapter = adapterOver(root, {
       gameFolder: async () => {
         if (reading === undefined) {
           const before = await programsIn(root);
@@ -276,7 +274,7 @@ describe('the MO2 adapter\'s path tokens', () => {
         }
         return found;
       },
-    }, PUBLISHER);
+    });
 
     await adapter.writePathTokens();
     await reading;
@@ -287,13 +285,13 @@ describe('the MO2 adapter\'s path tokens', () => {
   it('takes a file committed before the game folder was found as changed once the game folder is found', async () => {
     const game = await gameFolder();
     const { root } = await instanceRepository([`1\\binary=${onWineDrive(game, '/')}/Fallout4.exe`]);
-    await managerOver(root, {}, PUBLISHER).writePathTokens();
+    await adapterOver(root, {}).writePathTokens();
     const anHourAgo = new Date(Date.now() - 3_600_000);
     await utimes(join(root, 'ModOrganizer.ini'), anHourAgo, anHourAgo);
     git(root, 'add', '--', 'ModOrganizer.ini');
     git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
 
-    await managerOver(root, { gameFolderSettingValue: game }, PUBLISHER).writePathTokens();
+    await adapterOver(root, { gameFolderSettingValue: game }).writePathTokens();
 
     expect(git(root, 'status', '--porcelain', '--', 'ModOrganizer.ini')).toBe(' M ModOrganizer.ini\n');
   });
@@ -375,7 +373,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     git(root, 'worktree', 'add', '--quiet', linked);
     await put(linked, 'ModOrganizer.ini', SETTINGS(['gamePath=C:/Games']));
 
-    await managerOver(linked, {}, PUBLISHER).writePathTokens();
+    await adapterOver(linked, {}).writePathTokens();
     git(root, 'worktree', 'remove', '--force', linked);
     await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(linked, '/')}/x.exe`]));
 
@@ -390,7 +388,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(() => execFileSync('git', ['add', '--', 'ModOrganizer.ini'], { cwd: root, stdio: 'pipe' })).toThrow(/ModOrganizer\.ini/);
   });
 
-  async function cloned(lines: (origin: string, game: string) => readonly string[], detectors?: GameDetectors, publisherSettings?: (origin: string, game: string) => string) {
+  async function cloned(lines: (origin: string, game: string) => readonly string[], detectors?: AdapterAnswers['detectors'], publisherSettings?: (origin: string, game: string) => string) {
     const game = await gameFolder();
     const { root, adapter } = await instanceRepository([], game);
     await put(root, 'ModOrganizer.ini', SETTINGS(lines(root, game)));
@@ -401,7 +399,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const clone = join(await folder('clone'), 'modlist');
     git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
     await mkdir(join(clone, 'mods'));
-    return { clone, adapter: managerOver(clone, { detectors }, PUBLISHER), game };
+    return { clone, adapter: adapterOver(clone, { detectors }), game };
   }
 
   describe('in the publisher\'s configuration', () => {
@@ -434,11 +432,11 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     it('blanks what it holds of this machine alone', async () => {
       const { root, adapter } = await instanceRepository([]);
-      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, Output: join(root, 'list.out') }));
+      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, OutputFile: join(root, 'list.out') }));
 
       await adapter.writePathTokens();
 
-      expect(held(root, PUBLISHER_FILE)).toBe(JSON.stringify({ Source: '{instance folder}', Output: '' }));
+      expect(held(root, PUBLISHER_FILE)).toBe(JSON.stringify({ Source: '{instance folder}', OutputFile: '' }));
     });
 
   });
@@ -455,9 +453,13 @@ describe('the MO2 adapter\'s path tokens', () => {
     };
 
     async function problemsOver(file: string, text: (root: string) => string) {
+      const game = await gameFolder();
       const { root } = await instanceRepository([]);
       const problems = fileProblemsFake();
-      const adapter = managerOver(root, { fileProblems: problems }, PUBLISHER);
+      const adapter = adapterForInstance({
+        instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), watcherExclude: watcherExcluding(), hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]),
+        fileProblems: problems, fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, scriptEnvironmentFileSetting: () => undefined,
+      });
       await put(root, 'profiles/Default/plugins.txt', '');
       await writeFile(join(root, file), text(root));
       await adapter.writePathTokens();
@@ -594,7 +596,7 @@ describe('the MO2 adapter\'s path tokens', () => {
   it('writes nothing in an instance folder that holds no repository', async () => {
     const root = await folder('instance');
     await put(root, 'ModOrganizer.ini', SETTINGS(['1\\binary=C:/Modding/x.exe']));
-    const adapter = managerOver(root, {}, PUBLISHER);
+    const adapter = adapterOver(root, {});
 
     expect([await adapter.writePathTokens(), await readFile(join(root, 'ModOrganizer.ini'), 'utf8')])
       .toEqual([undefined, SETTINGS(['1\\binary=C:/Modding/x.exe'])]);
@@ -627,7 +629,7 @@ describe('the MO2 adapter\'s path tokens', () => {
   it('takes back each filter key to the value the repository held when a write fails', async () => {
     const { root } = await instanceRepository([]);
     git(root, 'config', 'filter.modbench-tokens.clean', 'cat');
-    const failing = managerOver(root, { gameFolder: () => Promise.reject(new Error('the game folder could not be read')) }, PUBLISHER);
+    const failing = adapterOver(root, { gameFolder: () => Promise.reject(new Error('the game folder could not be read')) });
 
     await expect(failing.writePathTokens()).rejects.toThrow('the game folder could not be read');
 
@@ -649,8 +651,10 @@ describe('the MO2 adapter\'s path tokens', () => {
   onPosix.it.skipIf(process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) takes back only the filter a failed write added, and keeps each the repository held', async () => {
     const { root } = await instanceRepository([]);
     await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
-    const withoutPublisher = managerOver(root);
-    await withoutPublisher.writePathTokens();
+    await adapterOver(root).writePathTokens();
+    git(root, 'config', '--remove-section', 'filter.modbench-publisher-tokens');
+    const attributes = join(root, '.git', 'info', 'attributes');
+    await writeFile(attributes, (await readFile(attributes, 'utf8')).split('\n').filter((line) => !line.includes('modbench-publisher-tokens')).join('\n'));
     const written = async () => [
       git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-')),
       await readFile(join(root, '.git', 'info', 'attributes'), 'utf8'),
@@ -659,7 +663,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const before = await written();
     await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);
 
-    await expect(managerOver(root, {}, PUBLISHER).writePathTokens()).rejects.toThrow();
+    await expect(adapterOver(root, {}).writePathTokens()).rejects.toThrow();
 
     expect(await written()).toEqual(before);
   });
