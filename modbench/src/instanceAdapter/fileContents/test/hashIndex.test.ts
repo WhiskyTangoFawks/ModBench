@@ -12,16 +12,10 @@ import { dirname, join } from 'node:path';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { fileProblemsFake } from '../../../test/fileProblemsFake';
 import { adapterOver } from '../../../test/mo2/adapterOver';
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
-import { watcherExcluding } from '../../../test/watcherExclusion';
-import { hostWithoutGit } from '../../../test/hostGitDouble';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
-import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { GamePlace, InstallationFileReader, InstanceAdapter } from '../../instanceAdapter';
 import type { FileProblems } from '../../../ports/fileProblems';
 import { expectKind } from '../../../test/expectKind';
-import { adapterForInstance } from '../../openInstance';
-import { mo2InstanceHolding } from '../../test/mo2InstanceHolding';
+import { composedOver, mo2InstanceHolding } from '../../test/mo2InstanceHolding';
 
 const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
 const HASH_OF_BBBB = 'M5WSec/sW34=';
@@ -36,10 +30,8 @@ const holding = (reader: InstallationFileReader = fakeInstallationFileReader(ENT
 const reopened = (root: string, reader: InstallationFileReader = fakeInstallationFileReader(ENTRIES)): InstanceAdapter =>
   adapterOver(root, { installationFileReader: reader });
 
-const withProblems = (root: string, reader: InstallationFileReader, fileProblems: FileProblems): InstanceAdapter => adapterForInstance({
-  instanceRoot: root, installationFileReader: reader, fileProblems, fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
-  gameFolderSetting: fixedGameFolderSetting(), watcherExclude: watcherExcluding(), hostGit: hostWithoutGit, scriptEnvironmentFileSetting: () => undefined,
-});
+const withProblems = (root: string, installationFileReader: InstallationFileReader, fileProblems: FileProblems): InstanceAdapter =>
+  composedOver(root, { installationFileReader, fileProblems });
 
 async function placed(path: string, body: string, at: Date = LONG_AGO): Promise<string> {
   await mkdir(dirname(path), { recursive: true });

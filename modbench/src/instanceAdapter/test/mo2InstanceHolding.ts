@@ -3,8 +3,17 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { onTestFinished } from 'vitest';
-import type { InstanceAdapter } from '../instanceAdapter';
+import type { InstallationFileReader, InstanceAdapter } from '../instanceAdapter';
+import { adapterForInstance } from '../openInstance';
+import type { FileProblems } from '../../ports/fileProblems';
 import { adapterOver, type AdapterAnswers } from '../../test/mo2/adapterOver';
+import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
+import { fileProblemsFake } from '../../test/fileProblemsFake';
+import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
+import { watcherExcluding } from '../../test/watcherExclusion';
+import { hostWithoutGit } from '../../test/hostGitDouble';
+import { FOMOD_ENGINE } from '../../test/fomodEngine';
+import { DEPLOYED_PATH } from '../../test/deployedPath';
 
 const SETTINGS = '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n';
 
@@ -27,3 +36,15 @@ export function mo2InstanceHolding(files: Readonly<Record<string, string>> = {},
   }
   return { root, adapter: adapterOver(root, answers), text: (path) => readFile(join(root, path), 'utf8') };
 }
+
+type FomodEngine = Parameters<typeof adapterForInstance>[0]['fomodEngine'];
+
+/** The adapter as the composition root builds it over `root`, its game folder setting naming `root`'s game folder,
+ *  so it never asks Steam, and with `parts` in place of the test's defaults. */
+export const composedOver = (
+  root: string, parts: { readonly installationFileReader?: InstallationFileReader; readonly fileProblems?: FileProblems; readonly fomodEngine?: FomodEngine } = {},
+): InstanceAdapter => adapterForInstance({
+  instanceRoot: root, installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
+  gameFolderSetting: fixedGameFolderSetting(join(root, 'game')), watcherExclude: watcherExcluding(), hostGit: hostWithoutGit, scriptEnvironmentFileSetting: () => undefined,
+  ...parts,
+});
