@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
-import { mo2InstanceHolding, type HeldInstance } from '../../../test/mo2InstanceHolding';
+import { mo2InstanceHolding, type HeldInstance } from '../../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

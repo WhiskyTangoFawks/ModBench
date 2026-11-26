@@ -6,7 +6,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { installationFileMeta } from './installationFileMeta';
+import { installationFileMeta } from '../../test/instanceOnDisk';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 
 let root: string;

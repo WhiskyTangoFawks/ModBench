@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
 import type { EntryRef, Mod, ModlistEntry, ModOrderChange, MovePlace, SeparatorsPlace, Separator } from '../../../instanceAdapter';
-import { mo2InstanceHolding, type HeldInstance } from '../../../test/mo2InstanceHolding';
+import { mo2InstanceHolding, type HeldInstance } from '../../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

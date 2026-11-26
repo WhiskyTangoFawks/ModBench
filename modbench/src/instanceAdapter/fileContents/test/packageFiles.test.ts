@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rm, symlink } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
-import { mo2InstanceHolding } from '../../test/mo2InstanceHolding';
+import { mo2InstanceHolding } from '../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

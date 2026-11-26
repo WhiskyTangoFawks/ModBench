@@ -6,15 +6,9 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { adapterForInstance } from '../openInstance';
+import { adapterAsBuilt } from './instanceOnDisk';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { watcherExcluding } from '../../test/watcherExclusion';
-import { hostWithoutGit } from '../../test/hostGitDouble';
-import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
-import { FOMOD_ENGINE } from '../../test/fomodEngine';
-import { DEPLOYED_PATH } from '../../test/deployedPath';
 
 const EXCLUDED = 'excluded in files.watcherExclude';
 const FILES = ['mods/Harder VATS/textures/actors/a.dds', 'mods/Harder VATS/Harder VATS.esp', 'mods/Patch Mod/textures/b.dds'];
@@ -39,11 +33,7 @@ describe('what the user excluded from VS Code\'s watch (files.watcherExclude) na
   });
 
   const unwatched = async (patterns: Record<string, boolean>): Promise<{ folder: string; reason: string }[]> => {
-    const adapter = adapterForInstance({
-      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), watcherExclude: watcherExcluding(patterns), hostGit: hostWithoutGit,
-      installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
-      scriptEnvironmentFileSetting: () => undefined,
-    });
+    const adapter = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding(patterns) });
     const subscription = adapter.subscribe(() => undefined);
     try {
       const { unwatchedFolders } = await adapter.reading();

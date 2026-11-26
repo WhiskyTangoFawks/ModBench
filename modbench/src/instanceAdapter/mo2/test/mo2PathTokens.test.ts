@@ -8,13 +8,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { fileProblemsFake } from '../../../test/fileProblemsFake';
-import { adapterForInstance } from '../../openInstance';
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
-import { watcherExcluding } from '../../../test/watcherExclusion';
-import { hostWithoutGit } from '../../../test/hostGitDouble';
-import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
-import { DEPLOYED_PATH } from '../../../test/deployedPath';
+import { adapterAsBuilt } from '../../test/instanceOnDisk';
 import { onPosix, onWindows } from '../../../test/platform';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -455,10 +449,7 @@ describe('the MO2 adapter\'s path tokens', () => {
       const game = await gameFolder();
       const { root } = await instanceRepository([]);
       const problems = fileProblemsFake();
-      const adapter = adapterForInstance({
-        instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), watcherExclude: watcherExcluding(), hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]),
-        fileProblems: problems, fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, scriptEnvironmentFileSetting: () => undefined,
-      });
+      const adapter = adapterAsBuilt(root, { gameFolderSettingValue: game, fileProblems: problems });
       await put(root, 'profiles/Default/plugins.txt', '');
       await writeFile(join(root, file), text(root));
       await adapter.writePathTokens();

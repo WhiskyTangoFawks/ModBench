@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
-import { mo2InstanceHolding } from '../../../test/mo2InstanceHolding';
+import { mo2InstanceHolding } from '../../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

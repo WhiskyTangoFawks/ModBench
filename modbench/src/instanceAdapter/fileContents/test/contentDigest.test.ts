@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { expectKind } from '../../../test/expectKind';
-import { mo2InstanceHolding } from '../../test/mo2InstanceHolding';
+import { mo2InstanceHolding } from '../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

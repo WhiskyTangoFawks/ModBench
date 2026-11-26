@@ -11,7 +11,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile) };
 });
 
-import { installationFileMeta } from './installationFileMeta';
+import { installationFileMeta } from '../../test/instanceOnDisk';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 

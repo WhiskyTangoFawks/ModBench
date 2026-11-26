@@ -97,7 +97,7 @@ describe('the My Games folder whose INIs list the archives of a profile that kee
       const documents = join(base, 'José', 'Документы');
       await myGamesIn(documents);
       powershell.documents = documents;
-      const adapter = adapterAsBuilt(await instanceAt(join(base, 'MO2')), game);
+      const adapter = adapterAsBuilt(await instanceAt(join(base, 'MO2')), { gameFolderSettingValue: game });
 
       expect((await adapter.reading()).archiveList).toEqual([ARCHIVE]);
     });

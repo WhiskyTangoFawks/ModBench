@@ -3,7 +3,7 @@ import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
 import { expectKind } from '../../../../test/expectKind';
 import type { DownloadedFileMark } from '../../../instanceAdapter';
 import type { NexusFileInfo } from '../../../../ports/nexusFileInfo';
-import { mo2InstanceHolding, type HeldInstance } from '../../../test/mo2InstanceHolding';
+import { mo2InstanceHolding, type HeldInstance } from '../../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

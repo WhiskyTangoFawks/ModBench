@@ -1,5 +1,4 @@
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
-import { fileProblemsFake } from '../../../test/fileProblemsFake';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
@@ -38,23 +37,19 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { basename, dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
-import { adapterForInstance, isInstance } from '../../openInstance';
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
-import { DEPLOYED_PATH } from '../../../test/deployedPath';
+import { isInstance } from '../../openInstance';
 import {
-  CHECK_THE_DISK, type InstanceAdapter, type InstanceReading, type OriginFiles, type Reread, type WatcherExclude,
+  CHECK_THE_DISK, type InstanceAdapter, type InstanceReading, type OriginFiles, type Reread,
 } from '../../instanceAdapter';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
   EntryRef, FileOrigin, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
-import { installationFileMeta } from './installationFileMeta';
+import { adapterAsBuilt, installationFileMeta } from '../../test/instanceOnDisk';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
-import { hostWithoutGit } from '../../../test/hostGitDouble';
 import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
 import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
@@ -82,14 +77,6 @@ async function modOrderOf(adapter: InstanceAdapter, profile: string): Promise<re
   });
   return order;
 }
-
-/** The adapter the extension builds, asking this machine whether MO2 runs; the game folder setting names `game`, or a
- *  folder with no Data folder, so no Steam is asked where the game is. */
-const onThisMachineOver = (root: string, { game = join(root, 'no game'), watcherExclude = watcherExcluding() }: { game?: string; watcherExclude?: WatcherExclude } = {}): InstanceAdapter =>
-  adapterForInstance({
-    instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), watcherExclude, hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]),
-    fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, scriptEnvironmentFileSetting: () => undefined,
-  });
 
 async function isThere(path: string): Promise<boolean> {
   try {
@@ -403,7 +390,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
-        const onThisMachine = onThisMachineOver(root);
+        const onThisMachine = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game') });
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
           expect(await onThisMachine.managerRunning()).toEqual({ kind: 'running' });
@@ -1080,7 +1067,7 @@ describe('the MO2 Instance adapter', () => {
       const listedWith = async (patterns: Record<string, boolean>): Promise<InstanceAdapter> => {
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures', 'actors'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'actors', 'a.dds'), '');
-        const watched = onThisMachineOver(root, { watcherExclude: watcherExcluding(patterns) });
+        const watched = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: watcherExcluding(patterns) });
         watched.subscribe(() => undefined);
         return watched;
       };
@@ -1116,7 +1103,7 @@ describe('the MO2 Instance adapter', () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-data-'));
         try {
           await mkdir(join(game, 'Data'));
-          const watched = onThisMachineOver(root, { game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
+          const watched = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
           watched.subscribe(() => undefined);
 
           expect((await watched.reading()).unwatchedFolders).toEqual([{ folder: join(game, 'Data'), reason: EXCLUDED }]);
@@ -1134,7 +1121,7 @@ describe('the MO2 Instance adapter', () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-strings-'));
         try {
           await mkdir(join(game, 'Data', 'Strings'), { recursive: true });
-          const watched = onThisMachineOver(root, { game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
+          const watched = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
           watched.subscribe(() => undefined);
 
           await watched.reading();
@@ -1165,7 +1152,7 @@ describe('the MO2 Instance adapter', () => {
       it('watches everything whole, and names no folder, once the user stops excluding them', async () => {
         let excluded: Record<string, boolean> = { '**/textures/**': true, '**/*.dds': true };
         let settingChanged = (): void => undefined;
-        const watched = onThisMachineOver(root, { watcherExclude: { value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } } });
+        const watched = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: { value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } } });
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'a.dds'), '');
         watched.subscribe(() => undefined);
