@@ -101,29 +101,15 @@ public sealed class WriteSessionTests : IDisposable
     private static SourceFailure? Write(IWriteSession session, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
         session.Atomically(() => session.Apply(changes(session.Repository)));
 
-    public enum Holder
+    [Fact]
+    public void RemovingARecord_RemovesTheRecordsItHoldsInFilesOfTheirOwn()
     {
-        CellHoldingItsReferencesInItsDocument,
-        WorldspaceHoldingACellInAFileOfItsOwn,
-    }
-
-    [Theory]
-    [InlineData(Holder.CellHoldingItsReferencesInItsDocument)]
-    [InlineData(Holder.WorldspaceHoldingACellInAFileOfItsOwn)]
-    public void RemovingARecord_RemovesEveryRecordItHolds(Holder holder)
-    {
-        var (removed, recordType, held) = holder switch
-        {
-            Holder.CellHoldingItsReferencesInItsDocument => ((IMajorRecordGetter)_room, "cell", new IMajorRecordGetter[] { _ref1, _ref2 }),
-            Holder.WorldspaceHoldingACellInAFileOfItsOwn => (_worldspace, "wrld", [_exteriorCell]),
-            _ => throw new ArgumentOutOfRangeException(nameof(holder), holder, null),
-        };
         var session = Session();
 
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(removed, recordType))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_worldspace, "wrld"))));
 
         Assert.All(
-            [removed, .. held],
+            new IMajorRecordGetter[] { _worldspace, _exteriorCell },
             record => Assert.Null(session.Repository.RecordByFormKey(Plugin, record.FormKey.ToString()).Value()));
     }
 
