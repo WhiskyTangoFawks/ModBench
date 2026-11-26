@@ -102,6 +102,18 @@ public sealed class WriteSessionTests : IDisposable
         session.Atomically(() => session.Apply(changes(session.Repository)));
 
     [Fact]
+    public void RemovingACell_RemovesEveryReferenceItHolds()
+    {
+        var session = Session();
+
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell"))));
+
+        Assert.All(
+            new IMajorRecordGetter[] { _room, _ref1, _ref2 },
+            record => Assert.Null(session.Repository.RecordByFormKey(Plugin, record.FormKey.ToString()).Value()));
+    }
+
+    [Fact]
     public void TwoRemovalsFromOneDocument_AnswerItsTextWithoutEither_AndWriteNothing()
     {
         var before = TreeSnapshot.Of(_modFolder);

@@ -109,6 +109,33 @@ public sealed class CopyStatesTests(CopyStatesTests.FourPlugins plugins) : IClas
     }
 
     [Fact]
+    public void ACopyIdenticalToThePreviousOverride_ButNotToTheMaster_IsAnOverride()
+    {
+        var previous = new PluginAddress("Previous.esp", PluginOrigin.DataDirectory);
+        var judged = new PluginAddress("Judged.esp", PluginOrigin.DataDirectory);
+        var inPrevious = new FormKey(ModKey.FromFileName(previous.Name), 0x900);
+        using var fixture = new PluginFixtureBuilder("medit-copy-states-previous")
+            .WithPlugin(First.Name, mod => mod.MiscItems.Add(Named(Item, "Item")))
+            .WithPlugin(previous.Name, mod =>
+            {
+                mod.MiscItems.Set(Named(Item, "Changed"));
+                mod.MiscItems.Add(Named(inPrevious, "Own"));
+            })
+            .WithPlugin(judged.Name, mod =>
+            {
+                mod.MiscItems.Set(Named(Item, "Changed"));
+                mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(inPrevious)] });
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        var states = StatesOf(index, Item, judged);
+
+        Assert.Equal([First, previous, judged], states.Keys);
+        Assert.Equal(ConflictThis.Override, states[judged]);
+    }
+
+    [Fact]
     public void ASourceOnlyPlugin_IsJudgedWithTheMastersItsRecordsReference()
     {
         var edited = new PluginAddress("Edited.esp", "EditedMod");
