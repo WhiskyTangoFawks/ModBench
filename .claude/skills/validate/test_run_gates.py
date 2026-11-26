@@ -263,12 +263,15 @@ class TimeReport(FakeDotnet):
         self.assertIn("--- 1 MEMBERS ONLY TESTS REACH ---", run.stdout)
         self.assertNotIn("REPORT FAILED", run.stdout)
 
+    def switch_on(self, script):
+        switched = self.validate / script
+        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+
     def run_with_the_switch_of(self, script):
         self.write("MEditService/MEditService.Http/Source.cs", "public class Http {\n    public int OnlyTests() => 1;\n}\nclass Uses { Http http; }")
         self.write("MEditService/MEditService.Http.Tests/Source.cs", "class T { int n = new Http().OnlyTests(); }")
         self.write("MEditService/MEditService.Http.Tests/TestData/big.bin", "x" * 65537)
-        switched = self.validate / script
-        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+        self.switch_on(script)
         return self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend")[0]
 
     def test_the_switch_of_the_test_data_report_fails_the_run(self):
@@ -279,8 +282,7 @@ class TimeReport(FakeDotnet):
 
     def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self):
         self.write(".claude/skills/validate/test-budgets.toml", 'other = 60\n[boxes]\n"MEditService.Http.Tests" = 4\n')
-        switched = self.validate / "check_test_times.py"
-        switched.write_text(switched.read_text().replace("FAILS_THE_RUN = False", "FAILS_THE_RUN = True"))
+        self.switch_on("check_test_times.py")
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
         self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
         self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)

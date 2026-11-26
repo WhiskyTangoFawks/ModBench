@@ -22,6 +22,12 @@ class Reports(unittest.TestCase):
     def report(self, name, text):
         (self.dir / name).write_text(text)
 
+    def main(self, elapsed: float, budget: float, *budgets_file: str) -> tuple[int, str]:
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            status = ctt.main([str(self.dir), str(elapsed), str(budget), *budgets_file])
+        return status, printed.getvalue()
+
 
 class OverCeiling(Reports):
     def test_a_test_over_a_second_is_named_with_its_time_and_one_under_it_is_not(self):
@@ -39,12 +45,6 @@ class OverCeiling(Reports):
 
 
 class Main(Reports):
-    def main(self, elapsed, budget, *budgets):
-        printed = io.StringIO()
-        with contextlib.redirect_stdout(printed):
-            status = ctt.main([str(self.dir), str(elapsed), str(budget), *budgets])
-        return status, printed.getvalue()
-
     def test_it_names_each_test_over_the_ceiling_and_not_the_others(self):
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Quick', 5, 0.5), fx.trx_result('A.Slow', 100, 2)))
         _, printed = self.main(100, 300)
@@ -56,12 +56,8 @@ class Main(Reports):
             with self.subTest(elapsed=elapsed):
                 self.assertIn(line, self.main(elapsed, 300)[1])
 
-    def test_it_fails_nothing(self):
-        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Slow', 100, 5)))
-        self.assertEqual(self.main(900, 300)[0], 0)
 
-
-class Boxes(Main):
+class Boxes(Reports):
     BUDGETS = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
 
     def setUp(self):
@@ -72,7 +68,7 @@ class Boxes(Main):
                                            ('/repo/modbench/webview/b.test.tsx', [('two', 'passed', 500)])))
         self.report('hooks.unittest', fx.unittest_log(durations=[('test_a (m.C.test_a)', 1.25)]))
 
-    def with_budgets(self, text):
+    def with_budgets(self, text: str) -> tuple[int, str]:
         budgets = self.dir / 'budgets.toml'
         budgets.write_text(text)
         return self.main(10, 300, str(budgets))

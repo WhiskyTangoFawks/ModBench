@@ -52,7 +52,8 @@ def report_budgets(times: list[tuple[str, float]], budgets_file: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    directory, elapsed_argument, budget_argument, *budgets_file = sys.argv[1:] if argv is None else argv
+    directory, elapsed_argument, budget_argument, *optional = sys.argv[1:] if argv is None else argv
+    (budgets_file,) = optional or [None]
     elapsed, budget = float(elapsed_argument), float(budget_argument)
     results = reports.results(Path(directory))
     over = over_ceiling(results)
@@ -62,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     times = box_times(results)
     overrun = 0
     if budgets_file:
-        overrun = report_budgets(times, Path(budgets_file[0]))
+        overrun = report_budgets(times, Path(budgets_file))
     else:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
