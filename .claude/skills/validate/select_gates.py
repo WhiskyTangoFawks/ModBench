@@ -5,6 +5,7 @@ selects no gate is still checked."""
 import re
 import sys
 
+API_TS = 'modbench/src/wire/generated/api.ts'
 TEST_PROJECT_RE = re.compile(r'MEditService/(?:[^/]+\.Tests|MEditService\.TestSupport)/')
 
 
@@ -18,9 +19,11 @@ def gates(path: str) -> list[str]:
         return ['--backend']
     if path.startswith('MEditService/'):
         # The client reaches Http through the wire, and Http references every mEdit box.
-        return ['--backend', '--api-drift', '--scripts', '--frontend']
-    if path.startswith(('scripts/', 'DevListFallout/')):
+        return ['--backend', '--api-drift', '--frontend']
+    if path.startswith('scripts/'):
         return ['--scripts']
+    if path == API_TS:
+        return ['--scripts', '--frontend']
     if path.startswith('modbench/'):
         return ['--frontend']
     return []
