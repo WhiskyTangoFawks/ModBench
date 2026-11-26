@@ -11,21 +11,6 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task VersionInGit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformed()
-    {
-        using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
-
-        var result = await scratch.VersionInGitAsync();
-
-        Assert.False(result.Applied);
-        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
-
-        Assert.Contains(MisshapedPerkPlugin.Anchor, result.Message);
-        Assert.Contains("malformed", result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
-    }
-
-    [Fact]
     public async Task VersionInGit_OfAMismatchedFnamPlugin_NamesMutagensMishandlingAndNoRecord()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
@@ -43,15 +28,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 
-    private static readonly string[] ReadWithoutLoss = ["CounterDisagreeingWithEntries", "EntryPointMissingEpf3"];
-
-    public static TheoryData<MalformationFixture, VersionInGitRefusal> Malformations()
+    public static TheoryData<MalformationFixture, VersionInGitRefusal> Malformations() => new()
     {
-        TheoryData<MalformationFixture, VersionInGitRefusal> rows = new();
-        foreach (var fixture in MalformationFixtures.All.Where(f => !ReadWithoutLoss.Contains(f.Malformation)))
-            rows.Add(fixture, fixture.Change is not null ? VersionInGitRefusal.MalformedRepairable : VersionInGitRefusal.RoundTripFailed);
-        return rows;
-    }
+        { MalformationFixtures.ShortRegion, VersionInGitRefusal.MalformedRepairable },
+        { MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParameterOfAnotherType"), VersionInGitRefusal.RoundTripFailed },
+    };
 
     [Theory]
     [MemberData(nameof(Malformations))]

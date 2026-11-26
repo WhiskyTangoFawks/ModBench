@@ -23,7 +23,7 @@ internal static class CompiledPluginTemplates
     /// <summary>Fills <paramref name="modFolder"/> as <paramref name="make"/> fills an empty mod
     /// folder. <paramref name="key"/> names everything <paramref name="make"/> writes, which runs
     /// once per key.</summary>
-    internal static void CopyInto(string modFolder, string key, Action<string> make)
+    private static void CopyInto(string modFolder, string key, Action<string> make)
     {
         var template = Folders.GetOrAdd(key, _ => new Lazy<ScratchDirectory>(() =>
         {
@@ -52,7 +52,7 @@ internal static class CompiledPluginTemplates
 
     /// <summary>Inits the mod of the one plugin <paramref name="modFolder"/> holds, in a load order of that
     /// plugin alone.</summary>
-    internal static void InitAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
+    private static void InitAlone(string modFolder, string pluginName, GameRelease release)
     {
         const string origin = "TemplateMod";
         using var dataFolder = new ScratchDirectory("medit-compiled-plugin-template-data-");
@@ -64,7 +64,7 @@ internal static class CompiledPluginTemplates
             throw new InvalidOperationException($"Expected {pluginName} to init: {string.Join("; ", result.RefusalMessages())}");
     }
 
-    internal static void CopyDirectory(string sourceFolder, string destinationFolder)
+    private static void CopyDirectory(string sourceFolder, string destinationFolder)
     {
         foreach (var directory in Directory.EnumerateDirectories(sourceFolder, "*", SearchOption.AllDirectories))
             Directory.CreateDirectory(Path.Combine(destinationFolder, Path.GetRelativePath(sourceFolder, directory)));
