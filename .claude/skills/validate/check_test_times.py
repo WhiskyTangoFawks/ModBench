@@ -8,16 +8,16 @@ from pathlib import Path
 
 import reports
 
-POINTER_SECONDS = 0.1
+SLOW_SECONDS = 0.1
 FAILS_THE_RUN = False
 # The source scans, the gates' own tests and the integration tests: the budget file's `other` holds them.
 NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
 OTHER = 'the tests of no box'
 
 
-def over_pointer(results: list[reports.Result]) -> list[tuple[str, float]]:
+def slow_tests(results: list[reports.Result]) -> list[tuple[str, float]]:
     return sorted(((result.name, result.seconds) for result in results
-                   if result.seconds is not None and result.seconds > POINTER_SECONDS),
+                   if result.seconds is not None and result.seconds > SLOW_SECONDS),
                   key=lambda over: -over[1])
 
 
@@ -29,7 +29,10 @@ def box_times(results: list[reports.Result]) -> list[tuple[str, float]]:
     return sorted(times.items(), key=lambda box: -box[1])
 
 
-def against(seconds: float, budget: float, name: str) -> tuple[str, bool]:
+def against(seconds: float, budget: float | None, name: str) -> tuple[str, bool]:
+    """The line, and whether it fails."""
+    if budget is None:
+        return f'{seconds:7.1f} s  {name}: NO BUDGET', True
     over = seconds > budget
     late = f': OVER BUDGET by {seconds - budget:.1f} s' if over else ''
     return f'{seconds:7.1f} s of {budget:4g} s  {name}{late}', over
@@ -40,8 +43,7 @@ def report_budgets(times: list[tuple[str, float]], budgets_file: Path) -> int:
     budgets = tomllib.loads(budgets_file.read_text())
     boxes: dict[str, float] = budgets['boxes']
     no_box = [(box, seconds) for box, seconds in times if box in NO_BOX]
-    lines = [against(seconds, boxes[box], box) if box in boxes else (f'{seconds:7.1f} s  {box}: NO BUDGET', True)
-             for box, seconds in times if box not in NO_BOX]
+    lines = [against(seconds, boxes.get(box), box) for box, seconds in times if box not in NO_BOX]
     lines.append(against(sum(seconds for _, seconds in no_box), budgets['other'], OTHER))
     for line, _ in lines:
         print(line)
@@ -57,10 +59,10 @@ def main(argv: list[str] | None = None) -> int:
     (budgets_file,) = optional or [None]
     elapsed, budget = float(elapsed_argument), float(budget_argument)
     results = reports.results(Path(directory))
-    over = over_pointer(results)
+    over = slow_tests(results)
     for name, time in over:
         print(f'{time:7.2f} s  {name}')
-    print(f'--- {len(over)} TESTS OVER {POINTER_SECONDS * 1000:.0f} ms ---')
+    print(f'--- {len(over)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
     times = box_times(results)
     failing = 0
     if budgets_file:

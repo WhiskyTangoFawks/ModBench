@@ -28,19 +28,19 @@ class Reports(unittest.TestCase):
         return status, printed.getvalue()
 
 
-class OverPointer(Reports):
+class SlowTests(Reports):
     def test_a_test_over_100_ms_is_named_with_its_time_and_one_under_it_is_not(self) -> None:
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Under', 5, 0.09), fx.trx_result('A.Over', 9, 0.11)))
-        self.assertEqual(ctt.over_pointer(reports.results(self.dir)), [('A.Over', 0.11)])
+        self.assertEqual(ctt.slow_tests(reports.results(self.dir)), [('A.Over', 0.11)])
 
     def test_a_test_with_no_time_is_not_named(self):
         self.report('a.trx', fx.trx(fx.trx_result('A.Skipped', outcome='NotExecuted')))
-        self.assertEqual(ctt.over_pointer(reports.results(self.dir)), [])
+        self.assertEqual(ctt.slow_tests(reports.results(self.dir)), [])
 
     def test_the_slowest_comes_first_whichever_report_holds_it(self):
         self.report('unit.json', fx.vitest(('/repo/modbench/src/a.test.ts', [('quick', 'passed', 40), ('slow', 'passed', 2500)])))
         self.report('it.mocha', fx.mocha_log(passed=[('slower', 4000), ('slowest', 7000)]))
-        self.assertEqual([name for name, _ in ctt.over_pointer(reports.results(self.dir))], ['slowest', 'slower', 'a.test.ts > slow'])
+        self.assertEqual([name for name, _ in ctt.slow_tests(reports.results(self.dir))], ['slowest', 'slower', 'a.test.ts > slow'])
 
 
 class Main(Reports):
@@ -58,6 +58,7 @@ class Main(Reports):
 
 class Boxes(Reports):
     BUDGETS = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\nwebview = 1\n'
+    NO_WEBVIEW_BUDGET = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
 
     def setUp(self) -> None:
         super().setUp()
@@ -87,13 +88,13 @@ class Boxes(Reports):
         self.assertIn('--- 2 BUDGETS OVERRUN OR MISSING ---\n', printed)
 
     def test_a_box_the_file_does_not_name_is_said_to_have_no_budget(self) -> None:
-        _, printed = self.with_budgets('other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n')
+        _, printed = self.with_budgets(self.NO_WEBVIEW_BUDGET)
         self.assertIn('    0.5 s  webview: NO BUDGET\n', printed)
         self.assertIn('--- 1 BUDGETS OVERRUN OR MISSING ---\n', printed)
 
     def test_a_budget_overrun_or_a_box_with_none_fails_the_run_once_the_switch_is_on_and_not_before(self) -> None:
         overrun = 'other = 3\n[boxes]\n"B.Tests" = 1\nplugins = 2\nwebview = 1\n'
-        missing = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
+        missing = self.NO_WEBVIEW_BUDGET
         for budgets, switch, status in ((overrun, False, 0), (overrun, True, 1), (missing, False, 0), (missing, True, 1)):
             with self.subTest(budgets=budgets, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
                 self.assertEqual(self.with_budgets(budgets)[0], status)
