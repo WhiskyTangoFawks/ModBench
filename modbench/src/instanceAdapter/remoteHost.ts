@@ -1,6 +1,6 @@
-// Where a source mod's remote is hosted, as a submodule's URL names it.
+// Where a source mod's remote is hosted, as its remote's URL names it.
 
-import type { SourceHost } from '../instanceAdapter';
+import type { SourceHost } from './instanceAdapter';
 
 const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
 

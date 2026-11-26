@@ -17,7 +17,7 @@ import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { toldAfter } from '../../repositoriesLib/writesTold';
 import { sourceFoldersTracked } from './sourceModFolders';
-import { hostOf } from './remoteHost';
+import { hostOf } from '../remoteHost';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'followFoldersInRepository' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 

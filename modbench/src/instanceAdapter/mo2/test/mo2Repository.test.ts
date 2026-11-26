@@ -63,6 +63,7 @@ describe('the MO2 adapter\'s repository', () => {
     const joined = (lines: string[]): string => `${lines.join('\n')}\n`;
     const withoutLastLine = joined(whitelistLines.slice(0, -1));
     const swapped = joined([whitelistLines[1] ?? '', whitelistLines[0] ?? '', ...whitelistLines.slice(2)]);
+    const split = joined([whitelistLines[0] ?? '', 'mine/', ...whitelistLines.slice(1)]);
     const trailingSpace = joined([`${whitelistLines[0] ?? ''} `, ...whitelistLines.slice(1)]);
 
     it.each([
@@ -71,6 +72,7 @@ describe('the MO2 adapter\'s repository', () => {
       ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(whitelistIgnoreList(undefined))}`],
       ['an ignore list whose whitelist lacks a line', withoutLastLine, `${withoutLastLine}${whitelistIgnoreList(undefined)}`],
       ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${whitelistIgnoreList(undefined)}`],
+      ['an ignore list whose whitelist a line of the user splits', split, `${split}${whitelistIgnoreList(undefined)}`],
       ['an ignore list that holds its whitelist and its source mods', withSourceMod, withSourceMod],
       ['an ignore list that holds lines of the user on both sides of its whitelist', `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`, `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`],
       ['an ignore list of CRLF lines that holds its whitelist, then lines of the user', crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`), crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`)],
