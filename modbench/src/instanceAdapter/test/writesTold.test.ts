@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { writesToldTo } from '../../repositoriesLib/writesTold';
-import { withLock } from '../files';
 import type { InstanceAdapter } from '../instanceAdapter';
 import { PROFILE } from './adapterContract';
 
@@ -29,12 +28,15 @@ describe('a write through the adapter', () => {
   const inProfile = (file: string): string => join(root, 'profiles', PROFILE, file);
 
   type Write = [string, (adapter: InstanceAdapter) => Promise<unknown>, (root: string) => string[]];
-  const writesUnderALock: Write[] = [
-    ['a change to the mod order', (a) => a.changeModOrder(PROFILE, () => [{ kind: 'enable', mod: 'Beta', enabled: true }]), () => [inProfile('modlist.txt')]],
-    ['a change to the plugin order', (a) => a.changePluginOrder(PROFILE, () => [{ kind: 'enable', plugin: 'B.esp', enabled: true }]), () => [inProfile('loadorder.txt'), inProfile('plugins.txt')]],
+  type LockedWrite = [...Write, (adapter: InstanceAdapter) => Promise<unknown>];
+  const writesUnderALock: LockedWrite[] = [
+    ['a change to the mod order', (a) => a.changeModOrder(PROFILE, () => [{ kind: 'enable', mod: 'Beta', enabled: true }]), () => [inProfile('modlist.txt')],
+      (a) => a.changeModOrder(PROFILE, () => [])],
+    ['a change to the plugin order', (a) => a.changePluginOrder(PROFILE, () => [{ kind: 'enable', plugin: 'B.esp', enabled: true }]), () => [inProfile('loadorder.txt'), inProfile('plugins.txt')],
+      (a) => a.changePluginOrder(PROFILE, () => [])],
   ];
   const writes: Write[] = [
-    ...writesUnderALock,
+    ...writesUnderALock.map(([name, write, files]): Write => [name, write, files]),
     ['a new mod folder', (a) => a.createModFolder('Fresh'), (r) => [join(r, 'mods', 'Fresh')]],
     ['the push check', (a) => { execFileSync('git', ['init', '-q', root]); return a.refuseUnpublishedPins(); }, (r) => [join(r, '.git', 'hooks', 'pre-push')]],
     ['a change that changes nothing', (a) => a.changeModOrder(PROFILE, () => []), () => []],
@@ -47,10 +49,11 @@ describe('a write through the adapter', () => {
     expect([...told.values()].every(Boolean)).toBe(true);
   });
 
-  it.each(writesUnderALock)('tells the loader once it holds no lock, so the loader may take the lock of each file it is told of, for %s', async (_, write, files) => {
+  it.each(writesUnderALock)('tells the loader once it holds no lock, so the loader may take the lock of each file it is told of, for %s', async (_, write, files, writeTheSameFilesAgain) => {
     const lockedByLoader: string[] = [];
     writesToldTo({ told: async (paths) => {
-      await Promise.all(paths.map((path) => withLock(path, () => { lockedByLoader.push(path); return Promise.resolve(); })));
+      await writeTheSameFilesAgain(adapter);
+      lockedByLoader.push(...paths);
       return { subscribed: Promise.resolve() };
     } });
 
