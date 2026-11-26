@@ -35,10 +35,10 @@ describe('where a release\'s files start', () => {
     ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], { root: '' }],
     ['a lone top-level data folder, never a wrapper', ['meshes/x.nif'], { root: '' }],
     ['a lone top-level script extender folder, never a wrapper', ['F4SE/x.dll'], { root: '' }],
-  ])('is %s', async (_, release, { root, ...fomod }) => {
+  ])('is %s', async (_, release, { root, ...expected }) => {
     await holding(release);
 
-    expect(await releaseRoot(extracted)).toEqual({ root: join(extracted, root), ...fomod });
+    expect(await releaseRoot(extracted)).toEqual({ root: join(extracted, root), ...expected });
   });
 
   it('peels no more than 32 wrapper folders', async () => {

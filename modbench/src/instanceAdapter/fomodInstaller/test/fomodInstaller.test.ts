@@ -44,6 +44,7 @@ const KNOWN: ConditionFacts = {
 };
 
 const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+const utf16be = (text: string): Buffer => Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, 'utf16le').swap16()]);
 
 const choose = (...each: [string, Record<string, string[]>][]): FomodStepChoice[] =>
   each.map(([name, groups]) => ({ step: name, groups: Object.entries(groups).map(([named, options]) => ({ group: named, options })) }));
@@ -547,14 +548,40 @@ describe('the FOMOD installer', () => {
       };
       const imageOf = (state: FomodState<ReleaseImage>): ReleaseImage => state.steps[0]?.optionalFileGroups?.group[0]?.options[0]?.image;
 
-      it('carries the author, version and website of the FOMOD\'s info file, found as the release spells it and read as MO2 reads it', async () => {
+      it('carries the author, version and website of the FOMOD\'s info file, found as the release spells it', async () => {
         await release(imaged('', ''), ['a/A.esp']);
         await mkdir(join(root, 'FOMOD'), { recursive: true });
-        await writeFile(join(root, 'FOMOD', 'Info.XML'), utf16le(INFO.replace('Ada', 'Adé')));
+        await writeFile(join(root, 'FOMOD', 'Info.XML'), INFO);
 
         const { page } = await answered([INSTALL]);
 
-        expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Adé & <Bo>', version: '1.2', website: 'https://example.com/m' });
+        expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Ada & <Bo>', version: '1.2', website: 'https://example.com/m' });
+      });
+
+      const cyrillicInWindows1251 = (text: string): Buffer =>
+        Buffer.from(Array.from({ length: text.length }, (_, i) => {
+          const code = text.charCodeAt(i);
+          return code >= 0x410 && code <= 0x44f ? code - 0x410 + 0xc0 : code;
+        }));
+
+      it.each([
+        ['UTF-8 with a byte order mark', 'Adé', (text: string): Buffer => Buffer.from(`\uFEFF${text}`)],
+        ['UTF-8, of an even length that UTF-16 would decode, whose declaration names UTF-16', 'Adé', (text: string): Buffer => {
+          const declared = `<?xml version="1.0" encoding="UTF-16"?>${text}`;
+          return Buffer.from(Buffer.byteLength(declared) % 2 === 0 ? declared : `${declared}\n`);
+        }],
+        ['UTF-16 little-endian, by its byte order mark', 'Adé', utf16le],
+        ['UTF-16 big-endian, by its byte order mark', 'Adé', utf16be],
+        ['UTF-16 little-endian with no byte order mark, by its first characters', 'Adé', (text: string): Buffer => Buffer.from(`<?xml version="1.0"?>${text}`, 'utf16le')],
+        ['the encoding its declaration names', 'Иван', (text: string): Buffer => cyrillicInWindows1251(`<?xml version="1.0" encoding="windows-1251"?>${text}`)],
+        ['neither UTF-8 nor UTF-16 and naming none, as Windows-1252, where MO2 falls back to Latin-1', 'Adé', (text: string): Buffer => Buffer.from(text, 'latin1')],
+      ])('reads an info file in %s', async (_, author, encoded) => {
+        await release(imaged('', ''), ['a/A.esp']);
+        await writeFile(join(root, 'fomod', 'info.xml'), encoded(INFO.replace('Ada', author)));
+
+        const { page } = await answered([INSTALL]);
+
+        expect(page.states[0]).toMatchObject({ author: `${author} & <Bo>`, version: '1.2', website: 'https://example.com/m' });
       });
 
       it('leaves a header field empty when the FOMOD gives no info file', async () => {
