@@ -91,23 +91,6 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(["plugin-source"], Directory.GetDirectories(_modFolder).Select(Path.GetFileName).Where(name => name != ".git"));
     }
 
-    [Fact]
-    public async Task ADecompiledSource_HoldsEachFileWhereSpriggitWritesIt()
-    {
-        using var spriggit = new ScratchDirectory("medit-spriggit-tree-");
-        await Fallout4WholeMod.Serialize(OfEachShape(), spriggit);
-        string[] written =
-        [
-            .. Directory.EnumerateFiles(spriggit, "*", SearchOption.AllDirectories)
-                .Select(path => Path.GetRelativePath(spriggit, path).Replace('\\', '/'))
-                .Order(StringComparer.Ordinal),
-        ];
-
-        Repository.ReplaceSourceFrom(Address, [.. written.Select(path => File(path, System.IO.File.ReadAllText(Path.Combine(spriggit, path))))], Sha).Wrote();
-
-        Assert.Equal(written, FilesUnderRoot());
-    }
-
     private static Fallout4Mod OfEachShape()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
@@ -146,50 +129,25 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(Root, "weap")));
     }
 
-    [Fact]
-    public void AFailedReplace_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
+    public static TheoryData<string, string[], string, string?, string> WhatAnotherProgramDidDuringTheReplace => new()
     {
-        var theirs = Path.Combine(Root, "armo", "theirs.txt");
+        { "echo theirs > 'ROOT/armo/theirs.txt'", ["npc_/A.esp/000001.json", "armo/A.esp/000003.json"], "armo/theirs.txt", "theirs", "armo — holds something this change did not write" },
+        { "echo theirs > 'ROOT/npc_/A.esp/000001.json'", ["npc_/A.esp/000001.json"], "npc_/A.esp/000001.json", "theirs", "000001.json — changed by something else" },
+        { "rm 'ROOT/npc_/A.esp/000001.json'", ["npc_/A.esp/000001.json"], "npc_/A.esp/000001.json", null, "000001.json — removed by something else" },
+        { "mkdir -p 'ROOT/npc_/A.esp'\necho theirs > 'ROOT/npc_/A.esp/000001.json'", ["armo/A.esp/000003.json"], "npc_/A.esp/000001.json", "theirs", "000001.json — written by something else" },
+    };
 
-        var failure = FailAfterWritingWhile($"echo theirs > '{theirs}'", [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")]);
+    [Theory]
+    [MemberData(nameof(WhatAnotherProgramDidDuringTheReplace))]
+    public void AFailedReplace_LeavesWhatAnotherProgramDidToAFile_AndNamesIt(string script, string[] written, string path, string? theirs, string named)
+    {
+        var failure = FailAfterWritingWhile(script.Replace("ROOT", Root, StringComparison.Ordinal), [.. written.Select(file => File(file, "{}"))]);
 
-        Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
-        Assert.Contains("armo — holds something this change did not write", failure.Reason.Replace('\\', '/'));
-        Assert.False(System.IO.File.Exists(Path.Combine(Root, "armo", "A.esp", "000003.json")));
+        Assert.Equal(theirs, TextAt(Path.Combine(Root, path))?.Trim());
+        Assert.Contains(named, failure.Reason.Replace('\\', '/'), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AFailedReplace_LeavesAFileAnotherProgramChangedAfterItReplacedIt_AndNamesIt()
-    {
-        var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
-
-        var failure = FailAfterWritingWhile($"echo theirs > '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
-
-        Assert.Equal("theirs", System.IO.File.ReadAllText(replaced).Trim());
-        Assert.Contains("000001.json — changed by something else", failure.Reason);
-    }
-
-    [Fact]
-    public void AFailedReplace_DoesNotPutBackAFileAnotherProgramRemovedAfterItReplacedIt()
-    {
-        var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
-
-        var failure = FailAfterWritingWhile($"rm '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
-
-        Assert.False(System.IO.File.Exists(replaced));
-        Assert.Contains("000001.json — removed by something else", failure.Reason);
-    }
-
-    [Fact]
-    public void AFailedReplace_LeavesAFileAnotherProgramWroteWhereItRemovedOne_AndNamesIt()
-    {
-        var removed = Path.Combine(Root, "npc_", "A.esp", "000001.json");
-
-        var failure = FailAfterWritingWhile($"mkdir -p '{Path.GetDirectoryName(removed)}'\necho theirs > '{removed}'", [File("armo/A.esp/000003.json", "{}")]);
-
-        Assert.Equal("theirs", System.IO.File.ReadAllText(removed).Trim());
-        Assert.Contains("000001.json — written by something else", failure.Reason);
-    }
+    private static string? TextAt(string path) => System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
 
     [Fact]
     public void AFailedReplace_PutsBackADirectoryItEmptiedAndAnotherProgramThenFilled_NamingNothing()

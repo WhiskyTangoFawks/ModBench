@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -49,52 +50,33 @@ public sealed class PluginByteComparisonTests : IDisposable
         Assert.StartsWith("REGN 00000020", comparison.LossCauses?.Single().Diagnosis.Anchor);
     }
 
-    [Fact]
-    public async Task ARewriteLackingARecord_NamesItAsAbsent()
+    private static readonly byte[] Kept = Record("MISC", 3, Subrecord("DATA", [1]));
+
+    private static UnverifiedRecord Misc(UnverifiedReason reason, string formKey) => new(reason, "MISC", FormKey.Factory(formKey));
+
+    public static TheoryData<string, byte[], byte[], UnverifiedRecord?> Pairings => new()
     {
-        var kept = Record("MISC", 3, Subrecord("DATA", [1]));
-        var lost = Record("MISC", 4, Subrecord("DATA", [1]));
+        { "a rewrite lacking a record", [.. Kept, .. Record("MISC", 4, Subrecord("DATA", [1]))], Kept, Misc(UnverifiedReason.AbsentFromRewrite, "000004:a.esp") },
+        { "two original records of one identity and one rewritten", [.. Kept, .. Kept], Kept, Misc(UnverifiedReason.AbsentFromRewrite, "000003:a.esp") },
+        {
+            "a pair whose compression differs",
+            [.. Tes4(), .. Kept], [.. Tes4(), .. DeflatedRecord("MISC", 3, CompressionLevel.Optimal, Subrecord("DATA", [1]))],
+            Misc(UnverifiedReason.NotComparable, "000003:a.esp")
+        },
+        {
+            "a pair both compressed and read",
+            [.. Tes4(), .. DeflatedRecord("MISC", 3, CompressionLevel.Optimal, Subrecord("DATA", [1]))],
+            [.. Tes4(), .. DeflatedRecord("MISC", 3, CompressionLevel.Optimal, Subrecord("DATA", [1]))],
+            null
+        },
+        { "a plugin header whose rewrite prunes a master", Tes4(masters: ["A.esm", "B.esm"]), Tes4(masters: ["B.esm"]), null },
+    };
 
-        var unverified = await UnverifiedAsync([.. kept, .. lost], kept);
-
-        Assert.Equal(("MISC", "000004:a.esp", UnverifiedReason.AbsentFromRewrite),
-            (unverified?.RecordType, unverified?.FormKey.ToString(), unverified?.Reason));
-    }
-
-    [Fact]
-    public async Task TwoOriginalRecordsOfOneIdentity_NeedTwoInTheRewrite()
+    [Theory]
+    [MemberData(nameof(Pairings))]
+    public async Task ARecordTheRewriteDoesNotHoldIntact_IsNamedWithWhy(string _, byte[] original, byte[] rewritten, UnverifiedRecord? unverified)
     {
-        var record = Record("MISC", 3, Subrecord("DATA", [1]));
-
-        var unverified = await UnverifiedAsync([.. record, .. record], record);
-
-        Assert.Equal(UnverifiedReason.AbsentFromRewrite, unverified?.Reason);
-    }
-
-    [Fact]
-    public async Task APairWhoseCompressionDiffers_IsNotComparable()
-    {
-        var payload = Subrecord("DATA", [1]);
-
-        var unverified = await UnverifiedAsync([.. Tes4(), .. Record("MISC", 3, payload)], [.. Tes4(), .. DeflatedRecord("MISC", 3, CompressionLevel.Optimal, payload)]);
-
-        Assert.Equal(("MISC", UnverifiedReason.NotComparable), (unverified?.RecordType, unverified?.Reason));
-    }
-
-    [Fact]
-    public async Task APairBothCompressedAndRead_IsVerified()
-    {
-        var payload = Subrecord("DATA", [1]);
-
-        Assert.Null(await UnverifiedAsync([.. Tes4(), .. DeflatedRecord("MISC", 3, CompressionLevel.Optimal, payload)], [.. Tes4(), .. DeflatedRecord("MISC", 3, CompressionLevel.Optimal, payload)]));
-    }
-
-    [Fact]
-    public async Task WhenTheRewritePrunesAMaster_ThePluginHeaderStillPairs()
-    {
-        var unverified = await UnverifiedAsync(Tes4(masters: ["A.esm", "B.esm"]), Tes4(masters: ["B.esm"]));
-
-        Assert.Null(unverified);
+        Assert.Equal(unverified, await UnverifiedAsync(original, rewritten));
     }
 
     private async Task<UnverifiedRecord?> UnverifiedAsync(byte[] original, byte[] rewritten) =>

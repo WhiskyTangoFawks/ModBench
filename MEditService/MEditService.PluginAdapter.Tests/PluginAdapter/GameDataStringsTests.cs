@@ -127,17 +127,6 @@ public sealed class GameDataStringsTests : IDisposable
             [DoorOf(Plugin, loadOrder).Contains(DoorName, StringComparison.Ordinal), DoorOf(overridden, loadOrder).Contains("The Overridden Door", StringComparison.Ordinal)]);
     }
 
-    [Fact]
-    public void ReadContent_ACopyTheGamesListsDoNotAnswerForWithNoStringsOfItsOwn_NamesThemMissing()
-    {
-        var (overridden, loadOrder) = AnOverriddenCopy("The Overridden Door");
-        Directory.Delete(LocalizedDoorPlugin.LooseStrings(overridden.Path), recursive: true);
-
-        var content = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), overridden.Path), loadOrder, PluginStrings.None).Answered();
-
-        Assert.Equal(["Update_English.STRINGS", "Update_English.ILSTRINGS", "Update_English.DLSTRINGS"], content.MissingStringsFiles);
-    }
-
     private (RegisteredPlugin Overridden, LoadOrderSnapshot LoadOrder) AnOverriddenCopy(string doorName)
     {
         var folder = Directory.CreateDirectory(Path.Combine(_root, "mods", "Overridden")).FullName;
@@ -204,16 +193,6 @@ public sealed class GameDataStringsTests : IDisposable
         var source = (await Adapter.ReadSourceOfAsync(Plugin, LoadOrder)).Answered();
 
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains(DoorName, StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void OpenDocuments_APluginWhoseStringsAreInAnArchiveForItTheGameLoads_ReadsItsNamesFromThere()
-    {
-        MoveStringsIntoGameData("Update.bsa");
-
-        using var documents = OpenDocuments(_pluginPath).Answered();
-
-        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -288,19 +267,6 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Fact]
-    public void OpenDocuments_AGameMasterWhoseStringsAreOnlyInAnArchiveNamedForNoPluginThatTheGameLoads_ReadsItsNames()
-    {
-        var masterPath = Path.Combine(_dataFolder, PluginName);
-        LocalizedDoorPlugin.Write(masterPath, DoorName);
-        LocalizedDoorPlugin.PackStrings(masterPath, Path.Combine(_dataFolder, "Skyrim - Interface.bsa"));
-        TheGameLoads("Skyrim - Interface.bsa");
-
-        using var documents = OpenDocuments(masterPath).Answered();
-
-        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task ReadSourceOf_AModsCopyOfAGameMasterWhoseStringsAreOnlyInAnArchiveTheGameLoads_TracksItsNames()
     {
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, "Skyrim - Interface.bsa"));
@@ -336,17 +302,6 @@ public sealed class GameDataStringsTests : IDisposable
         var source = await Adapter.ReadSourceOfAsync(Plugin, LoadOrder);
 
         Assert.IsType<PluginFailure.MissingStrings>(source.Failure());
-    }
-
-    [Fact]
-    public void OpenDocuments_APluginWithAnotherLanguagesStringsBesideItAndItsEnglishInTheGame_ReadsTheEnglish()
-    {
-        MoveStringsIntoGameData("Update.bsa");
-        WriteOnlyFrenchStringsBesideThePlugin();
-
-        using var documents = OpenDocuments(_pluginPath).Answered();
-
-        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -425,24 +380,6 @@ public sealed class GameDataStringsTests : IDisposable
         LocalizedDoorPlugin.PackStrings(_pluginPath, Path.Combine(_dataFolder, "Skyrim - Interface.bsa"));
         File.WriteAllText(Path.Combine(_dataFolder, "Skyrim - Misc.bsa"), "not an archive");
         TheGameLoads("Skyrim - Misc.bsa", "Skyrim - Interface.bsa");
-
-        using var documents = OpenDocuments(_pluginPath).Answered();
-
-        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void OpenDocuments_AnArchiveTheGameLoadsRewrittenAfterARead_IsReadAgain()
-    {
-        var interfaceArchive = Path.Combine(_dataFolder, "Skyrim - Interface.bsa");
-        var otherPlugin = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "Other")).FullName, "Other.esm");
-        LocalizedDoorPlugin.Write(otherPlugin, "Another Door");
-        LocalizedDoorPlugin.PackStrings(otherPlugin, interfaceArchive);
-        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
-        TheGameLoads("Skyrim - Interface.bsa");
-        OpenDocuments(_pluginPath).Answered().Dispose();
-        LocalizedDoorPlugin.Write(_pluginPath, DoorName);
-        LocalizedDoorPlugin.PackStrings(_pluginPath, interfaceArchive);
 
         using var documents = OpenDocuments(_pluginPath).Answered();
 

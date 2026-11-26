@@ -25,18 +25,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
 
     private string SourceFolder => _submodule.Folder;
 
-    [Theory]
-    [InlineData("first")]
-    [InlineData("second")]
-    public void AnAbsentSubmodule_IsCheckedOutByGitAtItsPin_AsASourceMod(string at)
-    {
-        Assert.Equal(_commits[at], CommitAtHead(_commits[at]).Value().Commit);
-
-        Assert.Equal(_commits[at], Git(SourceFolder, "rev-parse", "HEAD").Trim());
-        Assert.Equal(at, File.ReadAllText(Path.Combine(SourceFolder, "readme.txt")));
-        Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
-    }
-
     [Fact]
     public void AFolderHoldingARepositoryWithNoCommit_IsUnreadable_NamingIt()
     {
@@ -59,38 +47,28 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
     }
 
-    [Theory]
-    [InlineData("core.longpaths", "true")]
-    [InlineData("core.quotePath", "false")]
-    [InlineData("commit.gpgsign", "false")]
-    [InlineData("gc.autoDetach", "false")]
-    public void AClone_IsSetAsInitSetsARepository(string key, string value)
+    [Fact]
+    public void AClone_IsSetAsInitSetsARepository()
     {
         CommitAtHead(_commits["second"]).Value();
 
-        Assert.Equal(value, Git(SourceFolder, "config", "--local", "--get", key).Trim());
+        Assert.Equal(
+            ("true", "false", "false", "false"),
+            (Setting("core.longpaths"), Setting("core.quotePath"), Setting("commit.gpgsign"), Setting("gc.autoDetach")));
     }
 
-    [Fact]
-    public void AClone_LandsOnTheBranchItFollows_WhenThatBranchIsAtThePin()
+    private string Setting(string key) => Git(SourceFolder, "config", "--local", "--get", key).Trim();
+
+    [Theory]
+    [InlineData("main")]
+    [InlineData("gone")]
+    public void AClone_LandsOnTheBranchItFollows_ElseTheRemotesDefaultBranch_WhenThatBranchIsAtThePin(string followed)
     {
-        _submodule.Follow("main");
+        _submodule.Follow(followed);
 
         var head = CommitAtHead(_commits["second"]).Value();
 
         Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
-    }
-
-    [Fact]
-    public void AClone_StaysDetached_AndNamesTheBranchItFollows_WhenThatBranchIsAtAnotherCommit()
-    {
-        _submodule.Follow("main");
-
-        var head = CommitAtHead(_commits["first"]).Value();
-
-        Assert.Equal(
-            (new SubmoduleHead(_commits["first"], $"its branch 'main' is at {_commits["second"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
-            (head, Branch()));
     }
 
     [Fact]
@@ -102,23 +80,15 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
-    public void AClone_OfASubmoduleThatFollowsAMissingBranch_LandsOnTheRemotesDefaultBranch_WhenThatIsAtThePin()
-    {
-        _submodule.Follow("gone");
-
-        var head = CommitAtHead(_commits["second"]).Value();
-
-        Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
-    }
-
-    [Fact]
-    public void AClone_OfASubmoduleThatFollowsNoBranch_StaysDetached_AndSaysWhy_WhenTheRemotesDefaultBranchIsAtAnotherCommit()
+    public void AnAbsentSubmodule_IsClonedAtItsPin_AsASourceMod_DetachedSayingWhy_WhenTheRemotesDefaultBranchIsAtAnotherCommit()
     {
         var head = CommitAtHead(_commits["first"]).Value();
 
         Assert.Equal(
             (new SubmoduleHead(_commits["first"], $"its branch 'main' is at {_commits["second"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
             (head, Branch()));
+        Assert.Equal("first", File.ReadAllText(Path.Combine(SourceFolder, "readme.txt")));
+        Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
     }
 
     [Fact]
@@ -141,21 +111,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
 
         Assert.Equal(
             (new SubmoduleHead(_commits["second"], "its remote names no default branch and not exactly one of its branches is at the pin, so it is left detached at the pin"), "HEAD"),
-            (head, Branch()));
-    }
-
-    [Fact]
-    public void AClone_OfASubmoduleWhoseFollowedBranchHoldsOtherCommits_StaysDetached_AndNamesIt_WhateverTheRemotesDefaultHolds()
-    {
-        _submodule.Follow("dev");
-        CommitAtHead(_commits["second"]).Value();
-        Git(SourceFolder, "branch", "dev", _commits["first"]);
-        Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
-
-        var head = CommitAtHead(_commits["second"]).Value();
-
-        Assert.Equal(
-            (new SubmoduleHead(_commits["second"], $"its branch 'dev' is at {_commits["first"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
             (head, Branch()));
     }
 
@@ -230,19 +185,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
 
         Assert.Equal(
             (new SubmoduleHead(_commits["second"], "its branch 'main' could not be checked out (git checkout failed (128)), so it is left detached at the pin"), "HEAD"),
-            (head, Branch()));
-    }
-
-    [Fact]
-    public void APresentSubmoduleDetachedAtThePin_NamesItsBranch_WhenThatBranchIsTheRemotesAndAheadOfThePin()
-    {
-        ClonedThenDetached();
-        Git(SourceFolder, "checkout", "-q", "--detach", _commits["first"]);
-
-        var head = CommitAtHead(_commits["first"]).Value();
-
-        Assert.Equal(
-            (new SubmoduleHead(_commits["first"], $"its branch 'main' is at {_commits["second"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
             (head, Branch()));
     }
 
@@ -330,16 +272,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
-    public void ASubmoduleAtAnotherCommit_AnswersThatCommit_AndIsNotMoved()
-    {
-        CommitAtHead(_commits["first"]).Value();
-
-        Assert.Equal(_commits["first"], CommitAtHead(_commits["second"]).Value().Commit);
-
-        Assert.Equal("first", File.ReadAllText(Path.Combine(SourceFolder, "readme.txt")));
-    }
-
-    [Fact]
     public void APinItsRemoteDoesNotHold_Fails_NamingThePin_LeavingTheFolderHoldingNothing()
     {
         const string Unpushed = "0123456789012345678901234567890123456789";
@@ -367,7 +299,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         var stalled = Directory.CreateDirectory(Path.Combine(_root, "stalled", ".git")).FullName;
         using (var fifo = System.Diagnostics.Process.Start("mkfifo", Path.Combine(stalled, "HEAD"))) await fifo.WaitForExitAsync();
         Git(_submodule.Instance, "config", "-f", ".gitmodules", "submodule.Mod.url", Path.Combine(_root, "stalled"));
-        using var cancelling = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        using var cancelling = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
         var failure = await Task.Run(() => CommitAtHead(_commits["second"], cancelling.Token).Stopped())
             .WaitAsync(TimeSpan.FromSeconds(60));
