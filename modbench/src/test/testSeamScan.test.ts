@@ -57,7 +57,7 @@ describe('a test file of a box imports, of its own box, only its seam: the files
       'src/view/test/view.test.ts': "import { i } from '../../kernel/inner';\n",
       'src/wiring.ts': "import { c } from './kernel/codec';\nexport const w = c;\n",
       'webview/src/Panel.tsx': "import { s } from '../../src/kernel/shown';\nexport const P = () => <div>{s}</div>;\n",
-      'src/test/shared.ts': "import { i } from '../kernel/inner';\nexport const d = i;\n",
+      'src/test/shared.ts': "import { i } from '../kernel/inner';\nimport { w } from '../wiring';\nexport const d = i + w;\n",
       'src/kernel/test/fakeInner.ts': 'export const f = 1;\n',
       'src/kernel/test/harness.ts': "import { i } from '../inner';\nexport const h = i;\n",
       'src/kernel/test/atTheSeam.test.ts': [
