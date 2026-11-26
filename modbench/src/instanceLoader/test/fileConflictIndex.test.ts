@@ -233,7 +233,6 @@ describe('a lookup changed from the one before it', () => {
     for (const entry of entries) lookup.set(entry);
     return lookup;
   };
-  // More paths than the trie's root slots times what a leaf holds, so a leaf splits and an emptied branch goes.
   const SPLITS_A_LEAF = 1100;
   const pathsUpTo = (count: number): string[] => Array.from({ length: count }, (_, at) => `meshes/${at}.nif`);
 

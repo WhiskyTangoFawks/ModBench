@@ -21,7 +21,6 @@ afterEach(async () => {
   await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
 });
 
-// Git runs a filter's command in its own shell, as an alias's, which needs no repository.
 const filtered = (command: string | undefined, text: string): string =>
   execFileSync('git', ['-c', `alias.filtered=!${present(command, 'the filter\'s command')}`, 'filtered'], { input: text, encoding: 'utf8' });
 
