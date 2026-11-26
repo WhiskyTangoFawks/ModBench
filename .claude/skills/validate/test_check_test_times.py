@@ -22,10 +22,10 @@ class Reports(unittest.TestCase):
     def report(self, name, text):
         (self.dir / name).write_text(text)
 
-    def main(self, elapsed: float, budget: float, *budgets_file: str) -> tuple[int, str]:
+    def main(self, elapsed: float, budget: float, budgets_file: str | None = None) -> tuple[int, str]:
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            status = ctt.main([str(self.dir), str(elapsed), str(budget), *budgets_file])
+            status = ctt.main([str(self.dir), str(elapsed), str(budget), *([budgets_file] if budgets_file else [])])
         return status, printed.getvalue()
 
 
@@ -60,7 +60,7 @@ class Main(Reports):
 class Boxes(Reports):
     BUDGETS = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1, project='B.Tests'), fx.trx_result('A.Two', 3, 2.5, project='B.Tests'),
                                     fx.trx_result('A.Skipped', outcome='NotExecuted', project='B.Tests')))
@@ -73,26 +73,26 @@ class Boxes(Reports):
         budgets.write_text(text)
         return self.main(10, 300, str(budgets))
 
-    def test_with_no_budgets_it_prints_each_boxs_summed_time_most_first(self):
+    def test_with_no_budgets_it_prints_each_boxs_summed_time_most_first(self) -> None:
         self.assertIn('    2.0 s  B.Tests\n    1.5 s  plugins\n    1.2 s  hooks\n    0.5 s  webview\n', self.main(10, 300)[1])
 
-    def test_it_prints_each_box_against_its_budget_and_the_others_together_against_theirs(self):
+    def test_it_prints_each_box_against_its_budget_and_the_others_together_against_theirs(self) -> None:
         self.assertIn('    2.0 s of    4 s  B.Tests\n    1.5 s of    2 s  plugins\n    1.8 s of    3 s  the other tests\n'
                       '      1.2 s  hooks\n      0.5 s  webview\n--- 0 BUDGETS OVERRUN ---\n',
                       self.with_budgets(self.BUDGETS)[1])
 
-    def test_a_box_and_the_other_tests_over_their_budgets_are_each_said_to_be(self):
+    def test_a_box_and_the_other_tests_over_their_budgets_are_each_said_to_be(self) -> None:
         _, printed = self.with_budgets('other = 1\n[boxes]\n"B.Tests" = 1.5\nplugins = 2\n')
         self.assertIn('    2.0 s of  1.5 s  B.Tests: OVER BUDGET by 0.5 s\n', printed)
         self.assertIn('    1.8 s of    1 s  the other tests: OVER BUDGET by 0.8 s\n', printed)
         self.assertIn('--- 2 BUDGETS OVERRUN ---\n', printed)
 
-    def test_a_budget_overrun_fails_the_run_once_the_switch_is_on_and_not_before(self):
+    def test_a_budget_overrun_fails_the_run_once_the_switch_is_on_and_not_before(self) -> None:
         for switch, status in ((False, 0), (True, 1)):
             with self.subTest(switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
                 self.assertEqual(self.with_budgets('other = 3\n[boxes]\n"B.Tests" = 1\n')[0], status)
 
-    def test_a_run_given_no_budgets_fails_on_none_though_the_switch_is_on(self):
+    def test_a_run_given_no_budgets_fails_on_none_though_the_switch_is_on(self) -> None:
         with mock.patch.object(ctt, 'FAILS_THE_RUN', True):
             self.assertEqual(self.main(900, 300)[0], 0)
 
