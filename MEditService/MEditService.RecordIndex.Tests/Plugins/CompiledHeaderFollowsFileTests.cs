@@ -81,15 +81,20 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
         Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_built)(n)), "the built plugin's announcement");
     }
 
+    private static readonly Dictionary<string, Action<string>> Unreadable = new()
+    {
+        ["gone"] = File.Delete,
+        ["unreadable"] = path => File.WriteAllText(path, "not a plugin"),
+    };
+
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ACompiledFileThatIsGoneOrUnreadable_LeavesItsPluginListedWithTheMastersLastRead(bool gone)
+    [InlineData("gone")]
+    [InlineData("unreadable")]
+    public void ACompiledFileThatIsGoneOrUnreadable_LeavesItsPluginListedWithTheMastersLastRead(string made)
     {
         WriteBuilt(referencingMaster: true);
         ReadWrittenBuilt([Master]);
-        if (gone) File.Delete(_built.Path);
-        else File.WriteAllText(_built.Path, "not a plugin");
+        Unreadable[made](_built.Path);
 
         SignalNamingBuiltAndTheBystanderUntilTheBystanderIsRead();
 

@@ -31,7 +31,7 @@ public sealed class SequenceAwaitTests : IDisposable
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(10);
 
     [Fact]
-    public async Task AwaitSequence_AlreadyReached_AnswersTrue_WithTheClockStill()
+    public async Task ASequenceAlreadyReached_IsAnsweredReached_WithTheClockStill()
     {
         var landed = _index.Sequence;
 
@@ -44,7 +44,7 @@ public sealed class SequenceAwaitTests : IDisposable
     private static readonly TimeSpan DayLongTimeoutSoAStopwatchAwaitWouldStillBePending = TimeSpan.FromDays(1);
 
     [Fact]
-    public async Task AwaitSequence_NotReached_AnswersNotYet_OnceTheClockPassesTheTimeout()
+    public async Task ASequenceNotReached_IsAnsweredNotYet_OnceTheClockPassesTheTimeout()
     {
         var pending = _index.Queries.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
@@ -55,7 +55,7 @@ public sealed class SequenceAwaitTests : IDisposable
     }
 
     [Fact]
-    public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockAdvancedOnlyToWakeThePoll()
+    public async Task ASequenceLandingWhileAwaited_IsAnsweredReached_WithTheClockAdvancedOnlyToWakeThePoll()
     {
         var pending = _index.Queries.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
