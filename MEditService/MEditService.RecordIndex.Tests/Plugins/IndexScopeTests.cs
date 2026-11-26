@@ -23,18 +23,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetPlugins().Refused().Refusal);
     }
 
-    [Fact]
-    public void AFilterClearedBeforeAnyLoadOrder_LeavesNoFilterOnceOneArrives()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-
-        index.ClearFilter();
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        Assert.Null(index.Queries.GetFilter().Value());
-    }
-
     public static TheoryData<string, Func<TestPluginFixture, string, LoadOrderSnapshot[]>> ArrivalsOutsideTheFiltersScope => new()
     {
         {

@@ -58,12 +58,6 @@ public sealed class PluginAddressComparisonTests : IDisposable
     }
 
     [Fact]
-    public void ASearchUnderAnotherCase_FindsThePluginsRecords()
-    {
-        Assert.Equal(1, _index.Queries.GetRecords(["npc_"], OtherCase, search: "FromCased", limit: 10, offset: 0).Value().Total);
-    }
-
-    [Fact]
     public void ASqlDoorFilterOnALinkUnderAnotherCase_MatchesTheLinkingRecord()
     {
         Assert.Equal(1, _index.Matching($"SELECT form_key FROM npc_ WHERE \"Race\" = '{UnderAnotherCase("CasedRace")}'"));

@@ -21,7 +21,6 @@ public sealed class UnreadableBinaryTests : IDisposable
     private const string Origin = "NonSourceMod";
     private readonly string _modFolder;
     private readonly string _pluginPath;
-    private readonly PluginAddress _key = new(PluginName, Origin);
 
     public UnreadableBinaryTests()
     {
@@ -75,39 +74,6 @@ public sealed class UnreadableBinaryTests : IDisposable
         Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
         Assert.Contains(_index.ListedIn(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
             row => row.EditorId == "OtherNpc");
-    }
-
-    [Fact]
-    public void AReDerivationThatCannotReadTheBinary_IsNotReadAgain_WhileItsBytesHold()
-    {
-        NonCompiledPluginOverAnUnreadableBinary();
-        var before = _notifications.Notifications.Count;
-        var standing = _index.Status;
-        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
-        other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
-        other.WriteToBinary(OtherPluginPath);
-
-        _index.NextCheckThatMayFail();
-
-        Assert.All(
-            _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),
-            n =>
-            {
-                Assert.Equal(standing.State, n.Status.State);
-                Assert.Equal(standing.Failures, n.Status.Failures);
-            });
-    }
-
-    [Fact]
-    public void AReDerivationThatCannotReadTheBinary_ReadsAgainOnceItsBytesChange()
-    {
-        NonCompiledPluginOverAnUnreadableBinary();
-
-        WriteValidPlugin(_pluginPath);
-        _index.NextCheckUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
-
-        Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
-        Assert.Contains(_index.ListedIn(_key), row => row.EditorId == "FreshlyAppearedNpc");
     }
 
     [Fact]

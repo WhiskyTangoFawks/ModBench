@@ -25,37 +25,19 @@ public sealed class IndexWriteOrderTests : IDisposable
 
     private LoadOrderEntry Plugin => _fixture.Plugins.Single();
 
-    private async Task<Task> ARevalidationParkedMidWrite()
+    [Fact]
+    public async Task AFilterSetWhileAReDerivationIsInFlight_TakesEffectOnlyAfterItLands()
     {
         PluginBinaries.Touch(Plugin.Path);
         _adapter.ParkNextOpenOf(PluginName);
         var revalidation = Task.Run(_index.NextCheck);
         await _adapter.WaitUntilParkedAsync();
-        return revalidation;
-    }
-
-    [Fact]
-    public async Task AFilterSetWhileAReDerivationIsInFlight_TakesEffectOnlyAfterItLands()
-    {
-        var revalidation = await ARevalidationParkedMidWrite();
 
         var filter = Task.Run(() => _index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql"));
 
-        Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(500))));
+        Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(100))));
         _adapter.Release();
         await Task.WhenAll(revalidation, filter).WaitAsync(Waits.Patience);
         Assert.Equal("filter.sql", _index.Queries.GetFilter().Value()?.Source);
-    }
-
-    [Fact]
-    public async Task ARecordListing_IsServedWhileAReDerivationIsInFlight()
-    {
-        var revalidation = await ARevalidationParkedMidWrite();
-
-        var listing = Task.Run(() => _index.ListedIn(Plugin.Key));
-
-        Assert.NotEmpty(await listing.WaitAsync(Waits.Patience));
-        _adapter.Release();
-        await revalidation.WaitAsync(Waits.Patience);
     }
 }

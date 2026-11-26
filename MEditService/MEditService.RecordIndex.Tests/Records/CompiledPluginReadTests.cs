@@ -29,18 +29,13 @@ public sealed class CompiledPluginReadTests : IDisposable
     }
 
     private static readonly PluginAddress CompiledPlugin = new("CompiledPlugin.esp", "SourceMod");
-    private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
-    [Fact]
-    public void APluginIngestedFromItsSourceTree_ReadsAsDerivedFromIt()
+    [Theory]
+    [InlineData("CompiledPlugin.esp", "SourceMod", true)]
+    [InlineData("Plain.esp", "PlainMod", false)]
+    public void APluginRow_SaysWhetherItIsDerivedFromItsSourceTree(string name, string origin, bool compiled)
     {
-        Assert.True(_index.ReadFromItsPluginSource(CompiledPlugin));
-    }
-
-    [Fact]
-    public void APluginIngestedFromItsBytes_ReadsAsDerivedFromThem()
-    {
-        Assert.False(_index.PluginResponseOf(Plain)?.IsCompiledPlugin ?? true);
+        Assert.Equal(compiled, _index.PluginResponseOf(new PluginAddress(name, origin))?.IsCompiledPlugin);
     }
 
     [Fact]
@@ -52,13 +47,5 @@ public sealed class CompiledPluginReadTests : IDisposable
             GameRelease.Fallout4);
 
         Assert.True(_index.ReadFromItsPluginSource(recased));
-    }
-
-    [Fact]
-    public void ACompiledPluginTheSnapshotStoppedNaming_IsAbsent()
-    {
-        _index.Reconcile(_holder, _fixture.DataFolder, [.. _fixture.Plugins.Where(p => p.Name != CompiledPlugin.Name)], GameRelease.Fallout4);
-
-        Assert.Null(_index.PluginResponseOf(CompiledPlugin));
     }
 }

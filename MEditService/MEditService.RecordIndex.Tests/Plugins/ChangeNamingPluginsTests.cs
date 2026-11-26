@@ -52,13 +52,13 @@ public sealed class ChangeNamingPluginsTests : IDisposable
     }
 
     [Fact]
-    public void APluginARefreshCouldNotOpen_IsOpenedByAChangeNamingIt_OnceItsBytesAreRestored()
+    public void APluginThatFailedToOpen_IsOpenedByAChangeNamingIt_OnceItsBytesAreRestored()
     {
         var bytes = File.ReadAllBytes(_named.Path);
         File.WriteAllText(_named.Path, "not a plugin");
-        SignalNamingUntil(_ => _index.Status.Failures.Any(f => f.Name == _named.Name), _named);
-        Assert.Null(_index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
-        Waits.Reached(() => _index.Status is { State: LoadOrderState.Ready } status && status.Failures.Any(f => f.Name == _named.Name), "the refresh's failure");
+        _index.Reconcile(_holder, _fixture.DataFolder, [_unnamed], GameRelease.Fallout4, _fixture.InstanceRoot);
+        _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        Assert.Contains(_index.Status.Failures, f => f.Name == _named.Name);
 
         File.WriteAllBytes(_named.Path, bytes);
         _index.SignalChange([_named.Key]);

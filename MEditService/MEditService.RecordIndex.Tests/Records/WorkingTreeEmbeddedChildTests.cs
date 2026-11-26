@@ -107,8 +107,9 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     {
         Project(_fixture.Worldspace, null);
 
-        foreach (var formKey in new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef })
-            Assert.Null(_fixture.Index.CopyIn(formKey, _fixture.Plugin));
+        Assert.All(
+            new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef }.Select(formKey => _fixture.Index.CopyIn(formKey, _fixture.Plugin)),
+            Assert.Null);
         var refInAnotherContainer = _fixture.TemporaryRef;
         Assert.NotNull(_fixture.Index.CopyIn(refInAnotherContainer, _fixture.Plugin));
     }

@@ -1,3 +1,5 @@
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -15,24 +17,30 @@ namespace MEditService.RecordIndex.Tests.Plugins;
 public sealed class WarmReconcileTests
 {
     [Fact]
-    public void ASecondLoadOfTheSameOrder_IndexesNothing_AndIsStillReadyWithWinners()
+    public void ALaunchWithNothingChanged_OpensHashesAndCountsNoPlugin_AndAdvancesTheSequenceOnlyForTheWinnerSweep()
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-same")
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        long launched;
+        using (var cold = Indexes.Open(holder, new CountingAdapter()))
+        {
+            cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+            launched = cold.Sequence;
+        }
 
-        using var opens = new GatedPluginAdapter();
-        using var warm = Indexes.Open(holder, opens);
+        var work = new CountingAdapter();
+        using var warm = Indexes.Open(holder, work);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        Assert.Empty(opens.Opened);
-        Assert.Equal(2, warm.Status.TotalPlugins);
-        Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
-
+        Assert.Empty(work.Opened);
+        Assert.Empty(work.Hashed);
+        Assert.Empty(work.Counted);
+        Assert.Equal(launched + 1, warm.Sequence);
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
+        Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(warm.Status.ConflictsComputed);
         Assert.NotEmpty(warm.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
@@ -78,45 +86,6 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(switched + 2, index.Sequence);
         Assert.Equal(3, index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
-    }
-
-    [Fact]
-    public void ALaunchWithNothingChanged_AdvancesTheSequenceOnlyForTheWinnerSweep()
-    {
-        var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("warm-unwritten")
-            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
-            .Build();
-        long launched;
-        using (var cold = Indexes.Open(holder))
-        {
-            cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-            launched = cold.Sequence;
-        }
-
-        using var warm = Indexes.Open(holder);
-        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        Assert.Equal(launched + 1, warm.Sequence);
-    }
-
-    [Fact]
-    public void ALaunchWithNothingChanged_CountsNoPluginsRecords()
-    {
-        var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("warm-uncounted")
-            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
-            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
-            .Build();
-        var counts = new RecordCountingAdapter();
-        using (var cold = Indexes.Open(holder, counts)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        Assert.NotEmpty(counts.Counted);
-        counts.Counted.Clear();
-
-        using var warm = Indexes.Open(holder, counts);
-        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        Assert.Empty(counts.Counted);
     }
 
     [Fact]
@@ -181,24 +150,6 @@ public sealed class WarmReconcileTests
     private static readonly FakeTimeProvider ClockPastEveryWrite = new(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
 
     [Fact]
-    public void ALaunchWithNothingChanged_HashesNoPlugin()
-    {
-        var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("warm-unhashed")
-            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
-            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
-            .Build();
-        using (var cold = Indexes.Open(holder, new HashCountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        var hashes = new HashCountingAdapter();
-        using var warm = Indexes.Open(holder, hashes);
-        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        Assert.Empty(hashes.Hashed);
-        Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
-    }
-
-    [Fact]
     public void APluginClaimedJustAfterItWasWritten_IsHashedByTheNextLaunchAlone()
     {
         var holder = new LoadOrderHolder();
@@ -208,9 +159,9 @@ public sealed class WarmReconcileTests
         var clockStoppedAtTheWrite = new MutagenPluginAdapter(new FakeTimeProvider(TimeProvider.System.GetUtcNow()));
         using (var cold = Indexes.Open(holder, clockStoppedAtTheWrite)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        var next = new HashCountingAdapter();
+        var next = new CountingAdapter();
         using (var launch = Indexes.Open(holder, next)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        var after = new HashCountingAdapter();
+        var after = new CountingAdapter();
         using (var launch = Indexes.Open(holder, after)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(["A.esp"], next.Hashed.Distinct());
@@ -246,11 +197,11 @@ public sealed class WarmReconcileTests
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = Indexes.Open(holder, new HashCountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = Indexes.Open(holder, new CountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var b = data.Plugins.Single(p => p.Name == "B.esp");
         PluginBinaries.Rewrite(b.Path, m => m.Npcs.AddNew("NpcBAgain"));
 
-        var hashes = new HashCountingAdapter();
+        var hashes = new CountingAdapter();
         using var warm = Indexes.Open(holder, hashes);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
@@ -258,25 +209,37 @@ public sealed class WarmReconcileTests
         Assert.Equal(["NpcBAgain"], warm.ListedIn(b.Key).Select(r => r.EditorId));
     }
 
-    private sealed class HashCountingAdapter() : DelegatingPluginAdapter(new MutagenPluginAdapter(ClockPastEveryWrite))
+    /// <summary>Each plugin hashed, counted and opened, over a clock past every write, so a stamp vouches for its file.</summary>
+    private sealed class CountingAdapter() : DelegatingPluginAdapter(new MutagenPluginAdapter(ClockPastEveryWrite))
     {
         public List<string> Hashed { get; } = [];
 
+        public List<string> Counted { get; } = [];
+
+        public List<string> Opened { get; } = [];
+
+        private static void Add(List<string> work, string path)
+        {
+            lock (work) work.Add(Path.GetFileName(path));
+        }
+
         public override string? HashOf(string pluginPath)
         {
-            lock (Hashed) Hashed.Add(Path.GetFileName(pluginPath));
+            Add(Hashed, pluginPath);
             return base.HashOf(pluginPath);
         }
-    }
-
-    private sealed class RecordCountingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public List<string> Counted { get; } = [];
 
         public override Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(ModPath modPath, LoadOrderSnapshot loadOrder)
         {
-            Counted.Add(modPath.ModKey.FileName.String);
+            Add(Counted, modPath.Path);
             return base.CountRecords(modPath, loadOrder);
+        }
+
+        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
+            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas, PluginStrings strings)
+        {
+            Add(Opened, modPath.Path);
+            return base.OpenDocuments(modPath, loadOrder, schemas, strings);
         }
     }
 

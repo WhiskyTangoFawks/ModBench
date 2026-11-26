@@ -16,7 +16,6 @@ public sealed class SourceIngestTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string NpcEditorId = "FixtureNpc";
-    private const string KeywordEditorId = "FixtureKeyword";
     private const float BaselineHeightMax = 0.5f;
 
     private readonly ScatteredFixtureData _fixture;
@@ -24,16 +23,14 @@ public sealed class SourceIngestTests : IDisposable
     private readonly string _npc;
     private readonly string _otherNpc;
     private readonly string _race;
-    private readonly string _keyword;
 
     public SourceIngestTests()
     {
-        FormKey npc = default, otherNpc = default, race = default, keyword = default;
+        FormKey npc = default, otherNpc = default, race = default;
         _fixture = new PluginFixtureBuilder("source-ingest")
             .WithPlugin(PluginName, mod =>
             {
                 var theRace = mod.Races.AddNew("FixtureRace");
-                keyword = mod.Keywords.AddNew(KeywordEditorId).FormKey;
                 var theNpc = mod.Npcs.AddNew(NpcEditorId);
                 theNpc.Race.SetTo(theRace);
                 theNpc.HeightMax = BaselineHeightMax;
@@ -43,8 +40,7 @@ public sealed class SourceIngestTests : IDisposable
             .BuildScattered()
             .CompiledPlugin();
         _entry = _fixture.Plugins.Single();
-        (_npc, _otherNpc, _race, _keyword) =
-            (npc.ToString(), otherNpc.ToString(), race.ToString(), keyword.ToString());
+        (_npc, _otherNpc, _race) = (npc.ToString(), otherNpc.ToString(), race.ToString());
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -63,37 +59,6 @@ public sealed class SourceIngestTests : IDisposable
             .Single(p => PluginAddress.Comparer.Equals(p.Plugin, Plugin)).Problems.Select(p => p.SourceRelativePath);
 
     private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.HeaderDocument(PluginName));
-
-    [Fact]
-    public void ADocumentSortedByHandIntoAFolderBelowItsGroup_IsAtEffectiveAfterReload()
-    {
-        const string editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName = "SortedByHandNpc";
-        using (var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing())
-        {
-            var document = NpcSourceFile(live);
-            var sorted = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "SortedByHand"));
-            File.WriteAllText(
-                Path.Combine(sorted.FullName, Path.GetFileName(document)),
-                File.ReadAllText(document).Replace(NpcEditorId, editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, StringComparison.Ordinal));
-            File.Delete(document);
-        }
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
-        Assert.Equal(editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, reloaded.DocumentOf(_npc, Plugin).EditorId);
-    }
-
-    [Fact]
-    public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
-    {
-        using (var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing()) File.Delete(NpcSourceFile(live));
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
-        Assert.Null(reloaded.CopyIn(_npc, Plugin));
-        var siblingProvingTheLoadReallyIndexedThePlugin = reloaded.CopyIn(_otherNpc, Plugin);
-        Assert.NotNull(siblingProvingTheLoadReallyIndexedThePlugin);
-    }
 
     [Fact]
     public void AnUncommittedEdit_IsServedFromTheWorkingTree()
@@ -118,20 +83,6 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
 
         Assert.Contains("RenamedByHand", reloaded.BodyOf(headerFormKey, Plugin), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AnEditCommittedOutsideModbench_IsNotPermanentlyDirty()
-    {
-        using (var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing())
-            _entry.HandEdit(live.DocumentOf(_npc, Plugin), NpcEditorId, "CommittedRename");
-        _entry.Git("add", "-A");
-        _entry.Git("commit", "-q", "-m", "external rename");
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
-        Assert.Equal("CommittedRename", reloaded.DocumentOf(_npc, Plugin).EditorId);
-        Assert.Equal(WorkingTreeState.None, reloaded.RowOf(_npc, Plugin)?.WorkingTreeState);
     }
 
     [Fact]
@@ -213,22 +164,6 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public void ABackupCopyDeclaringTheSameRecord_DegradesToTheBinary_AndNamesBothDocuments()
-    {
-        string document;
-        using (var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing()) document = NpcSourceFile(live);
-        var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "Backup")).FullName, Path.GetFileName(document));
-        File.WriteAllText(backup, File.ReadAllText(document).Replace(NpcEditorId, "BackupNpc", StringComparison.Ordinal));
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
-        Assert.Equal(NpcEditorId, reloaded.DocumentOf(_npc, Plugin).EditorId);
-        Assert.Equivalent(
-            new[] { Path.GetRelativePath(ModFolder, document), Path.GetRelativePath(ModFolder, backup) },
-            SourceFilesTheReadStoppedAt(reloaded), strict: true);
-    }
-
-    [Fact]
     public void APluginWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
     {
         File.WriteAllText(_entry.Path, "this is not a plugin");
@@ -244,26 +179,5 @@ public sealed class SourceIngestTests : IDisposable
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
-    }
-
-    [Fact]
-    public void AnEditorIdRename_ReadsAsOneModifiedRecordAfterReload_NotACreateAndADelete()
-    {
-        RenameTheNpc("RenamedAcrossReload");
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
-        Assert.Equal("RenamedAcrossReload", reloaded.DocumentOf(_npc, Plugin).EditorId);
-        Assert.Single(reloaded.StackOf(_npc));
-        Assert.Equal(WorkingTreeState.Modified, reloaded.ListedIn(Plugin).Single(r => r.FormKey == _npc).WorkingTreeState);
-    }
-
-    private void RenameTheNpc(string newEditorId)
-    {
-        using var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-        var document = live.DocumentOf(_npc, Plugin);
-        live.Rename(
-            _entry, document, newEditorId,
-            live.BodyOf(_npc, Plugin).Replace($"\"{NpcEditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
     }
 }

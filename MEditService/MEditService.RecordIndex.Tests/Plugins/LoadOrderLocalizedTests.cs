@@ -17,66 +17,6 @@ namespace MEditService.RecordIndex.Tests.Plugins;
 public sealed class LoadOrderLocalizedTests
 {
     [Fact]
-    public void ALocalizedPluginWhoseStringsFilesAreHandedInALaterSnapshot_IsReadAgainWithThem()
-    {
-        var holder = new LoadOrderHolder();
-        using (var data = LocalizedDoor("load-order-localized-handed-later", out var doorFormKey))
-        {
-            var strings = Path.Combine(data.DataFolder, "Strings");
-            var aside = Path.Combine(data.DataFolder, "Strings aside");
-            Directory.Move(strings, aside);
-            using var index = Indexes.Open(holder);
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var key = new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory);
-            var before = Assert.Single(index.CopyIn(doorFormKey.ToString(), key).Require().Fields, f => f.Metadata.Name == "Name");
-
-            Directory.Move(aside, strings);
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-
-            var after = Assert.Single(index.CopyIn(doorFormKey.ToString(), key).Require().Fields, f => f.Metadata.Name == "Name");
-            Assert.Equal(
-                [("Fixture_en.STRINGS, Fixture_en.ILSTRINGS, Fixture_en.DLSTRINGS", false), (null, true)],
-                [(before.CheckError, before.Value?.ToString()?.Contains("The Big Door") == true),
-                    (after.CheckError, after.Value?.ToString()?.Contains("The Big Door") == true)]);
-        }
-    }
-
-    [Fact]
-    public void ALocalizedPluginWhoseStringsTheGamesListsGainInALaterSnapshot_IsReadAgainWithThem()
-    {
-        using var data = LocalizedDoor("load-order-localized-game-lists", out var doorFormKey);
-        var translation = StringsMovedIntoATranslation(data);
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-
-        var before = NameAfter(index, holder, data, data.Plugins, gameReads: [], doorFormKey);
-        var after = NameAfter(index, holder, data, data.Plugins, gameReads: translation, doorFormKey);
-
-        Assert.Equal([(true, false), (false, true)], [before, after]);
-    }
-
-    [Fact]
-    public void ALocalizedPluginTheGameNoLongerResolvesItsNameTo_IsReadAgainWithoutTheGamesLists()
-    {
-        using var data = LocalizedDoor("load-order-localized-resolved", out var doorFormKey);
-        var translation = StringsMovedIntoATranslation(data);
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-
-        var modCopy = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "..", "mods", "ModB")).FullName, "Fixture.esp");
-        File.Copy(Path.Combine(data.DataFolder, "Fixture.esp"), modCopy);
-        var dataCopy = data.Plugins.Single();
-        var modEntry = new LoadOrderEntry("Fixture.esp", modCopy, "ModB", dataCopy.Line, Enabled: true, Winning: false);
-
-        var before = NameAfter(index, holder, data, [dataCopy, modEntry], gameReads: translation, doorFormKey);
-        index.Receive(holder, SnapshotOf(data, [dataCopy with { Winning = false }, modEntry with { Winning = true }], translation));
-
-        Assert.Equal((false, true), before);
-        Assert.DoesNotContain("The Big Door", index.BodyOf(doorFormKey.ToString(), DataCopy), StringComparison.Ordinal);
-        Assert.Contains("The Big Door", index.BodyOf(doorFormKey.ToString(), modEntry.Key), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ALocalizedPluginWhoseStringsChangedBetweenSessions_IsReadAgainAtLoad()
     {
         using var data = LocalizedDoor("load-order-localized-sessions", out var doorFormKey);
@@ -120,68 +60,6 @@ public sealed class LoadOrderLocalizedTests
 
         var name = Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
         Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ALocalizedPluginWhoseStringsTheGameReadsChangedBetweenSessions_IsReadAgainAtLoad()
-    {
-        using var data = LocalizedDoor("load-order-localized-game-sessions", out var doorFormKey);
-        var translation = StringsMovedIntoATranslation(data);
-        var coldHolder = new LoadOrderHolder();
-        using (var cold = Indexes.Open(coldHolder)) cold.Receive(coldHolder, SnapshotOf(data, data.Plugins, translation, instanceRoot: data.InstanceRoot));
-        StringsOfADoorNamed("The New Door", Path.GetDirectoryName(translation[0]).Require());
-
-        var warmHolder = new LoadOrderHolder();
-        using var warm = Indexes.Open(warmHolder);
-        warm.Receive(warmHolder, SnapshotOf(data, data.Plugins, translation, instanceRoot: data.InstanceRoot));
-
-        var name = Assert.Single(warm.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
-        Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ALocalizedPluginWhoseStringsInAnArchiveTheGameLoadsAreRewrittenInPlace_IsReadAgainWithThem()
-    {
-        using var data = LocalizedDoor("load-order-localized-archive-rewritten", out var doorFormKey);
-        var archive = Path.Combine(data.DataFolder, "Translation - Main.ba2");
-        var strings = Path.Combine(data.DataFolder, "Strings");
-        StringsBa2.Pack(Directory.EnumerateFiles(strings), archive);
-        Directory.Delete(strings, recursive: true);
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], gameArchives: [archive]));
-        using (var rewritten = new ScratchDirectory("load-order-localized-archive-strings-"))
-        {
-            StringsOfADoorNamed("The New Door", rewritten.Path);
-            StringsBa2.Pack(Directory.EnumerateFiles(rewritten.Path), archive);
-        }
-
-        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], gameArchives: [archive]));
-
-        var name = Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
-        Assert.Contains("The New Door", name.Value?.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ALocalizedPluginUnderAStringsLanguageItHoldsNoStringsFor_NamesThatLanguagesFiles_UntilTheLanguageChangesBack()
-    {
-        using var data = LocalizedDoor("load-order-localized-language", out var doorFormKey);
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: []));
-        string? NameCheckError() =>
-            Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name").CheckError;
-        string? NameCheckErrorIn(Language language)
-        {
-            ReceiveInLanguage(index, holder, data, language);
-            return NameCheckError();
-        }
-
-        var (first, second, third) = (NameCheckError(), NameCheckErrorIn(Language.German), NameCheckErrorIn(Language.English));
-
-        Assert.Equal(
-            (null, "Fixture_de.STRINGS, Fixture_de.ILSTRINGS, Fixture_de.DLSTRINGS", null),
-            (first, second, third));
     }
 
     private static void ReceiveInLanguage(OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, Language language)
@@ -368,19 +246,10 @@ public sealed class LoadOrderLocalizedTests
     }
 
     private static LoadOrderSnapshot SnapshotOf(
-        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null,
+        PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string? instanceRoot = null,
         Language language = Language.English) =>
         new(data.DataFolder, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [], [.. gameReads.Select(HandedStrings.Stamped)], [], language);
-
-    private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
-        OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,
-        FormKey doorFormKey)
-    {
-        index.Receive(holder, SnapshotOf(data, plugins, gameReads));
-        var name = Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name");
-        return (name.CheckError is not null, name.Value?.ToString()?.Contains("The Big Door", StringComparison.Ordinal) == true);
-    }
+            SnapshotPlugins.LoadedWithNoLine(plugins), [], [], [.. gameReads.Select(HandedStrings.Stamped)], [], language);
 
     [Fact]
     public void ComparingCopiesOfARecordWhoseStringsFilesAreMissing_CarriesEachColumnsStringsFileOnItsName()

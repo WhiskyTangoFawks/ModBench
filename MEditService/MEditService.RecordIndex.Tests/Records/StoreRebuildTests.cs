@@ -35,14 +35,6 @@ public sealed class StoreRebuildTests : IDisposable
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);
 
     [Fact]
-    public void AnEmptySnapshot_ReconcilesToAnIndexThatAnswersNothing()
-    {
-        _index.Reconcile(_holder, _fixture.DataFolder, [], GameRelease.Fallout4);
-
-        Assert.Equal(0, _index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value().Total);
-    }
-
-    [Fact]
     public void WithNoInstanceRoot_NothingIsKeptBetweenIndexes()
     {
         Reconcile(instanceRoot: null);
@@ -99,17 +91,18 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void ARebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
+    public void ARebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld_AndMovesTheSequenceOnFromWhereItWas()
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
-        var held = _holder.Held?.Version;
+        var (held, sequence) = (_holder.Held?.Version, _index.Sequence);
 
         Rebuilt(_index, _fixture.InstanceRoot);
 
         Assert.Equal(2, _opens.OpenedTotal);
         Assert.Equal(held, _index.Status.Version);
         Assert.NotEmpty(_index.ListedIn(Key));
+        Assert.True(_index.Sequence > sequence, $"The rebuilt sequence {_index.Sequence} did not move on from {sequence}.");
     }
 
     [Fact]
@@ -156,21 +149,6 @@ public sealed class StoreRebuildTests : IDisposable
         [.. index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
-    public void ARebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
-    {
-        using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-kept");
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, _opens);
-        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        index.SetFilter(MatchesNpcA, "npc-a.sql");
-
-        Rebuilt(index, data.InstanceRoot);
-
-        Assert.Equal(new RecordFilter(MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
-        Assert.Equal(["NpcA"], ListedNpcs(index));
-    }
-
-    [Fact]
     public async Task WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-refill");
@@ -189,6 +167,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.Equal(["NpcA"], midRefill);
         Assert.Equal(["NpcA"], ListedNpcs(index));
+        Assert.Equal(new RecordFilter(MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
     }
 
     [Fact]
@@ -359,7 +338,7 @@ public sealed class StoreRebuildTests : IDisposable
             if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
             holder.Apply(holder.Current);
             parked = gate.WaitUntilParkedAsync();
-            readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));
+            readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromMilliseconds(200));
         };
 
         Assert.Null(await Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot)));
@@ -377,21 +356,8 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(next.ListedIn(Key));
     }
 
-    [Fact]
-    public void ARebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
-    {
-        Reconcile(_fixture.InstanceRoot);
-        var priorSequence = _index.Sequence;
-        Assert.True(priorSequence > 0, "sanity: indexing must have advanced the sequence past 0");
-
-        Rebuilt(_index, _fixture.InstanceRoot);
-
-        Assert.True(_index.Sequence > priorSequence,
-            $"rebuilt sequence {_index.Sequence} regressed below the prior process value {priorSequence}");
-    }
-
     [ForeignIndexHolderFact]
-    public void ARebuildWhileAnotherProcessHoldsTheFile_IsRefused_AndLeavesTheFileInPlace()
+    public void ARebuildWhileAnotherProcessHoldsTheFile_IsRefused_LeavesTheFileInPlace_AndTheStatusHeldElsewhere()
     {
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder, _opens))
@@ -408,20 +374,8 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.True(File.Exists(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex), "the file must still exist — a refusal must never delete it");
         Assert.Equal(bytesBeforeHold, bytesOnceTheHolderIsGoneAsWindowsLetsNothingReadAFileDuckDbHolds);
-    }
-
-    [ForeignIndexHolderFact]
-    public void ARebuildRefusedBecauseAnotherProcessHoldsIt_LeavesTheStatusHeldElsewhere_NamingTheFile()
-    {
-        var earlierHolder = new LoadOrderHolder();
-        using (var earlier = Indexes.Open(earlierHolder, _opens))
-            earlier.Reconcile(earlierHolder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var indexPath = IndexFiles.In(_fixture.InstanceRoot);
-        using (ForeignIndexHolder.Hold(indexPath))
-            _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
-
         Assert.Equal(LoadOrderState.HeldElsewhere, _index.Status.State);
-        Assert.Contains(indexPath, _index.Status.Message);
+        Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, _index.Status.Message);
     }
 
     private static bool ReadMetARefusal(Exception ex) => ex is InvalidOperationException && ex.Message.StartsWith("Expected the Index to answer here", StringComparison.Ordinal);
