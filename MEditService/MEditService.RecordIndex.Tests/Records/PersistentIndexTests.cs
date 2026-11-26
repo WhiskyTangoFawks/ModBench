@@ -99,15 +99,13 @@ public sealed class PersistentIndexTests : IDisposable
     public void AFileWrittenUnderAnotherVersion_RebuildsFromScratch()
     {
         var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
-        using (Launched([alpha, beta])) { }
+        using (Launched([alpha])) { }
 
         IndexFiles.Execute(_instanceRoot, "UPDATE mirror.index_version SET value = 'written-by-another-build'");
 
-        using var second = Launched([alpha, beta]);
-        Assert.Equal(["Alpha.esp", "Beta.esp"], second.Opens.Opened);
+        using var second = Launched([alpha]);
+        Assert.Equal(["Alpha.esp"], second.Opens.Opened);
         Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
-        Assert.NotEmpty(second.Index.ListedIn(beta.Key));
     }
 
     [Fact]

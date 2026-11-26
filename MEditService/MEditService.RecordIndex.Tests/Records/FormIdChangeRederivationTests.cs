@@ -13,63 +13,67 @@ namespace MEditService.RecordIndex.Tests.Records;
 
 public sealed class FormIdChangeRederivationTests : IDisposable
 {
-    private readonly IndexedContainerMod _mod = new();
-    private OpenedIndex Index => _mod.Index;
+    private readonly Lazy<IndexedContainerMod> _container = new(() => new IndexedContainerMod());
+    private IndexedContainerMod Mod => _container.Value;
+    private OpenedIndex Index => Mod.Index;
 
-    public void Dispose() => _mod.Dispose();
+    public void Dispose()
+    {
+        if (_container.IsValueCreated) _container.Value.Dispose();
+    }
 
     private IEnumerable<ChildRecordSummary> ChildrenOf(string cellKey)
     {
-        var children = Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value();
+        var children = Index.Queries.GetCellChildRecords(Mod.Plugin, cellKey).Value();
         return children.Persistent.Concat(children.Temporary);
     }
 
     private string EmbeddedNavmeshKeyReadFromTheLiveChildRows =>
-        ChildrenOf(_mod.EmbedCell).Single(c => c.RecordType == "navm").FormKey;
+        ChildrenOf(Mod.EmbedCell).Single(c => c.RecordType == "navm").FormKey;
 
     private bool HoldsNavmesh(string cellKey, string navmeshKey) =>
-        Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary
+        Index.Queries.GetCellChildRecords(Mod.Plugin, cellKey).Value().Temporary
             .Any(c => c.FormKey == navmeshKey && c.RecordType == "navm");
 
     private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextCheck(string oldFormKey, string newFormKey, string newBody)
     {
-        var repository = SourceMods.RepositoryOf(_mod.Entry);
-        var current = Index.DocumentOf(oldFormKey, _mod.Plugin);
-        repository.Put(_mod.Plugin, new SourceDocument(newFormKey, current.RecordType, current.EditorId, newBody)).Wrote();
-        repository.Remove(_mod.Plugin, new RecordIdentity(oldFormKey, current.RecordType, current.EditorId)).Wrote();
-        _mod.Index.NextCheck();
+        var repository = SourceMods.RepositoryOf(Mod.Entry);
+        var current = Index.DocumentOf(oldFormKey, Mod.Plugin);
+        repository.Put(Mod.Plugin, new SourceDocument(newFormKey, current.RecordType, current.EditorId, newBody)).Wrote();
+        repository.Remove(Mod.Plugin, new RecordIdentity(oldFormKey, current.RecordType, current.EditorId)).Wrote();
+        Mod.Index.NextCheck();
     }
 
     [Fact]
     public void ChangingTheFormIdOfAContainersOwnRecord_RepointsItsChildrensRows_AndTheOldKeyAnswersNothing()
     {
-        var oldCellKey = _mod.EmbedCell;
+        var oldCellKey = Mod.EmbedCell;
         var navmesh = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string newCellKey = "F00010:ContainerFixture.esp";
-        var before = _mod.Entry.SourceTextOf(Index.DocumentOf(oldCellKey, _mod.Plugin));
+        var before = Mod.Entry.SourceTextOf(Index.DocumentOf(oldCellKey, Mod.Plugin));
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
         Assert.NotEqual(before, newBody);
 
         ChangeFormIdWithATwoSidedPutAndRemoveThenNextCheck(oldCellKey, newCellKey, newBody);
 
         Assert.True(HoldsNavmesh(newCellKey, navmesh));
-        Assert.Equal("temporary", Index.PlacementGroupIn(_mod.Plugin, newCellKey, _mod.TemporaryRef));
+        Assert.Equal("temporary", Index.PlacementGroupIn(Mod.Plugin, newCellKey, Mod.TemporaryRef));
 
-        Assert.Null(Index.CopyIn(oldCellKey, _mod.Plugin));
+        Assert.Null(Index.CopyIn(oldCellKey, Mod.Plugin));
         Assert.Empty(ChildrenOf(oldCellKey));
     }
 
     [Fact]
     public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsChildRow_InFormIdOrderAmongItsCellsTemporaryChildren()
     {
-        var cellKey = _mod.EmbedCell;
+        var cellKey = Mod.EmbedCell;
         var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string lowerNavmeshKey = "000001:ContainerFixture.esp";
-        var document = Index.DocumentOf(cellKey, _mod.Plugin);
+        var document = Index.DocumentOf(cellKey, Mod.Plugin);
 
-        Index.Edit(_mod.Entry, document, _mod.Entry.SourceTextOf(document).Replace(oldNavmeshKey, lowerNavmeshKey, StringComparison.Ordinal));
+        Index.Edit(Mod.Entry, document, Mod.Entry.SourceTextOf(document).Replace(oldNavmeshKey, lowerNavmeshKey, StringComparison.Ordinal));
 
-        Assert.Equal(lowerNavmeshKey, Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary[0].FormKey);
+        Assert.Equal(lowerNavmeshKey, Index.Queries.GetCellChildRecords(Mod.Plugin, cellKey).Value().Temporary[0].FormKey);
         Assert.False(HoldsNavmesh(cellKey, oldNavmeshKey));
     }
 
