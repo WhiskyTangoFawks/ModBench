@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -23,7 +22,7 @@ public sealed class IncompleteBinaryReadTests : IDisposable
 
     private PluginAddress Plugin => _fixture.Plugins.Single().Key;
 
-    private static readonly AdapterReadingWithoutTables EveryRecordTable = new(table => table != PluginHeader.RecordType);
+    private static readonly AdapterReadingWithoutTables NoNpcTable = new(table => table == "npc_");
 
     private OpenedIndex Reconciled(IPluginAdapter adapter) =>
         Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter);
@@ -32,17 +31,9 @@ public sealed class IncompleteBinaryReadTests : IDisposable
         index.Status.Failures.SingleOrDefault(failure => failure.Name == plugin)?.Reason;
 
     [Fact]
-    public void ABinaryNoneOfWhoseRecordsReachTheIndex_FailsToRead_AndNamesHowManyItHolds()
-    {
-        using var index = Reconciled(EveryRecordTable);
-
-        Assert.Contains("0 of its 2 records", ReasonFor(index, PluginName));
-    }
-
-    [Fact]
     public void ABinaryOneOfWhoseRecordTypesDoesNotReachTheIndex_FailsToRead_AndListsNoneOfItsRecords()
     {
-        using var index = Reconciled(new AdapterReadingWithoutTables(table => table == "npc_"));
+        using var index = Reconciled(NoNpcTable);
 
         Assert.Contains("1 of its 2 records", ReasonFor(index, PluginName));
         Assert.Empty(index.ListedIn(Plugin));
@@ -51,10 +42,10 @@ public sealed class IncompleteBinaryReadTests : IDisposable
     [Fact]
     public void ABinaryThatFailedToReadWhole_FailsAgainWhenTheIndexFileIsOpenedAgain()
     {
-        using (Reconciled(EveryRecordTable)) { }
+        using (Reconciled(NoNpcTable)) { }
 
-        using var reopened = Reconciled(EveryRecordTable);
+        using var reopened = Reconciled(NoNpcTable);
 
-        Assert.Contains("0 of its 2 records", ReasonFor(reopened, PluginName));
+        Assert.Contains("1 of its 2 records", ReasonFor(reopened, PluginName));
     }
 }

@@ -69,28 +69,16 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
         return [.. _notifications.Since(before)];
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ABuildReadBack_IsAnsweredOnceTheRecordIndexHoldsItsHeader_WhetherItAddsAMasterOrDropsOne(bool dropsMaster)
-    {
-        if (dropsMaster)
-        {
-            WriteBuilt(referencingMaster: true);
-            ReadWrittenBuilt([Master]);
-        }
-        WriteBuilt(referencingMaster: !dropsMaster);
-        Assert.Null(await _index.Queries.Hold([HandedPlugin.ReadBack(_built.Key)], CancellationToken.None).WaitAsync(Generous));
-
-        Assert.Equal(dropsMaster ? [] : [Master], MastersOfBuilt());
-    }
-
     [Fact]
-    public void ACompiledFileRewrittenOutsideModbench_ReachesItsMasters()
+    public async Task ABuildReadBack_IsAnsweredOnceTheRecordIndexHoldsItsHeader_AndItsPluginIsAnnounced()
     {
         WriteBuilt(referencingMaster: true);
+        var before = _notifications.Notifications.Count;
 
-        ReadWrittenBuilt([Master]);
+        Assert.Null(await _index.Queries.Hold([HandedPlugin.ReadBack(_built.Key)], CancellationToken.None).WaitAsync(Generous));
+
+        Assert.Equal([Master], MastersOfBuilt());
+        Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_built)(n)), "the built plugin's announcement");
     }
 
     [Theory]
@@ -106,17 +94,6 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
         SignalNamingBuiltAndTheBystanderUntilTheBystanderIsRead();
 
         Assert.Equal([Master], MastersOfBuilt());
-    }
-
-    [Fact]
-    public void AHeaderThatChanged_AnnouncesItsPluginChanged()
-    {
-        WriteBuilt(referencingMaster: true);
-        var before = _notifications.Notifications.Count;
-
-        _index.SignalChange([_built.Key]);
-
-        Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_built)(n)), "the built plugin's announcement");
     }
 
     [Fact]

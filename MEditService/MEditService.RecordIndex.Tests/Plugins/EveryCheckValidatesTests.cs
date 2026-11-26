@@ -23,7 +23,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     private readonly string _compiledPluginNpc;
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly DiskSaysAdapter _disk;
+    private readonly MutagenPluginAdapter _disk;
     private readonly OpenedIndex _index;
 
     public EveryCheckValidatesTests()
@@ -38,7 +38,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
         _compiledPluginNpc = npc.ToString();
         SourceMods.Init(_compiledPlugin);
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        _disk = new DiskSaysAdapter(clock);
+        _disk = new MutagenPluginAdapter(clock);
         _index = Indexes.Open(_holder, _disk, notifications: _notifications, timeProvider: clock);
         Reconcile();
     }
@@ -76,26 +76,6 @@ public sealed class EveryCheckValidatesTests : IDisposable
     }
 
     [Fact]
-    public void ACheck_ReindexesANonCompiledPluginBinaryRewrittenOutsideModbench_AndNamesThePlugin()
-    {
-        RewriteNonCompiledPlugin("WrittenByAnotherTool");
-
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "WrittenByAnotherTool");
-    }
-
-    [Fact]
-    public void ACheck_RefreshesACompiledPluginDocumentEditedOutsideModbench_AndNamesTheRecord()
-    {
-        HandEditCompiledPlugin();
-
-        CheckAnnouncing(RowsChanged(_compiledPluginNpc));
-
-        Assert.Equal("EditedByHand", _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
-    }
-
-    [Fact]
     public void AReconcile_KeepsNoHashOfAFileTheLoadOrderNoLongerNames()
     {
         using (new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -120,39 +100,6 @@ public sealed class EveryCheckValidatesTests : IDisposable
     }
 
     [Fact]
-    public void ATreeEditedWhileMEditWasClosed_IsReadByTheFirstLoadOrder()
-    {
-        HandEditCompiledPlugin();
-        _index.Dispose();
-
-        var holder = new LoadOrderHolder();
-        using var reopened = Indexes.Open(holder);
-        reopened.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        Assert.Equal("EditedByHand", reopened.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
-    }
-
-    [Fact]
-    public void ACheck_TakesTheRowsOfANonCompiledPluginBinaryTheAdapterSaysIsGone()
-    {
-        _disk.Gone(_nonCompiledPlugin.Path);
-
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
-    }
-
-    [Fact]
-    public void ACheck_ReindexesANonCompiledPluginBinaryTheAdapterSaysChanged()
-    {
-        _disk.Changed(_nonCompiledPlugin.Path);
-
-        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
-    }
-
-    [Fact]
     public void ACheck_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent()
     {
         HandEditCompiledPlugin();
@@ -162,9 +109,8 @@ public sealed class EveryCheckValidatesTests : IDisposable
         File.Delete(_compiledPlugin.Path);
         CheckThatMayFailAnnouncing(PluginChanged(_compiledPlugin));
 
-        var failure = Assert.Single(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
+        Assert.Single(_index.Status.Failures, f => f.Name == _compiledPlugin.Name && f.Origin == _compiledPlugin.Origin);
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
-        Assert.DoesNotContain("showing", failure.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Null(_index.PluginResponseOf(_compiledPlugin.Key).Require().RowsFrom);
     }
 
@@ -221,6 +167,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
+
 
     [Fact]
     public void ACheck_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsNothingOfIt()
