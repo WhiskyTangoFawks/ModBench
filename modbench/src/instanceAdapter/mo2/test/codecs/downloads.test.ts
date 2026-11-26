@@ -145,6 +145,10 @@ describe('the Nexus file info written to a downloaded file\'s .meta', () => {
     ].join('\r\n'));
   });
 
+  it('writes a fresh .meta in CRLF, though a time is the last key it holds', async () => {
+    expect(await written(undefined, { game: 'fallout4', modID: '4598', fileTime: 1_704_164_645_000 })).toMatch(/^\[General\]\r\ngameName=Fallout4\r\nmodID=4598\r\nfileTime=[^\r\n]+\r\n$/);
+  });
+
   it.each([
     ['the newest version the metadata records', '[General]\r\nnewestVersion=2.0\r\n', 'version=2.0.0.0'],
     ['zero when the metadata records none', undefined, 'version=0.0.0.0'],
