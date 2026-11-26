@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { folderTokens, tokenFilter, type PathSpelling, type TokenFolders } from '../pathTokens';
@@ -20,32 +20,24 @@ afterEach(async () => {
   await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
 });
 
-async function repositoryFiltering(folders: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'modbench-token-filter-'));
-  made.push(root);
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
-  git('init', '--quiet');
-  git('config', 'core.autocrlf', 'false');
-  const directory = join(root, '.git', 'modbench');
+// Git runs a filter's command in its own shell, as an alias's, which needs no repository.
+const filtered = (command: string | undefined, text: string): string =>
+  execFileSync('git', ['-c', `alias.filtered=!${command ?? ''}`, 'filtered'], { input: text, encoding: 'utf8' });
+
+async function filterConfig(folders: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): Promise<Readonly<Record<string, string>>> {
+  const directory = await mkdtemp(join(tmpdir(), 'modbench-token-filter-'));
+  made.push(directory);
   const { config, programFiles } = tokenFilter(DRIVER, directory, folderTokens(folders, platform, spelling));
-  await mkdir(directory);
   for (const [file, text] of Object.entries(programFiles)) await writeFile(file, text);
-  for (const [key, value] of Object.entries(config)) git('config', key, value);
-  await writeFile(join(root, '.git', 'info', 'attributes'), `* filter=${DRIVER}\n`);
-  return root;
+  return config;
 }
 
 async function heldByGit(folders: TokenFolders, platform: NodeJS.Platform, text: string, spelling = WINDOWS_PROGRAMS): Promise<string> {
-  const root = await repositoryFiltering(folders, platform, spelling);
-  await writeFile(join(root, 'file.ini'), text);
-  execFileSync('git', ['add', 'file.ini'], { cwd: root });
-  return execFileSync('git', ['cat-file', 'blob', ':file.ini'], { cwd: root, encoding: 'utf8' });
+  return filtered((await filterConfig(folders, platform, spelling))[`filter.${DRIVER}.clean`], text);
 }
 
 async function checkedOutByGit(folders: TokenFolders, platform: NodeJS.Platform, held: string, spelling = WINDOWS_PROGRAMS): Promise<string> {
-  const root = await repositoryFiltering(folders, platform, spelling);
-  const blob = execFileSync('git', ['hash-object', '-w', '--no-filters', '--stdin'], { cwd: root, input: held, encoding: 'utf8' }).trim();
-  return execFileSync('git', ['cat-file', '--filters', '--path=file.ini', blob], { cwd: root, encoding: 'utf8' });
+  return filtered((await filterConfig(folders, platform, spelling))[`filter.${DRIVER}.smudge`], held);
 }
 
 const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4', downloads: '//nas/share/Downloads', committedOutsideInstance: [] };
@@ -56,10 +48,9 @@ describe('the token filter', () => {
   it('cleans and smudges folders whose paths no inline program could carry in a Windows command line', async () => {
     const long = (name: string): string => `C:\\${Array.from({ length: 12 }, (_, at) => `${name}${at}`.padEnd(40, 'x')).join('\\')}`;
     const folders: TokenFolders = { instance: long('instance'), game: long('game'), downloads: long('downloads'), committedOutsideInstance: [] };
-    const root = await repositoryFiltering(folders, 'win32', WINDOWS_PROGRAMS);
-    const configured = execFileSync('git', ['config', '--get-regexp', '^filter\\.'], { cwd: root, encoding: 'utf8' });
+    const config = await filterConfig(folders, 'win32', WINDOWS_PROGRAMS);
 
-    expect(Math.max(...configured.split('\n').map((line) => line.length))).toBeLessThan(500);
+    expect(Math.max(...Object.entries(config).map(([key, value]) => `${key} ${value}`.length))).toBeLessThan(500);
     expect(await heldByGit(folders, 'win32', `x=${folders.downloads}\\a.7z`)).toBe('x={downloads folder:\\}\\a.7z');
     expect(await checkedOutByGit(folders, 'win32', 'x={game folder:/}/Data')).toBe(`x=${folders.game?.replaceAll('\\', '/')}/Data`);
   });

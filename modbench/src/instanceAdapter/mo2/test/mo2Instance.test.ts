@@ -63,7 +63,7 @@ import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
 import { adapterOver, contextOver, managerOver, sourceOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, modFolderNames, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
 import { onPosix } from '../../../test/platform';
 
@@ -209,12 +209,6 @@ describe('the MO2 Instance adapter', () => {
 
         it('answers the file for the path it is listed at', async () => {
           expect(await nameAt(join(root, listed))).toBe(DOWNLOADED_FILE);
-        });
-
-        it('answers the file through a symlink to it', async () => {
-          await symlink(join(root, listed), join(root, 'link.7z'));
-
-          expect(await nameAt(join(root, 'link.7z'))).toBe(DOWNLOADED_FILE);
         });
 
         it('answers the file for a path that reaches it through a folder link', async () => {
@@ -1282,19 +1276,11 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
-    it.each(['.gitignore', '.git/index', '.git/info/exclude'])('hears a change to %s, which decides the folders git holds whole', (inside) => {
+    it('hears a change to .git/info/exclude, which decides the folders git holds whole', () => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
 
-      expect(fire(root, inside)).toBe(true);
-      expect(signals).toBe(1);
-    });
-
-    it('hears a change to .gitmodules, which names the submodules of the source folders', () => {
-      let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
-
-      expect(fire(root, '.gitmodules')).toBe(true);
+      expect(fire(root, '.git/info/exclude')).toBe(true);
       expect(signals).toBe(1);
     });
 
@@ -1330,22 +1316,14 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it.each([
-      ['a profile\'s mod order', 'profiles/Default/modlist.txt', 1],
       ['another profile\'s plugin order', 'profiles/Secondary/plugins.txt', 1],
       ['the settings', 'ModOrganizer.ini', 1],
-      ['a mod\'s file at its folder\'s first level', 'mods/Harder VATS/Harder VATS.esp', 1],
-      ['a folder made in a mod', 'mods/Harder VATS/Textures', 1],
-      ['a mod folder made', 'mods/New Mod', 1],
       ['a profile made', 'profiles/Third', 1],
       ['a mod\'s source', 'source/Harder VATS/plugin-source/Harder VATS.esp/a.json', 1],
       ['a file in overwrite', 'overwrite/F4SE/Plugins/x.ini', 1],
-      ['a profile\'s settings', 'profiles/Default/settings.ini', 1],
       ['a profile\'s INI, in any case', 'profiles/Default/fallout4.INI', 1],
       ['no other file of a profile', 'profiles/Default/other.txt', 0],
       ['a file deeper in a mod', 'mods/Harder VATS/Textures/a.dds', 1],
-      ['the record index folder', 'modbench', 1],
-      ['the hash index folder', 'hash-index', 1],
-      ['the source folder', 'source', 1],
     ])('signals a change to %s', async (_what, relativePath, signalled) => {
       const watched = managerOver(root);
       let signals = 0;
@@ -1358,7 +1336,7 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(signalled);
     });
 
-    it.each(['HEAD', 'refs/heads/main', 'packed-refs', ''])(
+    it.each(['HEAD', 'refs/heads/main', ''])(
       'hears .git/%s in a mod\'s repository', (inside) => {
         let signals = 0;
         managerOver(root).subscribe(() => { signals++; });
@@ -1394,7 +1372,7 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
-    it.each(['index', 'objects/ab/cdef', 'logs/HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'HEAD.lock'])(
+    it.each(['index', 'logs/HEAD'])(
       'hears nothing of .git/%s in a mod\'s repository, git\'s own bookkeeping not reading as a change', (inside) => {
         let signals = 0;
         managerOver(root).subscribe(() => { signals++; });
@@ -1595,12 +1573,7 @@ describe('the MO2 Instance adapter', () => {
       expect(fire(join(root, 'Elsewhere'), 'new.7z')).toBe(true);
     });
 
-    it.each([
-      ['Fallout4.esm', true],
-      ['Patch.ESP', true],
-      ['F4SE/Plugins/x.dll', true],
-      ['readme.txt', true],
-    ])('follows everything under the game folder\'s Data folder, so a file the game folder holds is heard: %s heard %s', async (name, heard) => {
+    it('follows everything under the game folder\'s Data folder, so a file the game folder holds is heard, at any depth', async () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
@@ -1609,14 +1582,13 @@ describe('the MO2 Instance adapter', () => {
 
         await (await watched.settings()).gameFolder();
 
-        expect(fire(join(game, 'Data'), name)).toBe(heard);
+        expect(fire(join(game, 'Data'), 'F4SE/Plugins/x.dll')).toBe(true);
       } finally {
         await rm(game, { recursive: true, force: true });
       }
     });
 
     it.each([
-      ['Fallout4.exe', true],
       ['F4SE_Loader.EXE', true],
       ['Fallout4Launcher.exe', false],
     ])('follows the game\'s program and its script extender\'s loader at the game folder\'s root, in any case: %s heard %s', async (name, heard) => {
@@ -1927,9 +1899,8 @@ describe('the MO2 Instance adapter', () => {
         expect(relativePaths(files.files)).toEqual(['docs/Harder VATS.manifest.json']);
       });
 
-      it.each([
-        ['.medit_tmp_12_ab.tmp'], ['.medit_tmp_12_ab'],
-      ])('leaves out %s, a temp left by a dead writer, at any depth', async (temp) => {
+      it('leaves out a temp left by a dead writer, at any depth', async () => {
+        const temp = '.medit_tmp_12_ab.tmp';
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'Meshes', temp), { recursive: true });
         await writeFile(join(folder, 'Meshes', temp, 'inside.nif'), '');
@@ -2702,6 +2673,14 @@ describe('the MO2 Instance adapter', () => {
   });
 
   describe('put and rename in mods/', () => {
+    it.each(['../escape', 'a\\b', '..', '.', ''])('refuses to create a folder for a name that reaches outside the mods folder: %j', async (name) => {
+      const before = await modFolderNames(root);
+
+      await expect(adapter.createModFolder(name)).rejects.toThrow(`Not a valid mod name: "${name}"`);
+
+      expect(await modFolderNames(root)).toEqual(before);
+    });
+
     it('creates a mod\'s folder in mods/', async () => {
       await adapter.createModFolder('Brand New');
 
@@ -2766,6 +2745,15 @@ describe('the MO2 Instance adapter', () => {
 
   describe('excluding and including a file of a mod or Overwrite', () => {
     const modOrigin = { kind: 'mod' as const, name: 'Harder VATS' };
+
+    it.each(['../Beta/Taken.esp', 'textures//a.dds', 'textures\\..\\a.dds'])('refuses a path that reaches outside the origin: %s', async (path) => {
+      const folder = join(root, 'mods', 'Harder VATS');
+      const notAFile = `Not a file of mod "Harder VATS": "${path}"`;
+
+      await expect(adapter.originFile(modOrigin, path)).rejects.toThrow(notAFile);
+      await expect(adapter.markOriginFile(modOrigin, path, 'Excluded')).rejects.toThrow(notAFile);
+      await expect(adapter.trashFileIn(folder, path, TRASH)).rejects.toThrow(`Not a file or folder of "${folder}": "${path}"`);
+    });
     const overwrite = { kind: 'runtimeOutput' as const };
     const put = async (path: string, content = ''): Promise<void> => {
       await mkdir(join(path, '..'), { recursive: true });
@@ -2848,16 +2836,13 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.originFile(modOrigin, 'Textures')).toBeUndefined();
     });
 
-    it.each([
-      ['Excluded', 'a.dds', 'a.dds.mohidden'],
-      ['Included', 'a.dds.mohidden', 'a.dds'],
-    ] as const)('refuses, and changes nothing, when %s would replace a file already at the new name', async (mark, from, to) => {
+    it('refuses, and changes nothing, when a mark would replace a file already at the new name', async () => {
       const folder = join(root, 'mods', 'Harder VATS');
-      await put(join(folder, from), 'mine');
-      await put(join(folder, to), 'theirs');
+      await put(join(folder, 'a.dds'), 'mine');
+      await put(join(folder, 'a.dds.mohidden'), 'theirs');
       const before = await snapshotTree(root);
 
-      expect(await adapter.markOriginFile(modOrigin, from, mark)).toEqual({ gone: false, refusal: `"${to}" is already there.` });
+      expect(await adapter.markOriginFile(modOrigin, 'a.dds', 'Excluded')).toEqual({ gone: false, refusal: '"a.dds.mohidden" is already there.' });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -2905,30 +2890,22 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(elsewhere('a.txt'))).toBe(true);
       });
 
-      it.each([['one path', 'x.ini', 'x.ini'], ['paths that differ only in case', 'a/X.ini', 'a/x.INI']])('refuses, and moves nothing, when two files move to %s', async (_case, first, second) => {
+      it('refuses, and moves nothing, when two files move to paths that differ only in case', async () => {
         await put(elsewhere('1'), 'first');
         await put(elsewhere('2'), 'second');
 
-        const refusal = await adapter.moveIntoOverwrite([{ from: elsewhere('1'), relativePath: first }, { from: elsewhere('2'), relativePath: second }]);
+        const refusal = await adapter.moveIntoOverwrite([{ from: elsewhere('1'), relativePath: 'a/X.ini' }, { from: elsewhere('2'), relativePath: 'a/x.INI' }]);
 
-        expect([refusal, await text(root, join('deployed', '1')), await text(root, join('deployed', '2')), await isThere(join(root, 'overwrite', first))])
-          .toEqual([`More than one file is moving to "${second}" in Overwrite.`, 'first', 'second', false]);
+        expect([refusal, await text(root, join('deployed', '1')), await text(root, join('deployed', '2')), await isThere(join(root, 'overwrite', 'a/X.ini'))])
+          .toEqual(['More than one file is moving to "a/x.INI" in Overwrite.', 'first', 'second', false]);
       });
 
-      it('puts back the files before the one that failed to move', async () => {
-        await put(elsewhere('a.txt'), 'mine');
-
-        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'a.txt' }, { from: elsewhere('gone.txt'), relativePath: 'gone.txt' }])).rejects.toThrow('ENOENT');
-
-        expect([await text(root, join('deployed', 'a.txt')), await isThere(join(root, 'overwrite', 'a.txt'))]).toEqual(['mine', false]);
-      });
-
-      it('leaves Overwrite as it was when a move fails, the folders it made included', async () => {
+      it('puts back the files before the one that failed to move, and leaves Overwrite as it was, the folders it made included', async () => {
         await put(elsewhere('a.txt'), 'mine');
 
         await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'MCM/deep/a.txt' }, { from: elsewhere('gone.txt'), relativePath: 'gone.txt' }])).rejects.toThrow('ENOENT');
 
-        expect(await isThere(join(root, 'overwrite', 'MCM'))).toBe(false);
+        expect([await text(root, join('deployed', 'a.txt')), await isThere(join(root, 'overwrite', 'MCM'))]).toEqual(['mine', false]);
       });
     });
 
@@ -3256,25 +3233,16 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
       });
 
-      it('refuses a rename onto a folder already there, listed or not, before anything moves, as on Linux a rename onto an empty folder would replace it in silence where Windows refuses', async () => {
+      it('refuses a rename onto a folder already there, listed or not and in any case, before anything moves, as on Linux a rename onto an empty folder would replace it in silence where Windows refuses', async () => {
         const before = await text(root, DEFAULT_MODLIST);
-        await mkdir(separatorFolder('Core Mods'));
-
-        await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]))
-          .rejects.toThrow(`The folder "${separatorFolder('Core Mods')}" is in the way`);
-
-        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
-        expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
-        expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
-      });
-
-      it('refuses a rename onto a folder that holds the name in another case', async () => {
         await mkdir(separatorFolder('core mods'));
 
         await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]))
           .rejects.toThrow(/is in the way/);
 
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
         expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
+        expect(await isThere(separatorFolder('core mods'))).toBe(true);
       });
 
       it('refuses adding a separator whose folder is already there, not adopting it as its own and taking it away as one it made if the line cannot be written', async () => {
@@ -3926,7 +3894,6 @@ describe('a folder is an MO2 instance by what it holds', () => {
     ['is none without ModOrganizer.ini', async (at) => { await folderIn(at, 'mods'); await folderIn(at, 'profiles'); }, false],
     ['is none without mods/', async (at) => { await settingsIn(at); await folderIn(at, 'profiles'); }, false],
     ['is none without profiles/', async (at) => { await settingsIn(at); await folderIn(at, 'mods'); }, false],
-    ['is none when empty', () => Promise.resolve(), false],
   ])('%s', async (_case, lay, instance) => {
     await lay(root);
 

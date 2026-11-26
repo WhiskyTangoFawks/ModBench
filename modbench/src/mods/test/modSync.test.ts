@@ -1,17 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('vscode', () => ({ commands: { registerCommand: vi.fn() } }));
+
+const { registerCommand } = vi.hoisted(() => ({ registerCommand: vi.fn((_id: string, _handler: () => unknown) => ({ dispose: () => undefined })) }));
+vi.mock('vscode', () => ({ commands: { registerCommand } }));
 
 import { present } from '../../ports/present';
 import { registerModSyncCommand } from '../modSync';
 
 describe('the mod sync command', () => {
   it('is modbench.mod.sync, and runs the mod sync', async () => {
-    const handlers = new Map<string, () => unknown>();
     const modSync = { run: vi.fn(() => Promise.resolve(undefined)) };
-    registerModSyncCommand(modSync, (id, handler) => { handlers.set(id, handler); return { dispose: () => undefined }; });
+    registerModSyncCommand(modSync);
 
-    await present(handlers.get('modbench.mod.sync'), 'the modbench.mod.sync handler')();
+    const [id, handler] = present(registerCommand.mock.calls[0], 'the command registered');
+    await handler();
 
-    expect([[...handlers.keys()], modSync.run.mock.calls.length]).toEqual([['modbench.mod.sync'], 1]);
+    expect([id, modSync.run.mock.calls.length]).toEqual(['modbench.mod.sync', 1]);
   });
 });

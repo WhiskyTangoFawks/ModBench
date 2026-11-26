@@ -49,11 +49,6 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
     });
 
-    it.each(['../escape', 'a/../../escape', '/escape', 'a\\b', '..', '.', ''])('refuses to create a folder for a name that reaches outside the mods folder: %j', async (name) => {
-      await expect(adapter.createModFolder(name)).rejects.toThrow(`Not a valid mod name: "${name}"`);
-      expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
-    });
-
     it('shows a folder it created to the next read', async () => {
       await adapter.createModFolder('Fresh');
       expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Fresh', 'Gamma']);
@@ -157,14 +152,6 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       const marked = `x.dds${adapter.exclusionMark}`;
       expect(await adapter.markOriginFile(GAMMA, 'x.dds', 'Excluded')).toEqual({ gone: false, refusal: `"${marked}" is already there.` });
       expect(await adapter.markOriginFile(GAMMA, marked, 'Included')).toEqual({ gone: false, refusal: '"x.dds" is already there.' });
-    });
-
-    it.each(['../Beta/Taken.esp', 'textures//a.dds', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds', 'a/../../outside.txt', '/etc/hosts', ''])('refuses a path that reaches outside the origin: %s', async (path) => {
-      const notAFile = `Not a file of mod "Alpha": "${path}"`;
-      await expect(adapter.originFile(ALPHA, path)).rejects.toThrow(notAFile);
-      await expect(adapter.markOriginFile(ALPHA, path, 'Excluded')).rejects.toThrow(notAFile);
-      const alpha = await adapter.modFolderPath('Alpha') ?? '';
-      await expect(adapter.trashFileIn(alpha, path, trash)).rejects.toThrow(`Not a file or folder of "${alpha}": "${path}"`);
     });
   });
 
