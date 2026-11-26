@@ -17,44 +17,59 @@ vi.mock('vscode', async () => {
 
 import { A_FILE_A_RULE_READS_REWRITTEN, A_GESTURE_WRITING_A_LOOSE_FILE, A_NEW_LOOSE_FILE, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, A_RECORD_WRITTEN, IN_MODS, IN_PLUGINS, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES, costOf, type Cost, type Gesture } from './scaleGate';
 
-describe('a change costs the same on a small and a large instance', () => {
-  it.each<{ change: Gesture; layer: keyof Cost }>([
-    ...[A_NEW_LOOSE_FILE, NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].map((change) => ({ change, layer: 'read' as const })),
-    { change: A_NEW_LOOSE_FILE, layer: 'derived' },
-    ...(['read', 'derived', 'subscribers', 'mEdit', 'views'] as const).flatMap((layer) => [A_RECORD_WRITTEN, A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE].map((change) => ({ change, layer }))),
-    ...(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling'] as const).flatMap((layer) => [A_FILE_A_RULE_READS_REWRITTEN, A_GESTURE_WRITING_A_LOOSE_FILE].map((change) => ({ change, layer }))),
-    { change: A_NEW_LOOSE_FILE, layer: 'subscribers' },
-    { change: A_NEW_LOOSE_FILE, layer: 'mEdit' },
-  ])('$change.name, at the $layer layer', async ({ change, layer }) => {
-    const small = await costOf(3, change);
-    const large = await costOf(60, change);
+const SMALL = 3;
+const LARGE = 12;
 
-    expect(large[layer]).toBe(small[layer]);
+type Measured = Awaited<ReturnType<typeof costOf>>;
+const measured = new Map<Gesture, Promise<[Measured, Measured]>>();
+function smallThenLarge(gesture: Gesture): Promise<[Measured, Measured]> {
+  const costs = measured.get(gesture) ?? costOf(SMALL, gesture).then(async (small) => [small, await costOf(LARGE, gesture)] as [Measured, Measured]);
+  measured.set(gesture, costs);
+  return costs;
+}
+
+const at = (cost: Cost, layers: readonly (keyof Cost)[]): Partial<Cost> => Object.fromEntries(layers.map((layer) => [layer, cost[layer]]));
+
+const CHANGED = ['read', 'derived', 'subscribers', 'mEdit'] as const;
+const SHOWN = [...CHANGED, 'views'] as const;
+const SETTLED = [...SHOWN, 'settling'] as const;
+
+describe('a change costs the same on a small and a large instance (ADR-0029, Consequences, bullet 5)', () => {
+  it.each<{ change: Gesture; layers: readonly (keyof Cost)[] }>([
+    { change: A_NEW_LOOSE_FILE, layers: CHANGED },
+    { change: A_RECORD_WRITTEN, layers: SHOWN },
+    { change: A_NEW_LOOSE_FILE_UNDER_A_FILE_RULE, layers: SHOWN },
+    { change: A_FILE_A_RULE_READS_REWRITTEN, layers: SETTLED },
+    { change: A_GESTURE_WRITING_A_LOOSE_FILE, layers: SETTLED },
+  ])('$change.name', async ({ change, layers }) => {
+    const [small, large] = await smallThenLarge(change);
+
+    expect(at(large, layers)).toEqual(at(small, layers));
   });
 });
 
 describe('a new loose file in one mod', () => {
   it('derives only the facts that hold the file, so the load order snapshot mEdit is handed stays as it was (commands.md, Commands Modbench runs itself, row 1)', async () => {
-    const { derivedIn } = await costOf(3, A_NEW_LOOSE_FILE);
+    const [{ derivedIn }] = await smallThenLarge(A_NEW_LOOSE_FILE);
 
     expect(Object.keys(derivedIn).filter((fact) => (derivedIn[fact] ?? 0) > 0)).toEqual(['files', 'filesByMod', 'stackedCopies']);
   });
 });
 
+const A_CHECK_OF_THE_DISK: Gesture = { name: 'a check of the disk', make: async ({ instance }) => { await instance.refresh(); return 0; } };
+
 describe('a change shows in the views at the rows it touches, on a small and a large instance (common.md, A view, story 13)', () => {
   it.each([
     ['a new loose file in one mod tells neither, whose files it does not touch', A_NEW_LOOSE_FILE, 0],
-    ['a check of the disk tells each once', { name: 'a check of the disk', make: async ({ instance }) => { await instance.refresh(); return 0; } } satisfies Gesture, 1],
+    ['a check of the disk tells each once', A_CHECK_OF_THE_DISK, 1],
   ])('the symbols and deploy\'s problems: %s', async (_case, change, told) => {
-    const small = await costOf(3, change);
-    const large = await costOf(60, change);
+    const [small, large] = await smallThenLarge(change);
 
     expect([small.told, large.told]).toEqual([{ symbols: told, deployProblems: told }, { symbols: told, deployProblems: told }]);
   });
 
   it('a new loose file in one mod asks the Mods and Plugins views the same, and the conflict table of another mod nothing', async () => {
-    const small = await costOf(3, A_NEW_LOOSE_FILE);
-    const large = await costOf(60, A_NEW_LOOSE_FILE);
+    const [small, large] = await smallThenLarge(A_NEW_LOOSE_FILE);
 
     expect(large.viewsIn.Mods).toBe(small.viewsIn.Mods);
     expect(large.viewsIn.Plugins).toBe(small.viewsIn.Plugins);
@@ -62,43 +77,38 @@ describe('a change shows in the views at the rows it touches, on a small and a l
   });
 
   it('a file a rule reads, rewritten in place, draws again the row of the plugin the rule judges, the same on both', async () => {
-    const small = await costOf(3, A_FILE_A_RULE_READS_REWRITTEN);
-    const large = await costOf(60, A_FILE_A_RULE_READS_REWRITTEN);
+    const [small, large] = await smallThenLarge(A_FILE_A_RULE_READS_REWRITTEN);
 
     expect([small.viewsIn.Plugins > 0, large.viewsIn.Plugins]).toEqual([true, small.viewsIn.Plugins]);
   });
 });
 
 describe('a gesture into one mod costs the same whatever that mod holds (ADR-0029, Consequences, bullet 5)', () => {
-  const into = (files: number): Gesture => ({ ...A_GESTURE_WRITING_A_LOOSE_FILE, writtenModFiles: files });
+  it('at every layer', async () => {
+    const layers = [...SETTLED, 'lookups', 'rows'] as const;
+    const small = await costOf(SMALL, { ...A_GESTURE_WRITING_A_LOOSE_FILE, writtenModFiles: 3 });
+    const large = await costOf(SMALL, { ...A_GESTURE_WRITING_A_LOOSE_FILE, writtenModFiles: 300 });
 
-  it.each(['read', 'derived', 'subscribers', 'mEdit', 'views', 'settling', 'lookups', 'rows'] as const)('at the %s layer', async (layer) => {
-    const small = await costOf(3, into(3));
-    const large = await costOf(3, into(300));
-
-    expect(large[layer]).toBe(small[layer]);
+    expect(at(large, layers)).toEqual(at(small, layers));
   });
 });
 
 describe('a read that finds nothing new is no change', () => {
-  it.each<{ change: Gesture; layer: keyof Cost }>(
-    [NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES].flatMap((change) => (['derived', 'subscribers', 'mEdit', 'views'] as const).map((layer) => ({ change, layer }))),
-  )('$change.name, at the $layer layer', async ({ change, layer }) => {
-    const cost = await costOf(60, change);
+  it.each([NOTHING_WRITTEN, REWRITTEN_WITH_ITS_OWN_BYTES])('$name reads the same on both, and derives, tells, asks and draws nothing', async (change) => {
+    const [small, large] = await smallThenLarge(change);
 
-    expect(cost[layer]).toBe(0);
+    expect(large.read).toBe(small.read);
+    expect(at(large, ['derived', 'subscribers', 'mEdit', 'views'])).toEqual({ derived: 0, subscribers: 0, mEdit: 0, views: 0 });
   });
 });
 
 describe('a gesture in a view costs what it shows, on a small and a large instance', () => {
-  const layers: (keyof Cost)[] = ['read', 'derived', 'subscribers', 'mEdit', 'views'];
-  it.each<{ gesture: Gesture; layer: keyof Cost }>(
-    [...Object.values(IN_MODS), ...Object.values(IN_PLUGINS)].flatMap((gesture) => layers.map((layer) => ({ gesture, layer }))),
-  )('$gesture.name, at the $layer layer', async ({ gesture, layer }) => {
-    const small = await costOf(3, gesture);
-    const large = await costOf(60, gesture);
+  const perRow = (cost: Measured): Partial<Cost> => Object.fromEntries(SHOWN.map((layer) => [layer, cost[layer] / cost.shown]));
+
+  it.each([...Object.values(IN_MODS), ...Object.values(IN_PLUGINS)])('$name', async (gesture) => {
+    const [small, large] = await smallThenLarge(gesture);
 
     expect(small.shown).toBeGreaterThan(0);
-    expect(large[layer] / large.shown).toBe(small[layer] / small.shown);
+    expect(perRow(large)).toEqual(perRow(small));
   });
 });

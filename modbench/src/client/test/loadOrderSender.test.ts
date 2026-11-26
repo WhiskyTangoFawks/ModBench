@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot } from '../MEditClient';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
+import { settled } from '../../test/eventually';
 
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
@@ -204,7 +205,7 @@ describe('a reconnect', () => {
     const failed: LoadOrderOutcome = { outcome: 'failed', message: 'no' };
     client.answerPuts((sent) => (sent.plugins[0]?.name === 'A.esp' ? released.promise : Promise.resolve(failed)));
     const older = client.sendLoadOrder(snapshot('A.esp'));
-    await vi.waitFor(() => { expect(sentNames(client)).toHaveLength(1); });
+    await settled(() => { expect(sentNames(client)).toHaveLength(1); });
     const newer = client.sendLoadOrder(snapshot('B.esp'));
 
     client.reconnected();
@@ -262,7 +263,7 @@ describe('a stop during a send', () => {
     client.answerStart(() => launched.promise);
     void client.start();
     const sent = client.sendLoadOrder(snapshot('A.esp'));
-    await vi.waitFor(() => { expect(methods(client)).toContain('start'); });
+    await settled(() => { expect(methods(client)).toContain('start'); });
 
     await client.stop();
     launched.resolve(undefined);
@@ -322,7 +323,7 @@ describe('each launch, announced as it begins', () => {
     client.answerStart(() => launched.promise);
     const launches = launchesOf(client);
     void client.start();
-    await vi.waitFor(() => { expect(methods(client)).toContain('start'); });
+    await settled(() => { expect(methods(client)).toContain('start'); });
 
     await client.stop();
     launched.resolve(undefined);
@@ -418,10 +419,10 @@ describe('a change signalled', () => {
     void client.sendLoadOrder(snapshot('A.esp'));
 
     void client.signalChange([]);
-    await vi.waitFor(() => { expect(methods(client)).toEqual(['put']); });
+    await settled(() => { expect(methods(client)).toEqual(['put']); });
     answer();
 
-    await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
+    await settled(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
   });
 
   it('is sent within a bounded time while the snapshots handed before it go unanswered', async () => {
@@ -475,7 +476,7 @@ describe('a change signalled', () => {
     void client.signalChange([]);
     void client.signalChange([]);
     released.resolve(undefined);
-    await vi.waitFor(() => { expect(methods(client)).toEqual(['signalChange', 'signalChange']); });
+    await settled(() => { expect(methods(client)).toEqual(['signalChange', 'signalChange']); });
     await client.sendLoadOrder(snapshot('A.esp'));
 
     expect(methods(client)).toEqual(['signalChange', 'signalChange', 'put']);
@@ -493,7 +494,7 @@ describe('a change signalled', () => {
     for (const paths of handed) void client.signalChange(paths);
     released.resolve(undefined);
 
-    await vi.waitFor(() => { expect(signalled(client)).toEqual([['/first.esp'], folded]); });
+    await settled(() => { expect(signalled(client)).toEqual([['/first.esp'], folded]); });
   });
 
   it('waits for mEdit to run', async () => {
@@ -504,7 +505,7 @@ describe('a change signalled', () => {
     expect(methods(client)).toEqual([]);
     await client.start();
 
-    await vi.waitFor(() => { expect(methods(client)).toEqual(['start', 'signalChange']); });
+    await settled(() => { expect(methods(client)).toEqual(['start', 'signalChange']); });
   });
 
   it('follows a reconnect, since the process behind the stream may not have checked the disk', async () => {
@@ -513,7 +514,7 @@ describe('a change signalled', () => {
 
     client.reconnected();
 
-    await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
+    await settled(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
   });
 });
 
@@ -537,7 +538,7 @@ describe('the promise a change signal returns', () => {
     expect(signalled(client)).toEqual([]);
 
     client.setStatus('running');
-    await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
+    await settled(() => { expect(signalled(client)).toEqual([[]]); });
   });
 
   it('waits while mEdit starts, posts the signal once it runs, and settles when it goes instead', async () => {
@@ -548,7 +549,7 @@ describe('the promise a change signal returns', () => {
     expect(signalled(client)).toEqual([]);
 
     client.setStatus('running');
-    await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
+    await settled(() => { expect(signalled(client)).toEqual([[]]); });
     await waiting;
 
     const next = new InMemoryMEditClient();

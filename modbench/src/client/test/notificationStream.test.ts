@@ -5,6 +5,7 @@ import type { NotificationEvent } from '../apiClient';
 import { IGNORED_THROWS, notificationEventFixture, recordedThrows } from './fixtures';
 import { leveledLog } from '../../test/leveledLog';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return notificationEventFixture({ kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, ...overrides });
@@ -49,7 +50,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onNotification('rows-changed', (p) => received.push(p));
 
     subscriber.start();
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await settled(() => expect(received).toHaveLength(1));
 
     expect(received[0]).toEqual({ plugin: { name: event.plugin, origin: event.origin }, keys: event.keys });
     subscriber.stop();
@@ -68,9 +69,9 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onNotification('rows-changed', (p) => received.push(p));
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     await vi.advanceTimersByTimeAsync(1000);
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await settled(() => expect(received).toHaveLength(1));
 
     expect(openStream).toHaveBeenCalledTimes(2);
     expect(received).toEqual([{ plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000002:Other.esp'] }]);
@@ -87,7 +88,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onNotification('rows-changed', (p) => heard.push(p));
 
     subscriber.start();
-    await vi.waitFor(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
+    await settled(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
 
     expect(heard).toHaveLength(1);
     expect(threw.map((t) => t.detail)).toEqual(['listener broke']);
@@ -105,7 +106,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onNotification('rows-changed', listener);
 
     subscriber.start();
-    await vi.waitFor(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
+    await settled(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
 
     expect(threw).toHaveLength(1);
     expect(recovered).toEqual([listener]);
@@ -122,9 +123,9 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onReconnected(heard);
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     await vi.advanceTimersByTimeAsync(1000);
-    await vi.waitFor(() => expect(log.lines.info).toHaveLength(2));
+    await settled(() => expect(log.lines.info).toHaveLength(2));
 
     expect(heard).toHaveBeenCalledTimes(1);
     expect(threw.map((t) => t.detail)).toEqual(['reopen listener broke']);
@@ -142,7 +143,7 @@ describe('SseNotificationSubscriber', () => {
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, log, reconnectDelayMs: 100_000 });
 
     subscriber.start();
-    await vi.waitFor(() => expect(log.lines.warn.join('\n')).toContain('stream dropped'));
+    await settled(() => expect(log.lines.warn.join('\n')).toContain('stream dropped'));
 
     expect(signals[0]?.aborted).toBe(true);
     subscriber.stop();
@@ -153,7 +154,7 @@ describe('SseNotificationSubscriber', () => {
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 100_000 });
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     subscriber.start();
 
     expect(openStream).toHaveBeenCalledTimes(1);
@@ -165,10 +166,10 @@ describe('SseNotificationSubscriber', () => {
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 2000 });
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     subscriber.stop();
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(2));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(2));
 
     await vi.advanceTimersByTimeAsync(2000);
     expect(openStream).toHaveBeenCalledTimes(3);
@@ -183,11 +184,11 @@ describe('SseNotificationSubscriber', () => {
 
     subscriber.start();
     void subscriber.whenConnected().then(() => { connected = true; });
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     expect(connected).toBe(false);
 
     present(answer, 'the promise-settling connection callback')(streamResponse([]));
-    await vi.waitFor(() => expect(connected).toBe(true));
+    await settled(() => expect(connected).toBe(true));
     subscriber.stop();
   });
 
@@ -198,7 +199,7 @@ describe('SseNotificationSubscriber', () => {
 
     subscriber.start();
     void subscriber.whenConnected().then(() => { connected = true; });
-    await vi.waitFor(() => expect(connected).toBe(true));
+    await settled(() => expect(connected).toBe(true));
 
     subscriber.stop();
   });
@@ -213,7 +214,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onReconnected(reconnects);
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     expect(reconnects).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(1000);
@@ -230,10 +231,10 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onReconnected(reconnects);
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     subscriber.stop();
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(2));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(2));
 
     expect(reconnects).not.toHaveBeenCalled();
     subscriber.stop();
@@ -248,7 +249,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.onReconnected(reconnects);
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(openStream).toHaveBeenCalledTimes(2);
@@ -265,7 +266,7 @@ describe('SseNotificationSubscriber', () => {
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
 
     subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
     subscriber.stop();
 
     expect(sawSignal?.aborted).toBe(true);
@@ -329,7 +330,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     subscriber.onNotification('files-set-aside', (p) => heard.push(p));
 
     subscriber.start();
-    await vi.waitFor(() => expect(heard).toEqual([{ folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }]));
+    await settled(() => expect(heard).toEqual([{ folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }]));
     subscriber.stop();
   });
 

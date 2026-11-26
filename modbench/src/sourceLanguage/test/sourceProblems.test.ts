@@ -7,6 +7,7 @@ import type { PluginProblems, RecordIndexChange } from '../../client';
 import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
+import { settled as until } from '../../test/eventually';
 
 const RETRY_AFTER_MS = 1000;
 const MISSING = '000ABC:Absent.esp';
@@ -132,7 +133,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
     let ended = false;
     const waiting = settled().then(() => { ended = true; });
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(asked + 1); });
+    await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(asked + 1); });
     expect(ended).toBe(false);
     answer([{ plugin: PLUGIN, problems: [] }]);
     await waiting;
@@ -143,17 +144,17 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
     const { client, published } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
-    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
+    await until(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
 
     client.setQueryAnswer('getPluginProblems', [{ plugin: PLUGIN, problems: [] }]);
     changeNamesPlugin(client, { name: PLUGIN.name, origin: PLUGIN.origin }, [REFERRER]);
 
-    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1, 0]); });
+    await until(() => { expect(published.map((problems) => problems.size)).toEqual([1, 0]); });
   });
 
   it('asks only for the records a notification names', async () => {
     const { client, published, settled } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [] }]);
-    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    await until(() => { expect(published).toHaveLength(1); });
 
     changeNamesPlugin(client, { name: PLUGIN.name, origin: PLUGIN.origin }, [REFERRER]);
     await settled();
@@ -164,7 +165,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   it('publishes nothing again when mEdit answers a plugin as it was', async () => {
     const same = [{ plugin: PLUGIN, problems: [problem()] }];
     const { client, published, settled } = feed(sourceFolders, same);
-    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    await until(() => { expect(published).toHaveLength(1); });
 
     client.setQueryAnswer('getPluginProblems', same);
     changeNamesPlugin(client, { name: PLUGIN.name, origin: PLUGIN.origin });
@@ -191,7 +192,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     const { client, published, answered } = feed(sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
     late(client);
     answer([]);
-    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    await until(() => { expect(published).toHaveLength(1); });
     changeNamesPlugin(client, { name: PLUGIN.name, origin: PLUGIN.origin }, [REFERRER]);
 
     await answered([]);
@@ -228,19 +229,19 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
     const { client, published } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [] }]);
-    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    await until(() => { expect(published).toHaveLength(1); });
     let answerFirst!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { answerFirst = resolve; }));
     const named = (sequence: number) => { client.hearSequence(sequence); client.change([{ plugin: { name: PLUGIN.name, origin: PLUGIN.origin }, keys: [REFERRER] }]); };
     named(1);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
+    await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
 
     for (let sequence = 2; sequence < 6; sequence += 1) named(sequence);
     await new Promise((resolve) => { setTimeout(resolve, 20); });
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
 
     answerFirst([]);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
+    await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
     await new Promise((resolve) => { setTimeout(resolve, 20); });
 
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3);
@@ -288,9 +289,9 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
 
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
+    await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
+    await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(published).toHaveLength(2);
@@ -304,7 +305,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: mEdit did not answer in time.'); });
+    await until(() => { expect(status.at(-1)).toBe('Showing the last good read: mEdit did not answer in time.'); });
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
@@ -317,7 +318,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     vi.useFakeTimers();
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: mEdit did not answer in time.'); });
+    await until(() => { expect(status.at(-1)).toBe('Showing the last good read: mEdit did not answer in time.'); });
     client.setQueryAnswer('getPluginProblems', []);
 
     await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
@@ -426,7 +427,7 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(status.at(-1)).toContain('mEdit did not answer in time.'); });
+    await until(() => { expect(status.at(-1)).toContain('mEdit did not answer in time.'); });
 
     expect(unsaved.filter((line) => line !== undefined)).toEqual([]);
   });

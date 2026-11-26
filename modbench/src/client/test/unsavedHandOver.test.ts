@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { BackendStatus, UnsavedDocumentChange, WriteRefused } from '../MEditClient';
 import { createUnsavedHandOver, type UnsavedDocumentsWire } from '../unsavedHandOver';
+import { settled } from '../../test/eventually';
 
 const GUN = '/mod/plugin-source/A.esp/Gun.json';
 const AXE = '/mod/plugin-source/A.esp/Axe.json';
@@ -56,7 +57,7 @@ describe('handing mEdit an unsaved document', () => {
     handOver.hand(typed('first', 1));
     handOver.hand(typed('second', 2));
     handOver.hand(typed('third', 3));
-    await vi.waitFor(() => { expect(mEdit.put).toEqual([`${GUN}@1:first opened`]); });
+    await settled(() => { expect(mEdit.put).toEqual([`${GUN}@1:first opened`]); });
     mEdit.answerWith(taking);
     answerFirst();
     await handOver.sent();
@@ -178,8 +179,8 @@ describe('whether a hand-over is pending', () => {
     handOver.hand(typed('first', 1));
     expect(handOver.pending()).toBe(true);
 
-    await vi.waitFor(() => { expect(mEdit.put).toHaveLength(1); });
+    await settled(() => { expect(mEdit.put).toHaveLength(1); });
     answer();
-    await vi.waitFor(() => { expect(handOver.pending()).toBe(false); });
+    await settled(() => { expect(handOver.pending()).toBe(false); });
   });
 });

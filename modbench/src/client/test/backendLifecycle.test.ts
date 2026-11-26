@@ -11,6 +11,7 @@ import type { HealthAnswer } from '../backendLifecycle';
 import { answered } from './healthAnswer';
 import type { BackendStatus } from '../MEditClient';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 
 function addressInfo(address: ReturnType<Server['address']>): AddressInfo {
   if (address === null || typeof address === 'string') {
@@ -305,7 +306,7 @@ describe('BackendLifecycle output forwarding', () => {
     child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
     child.stderr.write('Unhandled exception. boom\n');
 
-    await vi.waitFor(() => expect(lines).toEqual([
+    await settled(() => expect(lines).toEqual([
       '[08:30:45 INF] Indexed 500 records stdout',
       'Unhandled exception. boom stderr',
     ]));
@@ -317,7 +318,7 @@ describe('BackendLifecycle output forwarding', () => {
     child.stdout.write('[08:30:45 INF] Indexed ');
     child.stdout.write('500 records\r\n');
 
-    await vi.waitFor(() => expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']));
+    await settled(() => expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']));
   });
 
   it('drains the streams even with no onOutput — an unread pipe would block the backend', async () => {
@@ -367,7 +368,7 @@ describe('BackendLifecycle exit / stop', () => {
       freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(answered(false)),
     });
     const started = lifecycle.start();
-    await vi.waitFor(() => expect(children).toHaveLength(1), { interval: 2 });
+    await settled(() => expect(children).toHaveLength(1));
 
     present(children[0], 'the first spawned child').emit('exit', 1);
     await started;
@@ -473,7 +474,7 @@ describe('BackendLifecycle exit / stop', () => {
       freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(answered(false)),
     });
     const started = lifecycle.start();
-    await vi.waitFor(() => expect(children).toHaveLength(1), { interval: 2 });
+    await settled(() => expect(children).toHaveLength(1));
 
     present(children[0], 'the first spawned child').emit('exit', 1);
     await lifecycle.stop();

@@ -38,6 +38,7 @@ import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { oneAtATime, type OneAtATime } from '../../textDocuments/oneAtATime';
+import { settled } from '../../test/eventually';
 
 beforeEach(() => {
   handlers.clear();
@@ -285,7 +286,7 @@ describe('registerRecordLifecycleCommands', () => {
       const settle = editInFlight(source);
 
       const deleting = deleteRecords(SECOND_NODE);
-      await vi.waitFor(() => expect(writing).toContain('opens'));
+      await settled(() => expect(writing).toContain('opens'));
       writing.push('edit settled');
       settle();
       await deleting;
@@ -665,7 +666,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       const settle = editInFlight(source);
 
       const copying = copy(RECORD_NODE);
-      await vi.waitFor(() => expect(writing).toContain('opens'));
+      await settled(() => expect(writing).toContain('opens'));
       writing.push('edit settled');
       settle();
       await copying;
