@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 
@@ -265,7 +266,7 @@ describe('telling a launch that threw', () => {
 
     client.heard(Promise.reject(new Error('no kill')));
 
-    await vi.waitFor(() => { expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: no kill']); });
+    await settled(() => { expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: no kill']); });
   });
 });
 
@@ -274,7 +275,7 @@ describe('a recompute after a failed launch', () => {
     const { client, told, land, around } = wired('stopped');
     client.answerStart(() => Promise.resolve());
     void client.start();
-    await vi.waitFor(() => { expect(around.settled).toBe(true); });
+    await settled(() => { expect(around.settled).toBe(true); });
     const toldBefore = told.length;
 
     land(valueWith('A.esp'));

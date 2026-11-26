@@ -33,6 +33,7 @@ import { present } from '../../ports/present';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import type { RebuildResult } from '../../instanceCommands/loadOrder';
 import type { InstanceCommands } from '../../instanceCommands/instanceCommands';
+import { settled } from '../../test/eventually';
 
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
@@ -88,7 +89,7 @@ async function switchProfileChoosing(choice: string, over: Partial<ToolboxComman
   createQuickPick.mockReturnValue(qp);
   const registered = register(over);
   const done = registered.run('modbench.profile.switch');
-  await vi.waitFor(() => expect(qp.show).toHaveBeenCalled());
+  await settled(() => expect(qp.show).toHaveBeenCalled());
   if (choice === 'Esc') escape();
   else accept(present(qp.items.find((i) => i.label === choice), `the item "${choice}"`));
   await done;

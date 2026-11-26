@@ -9,6 +9,7 @@ import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { ArchiveEntries } from '../archiveEntries';
 import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
+import { settled as until } from '../../test/eventually';
 
 let root: string;
 let logged: string[];
@@ -570,7 +571,7 @@ describe('Mod status (mod-status trace)', () => {
 
     statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', a)]));
     const settled = [...(await statuses.current()).keys()];
-    await vi.waitFor(async () => {
+    await until(async () => {
       await statuses.current();
       expect(listings).toBe(4);
     });
@@ -589,7 +590,7 @@ describe('Mod status (mod-status trace)', () => {
     statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', a)]));
     statuses.derive(valueOf([{ kind: 'mod', name: 'B' }], [folder('mod', 'B', b)]));
     const settled = [...(await statuses.current()).keys()];
-    await vi.waitFor(async () => {
+    await until(async () => {
       await statuses.current();
       expect(listings).toBe(3);
     });

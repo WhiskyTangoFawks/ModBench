@@ -21,6 +21,7 @@ import { registerPutLoadOrder } from '../putLoadOrderCommand';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import type { InstanceSubscriber } from '../../instanceLoader/instance';
+import { settled as until } from '../../test/eventually';
 
 const wired = () => {
   const puts: (string | undefined)[] = [];
@@ -85,7 +86,7 @@ describe('the instance read that signalled', () => {
     expect(settled).toBe(false);
 
     sweepEnds();
-    await vi.waitFor(() => { expect(settled).toBe(true); });
+    await until(() => { expect(settled).toBe(true); });
   });
 });
 

@@ -9,6 +9,7 @@ import { subscribeRecordTabsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakePanel } from './editorVscode';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'Mod.esp', origin: 'ModA' } };
 
@@ -254,7 +255,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.change(PLUGIN_CHANGED);
-      await vi.waitFor(() => expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]));
+      await settled(() => expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]));
       settles(client);
 
       expect(loadsOf(panel)).toEqual([
@@ -273,7 +274,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.change(PLUGIN_CHANGED);
-      await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwners')).toBe(true));
+      await settled(() => expect(client.calls.some(c => c.method === 'getRecordOwners')).toBe(true));
       client.change(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);

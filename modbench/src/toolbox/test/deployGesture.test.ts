@@ -38,6 +38,7 @@ import type { InstanceSubscriber } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { instanceOver } from '../../test/instanceOver';
 import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult } from '../../instanceCommands/deploy';
+import { settled } from '../../test/eventually';
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
@@ -251,7 +252,7 @@ describe('the problems on the files the deployment folder holds that deploy does
 
     void present(subscribers[0], 'the instance subscriber')(value, 2, toldOf(value, value, { named: [], disk: true }, undefined));
 
-    await vi.waitFor(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
+    await settled(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
   });
 
   it('name no file left out by an earlier deploy once a deploy fails', async () => {

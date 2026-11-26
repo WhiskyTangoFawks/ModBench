@@ -14,6 +14,7 @@ vi.mock('vscode', () => ({
 import { sourceModRepositoriesOver } from '../sourceModRepositories';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { settled } from '../../test/eventually';
 
 describe('sourceModRepositoriesOver', () => {
   const OTHER_IN_MODB = [{ name: 'Other.esp', origin: 'ModB' }];
@@ -74,7 +75,7 @@ describe('sourceModRepositoriesOver', () => {
     await compiledPlugin.registerRepositories();
 
     compiledPlugin.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
-    await vi.waitFor(() => { expect(outputChannel.error).toHaveBeenCalledOnce(); });
+    await settled(() => { expect(outputChannel.error).toHaveBeenCalledOnce(); });
   });
 
   it('warns and registers nothing when vscode.git is absent', async () => {

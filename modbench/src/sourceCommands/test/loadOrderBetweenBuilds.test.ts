@@ -11,6 +11,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client/MEditClient';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 let root: string;
 let SOURCES: Record<string, string>;
@@ -56,7 +57,7 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', NOT_YET);
 
     const outcome = built();
-    await vi.waitFor(() => { expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' }); });
+    await settled(() => { expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' }); });
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
     event(client);
 
@@ -89,10 +90,10 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', NOT_YET);
 
     const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await settled(() => { expect(builtMods(client)).toEqual(['ModB']); });
     for (let minute = 0; minute < 10; minute++) {
       await vi.advanceTimersByTimeAsync(60_000);
-      await vi.waitFor(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
+      await settled(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
     }
     expect(builtMods(client)).toEqual(['ModB']);
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
@@ -109,10 +110,10 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', answer);
 
     const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await settled(() => { expect(builtMods(client)).toEqual(['ModB']); });
     for (let minute = 0; minute < 3; minute++) {
       await vi.advanceTimersByTimeAsync(60_000);
-      await vi.waitFor(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
+      await settled(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
     }
     expect(builtMods(client)).toEqual(['ModB']);
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
@@ -126,7 +127,7 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', { failed, cause: 'mEdit cannot say.' });
 
     const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await settled(() => { expect(builtMods(client)).toEqual(['ModB']); });
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(builtMods(client)).toEqual(['ModB']);
@@ -144,7 +145,7 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', NOT_YET);
 
     const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await settled(() => { expect(builtMods(client)).toEqual(['ModB']); });
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(builtMods(client)).toEqual(['ModB']);
@@ -159,7 +160,7 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', { state: 'ReadFailed', reason: 'B.esp is not a plugin.' });
 
     const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await settled(() => { expect(builtMods(client)).toEqual(['ModB']); });
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(await outcome).toMatchObject({

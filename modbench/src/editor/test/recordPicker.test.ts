@@ -13,6 +13,7 @@ import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 
 beforeEach(() => { createQuickPick.mockReset(); });
 
@@ -37,7 +38,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, record.formKey, ['npc_']);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.value).toBe(record.formKey);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
@@ -64,7 +65,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, seed, []);
-    await vi.waitFor(() => expect(searchRecords).toHaveBeenCalledWith(searched, []));
+    await settled(() => expect(searchRecords).toHaveBeenCalledWith(searched, []));
 
     qp.hide();
     await dispatchPromise;
@@ -80,7 +81,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, typed, []);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.visibleItems).toHaveLength(1);
 
@@ -94,7 +95,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, 'Record', []);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
 
     expect(shownOnSurface).not.toHaveBeenCalled();
 
@@ -109,7 +110,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, 'Record', []);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(20));
+    await settled(() => expect(qp.items).toHaveLength(20));
 
     expect([qp.title, shownOnSurface.mock.calls]).toEqual([undefined, [[
       'warning', 'The record picker lists 20 of the 1234 copies of records that match "Record".', 'Type more of the EditorID, FormID or FormKey to narrow the list.',
@@ -127,7 +128,7 @@ describe('pickRecord', () => {
 
     const composite = `Seeded [${record.formKey}]`;
     const dispatchPromise = pickRecord(deps, composite, ['npc_']);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.value).toBe(composite);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
@@ -228,7 +229,7 @@ describe('pickRecord', () => {
 
     const secondRecord = makeRecord(9, 'Second');
     resolveSecond({ items: [secondRecord], total: 1 });
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
     resolveFirst({ items: [makeRecord(1, 'First')], total: 1 });
     await Promise.resolve();
 
@@ -287,7 +288,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const result = pickRecord(deps, 'sword', []);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.items).toEqual([expect.objectContaining({ label: '$(error) The search failed', detail: 'connection refused' })]);
     expect(shownOnSurface).toHaveBeenCalledWith('error', 'The record search failed.', 'connection refused');
@@ -303,7 +304,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const result = pickRecord(deps, 'sword', []);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
     accept(present(qp.items[0], 'the shown item'));
 
     expect(qp.hide).not.toHaveBeenCalled();
@@ -322,7 +323,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const result = pickRecord(deps, 'sw', []);
-    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    await settled(() => expect(qp.items).toHaveLength(1));
     vi.useFakeTimers();
     type('swo');
     await vi.advanceTimersByTimeAsync(200);
