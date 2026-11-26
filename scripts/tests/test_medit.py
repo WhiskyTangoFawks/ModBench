@@ -44,10 +44,10 @@ class Reaching(unittest.TestCase):
                 medit.resolve(PLUGIN.name)
 
     def test_raises_naming_the_port_when_nothing_answers_on_it(self) -> None:
-        refused_at_once = '0'
+        port_failing_at_once = '0'
         with (
-                mock.patch.dict(os.environ, {'MEDIT_PORT': refused_at_once}),
-                self.assertRaisesRegex(medit.MEditError, f'port {refused_at_once}:')):
+                mock.patch.dict(os.environ, {'MEDIT_PORT': port_failing_at_once}),
+                self.assertRaisesRegex(medit.MEditError, f'port {port_failing_at_once}:')):
             medit.select('SELECT 1')
 
 
