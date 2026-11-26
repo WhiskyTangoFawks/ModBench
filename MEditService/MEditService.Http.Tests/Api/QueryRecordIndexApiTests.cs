@@ -133,6 +133,14 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
+    public async Task APluginTheRecordIndexHasRead_IsIndexedAsOnDisk()
+    {
+        var indexed = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/indexed-as-on-disk?origin={UserMod}");
+
+        Assert.Equal("AsOnDisk", indexed.GetProperty("state").GetString());
+    }
+
+    [Fact]
     public async Task ThePluginsListingAFileNameAsAMaster_AreItsDependants()
     {
         var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/dependants?origin={UserMod}");
