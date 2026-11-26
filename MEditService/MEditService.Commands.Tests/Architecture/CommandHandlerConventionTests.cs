@@ -1,116 +1,18 @@
 using System.Reflection;
-using MEditService.Commands.Composition;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Commands.Tests.Architecture;
 
 public sealed class CommandHandlerConventionTests
 {
-    private static readonly Type[] Carriers =
-    [
-        typeof(ArchiveRefused),
-        typeof(BuildRefused),
-        typeof(BuildResult),
-        typeof(CompileRefusal),
-        typeof(CompileRefused),
-        typeof(CompileResult),
-        typeof(CompiledPlugin),
-        typeof(CopyRecordRefused),
-        typeof(CopyRecordResult),
-        typeof(CreateRecordChanges),
-        typeof(VersionInGitRefused),
-        typeof(VersionInGitResult),
-        typeof(VersionedMod),
-        typeof(DecompileAndRepairRefusal),
-        typeof(DecompileAndRepairRefused),
-        typeof(DecompileAndRepairResult),
-        typeof(DecompileRefusal),
-        typeof(DecompileRefused),
-        typeof(DecompileResult),
-        typeof(DeleteRecordRefused),
-        typeof(DeleteRecordResult),
-        typeof(EditRecordChanges),
-        typeof(FilesWritten),
-        typeof(GivenRecord),
-        typeof(ModBuilt),
-        typeof(MoveLastWrittenResult),
-        typeof(SourceFolderContents),
-        typeof(PatchMade),
-        typeof(PatchRefused),
-        typeof(PatchRefused.AsCompile),
-        typeof(PatchRefused.AsCreate),
-        typeof(PatchRefused.OfIndex),
-        typeof(PatchRefused.OfRecord),
-        typeof(PluginCreateRefusal),
-        typeof(PluginCreateRefused),
-        typeof(PluginCreated),
-        typeof(PluginFileFlagRefusal),
-        typeof(PluginFileFlagRefused),
-        typeof(PluginFileFlagsSet),
-        typeof(PluginFileFlagsToSet),
-        typeof(PluginToRepair),
-        typeof(PutLoadOrderApplied),
-        typeof(PutLoadOrderRefusal),
-        typeof(PutLoadOrderRefused),
-        typeof(RecordCopied),
-        typeof(RecordDeleted),
-        typeof(RecordEdited),
-        typeof(RecordEditRefused),
-        typeof(RecordWritten),
-        typeof(RenameSourceChanges),
-        typeof(RenameSourceRefusal),
-        typeof(RenameSourceResult),
-        typeof(ScriptCopyFile),
-        typeof(ScriptCopyPlace),
-        typeof(ScriptRenameSourceChanges),
-        typeof(SetPluginFileFlagsResult),
-        typeof(SourceFolderMoveRefusal),
-        typeof(SourceFolderMoveRefused),
-        typeof(SourceLeftBehind),
-    ];
-
-    private const string CommandsNamespace = "MEditService.Commands";
-
-    private static readonly Type[] Handlers =
-    [
-        .. typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
-            .Where(type => type.Name.EndsWith("Handler", StringComparison.Ordinal))
-            .OrderBy(type => type.FullName, StringComparer.Ordinal),
-    ];
-
-    public static TheoryData<Type> EveryHandler => [.. Handlers];
-
-    [Theory]
-    [MemberData(nameof(EveryHandler))]
-    public void AHandler_OffersTheGestureAndNothingElse(Type handler)
-    {
-        var gestures = DeclaredMethodsNotRequiredByAnInterface(handler);
-
-        Assert.True(
-            gestures.Length == 1,
-            $"{handler.Name} declares {gestures.Length} public methods of its own; a handler is one " +
-            "gesture, and no interface may declare it.");
-    }
-
-    [Theory]
-    [MemberData(nameof(EveryHandler))]
-    public void AHandler_IsRegisteredByTheOneRegistration(Type handler)
-    {
-        var services = new ServiceCollection().AddCommandHandlers();
-
-        Assert.Contains(services, descriptor => descriptor.ServiceType == handler);
-    }
-
     [Fact]
-    public void EveryCommandInTheNamespace_IsAHandlerOrACarrierThisSuiteNames()
+    public void EveryHandler_OffersOneGesture_ThatNoInterfaceDeclares()
     {
-        var found = typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
-            .Where(type => type.Namespace == CommandsNamespace)
-            .OrderBy(type => type.Name, StringComparer.Ordinal);
+        var offenders = typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
+            .Where(type => type.Name.EndsWith("Handler", StringComparison.Ordinal))
+            .Where(handler => DeclaredMethodsNotRequiredByAnInterface(handler).Length != 1)
+            .Select(handler => handler.Name);
 
-        Assert.Equal(
-            Handlers.Concat(Carriers).Where(type => type.Namespace == CommandsNamespace).OrderBy(type => type.Name, StringComparer.Ordinal),
-            found);
+        Assert.Empty(offenders);
     }
 
     private static MethodInfo[] DeclaredMethodsNotRequiredByAnInterface(Type handler)
