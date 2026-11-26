@@ -294,7 +294,9 @@ class TimeReport(FakeDotnet):
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
-        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n +0\.0 s of +\d+ s  the tests of no box\n"
+        self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n"
+                                     r"--- 0 TESTS OVER THE 1 s CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n"
+                                     r" +0\.0 s of +\d+ s  the tests of no box\n"
                                      r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN OR MISSING ---\nWall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])

@@ -1,5 +1,5 @@
-"""Pins check_test_times.py: each test over 100 ms is named, each box's summed time is printed against its
-budget, and a box over it or without one fails the run once the switch is on, given budgets."""
+"""Pins check_test_times.py: its 100 ms list, the ceiling and box budgets it reports, and which of them fail
+the run once the switch is on."""
 import contextlib
 import io
 import pathlib
@@ -26,6 +26,11 @@ class Reports(unittest.TestCase):
         with contextlib.redirect_stdout(printed):
             status = ctt.main([str(self.dir), str(elapsed), str(budget), *([budgets_file] if budgets_file else [])])
         return status, printed.getvalue()
+
+    def with_budgets(self, text: str) -> tuple[int, str]:
+        budgets = self.dir / 'budgets.toml'
+        budgets.write_text(text)
+        return self.main(10, 300, str(budgets))
 
 
 class SlowTests(Reports):
@@ -56,7 +61,32 @@ class Main(Reports):
                 self.assertIn(line, self.main(elapsed, 300)[1])
 
 
+class Ceiling(Reports):
+    APPROVALS = ('other = 60\n[boxes]\n"A.Tests" = 60\n'
+                 '[approved]\n"A.Approved" = "r"\n"A.Theory" = "r"\n"A.Lapsed" = "r"\n"A.NotRun" = "r"\n')
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1), fx.trx_result('A.Unapproved', 5, 2), fx.trx_result('A.Approved', 5, 3),
+                                    fx.trx_result('A.Theory(case: 1)', 6, 2.5), fx.trx_result('A.Theory(case: 2)', 6, 0.5),
+                                    fx.trx_result('A.Lapsed', 6, 0.4)))
+
+    def test_it_names_each_test_over_the_ceiling_no_approval_names_by_its_own_or_its_theorys_and_each_approval_that_lapsed(self) -> None:
+        """A.NotRun's approval did not run, so it did not lapse; A.Theory's lapses only once all its cases run under 1 s."""
+        self.assertIn('--- 5 TESTS OVER 100 ms ---\n'
+                      '   2.00 s  A.Unapproved: OVER THE 1 s CEILING, NOT APPROVED\n'
+                      '   0.40 s  A.Lapsed: APPROVAL LAPSED\n'
+                      '--- 1 TESTS OVER THE 1 s CEILING NOT APPROVED, 1 APPROVALS LAPSED ---\n', self.with_budgets(self.APPROVALS)[1])
+
+    def test_an_unapproved_test_over_the_ceiling_fails_the_run_once_the_switch_is_on_and_a_lapse_never_does(self) -> None:
+        all_approved = self.APPROVALS + '"A.Unapproved" = "r"\n'
+        for budgets, switch, status in ((self.APPROVALS, False, 0), (self.APPROVALS, True, 1), (all_approved, True, 0)):
+            with self.subTest(budgets=budgets, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
+                self.assertEqual(self.with_budgets(budgets)[0], status)
+
+
 class Boxes(Reports):
+    APPROVED = '[approved]\n"A.Two" = "r"\n"a.test.ts > one" = "r"\n"test_a (m.C.test_a)" = "r"\n'
     BUDGETS = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\nwebview = 1\n'
     NO_WEBVIEW_BUDGET = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
 
@@ -69,9 +99,7 @@ class Boxes(Reports):
         self.report('hooks.unittest', fx.unittest_log(durations=[('test_a (m.C.test_a)', 1.25)]))
 
     def with_budgets(self, text: str) -> tuple[int, str]:
-        budgets = self.dir / 'budgets.toml'
-        budgets.write_text(text)
-        return self.main(10, 300, str(budgets))
+        return super().with_budgets(text + self.APPROVED)
 
     def test_with_no_budgets_it_prints_each_boxs_summed_time_most_first(self) -> None:
         self.assertIn('    2.0 s  B.Tests\n    1.5 s  plugins\n    1.2 s  hooks\n    0.5 s  webview\n', self.main(10, 300)[1])
@@ -95,7 +123,8 @@ class Boxes(Reports):
     def test_a_budget_overrun_or_a_box_with_none_fails_the_run_once_the_switch_is_on_and_not_before(self) -> None:
         overrun = 'other = 3\n[boxes]\n"B.Tests" = 1\nplugins = 2\nwebview = 1\n'
         missing = self.NO_WEBVIEW_BUDGET
-        for budgets, switch, status in ((overrun, False, 0), (overrun, True, 1), (missing, False, 0), (missing, True, 1)):
+        for budgets, switch, status in ((overrun, False, 0), (overrun, True, 1), (missing, False, 0), (missing, True, 1),
+                                        (self.BUDGETS, True, 0)):
             with self.subTest(budgets=budgets, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
                 self.assertEqual(self.with_budgets(budgets)[0], status)
 
