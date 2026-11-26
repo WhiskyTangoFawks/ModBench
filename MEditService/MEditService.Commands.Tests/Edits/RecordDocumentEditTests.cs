@@ -121,6 +121,11 @@ public sealed class RecordDocumentEditTests : IDisposable
             RecordEditRefusal.AlphaNotHeld, "LightningColor", "'LightningColor' holds no alpha"
         },
         {
+            "an element pasted with an alpha in a color holding none", t => t._fixture.Seed(t._mod.LensFlares.AddNew("Lf"), "lens"),
+            AddAt(Json("""{"Data": {"Tint": "#7F102030"}}"""), Member("Sprites")),
+            RecordEditRefusal.AlphaNotHeld, "Sprites[0].Data.Tint", "'Sprites[0].Data.Tint' holds no alpha"
+        },
+        {
             "a member the codec drops", t => t.SeedNpc(), SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")),
             RecordEditRefusal.CodecDroppedValue, "Weight.Bogus", "'Weight.Bogus' was not kept by the codec"
         },

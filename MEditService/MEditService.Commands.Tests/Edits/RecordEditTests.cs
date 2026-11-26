@@ -76,17 +76,18 @@ public sealed class RecordEditTests : IDisposable
         Assert.Equal(unreadableBefore, Unreadable());
     }
 
-    private string Unreadable() =>
-        Assert.IsType<SourceFailure.Unreadable>(_mod.Repository.Require().RecordByFormKey(_mod.Plugin, _mod.Npc.ToString()).Stopped()).Reason;
-
     [Fact]
-    public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()
+    public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsParseFailed_AndRenamesNothing()
     {
         _mod.Overwrite(_mod.NpcIdentity, "this is not a document");
+        var unreadableBefore = Unreadable();
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.NotNull(Unreadable());
+        Assert.Equal(unreadableBefore, Unreadable());
     }
+
+    private string Unreadable() =>
+        Assert.IsType<SourceFailure.Unreadable>(_mod.Repository.Require().RecordByFormKey(_mod.Plugin, _mod.Npc.ToString()).Stopped()).Reason;
 }

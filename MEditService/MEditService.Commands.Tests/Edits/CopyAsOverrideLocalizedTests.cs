@@ -35,7 +35,9 @@ public sealed class CopyAsOverrideLocalizedTests
                 EditorID = "MainCell",
                 Name = new TranslatedString(Language.English, [
                     new KeyValuePair<Language, string>(Language.English, EnglishName),
-                    new KeyValuePair<Language, string>(cellNamedInStringsLanguage ? Language.French : Language.German, FrenchName),
+                    cellNamedInStringsLanguage
+                        ? new KeyValuePair<Language, string>(Language.French, FrenchName)
+                        : new KeyValuePair<Language, string>(Language.German, "Die Grosse Zelle"),
                 ]),
             };
             var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
