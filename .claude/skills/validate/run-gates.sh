@@ -76,8 +76,8 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
   exec bash "$0" ${flags:---comments}
 fi
 
-# Every gate but the comment gate builds or tests: api-drift and scripts build and boot a backend,
-# and docs runs both stacks' scans.
+# Every gate but the comment gate builds or tests: api-drift builds and boots a backend, scripts
+# lints and tests, and docs runs both stacks' scans.
 HOLDS_SLOT=false
 { $BACKEND || $FRONTEND || $API_DRIFT || $DOCS || $SCRIPTS; } && HOLDS_SLOT=true
 if $HOLDS_SLOT && [[ -z ${BUILD_SLOT_HELD:-} ]]; then

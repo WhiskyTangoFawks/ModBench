@@ -64,7 +64,7 @@ class GateRepo(unittest.TestCase):
         script.write_text(SCRIPT.read_text().replace("MERGE_TIER_PAUSED=true", f"MERGE_TIER_PAUSED={self.TIER_PAUSED}", 1))
         shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
         (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
-        for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "spec/a.d2"):
+        for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "scripts/a.py", "spec/a.d2"):
             self.write(path, "x")
         git(self.repo, "init", "-q", "-b", "main")
         git(self.repo, "add", ".")
@@ -100,7 +100,7 @@ class InTheSlot(GateRepo):
 
 
 class SelectedByChange(GateRepo):
-    EVERY_GATE = "--backend --api-drift --scripts --frontend --docs"
+    EVERY_GATE = "--backend --api-drift --frontend --scripts --docs"
 
     def selected(self):
         return self.gates().stdout.splitlines()[-1]
@@ -122,7 +122,7 @@ class SelectedByChange(GateRepo):
         git(self.repo, "checkout", "-q", "-b", "feature")
         self.write("MEditService/Core/a.cs", "edited")
         git(self.repo, "commit", "-q", "-am", "edit")
-        self.assertEqual(self.selected(), self.slot_line("--backend --api-drift --scripts --frontend"))
+        self.assertEqual(self.selected(), self.slot_line("--backend --api-drift --frontend"))
 
     def branch_tracking_an_integration_branch_with_a_backend_change(self):
         git(self.repo, "checkout", "-q", "-b", "integration")
