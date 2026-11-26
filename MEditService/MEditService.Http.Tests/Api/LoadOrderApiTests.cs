@@ -97,4 +97,67 @@ public sealed class LoadOrderApiTests : HostedTests
 
         Assert.Equal((namedIn, "Levier"), (namedIn, name));
     }
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("loadedWithNoLine")]
+    [InlineData("archives")]
+    [InlineData("listedArchives")]
+    [InlineData("stringsFiles")]
+    [InlineData("places")]
+    [InlineData("stringsLanguage")]
+    [InlineData("gameRelease")]
+    public async Task ALoadOrderLeavingOutAFieldItNeverDefaults_Is400(string omitted)
+    {
+        var body = Body();
+        body.Remove(omitted);
+
+        var response = await Client.PutAsJsonAsync("/load-order", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("stringsLanguage", "99")]
+    [InlineData("stringsLanguage", "Klingon")]
+    [InlineData("gameRelease", "NotAGame")]
+    public async Task ALoadOrderNamingALanguageOrGameThatIsNone_Is400(string field, string value)
+    {
+        var body = Body();
+        body[field] = value;
+
+        var response = await Client.PutAsJsonAsync("/load-order", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private const string Named = """ "name": "Any.esp", "path": "/data/Any.esp", "origin": "AnyMod" """;
+
+    public static TheoryData<string, string> NotAPluginEntry => new()
+    {
+        { "a game plugin naming a mod", $$"""{ {{Named}}, "provider": {"kind": "Game", "mod": "ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a plugin of no mod naming a folder", $$"""{ {{Named}}, "provider": {"kind": "None", "folder": "/mods/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a game plugin naming a source folder", $$"""{ {{Named}}, "provider": {"kind": "Game", "sourceFolder": "/source/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a mod's plugin naming no folder", $$"""{ {{Named}}, "provider": {"kind": "Mod", "mod": "ModA", "sourceFolder": "/source/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a mod's plugin naming no mod", $$"""{ {{Named}}, "provider": {"kind": "Mod", "folder": "/mods/ModA", "sourceFolder": "/source/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a mod's plugin naming an empty source folder", $$"""{ {{Named}}, "provider": {"kind": "Mod", "mod": "ModA", "folder": "/mods/ModA", "sourceFolder": ""}, "archives": [], "stringsFiles": [] }""" },
+        { "no provider", $$"""{ {{Named}}, "archives": [], "stringsFiles": [] }""" },
+        { "no archives", $$"""{ {{Named}}, "provider": {"kind": "Game"}, "stringsFiles": [] }""" },
+        { "no strings files", $$"""{ {{Named}}, "provider": {"kind": "Game"}, "archives": [] }""" },
+        { "a strings file with no stamp", $$"""{ {{Named}}, "provider": {"kind": "Game"}, "archives": [], "stringsFiles": [{"path": "/data/Strings/A_en.STRINGS"}] }""" },
+    };
+
+    [Theory]
+    [MemberData(nameof(NotAPluginEntry))]
+    public async Task ALoadOrderWithAPluginEntryLackingWhatMakesItAPlugin_Is400(string lacking, string entry)
+    {
+        var body = Body();
+        body["plugins"] = new[] { JsonDocument.Parse(entry).RootElement };
+        body["active"] = Array.Empty<object>();
+        body["loadedWithNoLine"] = Array.Empty<object>();
+
+        var response = await Client.PutAsJsonAsync("/load-order", body);
+
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
+    }
 }
