@@ -411,6 +411,17 @@ public sealed class BuildModHandlerTests : IDisposable
         WrittenPaths.Within(result.Written, Path.Combine(_root, "mods"));
     }
 
+    [Fact]
+    public async Task ACompile_NamesThePluginAndStringsItWrote_AndTheRepositoryItParkedTheirSourceIn()
+    {
+        await InitializedWithALocalizedPlugin();
+
+        var result = await Build(Compile());
+
+        WrittenPaths.Cover(result.Written, [Path.Combine(ModFolder, Plugin), Path.Combine(SourceFolder, ".git"), .. Directory.GetFiles(Path.Combine(ModFolder, "Strings"))]);
+        WrittenPaths.Within(result.Written, ModFolder, SourceFolder);
+    }
+
     private string[] SourceFilesOf(string plugin) =>
         [.. Directory.GetFiles(Path.Combine(SourceFolder, "plugin-source", plugin), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
 

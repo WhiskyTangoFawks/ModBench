@@ -73,7 +73,9 @@ public sealed class VersionInGitTests
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
         var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, VersionInGitRefusal.AlreadyInitialized), (result.Applied, result.Refusal));
+        Assert.Equal(
+            (false, VersionInGitRefusal.AlreadyInitialized, $"'{modFolder.Path}' is already a source mod's source folder."),
+            (result.Applied, result.Refusal, result.Message));
     }
 
     [Fact]

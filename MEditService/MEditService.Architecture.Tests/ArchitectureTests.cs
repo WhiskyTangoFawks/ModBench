@@ -23,8 +23,8 @@ public sealed class ArchitectureTests
     public void ThePluginIdentityScan_NamesAPluginStringOnAnInterface_AndAPluginWithoutItsOriginOnARecord()
     {
         Assert.Equal(
-            ["IPlantedPort.Open(plugin)", "PlantedRecord(Plugin)"],
-            PluginIdentityOffenders([typeof(IPlantedPort), typeof(PlantedRecord)]));
+            ["IPlantedPort.Open(plugin)", "PlantedPair(DestinationPlugin)", "PlantedRecord(Plugin)"],
+            PluginIdentityOffenders([typeof(IPlantedPort), typeof(PlantedPair), typeof(PlantedRecord)]).Order(StringComparer.Ordinal));
     }
 
     public interface IPlantedPort
@@ -33,6 +33,8 @@ public sealed class ArchitectureTests
     }
 
     public sealed record PlantedRecord(string Plugin, string FormKey);
+
+    public sealed record PlantedPair(string SourcePlugin, string SourceOrigin, string DestinationPlugin);
 
     private static List<string> PluginIdentityOffenders(IEnumerable<Type> types)
     {
@@ -271,11 +273,11 @@ public sealed class ArchitectureTests
     public void TheWriteVerbScan_NamesOnlyTheFileCarryingEveryNeedle()
     {
         using var root = new ScratchDirectory("medit-arch-");
-        ScratchFiles.Plant(root, "P/Both.cs", "var h = new Holder(); renamed.Apply(x);");
-        ScratchFiles.Plant(root, "P/OnlyType.cs", "var h = new Holder();");
-        ScratchFiles.Plant(root, "P/OnlyCall.cs", "renamed.Apply(x);");
+        ScratchFiles.Plant(root, "P/Both.cs", "IPluginAdapter adapter; await adapter.WriteAsync(plugin);");
+        ScratchFiles.Plant(root, "P/OnlyType.cs", "IPluginAdapter adapter;");
+        ScratchFiles.Plant(root, "P/OnlyCall.cs", "await writer.WriteAsync(plugin);");
 
-        var offenders = Offenders(root, ["P"], ["Holder", ".Apply("], allowedFiles: []);
+        var offenders = Offenders(root, ["P"], ["PluginAdapter", "WriteAsync("], allowedFiles: []);
 
         Assert.Equal([Path.Combine("P", "Both.cs")], offenders);
     }

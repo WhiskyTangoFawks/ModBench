@@ -233,6 +233,19 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth_AndNamesBothInItsCommits()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
+
+        var result = await Repair([ToRepair(plugin)]);
+
+        Assert.Equal([plugin], result.Applied);
+        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
+        Assert.Contains("HarborRegion", messages, StringComparison.Ordinal);
+        Assert.Contains("HarborRace", messages, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DecompileAndRepair_OfAHealthyPluginOfASourceMod_WhoseSiblingIsMalformed_IsRefusedAsNotMalformed()
     {
         AddToSourceMod(Lossless.Malformed);
