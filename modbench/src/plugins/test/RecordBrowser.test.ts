@@ -141,7 +141,7 @@ describe('a plugin\'s children — an answer that is no failed read', () => {
 });
 
 describe('a record-type group\'s children', () => {
-  it('lists a record row for every record, asking for every record in one call, with no paging', async () => {
+  it('lists a row for every record, from one unpaged read', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeClient({ records: { items: records, total: 3 } });
     const provider = new RecordBrowser(repo);
@@ -220,11 +220,14 @@ describe('a record row', () => {
 
     const row = await rowOf(record, 'ModA');
 
-    expect([row.command, row.argument]).toEqual([{
-      command: 'modbench.record.open',
-      title: 'Open Record',
-      arguments: [{ argument: { kind: 'record', formKey: record.formKey, plugin: { name: 'Plugin0.esp', origin: 'ModA' } } }],
-    }, { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey }]);
+    expect(row).toMatchObject({
+      command: {
+        command: 'modbench.record.open',
+        title: 'Open Record',
+        arguments: [{ argument: { kind: 'record', formKey: record.formKey, plugin: { name: 'Plugin0.esp', origin: 'ModA' } } }],
+      },
+      argument: { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey },
+    });
   });
 
   it.each<[string, RecordSummary, PluginConditions, string]>([
@@ -407,7 +410,7 @@ describe('worldspace, cell and placed rows state their record', () => {
   it.each(['worldspace', 'cell', 'placed'] as const)('a %s row', async (which) => {
     const row = (await spatialRowsOver())[which];
 
-    expect({ label: row.label, description: row.description, argument: row.argument }).toEqual({
+    expect(row).toMatchObject({
       label: 'World', description: '000801:A.esp', argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp' },
     });
     expect(row.command).toEqual({

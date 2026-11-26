@@ -1500,8 +1500,6 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 });
 
 describe('PluginsTreeProvider — a row expands into the record browser children', () => {
-  const withRecords = (client: InMemoryMEditClient) => makeTree([A_ROW()], { client });
-
   it('reads the row\'s own plugin of a shared filename, and every row beneath it carries that plugin', async () => {
     const client = browserClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
@@ -1701,34 +1699,20 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
     expect(item.checkboxState).toBe(vscode.TreeItemCheckboxState.Checked);
   });
 
-  it('reads an enabled master mEdit failed to read as present, for the game loads what mEdit cannot read', async () => {
-    const rows = [plugin({ name: 'Broken.esm', line: 0 }), plugin({ name: 'A.esp', line: 1 })];
-    const h = makeTree(rows);
+  const baseThenA = (enabled: boolean) => [plugin({ name: 'Base.esm', line: 0, enabled }), plugin({ name: 'A.esp', line: 1 })];
+  const needsBase = held('A.esp', { masters: ['Base.esm'] });
+  it.each<[string, (LoadOrderPlugin | LoadOrderPluginLine)[], string[], PluginMetadata[], PluginLoadFailure[], string | undefined]>([
+    ['an enabled master mEdit failed to read as present, for the game loads what mEdit cannot read', baseThenA(true), [],
+      [needsBase], [{ name: 'Base.esm', origin: 'SomeMod', reason: 'Malformed record' }], undefined],
+    ['a master that is listed but disabled as missing', baseThenA(false), [], [held('Base.esm', { isMaster: true }), needsBase], [], '1 error'],
+    ['a master the game loads with no line as active', [A_ROW()], ['Base.esm'], [held('Base.esm', { origin: 'Data/', isMaster: true }), needsBase], [], undefined],
+  ])('reads %s', async (_case, lines, loadedWithNoLine, read, failures, description) => {
+    const h = makeTree(lines, { loadedWithNoLine });
 
-    await reconcile(h, [held('A.esp', { masters: ['Broken.esm'] })], [{ name: 'Broken.esm', origin: 'SomeMod', reason: 'Malformed record' }]);
-
-    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
-    expect(item?.description).toBeUndefined();
-  });
-
-  it('reads a master that is listed but disabled as missing, at Error', async () => {
-    const rows = [plugin({ name: 'Base.esm', line: 0, enabled: false }), plugin({ name: 'A.esp', line: 1 })];
-    const h = makeTree(rows);
-
-    await reconcile(h, [held('Base.esm', { isMaster: true }), held('A.esp', { masters: ['Base.esm'] })]);
+    await reconcile(h, read, failures);
 
     const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
-    expect(item?.description).toBe('1 error');
-    expect(tooltipAsString(item?.tooltip)).toContain('"Base.esm" is a master of "A.esp", and is missing or not active.');
-  });
-
-  it('reads a master the game loads with no line as active', async () => {
-    const h = makeTree([A_ROW()], { loadedWithNoLine: ['Base.esm'] });
-
-    await reconcile(h, [held('Base.esm', { origin: 'Data/', isMaster: true }), held('A.esp', { masters: ['Base.esm'] })]);
-
-    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
-    expect(item?.description).toBeUndefined();
+    expect(item?.description).toBe(description);
   });
 
   describe('flags the row of a plugin whose suggested move can be applied', () => {

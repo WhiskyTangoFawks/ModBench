@@ -122,7 +122,6 @@ const named = (kind: 'rows-changed' | 'plugin-changed', keys: string[] = []) =>
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const pluginReads = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPlugins').length;
 
-
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
 async function handedOff(client: InMemoryMEditClient): Promise<void> {
@@ -330,7 +329,6 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
     expect(marked).toEqual(['1 B.esp']);
   });
 });
-
 
 describe('the Plugins view follows mEdit\'s change event', () => {
   const TEST = { name: 'Test.esp', origin: 'ModA' };
