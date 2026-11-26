@@ -450,6 +450,17 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void RekeyingAContainerOntoADirectoryThatIsThere_IsRefusedAsHavingNowhereToMoveTo()
+    {
+        var directory = Path.GetDirectoryName(FullPath(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")).Value().Require())).Require();
+        Directory.CreateDirectory(directory.Replace(_worldspace.FormKey.ToString().Replace(':', '_'), FreeFormKey.Replace(':', '_'), StringComparison.Ordinal));
+
+        var refused = Assert.IsType<SourceFailure.Inaccessible>(Repository.ChangesToRekey(Plugin, Identity(_worldspace, "wrld"), FreeFormKey).Stopped());
+
+        Assert.Contains("nowhere to move to", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RekeyingARecordWithAFileOfItsOwnInItsContainersDirectory_ReplacesThatFileThereUnderTheNewKey()
     {
         var before = TreeSnapshot.Of(_modFolder);
