@@ -19,7 +19,7 @@ MODIFIERS = r'(?:(?:public|internal|protected|static|virtual|abstract|sealed|asy
 DECLARATION = re.compile(
     r'^[ \t]*(?:\[[^\]\n]*\] *)*(?P<modifiers>' + MODIFIERS + r')'
     r'(?:(?:class|record(?: struct)?|struct|interface|enum) +(?P<type>[A-Za-z_]\w*)\b(?! *(?:<[^>\n]*>)? *(?:\([^)\n]*\))? *:)'
-    r'|(?![\w<>\[\],.?() ]*\b(?:class|record|struct|interface|enum)\b)[\w<>\[\],.?() ]+? +(?P<member>[A-Za-z_]\w*) *(?:<[^>\n]*>)? *(?:\(|\{|=>|=|;))', re.MULTILINE)
+    r'|(?!(?:public|internal|protected|static|virtual|abstract|sealed|async|readonly|new|required|partial|unsafe|extern|override|class|record|struct|interface|enum)\b)[\w<>\[\],.?() ]+? +(?P<member>[A-Za-z_]\w*) *(?:<[^>\n]*>)? *(?:\(|\{|=>|=|;))', re.MULTILINE)
 
 
 @dataclass
