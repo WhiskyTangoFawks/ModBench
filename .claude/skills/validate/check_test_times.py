@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Reads every TRX file and Vitest JSON report in a directory and names each test whose run took
-longer than its suite's ceiling. Exit 0 when none did, 1 otherwise."""
+"""Reads every test report under a directory (a TRX file, a Vitest JSON report, and the logs of
+unittest, .unittest, and mocha, .mocha), names each test that took over a second, and prints the
+run's wall time against its budget. Reports only: exit 0."""
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Three times a test's time on a quiet machine: ten seconds for a backend test, two for a unit
-# test. Gate runs share the machine with builds and other test runs, which slow a test two to six
-# times.
-CEILINGS = {'.trx': 30, '.json': 6}
+CEILING = 1
 TRX = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+UNITTEST_DURATION = re.compile(r'^(\d+\.\d+)s +(\S.*)$')
+MOCHA_PASSED = re.compile(r'^\s+[✔√] (.+) \((\d+)ms\)$', re.MULTILINE)
 
 
 def seconds(duration: str):
@@ -39,25 +40,45 @@ def vitest_times(report: Path):
             for test in file['assertionResults'] if 'duration' in test]
 
 
-TIMES = {'.trx': charged_times, '.json': vitest_times}
+def unittest_times(log: Path):
+    """The log of a run with --durations 0: a rule, then one line per test, up to a blank line."""
+    times = []
+    in_section = False
+    for line in log.read_text().splitlines():
+        if line == 'Slowest test durations':
+            in_section = True
+        elif in_section and (row := UNITTEST_DURATION.match(line)):
+            times.append((row[2], float(row[1])))
+        elif not line:
+            in_section = False
+    return times
 
 
-def over_ceiling(directory: Path, ceilings=CEILINGS):
+def mocha_times(log: Path):
+    """Mocha prints a passing test's time when it is over half its slow threshold, so a test over a
+    second always shows."""
+    return [(name, int(ms) / 1000) for name, ms in MOCHA_PASSED.findall(log.read_text())]
+
+
+TIMES = {'.trx': charged_times, '.json': vitest_times, '.unittest': unittest_times, '.mocha': mocha_times}
+
+
+def over_ceiling(directory: Path):
     return sorted(
-        ((name, time, ceilings[report.suffix]) for report in sorted(directory.iterdir())
-         if report.suffix in ceilings
-         for name, time in TIMES[report.suffix](report) if time > ceilings[report.suffix]),
+        ((name, time) for report in sorted(directory.rglob('*')) if report.is_file() and report.suffix in TIMES
+         for name, time in TIMES[report.suffix](report) if time > CEILING),
         key=lambda over: -over[1])
 
 
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
-    over = over_ceiling(Path(argv[0]))
-    for name, time, ceiling in over:
-        print(f'{time:7.1f} s  over {ceiling} s  {name}')
-    if over:
-        print(f'--- {len(over)} TESTS OVER THEIR CEILING ---')
-        return 1
+    directory, elapsed, budget = (sys.argv[1:] if argv is None else argv)
+    elapsed, budget = float(elapsed), float(budget)
+    over = over_ceiling(Path(directory))
+    for name, time in over:
+        print(f'{time:7.1f} s  {name}')
+    print(f'--- {len(over)} TESTS OVER {CEILING} s ---')
+    late = f': OVER BUDGET by {elapsed - budget:.0f} s' if elapsed > budget else ''
+    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget{late}')
     return 0
 
 

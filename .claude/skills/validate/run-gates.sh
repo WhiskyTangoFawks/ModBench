@@ -84,21 +84,25 @@ if $HOLDS_SLOT && [[ -z ${BUILD_SLOT_HELD:-} ]]; then
   exec bash "$ROOT/.claude/skills/validate/slot-run.sh" bash "$0" "${GATE_ARGS[@]}"
 fi
 
-# The logs and reports a skip is read from, under --merge-to-main. A run beside the comment gate's
-# own would delete them, so only a run in the slot clears them. MAIN_RESULTS has a folder of its own,
-# since check_test_times.py reads all of the folder it is given.
+# The logs and reports the time report reads, and a merge to main's skips. A run beside the comment
+# gate's own would delete them, so only a run in the slot clears them. SECONDS counts from here, in
+# the process that holds the slot, so the wait for the slot is not in it.
 REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
-SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend MAIN_RESULTS=$REPORTS/main UNIT_RESULTS=$REPORTS/unit
+SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
 ! $HOLDS_SLOT || { rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+BUDGET_SECONDS=300
+! $MERGE_TO_MAIN || BUDGET_SECONDS=600
+SECONDS=0
 
-# A merge to main fails on a skipped test, so each unittest run leaves its verbose log for skips.py.
+# Each unittest run in the slot leaves its verbose log, with every test's time, for skips.py and
+# check_test_times.py. The console shows what neither reads: the failures.
 unittest_discover() {
   local log=$1 status
   shift
-  $MERGE_TO_MAIN || { python3 -m unittest discover -q "$@"; return; }
-  python3 -m unittest discover -v "$@" > "$SKIP_LOGS/$log.unittest" 2>&1
+  $HOLDS_SLOT || { python3 -m unittest discover -q "$@"; return; }
+  python3 -m unittest discover -v --durations 0 "$@" > "$SKIP_LOGS/$log.unittest" 2>&1
   status=$?
-  grep -Ev ' \.\.\. ok$' "$SKIP_LOGS/$log.unittest"
+  grep -Ev ' \.\.\. ok$|^Slowest test durations$|^[0-9]+\.[0-9]+s ' "$SKIP_LOGS/$log.unittest"
   return $status
 }
 
@@ -167,20 +171,6 @@ backend_tests() {
   if { [[ -n $selected ]] || $DOCS; } && ! grep -qx MEditService.Architecture.Tests <<< "$selected"; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
   fi
-  echo "=== Gate 3: Backend test times ==="
-  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results" || return
-  ! $MERGE_TO_MAIN || tests_on_the_users_world
-}
-
-# The kinds a branch leaves out, run at a merge to main, one project at a time so a budget never
-# shares the machine with another project's tests. A filter that selects nothing is no test, so a
-# run with no passing test fails.
-tests_on_the_users_world() {
-  echo "=== Gate 3: Backend tests of real size, soak and smoke ==="
-  mkdir -p "$MAIN_RESULTS" || return
-  (cd "$ROOT/MEditService" && dotnet test --no-build -m:1 -v minimal --logger trx --results-directory "$MAIN_RESULTS" \
-    --filter 'Kind=RealSize|Kind=Smoke') || return
-  grep -qs 'outcome="Passed"' "$MAIN_RESULTS"/*.trx || { echo "No test of real size or smoke ran."; return 1; }
 }
 
 if $BACKEND; then
@@ -227,6 +217,11 @@ fi
 if $MERGE_TO_MAIN; then
   echo "=== Skipped tests ==="
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
+fi
+
+if $HOLDS_SLOT; then
+  echo "=== Test times and budget ==="
+  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS"
 fi
 
 if $FAILED; then

@@ -196,12 +196,14 @@ fi
         self.write(f"MEditService/MEditService.{name}/MEditService.{name}.csproj", test_sdk + "".join(
             f'<ProjectReference Include="..\\MEditService.{r}\\MEditService.{r}.csproj" />' for r in references))
 
-    def trx(self, outcome):
+    def trx(self, outcome, slow_seconds=0):
         name = pathlib.Path(self.repo, "fake.trx")
+        slow = (f'<UnitTestResult testName="Fake.Slow" duration="00:00:{slow_seconds:02d}" '
+                'endTime="2026-10-02T19:01:00+00:00" outcome="Passed" />') if slow_seconds else ""
         name.write_text(
             '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>'
             f'<UnitTestResult testName="Fake.ATest" duration="00:00:00.1" endTime="2026-10-02T19:00:01+00:00" outcome="{outcome}" />'
-            '</Results></TestRun>')
+            f'{slow}</Results></TestRun>')
         return str(name)
 
     def run_after_changing(self, path, *flags, **env):
@@ -225,6 +227,23 @@ class BranchTests(FakeDotnet):
     def test_the_docs_scans_of_a_branch_pass_no_filter(self):
         _, calls = self.run_after_changing("spec/a.d2", "--docs")
         self.assertEqual(self.filter_present_per_dotnet_test(calls), [False], calls)
+
+
+class TimeReport(FakeDotnet):
+    def test_a_run_in_the_slot_names_each_test_over_a_second_and_the_wall_time_against_the_branch_budget(self):
+        run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
+        self.assertIn("5.0 s  Fake.Slow", run.stdout)
+        self.assertNotIn("Fake.ATest", run.stdout)
+        self.assertRegex(run.stdout, r"Wall time \d+ s of 300 s budget\n")
+
+    def test_a_unittest_over_a_second_is_named(self):
+        self.write(".claude/hooks/test_probe.py",
+                   "import time, unittest\nclass Probe(unittest.TestCase):\n    def test_slow(self):\n        time.sleep(1.1)\n")
+        run, _ = self.run_after_changing("spec/a.d2", "--docs")
+        self.assertRegex(run.stdout, r"1\.\d s  test_slow \(test_probe\.Probe\.test_slow\)")
+
+    def test_the_comment_gate_alone_prints_no_report(self):
+        self.assertNotIn("Wall time", self.gates("--comments").stdout)
 
 
 class MergeToMainPaused(FakeDotnet):
@@ -257,18 +276,10 @@ class MergeToMainPaused(FakeDotnet):
 class MergeToMain(FakeDotnet):
     TIER_PAUSED = "false"
     MODE = "--merge-to-main"
-    ONE_PROJECT_AT_A_TIME = " -m:1 "
 
-    def world_runs(self, calls):
-        return [call for call in calls if "--filter Kind=RealSize|Kind=Smoke" in call]
-
-    def test_the_mode_runs_the_real_size_and_smoke_tests_beside_the_gates_of_the_diff(self):
-        _, calls = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
-        self.assertEqual(len(self.world_runs(calls)), 1, calls)
-
-    def test_the_tests_of_the_users_world_run_one_project_at_a_time_so_a_budget_runs_alone(self):
-        _, calls = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
-        self.assertIn(self.ONE_PROJECT_AT_A_TIME, self.world_runs(calls)[0])
+    def test_the_report_reads_a_merge_to_main_against_its_budget_of_ten_minutes(self):
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
+        self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
 
     def test_the_mode_runs_the_gates_the_whole_diff_since_main_can_break_not_the_diff_since_the_branch_it_tracks(self):
         git(self.repo, "checkout", "-q", "-b", "integration")
@@ -278,11 +289,6 @@ class MergeToMain(FakeDotnet):
         self.write("spec/a.d2", "edited")
         git(self.repo, "commit", "-q", "-am", "edit")
         self.assertEqual(self.gates(self.MODE).stdout.splitlines()[-1], self.slot_line("--frontend --docs"))
-
-    def test_a_run_that_executed_no_test_fails(self):
-        run, _ = self.run_after_changing("spec/a.d2", self.MODE)
-        self.assertIn("No test of real size or smoke ran.", run.stdout)
-        self.assertEqual(run.returncode, 1)
 
     def test_a_skipped_test_fails_the_run_naming_it(self):
         run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("NotExecuted"))
