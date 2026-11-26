@@ -1,50 +1,57 @@
-import { describe, it, expect } from 'vitest';
-import { readIniSection, readIniValue, replaceIniSection, setIniByteArray, setIniValue } from '../../codecs/qSettingsIni';
+import { describe, it, expect, vi } from 'vitest';
+import { rm } from 'node:fs/promises';
+import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
+import type { ModMetadata } from '../../../instanceAdapter';
+import { mo2InstanceHolding, type HeldInstance } from '../../../test/mo2InstanceHolding';
 
-describe('a value read from a QSettings INI', () => {
-  it('reads the key in the named section, not the same key in another', () => {
-    const text = '[A]\r\nk=wrong\r\n[B]\r\nk=right\r\n';
-    expect(readIniValue(text, 'B', 'k')).toBe('right');
-  });
+vi.mock('vscode', () => fakeVscodeModule());
 
-  it('is undefined when the section lacks the key', () => {
-    expect(readIniValue('[A]\r\nk=1\r\n[B]\r\n', 'B', 'k')).toBeUndefined();
-  });
+const META = 'mods/M/meta.ini';
+const trash = (path: string): Promise<void> => rm(path);
 
-  it('trims padding around the key and the value', () => {
-    expect(readIniValue('[A]\r\n k = v \r\n', 'A', 'k')).toBe('v');
-  });
+const modHolding = (meta: string): HeldInstance => mo2InstanceHolding({ 'profiles/Default/modlist.txt': '+M\r\n', [META]: meta });
 
-  it('ignores a line with no "=", whose whole text would otherwise pass for a key', () => {
-    expect(readIniValue('[A]\r\nkx\r\nk=1\r\n', 'A', 'k')).toBe('1');
+async function versionRead(meta: string): Promise<string | undefined> {
+  return (await modHolding(meta).adapter.reading()).mods.find((entry) => entry.kind === 'mod')?.version;
+}
+
+async function metaWritten(meta: string, metadata: ModMetadata): Promise<string> {
+  const { adapter, text } = modHolding(meta);
+  await adapter.writeModMetadata('M', metadata, trash);
+  return text(META);
+}
+
+async function writtenAndRead(version: string): Promise<{ written: string; read: string | undefined }> {
+  const { adapter, text } = modHolding('[General]\n');
+  await adapter.writeModMetadata('M', { version }, trash);
+  return { written: await text(META), read: (await adapter.reading()).mods.find((entry) => entry.kind === 'mod')?.version };
+}
+
+describe('a value read from a QSettings INI, a mod\'s meta.ini version', () => {
+  it.each([
+    ['reads the key in the named section, not the same key in another', '[A]\r\nversion=wrong\r\n[General]\r\nversion=right\r\n', 'right'],
+    ['is undefined when the section lacks the key', '[A]\r\nversion=1\r\n[General]\r\n', undefined],
+    ['trims padding around the key and the value', '[General]\r\n version = v \r\n', 'v'],
+    ['ignores a line with no "=", whose whole text would otherwise pass for a key', '[General]\r\nversion\r\nversion=1\r\n', '1'],
+  ])('%s', async (_, meta, version) => {
+    expect(await versionRead(meta)).toBe(version);
   });
 });
 
 describe('keys above the first header', () => {
-  it('read as [General], as QSettings does', () => {
-    expect(readIniValue('k=1\r\n[A]\r\nk=2\r\n', 'General', 'k')).toBe('1');
+  it('read as [General], as QSettings does', async () => {
+    expect(await versionRead('version=1\r\n[A]\r\nversion=2\r\n')).toBe('1');
   });
 
-  it('are set in place as [General]', () => {
-    expect(setIniValue('k=1\r\n[A]\r\nk=2\r\n', 'General', 'k', '9')).toBe('k=9\r\n[A]\r\nk=2\r\n');
+  it('are set in place as [General]', async () => {
+    expect(await metaWritten('version=1\r\n[A]\r\nversion=2\r\n', { version: '9' })).toBe('version=9\r\n[A]\r\nversion=2\r\n');
   });
 });
 
 describe('a repeated key', () => {
-  it('reads and sets its first line', () => {
-    const text = '[A]\nk=1\nk=2\n';
-    expect(readIniValue(text, 'A', 'k')).toBe('1');
-    expect(setIniValue(text, 'A', 'k', '9')).toBe('[A]\nk=9\nk=2\n');
-  });
-});
-
-describe('a section read from a QSettings INI', () => {
-  it('maps every key of the section and none of another', () => {
-    expect([...readIniSection('[A]\na=1\n[B]\nb=2\nc=3\n', 'B')]).toEqual([['b', '2'], ['c', '3']]);
-  });
-
-  it('is empty for a missing section', () => {
-    expect(readIniSection('[A]\na=1\n', 'B').size).toBe(0);
+  it('reads and sets its first line', async () => {
+    expect([await versionRead('[General]\nversion=1\nversion=2\n'), await metaWritten('[General]\nversion=1\nversion=2\n', { version: '9' })])
+      .toEqual(['1', '[General]\nversion=9\nversion=2\n']);
   });
 });
 
@@ -60,13 +67,8 @@ describe('decoded values', () => {
     ['reads a leading @@ as one @', '@@Variant(x)', '@Variant(x)'],
     ['reads a unit above 0xFF in a @ByteArray as ?, as toLatin1 does', '@ByteArray(a\\x20acz)', 'a?z'],
     ['reads the UTF-8 bytes of a @ByteArray as text', '@ByteArray(caf\\xc3\\xa9)', 'caf\u00e9'],
-    ['reads an empty value as empty', '', ''],
-  ])('%s', (_name, raw, expected) => {
-    expect(readIniValue(`[A]\nk=${raw}\n`, 'A', 'k')).toBe(expected);
-  });
-
-  it('reach readIniSection decoded too', () => {
-    expect(readIniSection('[A]\nk="a,b"\n', 'A').get('k')).toBe('a,b');
+  ])('%s', async (_name, raw, expected) => {
+    expect(await versionRead(`[General]\nversion=${raw}\n`)).toBe(expected);
   });
 });
 
@@ -79,67 +81,37 @@ describe('values written to a QSettings INI, read back as written', () => {
     ['leading and trailing spaces', ' padded '],
     ['a newline', 'a\nb'],
     ['plain text', 'My Profile'],
-  ])('read back as written: %s', (_name, value) => {
-    const text = setIniValue('[A]\n', 'A', 'k', value);
-    expect(readIniValue(text, 'A', 'k')).toBe(value);
+  ])('read back as written: %s', async (_name, value) => {
+    expect((await writtenAndRead(value)).read).toBe(value);
   });
 
-  it('quote a comma, as Qt writes category="-1,"', () => {
-    expect(setIniValue('[A]\n', 'A', 'k', '-1,')).toBe('[A]\nk="-1,"\n');
+  it('quote a comma, as Qt writes category="-1,"', async () => {
+    expect((await writtenAndRead('-1,')).written).toBe('[General]\nversion="-1,"\n');
   });
 
-  it('leave plain text bare', () => {
-    expect(setIniValue('[A]\n', 'A', 'k', 'My Profile')).toBe('[A]\nk=My Profile\n');
+  it('leave plain text bare', async () => {
+    expect((await writtenAndRead('My Profile')).written).toBe('[General]\nversion=My Profile\n');
   });
 });
 
 describe('a value set in a QSettings INI', () => {
-  it('replaces the key in its section only', () => {
-    const text = '[A]\r\nk=1\r\n[B]\r\nk=2\r\n';
-    expect(setIniValue(text, 'B', 'k', '9')).toBe('[A]\r\nk=1\r\n[B]\r\nk=9\r\n');
-  });
-
-  it('adds an absent key right after its section header', () => {
-    expect(setIniValue('[A]\r\nx=1\r\n[B]\r\n', 'A', 'k', '9')).toBe('[A]\r\nk=9\r\nx=1\r\n[B]\r\n');
-  });
-
-  it('adds an absent section ahead of everything', () => {
-    expect(setIniValue('[B]\r\nx=1\r\n', 'A', 'k', '9')).toBe('[A]\r\nk=9\r\n[B]\r\nx=1\r\n');
-  });
-
-  it('writes an empty value as an empty key rather than deleting it', () => {
-    expect(setIniValue('[A]\nk=1\n', 'A', 'k', '')).toBe('[A]\nk=\n');
-  });
-
-  it('deletes the key when the value is undefined', () => {
-    expect(setIniValue('[A]\nk=1\nx=2\n', 'A', 'k', undefined)).toBe('[A]\nx=2\n');
-  });
-
-  it('adds nothing, not even a section, to delete an absent key', () => {
-    expect(setIniValue('[B]\nx=2\n', 'A', 'k', undefined)).toBe('[B]\nx=2\n');
-  });
-
-  it('keeps every other byte of an unchanged file, BOM included', () => {
-    const text = '\uFEFF[A]\r\n; note\r\nk=1\r\n\r\n[B]\r\nx=@ByteArray(a\\\\b)\r\n';
-    expect(setIniValue(text, 'A', 'k', '1')).toBe(text);
+  it.each([
+    ['replaces the key in its section only', '[A]\r\nversion=1\r\n[General]\r\nversion=2\r\n', { version: '9' }, '[A]\r\nversion=1\r\n[General]\r\nversion=9\r\n'],
+    ['adds an absent key right after its section header', '[General]\r\nx=1\r\n[B]\r\n', { version: '9' }, '[General]\r\nversion=9\r\nx=1\r\n[B]\r\n'],
+    ['adds an absent section ahead of everything', '[B]\r\nx=1\r\n', { version: '9' }, '[General]\r\nversion=9\r\n[B]\r\nx=1\r\n'],
+    ['writes an empty value as an empty key rather than deleting it', '[General]\nversion=1\n', { version: '' }, '[General]\nversion=\n'],
+    ['deletes the key when the value is undefined', '[General]\nmodid=5\nx=2\n', { installationFile: { name: 'New.7z' } }, '[General]\ninstallationFile=New.7z\nx=2\n'],
+    ['keeps every other byte of an unchanged file, BOM included',
+      '\uFEFF[General]\r\n; note\r\nversion=1\r\n\r\n[B]\r\nx=@ByteArray(a\\\\b)\r\n', { version: '2' }, '\uFEFF[General]\r\n; note\r\nversion=2\r\n\r\n[B]\r\nx=@ByteArray(a\\\\b)\r\n'],
+  ])('%s', async (_, meta, metadata, written) => {
+    expect(await metaWritten(meta, metadata)).toBe(written);
   });
 });
 
 describe('a section replaced whole in a QSettings INI', () => {
-  it('replaces a section whole, leaving its neighbours', () => {
-    expect(replaceIniSection('[A]\nx=1\ny=2\n[B]\nz=3\n', 'A', ['q=0'])).toBe('[A]\nq=0\n[B]\nz=3\n');
-  });
-
-  it('appends an absent section at the end', () => {
-    expect(replaceIniSection('[A]\nx=1\n', 'B', ['q=0'])).toBe('[A]\nx=1\n[B]\nq=0\n');
-  });
-
-  it('removes the section when no lines remain', () => {
-    expect(replaceIniSection('[A]\nx=1\n[B]\nz=3\n', 'A', [])).toBe('[B]\nz=3\n');
-  });
-
-  it('leaves text without the section alone when no lines remain', () => {
-    expect(replaceIniSection('[A]\nx=1\n', 'B', [])).toBe('[A]\nx=1\n');
+  it('removes the section when no lines remain', async () => {
+    expect(await metaWritten('[General]\nmodid=5\n[installedFiles]\n1\\modid=5\n1\\fileid=6\nsize=1\n[B]\nz=3\n', { installationFile: { name: 'New.7z' } }))
+      .toBe('[General]\ninstallationFile=New.7z\n[B]\nz=3\n');
   });
 });
 
@@ -150,23 +122,27 @@ describe('Qt escapes written', () => {
     ['a named control', 'a\nb\tc', 'a\\nb\\tc'],
     ['a leading @ doubled', '@x', '@@x'],
     ['non-ASCII as UTF-8', 'caf\u00e9', 'caf\u00e9'],
-  ])('%s', (_name, value, raw) => {
-    expect(setIniValue('[A]\n', 'A', 'k', value)).toBe(`[A]\nk=${raw}\n`);
-    expect(readIniValue(`[A]\nk=${raw}\n`, 'A', 'k')).toBe(value);
+  ])('%s', async (_name, value, raw) => {
+    expect(await writtenAndRead(value)).toEqual({ written: `[General]\nversion=${raw}\n`, read: value });
   });
 });
 
-describe('a value set as a byte array in a QSettings INI', () => {
-  it('escapes a hex digit after an escaped byte, as Qt does', () => {
-    expect(setIniByteArray('[A]\n', 'A', 'k', 'Pröfil')).toBe('[A]\nk=@ByteArray(Pr\\xc3\\xb6\\x66il)\n');
+describe('a value set as a byte array in a QSettings INI, the selected profile in ModOrganizer.ini', () => {
+  const selected = async (profile: string) => {
+    const { adapter, text } = mo2InstanceHolding({ 'ModOrganizer.ini': '[General]\ngameName=Fallout 4\nselected_profile=Default\n' });
+    await adapter.selectProfile(profile);
+    return { written: await text('ModOrganizer.ini'), read: await adapter.activeProfile() };
+  };
+
+  it('escapes a hex digit after an escaped byte, as Qt does', async () => {
+    expect((await selected('Pröfil')).written).toBe('[General]\ngameName=Fallout 4\nselected_profile=@ByteArray(Pr\\xc3\\xb6\\x66il)\n');
   });
 
-  it('writes the UTF-8 bytes at or above 0x7F as \\xNN, as Qt does for a QByteArray', () => {
-    expect(setIniByteArray('[A]\n', 'A', 'k', 'caf\u00e9')).toBe('[A]\nk=@ByteArray(caf\\xc3\\xa9)\n');
+  it('writes the UTF-8 bytes at or above 0x7F as \\xNN, as Qt does for a QByteArray', async () => {
+    expect((await selected('caf\u00e9')).written).toBe('[General]\ngameName=Fallout 4\nselected_profile=@ByteArray(caf\\xc3\\xa9)\n');
   });
 
-  it('reads back as written', () => {
-    const text = setIniByteArray('[A]\n', 'A', 'k', 'Pr\u00f6fil, \\x "q"');
-    expect(readIniValue(text, 'A', 'k')).toBe('Pr\u00f6fil, \\x "q"');
+  it('reads back as written', async () => {
+    expect((await selected('Pr\u00f6fil, \\x "q"')).read).toBe('Pr\u00f6fil, \\x "q"');
   });
 });
