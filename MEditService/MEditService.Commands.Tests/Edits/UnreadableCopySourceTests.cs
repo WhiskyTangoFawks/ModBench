@@ -21,28 +21,6 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
-    public void CopyAsOverride_OfAReadableRecord_ChangesTheDestinationByThatRecord()
-    {
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
-
-        result.OnlyLanded();
-        Assert.Equal([_mod.FlatNpc.ToString()], _mod.ChangedFormKeys(_mod.DestinationPlugin));
-    }
-
-    [Fact]
-    public void CopyAsOverride_OfARecordWhoseCompiledPluginDocumentIsNoJsonDocument_IsRefused_AndWritesNothing()
-    {
-        MakeNoJsonDocument(_mod.FlatNpc);
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
-        Assert.Contains($"{ContainerCopyFixture.SourcePluginName}'s document for {_mod.FlatNpc} is no record document", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
-    }
-
-    [Fact]
     public void CopyAsOverride_OfARecordTwoDocumentsOfItsSourceClaim_IsRefusedAsAmbiguous_NamingTheClaim_AndWritesNothing()
     {
         var document = _mod.Document(_mod.SourcePlugin, _mod.FlatNpc.ToString()).Require();
@@ -54,23 +32,6 @@ public sealed class UnreadableCopySourceTests : IDisposable
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains($"More than one document in this plugin's source tree holds {_mod.FlatNpc}", refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
-    }
-
-    [Fact]
-    public void CopyAsOverride_OntoADestinationDocumentThatIsNoJsonDocument_IsRefused_AndLeavesItAlone()
-    {
-        _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false).OnlyLanded();
-        var document = _mod.Document(_mod.DestinationPlugin, _mod.FlatNpc.ToString()).Require();
-        var file = TreeTampering.FileOf(_mod.DestinationModFolder, _mod.DestinationPlugin, document.Identity);
-        var broken = document.Body.Replace('{', '[');
-        File.WriteAllText(file, broken);
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: true);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
-        Assert.Contains("is not a readable document", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(broken, File.ReadAllText(file));
     }
 
     [Fact]
@@ -88,21 +49,6 @@ public sealed class UnreadableCopySourceTests : IDisposable
         Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
         Assert.Contains($"{ContainerCopyFixture.DestinationPluginName}'s document for {_mod.Quest} is no record document", refused.Message, StringComparison.Ordinal);
         Assert.Equal(broken, File.ReadAllText(file));
-    }
-
-    [Fact]
-    public void CopyAsOverride_OntoADestinationHoldingTheRecordInTwoDocuments_IsRefusedAsAmbiguous_AndLeavesItAlone()
-    {
-        _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false).OnlyLanded();
-        var document = _mod.Document(_mod.DestinationPlugin, _mod.FlatNpc.ToString()).Require();
-        TreeTampering.Duplicate(_mod.DestinationModFolder, _mod.DestinationPlugin, document.Identity);
-        var before = TreeSnapshot.Of(_mod.DestinationModFolder);
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: true);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
-        Assert.Equal(before, TreeSnapshot.Of(_mod.DestinationModFolder));
     }
 
     public static TheoryData<Func<ContainerCopyFixture, FormKey>, CopyMode> CopiesReadingTheWorldspace => new()

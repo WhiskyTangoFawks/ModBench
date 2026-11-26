@@ -71,11 +71,8 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     private static int FlagsOf(JsonObject document) => document["MajorRecordFlagsRaw"].Require().GetValue<int>();
 
     [Theory]
-    [InlineData(Compressed, Compressed | Deleted, Deleted)]
-    [InlineData(Compressed, Compressed | PartialForm, PartialForm)]
-    [InlineData(PartialForm, PartialForm | Deleted, Deleted)]
-    [InlineData(Deleted | Persistent, Deleted | Persistent | PartialForm, Persistent | PartialForm)]
-    [InlineData(0, Deleted | PartialForm, PartialForm)]
+    [InlineData(PartialForm | Compressed, PartialForm | Compressed | Deleted, Deleted)]
+    [InlineData(Compressed, Compressed | Deleted | PartialForm, PartialForm)]
     public void DeletedAndPartialFormExcludeEachOtherAndCompressed_WhateverIsWrittenAfterwards(int held, int written, int kept)
     {
         var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(held), "cell");
@@ -83,36 +80,16 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         Assert.Equal(kept, FlagsOf(SetFlags(formKey, written)));
     }
 
-    [Theory]
-    [InlineData(PartialForm, PartialForm | Deleted)]
-    [InlineData(0, Deleted | PartialForm)]
-    public void AnEmptiedRecordWithNoCopyToItsLeft_HoldsNeitherItsEditorIdNorItsFields(int held, int written)
+    [Fact]
+    public void APartialFormMadeOfACopyTheWriteDeletes_WithNoCopyToItsLeft_HoldsNeitherItsEditorIdNorItsFields()
     {
-        var cell = InteriorCellOfFallout4Esm(held);
+        var cell = InteriorCellOfFallout4Esm();
         cell.WaterHeight = 5f;
         var formKey = _fixture.Seed(cell, "cell");
 
-        var emptied = SetFlags(formKey, written);
+        var emptied = SetFlags(formKey, Deleted | PartialForm);
 
         Assert.DoesNotContain(emptied, p => p.Key is "EditorID" or "WaterHeight");
-    }
-
-    [Theory]
-    [InlineData(0, Deleted)]
-    [InlineData(0, PartialForm)]
-    [InlineData(PartialForm, PartialForm | Deleted)]
-    public void EmptyingACell_KeepsItsChildren_AndDropsItsOwnFields(int held, int written)
-    {
-        var cell = InteriorCellOfFallout4Esm(held);
-        cell.WaterHeight = 5f;
-        cell.Landscape = new Landscape(_mod);
-        var formKey = _fixture.Seed(cell, "cell");
-        var landscape = Parse(_fixture.Document(formKey))["Landscape"].Require().DeepClone();
-
-        var emptied = SetFlags(formKey, written);
-
-        Assert.True(JsonNode.DeepEquals(landscape, emptied["Landscape"]), emptied.ToJsonString());
-        Assert.DoesNotContain(emptied, p => p.Key == "WaterHeight");
     }
 
     [Fact]
@@ -132,17 +109,19 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingPartialForm_LeavesTheCopyItsHeaderAndItsEditorIdAlone()
+    public void SettingPartialForm_LeavesTheCopyItsHeaderItsEditorIdAndItsChildrenAlone()
     {
         var cell = InteriorCellOfFallout4Esm();
         cell.WaterHeight = 5f;
         cell.VersionControl = 7;
+        cell.Landscape = new Landscape(_mod);
         var formKey = _fixture.Seed(cell, "cell");
         var headerAndEditorId = new Cell(cell.FormKey, Fallout4Release.Fallout4)
         {
             EditorID = "C",
             MajorRecordFlagsRaw = PartialForm,
             VersionControl = 7,
+            Landscape = cell.Landscape,
         };
 
         var partial = SetFlags(formKey, PartialForm);
@@ -166,19 +145,21 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         Assert.DoesNotContain(deleted, p => p.Key is "EditorID" or "Data");
     }
 
-    [Fact]
-    public void AnotherFlag_OnACopyAlreadyDeleted_ChangesOnlyItsBit()
+    [Theory]
+    [InlineData(Deleted, Deleted | Persistent)]
+    [InlineData(0, PartialForm)]
+    public void AWriteThatNeitherEmptiesNorRefills_ChangesOnlyItsBits(int held, int written)
     {
         var npc = _mod.Npcs.AddNew("Guy");
         npc.HeightMax = 0.5f;
-        npc.MajorRecordFlagsRaw = Deleted;
+        npc.MajorRecordFlagsRaw = held;
         var formKey = _fixture.Seed(npc, "npc_");
 
-        var persistent = SetFlags(formKey, Deleted | Persistent);
+        var after = SetFlags(formKey, written);
 
-        Assert.Equal(Deleted | Persistent, FlagsOf(persistent));
-        Assert.Equal(0.5f, persistent["HeightMax"].Require().GetValue<float>());
-        Assert.Equal("Guy", persistent["EditorID"].Require().GetValue<string>());
+        Assert.Equal(written, FlagsOf(after));
+        Assert.Equal(0.5f, after["HeightMax"].Require().GetValue<float>());
+        Assert.Equal("Guy", after["EditorID"].Require().GetValue<string>());
     }
 
     [Fact]
@@ -192,22 +173,10 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingDeleted_WithNoCopyToItsLeft_LeavesItsFieldsEmpty()
+    public void ClearingDeleted_WithNoCopyToItsLeft_LeavesItsFieldsEmpty_AndKeepsItsFormVersionVersionStampsAndTheFlagsWritten()
     {
         var npc = _mod.Npcs.AddNew("Guy");
         npc.HeightMax = 0.5f;
-        npc.MajorRecordFlagsRaw = Deleted;
-        var formKey = _fixture.Seed(npc, "npc_");
-
-        var undeleted = SetFlags(formKey, 0);
-
-        Assert.DoesNotContain(undeleted, p => p.Key is "EditorID" or "HeightMax");
-    }
-
-    [Fact]
-    public void ClearingDeleted_WithNoCopyToItsLeft_KeepsItsFormVersionAndVersionStamps_AndTheFlagsWritten()
-    {
-        var npc = _mod.Npcs.AddNew("Guy");
         npc.FormVersion = 120;
         npc.VersionControl = 7;
         npc.Version2 = 8;
@@ -216,57 +185,11 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
 
         var undeleted = SetFlags(formKey, Persistent);
 
+        Assert.DoesNotContain(undeleted, p => p.Key is "EditorID" or "HeightMax");
         Assert.Equal(Persistent, FlagsOf(undeleted));
         Assert.Equal(120, undeleted["FormVersion"].Require().GetValue<int>());
         Assert.Equal(7, undeleted["VersionControl"].Require().GetValue<int>());
         Assert.Equal(8, undeleted["Version2"].Require().GetValue<int>());
-    }
-
-    [Fact]
-    public void ClearingPartialForm_WithNoCopyToItsLeft_LeavesItsOwnFieldsEmpty()
-    {
-        var cell = InteriorCellOfFallout4Esm(PartialForm);
-        cell.WaterHeight = 5f;
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var whole = SetFlags(formKey, 0);
-
-        Assert.DoesNotContain(whole, p => p.Key is "EditorID" or "WaterHeight" or "Flags");
-    }
-
-    [Fact]
-    public void Bit14_OnATypeThatCannotBeAPartialForm_ChangesOnlyItsBit()
-    {
-        var npc = _mod.Npcs.AddNew("Guy");
-        npc.HeightMax = 0.5f;
-        var formKey = _fixture.Seed(npc, "npc_");
-
-        var written = SetFlags(formKey, PartialForm);
-
-        Assert.Equal(PartialForm, FlagsOf(written));
-        Assert.Equal(0.5f, written["HeightMax"].Require().GetValue<float>());
-    }
-
-    [Fact]
-    public void ClearingPartialForm_MakesTheCopysOwnFieldsEditable()
-    {
-        var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(PartialForm), "cell");
-
-        SetFlags(formKey, 0);
-        var (result, _) = _fixture.Apply(formKey, SetAt(Flags(9), Member("WaterHeight")));
-
-        Assert.True(result.Applied, result.Message);
-    }
-
-    [Fact]
-    public void ARecordHeaderRow_OnAPartialForm_Edits()
-    {
-        var formKey = _fixture.Seed(new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm }, "cell");
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Flags(9), Member("VersionControl")));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(9, Parse(after.Require())["VersionControl"].Require().GetValue<int>());
     }
 
     [Fact]

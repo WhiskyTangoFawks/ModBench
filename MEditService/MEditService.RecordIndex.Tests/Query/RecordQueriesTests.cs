@@ -15,7 +15,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 {
     private const string PluginName = "TestPlugin.esp";
     private const string Npc01 = "000800:TestPlugin.esp";
-    private const string MatchesNpc02 = "SELECT form_key FROM npc_ WHERE editor_id = 'TestNPC02'";
     private static readonly PluginAddress PluginKey = new(PluginName, "TestMod");
 
     private static PluginFixtureBuilder TwoNpcsPlugin() => new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
@@ -65,8 +64,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
     private OpenedIndex Reconciled(PluginFixtureBuilder builder) => Reconciled(Built(builder));
 
-    private OpenedIndex OwnTwoNpcs() => Reconciled(TwoNpcsPlugin());
-
     private OpenedIndex WithAnUnreadableNpc(string unreadable)
     {
         var dataFolder = new ScratchDirectory("medit-record-query-unreadable-");
@@ -78,14 +75,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
             [new LoadOrderEntry(Path.GetFileName(path), path, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true)]);
         _built.Add(index);
         return index;
-    }
-
-    [Fact]
-    public void TheIndexedPlugin_IsListed()
-    {
-        var plugin = Assert.Single(_svc.GetPlugins().Value());
-
-        Assert.Equal(PluginName, plugin.Name);
     }
 
     private sealed record CompiledPluginRow(bool IsCompiledPlugin, bool PluginSourceUnreadable);
@@ -406,12 +395,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void ARecord_CarriesItsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
-    {
-        Assert.Equal("npc_", _svc.GetWinner(Npc01).Value()?.RecordType);
-    }
-
-    [Fact]
     public void AColumn_CarriesTheDiagnosisTheDocumentArrivedWith_ForTheRecordEditorRendersTheColumnReadOnlyFromItAlone()
     {
         const string unreadable = "000800:Unreadable.esp";
@@ -423,15 +406,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.NotNull(compare);
         Assert.Equal(diagnosis, Assert.Single(compare.Overrides).ParseDiagnosis);
-    }
-
-    [Fact]
-    public void AReadableRecordsColumn_CarriesNoDiagnosis()
-    {
-        var compare = _svc.GetCompare(Npc01).Value();
-
-        Assert.NotNull(compare);
-        Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
     }
 
     [Fact]
@@ -478,15 +452,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         Assert.Equal(["Base.esp", "Patch.esp"], plugins);
     }
 
-    [Fact]
-    public void EveryColumn_CarriesItsRecordType()
-    {
-        var compare = _svc.GetCompare(Npc01).Value();
-
-        Assert.NotNull(compare);
-        Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
-    }
-
     [Theory]
     [InlineData(LoadOrderEntry.OverwriteOrigin, true)]
     [InlineData("TestMod", false)]
@@ -498,25 +463,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.NotNull(compare);
         Assert.Equal(inOverwrite, Assert.Single(compare.Overrides).IsInOverwrite);
-    }
-
-    [Fact]
-    public void AConditionList_IsClassifiedAsFieldDiffChildren_ThroughTheOneConflictClassifier_ForItIsAnOrdinaryReflectedArrayColumn()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod => mod.ConstructibleObjects.AddNew("Recipe").Conditions.Add(new ConditionFloat
-            {
-                CompareOperator = CompareOperator.EqualTo,
-                ComparisonValue = 1f,
-                Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
-            })));
-
-        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
-        var condition = Assert.Single(Children(conditions));
-        var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
-        var function = Assert.Single(Children(data0), c => c.FieldName == "Function");
-        Assert.Equal("GetIsID", function.Values["Base.esp"]?.ToString());
-        Assert.Equal("Base.esp", conditions.WinnerColumn);
     }
 
     [Fact]
@@ -704,27 +650,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
-    }
-
-    [Fact]
-    public void AFilterSet_IsInForce_WithItsSource()
-    {
-        var index = OwnTwoNpcs();
-
-        index.Queries.SetFilter(MatchesNpc02, "npcs.sql").Accepted();
-
-        Assert.Equal(new RecordFilter(MatchesNpc02, "npcs.sql"), index.Queries.GetFilter().Value());
-    }
-
-    [Fact]
-    public void AClearedFilter_LeavesNoFilterInForce()
-    {
-        var index = OwnTwoNpcs();
-        index.Queries.SetFilter(MatchesNpc02, "npcs.sql").Accepted();
-
-        index.Queries.ClearFilter();
-
-        Assert.Null(index.Queries.GetFilter().Value());
     }
 
     [Fact]

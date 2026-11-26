@@ -1,6 +1,7 @@
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
@@ -117,4 +118,13 @@ public sealed class ContainerChildrenTests : IDisposable
         Assert.Empty(index.Queries.GetContainerChildren(Plugin, Quest).Value());
     }
 
+    [Fact]
+    public void ADeletedPlugin_LeavesNoContainerChildren()
+    {
+        File.Delete(_fixture.Plugins.Single().Path);
+        _index.NextCheck();
+
+        Assert.Empty(_index.Queries.GetContainerChildren(Plugin, Quest).Value());
+        Assert.Empty(_index.Queries.GetContainerChildren(Plugin, TopicA).Value());
+    }
 }

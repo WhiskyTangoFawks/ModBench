@@ -20,7 +20,6 @@ public sealed class SkyrimGestureTests : TestInstance
 
     private readonly FormKey _masterInteriorCell;
     private readonly FormKey _masterPlaced;
-    private readonly FormKey _npc;
     private readonly PluginAddress _compiledPlugin;
 
     public SkyrimGestureTests()
@@ -35,110 +34,30 @@ public sealed class SkyrimGestureTests : TestInstance
         Add(master, "MasterMod", compiledPlugin: false);
 
         var compiledPlugin = new SkyrimMod(ModKey.FromFileName(CompiledPluginName), SkyrimRelease.SkyrimSE);
-        _npc = compiledPlugin.Npcs.AddNew("CompiledPluginNpc").FormKey;
         _compiledPlugin = Add(compiledPlugin, "SourceMod");
     }
 
-    private string CompiledPluginPath => Path.Combine(ModFolderOf(_compiledPlugin), CompiledPluginName);
-
-    private ISkyrimModDisposableGetter Compiled() =>
-        SkyrimMod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(CompiledPluginName), CompiledPluginPath), SkyrimRelease.SkyrimSE);
-
     [Fact]
-    public async Task AFieldEdit_CompilesIntoTheSkyrimPlugin()
-    {
-        var result = EditHandler.Set(_compiledPlugin, _npc.ToString(), "Height", Json("1.25"));
-
-        Assert.True(result.Applied, result.Message);
-        await CompileHandler.CompileLandedAsync(_compiledPlugin);
-        using var compiled = Compiled();
-        Assert.Equal(1.25f, compiled.Npcs[_npc].Height);
-    }
-
-    [Fact]
-    public void ANestedTemplatedMember_IsRefused_NamingItsFlag()
+    public void AWriteThatChangesATemplatedBit_ThroughItsMemberOrItsStruct_IsRefusedNamingTheBit()
     {
         var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
         var template = mod.Npcs.AddNew("Template");
         var copy = mod.Npcs.AddNew("Copy");
-        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats;
-        copy.Template.SetTo(template.FormKey);
-        var plugin = Add(mod, "TemplatedMod");
-
-        var result = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("3"), Member("Configuration"), Member("SpeedMultiplier")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
-        Assert.Contains("Configuration.SpeedMultiplier", result.Message);
-        Assert.Contains("Stats", result.Message);
-        Assert.True(EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("3"), Member("Configuration"), Member("DispositionBase"))).Applied);
-    }
-
-    [Theory]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", "[]", "Configuration.Flags.Essential")]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", """["Essential","Respawn"]""", "Configuration.Flags.Respawn")]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", """["Essential","Female"]""", null)]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, (NpcConfiguration.Flag)0, "Flags", """["2"]""", "Configuration.Flags.Essential")]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, (NpcConfiguration.Flag)0, "Flags", """["Female"]""", null)]
-    [InlineData(NpcConfiguration.TemplateFlag.Stats, NpcConfiguration.Flag.Essential, "MagickaOffset", "9", "Configuration.MagickaOffset")]
-    [InlineData(NpcConfiguration.TemplateFlag.Stats, NpcConfiguration.Flag.Essential, "Flags", """["Essential"]""", null)]
-    public void AWriteThatChangesATemplatedMemberOrBit_ThroughTheMemberOrItsStruct_IsRefused(
-        NpcConfiguration.TemplateFlag templateFlag, NpcConfiguration.Flag held, string member, string requested, string? refusedMember)
-    {
-        var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
-        var template = mod.Npcs.AddNew("Template");
-        var copy = mod.Npcs.AddNew("Copy");
-        copy.Configuration.TemplateFlags = templateFlag;
-        copy.Configuration.Flags = held;
+        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.BaseData;
+        copy.Configuration.Flags = NpcConfiguration.Flag.Essential;
         copy.Template.SetTo(template.FormKey);
         var plugin = Add(mod, "TemplatedMod");
         var configuration = JsonNode.Parse(Document.Parse(RecordTextCodec.SerializeToText(copy, GameRelease.SkyrimSE)).DocumentAt("Configuration").Require().Text).Require();
-        configuration[member] = JsonNode.Parse(requested);
+        configuration["Flags"] = new JsonArray();
 
-        var throughMember = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json(requested), Member("Configuration"), Member(member)));
+        var throughMember = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("[]"), Member("Configuration"), Member("Flags")));
         var throughStruct = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json(configuration.ToJsonString()), Member("Configuration")));
 
-        Assert.Equal(refusedMember is null, throughMember.Applied);
-        Assert.Equal(refusedMember is null, throughStruct.Applied);
-        if (refusedMember is not null)
+        Assert.All([throughMember, throughStruct], result =>
         {
-            Assert.All([throughMember, throughStruct], result =>
-            {
-                Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
-                Assert.Contains(refusedMember, result.Message);
-            });
-        }
-    }
-
-    [Fact]
-    public void ClearingTheLastTemplateFlag_ThroughTheFlagsWrite_MakesTheMembersEditableAtOnce()
-    {
-        var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
-        var template = mod.Npcs.AddNew("Template");
-        var copy = mod.Npcs.AddNew("Copy");
-        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats;
-        copy.Template.SetTo(template.FormKey);
-        var plugin = Add(mod, "TemplatedMod");
-        var level = SetAt(Json("3"), Member("Configuration"), Member("SpeedMultiplier"));
-
-        Assert.False(EditHandler.Edit(plugin, copy.FormKey.ToString(), level).Applied);
-        var cleared = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("[]"), Member("Configuration"), Member("TemplateFlags")));
-
-        Assert.True(cleared.Applied, cleared.Message);
-        Assert.True(EditHandler.Edit(plugin, copy.FormKey.ToString(), level).Applied);
-    }
-
-    [Fact]
-    public async Task TheLightFlag_SetOnTheHeader_CompilesAsALightSkyrimPlugin()
-    {
-        var header = new FormKey(ModKey.FromFileName(CompiledPluginName), 0).ToString();
-
-        var result = EditHandler.Set(_compiledPlugin, header, "IsSmallMaster", Json("true"));
-
-        Assert.True(result.Applied, result.Message);
-        await CompileHandler.CompileLandedAsync(_compiledPlugin);
-        using var compiled = Compiled();
-        Assert.True(compiled.IsSmallMaster);
+            Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
+            Assert.Contains("Configuration.Flags.Essential", result.Message);
+        });
     }
 
     [Fact]

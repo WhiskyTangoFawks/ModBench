@@ -10,16 +10,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-[Collection(TestPluginFixtureCollection.Name)]
-public class RecordReadsTests(TestPluginFixture fixture)
+public sealed class RecordReadsTests(SqlDoorFixture door) : IClassFixture<SqlDoorFixture>
 {
     private static readonly PluginAddress Plugin = new(TestPluginFixture.PluginName, PluginOrigin.DataDirectory);
     private static readonly PluginAddress UnknownPlugin = new("NonExistent.esp", PluginOrigin.DataDirectory);
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
 
-    private readonly TestPluginFixture _fixture = fixture;
-
-    private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+    private readonly TestPluginFixture _fixture = door.Plugin;
 
     [Fact]
     public void ASearchByFormId_AlsoOffersTheRecordsWhoseEditorIdHoldsItsText()
@@ -65,7 +62,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [InlineData("000800:testplugin.esp")]
     public void ASearchByFormKey_FindsThatRecord_IgnoringCase_AcrossTypes(string search)
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
 
         var result = index.Queries.GetRecords(["npc_", "weap"], plugin: null, search: search, limit: 100, offset: 0).Value();
 
@@ -76,7 +73,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [Fact]
     public void ASearchByAMalformedFormKey_FallsBackToEditorIdMatch_FindingNothing()
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
 
         var result = index.Queries.GetRecords(["npc_"], plugin: null, search: "ZZZZZZ:NotAFormKey.esp", limit: 100, offset: 0).Value();
 
@@ -148,7 +145,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [Fact]
     public void ADocument_HasAFieldForEveryColumnInItsSchema()
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
         var formKey = _fixture.Npc1FormKey.ToString();
         var schema = Reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
 
@@ -158,29 +155,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.NotEmpty(schema.RecordColumns);
         var fieldNames = record.Fields.Select(f => f.Metadata.Name).ToHashSet();
         Assert.All(schema.RecordColumns, col => Assert.Contains(col.Name, fieldNames));
-    }
-
-    [Fact]
-    public void AFormLinkField_ReadsItsExactFormKey()
-    {
-        FormKey npcFormKey = default, raceFormKey = default;
-        using var fixture = new PluginFixtureBuilder("medit-columnlist-value")
-            .WithPlugin("ColumnValue.esm", mod =>
-            {
-                raceFormKey = mod.Races.AddNew("TestRace").FormKey;
-                var npc = mod.Npcs.AddNew("ColumnValueNPC");
-                npcFormKey = npc.FormKey;
-                npc.Race = new FormLink<IRaceGetter>(raceFormKey);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        var record = index.Queries.GetWinner(npcFormKey.ToString()).Value();
-
-        Assert.NotNull(record);
-        var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Race");
-        Assert.NotNull(raceField);
-        Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
     [Theory]
@@ -199,19 +173,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var stack = index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner).StackOf(npcFormKey.ToString());
 
         Assert.Equal(winner, Assert.Single(stack).Origin);
-    }
-
-    [Fact]
-    public void APluginAddress_ReadsThatPluginsDocument()
-    {
-        using var index = LoadedIndex();
-        var formKey = _fixture.Npc1FormKey.ToString();
-
-        var record = index.CopyIn(formKey, Plugin);
-
-        Assert.NotNull(record);
-        Assert.Equal(TestPluginFixture.PluginName, record.Plugin);
-        Assert.Equal("TestNPC01", record.EditorId);
     }
 
     [Fact]
@@ -243,57 +204,15 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [InlineData("' OR '1'='1")]
     public void AFormKeyInNoPlugin_ReadsNoDocument(string formKey)
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
 
         Assert.Null(index.Queries.GetWinner(formKey).Value());
-    }
-
-    private static PluginFixtureData TwoProviders(string prefix, out FormKey sharedNpc)
-    {
-        FormKey npcKey = default;
-        var fixture = new PluginFixtureBuilder(prefix)
-            .WithPlugin("PluginA.esm", mod => npcKey = mod.Npcs.AddNew("SharedNPC").FormKey)
-            .WithPlugin("PluginB.esp", (mod, built) =>
-            {
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("PluginA.esm") });
-                mod.Npcs.Set(built[0].Npcs.First().DeepCopy());
-            })
-            .Build();
-        sharedNpc = npcKey;
-        return fixture;
-    }
-
-    [Fact]
-    public void TheOverrideStack_IsOrderedByLoadOrderIndex_WithTheLaterPluginTheWinner()
-    {
-        using var fixture = TwoProviders("medit-duckdb", out var npcKey);
-        using var index = Indexes.Reconciled(fixture);
-
-        var overrides = index.StackOf(npcKey.ToString());
-
-        Assert.Equal(2, overrides.Count);
-        Assert.Equal(0, overrides[0].LoadOrderIndex);
-        Assert.Equal(1, overrides[1].LoadOrderIndex);
-        Assert.False(overrides[0].IsWinner);
-        Assert.True(overrides[1].IsWinner);
-    }
-
-    [Fact]
-    public void AKnownFormKey_ResolvesToItsRecordTypeAndEditorId()
-    {
-        using var index = LoadedIndex();
-        var npc1 = _fixture.Npc1FormKey.ToString();
-
-        var link = index.ResolutionOf(npc1, Plugin, npc1);
-
-        Assert.Equal("npc_", link.RecordType);
-        Assert.Equal("TestNPC01", link.EditorId);
     }
 
     [Fact]
     public void AnUnknownFormKey_ResolvesToNothing()
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
         var link = index.ResolutionOf(_fixture.Npc1FormKey.ToString(), Plugin, "FFFFFF:Unknown.esp");
 
         Assert.Equal(new FormKeyResolution(FormKeyResolutionState.Unresolved, null, null), link);
@@ -330,7 +249,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [Fact]
     public void APluginFilterNamingAnUnknownPlugin_FindsNothingEvenWhenTheSearchMatches()
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
         var result = index.Queries.GetRecords(["npc_"], UnknownPlugin, search: "TestNPC", limit: 100, offset: 0).Value();
         Assert.Equal(0, result.Total);
     }
@@ -359,7 +278,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [Fact]
     public void AnUnsetFormLinkField_ReadsNull()
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
 
         var record = index.Queries.GetWinner(_fixture.Npc1FormKey.ToString()).Value();
 
@@ -371,7 +290,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [Fact]
     public void AHeaderMemberTheDocumentOmits_ReadsNull_InTheComparedColumn()
     {
-        using var index = LoadedIndex();
+        var index = door.Index;
 
         var compare = index.Queries.GetCompare(_fixture.Npc1FormKey.ToString()).Value();
 

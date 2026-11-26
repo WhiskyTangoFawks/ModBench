@@ -18,7 +18,6 @@ public sealed class TwoModReferenceFixture : TestInstance, ICompiledPlugins
     public const string TargetRaceEditorId = "TargetRace";
     public const string ReferencerNpcEditorId = "ReferencerNpc";
 
-    public string TargetModFolder => FolderOf(TargetOrigin);
     public string ReferencerModFolder => FolderOf(ReferencerOrigin);
 
     public PluginAddress TargetPlugin { get; }
@@ -29,9 +28,8 @@ public sealed class TwoModReferenceFixture : TestInstance, ICompiledPlugins
     public FormKey Npc { get; }
 
     public FormKey TargetRace { get; }
-    public FormKey ReferencerNpc { get; }
 
-    private TwoModReferenceFixture(bool initReferencer)
+    private TwoModReferenceFixture()
     {
         var targetMod = new Fallout4Mod(ModKey.FromFileName(TargetPluginName), Fallout4Release.Fallout4);
         var race = targetMod.Races.AddNew(TargetRaceEditorId);
@@ -42,12 +40,10 @@ public sealed class TwoModReferenceFixture : TestInstance, ICompiledPlugins
         var referencerMod = new Fallout4Mod(ModKey.FromFileName(ReferencerPluginName), Fallout4Release.Fallout4);
         referencerMod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName(TargetPluginName) });
         referencerMod.Npcs.Set(targetMod.Npcs.First(n => n.FormKey == npc.FormKey).DeepCopy());
-        var referencerNpc = referencerMod.Npcs.AddNew(ReferencerNpcEditorId);
-        referencerNpc.Race.SetTo(race);
-        ReferencerNpc = referencerNpc.FormKey;
-        ReferencerPlugin = Add(referencerMod, ReferencerOrigin, initReferencer);
+        referencerMod.Npcs.AddNew(ReferencerNpcEditorId).Race.SetTo(race);
+        ReferencerPlugin = Add(referencerMod, ReferencerOrigin);
         Seal();
     }
 
-    public static TwoModReferenceFixture Create(bool initReferencer) => new(initReferencer);
+    public static TwoModReferenceFixture Create() => new();
 }

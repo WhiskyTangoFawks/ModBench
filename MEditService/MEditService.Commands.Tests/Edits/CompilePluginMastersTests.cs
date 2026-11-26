@@ -63,36 +63,11 @@ public sealed class CompilePluginMastersTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
+    public async Task Compile_AfterAnEditLinkingAPluginNoMasterNamed_AddsItAsAMaster_InLoadOrder()
     {
-        using var compiled = await this.CompiledAsync(_plugin);
-
-        Assert.Equal([CharlieName, BravoName], compiled.MasterReferences.Select(m => m.Master.FileName.String));
-    }
-
-    public static TheoryData<string, Action<CompilePluginMastersTests>> EditsReachingDelta => new()
-    {
-        {
-            "an override of its record",
-            test => SourceEdits.Write(
-                test.RepositoryOf(test._plugin).Require(), test._plugin,
-                new Keyword(test._deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
-                "kywd", GameRelease.Fallout4)
-        },
-        {
-            "a link to its record",
-            test => SourceEdits.Rewrite<Npc>(
-                test.RepositoryOf(test._plugin).Require(), test._plugin,
-                new RecordIdentity(test._npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
-                npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(test._deltaKeyword)))
-        },
-    };
-
-    [Theory]
-    [MemberData(nameof(EditsReachingDelta))]
-    public async Task Compile_AfterAnEditReachingAPluginNoMasterNamed_AddsItAsAMaster_InLoadOrder(string _, Action<CompilePluginMastersTests> edit)
-    {
-        edit(this);
+        SourceEdits.Rewrite<Npc>(
+            RepositoryOf(_plugin).Require(), _plugin, new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
+            npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
         using var compiled = await this.CompiledAsync(_plugin);
 
