@@ -26,7 +26,6 @@ async function instance() {
 
 const PUBLISHER_FILE = 'compiler_settings.json';
 
-// The ignore list's whitelist, the publisher's configuration let in beside the mod manager's.
 const WHITELIST = `${[
   '/*', '!/.gitignore', '!/.gitmodules', '!/ModOrganizer.ini', '!/userlist.yaml', `!/${PUBLISHER_FILE}`, '!/source/', '/source/*',
   '!/profiles/', '/profiles/*', '!/profiles/*/', '/profiles/*/*', '!/profiles/*/modlist.txt', '!/profiles/*/plugins.txt', '!/profiles/*/loadorder.txt',
@@ -36,8 +35,7 @@ const WHITELIST = `${[
 const heldWhole = (name: string): string =>
   `# Mod folders this repository holds whole\n!/mods/${name}/*\n/mods/${name}/meta.ini\n# End of mod folders this repository holds whole\n`;
 
-/** The hook the push check writes, as an instance repository of its own holds it. */
-async function ownPushCheck(): Promise<string> {
+async function pushCheckAnInstanceRepositoryHolds(): Promise<string> {
   const other = await mkdtemp(join(tmpdir(), 'modbench-mo2-hook-'));
   try {
     execFileSync('git', ['init', '--quiet'], { cwd: other });
@@ -1228,7 +1226,7 @@ describe('the MO2 adapter\'s repository', () => {
         const cloned = join(clone, 'modlist');
         await mkdir(join(cloned, 'source', 'Mod A'), { recursive: true });
         await mkdir(join(cloned, '.git', 'hooks'), { recursive: true });
-        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), await ownPushCheck(), { mode: 0o755 });
+        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), await pushCheckAnInstanceRepositoryHolds(), { mode: 0o755 });
         git(cloned, 'config', 'user.name', 't');
         git(cloned, 'config', 'user.email', 't@t');
         git(cloned, 'commit', '--quiet', '--allow-empty', '-m', 'unrelated');
@@ -1247,7 +1245,7 @@ describe('the MO2 adapter\'s repository', () => {
         const cloned = join(clone, 'modlist');
         await mkdir(join(cloned, 'source', 'Mod A'), { recursive: true });
         await mkdir(join(cloned, '.git', 'hooks'), { recursive: true });
-        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), await ownPushCheck(), { mode: 0o755 });
+        await writeFile(join(cloned, '.git', 'hooks', 'pre-push'), await pushCheckAnInstanceRepositoryHolds(), { mode: 0o755 });
         git(cloned, 'config', 'user.name', 't');
         git(cloned, 'config', 'user.email', 't@t');
         git(cloned, 'update-index', '--add', '--cacheinfo', `160000,${'a'.repeat(40)},source/Mod A`);
@@ -1259,7 +1257,7 @@ describe('the MO2 adapter\'s repository', () => {
       it('takes a pre-push hook already in a clone as written when it is Modbench\'s own', async () => {
         const adapter = await instance();
         runGit('init', '--quiet');
-        const own = await ownPushCheck();
+        const own = await pushCheckAnInstanceRepositoryHolds();
         await put('.git/hooks/pre-push', own);
 
         await adapter.refuseUnpublishedPins();

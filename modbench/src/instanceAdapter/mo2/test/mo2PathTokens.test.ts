@@ -19,7 +19,6 @@ import { onPosix } from '../../../test/platform';
 
 vi.mock('vscode', () => fakeVscodeModule());
 const smudge = vi.hoisted(() => ({ beforeRun: vi.fn<() => void>() }));
-// git's own smudge of a text, run through the filter as a checkout would.
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   const { promisify } = await import('node:util');
