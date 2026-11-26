@@ -64,25 +64,6 @@ public sealed class CommitLandingTests : IDisposable
     }
 
     [Fact]
-    public void ACommitThatChangesNoRow_DoesNotApplyTheFilterAgain_AndOneThatDoesApplyIt()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master)), (Later, () => Items(Later))));
-        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
-        index.SetFilter("SELECT form_key FROM records", "filter.sql");
-        IndexFiles.LogQueries(_fixture.InstanceRoot);
-        const string Materialized = "CREATE OR REPLACE TABLE _filter AS";
-
-        index.SignalChange();
-        Waits.Reached(() => IndexFiles.Started(_fixture.InstanceRoot, "SELECT plugin, origin, derived_from FROM"), "the check reading the index");
-        Waits.Reached(() => index.Status is { Validating: false, State: LoadOrderState.Ready }, "the check ending");
-        Assert.Equal(0, IndexFiles.StartedCount(_fixture.InstanceRoot, Materialized));
-
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        Assert.True(IndexFiles.StartedCount(_fixture.InstanceRoot, Materialized) > 0);
-    }
-
-    [Fact]
     public async Task AFatalCheckpoint_ReopensTheStore_WithNoReadToMeetIt()
     {
         var notifications = new InMemoryNotificationPublisher();

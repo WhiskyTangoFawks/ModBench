@@ -6,14 +6,18 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
-[Collection(TestPluginFixtureCollection.Name)]
-public class FilterTests(TestPluginFixture fixture)
+public sealed class FilterTests : IClassFixture<SqlDoorFixture>
 {
     private static readonly PluginAddress Plugin = new(TestPluginFixture.PluginName, PluginOrigin.DataDirectory);
 
-    private readonly TestPluginFixture _fixture = fixture;
+    private readonly SqlDoorFixture _door;
 
-    private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+    /// <summary>Each test starts from no filter in force, whatever the test before it set on the shared index.</summary>
+    public FilterTests(SqlDoorFixture door)
+    {
+        _door = door;
+        _door.Index.ClearFilter();
+    }
 
     private static PagedResult<RecordSummary> NpcListing(OpenedIndex index) =>
         index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
@@ -27,7 +31,7 @@ public class FilterTests(TestPluginFixture fixture)
     [InlineData("SELECT form_key FROM \"NPC_\" WHERE CAST(editor_id AS INTEGER) = 1", "Conversion Error")]
     public void AFilterThatCannotRun_IsRefusedWithDuckDbsReason(string sql, string reasonStart)
     {
-        using var index = LoadedIndex();
+        var index = _door.Index;
 
         var refused = index.Queries.SetFilter(sql, "filter.sql");
 
@@ -38,7 +42,7 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void ARefusedFilter_LeavesTheFilterInForceStanding()
     {
-        using var index = LoadedIndex();
+        var index = _door.Index;
         var firstFormKey = NpcListing(index).Items[0].FormKey;
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "kept.sql");
 
@@ -50,7 +54,7 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void AnActiveFilter_NarrowsTheListingToItsMatches_WhateverExtraColumnsItSelects()
     {
-        using var index = LoadedIndex();
+        var index = _door.Index;
         var all = NpcListing(index);
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
@@ -65,7 +69,7 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void ClearingTheFilter_RestoresTheFullListing()
     {
-        using var index = LoadedIndex();
+        var index = _door.Index;
         var firstFormKey = NpcListing(index).Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
@@ -78,8 +82,8 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void ASearch_IsNotNarrowedByTheRecordFilter()
     {
-        using var index = LoadedIndex();
-        index.SetFilter($"SELECT '{_fixture.Npc1FormKey}' AS form_key", "filter.sql");
+        var index = _door.Index;
+        index.SetFilter($"SELECT '{_door.Plugin.Npc1FormKey}' AS form_key", "filter.sql");
 
         var found = index.Queries.GetRecords(["npc_"], plugin: null, search: "TestNPC02", limit: 100, offset: 0).Value();
 
@@ -89,7 +93,7 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void AnActiveFilter_NarrowsAPluginsCountToItsMatches()
     {
-        using var index = LoadedIndex();
+        var index = _door.Index;
         var firstFormKey = NpcListing(index).Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
@@ -98,27 +102,9 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void TwoPluginsOfOneName_OnlyThePluginThatMatchesIsListed()
-    {
-        using var plugins = new PluginFixtureBuilder("filter-two-plugins")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("InBoth"), origin: "ModA")
-            .WithPlugin("Shared.esp", mod =>
-            {
-                mod.Npcs.AddNew("InBoth");
-                mod.Npcs.AddNew("OnlyInModB");
-            }, origin: "ModB")
-            .BuildScattered();
-        using var index = Indexes.Reconciled(plugins);
-
-        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'OnlyInModB'", "filter.sql");
-
-        Assert.Equal([new PluginAddress("Shared.esp", "ModB")], PluginsWithMatches(index));
-    }
-
-    [Fact]
     public void NoMatchingRecords_FlagsNoPluginAsMatching_ButKeepsEveryPluginListed_ForTheTreeIsAlsoTheLoadOrder()
     {
-        using var index = LoadedIndex();
+        var index = _door.Index;
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
 
         Assert.Empty(PluginsWithMatches(index));

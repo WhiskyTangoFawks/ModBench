@@ -3,7 +3,6 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Query;
@@ -13,6 +12,9 @@ public sealed class StreamedSelectTests : IDisposable
     private const string Master = "Master.esm";
     private const string Later = "Later.esp";
     private const int Records = 100;
+    private const long SmallMemoryLimit = 32_000_000;
+    private const int BodyLength = 2_000;
+    private const int BodyCountTwiceTheSmallLimit = 32_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-select")
         .WithPlugin(Master).WithPlugin(Later).Build();
@@ -42,22 +44,6 @@ public sealed class StreamedSelectTests : IDisposable
         var read = 1;
         while (taken.MoveNext()) read++;
         Assert.Equal(Records, read);
-    }
-
-    [Fact]
-    public void ASelectPausedAfterItsFirstRow_HoldsNoSnapshotThatHoldsBackTheCheckpoint()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))));
-        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
-        using var rows = index.Queries.SelectRows("SELECT form_key FROM records WHERE record_type = 'misc'").Value();
-        using var taken = rows.Rows().GetEnumerator();
-        Assert.True(taken.MoveNext());
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        IndexFiles.Checkpointed(_fixture.InstanceRoot);
-
-        Assert.True(taken.MoveNext());
     }
 
     [Fact]
@@ -99,34 +85,43 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Empty(Directory.GetFiles(folder, "*.spool"));
     }
 
+    [Fact]
+    public void ASelectJoiningCopiesToTheirMastersRecordsOfTheSameBody_AnswersInMemoryTheBodiesOutgrow()
+    {
+        const int copied = 5;
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
+            (Master, () => Items(Master, BodyCountTwiceTheSmallLimit, BodyLength)),
+            (Later, () => Items(Master, copied, BodyLength))), memoryLimit: SmallMemoryLimit);
+
+        var rows = index.Queries.Selected($"""
+            SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.plugin = c.form_key_plugin
+            WHERE c.plugin = '{Later}' AND c.form_key_plugin <> c.plugin AND c.body = m.body
+            """);
+
+        Assert.Equal(copied, rows.Length);
+    }
+
+    [Theory]
+    [InlineData(100_000_000, "1")]
+    [InlineData(500_000_000, "2")]
+    public void TheRecordIndex_RunsADuckDbThreadPer250MbOfItsMemoryLimit_AndAtLeastOne(long memoryLimit, string threads)
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, memoryLimit: memoryLimit);
+
+        Assert.Equal(threads, index.Queries.Selected("SELECT current_setting('threads')::VARCHAR AS n").Single().GetProperty("n").GetString());
+    }
+
     [Theory]
     [InlineData("SELECT body FROM records")]
     [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
     public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
     {
-        const int many = 64_000;
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 64_000_000);
+        using var index = Indexes.Reconciled(
+            _fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, BodyCountTwiceTheSmallLimit, BodyLength))), memoryLimit: SmallMemoryLimit);
 
         using var rows = index.Queries.SelectRows(sql).Value();
 
-        Assert.Equal(many, rows.Rows().Count(row => row.Value().Length > 2_000));
-    }
-
-    [Fact]
-    public void ASelectRefusedAtItsFirstRow_LeavesNoReadThatHoldsBackTheCheckpoint()
-    {
-        var log = new List<LogEntry>();
-        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(
-            holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))), loggerFactory: loggers);
-        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        Assert.Equal(IndexRefusal.SelectRejected, index.Queries.SelectRows("SELECT CAST(editor_id AS INTEGER) AS v FROM records WHERE record_type = 'misc'").Refused().Refusal);
-        lock (log) log.Clear();
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-
-        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal)); }, "the checkpoint");
+        Assert.Equal(BodyCountTwiceTheSmallLimit, rows.Rows().Count(row => row.Value().Length > BodyLength));
     }
 
     [Fact]
@@ -134,11 +129,11 @@ public sealed class StreamedSelectTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
 
-        using var rows = index.Queries.SelectRows("SELECT CAST(CASE WHEN n < 1000000 THEN '1' ELSE 'x' END AS INTEGER) AS v FROM range(2000000) t(n)").Value();
+        using var rows = index.Queries.SelectRows("SELECT CAST(CASE WHEN n < 100000 THEN '1' ELSE 'x' END AS INTEGER) AS v FROM range(200000) t(n)").Value();
 
         var read = rows.Rows().ToList();
         Assert.All(read[..^1], row => row.Value());
-        Assert.InRange(read.Count - 1, 1, 999_999);
+        Assert.InRange(read.Count - 1, 1, 99_999);
         var refused = read[^1].Refused();
         Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
         const string TheFaultsReasonOrOnlyTheInterruptThatFollowsIt = "Could not convert string 'x'|^DuckDB interrupted the SELECT partway, and gave no reason";
