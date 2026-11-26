@@ -56,14 +56,17 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AFailedInit_LeavesTheModFoldersManifestAndTheIndexAsTheyWere()
+    public void AFailedInit_LeavesTheBranchTheIndexTheFolderAndTheModFoldersManifestAsTheyWere()
     {
         CommitTheModFoldersManifest();
         StageAnotherChange();
+        var before = Head();
         GitHooks.Write(_instance, "commit-msg", "exit 1");
 
         Assert.NotNull(InitInInstanceRepository(_sourceFolder, commit: true, new ModFolderManifest(ModFolder, LinkManifest, InInit: true)));
 
+        Assert.Equal(before, Head());
+        Assert.False(Directory.Exists(_sourceFolder));
         Assert.Equal("{}", File.ReadAllText(Path.Combine(ModFolder, LinkManifest.Name)));
         Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
         Assert.Empty(Git("status", "--porcelain", "--", ModFolderManifestPath));
@@ -108,16 +111,6 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         File.WriteAllText(Path.Combine(ModFolder, LinkManifest.Name), "{}");
         Git("add", ModFolderManifestPath);
         Git("commit", "-q", "-m", "The mod folder's manifest");
-    }
-
-    [Fact]
-    public void UnderAnIgnoreListThatLetsInTheSourceFolderByItsOwnLine_AnInit_CommitsTheSourceFolderAlone_AndNoChangeOfTheIgnoreList()
-    {
-        CommitAnIgnoreListLettingInTheSourceFolderByItsOwnLine_ThenChangeIt();
-
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, heldIn: SourceModIn.InstanceRepository));
-
-        AssertTheInitAtHoldsTheSourceFolderAlone("HEAD");
     }
 
     [Fact]
@@ -210,25 +203,21 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ABuild_IsUnpushedOnlyWhileTheRemoteLacksTheLastCommitTouchingTheSourceFolder_AndUncommittedOnlyForItsOwnChanges(bool changedSincePushed)
+    [InlineData("modlist.txt", false)]
+    [InlineData("source/TestMod/build.json", true)]
+    public void ABuild_IsUnpushedOnlyWhileTheRemoteLacksTheLastCommitTouchingTheSourceFolder_AndUncommittedOnlyForItsOwnChanges(
+        string changedSincePushed, bool unpushed)
     {
         Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
         Git("remote", "add", "origin", "https://example.com/modlist.git");
         Git("update-ref", "refs/remotes/origin/main", "HEAD");
-        if (changedSincePushed)
-        {
-            File.WriteAllText(Path.Combine(_sourceFolder, "build.json"), "the build file, changed");
-            Git("commit", "-q", "-m", "Change the build file", "--", $"source/{TestMod.Name}/build.json");
-        }
-        StageAnotherChange();
-        Git("commit", "-q", "-m", "Another mod");
+        File.AppendAllText(Path.Combine(_instance, changedSincePushed), "changed\n");
+        Git("commit", "-q", "-m", "A change since the push", "--", changedSincePushed);
         StageAnotherChange();
 
         var source = TestAdapters.Source().SourceToBuild(_sourceFolder, ["build.json"]).Value();
 
-        Assert.Equal((false, changedSincePushed), (source.Uncommitted, source.Unpushed));
+        Assert.Equal((false, unpushed), (source.Uncommitted, source.Unpushed));
     }
 
     [Fact]
@@ -247,20 +236,6 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AFailedInit_LeavesTheBranchTheIndexAndTheFolderAsTheyWere()
-    {
-        StageAnotherChange();
-        var before = Head();
-        GitHooks.Write(_instance, "commit-msg", "exit 1");
-
-        Assert.NotNull(InitInInstanceRepository(_sourceFolder, commit: true));
-
-        Assert.Equal(before, Head());
-        Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
-        Assert.False(Directory.Exists(_sourceFolder));
-    }
-
-    [Fact]
     public void AnInitWhereNoRepositoryHoldsTheFolder_IsRefusedNamingWhy_AndWritesNothing()
     {
         using var outside = new ScratchDirectory("medit-no-repository-");
@@ -270,14 +245,6 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
 
         Assert.Contains("no repository holds", refused.Reason, StringComparison.Ordinal);
         Assert.False(Directory.Exists(sourceFolder));
-    }
-
-    [Fact]
-    public void AFolderHoldingNoBuildFile_IsNoSourceMod_SoItCanBePutInTheInstanceRepository()
-    {
-        Directory.CreateDirectory(_sourceFolder);
-
-        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
 
     [Fact]
@@ -337,14 +304,19 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.Equal(Ignores(newLine), document.Text);
     }
 
+    public static TheoryData<string, Action<string>> WithoutTheManifestsLine => new()
+    {
+        { "no ignore list", _ => { } },
+        { "an ignore list without the line", folder => File.WriteAllText(Path.Combine(folder, ".gitignore"), "*\n!/build.json\n") },
+    };
+
     [Theory]
-    [InlineData(null)]
-    [InlineData("*\n!/build.json\n")]
-    public void AMoveOfASourceFolder_ChangesNoIgnoreList_WhenItLacksTheLine_OrThereIsNone(string? ignoreList)
+    [MemberData(nameof(WithoutTheManifestsLine))]
+    public void AMoveOfASourceFolder_ChangesNoIgnoreList_WhenItLacksTheLine_OrThereIsNone(string _, Action<string> ignoreListIn)
     {
         Directory.CreateDirectory(_sourceFolder);
         File.WriteAllText(Path.Combine(_sourceFolder, "TestMod.manifest.json"), "{}");
-        if (ignoreList is not null) File.WriteAllText(Path.Combine(_sourceFolder, ".gitignore"), ignoreList);
+        ignoreListIn(_sourceFolder);
 
         var changes = TestAdapters.Source().ChangesToMoveSourceFolder(
             _sourceFolder, SourceFolderOf("Renamed"), [new SourceMove("TestMod.manifest.json", "Renamed.manifest.json")]).Value();

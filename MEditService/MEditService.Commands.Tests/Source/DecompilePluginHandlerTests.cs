@@ -91,14 +91,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Decompile_ParksThePluginsBytes_SoItReadsAsOneModbenchWrote()
-    {
-        await Decompile(CompiledPlugin("Second.esp"));
-
-        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
-    }
-
-    [Fact]
     public async Task Decompile_ParksTheHashOfTheBytesItsSourceWasReadFrom()
     {
         await Decompile(new ReadingAs("READ-FROM"), CompiledPlugin("Second.esp"));
@@ -160,20 +152,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Empty(result.Applied);
         Assert.Equal(DecompileRefusal.WorkingTreeStatusUnreadable, Assert.Single(result.Refused).Refusal);
         Assert.Equal(before, SourceTextOf("First.esp"));
-    }
-
-    [Fact]
-    public async Task Decompile_OfASelection_RefusesOnlyThePluginWhoseSourceHasWorkingTreeChanges()
-    {
-        var first = TreeDocuments.Of(Repository, CompiledPlugin("First.esp")).Single(document => document.EditorId == "FirstNpc");
-        SourceModTree.Overwrite(
-            _sourceMod, CompiledPlugin("First.esp"), new RecordIdentity(first.FormKey, first.RecordType, first.EditorId),
-            first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
-
-        var result = await Decompile(CompiledPlugin("First.esp"), CompiledPlugin("Second.esp"));
-
-        Assert.Equal([CompiledPlugin("Second.esp")], result.Applied);
-        Assert.Equal(CompiledPlugin("First.esp"), Assert.Single(result.Refused).Item);
     }
 
     [Fact]

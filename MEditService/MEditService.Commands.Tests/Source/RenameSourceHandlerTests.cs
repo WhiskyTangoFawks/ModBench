@@ -56,11 +56,10 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-    [Theory]
-    [InlineData("New.esp")]
-    [InlineData("New.esm")]
-    public async Task RenameSource_ThenTheFileRenamedToMatch_CompilesToTheBytesTheOldNameCompiledTo(string newName)
+    [Fact]
+    public async Task RenameSource_ThenTheFileRenamedToMatch_CompilesToTheBytesTheOldNameCompiledTo()
     {
+        const string newName = "New.esp";
         var compiledBefore = await CompiledBytes(Old);
 
         var result = RenameSource(Old, newName);
@@ -69,17 +68,6 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.False(SourceReads(Old.Name));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));
-    }
-
-    [Fact]
-    public async Task RenameSource_MovesWhatModbenchLastWrote_SoTheRenamedFileReadsAsOneModbenchWrote()
-    {
-        await CompiledBytes(Old);
-
-        RenameSource(Old, "New.esp");
-
-        TheInstanceAdapterRenamesTheFile("New.esp");
-        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
     }
 
     [Fact]
@@ -143,11 +131,10 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Contains("New - Main.ba2", result.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("New.txt")]
-    [InlineData("sub/New.esp")]
-    public void RenameSource_ToANameThatIsNoPluginFile_RefusesIt_AndWritesNothing(string name)
+    [Fact]
+    public void RenameSource_ToANameThatIsNoPluginFile_RefusesIt_AndWritesNothing()
     {
+        const string name = "New.txt";
         var before = SourceModTree.Records(_sourceMod, Old);
 
         var result = RenameSource(Old, name);

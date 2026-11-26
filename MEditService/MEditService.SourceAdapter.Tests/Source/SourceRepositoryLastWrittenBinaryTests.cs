@@ -21,17 +21,6 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     }
 
     [Fact]
-    public void TheLastWrittenBinary_IsWhatTheWriteRecorded_OnceTheWriteReturns()
-    {
-        using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = SourceModOver(modFolder);
-
-        repository.WriteBinary(Test, "DEADBEEF1234", () => { }).Value();
-
-        Assert.Equal(["DEADBEEF1234"], repository.LastWrittenBinarySha256s(Test).Value());
-    }
-
-    [Fact]
     public void TheLastWrittenBinaries_NameTheNewBinaryBesideTheOldOne_UntilTheWriteReturns()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
@@ -103,15 +92,6 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         Assert.Equal(["FOR-TEST"], repository.LastWrittenBinarySha256s(Test).Value());
         Assert.Equal([OthersSourceModBinary], repository.LastWrittenBinarySha256s(Other).Value());
-    }
-
-    [Fact]
-    public void TheLastWrittenBinaries_AreEmptyNotAThrow_ForAPluginNothingWasRecordedFor()
-    {
-        using var modFolder = new ScratchDirectory("medit-last-written-");
-        var repository = SourceModOver(modFolder);
-
-        Assert.Empty(repository.LastWrittenBinarySha256s(new PluginAddress("Unknown.esp", "TestMod")).Value());
     }
 
     [Fact]

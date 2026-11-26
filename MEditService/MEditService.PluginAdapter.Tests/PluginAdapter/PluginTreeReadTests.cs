@@ -97,6 +97,22 @@ public sealed class PluginTreeReadTests
     }
 
     [Fact]
+    public async Task WriteFromTree_OfAFaceMorphWhoseTailHoldsFloatEpsilonBits_WritesTheSameTail()
+    {
+        byte[] tail = [1, 0, 0, 0, 2, 0, 0, 0];
+        using var data = new PluginFixtureBuilder("writetree-facemorph")
+            .WithPlugin("Morph.esp", mod => mod.Npcs.Add(new Npc(mod) { EditorID = "Npc", FaceMorphs = [new NpcFaceMorph { Index = 7, Unknown = tail }] }))
+            .Build();
+        var files = await ReadTreeFiles(data, "Morph.esp");
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Morph.esp");
+
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, [], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
+
+        using var written = Fallout4Mod.CreateFromBinaryOverlay(recompiledPath, Fallout4Release.Fallout4);
+        Assert.Equal(tail, Assert.Single(written.Npcs.Single().FaceMorphs.Require()).Unknown.ToArray());
+    }
+
+    [Fact]
     public async Task WriteFromTree_WithAMasterOrder_WritesTheMasterListInThatOrder()
     {
         using var data = new PluginFixtureBuilder("writetree-masters")

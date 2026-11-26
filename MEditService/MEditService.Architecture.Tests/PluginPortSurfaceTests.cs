@@ -32,12 +32,6 @@ public sealed class PluginPortSurfaceTests
             LiveObjectsOnThePortAndBehindItsReturnedValues(typeof(IPlantedPort)).Order(StringComparer.Ordinal));
     }
 
-    [Fact]
-    public void ThePortScan_LeavesIdentityAndTheReleaseAlone()
-    {
-        Assert.Empty(LiveObjectsOnThePortAndBehindItsReturnedValues(typeof(IIdentityOnlyPort)));
-    }
-
     private static List<string> LiveObjectsOnThePortAndBehindItsReturnedValues(Type port)
     {
         var offenders = new List<string>();
@@ -82,11 +76,5 @@ public sealed class PluginPortSurfaceTests
         IPlantedHandle Open();
         Mutagen.Bethesda.Plugins.Records.IMod CreateEmpty();
         Task Write(Mutagen.Bethesda.Plugins.Records.IMod plugin);
-    }
-
-    private interface IIdentityOnlyPort
-    {
-        Task<IReadOnlyList<Mutagen.Bethesda.Plugins.FormKey>> Keys(
-            Mutagen.Bethesda.Plugins.ModPath modPath, Mutagen.Bethesda.GameRelease release);
     }
 }

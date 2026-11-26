@@ -47,14 +47,4 @@ internal static class ServiceProjects
             .Select(include => Path.GetFileNameWithoutExtension(include[(include.LastIndexOf('/') + 1)..]))
             .Where(name => name.Length > 0)
             .Order(StringComparer.Ordinal)];
-
-    internal static string Traces(string solutionDirectory)
-    {
-        var dir = new DirectoryInfo(solutionDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "docs", "traces")))
-            dir = dir.Parent;
-        return dir is null
-            ? throw new InvalidOperationException("docs/traces not found above " + solutionDirectory)
-            : Path.Combine(dir.FullName, "docs", "traces");
-    }
 }

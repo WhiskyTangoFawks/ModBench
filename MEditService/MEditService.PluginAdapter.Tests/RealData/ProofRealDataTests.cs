@@ -4,6 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.PluginAdapter.Tests.RealData;
 
+[Kind(Kinds.Tool)]
 public sealed class ProofRealDataTests
 {
     [Fact]

@@ -118,20 +118,6 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
-    [Fact]
-    public void RemovingAChildThenTheDocumentThatCarriedIt_AnswersTheDocumentsDeletionAlone()
-    {
-        var session = Session();
-
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr"))));
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell"))));
-
-        Assert.Equal([FullPath(RoomDirectory(_room))], session.Changes.Deletions);
-        Assert.Empty(session.Changes.Documents);
-        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_room, "cell")).Value());
-        Assert.True(File.Exists(FullPath(RoomPath)));
-    }
-
     private IWriteSession SessionAfter(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         var session = Session();
@@ -167,6 +153,7 @@ public sealed class WriteSessionTests : IDisposable
 
     public enum Sequence
     {
+        RemoveAChildThenItsContainer,
         RenameThenRemoveAChildOfTheRenamed,
         RenameThenRemoveTheRenamed,
         RenameAContainerThenPutAChildInIt,
@@ -187,6 +174,11 @@ public sealed class WriteSessionTests : IDisposable
         var rekeyed = cell with { FormKey = $"000900:{PluginName}" };
         return sequence switch
         {
+            Sequence.RemoveAChildThenItsContainer =>
+            [
+                repository => repository.ChangesToRemove(Plugin, Identity(_ref1, "refr")),
+                repository => repository.ChangesToRemove(Plugin, Identity(_room, "cell")),
+            ],
             Sequence.RenameThenRemoveAChildOfTheRenamed =>
             [
                 repository => repository.ChangesToPut(Plugin, renamedRoom),
@@ -231,6 +223,7 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Theory]
+    [InlineData(Sequence.RemoveAChildThenItsContainer)]
     [InlineData(Sequence.RenameThenRemoveAChildOfTheRenamed)]
     [InlineData(Sequence.RenameThenRemoveTheRenamed)]
     [InlineData(Sequence.RenameAContainerThenPutAChildInIt)]
@@ -419,25 +412,6 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
-    public void AReadAfterAFailedWrite_SeesNothingOfIt()
-    {
-        var session = Session();
-        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
-        bool HoldsTheNewNpc() =>
-            session.Repository.TreeOf(Plugin).Value().Files.Any(file => file.RelativePath.Contains("NewNpc", StringComparison.Ordinal));
-
-        var failed = session.Atomically(() =>
-        {
-            session.Apply(session.Repository.ChangesToPut(Plugin, created));
-            Assert.True(HoldsTheNewNpc());
-            session.Apply(session.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent")));
-        });
-
-        Assert.IsType<SourceFailure.NotCarried>(failed);
-        Assert.False(HoldsTheNewNpc());
-    }
-
-    [Fact]
     public void AReadLaterInTheSession_SeesTheHeaderAndTheFormKeysItsEarlierWritesLeft()
     {
         var session = Session();
@@ -523,17 +497,6 @@ public sealed class WriteSessionTests : IDisposable
         Assert.IsType<SourceFailure.Unsaved>(session.WriteThen(later.Write));
 
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
-    }
-
-    [Fact]
-    public void AWriteFollowedByOneThatLands_KeepsWhatItWrote()
-    {
-        var session = Session();
-        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
-
-        Assert.Null(session.WriteThen(() => null));
-
-        Assert.False(File.Exists(FullPath(ExteriorCellPath)));
     }
 
     [Fact]

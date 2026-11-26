@@ -31,27 +31,24 @@ public sealed class PluginLoadFlagsTests : IDisposable
         return Convert.ToBase64String(digest);
     }
 
-    [Fact]
-    public void SettingAFlag_ChangesNoOtherByte_AndAnswersTheHashItWrote()
+    public static TheoryData<string, Action<Fallout4Mod>, bool, Action<Fallout4Mod>> Settings => new()
     {
-        var plain = Written("Plain.esp", _ => { });
-        var small = Written("Small.esp", mod => mod.IsSmallMaster = true);
+        { "set", _ => { }, true, mod => mod.IsSmallMaster = true },
+        { "cleared", mod => mod.IsSmallMaster = true, false, _ => { } },
+        { "set over records inside the light range", HoldingNativeId(0x800), true, mod => { HoldingNativeId(0x800)(mod); mod.IsSmallMaster = true; } },
+    };
 
-        var written = Adapter.SetLoadFlags(plain, new Dictionary<string, bool> { ["Small"] = true }, GameRelease.Fallout4).Answered();
-
-        Assert.Equal(File.ReadAllBytes(small), File.ReadAllBytes(plain));
-        Assert.Equal(HashOf(small), written);
-    }
-
-    [Fact]
-    public void SettingAFlagToFalse_ClearsIt()
+    [Theory]
+    [MemberData(nameof(Settings))]
+    public void SettingAFlag_ChangesNoOtherByte_AndAnswersTheHashItWrote(string _, Action<Fallout4Mod> before, bool small, Action<Fallout4Mod> after)
     {
-        var small = Written("Small.esp", mod => mod.IsSmallMaster = true);
-        var plain = Written("Plain.esp", _ => { });
+        var path = Written("Plugin.esp", before);
+        var expected = Written("Expected.esp", after);
 
-        Adapter.SetLoadFlags(small, new Dictionary<string, bool> { ["Small"] = false }, GameRelease.Fallout4).Answered();
+        var written = Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Small"] = small }, GameRelease.Fallout4).Answered();
 
-        Assert.Equal(File.ReadAllBytes(plain), File.ReadAllBytes(small));
+        Assert.Equal(File.ReadAllBytes(expected), File.ReadAllBytes(path));
+        Assert.Equal(HashOf(expected), written);
     }
 
     [Fact]
@@ -93,14 +90,6 @@ public sealed class PluginLoadFlagsTests : IDisposable
     }
 
     [Fact]
-    public void ALightFlag_OverRecordsInsideTheLightRange_IsSet()
-    {
-        var path = Written("Fits.esp", HoldingNativeId(0x800));
-
-        Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Small"] = true }, GameRelease.Fallout4).Answered();
-    }
-
-    [Fact]
     public void AClearedLimitingFlag_IsNotHeldToTheRangeItLimited()
     {
         var path = Written("Big.esp", HoldingNativeId(0x1000));
@@ -120,5 +109,7 @@ public sealed class PluginLoadFlagsTests : IDisposable
         File.WriteAllBytes(path, [.. File.ReadAllBytes(path), .. "GRUP"u8.ToArray(), .. Enumerable.Repeat((byte)0xFF, 20)]);
 
         Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Master"] = true }, GameRelease.Fallout4).Answered();
+
+        Assert.Equal(1, File.ReadAllBytes(path)[8] & 0x01);
     }
 }
