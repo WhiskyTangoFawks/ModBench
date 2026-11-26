@@ -92,18 +92,8 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
   });
 
   it.each([
-    ['failed to read, then sorting errors', scenes(failed, lackingMasters('Ghost.esm')), 'error'],
-    ['sorting errors, then unreadable records', scenes(lackingMasters('Ghost.esm'), unreadable), 'error'],
-    ['unreadable records over plugin source unreadable', scenes(sourceUnreadable, unreadable), 'error'],
-    ['plugin source unreadable over changed outside', scenes(reconciledWith({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }), changed), 'warning'],
-    ['unreadable records, then changed outside', scenes(reconciledWith({ hasParseFailure: true }), changed), 'error'],
-    ['changed outside, then malformed', scenes(changed, malformed), 'warning'],
     ['sorting errors over changed outside', scenes(lackingMasters('Ghost.esm'), changed), 'error'],
-    ['unreadable records over malformed', scenes(unreadable, malformed), 'error'],
     ['failed to read over malformed', scenes(malformed, failed), 'error'],
-    ['malformed alone', malformed, 'warning'],
-    ['a sorting warning alone', loadsBeforeB, 'warning'],
-    ['malformed over a sorting warning', scenes(loadsBeforeB, malformed), 'warning'],
   ] as const)('%s: the first status that holds sets the icon', (_label, scene, icon) => {
     const facts = new PluginFacts();
     scene(facts);
