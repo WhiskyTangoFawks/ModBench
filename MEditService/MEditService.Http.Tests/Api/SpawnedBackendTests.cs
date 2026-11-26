@@ -11,6 +11,9 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
 {
     private const string EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost = "http://127.0.0.1:0";
 
+    private static readonly string[] AskedToExitWithItsStdin =
+        ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"];
+
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
         ?? throw new InvalidOperationException($"Expected '{typeof(Program).Assembly.Location}' to have a parent directory.");
 
@@ -49,12 +52,14 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
     }
 
     [Fact]
-    public void SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory_ARealProcessSinceWebApplicationFactoryNeverReproducesTheCwd()
+    public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory_ARealProcessSinceWebApplicationFactoryNeverReproducesTheCwd()
     {
         var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
 
-        Assert.Contains(spawned.Lines, l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
-            Path.TrimEndingDirectorySeparator(l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..]) == expectedContentRoot);
+        Assert.True(
+            await spawned.LogsAsync(l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
+                Path.TrimEndingDirectorySeparator(l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..]) == expectedContentRoot),
+            $"expected the content root {expectedContentRoot}; captured output:\n{string.Join('\n', spawned.Lines)}");
     }
 
     [Fact]
@@ -100,8 +105,7 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
     public async Task AskedToExitWithItsStdin_KeepsRunningWhileItIsOpen_AndExitsOnceItCloses()
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
-        using var process = await StartedWithPipedStdinAsync(
-            ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"], workingDirectory);
+        using var process = await StartedWithPipedStdinAsync(AskedToExitWithItsStdin, workingDirectory);
         try
         {
             Assert.False(await ExitsWithinAsync(process, TimeSpan.FromMilliseconds(500)));
@@ -130,9 +134,7 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
         var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(
-            ["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost, "--ExitWhenStdinCloses", "true"],
-            workingDirectory, lines, pipeStdin: true, stallStartup: true);
+        using var process = SpawnThroughTheDotnetMuxer(AskedToExitWithItsStdin, workingDirectory, lines, pipeStdin: true, stallStartup: true);
         try
         {
             var stalled = await WaitForLineAsync(lines, l => l.Contains(StalledStartup.Marker, StringComparison.Ordinal), TimeSpan.FromSeconds(15));

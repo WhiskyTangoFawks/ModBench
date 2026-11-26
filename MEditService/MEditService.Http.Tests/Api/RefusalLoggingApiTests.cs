@@ -68,6 +68,17 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ARefusedScriptDelete_AnswersItsStatus_AndIsLoggedOnce()
+    {
+        await LoadedAndCompiledPlugin();
+
+        var response = await Client.PostAsJsonAsync("/records/delete", new { formKey = "000FFF:Held.esp", plugin = new { name = Plugin, origin = Origin } });
+
+        Assert.Equal("RecordNotFound", (await response.AssertIsProblem(System.Net.HttpStatusCode.NotFound)).GetProperty("refusal").GetString());
+        AssertLoggedOnce("Refused DeleteRecord", "RecordNotFound");
+    }
+
+    [Fact]
     public async Task ARefusedCreatePlugin_IsLoggedOnce_NamingThePluginAndWhy()
     {
         using var scratch = new ScratchDirectory("refusal-logging-create-");

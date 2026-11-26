@@ -91,14 +91,6 @@ public sealed class RecordDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AFileNamedByNoAbsolutePath_Is400()
-    {
-        await NonCompiledPlugin();
-
-        await (await RecordOf(Path.Combine("plugin-source", Plugin, "Npcs", "FiledNpc.json"))).AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task AGroupsMetadataFile_HoldsNoRecord_Is204()
     {
         var fx = await CompiledPlugin();

@@ -1,19 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.Api;
 
-[Collection(LoadedApiCollection.Name)]
-public sealed class PluginFileFlagsApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IDisposable
+public sealed class PluginFileFlagsApiTests : HostedTests
 {
     private readonly ScratchDirectory _root = new("api-plugin-file-flags-");
 
-    public void Dispose() => _root.Dispose();
-
-    private HttpClient Client => loaded.Client;
+    protected override void DisposeFixtures() => _root.Dispose();
 
     private string PluginWritten(bool small)
     {

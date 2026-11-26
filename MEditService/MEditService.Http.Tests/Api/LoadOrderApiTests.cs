@@ -18,7 +18,7 @@ public sealed class LoadOrderApiTests : HostedTests
     private Dictionary<string, object> Body() => SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, _fixture.Plugins);
 
     [Fact]
-    public async Task PutLoadOrder_AModsPluginNamingNoSourceFolder_IsAccepted()
+    public async Task AModsPluginNamingNoSourceFolder_IsAccepted()
     {
         var body = Body();
         body["plugins"] = _fixture.Plugins.Select(p => new
@@ -62,7 +62,7 @@ public sealed class LoadOrderApiTests : HostedTests
     }
 
     [Fact]
-    public async Task PutLoadOrder_TheGamesStringsFilesItNames_AreWhereALocalizedPluginsNamesAreRead()
+    public async Task TheGamesStringsFilesItNames_AreWhereALocalizedPluginsNamesAreRead()
     {
         var fx = ALocalizedPlugin();
         var plugin = fx.Plugins.Single();
@@ -86,7 +86,7 @@ public sealed class LoadOrderApiTests : HostedTests
 
     [Theory]
     [MemberData(nameof(ArchivesNamed))]
-    public async Task PutLoadOrder_AnArchiveItNames_IsWhereALocalizedPluginsNamesAreRead(
+    public async Task AnArchiveItNames_IsWhereALocalizedPluginsNamesAreRead(
         string namedIn, Func<StampedFile, PluginStrings> pluginsOwn, Func<StampedFile, StampedFile[]> theGames)
     {
         var fx = ALocalizedPlugin();

@@ -28,13 +28,6 @@ public sealed class CreatePluginApiTests : HostedTests
     private Task<HttpResponseMessage> Create(string name, string folder, string origin = Origin) =>
         Client.PostAsJsonAsync("/plugins/create", new { origin, name, folder, flags = Array.Empty<string>() });
 
-    private async Task<JsonElement> Created(string name, string folder, string origin = Origin)
-    {
-        var created = await Create(name, folder, origin);
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        return await created.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
     private static string NewModFolder(ScatteredFixtureData fx, string name) =>
         Directory.CreateDirectory(Path.Combine(fx.Root, name)).FullName;
 

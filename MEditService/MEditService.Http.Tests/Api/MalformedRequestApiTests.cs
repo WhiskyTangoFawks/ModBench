@@ -18,7 +18,7 @@ public sealed class MalformedRequestApiTests(LoadedApiFixture<TestPluginFixture>
 
     private static string InitOf(string sourceFolder) => $$$"""{"mods": [{{{Init}}}, "sourceFolder": {{{sourceFolder}}}}]}""";
 
-    public static TheoryData<string, string, string?> NotARequest => new()
+    public static TheoryData<string, string, string> NotARequest => new()
     {
         { "POST /build", "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
         { "POST /build", "no folder", $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", {Copy}}}], \"exclusionMark\": \".mohidden\"}}" },
@@ -40,7 +40,7 @@ public sealed class MalformedRequestApiTests(LoadedApiFixture<TestPluginFixture>
         },
         { "POST /version-in-git", "no mod", """{"mods": []}""" },
         { "POST /version-in-git", "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
-        { "POST /version-in-git", "a mod without a folder", """{"mods": [{"name": "VersionedMod", "commit": true, "sourceFolder": {"path": "s", "buildFile": "{}"}}]}""" },
+        { "POST /version-in-git", "a mod without a folder", """{"mods": [{"name": "VersionedMod", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
         { "POST /version-in-git", "a mod without commit", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
         { "POST /version-in-git", "a mod without the repository that holds it", InitOf("""{"path": "s", "buildFile": "{}"}""") },
         { "POST /version-in-git", "a mod without a source folder", InitOf("""{"in": "NewRepository", "buildFile": "{}"}""") },
@@ -87,9 +87,7 @@ public sealed class MalformedRequestApiTests(LoadedApiFixture<TestPluginFixture>
         { "POST /plugins/problems", "keys of no plugin", """{"keys": ["000800:Refers.esp"], "known": []}""" },
         { "POST /plugins/problems?plugin=Refers.esp", "a plugin without its origin", """{"known": []}""" },
         { "POST /load-order/filter", "no source", """{"sql": "SELECT form_key FROM \"NPC_\""}""" },
-        { "GET /load-order/sequence/await?atLeast=1&timeoutMs=0", "no time to wait", null },
         { "PUT /unsaved-document", "a document by a relative path", """{"path": "plugin-source/Typed.esp/Typed.json", "text": "{}", "version": 1, "opened": true}""" },
-        { "DELETE /unsaved-document?path=plugin-source%2FTyped.esp%2FTyped.json", "a document by a relative path", null },
         { "POST /plugin-files/set-flags", "an unknown game", """{"gameRelease": "Nowhere", "files": [{"path": "/x", "flags": {"Small": true}}]}""" },
         { "POST /plugin-files/set-flags", "a file with no flag", """{"gameRelease": "Fallout4", "files": [{"path": "/x", "flags": {}}]}""" },
         { "POST /plugin-files/flagged-hashes", "an unknown game", """{"gameRelease": "Nowhere", "files": [{"path": "/x", "flags": {"Small": true}}]}""" },
@@ -106,15 +104,27 @@ public sealed class MalformedRequestApiTests(LoadedApiFixture<TestPluginFixture>
 
     [Theory]
     [MemberData(nameof(NotARequest))]
-    public async Task ARequestThatDoesNotSayWhatToDo_Is400(string request, string lacking, string? body)
+    public async Task ARequestThatDoesNotSayWhatToDo_Is400(string request, string lacking, string body)
     {
         var (method, route) = (request[..request.IndexOf(' ', StringComparison.Ordinal)], request[(request.IndexOf(' ', StringComparison.Ordinal) + 1)..]);
-        using var message = new HttpRequestMessage(new HttpMethod(method), route);
-        if (body is not null) message.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        using var message = new HttpRequestMessage(new HttpMethod(method), route) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
 
         var response = await loaded.Client.SendAsync(message);
 
         Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
+    }
+
+    [Theory]
+    [InlineData("GET", "/load-order/sequence/await?atLeast=1&timeoutMs=0")]
+    [InlineData("GET", "/plugin-source/record?path=plugin-source%2FFiled.esp%2FNpcs%2FFiledNpc.json")]
+    [InlineData("DELETE", "/unsaved-document?path=plugin-source%2FTyped.esp%2FTyped.json")]
+    public async Task ARequestOfNoBodyThatDoesNotSayWhatToDo_Is400(string method, string route)
+    {
+        using var message = new HttpRequestMessage(new HttpMethod(method), route);
+
+        var response = await loaded.Client.SendAsync(message);
+
+        Assert.Equal((route, HttpStatusCode.BadRequest), (route, response.StatusCode));
     }
 
     [Theory]

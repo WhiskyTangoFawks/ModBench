@@ -58,8 +58,4 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Contains("NotANumber", cleared.GetProperty("reason").GetString(), StringComparison.Ordinal);
     }
 
-    private static async Task<long> VersionOf(HttpResponseMessage put) =>
-        (await put.EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
-
-    private static JsonElement StatusOf(JsonElement frame) => frame.GetProperty("loadOrderStatus");
 }

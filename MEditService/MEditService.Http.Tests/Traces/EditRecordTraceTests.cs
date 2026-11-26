@@ -17,7 +17,11 @@ public sealed class EditRecordTraceTests : HostedTests
 
     private static ScatteredFixtureData TwoMods() =>
         new PluginFixtureBuilder("trace-edit-a-record")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
+            .WithPlugin(Plugin, mod =>
+            {
+                mod.Npcs.AddNew(Npc);
+                mod.Worldspaces.AddNew("EditableWorld");
+            }, origin: Origin)
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
             .BuildScattered();
 
@@ -86,20 +90,25 @@ public sealed class EditRecordTraceTests : HostedTests
         [.. rowsChanged.GetProperty("keys").EnumerateArray().Select(k => k.GetString().Require())];
 
     [Fact]
-    public async Task CreatingARecord_IsPushedAsRowsChangedNamingItsNewKey_AndAnsweredByTheNextRead()
+    public async Task CreatingACellInAWorldspace_IsPushedAsRowsChangedNamingItsNewKey_AndReadAtTheGridPositionAsked()
     {
         using var fx = await Loaded(Origin);
+        var world = await Client.FirstFormKey(Plugin, Origin, "wrld");
         using var stream = await Client.NotificationStream();
 
-        var created = await Client.CreateRecord(Plugin, Origin, "npc_");
+        var created = await Client.CreateRecord(Plugin, Origin, "cell", world, new { x = 1, y = -2 });
 
         created.EnsureSuccessStatusCode();
         var formKey = (await created.Body()).GetProperty("formKey").GetString().Require();
         await Client.NextCheck(fx);
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
-        Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
-        Assert.Equal(Origin, rows.GetProperty("origin").GetString());
-        Assert.Equal(formKey, (await Client.Record(formKey)).GetProperty("formKey").GetString());
+        Assert.Equal((Plugin, Origin), (rows.GetProperty("plugin").GetString(), rows.GetProperty("origin").GetString()));
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{Plugin}/worldspaces/{Uri.EscapeDataString(world)}/blocks?origin={Origin}");
+        var cell = blocks.GetProperty("blocks").EnumerateArray()
+            .SelectMany(block => block.GetProperty("subBlocks").EnumerateArray())
+            .SelectMany(subBlock => subBlock.GetProperty("cells").EnumerateArray())
+            .Single(c => c.GetProperty("formKey").GetString() == formKey);
+        Assert.Equal((1, -2), (cell.GetProperty("cellX").GetInt32(), cell.GetProperty("cellY").GetInt32()));
     }
 
     private const string NonCompiledPlugin = "NonCompiledPlugin.esp";
