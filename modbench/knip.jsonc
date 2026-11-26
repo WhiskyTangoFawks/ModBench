@@ -1,5 +1,5 @@
 {
-  "include": ["exports", "types"],
+  "include": ["files", "exports", "types"],
   "entry": ["src/extension.ts!", "webview/src/main.tsx!", "webview/src/conflicts.tsx!", "webview/src/fomod.tsx!", "webview/vite.config.ts!"],
   "project": [
     "src/**/*.{ts,tsx}!",
