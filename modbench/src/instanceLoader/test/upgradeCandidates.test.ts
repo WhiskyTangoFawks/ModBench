@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { buildDownloadedFileRows } from '../downloadedFileRows';
-import type { DownloadedFile } from '../../instanceAdapter/instanceAdapter';
-import type { InstanceValue } from '../instance';
+import { describe, it, expect, afterEach } from 'vitest';
+import type { DownloadedFile, Mod } from '../../instanceAdapter/instanceAdapter';
+import { repositoriesOf } from '../../test/fakeInstanceAdapter';
+import { disposeLoaded, loader } from './loader';
 
-type Mod = InstanceValue['mods'][number];
+afterEach(disposeLoaded);
 
 const mod = (over: Partial<Mod> & { name: string }): Mod => ({
   kind: 'mod',
@@ -20,10 +20,11 @@ const downloadedFile = (over: { modID?: string; installedKey?: string; name?: st
   };
 };
 
-const offered = (mods: InstanceValue['mods'], file: DownloadedFile, sourceMods: ReadonlySet<string> = new Set()) => {
-  const rows = buildDownloadedFileRows([file], new Map(), mods, sourceMods);
-  expect(rows).toHaveLength(1);
-  return rows.flatMap((row) => row.upgrades).map((c) => [c.modName, c.tier]);
+const offered = async (mods: Mod[], file: DownloadedFile, sourceModFolders: ReadonlyMap<string, string> = new Map()) => {
+  const { instance } = loader({ mods, downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: [file] }, sourceModFolders });
+  await instance.refresh();
+  const { downloadedFiles } = instance.value;
+  return (downloadedFiles.kind === 'listed' ? downloadedFiles.rows : []).map((row) => row.upgrades.map((c) => [c.modName, c.tier]));
 };
 
 describe('the upgrade candidates of a downloaded file', () => {
@@ -61,13 +62,13 @@ describe('the upgrade candidates of a downloaded file', () => {
     ['take no fileId tier from a matching installationFileName whose key the mod\'s installed files lack, and still flag installationFileName',
       [mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', installationFileName: 'harder-vats-v1.7z' })],
       downloadedFile({ modID: '111', installedKey: 'key-999', name: 'harder-vats-v1.7z' }), [['Harder VATS', 'installationFileName']]],
-  ])('%s', (_case, mods, file, expected) => {
-    expect(offered(mods, file)).toEqual(expected);
+  ])('%s', async (_case, mods, file, expected) => {
+    expect(await offered(mods, file)).toEqual([expected]);
   });
 });
 
-it('leaves a source mod out of the upgrades, though it shares the mod id', () => {
+it('leaves a source mod out of the upgrades, though it shares the mod id', async () => {
   const mods = [mod({ name: 'Source', nexusId: '111', installationFileName: 'foo.7z' }), mod({ name: 'Plain', nexusId: '111' })];
 
-  expect(offered(mods, downloadedFile({ modID: '111', name: 'foo.7z' }), new Set(['Source']))).toEqual([['Plain', undefined]]);
+  expect(await offered(mods, downloadedFile({ modID: '111', name: 'foo.7z' }), repositoriesOf({ Source: '/source/Source' }))).toEqual([[['Plain', undefined]]]);
 });
