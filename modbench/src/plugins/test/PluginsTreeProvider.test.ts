@@ -1,1012 +1,765 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LastModStatuses, PluginsDrop } from '../../pluginCommands/plugins';
-import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
-import type { PluginAddress } from '../../wire/pluginAddress';
-import type { InstanceValue } from '../../instanceLoader/instance';
-import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
-import { fileIn } from '../../test/fakeInstanceAdapter';
-import type { OriginFile } from '../../instanceAdapter/instanceAdapter';
-import {
-  type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type InteriorCellBlock, type RecordSummary,
-  type CellSummary, type ChildRecordSummary,
-} from '../../client';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
-  DiagnosticSeverity,
-} from '../../test/vscodeMock';
-import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { describe, it, expect, vi } from 'vitest';
 
-const moveCommands = vi.hoisted(() => [] as { plugins: PluginAddress[]; drop: PluginsDrop }[]);
+vi.mock('vscode', () => import('./vscodeHost'));
 
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    ...fakeVscodeModule(),
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DiagnosticSeverity,
-    Uri, DataTransferItem, DataTransfer,
-    window: { withProgress: recordedWithProgress },
-    commands: {
-      executeCommand: (id: string, _clicked: unknown, rows: { plugin: { name: string }; origin: string }[], drop: PluginsDrop) => {
-        if (id === 'modbench.plugin.move') moveCommands.push({ plugins: rows.map(({ plugin, origin }) => ({ name: plugin.name, origin })), drop });
-        return Promise.resolve();
-      },
-    },
-  };
-});
-
-import * as vscode from 'vscode';
-import { PluginsTreeProvider, NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
-import { PluginNode, ImplicitMasterNode, type PluginsTreeNode } from '../pluginRows';
-import { RecordBrowser } from '../RecordBrowser';
-import { pluginsTreeOver } from './pluginsTreeOver';
-import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
-import { status } from '../../test/modStatusFixture';
-import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { present } from '../../ports/present';
-import { parseRowResourceUri } from '../recordResourceUri';
-import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { listsForThePluginAsked, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
+import type * as vscode from 'vscode';
+import { DataTransfer, EventEmitter, host, ThemeColor, ThemeIcon, TreeItemCheckboxState, TreeItemCollapsibleState, Uri } from './vscodeHost';
+import { deferred, factsOver, indexedOver, pluginsOver, settle } from './pluginsOver';
 import { browserClient } from './browserRows';
-import { ABSENT_SORTING_RULE_FILES } from '../../instanceAdapter/instanceAdapter';
+import type { PluginAddress, PluginLoadFailure, PluginMetadata } from '../../client';
+import { listsForThePluginAsked, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
+import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { changeNamesPlugin } from '../../client/test/says';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
+import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
+import { ABSENT_SORTING_RULE_FILES, type OriginFile } from '../../instanceAdapter/instanceAdapter';
+import type { LastModStatuses } from '../../pluginCommands/plugins';
+import type { FileReads } from '../../sortingRules/lootConditions';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { READ_SORTING_RULE_FILES } from '../../test/readSortingRuleFiles';
-import type { PluginProblem } from '../pluginFacts';
-import { holdsLoadOrder } from '../../client/test/says';
-import { settled } from '../../test/eventually';
+import { fileIn } from '../../test/fakeInstanceAdapter';
+import { status } from '../../test/modStatusFixture';
+import { FakeCancellationToken } from '../../test/vscodeMock';
+import { pluginArgumentOf } from '../../drivingLib/argument';
+import { present } from '../../ports/present';
 
-type ModStatus = NonNullable<ReturnType<LastModStatuses['of']>>;
+const SOME_MOD = 'SomeMod';
+const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
+const NO_PLUGINS_MESSAGE = 'No plugins: plugins.txt lists none, and mEdit names none the game loads on its own. Create Plugin…, in the title bar, adds one.';
+const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
+const LOCKED_TOOLTIP = "This plugin can't be disabled or moved (enforced by the game).";
+const TOKEN = new FakeCancellationToken();
 
-function plugin(
-  overrides: Partial<Omit<LoadOrderPlugin, 'path'>> & { name: string; path?: string },
-): LoadOrderPlugin | LoadOrderPluginLine {
+interface Line { name: string; origin?: string; line?: number | null; enabled?: boolean; winning?: boolean; path?: string }
+
+const placed = (plugin: Omit<LoadOrderPlugin, 'path'>, path: string | undefined): LoadOrderPlugin | LoadOrderPluginLine =>
+  (path === undefined ? { ...plugin, path } : { ...plugin, path });
+
+const pathOf = ({ name, origin }: PluginAddress) => (origin === 'Data/' ? `/game/Data/${name}` : `/mods/${origin}/${name}`);
+
+function valueOf(lines: readonly Line[], { noLine, ...value }: Partial<InstanceValue> & { noLine?: readonly (string | PluginAddress)[] } = {}): InstanceValue {
+  const plugins = lines.map((line, at) => {
+    const address = { name: line.name, origin: line.origin ?? SOME_MOD };
+    return placed({ ...address, line: line.line === undefined ? at : line.line, enabled: line.enabled ?? true, winning: line.winning ?? true },
+      'path' in line ? line.path : pathOf(address));
+  });
+  const mods = [...new Set(plugins.map(({ origin }) => origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
+  return instanceValueFixture({
+    mods: mods.map((name) => ({ kind: 'mod', name, enabled: true })), gameFolder: FOUND, plugins,
+    pluginsLoadedWithNoLine: noLine?.map((plugin) => {
+      const address = typeof plugin === 'string' ? { name: plugin, origin: 'Data/' } : plugin;
+      return { ...address, path: pathOf(address) };
+    }),
+    ...value,
+  });
+}
+
+const linesOf = (...names: string[]): Line[] => names.map((name) => ({ name }));
+const held = (name: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name, ...overrides });
+const labelOf = (item: vscode.TreeItem) => (typeof item.label === 'object' ? item.label.label : item.label);
+const nameOf = (row: unknown) => pluginArgumentOf(row)?.plugin.name;
+const kindOf = (item: vscode.TreeItem) => item.contextValue?.split(' ')[0];
+
+type SceneOver = NonNullable<Parameters<typeof factsOver>[1]>;
+
+function scene(value: InstanceValue, over: SceneOver = {}) {
+  const made = factsOver([], { client: browserClient(), ...over, value });
+  const items = async (parent?: unknown) => Promise.all((await made.rows(parent)).map(made.item));
+  const controller = () => present(made.view().options.dragAndDropController, 'the view\'s drag and drop');
   return {
-    path: `/fixture/${overrides.name}`,
-    origin: 'SomeMod',
-    line: 0,
-    enabled: true,
-    winning: true,
-    ...overrides,
+    ...made, items,
+    labels: async (parent?: unknown) => (await items(parent)).map(labelOf),
+    names: async () => (await made.rows()).map(nameOf),
+    rowNamed: async (name: string, origin = SOME_MOD) => present((await made.rows()).find((row) => {
+      const plugin = pluginArgumentOf(row)?.plugin;
+      return plugin?.name === name && plugin.origin === origin;
+    }), `the row of ${name}`),
+    settledMessage: async () => { await settle(); return made.message(); },
+    filters: async (text: string) => {
+      made.shown.nameFilter.open();
+      present(host.inputBox(), 'the name filter').type(text);
+      await settle();
+    },
+    drags: async (rows: readonly unknown[]) => {
+      const dragged = new DataTransfer();
+      await controller().handleDrag?.(rows, dragged, TOKEN);
+      return dragged;
+    },
+    drops: async (dragged: DataTransfer, target?: unknown) => { await controller().handleDrop?.(target, dragged, TOKEN); },
+    sorts: (direction: 'WinningAtTop' | 'LosingAtTop') => host.run(`modbench.plugin.sort${direction}`),
   };
 }
 
-function valueOf(
-  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[], blueprintLoadsLast = false,
-): InstanceValue {
-  const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
-  return instanceValueFixture({
-    blueprintLoadsLast,
-    mods: mods.map((name) => ({ kind: 'mod' as const, name, enabled: true })),
-    gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
-    pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => {
-      const address = typeof p === 'string' ? { name: p, origin: 'Data/' } : p;
-      return { ...address, path: address.origin === 'Data/' ? `/game/Data/${address.name}` : `/instance/mods/${address.origin}/${address.name}` };
-    }),
-    plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])), sourceDirs: new Map() },
-  });
+type Scene = ReturnType<typeof scene>;
+
+const moves = () => host.executed.filter(([id]) => id === 'modbench.plugin.move').map(([, , rows, drop]) => ({
+  plugins: Array.isArray(rows) ? rows.map((row) => pluginArgumentOf(row)?.plugin) : [], drop,
+}));
+const movesOf = (...names: string[]) => (drop: unknown) => [{ plugins: names.map((name) => ({ name, origin: SOME_MOD })), drop }];
+
+async function filtersRecords(made: Scene, source: string): Promise<void> {
+  host.files.set(source, 'SELECT form_key FROM "armo"');
+  made.client.setQueryAnswer('setFilter', null);
+  made.client.setQueryAnswer('getActiveFilter', { sql: 'SELECT form_key FROM "armo"', source });
+  await host.run('modbench.record.filter', Uri.file(`/workspace/${source}`));
+  await settle();
 }
 
-const failIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
-  pending,
-  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
-]);
+describe('a plugin the game loads with no line: its row\'s leading line', () => {
+  it('renders a lock icon, not a checkbox, as VS Code has no non-interactive checkbox variant', async () => {
+    const [locked] = await scene(valueOf([], { noLine: ['Fallout4.esm'] })).items();
 
-beforeEach(() => { moveCommands.length = 0; });
-
-const moves = () => moveCommands.map(({ plugins, drop }) => ({ names: plugins.map((p) => p.name), drop }));
-
-const held = (name: string, overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name, ...overrides });
-
-interface Harness {
-  tree: PluginsTreeProvider;
-  client: InMemoryMEditClient;
-  records: RecordBrowser;
-  instance: FakeInstance;
-}
-
-function makeTree(
-  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
-  extra: Partial<{
-    instance: FakeInstance;
-    client: InMemoryMEditClient;
-    publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
-    publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
-    publishSortingErrors: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishSortingErrors'];
-    loadedWithNoLine: readonly (string | PluginAddress)[];
-    blueprintLoadsLast: boolean;
-    reporter: RecordingReporter;
-    fileReads: ConstructorParameters<typeof PluginsTreeProvider>[0]['fileReads'];
-  }> = {},
-): Harness {
-  const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine, extra.blueprintLoadsLast));
-  const client = extra.client ?? browserClient();
-  const records = new RecordBrowser(client);
-  const tree = pluginsTreeOver(instance, {
-    client, records,
-    ...(extra.reporter && { reporter: extra.reporter }),
-    ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
-    ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
-    ...(extra.publishSortingErrors && { publishSortingErrors: extra.publishSortingErrors }),
-    ...(extra.fileReads && { fileReads: extra.fileReads }),
+    expect([locked?.iconPath, locked?.checkboxState]).toEqual([new ThemeIcon('lock'), undefined]);
   });
-  return { tree, client, records, instance };
-}
-
-async function reconcile(
-  h: Harness, plugins: PluginMetadata[], failures: PluginLoadFailure[] = [],
-): Promise<void> {
-  holdsLoadOrder(h.client);
-  h.client.setQueryAnswer('getPlugins', plugins);
-  await h.tree.facts.reconciled(failures);
-}
-
-const STILL_INDEXING = [['indexing', 'Still indexing…']];
-
-function rendered(rows: readonly { contextValue?: string; label?: unknown }[]): unknown[] {
-  return rows.map((row) => [row.contextValue, row.label]);
-}
-
-function callCount(client: InMemoryMEditClient, method: string): number {
-  return client.calls.filter((c) => c.method === method).length;
-}
-
-describe('ImplicitMasterNode — leading line', () => {
-  it('renders a lock icon, not a checkbox, as VS Code has no non-interactive checkbox variant', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
-    expect(node.iconPath).toEqual({ id: 'lock' });
-    expect(node.checkboxState).toBeUndefined();
-  });
-
-  it('tooltip is MO2\'s one sentence alone, with no file name', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
-    expect(node.tooltip).toBe("This plugin can't be disabled or moved (enforced by the game).");
-  });
-
-  it('keys resourceUri on the plugin\'s address, for the label-graying decoration provider', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
-    expect(parseRowResourceUri(node.resourceUri)).toEqual({ plugin: { name: 'Fallout4.esm', origin: 'Data/' }, path: [] });
-  });
-
-  it('keys a plugin row on the same address, so the states beneath it can be asked', () => {
-    const node = new PluginNode({ name: 'Mod.esp', enabled: true }, 'ModA');
-    expect(parseRowResourceUri(present(node.resourceUri, 'the plugin row\'s URI'))).toEqual({ plugin: { name: 'Mod.esp', origin: 'ModA' }, path: [] });
-  });
-
 });
 
-describe('PluginNode / ImplicitMasterNode — row click opens the plugin header', () => {
+describe('a plugin row\'s click opens the plugin header', () => {
   it.each([
-    ['a plugin line', new PluginNode({ name: 'A.esp', enabled: true }, 'ModA')],
-    ['a plugin the game loads with none', new ImplicitMasterNode('A.esp', 'ModA')],
-  ])('%s opens the header at the plugin and origin its row stands for', (_what, node) => {
-    expect(node.command).toEqual({
+    ['a plugin line', valueOf([{ name: 'A.esp', origin: 'ModA' }])],
+    ['a plugin the game loads with none', valueOf([], { noLine: [{ name: 'A.esp', origin: 'ModA' }] })],
+  ])('%s opens the header at the plugin and origin its row stands for', async (_what, value) => {
+    const [item] = await scene(value).items();
+
+    expect(item?.command).toEqual({
       command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } }],
     });
+  });
+
+  it('does nothing on a disabled plugin but select it', async () => {
+    const [item] = await scene(valueOf([{ name: 'A.esp', enabled: false }])).items();
+
+    expect(item?.command).toBeUndefined();
   });
 });
 
 describe('a plugin row carries its plugin as its Argument', () => {
   it.each([
-    ['a plugin line', new PluginNode({ name: 'A.esp', enabled: true }, 'ModA')],
-    ['a plugin the game loads with none', new ImplicitMasterNode('A.esp', 'ModA')],
-  ])('%s', (_what, node) => {
-    expect(node.argument).toEqual({ kind: 'plugin', plugin: { name: 'A.esp', origin: 'ModA' } });
+    ['a plugin line', valueOf([{ name: 'A.esp', origin: 'ModA' }])],
+    ['a plugin the game loads with none', valueOf([], { noLine: [{ name: 'A.esp', origin: 'ModA' }] })],
+  ])('%s', async (_what, value) => {
+    const [row] = await scene(value).rows();
+
+    expect(pluginArgumentOf(row)).toEqual({ kind: 'plugin', plugin: { name: 'A.esp', origin: 'ModA' } });
   });
 });
 
-describe('PluginNode', () => {
-  it('renders a plain row — no icon, no description', () => {
-    const node = new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod');
-    expect(node.iconPath).toEqual(new ThemeIcon('blank'));
-    expect(node.description).toBeUndefined();
+describe('the rows come from the Instance value', () => {
+  it('renders a plain row — no icon, no description', async () => {
+    const [item] = await scene(valueOf(linesOf('A.esp'))).items();
+
+    expect([item?.iconPath, item?.description]).toEqual([new ThemeIcon('blank'), undefined]);
   });
 
-});
-
-describe('PluginsTreeProvider — rows come from the Instance value', () => {
   it('builds one row per plugins.txt line, in Plugin load order, with the enabled checkbox', async () => {
-    const { tree } = makeTree([
-      plugin({ name: 'A.esp', line: 0, enabled: false }),
-      plugin({ name: 'B.esp', line: 1, enabled: true }),
-    ]);
-    const rows = await tree.getChildren();
+    const items = await scene(valueOf([{ name: 'A.esp', enabled: false }, { name: 'B.esp' }])).items();
 
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toBeInstanceOf(PluginNode);
-    expect(expectInstanceOf(rows[0], PluginNode).label).toBe('A.esp');
-    expect(expectInstanceOf(rows[0], PluginNode).checkboxState).toBe(TreeItemCheckboxState.Unchecked);
-    expect(expectInstanceOf(rows[1], PluginNode).label).toBe('B.esp');
-    expect(expectInstanceOf(rows[1], PluginNode).checkboxState).toBe(TreeItemCheckboxState.Checked);
+    expect(items.map((item) => [labelOf(item), item.checkboxState])).toEqual([
+      ['0 A.esp', TreeItemCheckboxState.Unchecked], ['1 B.esp', TreeItemCheckboxState.Checked],
+    ]);
   });
 
   it('renders no row, and says so in the message line, with no lines and no locked plugins', async () => {
-    const { tree } = makeTree([]);
+    const made = scene(valueOf([]));
 
-    expect(await tree.getChildren()).toEqual([]);
-    expect(tree.viewMessage()).toBe(NO_PLUGINS_MESSAGE);
+    expect([await made.rows(), await made.settledMessage()]).toEqual([[], NO_PLUGINS_MESSAGE]);
   });
 
   it('says nothing about an empty list while the game loads a plugin on its own', async () => {
-    const { tree } = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
+    const made = scene(valueOf([], { noLine: ['Fallout4.esm'] }));
 
-    expect(await tree.getChildren()).toHaveLength(1);
-    expect(tree.viewMessage()).toBeUndefined();
+    expect([await made.names(), await made.settledMessage()]).toEqual([['Fallout4.esm'], undefined]);
   });
 
   it('takes the message back once a line lands', async () => {
-    const instance = new FakeInstance(valueOf([]));
-    const { tree } = makeTree([], { instance });
-    await tree.getChildren();
+    const made = scene(valueOf([]));
+    await made.rows();
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    await tree.getChildren();
+    made.instance.publish(valueOf(linesOf('A.esp')));
+    await made.rows();
 
-    expect(tree.viewMessage()).toBeUndefined();
-  });
-
-  it('draws a clicked row again with the box its plugin\'s value sets (common.md, A gesture that writes, story 2)', async () => {
-    const { tree } = makeTree([], { instance: new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, enabled: true })])) });
-    const clicked = expectInstanceOf((await tree.getChildren())[0], PluginNode);
-    const fired: (PluginsTreeNode | undefined | null)[] = [];
-    tree.onDidChangeTreeData((e) => fired.push(e));
-    clicked.checkboxState = TreeItemCheckboxState.Unchecked;
-
-    tree.restoreRows([clicked]);
-
-    expect([fired, tree.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
+    expect(await made.settledMessage()).toBeUndefined();
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    const { tree } = makeTree([], { instance });
-    await tree.getChildren();
-    const fired: unknown[] = [];
-    tree.onDidChangeTreeData((e) => fired.push(e));
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.rows();
+    const redrawn = made.redraws();
 
-    instance.fail('EACCES plugins.txt');
+    made.instance.fail('EACCES plugins.txt');
+    const failed = await made.settledMessage();
+    const redrawnOnFailure = redrawn.length;
+    made.instance.publish(valueOf(linesOf('A.esp')));
 
-    expect(tree.viewMessage()).toBe('Showing the last good read: EACCES plugins.txt');
-    expect(fired).toHaveLength(1);
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    expect(tree.viewMessage()).toBeUndefined();
+    expect([failed, redrawnOnFailure, await made.settledMessage()]).toEqual(['Showing the last good read: EACCES plugins.txt', 1, undefined]);
   });
 
   it('says the message line again once a read lands after a failed one, though it finds nothing new', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    const { tree } = makeTree([], { instance });
-    await tree.getChildren();
-    instance.fail('EACCES plugins.txt');
-    const fired: unknown[] = [];
-    tree.onDidChangeTreeData((e) => fired.push(e));
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.rows();
+    made.instance.fail('EACCES plugins.txt');
+    const redrawn = made.redraws();
 
-    instance.publish(instance.value);
+    made.instance.publish(made.instance.value);
 
-    expect([tree.viewMessage(), fired]).toEqual([undefined, [undefined]]);
-  });
-
-  it('says the later read that failed on the message line, and not once the next read answers', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
-    await h.tree.getChildren();
-    const failing = held('A.esp', { laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message: 'bad' }] });
-
-    await reconcile(h, [failing]);
-    expect(h.tree.viewMessage()).toContain('Showing the last good read: "A.esp"');
-    expect(h.tree.standingMessage()).toContain('A.esp/Npc.json: bad');
-
-    await reconcile(h, [held('A.esp')]);
-    expect(h.tree.viewMessage()).toBeUndefined();
+    expect([await made.settledMessage(), redrawn]).toEqual([undefined, [undefined]]);
   });
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const { tree } = makeTree([], { instance });
+    const made = pluginsOver({ instance, value: instance.value });
 
-    const pending = tree.getChildren();
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
-    const rendered = await pending;
+    const pending = made.rows();
+    instance.publish(valueOf(linesOf('A.esp', 'B.esp')));
 
-    expect(rendered.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
-    expect((await tree.getChildren()).map((r) => r.label)).toEqual(['A.esp', 'B.esp']);
+    expect([(await pending).map(nameOf), (await made.rows()).map(nameOf)]).toEqual([['A.esp', 'B.esp'], ['A.esp', 'B.esp']]);
   });
 
   it('settles a failed first read on the one error row naming the reason, raises nothing, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const { tree } = makeTree([], { instance });
+    const made = pluginsOver({ instance, value: instance.value });
+    const reason = 'EISDIR: illegal operation on a directory, read plugins.txt';
 
-    const pending = tree.getChildren();
-    instance.fail('EISDIR: illegal operation on a directory, read plugins.txt');
-    const rows = await failIfNotSettledWithin(pending, 500);
+    const pending = made.rows();
+    instance.fail(reason);
+    const errors = await Promise.all((await pending).map(made.item));
+    instance.publish(valueOf(linesOf('A.esp')));
 
-    expect(rows).toHaveLength(1);
-    const error = present(rows[0], 'the error row');
-    expect(error.label).toBe('Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
-    expect(error.tooltip).toBe('EISDIR: illegal operation on a directory, read plugins.txt');
-    expect(error.iconPath).toEqual(new ThemeIcon('error'));
-
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
-    const after = await failIfNotSettledWithin(tree.getChildren(), 500);
-
-    expect(after.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
+    expect(errors.map(({ label, tooltip, iconPath }) => ({ label, tooltip, iconPath }))).toEqual([
+      { label: `Failed to load: ${reason}`, tooltip: reason, iconPath: new ThemeIcon('error') },
+    ]);
+    expect((await made.rows()).map(nameOf)).toEqual(['A.esp']);
   });
 
   it('says nothing about an empty list before the first read lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const { tree } = makeTree([], { instance });
+    const made = pluginsOver({ instance, value: instance.value });
 
-    const pending = tree.getChildren();
-    expect(tree.viewMessage()).toBeUndefined();
+    const pending = made.rows();
+    await settle();
+    const before = made.view().message;
     instance.publish(valueOf([]));
-    await failIfNotSettledWithin(pending, 500);
+    await pending;
+    await settle();
 
-    expect(tree.viewMessage()).toBe(NO_PLUGINS_MESSAGE);
+    expect([before, made.view().message]).toEqual([undefined, NO_PLUGINS_MESSAGE]);
   });
 });
 
-describe('PluginsTreeProvider — a plugin row is identified by its kind and (origin, filename)', () => {
-  const idsOf = async (tree: PluginsTreeProvider): Promise<(string | undefined)[]> =>
-    (await tree.getChildren()).map((row) => row.id);
+describe('a plugin row is identified by its kind and (origin, filename)', () => {
+  const idsOf = async (made: Scene) => (await made.items()).map(({ id }) => id);
 
   it('keeps each row\'s identity across a rebuild that moves it', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
-    const { tree } = makeTree([], { instance });
-    const [a, b] = await idsOf(tree);
+    const made = scene(valueOf(linesOf('A.esp', 'B.esp')));
+    const [a, b] = await idsOf(made);
 
-    instance.publish(valueOf([plugin({ name: 'B.esp', line: 0 }), plugin({ name: 'A.esp', line: 1 })]));
+    made.instance.publish(valueOf(linesOf('B.esp', 'A.esp')));
 
-    expect(await idsOf(tree)).toEqual([b, a]);
-    expect(a).toBeDefined();
-    expect(a).not.toBe(b);
+    expect([await idsOf(made), a === b]).toEqual([[b, a], false]);
   });
 
   it('gives the plugin of the same name from another origin another identity', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModA' })]));
-    const { tree } = makeTree([], { instance });
-    const [fromModA] = await idsOf(tree);
+    const made = scene(valueOf([{ name: 'A.esp', origin: 'ModA' }]));
+    const [fromModA] = await idsOf(made);
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModB' })]));
+    made.instance.publish(valueOf([{ name: 'A.esp', origin: 'ModB' }]));
 
-    const [fromModB] = await idsOf(tree);
-    expect(fromModB).toBeDefined();
-    expect(fromModB).not.toBe(fromModA);
+    const [fromModB] = await idsOf(made);
+    expect([fromModB === undefined, fromModB === fromModA]).toEqual([false, false]);
   });
 
   it('gives a locked row an identity of its own kind, never a plugin row\'s', async () => {
-    const withLine = makeTree([plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/' })]).tree;
-    const locked = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] }).tree;
+    const [lineId] = await idsOf(scene(valueOf([{ name: 'Fallout4.esm', origin: 'Data/' }])));
+    const [lockedId] = await idsOf(scene(valueOf([], { noLine: ['Fallout4.esm'] })));
 
-    const [lineId] = await idsOf(withLine);
-    const [lockedId] = await idsOf(locked);
-
-    expect(lockedId).toBeDefined();
-    expect(lockedId).not.toBe(lineId);
+    expect([lockedId === undefined, lockedId === lineId]).toEqual([false, false]);
   });
-
 });
 
-describe('PluginsTreeProvider — name filter', () => {
+describe('the name filter', () => {
   it('narrows rows to plugins whose filename contains the text, case-insensitively', async () => {
-    const { tree } = makeTree([
-      plugin({ name: 'Alpha.esp', line: 0 }),
-      plugin({ name: 'Beta.esp', line: 1 }),
-      plugin({ name: 'AlphaExtra.esp', line: 2 }),
-    ]);
-    tree.setFilter('ALPHA');
-    const rows = await tree.getChildren();
+    const made = scene(valueOf(linesOf('Alpha.esp', 'Beta.esp', 'AlphaExtra.esp')));
 
-    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'AlphaExtra.esp']);
-  });
+    await made.filters('ALPHA');
 
-  it('finds the row it shows under the id of a row VS Code holds from before a rebuild', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
-    const { tree } = makeTree([], { instance });
-    const [held] = expectInstancesOf(await tree.getChildren(), PluginNode);
-    instance.publish({ ...instance.value, plugins: [...instance.value.plugins] });
-
-    const shown = tree.shownRow(expectInstanceOf(held, PluginNode));
-
-    expect(shown?.id).toBe(held?.id);
-    expect(shown).not.toBe(held);
-  });
-
-  it('finds no row for a plugin the instance does not hold now', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
-    const { tree } = makeTree([], { instance });
-    const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);
-    instance.publish(valueOf([plugin({ name: 'Beta.esp', line: 0 })]));
-
-    expect(tree.shownRow(expectInstanceOf(alpha, PluginNode))).toBeUndefined();
+    expect(await made.names()).toEqual(['Alpha.esp', 'AlphaExtra.esp']);
   });
 
   it('finds no row for a plugin the name filter hides', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
-    const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);
-    tree.setFilter('beta');
+    const made = scene(valueOf(linesOf('Alpha.esp', 'Beta.esp')));
+    const [alpha] = await made.rows();
+    made.view().selectRows([alpha]);
 
-    expect(tree.shownRow(expectInstanceOf(alpha, PluginNode))).toBeUndefined();
+    await made.filters('beta');
+    Object.assign(made.view(), { selection: [] });
+
+    expect(made.shown.followed.selection).toEqual([]);
   });
 
   it('returns an empty list, and no empty-list message, when the filter matches nothing', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
-    tree.setFilter('nomatch');
-    const rows = await tree.getChildren();
+    const made = scene(valueOf(linesOf('Alpha.esp', 'Beta.esp')));
 
-    expect(rows).toEqual([]);
-    expect(tree.viewMessage()).toBeUndefined();
+    await made.filters('nomatch');
+
+    expect([await made.rows(), await made.settledMessage()]).toEqual([[], 'No matches for "nomatch".']);
   });
 
   it('survives an instance value change, narrowing whatever it turns up', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
-    const { tree } = makeTree([], { instance });
-    tree.setFilter('alpha');
-    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp']);
+    const made = scene(valueOf(linesOf('Alpha.esp', 'Beta.esp')));
+    await made.filters('alpha');
+    const before = await made.names();
 
-    instance.publish(valueOf([
-      plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 }), plugin({ name: 'AlphaTwo.esp', line: 2 }),
-    ]));
+    made.instance.publish(valueOf(linesOf('Alpha.esp', 'Beta.esp', 'AlphaTwo.esp')));
 
-    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'AlphaTwo.esp']);
+    expect([before, await made.names()]).toEqual([['Alpha.esp'], ['Alpha.esp', 'AlphaTwo.esp']]);
   });
 
   it('narrowing a rendered tree asks it to render again, and its rows come back narrowed', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
-    await tree.getChildren();
-    let askedToRerender = false;
-    tree.onDidChangeTreeData(() => { askedToRerender = true; });
+    const made = scene(valueOf(linesOf('Alpha.esp', 'Beta.esp')));
+    await made.rows();
+    const redrawn = made.redraws();
 
-    tree.setFilter('alpha');
+    await made.filters('alpha');
 
-    expect(askedToRerender).toBe(true);
-    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp']);
+    expect([redrawn.includes(undefined), await made.names()]).toEqual([true, ['Alpha.esp']]);
   });
 });
 
-const IGNORED_TOKEN = new FakeCancellationToken();
-
-function payloadOf(item: unknown): unknown {
-  return expectInstanceOf(item, DataTransferItem).value;
-}
-
-describe('PluginsTreeProvider — drag-and-drop reorder', () => {
-  const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const fixturePlugins = (names: string[] = ORDER) => names.map((name, line) => plugin({ name, line }));
-  const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
-
-  const reporter = recordingReporter();
-  beforeEach(() => { reporter.reports.length = 0; });
-
-  async function drag(moved: string[], target: string | undefined, names: string[] = ORDER) {
-    const instance = Object.assign(new FakeInstance(valueOf(fixturePlugins(names))), { refresh: () => Promise.resolve() });
-    const tree = pluginsTreeOver(instance, { reporter });
-    await tree.getChildren();
-    let fired = false;
-    tree.onDidChangeTreeData(() => { fired = true; });
-
-    const dt = new DataTransfer();
-    tree.handleDrag(moved.map(node), dt, IGNORED_TOKEN);
-    await tree.handleDrop(target === undefined ? undefined : node(target), dt, IGNORED_TOKEN);
-    return { fired };
-  }
-
-  it('carries the origin of each dragged row, so two plugins of one filename stay apart', () => {
-    const { tree } = makeTree(fixturePlugins());
-    const dt = new DataTransfer();
-
-    tree.handleDrag([
-      new PluginNode({ name: 'Same.esp', enabled: true }, 'ModOne'),
-      new PluginNode({ name: 'Same.esp', enabled: true }, 'ModTwo'),
-    ], dt, IGNORED_TOKEN);
-
-    expect(payloadOf(dt.get('application/vnd.medit.pluginlist-node')))
-      .toEqual({ plugins: [{ name: 'Same.esp', origin: 'ModOne' }, { name: 'Same.esp', origin: 'ModTwo' }] });
-  });
+describe('drag-and-drop reorder (plugins.md, Drag and drop)', () => {
+  const ORDER = linesOf('A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp');
+  const dragging = (lines: readonly Line[] = ORDER) => scene(valueOf(lines));
 
   it('a drop of rows the view does not hold moves nothing, and does not fall back to the selection', async () => {
-    await drag(['Gone.esp'], 'D.esp');
-    expect(moveCommands).toEqual([]);
+    const made = dragging();
+    const dragged = await made.drags([await made.rowNamed('A.esp')]);
+    made.view().selectRows([await made.rowNamed('B.esp')]);
+
+    made.instance.publish(valueOf(linesOf('B.esp', 'C.esp', 'D.esp', 'E.esp')));
+    await made.drops(dragged, await made.rowNamed('D.esp'));
+
+    expect(moves()).toEqual([]);
   });
 
   it('a drop fires nothing before the read lands', async () => {
-    const { fired } = await drag(['A.esp'], 'D.esp');
-    expect(fired).toBe(false);
+    const made = dragging();
+    const dragged = await made.drags([await made.rowNamed('A.esp')]);
+    const redrawn = made.redraws();
+
+    await made.drops(dragged, await made.rowNamed('D.esp'));
+
+    expect([redrawn, moves()]).toEqual([[], movesOf('A.esp')({ kind: 'before', name: 'D.esp' })]);
   });
 
-  type Beneath = (tree: PluginsTreeProvider, group: PluginsTreeNode) => Promise<PluginsTreeNode | undefined>;
-  it.each<[string, Beneath]>([
-    ['a record row', async (tree, group) => (await tree.getChildren(group))[0]],
-    ['a record-type group row', (_tree, group) => Promise.resolve(group)],
-  ])('drop onto %s of this tree is refused, not treated as the end of the list', async (_name, targetBeneath) => {
-    const plugins = fixturePlugins();
+  it.each([
+    ['a record row', async (made: Scene, group: unknown) => (await made.rows(group))[0]],
+    ['a record-type group row', (_made: Scene, group: unknown) => Promise.resolve(group)],
+  ])('drop onto %s of this tree is refused, not treated as the end of the list', async (_name, beneath) => {
     const client = browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [recordSummaryFixture()], total: 1 } });
-    const reporter = recordingReporter();
-    const h = makeTree(plugins, { client, reporter });
-    await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
-    const [pluginRow] = await h.tree.getChildren();
-    const [group] = await h.tree.getChildren(present(pluginRow, 'the first plugin row'));
-    const target = await targetBeneath(h.tree, present(group, 'the Weapon group'));
-    const dt = new DataTransfer();
-    h.tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
+    const made = scene(valueOf(ORDER), { client });
+    await made.reconciled(ORDER.map(({ name }) => held(name)));
+    const [group] = await made.rows(await made.rowNamed('A.esp'));
+    const dragged = await made.drags([await made.rowNamed('A.esp')]);
 
-    await h.tree.handleDrop(present(target, 'the browser row'), dt, IGNORED_TOKEN);
+    await made.drops(dragged, await beneath(made, present(group, 'the Weapon group')));
 
     expect(moves()).toEqual([]);
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.',
-      detail: 'A plugin goes above a plugin row or at the bottom of the view, not on a record or a group.',
+    expect(made.reporter('pluginListTree.drop').reports).toEqual([{
+      severity: 'error', message: 'Could not move plugins.', detail: 'A plugin goes above a plugin row or at the bottom of the view, not on a record or a group.',
     }]);
   });
 
-  it.each(['C.esp', 'c.ESP'])('a drop on a row being dragged asks for nothing, the dragged name being %s', async (dragged) => {
-    await drag(['A.esp', dragged], 'C.esp');
+  it.each([['C.esp', SOME_MOD], ['c.ESP', 'ModB']])('a drop on a row being dragged asks for nothing, the dragged name being %s', async (name, origin) => {
+    const made = dragging([...ORDER, { name: 'c.ESP', origin: 'ModB' }]);
+    const dragged = await made.drags([await made.rowNamed('A.esp'), await made.rowNamed(name, origin)]);
+
+    await made.drops(dragged, await made.rowNamed('C.esp'));
+
     expect(moves()).toEqual([]);
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: 'C.esp is being dragged, so nothing goes above it.',
-    }]);
+    expect(made.reporter('pluginListTree.drop').reports).toEqual([{ severity: 'error', message: 'Could not move plugins.', detail: 'C.esp is being dragged, so nothing goes above it.' }]);
   });
 
   it('an empty drag payload is a no-op (no write)', async () => {
-    const { tree } = makeTree(fixturePlugins());
-    await tree.getChildren();
-    await tree.handleDrop(node('A.esp'), new DataTransfer(), IGNORED_TOKEN);
+    const made = dragging();
+
+    await made.drops(new DataTransfer(), await made.rowNamed('A.esp'));
+
     expect(moves()).toEqual([]);
   });
 
   it('produces the same load-order position with a name filter hiding a row between the drag and its target, as with no filter at all', async () => {
-    const NAMES = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
+    const made = dragging(linesOf('M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'));
+    await made.filters('m');
+    const shown = await made.names();
+    const dragged = await made.drags([await made.rowNamed('M1.esp')]);
 
-    await drag(['M1.esp'], 'M3.esp', NAMES);
-    const baseline = moves();
-    moveCommands.length = 0;
+    await made.drops(dragged, await made.rowNamed('M3.esp'));
 
-    const tree = pluginsTreeOver(new FakeInstance(valueOf(fixturePlugins(NAMES))));
-    await tree.getChildren();
-    tree.setFilter('m');
-    const visible = await tree.getChildren();
-    expect(visible.map((n) => expectInstanceOf(n, PluginNode).plugin.name)).toEqual(['M1.esp', 'M2.esp', 'M3.esp']);
-
-    const dt = new DataTransfer();
-    tree.handleDrag([node('M1.esp')], dt, IGNORED_TOKEN);
-    await tree.handleDrop(node('M3.esp'), dt, IGNORED_TOKEN);
-
-    expect(moves()).toEqual(baseline);
-  });
-
-});
-
-describe('PluginsTreeProvider — isEnabled', () => {
-  it('answers from the Instance value, matching the row\'s file name and origin without case', () => {
-    const { tree } = makeTree([
-      plugin({ name: 'Mod.esp', line: 0, origin: 'ModA', enabled: true }),
-      plugin({ name: 'Off.esp', line: 1, origin: 'ModA', enabled: false }),
-    ]);
-
-    expect(tree.isEnabled(new PluginNode({ name: 'mod.ESP', enabled: false }, 'moda'))).toBe(true);
-    expect(tree.isEnabled(new PluginNode({ name: 'Off.esp', enabled: true }, 'ModA'))).toBe(false);
-  });
-
-  it('answers false for a row of the same file name at another origin', () => {
-    const { tree } = makeTree([plugin({ name: 'Mod.esp', line: 0, origin: 'ModA', enabled: true })]);
-
-    expect(tree.isEnabled(new PluginNode({ name: 'Mod.esp', enabled: true }, 'ModB'))).toBe(false);
-  });
-});
-
-describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () => {
-  const lockedRowOf = async (tree: PluginsTreeProvider) =>
-    present((await tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
-
-  it('resolves a plugin row to its own plugin\'s file, by origin and file name', async () => {
-    const { tree } = makeTree([
-      plugin({ name: 'Base.esp', line: 0, origin: 'Winner', path: '/data/mods/Winner/Base.esp', winning: true }),
-      plugin({ name: 'Base.esp', line: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
-    ]);
-    expect(await tree.resolvePluginPath(new PluginNode({ name: 'base.esp', enabled: true }, 'Loser'))).toBe('/data/mods/Loser/Base.esp');
-  });
-
-  it('returns undefined when no plugin has the row\'s origin and file name', async () => {
-    const { tree } = makeTree(
-      [plugin({ name: 'Base.esp', line: 0, origin: 'OtherMod' })]);
-    expect(await tree.resolvePluginPath(new PluginNode({ name: 'Base.esp', enabled: true }, 'SomeMod'))).toBeUndefined();
-  });
-
-  it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
-    const { tree } = makeTree(
-      [plugin({ name: 'Fallout4.esm', line: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
-      { loadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'SomeMod' }] });
-    const locked = await lockedRowOf(tree);
-
-    expect(locked.origin).toBe('SomeMod');
-    expect(await tree.resolvePluginPath(locked)).toBe('/instance/mods/SomeMod/Fallout4.esm');
-  });
-
-  it('resolves a locked row no mod provides to the game folder\'s copy', async () => {
-    const { tree } = makeTree(
-      [plugin({ name: 'Mod.esp', line: 0 })],
-      { loadedWithNoLine: ['Fallout4.esm'] });
-
-    expect(await tree.resolvePluginPath(await lockedRowOf(tree))).toBe('/game/Data/Fallout4.esm');
-  });
-
-  it('resolves a locked row the value does not list to nothing', async () => {
-    const { tree } = makeTree([]);
-    expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm', 'Data/'))).toBeUndefined();
-  });
-});
-
-describe('PluginsTreeProvider — implicit master rows', () => {
-  const ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = null;
-  const treeFor = (
-    plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
-    implicit: readonly string[] | typeof ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = [],
-  ) => makeTree(plugins, {
-    ...(implicit === ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT ? {} : { loadedWithNoLine: implicit }),
-  }).tree;
-
-  it('renders the backend names as ImplicitMasterNode rows preceding plugins.txt rows, in the order given, not sorted (DLCCoast.esm would sort ahead of Fallout4.esm), with no checkbox and contextValue pluginImplicit', async () => {
-    const rows = await treeFor(
-      [plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm', 'DLCCoast.esm'],
-    ).getChildren();
-
-    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
-    expect(rows[0]).toBeInstanceOf(ImplicitMasterNode);
-    expect(rows[1]).toBeInstanceOf(ImplicitMasterNode);
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).contextValue).toBe('pluginImplicit');
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).checkboxState).toBeUndefined();
-    expect(rows[2]).toBeInstanceOf(PluginNode);
-  });
-
-  it('renders a plugins.txt line of the same filename from another origin as its own row (ADR-0012)', async () => {
-    const rows = await treeFor([plugin({ name: 'Fallout4.esm', line: 0, origin: 'SomeMod' })], ['Fallout4.esm']).getChildren();
-    expect(rows.map((r) => r.kind)).toEqual(['implicitMaster', 'plugin']);
-  });
-
-  it('gives two game folder files that differ only in case a row each, each with an id of its own', async () => {
-    const rows = await treeFor([], ['Master.esm', 'master.esm']).getChildren();
-
-    expect(rows.map((r) => r.label)).toEqual(['Master.esm', 'master.esm']);
-    expect(new Set(rows.map((r) => r.id)).size).toBe(2);
-  });
-
-  it('publishes each locked row\'s URI, for the graying decoration provider', async () => {
-    const tree = treeFor([plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm']);
-    const [locked] = await tree.getChildren();
-    const rowUri = present(expectInstanceOf(locked, ImplicitMasterNode).resourceUri, 'the locked row\'s URI');
-    expect([...tree.lockedRowUris()]).toEqual([rowUri.toString()]);
-  });
-
-  it('renders no implicit row, and every plugins.txt line, when the value cannot say', async () => {
-    const rows = await treeFor([plugin({ name: 'Mod.esp', line: 0 })], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).getChildren();
-
-    expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
-    expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
-    expect([...treeFor([], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).lockedRowUris()]).toEqual([]);
+    expect([shown, moves()]).toEqual([['M1.esp', 'M2.esp', 'M3.esp'], movesOf('M1.esp')({ kind: 'before', name: 'M3.esp' })]);
   });
 
   it('drags only plugin lines, never a locked row', async () => {
-    const tree = treeFor([plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm']);
-    const rows = await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag(rows, dt, IGNORED_TOKEN);
-    const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect(payloadOf(item)).toMatchObject({ plugins: [{ name: 'Mod.esp' }] });
+    const made = scene(valueOf(linesOf('Mod.esp'), { noLine: ['Fallout4.esm'] }));
+
+    await made.drops(await made.drags(await made.rows()));
+
+    expect(moves()).toEqual(movesOf('Mod.esp')({ kind: 'winningEnd' }));
   });
 });
 
-describe('PluginsTreeProvider — the sort direction', () => {
-  const LOCKED = ['Fallout4.esm', 'DLCRobot.esm'];
-  const LINES = () => [plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'C.esp', line: 2 })];
-  const labelsOf = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => row.label);
+describe('a drop asks for the place it is shown, in either sort direction', () => {
+  const rowOf = (name: string, origin?: string) => (made: Scene) => made.rowNamed(name, origin);
+  const LOCKED = rowOf('Fallout4.esm', 'Data/');
+  const BELOW_THE_LAST_ROW = () => Promise.resolve(undefined);
+
+  it.each([
+    { direction: 'LosingAtTop', moved: ['E.esp'], where: 'B.esp', target: rowOf('B.esp'), drop: { kind: 'before', name: 'B.esp' } },
+    { direction: 'LosingAtTop', moved: ['B.esp', 'C.esp', 'D.esp'], where: 'A.esp', target: rowOf('A.esp'), drop: { kind: 'before', name: 'A.esp' } },
+    { direction: 'LosingAtTop', moved: ['A.esp', 'C.esp', 'E.esp'], where: 'D.esp', target: rowOf('D.esp'), drop: { kind: 'before', name: 'D.esp' } },
+    { direction: 'LosingAtTop', moved: ['A.esp'], where: 'below the last row', target: BELOW_THE_LAST_ROW, drop: { kind: 'winningEnd' } },
+    { direction: 'LosingAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED, drop: { kind: 'losingEnd' } },
+    { direction: 'WinningAtTop', moved: ['A.esp'], where: 'D.esp', target: rowOf('D.esp'), drop: { kind: 'after', name: 'D.esp' } },
+    { direction: 'WinningAtTop', moved: ['A.esp', 'B.esp'], where: 'D.esp', target: rowOf('D.esp'), drop: { kind: 'after', name: 'D.esp' } },
+    { direction: 'WinningAtTop', moved: ['E.esp'], where: 'below the last row', target: BELOW_THE_LAST_ROW, drop: { kind: 'losingEnd' } },
+    { direction: 'WinningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED, drop: { kind: 'losingEnd' } },
+  ] as const)('$direction: $moved dropped on $where asks for $drop', async ({ direction, moved, target, drop }) => {
+    const made = scene(valueOf(linesOf('A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'), { noLine: ['Fallout4.esm'] }));
+    await made.sorts(direction);
+    const dragged = await made.drags(await Promise.all(moved.map((name) => made.rowNamed(name))));
+
+    await made.drops(dragged, await target(made));
+
+    expect(moves()).toEqual(movesOf(...moved)(drop));
+  });
+
+  it('moves the dragged plugin alone when another origin holds a plugin of its file name', async () => {
+    const made = scene(valueOf([{ name: 'A.esp' }, { name: 'Same.esp', origin: 'ModA' }, { name: 'Same.esp', origin: 'ModB' }]));
+    const dragged = await made.drags([await made.rowNamed('Same.esp', 'ModB')]);
+
+    await made.drops(dragged, await made.rowNamed('A.esp'));
+
+    expect(moves().flatMap(({ plugins }) => plugins)).toEqual([{ name: 'Same.esp', origin: 'ModB' }]);
+  });
+});
+
+describe('the places a move offers are the drops on its rows', () => {
+  const moved = (plugins: readonly string[], toIndex: number) => [{ verb: 'changePluginOrderOverProvided', profile: 'Default', changes: [{ kind: 'move', plugins, toIndex }] }];
+
+  async function moving() {
+    const made = await indexedOver(['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'], {
+      commandsClient: { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) },
+      value: { pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }] },
+    });
+    const selection = [made.row('B.esp'), made.row('D.esp')];
+    return { ...made, move: async (picked?: string) => { host.picks(() => picked); await host.run('modbench.plugin.move', selection[0], selection); } };
+  }
+
+  it('losing at the top: above each row outside the selection, as shown, then the bottom of the view at the winning end', async () => {
+    const { fake, move } = await moving();
+
+    await move('Bottom of the view');
+
+    expect(host.quickPicks.map(({ items }) => items)).toEqual([['A.esp', 'C.esp', 'E.esp', 'Bottom of the view']]);
+    expect(fake.calls).toEqual(moved(['B.esp', 'D.esp'], 3));
+  });
+
+  it('winning at the top: above each row outside the selection, as shown, then the bottom of the view at the losing end', async () => {
+    const { fake, move } = await moving();
+    await host.run('modbench.plugin.sortWinningAtTop');
+
+    await move('Bottom of the view');
+
+    expect(host.quickPicks.map(({ items }) => items)).toEqual([['E.esp', 'C.esp', 'A.esp', 'Bottom of the view']]);
+    expect(fake.calls).toEqual(moved(['B.esp', 'D.esp'], 0));
+  });
+
+  it('offers a row the name filter hides', async () => {
+    const { move, shown } = await moving();
+    shown.nameFilter.open();
+    present(host.inputBox(), 'the name filter').type('b');
+
+    await move();
+
+    expect(host.quickPicks.map(({ items }) => items)).toEqual([['A.esp', 'C.esp', 'E.esp', 'Bottom of the view']]);
+  });
+});
+
+describe('the places a load after offers are the active plugins outside the selection', () => {
+  it('offers each enabled line outside the selection, in the order the view shows them', async () => {
+    const names = ['A.esp', 'B.esp', 'C.esp', 'D.esp'];
+    const made = await indexedOver(names, {
+      reading: { pluginOrder: names.map((name) => ({ name, enabled: name !== 'C.esp' })) },
+      value: {
+        plugins: names.map((name, line) => ({ name, origin: 'ModA', path: `/mods/ModA/${name}`, line, enabled: name !== 'C.esp', winning: true })),
+        pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
+      },
+    });
+    const loadAfterB = () => host.run('modbench.plugin.loadAfter', made.row('B.esp'), [made.row('B.esp')]);
+
+    await loadAfterB();
+    await host.run('modbench.plugin.sortWinningAtTop');
+    await loadAfterB();
+
+    expect(host.quickPicks.map(({ items }) => items)).toEqual([['Fallout4.esm', 'A.esp', 'D.esp'], ['D.esp', 'A.esp', 'Fallout4.esm']]);
+  });
+});
+
+describe('the rows of the plugins the game loads with no line', () => {
+  it('draws the plugins the game loads with no line before the plugins.txt lines, in the order given, not sorted (DLCCoast.esm would sort ahead of Fallout4.esm), with no checkbox and contextValue pluginImplicit', async () => {
+    const items = await scene(valueOf(linesOf('Mod.esp'), { noLine: ['Fallout4.esm', 'DLCCoast.esm'] })).items();
+
+    expect(items.map((item) => [labelOf(item), kindOf(item), item.checkboxState])).toEqual([
+      ['Fallout4.esm', 'pluginImplicit', undefined], ['DLCCoast.esm', 'pluginImplicit', undefined], ['0 Mod.esp', 'plugin', TreeItemCheckboxState.Checked],
+    ]);
+  });
+
+  it('renders a plugins.txt line of the same filename from another origin as its own row (ADR-0012)', async () => {
+    const items = await scene(valueOf([{ name: 'Fallout4.esm' }], { noLine: ['Fallout4.esm'] })).items();
+
+    expect(items.map(kindOf)).toEqual(['pluginImplicit', 'plugin']);
+  });
+
+  it('gives two game folder files that differ only in case a row each, each with an id of its own', async () => {
+    const items = await scene(valueOf([], { noLine: ['Master.esm', 'master.esm'] })).items();
+
+    expect([items.map(labelOf), new Set(items.map(({ id }) => id)).size]).toEqual([['Master.esm', 'master.esm'], 2]);
+  });
+
+  it('renders no implicit row, and every plugins.txt line, when the value cannot say', async () => {
+    expect(await scene(valueOf(linesOf('Mod.esp'))).labels()).toEqual(['0 Mod.esp']);
+  });
+
+  it('shows a line naming a locked plugin as an ordinary row while the value cannot say, then locks it at the losing end', async () => {
+    const lines = [{ name: 'Fallout4.esm', origin: 'Data/' }, { name: 'Mod.esp' }];
+    const made = scene(valueOf(lines));
+    const shape = async () => (await made.rows()).map(async (row) => `${kindOf(await made.item(row))} ${nameOf(row)}`);
+    const before = await Promise.all(await shape());
+
+    made.instance.publish(valueOf(lines, { noLine: ['Fallout4.esm', 'DLCRobot.esm'] }));
+
+    expect([before, await Promise.all(await shape())]).toEqual([
+      ['plugin Fallout4.esm', 'plugin Mod.esp'], ['pluginImplicit Fallout4.esm', 'pluginImplicit DLCRobot.esm', 'plugin Mod.esp'],
+    ]);
+  });
+
+  it('never adds a read-only line to the locked row — its tooltip is the one sentence alone', async () => {
+    const made = scene(valueOf([], { noLine: ['Fallout4.esm'] }));
+    await made.reconciled([held('Fallout4.esm', { origin: 'Data/', isImmutable: true })]);
+
+    const [item] = await made.items();
+
+    expect(item?.tooltip).toBe(LOCKED_TOOLTIP);
+  });
+});
+
+describe('a plugin row reveals its own file (plugins.md, Reveal in Explorer)', () => {
+  it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
+    const made = scene(valueOf([{ name: 'Fallout4.esm', origin: 'SomeMod', line: null }], { noLine: [{ name: 'Fallout4.esm', origin: SOME_MOD }] }));
+
+    await host.run('modbench.plugin.reveal', await made.rowNamed('Fallout4.esm'));
+
+    expect(host.executed).toEqual([['revealFileInOS', Uri.file('/mods/SomeMod/Fallout4.esm')]]);
+  });
+});
+
+describe('the selection\'s keys read each plugin\'s line as it is now', () => {
+  it('reads the selected row\'s own line as the instance holds it now, never the line of its file name at another origin', async () => {
+    const lines = (enabled: boolean) => valueOf([{ name: 'Mod.esp', origin: 'ModA' }, { name: 'Mod.esp', origin: 'ModB', enabled }]);
+    const made = scene(lines(false));
+    made.view().selectRows([await made.rowNamed('Mod.esp', 'ModB')]);
+    const toggle = () => host.context('modbench.plugin.selectionToggle').at(-1);
+    const before = toggle();
+
+    made.instance.publish(lines(true));
+    await made.rows();
+
+    expect([before, toggle()]).toEqual(['enable', 'disable']);
+  });
+});
+
+describe('the sort direction', () => {
+  const LINES = valueOf(linesOf('A.esp', 'B.esp', 'C.esp'), { noLine: ['Fallout4.esm', 'DLCRobot.esm'] });
+  const LOSING_AT_TOP = ['Fallout4.esm', 'DLCRobot.esm', 'A.esp', 'B.esp', 'C.esp'];
 
   it('lists losing at the top until told otherwise', async () => {
-    const { tree } = makeTree(LINES(), { loadedWithNoLine: LOCKED });
-
-    expect(await labelsOf(tree)).toEqual(['Fallout4.esm', 'DLCRobot.esm', 'A.esp', 'B.esp', 'C.esp']);
+    expect(await scene(LINES).names()).toEqual(LOSING_AT_TOP);
   });
 
   it('lists winning at the top with the locked plugins at the bottom, and back again', async () => {
-    const { tree } = makeTree(LINES(), { loadedWithNoLine: LOCKED });
+    const made = scene(LINES);
 
-    tree.setViewDirection('winningAtTop');
-    expect(await labelsOf(tree)).toEqual(['C.esp', 'B.esp', 'A.esp', 'DLCRobot.esm', 'Fallout4.esm']);
+    await made.sorts('WinningAtTop');
+    const winningAtTop = await made.names();
+    await made.sorts('LosingAtTop');
 
-    tree.setViewDirection('losingAtTop');
-    expect(await labelsOf(tree)).toEqual(['Fallout4.esm', 'DLCRobot.esm', 'A.esp', 'B.esp', 'C.esp']);
+    expect([winningAtTop, await made.names()]).toEqual([['C.esp', 'B.esp', 'A.esp', 'DLCRobot.esm', 'Fallout4.esm'], LOSING_AT_TOP]);
   });
 
   it('flips the very rows it had, rebuilding none', async () => {
-    const { tree } = makeTree(LINES(), { loadedWithNoLine: LOCKED });
-    const before = await tree.getChildren();
-    let fired = false;
-    tree.onDidChangeTreeData(() => { fired = true; });
+    const made = scene(LINES);
+    const before = await made.rows();
+    const redrawn = made.redraws();
 
-    tree.setViewDirection('winningAtTop');
+    await made.sorts('WinningAtTop');
 
-    expect(fired).toBe(true);
-    const after = [...(await tree.getChildren())].reverse();
-    expect(after).toEqual(before);
-    expect(new Set([...before, ...after]).size).toBe(before.length);
+    expect([redrawn, [...await made.rows()].reverse()]).toEqual([[undefined], before]);
+    expect((await made.rows()).every((row) => before.includes(row))).toBe(true);
   });
 
   it('keeps the order of the groups and records beneath a plugin', async () => {
     const client = browserClient({
       recordTypes: [{ type: 'acti', count: 2, displayName: 'Activator' }, { type: 'weap', count: 1, displayName: 'Weapon' }],
-      records: {
-        items: [recordSummaryFixture({ formKey: '000001:A.esp', editorId: 'First' }), recordSummaryFixture({ formKey: '000002:A.esp', editorId: 'Second' })],
-        total: 2,
-      },
+      records: { items: [recordSummaryFixture({ formKey: '000001:A.esp', editorId: 'First' }), recordSummaryFixture({ formKey: '000002:A.esp', editorId: 'Second' })], total: 2 },
     });
-    const h = makeTree([A_ROW()], { client });
-    await reconcile(h, [held('A.esp')]);
+    const made = scene(valueOf(linesOf('A.esp')), { client });
+    await made.reconciled([held('A.esp')]);
     const beneath = async () => {
-      const [row] = await h.tree.getChildren();
-      const groups = await h.tree.getChildren(present(row, 'the A.esp row'));
-      const records = await h.tree.getChildren(present(groups[0], 'the Activator group'));
-      return [...groups, ...records].map((node) => node.label);
+      const groups = await made.rows(await made.rowNamed('A.esp'));
+      return [...await made.labels(await made.rowNamed('A.esp')), ...await made.labels(groups[0])];
     };
     const losingAtTop = await beneath();
 
-    h.tree.setViewDirection('winningAtTop');
+    await made.sorts('WinningAtTop');
 
-    expect(await beneath()).toEqual(losingAtTop);
-    expect(losingAtTop).toEqual(['Activator', 'Weapon', 'First', 'Second']);
+    expect([losingAtTop, await beneath()]).toEqual([['Activator', 'Weapon', 'First', 'Second'], ['Activator', 'Weapon', 'First', 'Second']]);
   });
 
   it('narrows the flipped rows by the name filter', async () => {
-    const { tree } = makeTree([...LINES(), plugin({ name: 'AB.esp', line: 3 })]);
+    const made = scene(valueOf(linesOf('A.esp', 'B.esp', 'C.esp', 'AB.esp')));
 
-    tree.setViewDirection('winningAtTop');
-    tree.setFilter('a');
+    await made.sorts('WinningAtTop');
+    await made.filters('a');
 
-    expect(await labelsOf(tree)).toEqual(['AB.esp', 'A.esp']);
+    expect(await made.names()).toEqual(['AB.esp', 'A.esp']);
   });
 });
 
-describe('PluginsTreeProvider.viewOrder, the order mEdit is handed', () => {
+describe('the order Editing hands mEdit is the order the view shows', () => {
   const at = (name: string) => ({ name, origin: 'Data/' });
   const snapshot = (gameRelease: string) => ({
     gameRelease, active: ['Base.esm', 'Blueprint.esm', 'A.esp'].map(at), loadedWithNoLine: ['Base.esm', 'Blueprint.esm'].map(at),
   });
-  const facts = [held('Base.esm', { origin: 'Data/' }), held('Blueprint.esm', { origin: 'Data/', isMaster: true, isBlueprint: true }), held('A.esp', { origin: 'Data/' })];
-  const orderFor = async (gameRelease: string, read: PluginMetadata[]) => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { loadedWithNoLine: ['Base.esm', 'Blueprint.esm'] });
-    await reconcile(h, read);
-    return h.tree.viewOrder.of(snapshot(gameRelease)).map(({ name }) => name);
-  };
+  const FACTS = [held('Base.esm', { origin: 'Data/' }), held('Blueprint.esm', { origin: 'Data/', isMaster: true, isBlueprint: true }), held('A.esp', { origin: 'Data/' })];
+  const over = () => scene(valueOf(linesOf('A.esp'), { noLine: ['Base.esm', 'Blueprint.esm'] }));
 
   it.each([
-    ['puts a blueprint plugin Editing read last, in a release that loads them last', 'Starfield', facts, ['Base.esm', 'A.esp', 'Blueprint.esm']],
-    ['keeps the plugins.txt order in a release that does not', 'Fallout4', facts, ['Base.esm', 'Blueprint.esm', 'A.esp']],
+    ['puts a blueprint plugin Editing read last, in a release that loads them last', 'Starfield', FACTS, ['Base.esm', 'A.esp', 'Blueprint.esm']],
+    ['keeps the plugins.txt order in a release that does not', 'Fallout4', FACTS, ['Base.esm', 'Blueprint.esm', 'A.esp']],
     ['keeps the plugins.txt order for a plugin Editing has not read', 'Starfield', [], ['Base.esm', 'Blueprint.esm', 'A.esp']],
   ])('%s', async (_name, gameRelease, read, expected) => {
-    expect(await orderFor(gameRelease, read)).toEqual(expected);
+    const made = over();
+    await made.reconciled(read);
+
+    expect(made.shown.editingInPluginsView.viewOrder.of(snapshot(gameRelease)).map(({ name }) => name)).toEqual(expected);
   });
 
   it('tells its listener when Editing has read the plugins', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
-    const listener = vi.fn();
-    h.tree.viewOrder.onChange(listener);
+    const made = over();
+    let told = 0;
+    made.shown.editingInPluginsView.viewOrder.onChange(() => { told++; });
 
-    await reconcile(h, facts);
+    await made.reconciled(FACTS);
 
-    expect(listener).toHaveBeenCalled();
+    expect(told).toBeGreaterThan(0);
   });
 });
 
-describe('PluginsTreeProvider — a plugin the game loads with no line sits where the game loads it (plugins.md, The tree, story 2)', () => {
+describe('a plugin the game loads with no line sits where the game loads it (plugins.md, The tree, story 2)', () => {
   const BLUEPRINT = 'Blueprint.esm';
-  const lines = () => [
-    plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'Ship.esm', line: 2 }),
-  ];
-  const scene = (blueprintLoadsLast = true) => makeTree(lines(), { loadedWithNoLine: ['Base.esm', BLUEPRINT], blueprintLoadsLast });
-  const facts = [
+  const over = (blueprintLoadsLast = true) => scene(valueOf(linesOf('A.esp', 'B.esp', 'Ship.esm'), { noLine: ['Base.esm', BLUEPRINT], blueprintLoadsLast }));
+  const FACTS = [
     held('Base.esm', { origin: 'Data/' }), held(BLUEPRINT, { origin: 'Data/', isMaster: true, isBlueprint: true }), held('A.esp'), held('B.esp'),
     held('Ship.esm', { isMaster: true, isBlueprint: true, masters: [BLUEPRINT] }),
   ];
-  const labelsOf = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => row.label);
 
   it('draws it after every line that is not a blueprint plugin, and before a blueprint line, once mEdit has read the plugins', async () => {
-    const h = scene();
-    await reconcile(h, facts);
+    const made = over();
+    await made.reconciled(FACTS);
 
-    expect(await labelsOf(h.tree)).toEqual(['Base.esm', 'A.esp', 'B.esp', BLUEPRINT, 'Ship.esm']);
+    expect(await made.names()).toEqual(['Base.esm', 'A.esp', 'B.esp', BLUEPRINT, 'Ship.esm']);
   });
 
   it('draws it at the losing end in a release that does not load blueprint plugins last', async () => {
-    const h = scene(false);
-    await reconcile(h, facts);
+    const made = over(false);
+    await made.reconciled(FACTS);
 
-    expect(await labelsOf(h.tree)).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
+    expect(await made.names()).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
   });
 
   it('draws it at the losing end until mEdit says it is a blueprint plugin', async () => {
-    expect(await labelsOf(scene().tree)).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
+    expect(await over().names()).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
   });
 
   it('still takes a drop on it at the losing end of plugins.txt, wherever it is drawn', async () => {
-    const h = scene();
-    await reconcile(h, facts);
-    const row = (await h.tree.getChildren()).find((r) => r.label === BLUEPRINT);
-    const dt = new DataTransfer();
-    h.tree.handleDrag([new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod')], dt, IGNORED_TOKEN);
+    const made = over();
+    await made.reconciled(FACTS);
+    const dragged = await made.drags([await made.rowNamed('A.esp')]);
 
-    await h.tree.handleDrop(row, dt, IGNORED_TOKEN);
+    await made.drops(dragged, await made.rowNamed(BLUEPRINT, 'Data/'));
 
-    expect(moves()).toEqual([{ names: ['A.esp'], drop: { kind: 'losingEnd' } }]);
+    expect(moves()).toEqual(movesOf('A.esp')({ kind: 'losingEnd' }));
   });
 });
 
-describe('PluginsTreeProvider — a drop asks for the place it is shown, in either sort direction', () => {
-  const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
-  const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const LOCKED_ROW = new ImplicitMasterNode('Fallout4.esm', 'Data/');
+describe('a plugin row\'s expander follows its line, not what mEdit holds', () => {
+  it('gives an enabled row a chevron whether or not mEdit holds its plugin, and a disabled row none', async () => {
+    const made = scene(valueOf([{ name: 'A.esp' }, { name: 'B.esp' }, { name: 'Off.esp', enabled: false }]));
+    await made.reconciled([held('A.esp'), held('Off.esp')]);
+    const chevrons = async () => (await made.items()).map(({ collapsibleState }) => collapsibleState);
+    const whileHeld = await chevrons();
+
+    await made.changed({ failed: 'refused', refusal: 'No load order has been received.' });
+
+    const { Collapsed, None } = TreeItemCollapsibleState;
+    expect([whileHeld, await chevrons()]).toEqual([[Collapsed, Collapsed, None], [Collapsed, Collapsed, None]]);
+  });
 
   it.each([
-    { direction: 'losingAtTop', moved: ['E.esp'], where: 'B.esp', target: node('B.esp'), drop: { kind: 'before', name: 'B.esp' } },
-    { direction: 'losingAtTop', moved: ['B.esp', 'C.esp', 'D.esp'], where: 'A.esp', target: node('A.esp'), drop: { kind: 'before', name: 'A.esp' } },
-    { direction: 'losingAtTop', moved: ['A.esp', 'C.esp', 'E.esp'], where: 'D.esp', target: node('D.esp'), drop: { kind: 'before', name: 'D.esp' } },
-    { direction: 'losingAtTop', moved: ['A.esp'], where: 'below the last row', target: undefined, drop: { kind: 'winningEnd' } },
-    { direction: 'losingAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
-    { direction: 'winningAtTop', moved: ['A.esp'], where: 'D.esp', target: node('D.esp'), drop: { kind: 'after', name: 'D.esp' } },
-    { direction: 'winningAtTop', moved: ['A.esp', 'B.esp'], where: 'D.esp', target: node('D.esp'), drop: { kind: 'after', name: 'D.esp' } },
-    { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, drop: { kind: 'losingEnd' } },
-    { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
-  ] as const)('$direction: $moved dropped on $where asks for $drop', async ({ direction, moved, target, drop }) => {
-    const tree = pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, line) => plugin({ name, line })), ['Fallout4.esm'])));
-    tree.setViewDirection(direction);
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag(moved.map(node), dt, IGNORED_TOKEN);
+    ['has no expander once the Data folder is listed without it', { kind: 'listed', names: new Set<string>() } as const, TreeItemCollapsibleState.None],
+    ['keeps its chevron while the Data folder cannot be listed, so the records mEdit holds still show', { kind: 'unreadable', reason: 'EACCES' } as const, TreeItemCollapsibleState.Collapsed],
+  ])('an enabled line no file answers to %s', async (_case, dataFolderPlugins, collapsibleState) => {
+    const [item] = await scene(valueOf([{ name: 'Gone.esp', origin: 'Data/', path: undefined }], { dataFolderPlugins })).items();
 
-    await tree.handleDrop(target, dt, IGNORED_TOKEN);
-
-    expect(moves()).toEqual([{ names: moved, drop }]);
-    expect(moveCommands.flatMap(({ plugins }) => plugins)).toEqual(moved.map((name) => ({ name, origin: 'SomeMod' })));
+    expect(item?.collapsibleState).toBe(collapsibleState);
   });
 
-  it('moves the dragged plugin alone when another origin holds a plugin of its file name', async () => {
-    const lines = [plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'Same.esp', line: 1, origin: 'ModA' }), plugin({ name: 'Same.esp', line: 2, origin: 'ModB' })];
-    const tree = pluginsTreeOver(new FakeInstance(valueOf(lines)));
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag([new PluginNode({ name: 'Same.esp', enabled: true }, 'ModB')], dt, IGNORED_TOKEN);
+  it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.reconciled([], { failures: [{ name: 'A.esp', origin: SOME_MOD, reason: 'Malformed record' }] });
 
-    await tree.handleDrop(node('A.esp'), dt, IGNORED_TOKEN);
+    const [item] = await made.items();
 
-    expect(moveCommands.flatMap(({ plugins }) => plugins)).toEqual([{ name: 'Same.esp', origin: 'ModB' }]);
+    expect([item?.collapsibleState, await made.expansion('A.esp')]).toEqual([TreeItemCollapsibleState.Collapsed, { kind: 'error', message: 'Malformed record' }]);
+  });
+
+  it('never asks the record browser before any reconcile has landed, answering "still indexing" instead', async () => {
+    const made = scene(valueOf(linesOf('A.esp')));
+
+    expect([await made.expansion('A.esp'), made.client.calls.filter(({ method }) => method === 'getRecordTypes')]).toEqual([{ kind: 'indexing' }, []]);
   });
 });
 
-describe('PluginsTreeProvider — the places a move offers are the drops on its rows', () => {
-  const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const treeOfLines = () => pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, line) => plugin({ name, line })), ['Fallout4.esm'])));
-
-  it('losing at the top: above each row outside the selection, as shown, then the bottom of the view at the winning end', () => {
-    const tree = treeOfLines();
-
-    expect(tree.movePlaces(['B.esp', 'D.esp'])).toEqual([
-      { label: 'A.esp', drop: { kind: 'before', name: 'A.esp' } },
-      { label: 'C.esp', drop: { kind: 'before', name: 'C.esp' } },
-      { label: 'E.esp', drop: { kind: 'before', name: 'E.esp' } },
-      { label: 'Bottom of the view', drop: { kind: 'winningEnd' } },
-    ]);
-  });
-
-  it('winning at the top: above each row outside the selection, as shown, then the bottom of the view at the losing end', () => {
-    const tree = treeOfLines();
-    tree.setViewDirection('winningAtTop');
-
-    expect(tree.movePlaces(['B.esp', 'D.esp'])).toEqual([
-      { label: 'E.esp', drop: { kind: 'after', name: 'E.esp' } },
-      { label: 'C.esp', drop: { kind: 'after', name: 'C.esp' } },
-      { label: 'A.esp', drop: { kind: 'after', name: 'A.esp' } },
-      { label: 'Bottom of the view', drop: { kind: 'losingEnd' } },
-    ]);
-  });
-
-  it('offers a row the name filter hides', () => {
-    const tree = treeOfLines();
-    tree.setFilter('b');
-
-    expect(tree.movePlaces(['B.esp']).map(({ label }) => label)).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'Bottom of the view']);
-  });
-});
-
-describe('PluginsTreeProvider — the places a load after offers are the active plugins outside the selection', () => {
-  const treeOf = () => pluginsTreeOver(new FakeInstance(valueOf(
-    ['A.esp', 'B.esp', 'C.esp', 'D.esp'].map((name, line) => plugin({ name, line, enabled: name !== 'C.esp' })), ['Fallout4.esm'],
-  )));
-
-  it('offers each enabled line outside the selection, in the order the view shows them', () => {
-    const tree = treeOf();
-
-    expect(tree.loadAfterPlaces(['B.esp'])).toEqual(['Fallout4.esm', 'A.esp', 'D.esp']);
-
-    tree.setViewDirection('winningAtTop');
-
-    expect(tree.loadAfterPlaces(['b.ESP'])).toEqual(['D.esp', 'A.esp', 'Fallout4.esm']);
-  });
-});
-
-describe('PluginsTreeProvider — the locked plugins follow the instance value', () => {
-  const LINES = () => [plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/' }), plugin({ name: 'Mod.esp', line: 1 })];
-  const shapeOf = async (tree: PluginsTreeProvider) => (await tree.getChildren())
-    .map((row) => (row instanceof PluginNode || row instanceof ImplicitMasterNode ? `${row.kind} ${row.kind === 'plugin' ? row.plugin.name : row.name}` : row.kind));
-
-  it('shows a line naming a locked plugin as an ordinary row while the value cannot say, then locks it at the losing end', async () => {
-    const instance = new FakeInstance(valueOf(LINES()));
-    const h = makeTree([], { instance });
-    expect(await shapeOf(h.tree)).toEqual(['plugin Fallout4.esm', 'plugin Mod.esp']);
-
-    instance.publish(valueOf(LINES(), ['Fallout4.esm', 'DLCRobot.esm']));
-
-    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'implicitMaster DLCRobot.esm', 'plugin Mod.esp']);
-  });
-});
-
-const A_ROW = () => plugin({ name: 'A.esp', line: 0, origin: 'SomeMod' });
-const B_ROW = () => plugin({ name: 'B.esp', line: 1, origin: 'SomeMod' });
-
-describe('PluginsTreeProvider — a plugin row\'s expander follows its line, not what mEdit holds', () => {
-  it('gives an enabled row a chevron whether or not mEdit holds its plugin, and a disabled row none', async () => {
-    const h = makeTree([A_ROW(), B_ROW(), plugin({ name: 'Off.esp', line: 2, enabled: false })]);
-    await reconcile(h, [held('A.esp'), held('Off.esp')]);
-    const rows = await h.tree.getChildren();
-    const chevrons = () => rows.map((row) => h.tree.getTreeItem(row).collapsibleState);
-    const { Collapsed, None } = vscode.TreeItemCollapsibleState;
-
-    expect(chevrons()).toEqual([Collapsed, Collapsed, None]);
-
-    h.client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'No load order has been received.' });
-    await h.tree.facts.reconciled([]);
-
-    expect(chevrons()).toEqual([Collapsed, Collapsed, None]);
-  });
-});
-
-describe('PluginsTreeProvider — an enabled line no file answers to', () => {
-  const lineOnly = plugin({ name: 'Gone.esp', line: 0, origin: 'Data/', path: undefined });
-  const collapsibleStateWith = async (dataFolderPlugins: InstanceValue['dataFolderPlugins']) => {
-    const { tree } = makeTree([], { instance: new FakeInstance({ ...valueOf([lineOnly]), dataFolderPlugins }) });
-    const [row] = await tree.getChildren();
-    return tree.getTreeItem(present(row, 'the sole row')).collapsibleState;
-  };
-
-  it('has no expander once the Data folder is listed without it', async () => {
-    expect(await collapsibleStateWith({ kind: 'listed', names: new Set() })).toBe(vscode.TreeItemCollapsibleState.None);
-  });
-
-  it('keeps its chevron while the Data folder cannot be listed, so the records mEdit holds still show', async () => {
-    expect(await collapsibleStateWith({ kind: 'unreadable', reason: 'EACCES' })).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-  });
-});
-
-describe('PluginsTreeProvider — a line a mod\'s manifest names, not restored (plugins.md, A row, Plugin statuses)', () => {
+describe('a line a mod\'s manifest names, not restored (plugins.md, A row, Plugin statuses)', () => {
+  type ModStatus = NonNullable<ReturnType<LastModStatuses['of']>>;
   const gone = (mod: string, ...paths: string[]): ModStatus => status(mod, { gone: paths });
   const statusesAnswering = (...answered: ModStatus[]) => {
     const changed = new EventEmitter<void>();
-    const byMod = new Map(answered.map((status) => [status.mod, status]));
-    return {
-      of: (mod: string) => byMod.get(mod),
-      onDidChange: changed.event,
-      answer: (status: ModStatus) => { byMod.set(status.mod, status); changed.fire(); },
-    };
+    const byMod = new Map(answered.map((each) => [each.mod, each]));
+    return { of: (mod: string) => byMod.get(mod), onDidChange: changed.event, answer: (each: ModStatus) => { byMod.set(each.mod, each); changed.fire(); } };
   };
-  const cloneValue = ({ holdsRepository = true, enabled = true, plugins = [plugin({ name: 'Unrestored.esp', origin: 'Data/', path: undefined })] } = {}) => ({
-    ...valueOf(plugins),
-    mods: [{ kind: 'mod' as const, name: 'Provider', enabled: true }, { kind: 'mod' as const, name: 'Unrestored', enabled }],
-    dataFolderPlugins: { kind: 'listed' as const, names: new Set<string>() },
-    holdsRepository,
+  const UNRESTORED: Line[] = [{ name: 'Unrestored.esp', origin: 'Data/', path: undefined }];
+  const cloneValue = ({ holdsRepository = true, enabled = true, lines = UNRESTORED } = {}) => valueOf(lines, {
+    mods: [{ kind: 'mod', name: 'Provider', enabled: true }, { kind: 'mod', name: 'Unrestored', enabled }],
+    dataFolderPlugins: { kind: 'listed', names: new Set<string>() }, holdsRepository,
   });
-  const decorated = async (tree: PluginsTreeProvider) => {
-    const [row] = await tree.getChildren();
-    const item = tree.getTreeItem(present(row, 'the sole row'));
-    return { description: item.description, icon: item.iconPath, tooltip: item.tooltip };
+  const shownWith = async (value: InstanceValue, modStatuses: LastModStatuses) => {
+    const [item] = await scene(value, { modStatuses }).items();
+    return { description: item?.description, icon: item?.iconPath, tooltip: item?.tooltip };
   };
 
   it('says not restored, in yellow, on a line no file answers to that a mod\'s manifest names', async () => {
-    const tree = pluginsTreeOver(new FakeInstance(cloneValue()), { modStatuses: statusesAnswering(gone('Unrestored', 'Unrestored.esp')) });
-
-    expect(await decorated(tree)).toEqual({
+    expect(await shownWith(cloneValue(), statusesAnswering(gone('Unrestored', 'Unrestored.esp')))).toEqual({
       description: 'not restored',
       icon: new ThemeIcon('warning', new ThemeColor('problemsWarningIcon.foreground')),
       tooltip: 'Unrestored.esp\nUnrestored\nNot restored: its mod\'s manifest names it, and the mod\'s folder lacks it.',
@@ -1014,413 +767,369 @@ describe('PluginsTreeProvider — a line a mod\'s manifest names, not restored (
   });
 
   it('gives as its origin the mod that wins it in mod order, when two enabled mods\' manifests name it', async () => {
-    const tree = pluginsTreeOver(new FakeInstance(cloneValue()), {
-      modStatuses: statusesAnswering(gone('Unrestored', 'Unrestored.esp'), gone('Provider', 'Unrestored.esp')),
-    });
+    const { tooltip } = await shownWith(cloneValue(), statusesAnswering(gone('Unrestored', 'Unrestored.esp'), gone('Provider', 'Unrestored.esp')));
 
-    expect((await decorated(tree)).tooltip).toContain('Unrestored.esp\nProvider\n');
+    expect(tooltip).toContain('Unrestored.esp\nProvider\n');
   });
 
   it('says it once mEdit\'s answer lands after the row is shown', async () => {
     const statuses = statusesAnswering();
-    const tree = pluginsTreeOver(new FakeInstance(cloneValue()), { modStatuses: statuses });
-    await tree.getChildren();
+    const made = scene(cloneValue(), { modStatuses: statuses });
+    await made.rows();
 
     statuses.answer(gone('Unrestored', 'Unrestored.esp'));
 
-    expect((await decorated(tree)).description).toBe('not restored');
+    expect((await made.items())[0]?.description).toBe('not restored');
   });
 
   it.each([
     ['the instance holds no repository', cloneValue({ holdsRepository: false }), 'Unrestored.esp'],
-    ['a file answers to the line', cloneValue({ plugins: [plugin({ name: 'Unrestored.esp', origin: 'Provider' })] }), 'Unrestored.esp'],
+    ['a file answers to the line', cloneValue({ lines: [{ name: 'Unrestored.esp', origin: 'Provider' }] }), 'Unrestored.esp'],
     ['the manifest names it only below its folder\'s root', cloneValue(), 'optional/Unrestored.esp'],
     ['only a disabled mod\'s manifest names it', cloneValue({ enabled: false }), 'Unrestored.esp'],
   ])('says nothing of it when %s', async (_, value, named) => {
-    const tree = pluginsTreeOver(new FakeInstance(value), { modStatuses: statusesAnswering(gone('Unrestored', named)) });
-
-    expect((await decorated(tree)).description).toBeUndefined();
+    expect((await shownWith(value, statusesAnswering(gone('Unrestored', named)))).description).toBeUndefined();
   });
 });
 
-describe('PluginsTreeProvider — a row that holds nothing yet expands to a single still-indexing row', () => {
-  it('never asks the record browser before any reconcile has landed, answering "still indexing" instead', async () => {
-    const { tree, client } = makeTree([A_ROW()]);
-    const [row] = await tree.getChildren();
+describe('the conditions a record row reads are its plugin row\'s', () => {
+  const weapon = (record = recordSummaryFixture()) => browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [record], total: 1 } });
+  const beneath = async (made: Scene, row: unknown) => {
+    const [group] = await made.rows(row);
+    const [record] = await made.items(present(group, 'the Weapon group'));
+    return { group: await made.item(present(group, 'the Weapon group')), record: present(record, 'the record row') };
+  };
 
-    const children = await tree.getChildren(row);
+  it('redraws every row while a record filter is in force, which decides which plugins have a row', async () => {
+    const made = scene(valueOf(linesOf('A.esp', 'B.esp')), { client: weapon() });
+    await made.reconciled([held('A.esp'), held('B.esp')]);
+    await filtersRecords(made, 'a.sql');
+    const redrawn = made.redraws();
 
-    expect(rendered(children)).toEqual(STILL_INDEXING);
-    expect(callCount(client, 'getRecordTypes')).toBe(0);
-  });
-});
+    changeNamesPlugin(made.client, { name: 'A.esp', origin: SOME_MOD });
 
-describe('PluginsTreeProvider — the conditions a record row reads are its plugin row\'s', () => {
-  const weaponOf = (record: RecordSummary) => browserClient({
-    recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [record], total: 1 },
-  });
-
-  async function firstRecordUnder(h: Harness, row: PluginsTreeNode) {
-    const [group] = await h.tree.getChildren(row);
-    const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
-    return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
-  }
-
-  describe('a change of the record index', () => {
-    const redrawnBy = async (filterSource: string | undefined) => {
-      const h = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })], { client: weaponOf(recordSummaryFixture()) });
-      await reconcile(h, [held('A.esp'), held('B.esp')]);
-      const [a] = await h.tree.getChildren();
-      h.tree.setRecordFilterSource(filterSource);
-      const redrawn: unknown[] = [];
-      h.tree.onDidChangeTreeData((element) => redrawn.push(element));
-
-      h.tree.indexChanged([{ plugin: { name: 'A.esp', origin: 'SomeMod' } }]);
-
-      return { redrawn, a };
-    };
-
-    it('redraws only the named plugin\'s row', async () => {
-      const { redrawn, a } = await redrawnBy(undefined);
-
-      expect(new Set(redrawn)).toEqual(new Set([a]));
-    });
-
-    it('redraws every row while a record filter is in force, which decides which plugins have a row', async () => {
-      const { redrawn } = await redrawnBy('a.sql');
-
-      expect(new Set(redrawn)).toEqual(new Set([undefined]));
-    });
+    expect(new Set(redrawn)).toEqual(new Set([undefined]));
   });
 
   it('gives a record-type group an id of its own, so VS Code keeps it open across a redraw', async () => {
-    const client = weaponOf(recordSummaryFixture());
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
-    await reconcile(h, [held('A.esp')]);
-    const [row] = await h.tree.getChildren();
+    const made = scene(valueOf(linesOf('A.esp')), { client: weapon() });
+    await made.reconciled([held('A.esp')]);
 
-    const { group } = await firstRecordUnder(h, present(row, 'the A.esp row'));
-    const again = (await firstRecordUnder(h, present(row, 'the A.esp row'))).group;
+    const { group } = await beneath(made, await made.rowNamed('A.esp'));
+    const again = (await beneath(made, await made.rowNamed('A.esp'))).group;
 
     expect([group.id, again.id]).toEqual(Array(2).fill(present(group.resourceUri, 'the group\'s URI').toString()));
   });
 
   it('flips a record row on the reconcile after its mod is decompiled and committed', async () => {
-    const client = weaponOf(recordSummaryFixture());
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
-    await reconcile(h, [held('A.esp')]);
-    const [row] = await h.tree.getChildren();
-    expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record');
+    const made = scene(valueOf(linesOf('A.esp')), { client: weapon() });
+    await made.reconciled([held('A.esp')]);
+    const before = (await beneath(made, await made.rowNamed('A.esp'))).record.contextValue;
 
-    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
-    const [again] = await h.tree.getChildren();
+    await made.reconciled([held('A.esp', { isCompiledPlugin: true })]);
 
-    expect((await firstRecordUnder(h, present(again, 'the A.esp row'))).record.contextValue).toBe('record editable');
+    expect([before, (await beneath(made, await made.rowNamed('A.esp'))).record.contextValue]).toEqual(['record', 'record editable']);
   });
 
   const DATA_COPY = held('Fallout4.esm', { origin: 'Data/', isImmutable: true });
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isCompiledPlugin: true });
-  const lockedTree = (modCopyWins: boolean) => makeTree(
-    [plugin({ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', line: 0 })],
-    { client: weaponOf(recordSummaryFixture({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })),
-      loadedWithNoLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' }] });
+  const locked = (modCopyWins: boolean) => scene(
+    valueOf([{ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: modCopyWins }, { name: 'A.esp', line: 0 }],
+      { noLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' }] }),
+    { client: weapon(recordSummaryFixture({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })) },
+  );
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
     'states a locked row the game folder provides by the game folder\'s copy, with the mod\'s copy listed %s',
     async (_order, answer) => {
-      const h = lockedTree(false);
-      await reconcile(h, [...answer, held('A.esp')]);
+      const made = locked(false);
+      await made.reconciled([...answer, held('A.esp')]);
 
-      const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
-      const { group, record } = await firstRecordUnder(h, locked);
+      const { group, record } = await beneath(made, await made.rowNamed('Fallout4.esm', 'Data/'));
 
-      expect(locked.origin).toBe('Data/');
       expect([group.contextValue, record.contextValue]).toEqual(['recordType creatable', 'record']);
     });
 
   it('expands a locked row mEdit names no plugin for at its origin as still indexing', async () => {
-    const h = lockedTree(false);
-    await reconcile(h, [MOD_COPY, held('A.esp')]);
+    const made = locked(false);
+    await made.reconciled([MOD_COPY, held('A.esp')]);
 
-    const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
-
-    expect(rendered(await h.tree.getChildren(locked))).toEqual(STILL_INDEXING);
+    expect(await made.expansion('Fallout4.esm', 'Data/')).toEqual({ kind: 'indexing' });
   });
 
   it.each([['last', [MOD_COPY, DATA_COPY]], ['first', [DATA_COPY, MOD_COPY]]])(
     'states a locked row the game loads from a mod by that mod\'s copy, with the game folder\'s listed %s',
     async (_order, answer) => {
-      const h = lockedTree(true);
-      await reconcile(h, [...answer, held('A.esp')]);
+      const made = locked(true);
+      await made.reconciled([...answer, held('A.esp')]);
 
-      const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
-      const { group, record } = await firstRecordUnder(h, locked);
+      const { group, record } = await beneath(made, await made.rowNamed('Fallout4.esm', 'ModA'));
 
-      expect(locked.origin).toBe('ModA');
       expect([group.contextValue, record.contextValue]).toEqual(['recordType editable creatable', 'record editable']);
     });
 });
 
-describe('PluginsTreeProvider — the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
-  const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
-  const indexFailed = { kind: 'failed', message: 'the record index threw' } as const;
+describe('the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
+  const INDEX_FAILED = { kind: 'failed', message: 'the record index threw' } as const;
 
-  const withoutGameFolder = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
-    new FakeInstance({ ...valueOf(plugins), gameFolder: GAME_FOLDER_NOT_FOUND });
+  it('puts the game folder over a failed index', async () => {
+    const made = scene(valueOf(linesOf('A.esp'), { gameFolder: GAME_FOLDER_NOT_FOUND }));
+    await made.rows();
 
-  it('puts the game folder over a failed index', () => {
-    const h = makeTree([A_ROW()], { instance: withoutGameFolder([A_ROW()]) });
-    h.tree.facts.refused(indexFailed);
+    await made.refused(INDEX_FAILED);
 
-    expect(h.tree.viewMessage()).toBe(GAME_FOLDER_MESSAGE);
+    expect(await made.settledMessage()).toBe(GAME_FOLDER_MESSAGE);
   });
 
   it('puts a failed index over no rows', async () => {
-    const h = makeTree([]);
-    await h.tree.getChildren();
-    h.tree.facts.refused(indexFailed);
+    const made = scene(valueOf([]));
+    await made.rows();
 
-    expect(h.tree.viewMessage()).toBe('Indexing failed: the record index threw');
+    await made.refused(INDEX_FAILED);
+
+    expect(await made.settledMessage()).toBe('Indexing failed: the record index threw');
   });
 
   it('takes the failed index off the message line on the next tick that indexes', async () => {
-    const h = makeTree([A_ROW()]);
-    await h.tree.getChildren();
-    h.tree.facts.refused(indexFailed);
-    expect(h.tree.viewMessage()).toBe('Indexing failed: the record index threw');
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.rows();
+    await made.refused(INDEX_FAILED);
+    const failed = await made.settledMessage();
 
-    h.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
+    await made.indexed({ indexed: [{ name: 'A.esp', origin: SOME_MOD }] });
 
-    expect(h.tree.viewMessage()).toBeUndefined();
+    expect([failed, await made.settledMessage()]).toEqual(['Indexing failed: the record index threw', undefined]);
   });
 
-  it('says there is no masterlist, naming update masterlist, once the instance has read', () => {
-    const noMasterlist = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
-      new FakeInstance({ ...valueOf(plugins), sortingRuleFiles: ABSENT_SORTING_RULE_FILES });
+  const withoutMasterlist = async () => {
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.rows();
+    made.instance.publish(valueOf(linesOf('A.esp'), { sortingRuleFiles: ABSENT_SORTING_RULE_FILES }));
+    return made;
+  };
 
-    expect(makeTree([A_ROW()], { instance: noMasterlist([A_ROW()]) }).tree.viewMessage()).toMatch(/No masterlist.*update masterlist/);
+  it('says there is no masterlist, naming update masterlist, once the instance has read', async () => {
+    const made = await withoutMasterlist();
+
+    expect(await made.settledMessage()).toMatch(/No masterlist.*update masterlist/);
   });
 
   describe('the lines it gives the agent', () => {
-    it('hold the missing masterlist apart from the plugins\' own, the view\'s line saying it', () => {
-      const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: ABSENT_SORTING_RULE_FILES });
-      const { tree } = makeTree([A_ROW()], { instance });
+    it('hold the missing masterlist apart from the plugins\' own, the view\'s line saying it', async () => {
+      const made = await withoutMasterlist();
 
-      expect([tree.viewMessage(), tree.standingLines(), tree.sortingRuleLines()]).toEqual([
+      expect([await made.settledMessage(), made.plugins.standing.plugins(), made.plugins.standing.sortingRules()]).toEqual([
         expect.stringMatching(/No masterlist/), [], [expect.stringMatching(/^No masterlist/)],
       ]);
     });
 
     it('leave out the empty list, which a read of the plugins shows', async () => {
-      const { tree } = makeTree([]);
-      await tree.getChildren();
+      const made = scene(valueOf([]));
+      await made.rows();
 
-      expect([tree.viewMessage(), tree.standingLines()]).toEqual([NO_PLUGINS_MESSAGE, []]);
+      expect([await made.settledMessage(), made.plugins.standing.plugins()]).toEqual([NO_PLUGINS_MESSAGE, []]);
     });
 
-    it('leave out the instance\'s last good read, which the instance says to the agent', () => {
-      const instance = new FakeInstance(valueOf([A_ROW()]));
-      const { tree } = makeTree([A_ROW()], { instance });
+    it('leave out the instance\'s last good read, which the instance says to the agent', async () => {
+      const made = scene(valueOf(linesOf('A.esp')));
+      await made.rows();
 
-      instance.fail('the modlist is unreadable');
+      made.instance.fail('the modlist is unreadable');
 
-      expect([tree.viewMessage(), tree.standingLines()]).toEqual(['Showing the last good read: the modlist is unreadable', []]);
+      expect([await made.settledMessage(), made.plugins.standing.plugins()]).toEqual(['Showing the last good read: the modlist is unreadable', []]);
     });
   });
+
+  it('puts no rows over a record filter that matched nothing', async () => {
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.reconciled([held('A.esp', { hasMatchingRecords: false })]);
+    await filtersRecords(made, 'a.sql');
+    const filtered = await made.settledMessage();
+
+    made.instance.publish(valueOf([]));
+    await made.rows();
+
+    expect([filtered, await made.settledMessage()]).toEqual(['No records match a.sql.', NO_PLUGINS_MESSAGE]);
+  });
+});
+
+describe('the sorting rules are judged again as the instance changes (plugins.md, Sorting rules)', () => {
+  const userlist = (text: string) => ({ ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text } }) as const;
+  const NEEDS_MESH = userlist('plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n');
+  const MISSING_MESH = '"A.esp" requires "Meshes/x.nif", which is missing.';
+  const messagesOf = (collection: string) => host.problems(collection).flatMap(([, problems]) => problems.map(({ message }) => message));
+  const errors = () => messagesOf('modbench-sorting-errors');
+  const warnings = () => messagesOf('modbench-sorting-warnings');
+  const meshes = (...paths: string[]) => {
+    const files = new FileConflictLookup();
+    for (const mesh of paths) files.set({ relativePath: mesh, winner: `/mods/SomeMod/${mesh}`, winnerOrigin: { kind: 'mod', name: SOME_MOD }, providers: [{ kind: 'mod', name: SOME_MOD }] });
+    return files;
+  };
+  const listed = (...paths: string[]) => ({ kind: 'listed', files: new Map(paths.map((each) => [each.toLowerCase(), fileIn('/game/Data', each)])) }) as const;
+
+  function checksums(stalls = 'nothing') {
+    let rewritten = false;
+    let judgedAgain = 0;
+    const stalled = deferred();
+    const reachedStall = deferred();
+    const fileReads: FileReads = {
+      checksum: async (path) => {
+        if (path === stalls) {
+          reachedStall.resolve();
+          await stalled.promise;
+        }
+        return { kind: 'read', value: rewritten ? 0xDEADBEEF : 1 };
+      },
+      version: () => Promise.resolve({ kind: 'read', value: undefined }), readable: () => Promise.resolve({ kind: 'read', value: false }),
+      trusting: (read) => { judgedAgain++; return read(); },
+    };
+    return { fileReads, rewrite: () => { rewritten = true; }, judgedAgain: () => judgedAgain, reachedStall: reachedStall.promise, release: stalled.resolve };
+  }
+
+  async function judged(value: InstanceValue, fileReads: FileReads = checksums().fileReads) {
+    const made = scene(value, { fileReads });
+    await made.reconciled([held('A.esp')]);
+    return made;
+  }
 
   it('judges the last reconcile\'s order again when the instance\'s sorting rule files change', async () => {
-    const instance = new FakeInstance(valueOf([A_ROW()]));
-    const errors: (readonly PluginProblem[])[] = [];
-    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
-    await reconcile(h, [held('A.esp')]);
+    const made = await judged(valueOf(linesOf('A.esp')));
 
-    instance.publish({
-      ...valueOf([A_ROW()]),
-      dataFolderPlugins: { kind: 'listed', names: new Set() },
-      dataFolderFiles: { kind: 'listed', files: new Map() },
-      sortingRuleFiles: { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Missing.esp]\n' } },
-    });
+    made.instance.publish(valueOf(linesOf('A.esp'), {
+      dataFolderPlugins: { kind: 'listed', names: new Set() }, dataFolderFiles: listed(),
+      sortingRuleFiles: userlist('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'),
+    }));
 
-    await settled(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
+    await vi.waitFor(() => { expect(errors()).toEqual(['"A.esp" requires "Missing.esp", which is missing.']); }, { interval: 1 });
   });
-
-  const needsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Meshes/x.nif]\n' } } as const;
 
   it.each([
     ['a file a rule reads', 'Meshes/X.nif', 1],
     ['a file no rule reads', 'Textures/y.dds', 0],
-  ])('judges the last reconcile\'s order again when a mod gains %s, and only then', async (_file, path, judgedAgain) => {
-    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh });
-    const errors: (readonly PluginProblem[])[] = [];
-    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
-    await reconcile(h, [held('A.esp')]);
-    const before = errors.length;
+  ])('judges the last reconcile\'s order again when a mod gains %s, and only then', async (_file, path, times) => {
+    const { fileReads, judgedAgain } = checksums();
+    const made = await judged(valueOf(linesOf('A.esp'), { sortingRuleFiles: NEEDS_MESH }), fileReads);
+    const before = judgedAgain();
 
-    instance.publish({ ...instance.value, filesByMod: new Map([['SomeMod', [fileIn('/mods/SomeMod', path)]]]) }, { named: [`/mods/SomeMod/${path}`], disk: false });
-    await h.tree.facts.settled();
+    made.instance.publish({ ...made.instance.value, filesByMod: new Map([[SOME_MOD, [fileIn('/mods/SomeMod', path)]]]) }, { named: [`/mods/SomeMod/${path}`], disk: false });
+    await settle();
 
-    expect(errors.length - before).toBe(judgedAgain);
+    expect(judgedAgain() - before).toBe(times);
   });
 
   it.each([
-    ['a file a rule reads the bytes of', '/mods/SomeMod/Meshes/x.nif', 1],
-    ['a game file a rule reads the bytes of', '/game/Data/Meshes/z.nif', 1],
-    ['a file no rule reads', '/mods/SomeMod/Meshes/y.nif', 0],
-    ['a path a rule reads in another case, the same file on Windows alone', '/mods/SomeMod/MESHES/X.NIF', process.platform === 'win32' ? 1 : 0],
-  ])('judges the last reconcile\'s order again when %s is rewritten in place, and only then', async (_file, path, judgedAgain) => {
-    const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF) or checksum(\"Meshes/z.nif\", DEADBEEF)'}]\n" } } as const;
-    const files = new FileConflictLookup();
-    for (const mesh of ['Meshes/x.nif', 'Meshes/y.nif']) files.set({ relativePath: mesh, winner: `/mods/SomeMod/${mesh}`, winnerOrigin: { kind: 'mod', name: 'SomeMod' }, providers: [{ kind: 'mod', name: 'SomeMod' }] });
-    const dataFolderFiles = { kind: 'listed', files: new Map([['meshes/z.nif', fileIn('/game/Data', 'Meshes/z.nif')]]) } as const;
-    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: checksumsMesh, files, dataFolderFiles });
-    const errors: (readonly PluginProblem[])[] = [];
-    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
-    await reconcile(h, [held('A.esp')]);
-    const before = errors.length;
+    ['a file a rule reads the bytes of', '/mods/SomeMod/Meshes/x.nif', ['m']],
+    ['a game file a rule reads the bytes of', '/game/Data/Meshes/z.nif', ['m']],
+    ['a file no rule reads', '/mods/SomeMod/Meshes/y.nif', []],
+    ['a path a rule reads in another case, the same file on Windows alone', '/mods/SomeMod/MESHES/X.NIF', process.platform === 'win32' ? ['m'] : []],
+  ])('judges the last reconcile\'s order again when %s is rewritten in place, and only then', async (_file, path, after) => {
+    const { fileReads, rewrite } = checksums();
+    const made = await judged(valueOf(linesOf('A.esp'), {
+      sortingRuleFiles: userlist("plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF) or checksum(\"Meshes/z.nif\", DEADBEEF)'}]\n"),
+      files: meshes('Meshes/x.nif', 'Meshes/y.nif'), dataFolderFiles: listed('Meshes/z.nif'),
+    }), fileReads);
+    const before = warnings();
 
-    await instance.refresh([path]);
-    await h.tree.facts.settled();
+    rewrite();
+    await made.instance.refresh([path]);
+    await settle();
 
-    expect(errors.length - before).toBe(judgedAgain);
+    expect([before, warnings()]).toEqual([[], after]);
   });
 
   it('judges again when the copy that wins a file the rules read is rewritten, after another mod came to win it', async () => {
-    const checksumsMesh = { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: "plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF)'}]\n" } } as const;
     const wonBy = (name: string) => {
       const files = new FileConflictLookup();
       files.set({ relativePath: 'Meshes/x.nif', winner: `/mods/${name}/Meshes/x.nif`, winnerOrigin: { kind: 'mod', name }, providers: [{ kind: 'mod', name }] });
       return files;
     };
-    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: checksumsMesh, files: wonBy('ModA') });
-    const h = makeTree([A_ROW()], { instance });
-    await reconcile(h, [held('A.esp')]);
-    await instance.refresh(['/mods/ModA/Meshes/other.nif']);
-    const rejudge = vi.spyOn(h.tree.facts, 'rejudge');
-    instance.publish({ ...instance.value, files: wonBy('ModB') }, { named: [], disk: false });
-    await h.tree.facts.settled();
+    const { fileReads, rewrite } = checksums();
+    const made = await judged(valueOf(linesOf('A.esp'), {
+      sortingRuleFiles: userlist("plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum(\"Meshes/x.nif\", DEADBEEF)'}]\n"), files: wonBy('ModA'),
+    }), fileReads);
+    made.instance.publish({ ...made.instance.value, files: wonBy('ModB') }, { named: [], disk: false });
+    await settle();
+    const before = warnings();
 
-    await instance.refresh(['/mods/ModB/Meshes/x.nif']);
-    await h.tree.facts.settled();
+    rewrite();
+    await made.instance.refresh(['/mods/ModB/Meshes/x.nif']);
+    await settle();
 
-    expect(rejudge).toHaveBeenCalledTimes(2);
-  });
-
-  it('judges again when a file the last judgement to land read is rewritten, while a newer judgement still reads', async () => {
-    const rulesReading = (mesh: string) => ({
-      ...READ_SORTING_RULE_FILES,
-      userlist: { path: '/instance/userlist.yaml', kind: 'text', text: `plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum("${mesh}", DEADBEEF)'}]\n` },
-    }) as const;
-    const files = new FileConflictLookup();
-    for (const mesh of ['Meshes/x.nif', 'Meshes/y.nif']) files.set({ relativePath: mesh, winner: `/mods/SomeMod/${mesh}`, winnerOrigin: { kind: 'mod', name: 'SomeMod' }, providers: [{ kind: 'mod', name: 'SomeMod' }] });
-    let release = (): void => undefined;
-    let reached = (): void => undefined;
-    const stalled = new Promise<void>((resolve) => { release = resolve; });
-    const readingY = new Promise<void>((resolve) => { reached = resolve; });
-    const fileReads = {
-      checksum: async (path: string) => {
-        if (path === 'Meshes/y.nif') {
-          reached();
-          await stalled;
-        }
-        return { kind: 'read', value: undefined } as const;
-      },
-      version: () => Promise.resolve({ kind: 'read', value: undefined } as const),
-      readable: () => Promise.resolve({ kind: 'read', value: false } as const),
-      trusting: <T>(read: () => Promise<T>) => read(),
-    };
-    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: rulesReading('Meshes/x.nif'), files });
-    const h = makeTree([A_ROW()], { instance, fileReads });
-    await reconcile(h, [held('A.esp')]);
-    const rejudge = vi.spyOn(h.tree.facts, 'rejudge');
-
-    instance.publish({ ...instance.value, sortingRuleFiles: rulesReading('Meshes/y.nif') }, { named: [], disk: false });
-    await readingY;
-    await instance.refresh(['/mods/SomeMod/Meshes/x.nif']);
-    release();
-    await h.tree.facts.settled();
-
-    expect(rejudge).toHaveBeenCalledTimes(2);
+    expect([before, warnings()]).toEqual([[], ['m']]);
   });
 
   it.each([
     ['a file a rule reads', 'Meshes/x.nif', 1],
     ['a file no rule reads', 'Meshes/other.nif', 0],
-  ])('judges the last reconcile\'s order again when the game\'s Data folder gains %s, and only then', async (_file, path, judgedAgain) => {
-    const instance = new FakeInstance({
-      ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh,
-      dataFolderPlugins: { kind: 'listed', names: new Set<string>() }, dataFolderFiles: { kind: 'listed', files: new Map() },
-    });
-    const errors: (readonly PluginProblem[])[] = [];
-    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
-    await reconcile(h, [held('A.esp')]);
-    const before = errors.length;
+  ])('judges the last reconcile\'s order again when the game\'s Data folder gains %s, and only then', async (_file, path, times) => {
+    const { fileReads, judgedAgain } = checksums();
+    const made = await judged(valueOf(linesOf('A.esp'), {
+      sortingRuleFiles: NEEDS_MESH, dataFolderPlugins: { kind: 'listed', names: new Set<string>() }, dataFolderFiles: listed(),
+    }), fileReads);
+    const before = judgedAgain();
 
-    instance.publish({ ...instance.value, dataFolderFiles: { kind: 'listed', files: new Map([[path.toLowerCase(), fileIn('/game/Data', path)]]) } }, { named: [`/game/Data/${path}`], disk: false });
-    await h.tree.facts.settled();
+    made.instance.publish({ ...made.instance.value, dataFolderFiles: listed(path) }, { named: [`/game/Data/${path}`], disk: false });
+    await settle();
 
-    expect(errors.length - before).toBe(judgedAgain);
+    expect(judgedAgain() - before).toBe(times);
+  });
+
+  it('judges again when a file the last judgement to land read is rewritten, while a newer judgement still reads', async () => {
+    const rulesReading = (mesh: string) => userlist(`plugins:\n  - name: A.esp\n    msg: [{type: warn, content: m, condition: 'checksum("${mesh}", DEADBEEF)'}]\n`);
+    const { fileReads, judgedAgain, reachedStall, release } = checksums('Meshes/y.nif');
+    const made = await judged(valueOf(linesOf('A.esp'), { sortingRuleFiles: rulesReading('Meshes/x.nif'), files: meshes('Meshes/x.nif', 'Meshes/y.nif') }), fileReads);
+    const before = judgedAgain();
+
+    made.instance.publish({ ...made.instance.value, sortingRuleFiles: rulesReading('Meshes/y.nif') }, { named: [], disk: false });
+    await reachedStall;
+    await made.instance.refresh(['/mods/SomeMod/Meshes/x.nif']);
+    release();
+    await settle();
+
+    expect(judgedAgain() - before).toBe(2);
   });
 
   it('judges the last reconcile\'s order again when only the files present change', async () => {
-    const listed = (files: [string, OriginFile][]) => ({
-      ...valueOf([A_ROW()]), sortingRuleFiles: needsMesh,
-      dataFolderPlugins: { kind: 'listed', names: new Set<string>() } as const, dataFolderFiles: { kind: 'listed', files: new Map(files) } as const,
+    const present = (files: [string, OriginFile][]) => valueOf(linesOf('A.esp'), {
+      sortingRuleFiles: NEEDS_MESH, dataFolderPlugins: { kind: 'listed', names: new Set<string>() }, dataFolderFiles: { kind: 'listed', files: new Map(files) },
     });
-    const instance = new FakeInstance(listed([]));
-    const errors: (readonly PluginProblem[])[] = [];
-    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
-    await reconcile(h, [held('A.esp')]);
-    const before = errors.at(-1)?.length;
+    const made = await judged(present([]));
+    const before = errors();
 
-    instance.publish(listed([['meshes/x.nif', fileIn('/game/Data', 'Meshes/x.nif')]]));
+    made.instance.publish(present([['meshes/x.nif', fileIn('/game/Data', 'Meshes/x.nif')]]));
 
-    await settled(() => expect([before, errors.at(-1)]).toEqual([1, []]));
-  });
-
-  it('puts no rows over a record filter that matched nothing', async () => {
-    const instance = new FakeInstance(valueOf([A_ROW()]));
-    const h = makeTree([], { instance });
-    h.tree.setRecordFilterSource('a.sql');
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
-    expect(h.tree.viewMessage()).toBe('No records match a.sql.');
-
-    instance.publish(valueOf([]));
-    await h.tree.getChildren();
-
-    expect(h.tree.viewMessage()).toBe(NO_PLUGINS_MESSAGE);
+    await vi.waitFor(() => { expect([before, errors()]).toEqual([[MISSING_MESH], []]); }, { interval: 1 });
   });
 });
 
-describe('PluginsTreeProvider — a record filter hides a plugin with no matches', () => {
-  it('omits a plugin with no matching records from the row set entirely', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-
-    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
-  });
+describe('a record filter hides a plugin with no matches', () => {
+  async function filtered(value: InstanceValue, facts: PluginMetadata[]) {
+    const made = scene(value);
+    await made.reconciled(facts);
+    await filtersRecords(made, 'a.sql');
+    return made;
+  }
+  const AB = valueOf(linesOf('A.esp', 'B.esp'));
+  const A_UNMATCHED = [held('A.esp', { hasMatchingRecords: false }), held('B.esp')];
 
   it('keeps hidden the row a record filter hid when mEdit becomes unreachable', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
+    const made = await filtered(AB, A_UNMATCHED);
 
-    h.tree.facts.unreachable('mEdit is stopped.');
+    await made.unreachable();
 
-    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
+    expect(await made.names()).toEqual(['B.esp']);
   });
 
   it('keeps a plugin the filter still matches visible and expandable', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-    const [row] = await h.tree.getChildren();
+    const made = await filtered(AB, A_UNMATCHED);
 
-    expect(h.tree.getTreeItem(present(row, 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect((await made.items()).map((item) => [nameOf(item), item.collapsibleState])).toEqual([['B.esp', TreeItemCollapsibleState.Collapsed]]);
   });
 
   it('hides an implicit master row the record filter matches no records of', async () => {
-    const h = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
-    await reconcile(h, [held('Fallout4.esm', { origin: 'Data/', hasMatchingRecords: false })]);
+    const made = await filtered(valueOf([], { noLine: ['Fallout4.esm'] }), [held('Fallout4.esm', { origin: 'Data/', hasMatchingRecords: false })]);
 
-    expect(await h.tree.getChildren()).toEqual([]);
+    expect(await made.rows()).toEqual([]);
   });
 
   const ownCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'Data/', hasMatchingRecords: matches });
@@ -1431,614 +1140,365 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     ['shows', 'matches', 'first', [ownCopy(true), modCopy(false)], 1],
     ['shows', 'matches', 'last', [modCopy(false), ownCopy(true)], 1],
   ] as const)('%s a locked row whose own copy %s, with its own copy listed %s', async (_verb, _match, _order, answer, rows) => {
-    const h = makeTree(
-      [plugin({ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: false })],
-      { loadedWithNoLine: ['Fallout4.esm'] });
-    await reconcile(h, [...answer]);
+    const made = await filtered(valueOf([{ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: false }], { noLine: ['Fallout4.esm'] }), [...answer]);
 
-    expect(await h.tree.getChildren()).toHaveLength(rows);
+    expect(await made.rows()).toHaveLength(rows);
   });
 
   it('hides no row by the answer for another plugin of its name, when mEdit names none at its origin', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'RenamedMod' })]);
-    await reconcile(h, [held('A.esp', { origin: 'SomeOtherMod', hasMatchingRecords: false })]);
+    const made = await filtered(valueOf([{ name: 'A.esp', origin: 'RenamedMod' }]), [held('A.esp', { origin: 'SomeOtherMod', hasMatchingRecords: false })]);
 
-    expect(await h.tree.getChildren()).toHaveLength(1);
+    expect(await made.rows()).toHaveLength(1);
   });
 
   it('restores a hidden row in its new position when the underlying order changed while it was hidden', async () => {
-    const instance = new FakeInstance(valueOf([A_ROW(), B_ROW()]));
-    const h = makeTree([], { instance });
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
+    const made = await filtered(AB, A_UNMATCHED);
+    const hidden = await made.names();
 
-    instance.publish(valueOf([
-      plugin({ name: 'B.esp', line: 0 }), plugin({ name: 'A.esp', line: 1 }),
-    ]));
-    h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
-    await h.tree.facts.refresh();
+    made.instance.publish(valueOf(linesOf('B.esp', 'A.esp')));
+    await made.changed([held('A.esp'), held('B.esp')]);
 
-    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp', 'A.esp']);
+    expect([hidden, await made.names()]).toEqual([['B.esp'], ['B.esp', 'A.esp']]);
   });
 
   describe('when the fact re-read fails', () => {
-    const hiddenByA = async (): Promise<Harness> => {
-      const h = makeTree([A_ROW(), B_ROW()]);
-      h.tree.setRecordFilterSource('a.sql');
-      await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-      h.client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'No load order has been received.' });
-      return h;
+    const REFUSED = { failed: 'refused', refusal: 'No load order has been received.' } as const;
+    const hiddenByA = async () => {
+      const made = await filtered(AB, A_UNMATCHED);
+      made.client.setQueryFailure('getPlugins', REFUSED);
+      return made;
     };
-    const labels = async (h: Harness) => (await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label);
 
     it('keeps a row hidden by the filter still in force', async () => {
-      const h = await hiddenByA();
+      const made = await hiddenByA();
 
-      await h.tree.facts.refresh();
+      await made.changed(REFUSED);
 
-      expect(await labels(h)).toEqual(['B.esp']);
+      expect(await made.names()).toEqual(['B.esp']);
     });
 
     it('shows the row again when the filter was cleared', async () => {
-      const h = await hiddenByA();
+      const made = await hiddenByA();
+      made.client.setQueryAnswer('clearFilter', null);
+      made.client.setQueryAnswer('getActiveFilter', null);
 
-      h.tree.setRecordFilterSource(undefined);
-      await h.tree.facts.refresh();
+      await host.run('modbench.record.clearFilter');
+      await settle();
 
-      expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
+      expect(await made.names()).toEqual(['A.esp', 'B.esp']);
     });
 
     it('shows the row again when another filter replaced the one that hid it', async () => {
-      const h = await hiddenByA();
+      const made = await hiddenByA();
 
-      h.tree.setRecordFilterSource('b.sql');
-      await h.tree.facts.refresh();
+      await filtersRecords(made, 'b.sql');
 
-      expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
+      expect(await made.names()).toEqual(['A.esp', 'B.esp']);
     });
   });
-
 });
 
-describe('PluginsTreeProvider — a row expands into the record browser children', () => {
+describe('a row expands into the record browser children', () => {
   it('reads the row\'s own plugin of a shared filename, and every row beneath it carries that plugin', async () => {
     const client = browserClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummaryFixture({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
     });
-    const h = makeTree([
-      plugin({ name: 'Shared.esp', line: 0, origin: 'ModA', winning: false }),
-      plugin({ name: 'Shared.esp', line: 0, origin: 'ModB' }),
-    ], { client });
-    await reconcile(h, [held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB' })]);
-    const [row] = await h.tree.getChildren();
+    const made = scene(valueOf([{ name: 'Shared.esp', line: 0, origin: 'ModA', winning: false }, { name: 'Shared.esp', line: 0, origin: 'ModB' }]), { client });
+    await made.reconciled([held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB' })]);
+    client.calls.length = 0;
 
-    const group = present((await h.tree.getChildren(row))[0], 'the Weapon group');
-    const record = present((await h.tree.getChildren(group))[0], 'the record row');
+    const [group] = await made.rows(present((await made.rows())[0], 'the first row'));
+    const [record] = await made.items(group);
 
-    expect(client.calls.filter((c) => c.method === 'getRecordTypes' || c.method === 'getRecords').map((c) => c.args))
+    expect(client.calls.filter(({ method }) => method === 'getRecordTypes' || method === 'getRecords').map(({ args }) => args))
       .toEqual([[{ name: 'Shared.esp', origin: 'ModB' }], [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)]]);
-    expect(record.command?.arguments?.[0]).toEqual({ argument: { kind: 'record', formKey: '000001:Shared.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } } });
+    expect(record?.command?.arguments?.[0]).toEqual({ argument: { kind: 'record', formKey: '000001:Shared.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } } });
   });
 
-  it('forwards the record browser change events', () => {
-    const h = makeTree([A_ROW()]);
-    const fired: unknown[] = [];
-    h.tree.onDidChangeTreeData((e) => fired.push(e));
+  it('forwards the load order own change events', async () => {
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.rows();
+    const redrawn = made.redraws();
 
-    h.records.refresh();
+    made.instance.publish({ ...made.instance.value, plugins: [...made.instance.value.plugins] });
 
-    expect(fired).toEqual([undefined]);
+    expect(redrawn).toEqual([undefined]);
   });
 
-  it('forwards the load order own change events', () => {
-    const { tree, instance } = makeTree([A_ROW()]);
-    const fired: unknown[] = [];
-    tree.onDidChangeTreeData((e) => fired.push(e));
+  it('draws no row again when only the files present change', async () => {
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.rows();
+    const redrawn = made.redraws();
 
-    instance.publish({ ...instance.value, plugins: [...instance.value.plugins] });
+    made.instance.publish({ ...made.instance.value, files: new FileConflictLookup(), dataFolderFiles: { kind: 'unresolved' } });
+    await settle();
 
-    expect(fired).toEqual([undefined]);
-  });
-
-  it('draws no row again when only the files present change', () => {
-    const { tree, instance } = makeTree([A_ROW()]);
-    const fired: unknown[] = [];
-    tree.onDidChangeTreeData((e) => fired.push(e));
-
-    instance.publish({ ...instance.value, files: new FileConflictLookup(), dataFolderFiles: { kind: 'unresolved' } });
-
-    expect(fired).toEqual([]);
+    expect(redrawn).toEqual([]);
   });
 });
 
-describe('PluginsTreeProvider — a record row is identified by its kind, its plugin and its FormKey', () => {
+describe('a record row is identified by its kind, its plugin and its FormKey', () => {
   const SHARED = '000801:Fallout4.esm';
-  const everyKindOfRecord = () => browserClient({
-    recordTypes: [
-      { type: 'weap', count: 1, displayName: 'Weapon' },
-      { type: 'wrld', count: 1, displayName: 'Worldspace' },
-      { type: 'cell', count: 1, displayName: 'Cell' },
-    ],
+  const everyKindOfRecord = () => listsForThePluginAsked(browserClient({
+    recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }, { type: 'wrld', count: 1, displayName: 'Worldspace' }, { type: 'cell', count: 1, displayName: 'Cell' }],
     records: { items: [recordSummaryFixture({ formKey: SHARED })], total: 1 },
     worldspaces: [{ workingTreeState: 'None', formKey: SHARED, editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
-    worldspaceBlocks: {
-      topCells: [{ workingTreeState: 'None', formKey: '000802:Fallout4.esm', isPersistentWorldspaceCell: true, hasChildren: true, hasParseFailure: false }],
-      blocks: [],
-    },
-    cellChildRecords: {
-      persistent: [{ workingTreeState: 'None', formKey: '000803:Fallout4.esm', editorId: 'DoorRef', recordType: 'refr', hasParseFailure: false }],
-      temporary: [],
-    },
+    worldspaceBlocks: { topCells: [{ workingTreeState: 'None', formKey: '000802:Fallout4.esm', isPersistentWorldspaceCell: true, hasChildren: true, hasParseFailure: false }], blocks: [] },
+    cellChildRecords: { persistent: [{ workingTreeState: 'None', formKey: '000803:Fallout4.esm', editorId: 'DoorRef', recordType: 'refr', hasParseFailure: false }], temporary: [] },
     interiorCells: [{
       number: 0, hasParseFailure: false,
       subBlocks: [{ number: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: '000804:Fallout4.esm', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }],
     }],
-  });
-
-  async function everyRow(tree: PluginsTreeProvider, under?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
-    const children = await tree.getChildren(under);
-    const expandable = children.filter((child) => tree.getTreeItem(child).collapsibleState !== vscode.TreeItemCollapsibleState.None);
-    const below = await Promise.all(expandable.map((child) => everyRow(tree, child)));
-    return [...children, ...below.flat()];
-  }
-
-  async function heldTree(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], instance?: FakeInstance): Promise<Harness> {
-    const h = makeTree(plugins, { client: listsForThePluginAsked(everyKindOfRecord()), instance });
-    await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
-    return h;
-  }
-
+  }));
   const RECORD_KINDS = new Set(['record', 'worldspace', 'cell', 'placed']);
-  const recordRows = (rows: PluginsTreeNode[]) => rows.filter((row) => RECORD_KINDS.has(row.kind));
+  const isRecord = (item: vscode.TreeItem) => RECORD_KINDS.has(kindOf(item) ?? '');
+
+  async function everyItem(made: Scene, under?: unknown): Promise<vscode.TreeItem[]> {
+    const below = await Promise.all((await made.rows(under)).map(async (row) => {
+      const item = await made.item(row);
+      return [item, ...(item.collapsibleState ? await everyItem(made, row) : [])];
+    }));
+    return below.flat();
+  }
+  const recordIds = async (made: Scene) => (await everyItem(made)).filter(isRecord).map(({ id }) => id);
+
+  async function heldOver(value: InstanceValue) {
+    const made = scene(value, { client: everyKindOfRecord() });
+    await made.reconciled(value.plugins.map(({ name, origin }) => held(name, { origin })));
+    return made;
+  }
 
   it('gives every record, worldspace, cell and placed reference row an identity, and no two rows one', async () => {
-    const { tree } = await heldTree([A_ROW(), B_ROW()]);
+    const made = await heldOver(valueOf(linesOf('A.esp', 'B.esp')));
 
-    const rows = await everyRow(tree);
-    const ids = rows.flatMap((row) => (row.id === undefined ? [] : [row.id]));
+    const items = await everyItem(made);
+    const ids = items.flatMap(({ id }) => (id === undefined ? [] : [id]));
 
-    expect(recordRows(rows).map((row) => row.kind).sort()).toEqual(
-      ['cell', 'cell', 'cell', 'cell', 'placed', 'placed', 'record', 'record', 'worldspace', 'worldspace']);
-    expect(recordRows(rows).every((row) => row.id !== undefined)).toBe(true);
+    expect(items.filter(isRecord).map(kindOf).sort()).toEqual(['cell', 'cell', 'cell', 'cell', 'placed', 'placed', 'record', 'record', 'worldspace', 'worldspace']);
+    expect(items.filter(isRecord).every(({ id }) => id !== undefined)).toBe(true);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('builds every row, at every level, collapsed', async () => {
-    const { tree } = await heldTree([A_ROW(), plugin({ name: 'Off.esp', line: 1, enabled: false })]);
+    const made = await heldOver(valueOf([{ name: 'A.esp' }, { name: 'Off.esp', enabled: false }]));
 
-    const rows = await everyRow(tree);
-    const states = rows.map((row) => tree.getTreeItem(row).collapsibleState);
+    const items = await everyItem(made);
 
-    expect([...new Set(rows.map((row) => row.kind))].sort()).toEqual([
-      'cell', 'interiorBlock', 'interiorSubBlock', 'placed', 'placedGroup', 'plugin', 'record', 'recordType', 'worldspace',
-    ]);
-    expect(states.filter((state) => state === vscode.TreeItemCollapsibleState.Expanded)).toEqual([]);
+    expect([...new Set(items.map(kindOf))].sort()).toEqual(['block', 'cell', 'placed', 'placedGroup-persistent', 'plugin', 'record', 'recordType', 'subBlock', 'worldspace']);
+    expect(items.map(({ collapsibleState }) => collapsibleState)).not.toContain(TreeItemCollapsibleState.Expanded);
   });
 
   it('keeps a record row\'s identity when its plugin\'s rows are asked for again', async () => {
-    const { tree } = await heldTree([A_ROW()]);
+    const made = await heldOver(valueOf(linesOf('A.esp')));
 
-    const first = recordRows(await everyRow(tree)).map((row) => row.id);
-    const again = recordRows(await everyRow(tree)).map((row) => row.id);
+    const first = await recordIds(made);
 
-    expect(again).toEqual(first);
+    expect(await recordIds(made)).toEqual(first);
   });
 
   it('gives a record under the plugin of the same name from another origin another identity', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModA' })]));
-    const h = await heldTree([plugin({ name: 'A.esp', line: 0, origin: 'ModA' })], instance);
-    const { tree } = h;
-    const fromModA = recordRows(await everyRow(tree)).map((row) => row.id);
+    const made = await heldOver(valueOf([{ name: 'A.esp', origin: 'ModA' }]));
+    const fromModA = await recordIds(made);
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModB' })]));
-    await reconcile(h, [held('A.esp', { origin: 'ModB' })]);
-    const fromModB = recordRows(await everyRow(tree)).map((row) => row.id);
+    made.instance.publish(valueOf([{ name: 'A.esp', origin: 'ModB' }]));
+    await made.reconciled([held('A.esp', { origin: 'ModB' })]);
+    const fromModB = await recordIds(made);
 
-    expect(fromModB).toHaveLength(fromModA.length);
-    expect(fromModB.filter((id) => fromModA.includes(id))).toEqual([]);
+    expect([fromModB.length, fromModB.filter((id) => fromModA.includes(id))]).toEqual([fromModA.length, []]);
   });
 });
 
-async function rowItem(h: Harness, index = 0): Promise<vscode.TreeItem> {
-  const rows = await h.tree.getChildren();
-  return h.tree.getTreeItem(present(rows[index], `row at index ${index}`));
-}
+describe('a row walks up to its plugin row, as VS Code reveals it', () => {
+  const NPC = '000900:A.esp';
 
-function tooltipAsString(value: unknown): string {
-  if (typeof value !== 'string') throw new Error(`Expected a string, got ${String(value)}`);
-  return value;
-}
+  async function aboveThe(client: InMemoryMEditClient, kinds: readonly string[]) {
+    const made = scene(valueOf(linesOf('A.esp', 'B.esp')), { client });
+    await made.reconciled([held('A.esp'), held('B.esp')]);
+    const provider = made.view().treeDataProvider;
+    let row: unknown = await made.rowNamed('A.esp');
+    for (const kind of kinds) {
+      const children = await made.rows(row);
+      const items = await Promise.all(children.map(made.item));
+      row = children[items.findIndex((item) => kindOf(item) === kind)];
+    }
+    const above: string[] = [];
+    for (let parent = await provider.getParent?.(row); parent !== undefined && parent !== null; parent = await provider.getParent?.(parent)) {
+      above.push(String(labelOf(await made.item(parent))));
+    }
+    return above;
+  }
 
-describe('PluginsTreeProvider — the row states its conditions', () => {
-  const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
+  it.each([
+    ['a record\'s row through its group', browserClient({
+      recordTypes: [{ type: 'npc_', count: 1, displayName: 'Non-Player Character' }], records: { items: [recordSummaryFixture({ formKey: NPC })], total: 1 },
+    }), ['recordType', 'record'], ['Non-Player Character', '0 A.esp']],
+    ['a worldspace\'s row through the Worldspace group', browserClient({
+      recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
+      worldspaces: [{ formKey: NPC, hasParseFailure: false, workingTreeState: 'None', hasChildren: true }],
+    }), ['recordType', 'worldspace'], ['Worldspace', '0 A.esp']],
+    ['an interior cell\'s row through the Cell group\'s block and sub-block', browserClient({
+      recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
+      interiorCells: [{ number: 1, hasParseFailure: false, subBlocks: [{ number: 9, hasParseFailure: false, cells: [
+        { workingTreeState: 'None', formKey: NPC, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false },
+      ] }] }],
+    }), ['recordType', 'block', 'subBlock', 'cell'], ['Sub-Block 9', 'Block 1', 'Cell', '0 A.esp']],
+  ])('walks up from %s to its plugin row, and no further', async (_row, client, kinds, above) => {
+    expect(await aboveThe(client, kinds)).toEqual(above);
+  });
+});
+
+describe('the row states its conditions', () => {
+  const flags = async (made: Scene) => (await made.items())[0]?.contextValue?.split(' ');
 
   it('states an editable plugin in a source mod', async () => {
-    const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), listedSourceMods: new Set(['SomeMod']) }) });
-    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
+    const made = scene(valueOf(linesOf('A.esp'), { listedSourceMods: new Set([SOME_MOD]) }));
+    await made.reconciled([held('A.esp', { isCompiledPlugin: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inSourceMod', 'compiledPlugin', 'editable']);
+    expect(await flags(made)).toEqual(['plugin', 'enabled', 'inSourceMod', 'compiledPlugin', 'editable']);
   });
 
   it('states a disabled line', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'SomeMod', enabled: false })]);
-    await reconcile(h, [held('A.esp')]);
+    const made = scene(valueOf([{ name: 'A.esp', enabled: false }]));
+    await made.reconciled([held('A.esp')]);
 
-    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inNonSourceMod', 'nonCompiledPlugin']);
+    expect(await flags(made)).toEqual(['plugin', 'disabled', 'inNonSourceMod', 'nonCompiledPlugin']);
   });
 });
 
-describe('PluginsTreeProvider — a plugin row\'s click', () => {
-  it('does nothing on a disabled plugin but select it', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'SomeMod', enabled: false })]);
-
-    expect((await rowItem(h)).command).toBeUndefined();
-  });
-});
-
-describe('PluginsTreeProvider — read-only tooltip', () => {
-
-  it('never adds a read-only line to the locked row — its tooltip is the one sentence alone', async () => {
-    const h = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
-    await reconcile(h, [held('Fallout4.esm', { origin: 'Data/', isImmutable: true })]);
-
-    expect((await rowItem(h)).tooltip).toBe(
-      "This plugin can't be disabled or moved (enforced by the game).");
-  });
-});
-
-describe('PluginsTreeProvider — sorting-error decoration', () => {
-  const withIssues = (h: Harness, masters: string[]) => reconcile(h, [held('A.esp', { masters })]);
-
+describe('sorting-error decoration', () => {
   it('never touches collapsibleState, and the leading line stays the checkbox alone', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, ['Ghost.esm']);
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.reconciled([held('A.esp', { masters: ['Ghost.esm'] })]);
 
-    const item = await rowItem(h);
+    const [item] = await made.items();
 
-    expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-    expect(item.checkboxState).toBe(vscode.TreeItemCheckboxState.Checked);
+    expect([item?.collapsibleState, item?.checkboxState]).toEqual([TreeItemCollapsibleState.Collapsed, TreeItemCheckboxState.Checked]);
   });
 
-  const baseThenA = (enabled: boolean) => [plugin({ name: 'Base.esm', line: 0, enabled }), plugin({ name: 'A.esp', line: 1 })];
+  const baseThenA = (enabled: boolean) => valueOf([{ name: 'Base.esm', enabled }, { name: 'A.esp' }]);
   const needsBase = held('A.esp', { masters: ['Base.esm'] });
-  it.each<[string, (LoadOrderPlugin | LoadOrderPluginLine)[], string[], PluginMetadata[], PluginLoadFailure[], string | undefined]>([
-    ['an enabled master mEdit failed to read as present, for the game loads what mEdit cannot read', baseThenA(true), [],
-      [needsBase], [{ name: 'Base.esm', origin: 'SomeMod', reason: 'Malformed record' }], undefined],
-    ['a master that is listed but disabled as missing', baseThenA(false), [], [held('Base.esm', { isMaster: true }), needsBase], [], '1 error'],
-    ['a master the game loads with no line as active', [A_ROW()], ['Base.esm'], [held('Base.esm', { origin: 'Data/', isMaster: true }), needsBase], [], undefined],
-  ])('reads %s', async (_case, lines, loadedWithNoLine, read, failures, description) => {
-    const h = makeTree(lines, { loadedWithNoLine });
+  it.each<[string, InstanceValue, PluginMetadata[], PluginLoadFailure[], string | undefined]>([
+    ['an enabled master mEdit failed to read as present, for the game loads what mEdit cannot read', baseThenA(true),
+      [needsBase], [{ name: 'Base.esm', origin: SOME_MOD, reason: 'Malformed record' }], undefined],
+    ['a master that is listed but disabled as missing', baseThenA(false), [held('Base.esm', { isMaster: true }), needsBase], [], '1 error'],
+    ['a master the game loads with no line as active', valueOf(linesOf('A.esp'), { noLine: ['Base.esm'] }),
+      [held('Base.esm', { origin: 'Data/', isMaster: true }), needsBase], [], undefined],
+  ])('reads %s', async (_case, value, read, failures, description) => {
+    const made = scene(value);
 
-    await reconcile(h, read, failures);
+    await made.reconciled(read, { failures });
 
-    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
-    expect(item?.description).toBe(description);
+    expect((await made.items())[1]?.description).toBe(description);
   });
 
-  describe('flags the row of a plugin whose suggested move can be applied', () => {
-    const flagged = async (h: Harness) => (await h.tree.getChildren()).map((row) => [row.label, h.tree.getTreeItem(row).contextValue?.includes('suggestedMove')]);
+  it('flags a master that loads after its dependant', async () => {
+    const made = scene(valueOf(linesOf('B.esp', 'A.esp')));
 
-    it('flags a master that loads after its dependant', async () => {
-      const h = makeTree([plugin({ name: 'B.esp', line: 0 }), plugin({ name: 'A.esp', line: 1 })]);
+    await made.reconciled([held('B.esp', { masters: ['A.esp'] }), held('A.esp')]);
 
-      await reconcile(h, [held('B.esp', { masters: ['A.esp'] }), held('A.esp')]);
-
-      expect(await flagged(h)).toEqual([['B.esp', false], ['A.esp', true]]);
-    });
+    expect((await made.items()).map((item) => [nameOf(item), item.contextValue?.split(' ').includes('suggestedMove')])).toEqual([['B.esp', false], ['A.esp', true]]);
   });
 
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, ['Ghost.esm']);
-    expect((await rowItem(h)).tooltip).toContain('is missing or not active');
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.reconciled([held('A.esp', { masters: ['Ghost.esm'] })]);
+    const before = (await made.items())[0]?.tooltip;
 
-    await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
+    await made.reconciled([held('A.esp', { isCompiledPlugin: true })]);
 
-    const item = await rowItem(h);
-    expect(item.tooltip).toBe('A.esp\nSomeMod');
-    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
-    expect(item.description).toBeUndefined();
+    const [item] = await made.items();
+    expect(before).toContain('is missing or not active');
+    expect([item?.tooltip, item?.iconPath, item?.description]).toEqual(['A.esp\nSomeMod', new ThemeIcon('blank'), undefined]);
   });
 });
 
-describe('PluginsTreeProvider — load-failure decoration', () => {
-  it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
+describe('the facts are pulled once and held', () => {
+  const asked = (client: InMemoryMEditClient, method: string) => client.calls.filter((call) => call.method === method).length;
 
-    expect((await rowItem(h)).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-    const [row] = await h.tree.getChildren();
-    const children = await h.tree.getChildren(row);
-    expect(children.map(c => c.contextValue)).toEqual(['error']);
-    expect(present(children[0], 'the error row').tooltip).toBe('Malformed record');
-  });
-});
-
-describe('PluginsTreeProvider fact refresh', () => {
   it('re-renders without rebuilding the rows', async () => {
-    const h = makeTree([A_ROW()]);
-    holdsLoadOrder(h.client);
-    const before = await h.tree.getChildren();
-    const heard: unknown[] = [];
-    h.tree.onDidChangeTreeData(() => heard.push(true));
+    const made = scene(valueOf(linesOf('A.esp')));
+    await made.reconciled([held('A.esp')]);
+    const before = await made.rows();
+    const redrawn = made.redraws();
 
-    await h.tree.facts.refresh();
+    await made.changed([held('A.esp')]);
 
-    expect(heard).toHaveLength(1);
-    expect((await h.tree.getChildren())[0]).toBe(before[0]);
+    expect([redrawn.length > 0, (await made.rows())[0] === before[0]]).toEqual([true, true]);
+  });
+
+  it.each([
+    ['the plugin rows', () => undefined, ['0 A.esp', '1 B.esp', '2 C.esp']],
+    ['the rows beneath a plugin', (made: Scene) => made.rowNamed('A.esp'), ['Weapon']],
+  ])('reads neither the plugin list nor the malformed-plugin scan while drawing %s', async (_rows, parent, labels) => {
+    const made = scene(valueOf(linesOf('A.esp', 'B.esp', 'C.esp')), { client: browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] }) });
+    await made.reconciled([held('A.esp'), held('B.esp'), held('C.esp')]);
+    const reads = () => [asked(made.client, 'getPlugins'), asked(made.client, 'getDiagnoses')];
+    const before = reads();
+
+    const drawn = await made.labels(await parent(made));
+
+    expect([drawn, reads()]).toEqual([labels, before]);
   });
 });
 
-describe('PluginsTreeProvider — a name under two origins joins to the row own origin, replies listing the row\'s own plugin first so a name-only join would answer with the other', () => {
-  const SHARED_ROW = () => plugin({ name: 'Shared.esp', line: 0, origin: 'ModA' });
-
-  it('badges the row from its own plugin sorting errors, not the other plugin', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', masters: ['AMaster.esm'] }),
-      held('Shared.esp', { origin: 'ModB', masters: ['BMaster.esm'] }),
-    ]);
-
-    const tooltip = tooltipAsString((await rowItem(h)).tooltip);
-    expect(tooltip).toContain('"AMaster.esm" is a master of "Shared.esp"');
-    expect(tooltip).not.toContain('BMaster.esm');
-  });
-});
-
-describe('PluginsTreeProvider — the facts are pulled once and held', () => {
-  it('reads the plugin list and the malformed-plugin scan once per reconcile, not once per rendered row', async () => {
-    const h = makeTree([A_ROW(), B_ROW(), plugin({ name: 'C.esp', line: 2 })]);
-    await reconcile(h, [held('A.esp'), held('B.esp'), held('C.esp')]);
-
-    const rendered = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row).label);
-
-    expect(rendered).toEqual(['0 A.esp', '1 B.esp', '2 C.esp']);
-    expect([callCount(h.client, 'getPlugins'), callCount(h.client, 'getDiagnoses')]).toEqual([1, 1]);
-  });
-
-  it('reads nothing at all while rendering children', async () => {
-    const client = browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { client });
-    await reconcile(h, [held('A.esp')]);
-    const [row] = await h.tree.getChildren();
-
-    const rendered = (await h.tree.getChildren(row)).map((child) => h.tree.getTreeItem(child).label);
-
-    expect(rendered).toEqual(['Weapon']);
-    expect(callCount(h.client, 'getPlugins')).toBe(1);
-  });
-});
-
-describe('PluginsTreeProvider — the row of a record create wrote', () => {
-  const NPCS = { plugin: { name: 'A.esp', origin: 'SomeMod' }, recordType: 'npc_' };
-  const NEW_NPC = '000900:A.esp';
-  const listing = (...formKeys: string[]) => browserClient({
-    recordTypes: [{ type: 'acti', count: 1, displayName: 'Activator' }, { type: 'npc_', count: formKeys.length, displayName: 'Non-Player Character' }],
-    records: { items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: 'A.esp' })), total: formKeys.length },
-  });
-  async function heldWith(client: InMemoryMEditClient): Promise<Harness> {
-    const rows = [A_ROW(), B_ROW()];
-    const h = makeTree(rows, { client });
-    await reconcile(h, rows.map((p) => held(p.name, { origin: p.origin })));
-    return h;
-  }
-
-  it('finds the record\'s row beneath its plugin and its group, once mEdit lists it', async () => {
-    const { tree } = await heldWith(listing('000800:A.esp', '000900:A.esp'));
-
-    const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
-
-    expect(row.description).toBe('000900:A.esp');
-  });
-
-  it('walks from the record\'s row up through its group to its plugin row, and no further', async () => {
-    const { tree } = await heldWith(listing('000900:A.esp'));
-    const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
-
-    const group = present(tree.getParent(row), 'the group row');
-    const pluginRow = expectInstanceOf(tree.getParent(group), PluginNode);
-
-    expect([group.label, pluginRow.plugin.name, tree.getParent(pluginRow)]).toEqual(['Non-Player Character', 'A.esp', undefined]);
-  });
-
-  it('finds nothing while mEdit does not list the record yet', async () => {
-    const { tree } = await heldWith(listing('000800:A.esp'));
-
-    expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
-  });
-
-  it('finds nothing under a plugin of the same name from another origin', async () => {
-    const { tree } = await heldWith(listing('000900:A.esp'));
-
-    expect(await tree.recordRow({ ...NPCS, plugin: { name: 'A.esp', origin: 'OtherMod' } }, NEW_NPC)).toBeUndefined();
-  });
-
-  it('finds nothing while the name filter hides its plugin', async () => {
-    const { tree } = await heldWith(listing('000900:A.esp'));
-    tree.setFilter('B.esp');
-
-    expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
-  });
-
-  it('finds a worldspace\'s row beneath the Worldspace group, and walks up through it to its plugin row', async () => {
-    const { tree } = await heldWith(browserClient({
-      recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
-      worldspaces: ['000800:A.esp', '000900:A.esp'].map((formKey) => ({ formKey, hasParseFailure: false, workingTreeState: 'None', hasChildren: true })),
-    }));
-
-    const row = present(await tree.recordRow({ ...NPCS, recordType: 'wrld' }, '000900:A.esp'), 'the worldspace row');
-    const group = present(tree.getParent(row), 'the Worldspace group');
-
-    expect([row.description, group.label, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
-      .toEqual(['000900:A.esp', 'Worldspace', 'A.esp']);
-  });
-
-  it('finds an interior cell\'s row beneath the Cell group\'s block and sub-block, and walks up through each to its plugin row', async () => {
-    const cell = (formKey: string): CellSummary => ({ workingTreeState: 'None', formKey, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false });
-    const { tree } = await heldWith(browserClient({
-      recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }],
-      interiorCells: [
-        { number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [cell('000800:A.esp')] }] },
-        { number: 1, hasParseFailure: false, subBlocks: [{ number: 9, hasParseFailure: false, cells: [cell('000900:A.esp')] }] },
-      ],
-    }));
-
-    const row = present(await tree.recordRow({ ...NPCS, recordType: 'cell' }, '000900:A.esp'), 'the interior cell row');
-    const subBlock = present(tree.getParent(row), 'the sub-block row');
-    const block = present(tree.getParent(subBlock), 'the block row');
-    const group = present(tree.getParent(block), 'the Cell group');
-
-    expect([row.description, subBlock.label, block.label, group.label, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
-      .toEqual(['000900:A.esp', 'Sub-Block 9', 'Block 1', 'Cell', 'A.esp']);
-  });
-
-  describe('beneath the container it landed in', () => {
-    const cell = (formKey: string, hasChildren = false): CellSummary => ({ workingTreeState: 'None', formKey, isPersistentWorldspaceCell: false, hasChildren, hasParseFailure: false });
-    const placed = (formKey: string): ChildRecordSummary => ({ workingTreeState: 'None', formKey, recordType: 'refr', hasParseFailure: false });
-    const interiorCell = (formKey: string): InteriorCellBlock[] =>
-      [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [cell(formKey)] }] }];
-
-    async function rowBeneath(tree: PluginsTreeProvider, parent: PluginsTreeNode, kind: string): Promise<PluginsTreeNode> {
-      return present((await tree.getChildren(parent)).find((row) => row.kind === kind), `the ${kind} row`);
-    }
-
-    async function ancestry(tree: PluginsTreeProvider, row: PluginsTreeNode): Promise<PluginsTreeNode[]> {
-      const parent = tree.getParent(row);
-      return parent === undefined ? [] : [parent, ...await ancestry(tree, parent)];
-    }
-
-    it('finds a placed reference beneath the empty cell it was created on, through rows the tree shows after the change', async () => {
-      const h = await heldWith(browserClient({ recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp') }));
-      const [pluginRow] = await h.tree.getChildren();
-      const group = await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType');
-      const subBlock = await rowBeneath(h.tree, await rowBeneath(h.tree, group, 'interiorBlock'), 'interiorSubBlock');
-      const shownBefore = await rowBeneath(h.tree, subBlock, 'cell');
-      h.client.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [placed(NEW_NPC)] });
-      h.records.refresh();
-
-      const row = present(await h.tree.recordRow({ container: shownBefore }, NEW_NPC), 'the new placed reference\'s row');
-      const above = await ancestry(h.tree, row);
-
-      expect(row.kind).toBe('placed');
-      expect(above.map((r) => [r.kind, r.label])).toEqual([
-        ['placedGroup', 'Temporary'], ['cell', '000800:A.esp'], ['interiorSubBlock', 'Sub-Block 0'], ['interiorBlock', 'Block 0'],
-        ['recordType', 'Cell'], ['plugin', 'A.esp'],
-      ]);
-      expect(above.filter((r) => [shownBefore, subBlock, group].includes(r))).toEqual([]);
-    });
-
-    it('finds a new exterior cell beneath its worldspace\'s block and sub-block', async () => {
-      const h = await heldWith(browserClient({
-        recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-        worldspaces: [{ workingTreeState: 'None', formKey: '000800:A.esp', hasParseFailure: false, hasChildren: false }],
-      }));
-      const [pluginRow] = await h.tree.getChildren();
-      const worldspace = await rowBeneath(h.tree, await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType'), 'worldspace');
-      h.client.setQueryAnswer('getWorldspaceBlocks', {
-        topCells: [], blocks: [{ x: 0, y: -1, hasParseFailure: false, subBlocks: [{ x: 1, y: -2, hasParseFailure: false, cells: [cell(NEW_NPC)] }] }],
-      });
-      h.records.refresh();
-
-      const row = present(await h.tree.recordRow({ container: worldspace }, NEW_NPC), 'the new cell row');
-
-      expect((await ancestry(h.tree, row)).slice(0, 3).map((r) => r.label)).toEqual(['Sub-Block 1, -2', 'Block 0, -1', '000800:A.esp']);
-    });
-
-    it('finds nothing once the name filter hides the container\'s plugin', async () => {
-      const h = await heldWith(browserClient({
-        recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp'),
-        cellChildRecords: { persistent: [placed(NEW_NPC)], temporary: [] },
-      }));
-      const [pluginRow] = await h.tree.getChildren();
-      const group = await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType');
-      const subBlock = await rowBeneath(h.tree, await rowBeneath(h.tree, group, 'interiorBlock'), 'interiorSubBlock');
-      const cellRow = await rowBeneath(h.tree, subBlock, 'cell');
-      h.tree.setFilter('B.esp');
-
-      expect(await h.tree.recordRow({ container: cellRow }, NEW_NPC)).toBeUndefined();
-    });
-  });
-
-  it('never expands a record row while it looks, since what a record holds is not its group\'s', async () => {
-    const h = await heldWith(browserClient({
-      recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
-      interiorCells: [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [
-        { workingTreeState: 'None', formKey: '000800:A.esp', isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false },
-      ] }] }],
-    }));
-
-    expect(await h.tree.recordRow({ ...NPCS, recordType: 'cell' }, NEW_NPC)).toBeUndefined();
-    expect(callCount(h.client, 'getCellChildRecords')).toBe(0);
-  });
-});
-
-describe('PluginsTreeProvider — the label leads with the line (plugins.md, A row)', () => {
-  const shown = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => tree.getTreeItem(row).label);
-
+describe('the label leads with the line (plugins.md, A row)', () => {
   it('zero-pads each line to the width of the last, so the numbers align', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', line: 3 }), plugin({ name: 'B.esp', line: 10 })]);
-
-    expect(await shown(tree)).toEqual(['03 A.esp', '10 B.esp']);
+    expect(await scene(valueOf([{ name: 'A.esp', line: 3 }, { name: 'B.esp', line: 10 }])).labels()).toEqual(['03 A.esp', '10 B.esp']);
   });
 
   it('leaves a plugin the game loads with no line to its file name', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0 })], { loadedWithNoLine: ['Base.esm'] });
-
-    expect(await shown(tree)).toEqual(['Base.esm', '0 A.esp']);
+    expect(await scene(valueOf(linesOf('A.esp'), { noLine: ['Base.esm'] })).labels()).toEqual(['Base.esm', '0 A.esp']);
   });
 });
 
-describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', () => {
-  const highlightsOf = async (tree: PluginsTreeProvider) =>
-    (await tree.getChildren()).map((row) => {
-      const item = tree.getTreeItem(row);
-      return typeof item.label === 'object' ? item.label.highlights : undefined;
-    });
+describe('the highlight (plugins.md, The highlight)', () => {
+  const highlightsOf = async (made: Scene) => (await made.items()).map(({ label }) => (typeof label === 'object' ? label.highlights : undefined));
+  const highlights = (made: Scene, ...plugins: PluginAddress[]) => { made.shown.drawsHighlight.highlight({ plugins, origins: [] }); };
+  const BEE = { name: 'Bee.esp', origin: SOME_MOD };
 
   it('marks the whole label of each plugin it is handed, and no other', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'Bee.esp', line: 1 })]);
+    const made = scene(valueOf(linesOf('A.esp', 'Bee.esp')));
 
-    tree.highlight([{ name: 'Bee.esp', origin: 'SomeMod' }]);
+    highlights(made, BEE);
 
-    expect(await highlightsOf(tree)).toEqual([undefined, [[0, 9]]]);
+    expect(await highlightsOf(made)).toEqual([undefined, [[0, 9]]]);
   });
 
   it('matches by name and origin, so a plugin of the same name from another origin stays unmarked', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', origin: 'One' })]);
+    const made = scene(valueOf([{ name: 'A.esp', origin: 'One' }]));
 
-    tree.highlight([{ name: 'A.esp', origin: 'Other' }]);
+    highlights(made, { name: 'A.esp', origin: 'Other' });
 
-    expect(await highlightsOf(tree)).toEqual([undefined]);
+    expect(await highlightsOf(made)).toEqual([undefined]);
   });
 
   it('clears the mark when handed none', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp' })]);
-    tree.highlight([{ name: 'A.esp', origin: 'SomeMod' }]);
+    const made = scene(valueOf(linesOf('A.esp')));
+    highlights(made, { name: 'A.esp', origin: SOME_MOD });
 
-    tree.highlight([]);
+    highlights(made);
 
-    expect(await highlightsOf(tree)).toEqual([undefined]);
+    expect(await highlightsOf(made)).toEqual([undefined]);
   });
 
   it('keeps the row in place, with its id', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp' })]);
-    const idsOf = async () => (await tree.getChildren()).map((row) => row.id);
+    const made = scene(valueOf(linesOf('A.esp')));
+    const idsOf = async () => (await made.items()).map(({ id }) => id);
     const before = await idsOf();
 
-    tree.highlight([{ name: 'A.esp', origin: 'SomeMod' }]);
+    highlights(made, { name: 'A.esp', origin: SOME_MOD });
 
     expect(await idsOf()).toEqual(before);
   });
 
   it('tells the tree which rows changed, and only those', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'Bee.esp', line: 1 })]);
-    const changed: unknown[] = [];
-    tree.onDidChangeTreeData((row) => { changed.push(row); });
-    await tree.getChildren();
+    const made = scene(valueOf(linesOf('A.esp', 'Bee.esp')));
+    await made.rows();
+    const redrawn = made.redraws();
 
-    tree.highlight([{ name: 'Bee.esp', origin: 'SomeMod' }]);
+    highlights(made, BEE);
 
-    expect(expectInstancesOf(changed, PluginNode).map((row) => row.plugin.name)).toEqual(['Bee.esp']);
+    expect(redrawn.map(nameOf)).toEqual(['Bee.esp']);
   });
 });

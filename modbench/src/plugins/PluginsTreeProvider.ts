@@ -216,8 +216,9 @@ export class PluginsTreeProvider
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
       const rewritten = told.disk || told.named.some((path) => this.readAt().has(pathKey(path)));
-      if (rules !== this.rules || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
+      const rulesChanged = rules !== this.rules;
       this.rules = rules;
+      if (rulesChanged || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
       else if (!recovered) return;
       this._onDidChangeTreeData.fire(undefined);
