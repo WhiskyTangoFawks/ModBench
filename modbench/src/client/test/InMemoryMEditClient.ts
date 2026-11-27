@@ -4,8 +4,9 @@ import type {
   MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocumentChange, WriteRefused,
   FilesSetAside,
 } from '../MEditClient';
+import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
-import { inMemorySender, type ScriptedMEdit } from './inMemorySender';
+import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getPlacesHoldingPluginSource' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
@@ -77,44 +78,41 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly handOverListeners = new Set<(failure: WriteRefused | undefined) => void>();
   private readonly setAsideListeners = new Set<(setAside: FilesSetAside) => void>();
   private _status: BackendStatus = 'starting';
-  private putAnswer: ScriptedMEdit['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
+  private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private signalAnswer: () => Promise<void> = () => Promise.resolve();
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
   private stopAnswer: () => void = () => undefined;
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
-  private readonly sender = inMemorySender({
+  // No cap: a change signal waits for the snapshots handed before it to be answered, so no test waits on a clock.
+  private readonly sender = createLoadOrderSender({
     status: () => this.status,
     onStatusChanged: (listener) => this.onStatusChanged(listener),
+    onReconnected: (listener) => this.onReconnected(listener),
     start: () => { this.record('start', []); return this.startAnswer(); },
     stop: () => {
       this.record('stop', []);
       this.stopAnswer();
       this.setStatus('stopped');
+      return Promise.resolve();
     },
-    put: (snapshot, signal) => {
+    put: (snapshot, signal, answered) => {
       this.record('put', [snapshot]);
       this.snapshotsPut.push(snapshot);
-      return this.putAnswer(snapshot, signal);
+      const outcome = this.putAnswer(snapshot, signal, answered);
+      void outcome.then(answered, answered);
+      return outcome;
     },
     signalChange: (paths) => {
       this.record('signalChange', [paths]);
-      return this.signalAnswer();
+      return this.signalAnswer().then(() => ({ ended: Promise.resolve() }));
     },
   });
 
-  private readonly lateChanges = new EventEmitter<boolean>();
-  private readonly progressChanges = new EventEmitter<RecordIndexProgress | undefined>();
-  private lateTold = false;
+  private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
+  private readonly progress = trackProgress(() => this.recordIndexProgress);
 
   constructor() {
-    this.sender.onPendingChanged(() => { this.noteLateness(); });
-  }
-
-  private noteLateness(): void {
-    const late = this.recordIndexMayBeLate;
-    if (late === this.lateTold) return;
-    this.lateTold = late;
-    this.lateChanges.fire(late);
+    this.sender.onPendingChanged(this.lateness.note);
   }
 
   /** What changed in the record index, as the change event tells it. */
@@ -122,17 +120,16 @@ export class InMemoryMEditClient implements MEditClient {
 
   /** How far the record index has come, which lateness carries; undefined while it holds no load order. */
   setProgress(progress: RecordIndexProgress | undefined): void {
-    const changed = JSON.stringify(progress) !== JSON.stringify(this.progressNow);
     this.progressNow = progress;
-    this.noteLateness();
-    if (changed) this.progressChanges.fire(progress);
+    this.lateness.note();
+    this.progress.note();
   }
 
   /** A notification carried this sequence of the record index. */
   hearSequence(sequence: number): void { this.heardSequence = Math.max(this.heardSequence, sequence); }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
-  answerPuts(answer: ScriptedMEdit['put']): void {
+  answerPuts(answer: LoadOrderWire['put']): void {
     this.putAnswer = answer;
   }
 
@@ -245,7 +242,6 @@ export class InMemoryMEditClient implements MEditClient {
    *  snapshot sent is put again, and its plugins and mods are announced changed once that applies. */
   reconnected(): void {
     for (const listener of [...this.reconnectListeners]) listener();
-    this.sender.reopened();
   }
 
   async start(): Promise<void> { await this.sender.launch(); }
@@ -259,17 +255,15 @@ export class InMemoryMEditClient implements MEditClient {
   private readSequence = 0;
   refreshRecordIndexLateness(): Promise<void> {
     this.readSequence = this.sequenceMEditStandsAt;
-    this.noteLateness();
+    this.lateness.note();
     return Promise.resolve();
   }
   get recordIndexMayBeLate(): boolean {
-    const progress = this.recordIndexProgress;
-    const indexing = progress !== undefined && (!progress.settled || progress.refusal !== undefined);
-    return this.sender.pending() || this.heardSequence < this.readSequence || indexing;
+    return this.sender.pending() || this.heardSequence < this.readSequence || indexingMakesLate(this.recordIndexProgress);
   }
   get recordIndexProgress(): RecordIndexProgress | undefined { return this.progressNow; }
-  onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progressChanges.event(listener); }
-  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateChanges.event(listener); }
+  onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
+  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }

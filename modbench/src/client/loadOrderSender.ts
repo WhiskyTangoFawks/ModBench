@@ -40,7 +40,6 @@ export interface LoadOrderSender {
 }
 
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
-const SIGNAL_WAIT_CAP_MS = 10_000;
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 interface OwedSignal {
@@ -74,7 +73,7 @@ function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: A
 
 // One snapshot waits and one is in flight. An arrival replaces the one waiting, so the newest
 // lands instead of a queue of stale ones each paying an index.
-function createSendSlot(wire: LoadOrderWire, changed: () => void) {
+function createSendSlot(wire: LoadOrderWire, sendable: () => boolean, signalWaitCapMs: number | undefined, changed: () => void) {
   let waiting: Waiting | undefined;
   let inFlight: AbortController | undefined;
   let unanswered = false;
@@ -82,7 +81,6 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   let owed: OwedSignal | undefined;
   let signalTimer: ReturnType<typeof setTimeout> | undefined;
   let signalling = false;
-  let closed = false;
 
   const drop = (outcome: LoadOrderOutcome): void => {
     const dropped = waiting;
@@ -120,14 +118,17 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   };
 
   // A signal waits for the snapshots handed before it to be answered, so mEdit checks the load order it was handed,
-  // and a stream of snapshots delays it by a bounded time.
+  // and with a cap a stream of snapshots delays it by a bounded time.
   const pumpSignal = (): void => {
     if (owed === undefined || signalling) return;
-    owed.since ??= Date.now();
-    const waited = Date.now() - owed.since;
-    if ((waiting || unanswered) && waited < SIGNAL_WAIT_CAP_MS) {
-      signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, SIGNAL_WAIT_CAP_MS - waited);
-      return;
+    if (waiting || unanswered) {
+      if (signalWaitCapMs === undefined) return;
+      owed.since ??= Date.now();
+      const waited = Date.now() - owed.since;
+      if (waited < signalWaitCapMs) {
+        signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, signalWaitCapMs - waited);
+        return;
+      }
     }
     sendSignal(owed);
   };
@@ -135,7 +136,7 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
   // mEdit to run rather than being sent into a backend that is not there yet.
   const advance = (): void => {
-    if (closed || wire.status() !== 'running') return;
+    if (!sendable()) return;
     if (!inFlight && waiting) {
       const next = waiting;
       waiting = undefined;
@@ -182,8 +183,6 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
       owed.sweepStarted(Promise.resolve());
       Object.assign(owed, awaitingSweep());
     },
-    /** Sends nothing more: the process is being taken down for good. */
-    close: (): void => { closed = true; },
     pending: () => waiting !== undefined || inFlight !== undefined || owed !== undefined || signalling,
     drop,
     pump,
@@ -193,14 +192,17 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   };
 }
 
-export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
+/** `signalWaitCapMs` bounds how long a change signal waits for the snapshots handed before it; without one it waits for
+ *  them to be answered. */
+export function createLoadOrderSender(wire: LoadOrderWire, signalWaitCapMs?: number): LoadOrderSender {
   const pendingChanges = new EventEmitter();
-  const slot = createSendSlot(wire, () => { pendingChanges.fire(); });
-  let newestHanded: LoadOrderSnapshot | undefined;
-  let handedCount = 0;
   const launches = new EventEmitter<Promise<LaunchOutcome>>();
   const exits = new EventEmitter();
   const launcher = createLauncher(wire, (launched) => { launches.fire(launched); });
+  const sendable = (): boolean => !launcher.stopped() && wire.status() === 'running';
+  const slot = createSendSlot(wire, sendable, signalWaitCapMs, () => { pendingChanges.fire(); });
+  let newestHanded: LoadOrderSnapshot | undefined;
+  let handedCount = 0;
   const subscribeTo = <T>(emitter: EventEmitter<T>) => (listener: (data: T) => void): (() => void) => {
     const subscription = emitter.event(listener);
     return () => { subscription.dispose(); };
@@ -256,7 +258,6 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     async stop() {
       launcher.stop();
       newestHanded = undefined;
-      slot.close();
       slot.abortInFlight();
       slot.drop(ABANDONED);
       slot.releaseSignalWaiters();
