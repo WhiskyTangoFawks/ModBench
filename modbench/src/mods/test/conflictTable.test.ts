@@ -27,7 +27,6 @@ const stamped = (size: bigint, modifiedSeconds = 0n): Held => ({ size, modifiedN
 const copiesOf = (relativePath: string, copies: Record<string, number | string>): Record<string, Held> => Object.fromEntries(
   Object.entries(copies).map(([name, held]) => [`/instance/${name}/${relativePath}`, typeof held === 'number' ? { size: 1n, modifiedNs: 0n, hash: `${held}` } : held]));
 
-/** What the adapter answers of each copy of `value`'s files: one stamp and contents of its own, but as `held` says. */
 function copiesAnswering(value: InstanceValue, held: Readonly<Record<string, Held>> = {}): InstanceAnswers {
   const paths = [...value.filesByMod.values(), value.overwriteFiles].flat().map(({ path }) => path);
   const copies = new Map<string, Held>([...paths.map((path): [string, Held] => [path, { size: 1n, modifiedNs: 0n, hash: path }]), ...Object.entries(held)]);
