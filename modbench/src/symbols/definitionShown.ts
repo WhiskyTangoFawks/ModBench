@@ -1,16 +1,19 @@
 import type * as vscode from 'vscode';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
-import type { Definition } from './symbolKind';
+import type { Definition, Presented, Shown } from './symbolKind';
 import { atFile } from './symbolPlaces';
 
-export type Shown = Exclude<Definition, { readonly none: string } | { readonly refused: string }>;
+/** Selects a definition's row, or shows its copy in the Explorer. */
+export async function present(definition: Presented, reveal: (copy: CopyAt) => Promise<void>): Promise<void> {
+  if ('row' in definition) await definition.show();
+  else await reveal(definition.shown);
+}
 
-/** Shows a definition: selects its row, or shows its copy in the Explorer; else the place a caller opens. */
+/** Presents a definition; else answers the place a caller opens. */
 export async function showDefinition(definition: Shown, reveal: (copy: CopyAt) => Promise<void>): Promise<vscode.Location | undefined> {
   if ('at' in definition) return definition.at;
   if ('file' in definition) return atFile(definition.file);
-  if ('row' in definition) await definition.show();
-  else await reveal(definition.shown);
+  await present(definition, reveal);
   return undefined;
 }
 

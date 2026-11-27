@@ -9,18 +9,20 @@ export type PluginNamed = { readonly kind: 'plugin' } & PluginName;
 export type RecordNamed = { readonly kind: 'record'; readonly formKey: string };
 export type FileNamed = { readonly kind: 'file'; readonly path: string };
 
-/** A symbol by its name: a record by its FormKey, a file by its path in the Data folder. */
-export type SymbolName = PluginNamed | RecordNamed | EntrySymbol | ScriptSymbol | FileNamed;
+/** The symbol of a kind that has a row: never a record or a script, the only kinds whose definition is a place. */
+export type RowSymbol = PluginNamed | EntrySymbol | FileNamed;
 
-/** Where a symbol is defined (symbols.md, The symbols): a place or a file to open, a row to select in the view `row`
- *  names, or a copy to show in the Explorer; else why it has none. */
-export type Definition =
-  | { readonly at: vscode.Location }
-  | { readonly file: string }
-  | { readonly row: string; readonly show: Reveal }
-  | { readonly shown: CopyAt }
-  | { readonly none: string }
-  | { readonly refused: string };
+/** A symbol by its name: a record by its FormKey, a file by its path in the Data folder. */
+export type SymbolName = RowSymbol | RecordNamed | ScriptSymbol;
+
+/** A row to select in the view `row` names, or a copy to show in the Explorer. */
+export type Presented = { readonly row: string; readonly show: Reveal } | { readonly shown: CopyAt };
+
+export type Shown = Presented | { readonly at: vscode.Location } | { readonly file: string };
+
+/** Where a symbol is defined (symbols.md, The symbols): a place or a file to open, or what is presented; else why it has
+ *  none. */
+export type Definition<Of extends Shown = Shown> = Of | { readonly none: string } | { readonly refused: string };
 
 /** Each place a file names a symbol, and why each file went unread; or why the symbol names nothing to list. */
 export type References =
@@ -60,9 +62,9 @@ export interface Listed {
 }
 
 /** One kind of symbol, giving every entry point one answer (symbols.md; ADR-0028). */
-export interface SymbolKind<Symbol> {
+export interface SymbolKind<Symbol, Of extends Shown = Shown> {
   nameAt(document: AskedIn, offset: number, token?: vscode.CancellationToken): Promise<Named<Symbol> | undefined>;
-  definitionOf(symbol: Symbol, token?: vscode.CancellationToken): Promise<Definition>;
+  definitionOf(symbol: Symbol, token?: vscode.CancellationToken): Promise<Definition<Of>>;
   referencesTo(symbol: Symbol, token?: vscode.CancellationToken): Promise<References>;
   /** `referenced by`: shows what references the symbol in VS Code's References view, reporting what it could not list. */
   referencedBy(symbol: Symbol): Promise<void>;
@@ -87,20 +89,20 @@ export interface SymbolKind<Symbol> {
 }
 
 export interface SymbolKinds {
-  readonly plugin: SymbolKind<PluginNamed>;
+  readonly plugin: SymbolKind<PluginNamed, Presented>;
   readonly record: SymbolKind<RecordNamed>;
-  readonly entry: SymbolKind<EntrySymbol>;
+  readonly entry: SymbolKind<EntrySymbol, Presented>;
   readonly script: SymbolKind<ScriptSymbol>;
-  readonly file: SymbolKind<FileNamed>;
+  readonly file: SymbolKind<FileNamed, Presented>;
 }
 
-interface Asked {
-  definition(token?: vscode.CancellationToken): Promise<Definition>;
+interface Asked<Of extends Shown = Shown> {
+  definition(token?: vscode.CancellationToken): Promise<Definition<Of>>;
   references(token?: vscode.CancellationToken): Promise<References>;
 }
 
 /** A symbol, with its kind's answers and `referenced by`. */
-export interface AskedSymbol extends Asked {
+export interface AskedSymbol<Of extends Shown = Shown> extends Asked<Of> {
   referencedBy(): Promise<void>;
 }
 
@@ -113,12 +115,12 @@ export interface AskedAt extends Asked, TextSpan {
 
 const namesNothing = (symbol: object): symbol is Refused => 'refused' in symbol;
 
-const askedOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol | Refused): Asked => ({
+const askedOf = <Symbol extends object, Of extends Shown>(kind: SymbolKind<Symbol, Of>, symbol: Symbol | Refused): Asked<Of> => ({
   definition: (token) => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.definitionOf(symbol, token)),
   references: (token) => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.referencesTo(symbol, token)),
 });
 
-const askedSymbolOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol): AskedSymbol => ({
+const askedSymbolOf = <Symbol extends object, Of extends Shown>(kind: SymbolKind<Symbol, Of>, symbol: Symbol): AskedSymbol<Of> => ({
   ...askedOf(kind, symbol),
   referencedBy: () => kind.referencedBy(symbol),
 });
@@ -146,6 +148,8 @@ export async function askedAt(kinds: SymbolKinds, document: AskedIn, offset: num
   return undefined;
 }
 
+export function asked(kinds: SymbolKinds, symbol: RowSymbol): AskedSymbol<Presented>;
+export function asked(kinds: SymbolKinds, symbol: SymbolName): AskedSymbol;
 export function asked(kinds: SymbolKinds, symbol: SymbolName): AskedSymbol {
   switch (symbol.kind) {
     case 'plugin': return askedSymbolOf(kinds.plugin, symbol);

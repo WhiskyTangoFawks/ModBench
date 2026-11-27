@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { Reporter } from '../ports/reporter';
-import { showDefinition } from './definitionShown';
+import { present } from './definitionShown';
 import { symbolOfRow } from './rowSymbol';
 import type { SymbolKinds, SymbolName } from './symbolKind';
 import { asked } from './symbolKind';
@@ -40,6 +40,6 @@ export function registerGoTo({ kinds, reporter, reveal, selection, dataPathOf }:
       reporter.report('error', `Could not go to ${nameOf(symbol)}: ${'refused' in definition ? definition.refused : definition.none}`);
       return;
     }
-    await showDefinition(definition, reveal);
+    await present(definition, reveal);
   });
 }
