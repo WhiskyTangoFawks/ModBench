@@ -2,11 +2,8 @@
 // over one instance root.
 
 import { existsSync } from 'node:fs';
-import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { steamRootOn } from '../gameFolder/gamePathDetector';
 import { nonSteamPrefixRunning } from '../gameFolder/steamPrefix';
-import { gameFolderResolver, steamInstallResolver } from '../gameFolder/gameFolderResolver';
-import { myGamesResolver } from '../gameFolder/myGames';
 import type { DeployedPath, GameFolder, InstallationFileReader, GameFolderSetting, Machine, WatcherExclude } from '../instanceAdapter';
 import type { FomodEngine } from '../fomodInstaller/fomodInstaller';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
@@ -17,7 +14,7 @@ import { filesBelow } from './mo2Files';
 import { foldersHeldWhole, foldersInReach } from '../foldersHeldWhole';
 import { filesHeldByGit } from '../filesHeldByGit';
 import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
-import type { Mo2Context } from './mo2Context';
+import { mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2GameFiles, mo2Repository } from './mo2Repository';
 import { mo2Submodules, sourceModLinesFollowed } from './mo2Submodules';
@@ -29,8 +26,6 @@ import { mo2EntryReferences } from './mo2EntryReferences';
 import { mo2Installation } from './mo2Installation';
 import { readInstance } from '../instanceReading';
 import { askedRunning, mo2Reads, readingSource } from './mo2Reads';
-import { mo2Watch } from './mo2Watch';
-import { programRunning } from '../processes';
 import type { FileProblems } from '../../ports/fileProblems';
 import { packageFilesWriter } from '../fileContents/packageFiles';
 import { hashIndex } from '../fileContents/hashIndex';
@@ -43,7 +38,6 @@ import { textByStamp } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
 import { gamePlaceOf } from '../gameFolder/gamePlace';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
-import { repositoryReads } from '../repositoryReads';
 import type { HostGit } from '../../ports/repository';
 
 export { overwriteDir } from './layout';
@@ -51,8 +45,6 @@ export { overwriteDir } from './layout';
 /** The mods `profile`'s mod order enables, by name. */
 export const enabledModsIn = (instanceRoot: string) => async (profile: string): Promise<string[]> =>
   parseModlist(await textByStamp(modlistFile(instanceRoot, profile))).flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : []));
-
-const MO2_PROGRAM = 'ModOrganizer.exe';
 
 export interface Mo2InstanceOptions {
   instanceRoot: string;
@@ -71,21 +63,6 @@ export interface Mo2InstanceOptions {
  *  root asks before an Instance exists. */
 export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
-}
-
-/** What every part of MO2's implementation over `instanceRoot` shares. */
-export function mo2Context({ instanceRoot, gameFolderSetting, watcherExclude, hostGit, machine }: Mo2InstanceOptions): Mo2Context {
-  const repository = repositoryReads(instanceRoot, hostGit);
-  return {
-    instanceRoot,
-    resolveGameFolder: gameFolderResolver(gameFolderSetting, machine),
-    resolveSteamInstall: steamInstallResolver(machine),
-    resolveDownloadsFolder: downloadsDirectoryResolver(machine),
-    resolveMyGames: myGamesResolver(instanceRoot, machine),
-    watch: mo2Watch(instanceRoot, gameFolderSetting.changed, repository.changed, watcherExclude),
-    repository,
-    mo2Running: () => programRunning(machine, MO2_PROGRAM),
-  };
 }
 
 export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {

@@ -17,7 +17,6 @@ const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
 const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING_ID}`;
 const STEAM_PLACE = 'the Steam install';
 
-/** A machine that notes each place it is asked where Steam is. */
 const notingSteamAsked = (asked: string[]): Partial<Machine> => ({
   get homeFolder() { asked.push('the home folder'); return '/nowhere'; },
   registryValue: (key, name) => { asked.push(key); return Promise.reject(new Error(`${key} holds no ${name}`)); },
@@ -47,7 +46,6 @@ describe('the game folder', () => {
   const resolved = async (
     { setting, gamePath, gameName, machine }: { setting?: string; gamePath?: string; gameName?: string; machine?: Partial<Machine> },
   ) => adapterOver(await instanceNaming(gamePath, gameName), { gameFolderSettingValue: setting, machine }).gameFolder();
-  /** Steam holding the game in its one library: what the machine answers of it, and the game's folder. */
   const steamHoldingGame = async (): Promise<{ machine: Partial<Machine>; root: string }> => {
     const base = await temp();
     return { machine: await steamIn(base), root: steamGameIn(base) };
@@ -198,16 +196,12 @@ describe('where the game is, beside the Steam install', () => {
     expect(place).toEqual({ root: game, steamRoot: steamGameIn(base), steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [] });
   });
 
-  it('holds no Steam install when Steam holds no such game', async () => {
-    const { game, place } = await placeOf({});
+  it.each<[string, string, Partial<Machine>]>([
+    ['Steam holds no such game', 'Fallout 4', {}],
+    ['Modbench has no Steam entry for the game, asking Steam nothing', 'Skyrim VR', { get platform(): NodeJS.Platform { throw new Error('Steam was asked'); } }],
+  ])('holds no Steam install when %s', async (_, gameName, machine) => {
+    const { game, place } = await placeOf(machine, gameName);
 
     expect(place).toEqual({ root: game, depots: [], depotProblems: [] });
-  });
-
-  it('holds no Steam install when Modbench has no Steam entry for the game, asking Steam nothing', async () => {
-    const asked: string[] = [];
-    const { game, place } = await placeOf(notingSteamAsked(asked), 'Skyrim VR');
-
-    expect([place, asked]).toEqual([{ root: game, depots: [], depotProblems: [] }, []]);
   });
 });

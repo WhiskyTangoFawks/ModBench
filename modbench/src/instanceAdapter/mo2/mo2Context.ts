@@ -4,15 +4,17 @@
 import { gameReleaseForGame, nexusDomainForMetaGame, nexusDomainsForGame, shortNameForNexusDomain, shortNameOfRelease } from '../../tables/gamePaths';
 import { readGameName } from './codecs/modOrganizerIni';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
-import type { DownloadsDirectoryResolver } from './downloadsDirectory';
+import { downloadsDirectoryResolver, type DownloadsDirectoryResolver } from './downloadsDirectory';
 import { exists, get, textByStamp, ignoreSkippedLink, listDirByStamp, listFolders, readOrAbsent, type SkippedLink } from '../files';
-import type { GameFolderResolver, SteamInstallResolver } from '../gameFolder/gameFolderResolver';
-import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from '../instanceAdapter';
+import { gameFolderResolver, steamInstallResolver, type GameFolderResolver, type SteamInstallResolver } from '../gameFolder/gameFolderResolver';
+import type { EntryRef, GameFolderSetting, Machine, ModFolder, ModFolders, ModlistEntry, WatcherExclude } from '../instanceAdapter';
 import type { FileOrigin } from '../instanceAdapter';
 import { entryDir, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
-import type { MyGamesResolver } from '../gameFolder/myGames';
-import type { Mo2Watch } from './mo2Watch';
-import type { RepositoryReads } from '../repositoryReads';
+import { myGamesResolver, type MyGamesResolver } from '../gameFolder/myGames';
+import { mo2Watch, type Mo2Watch } from './mo2Watch';
+import { repositoryReads, type RepositoryReads } from '../repositoryReads';
+import { programRunning } from '../processes';
+import type { HostGit } from '../../ports/repository';
 
 export interface Mo2Context {
   readonly instanceRoot: string;
@@ -23,6 +25,30 @@ export interface Mo2Context {
   readonly watch: Mo2Watch;
   readonly repository: RepositoryReads;
   readonly mo2Running: () => Promise<boolean>;
+}
+
+const MO2_PROGRAM = 'ModOrganizer.exe';
+
+interface ContextParts {
+  readonly instanceRoot: string;
+  readonly gameFolderSetting: GameFolderSetting;
+  readonly watcherExclude: WatcherExclude;
+  readonly hostGit: HostGit<unknown>;
+  readonly machine: Machine;
+}
+
+export function mo2Context({ instanceRoot, gameFolderSetting, watcherExclude, hostGit, machine }: ContextParts): Mo2Context {
+  const repository = repositoryReads(instanceRoot, hostGit);
+  return {
+    instanceRoot,
+    resolveGameFolder: gameFolderResolver(gameFolderSetting, machine),
+    resolveSteamInstall: steamInstallResolver(machine),
+    resolveDownloadsFolder: downloadsDirectoryResolver(machine),
+    resolveMyGames: myGamesResolver(instanceRoot, machine),
+    watch: mo2Watch(instanceRoot, gameFolderSetting.changed, repository.changed, watcherExclude),
+    repository,
+    mo2Running: () => programRunning(machine, MO2_PROGRAM),
+  };
 }
 
 /** How MO2 matches an entry: by the name of its folder, without case, a separator's folder named

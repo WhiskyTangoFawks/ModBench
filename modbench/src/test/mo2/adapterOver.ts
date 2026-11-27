@@ -4,7 +4,8 @@ import type {
 import { fileProblemsFake } from '../fileProblemsFake';
 import type { FileProblems } from '../../ports/fileProblems';
 import { adapterForInstance } from '../../instanceAdapter/openInstance';
-import { mo2Context, type Mo2InstanceOptions } from '../../instanceAdapter/mo2/mo2Instance';
+import type { Mo2InstanceOptions } from '../../instanceAdapter/mo2/mo2Instance';
+import { mo2Context } from '../../instanceAdapter/mo2/mo2Context';
 import type { FomodEngine } from '../../instanceAdapter/fomodInstaller/fomodInstaller';
 import type { HostGit } from '../../ports/repository';
 import { hostWithoutGit } from '../hostGitDouble';
