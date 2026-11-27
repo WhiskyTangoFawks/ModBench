@@ -1,5 +1,5 @@
 """Pins check_test_times.py: its 100 ms list, the ceiling, box budgets and wall time it reports for each run, that
-only the ceiling fails the run once the switch is on, and the yellow flag it raises on each lapse and overrun."""
+only the ceiling fails the run, and the yellow flag it raises on each lapse and overrun."""
 import contextlib
 import io
 import pathlib

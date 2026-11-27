@@ -1,7 +1,6 @@
 """Reads every test report under a directory: TRX, Vitest JSON, and unittest and mocha logs. A
 result's box is its backend test project, its folder under modbench/src/ or else modbench/, or its log's
-name. A Vitest result's name starts with its file's path under modbench/, as two boxes' test files can share a
-file name."""
+name."""
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -56,7 +55,8 @@ def frontend_file(path: str) -> tuple[str, str]:
 
 
 def in_vitest(text: str) -> list[Result]:
-    """A skipped test has no duration. Vitest times a file's imports apart from its tests."""
+    """A skipped test has no duration. Vitest times a file's imports apart from its tests. A name starts with its file's
+    path under modbench/, as two boxes can share a file name."""
     results: list[Result] = []
     for report in json.loads(text)['testResults']:
         path, box = frontend_file(report['name'])

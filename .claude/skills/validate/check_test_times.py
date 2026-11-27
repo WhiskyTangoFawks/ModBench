@@ -51,9 +51,8 @@ def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
 
 
 def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> tuple[int, list[str]]:
-    """The number of tests over the ceiling no approval names, and the lapse flags. A test over it under load that ran
-    again alone is judged on its fastest run there. Only a merge run reruns an approved test, so on a branch run an
-    approval lapses only by a test under the ceiling under load."""
+    """The number of tests over the ceiling no approval names, and the flags of the approvals that lapsed. A test over
+    the ceiling under load that ran again alone is judged on its fastest run there."""
     fastest_alone = fastest_runs(alone)
     ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in fastest_alone}
     judged = [result._replace(seconds=fastest_alone[result.name]) if result.name in ran_again else result for result in results]
