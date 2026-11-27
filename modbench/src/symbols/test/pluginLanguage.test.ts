@@ -1,29 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Range, TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
-import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { COMPLETION, SEARCH } from './fakeKinds';
+import { describe, expect, it, vi } from 'vitest';
 
-const setInput = vi.hoisted(() => vi.fn<(input: ReferencesViewInput) => void>());
-vi.mock('vscode', () => ({
-  Uri, Range, TreeItem, TreeItemCollapsibleState, SymbolKind, CompletionItemKind,
-  Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
-  workspace: { textDocuments: [], openTextDocument: () => Promise.resolve({ lineAt: () => ({ text: '*Base.esm' }) }) },
-  extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
-}));
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import { pluginLanguage } from '../pluginLanguage';
+import { CompletionItemKind, document, host, Location, Range, Uri } from './vscodeHost';
+import { instanceHolding, rowsOf, symbolsOver } from './symbolsOver';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { PluginName, SymbolOwner } from '../../symbolNames/symbolNames';
-import type { ReferencesViewInput } from '../../drivingLib/referencesView';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { sourceNames } from './fakeSourceNames';
+import type { SymbolOwner } from '../../symbolNames/symbolNames';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const PLUGINS_TXT = '/profiles/Default/plugins.txt';
 const UNREAD = '/userlist.yaml: it does not read';
 
 const namedAt = (line: number) => ({ place: { file: PLUGINS_TXT, start: { line, character: 1 }, end: { line, character: 9 } }, names: { name: 'Base.esm' } });
-const plugin = (named: PluginName) => ({ kind: 'plugin' as const, ...named });
+const plugin = (named: { name: string; origin?: string }) => ({ kind: 'plugin' as const, ...named });
 
 const ownerThatCannotReadAFile: SymbolOwner = {
   read: () => Promise.resolve({ references: [namedAt(0)], leftOut: [UNREAD] }),
@@ -39,44 +29,40 @@ interface Options {
 }
 
 function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }], show = () => undefined, tooltip = () => [] }: Options = {}) {
-  const reporter = recordingReporter();
-  const renamePlugin = vi.fn(() => Promise.resolve());
-  const kind = pluginLanguage({
-    plugins: () => plugins,
-    reporter,
-    client: { getCopyDocument: () => Promise.resolve(null), getRecordOwners: () => Promise.resolve([]) },
-    owners: [owner],
-    names: sourceNames(),
-    renamePlugin,
-    rows: () => ({ show, fileOf: () => undefined }),
-    tooltip,
+  return symbolsOver({
+    instance: instanceHolding(instanceValueFixture({ plugins })), owners: [owner], rows: rowsOf({ plugins: { show } }), pluginsShown: { tooltipLines: tooltip },
+    arrange: (client) => { client.setQueryAnswer('getCopyDocument', null); client.setQueryAnswer('getRecordOwners', []); },
   });
-  return { kind, reporter, renamePlugin };
 }
 
+const renamed = () => host.executed.filter(([id]) => id === 'modbench.plugin.rename');
+
 describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md, The features, story 6)', () => {
-  const document = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Mid.esp\r\n*base.ESM\r\n' };
+  const MARKED = '*Mid.esp\r\n*bas|e.ESM\r\n';
   const naming = (name?: string) => language({ owner: { ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve(name === undefined ? undefined : { name }) } });
 
   it('renames the plugin mod order resolves the name to, with the name VS Code asked for', async () => {
-    const { kind, renamePlugin } = naming('base.ESM');
+    naming('base.ESM');
 
-    expect(await kind.renameAt(document, 14, 'New.esm')).toBe(true);
-    expect(renamePlugin).toHaveBeenCalledWith(BASE, 'New.esm');
+    await host.rename(PLUGINS_TXT, MARKED, 'New.esm');
+
+    expect(renamed()).toEqual([['modbench.plugin.rename', undefined, undefined, { plugin: BASE, name: 'New.esm' }]]);
   });
 
   it('offers the name under the place, as the file spells it', async () => {
-    expect(await naming('Base.esm').kind.renameRangeAt(document, 14)).toEqual({ start: 11, end: 19, name: 'base.ESM' });
+    naming('Base.esm');
+
+    expect(await host.prepareRename(PLUGINS_TXT, MARKED)).toEqual({ spans: 'base.ESM', placeholder: 'base.ESM' });
   });
 
   it('offers nothing where no plugin\'s name is, and renames nothing a name resolves to no plugin', async () => {
-    const gone = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Gone.esp\r\n' };
-    const { kind, renamePlugin } = naming('Gone.esp');
+    naming();
+    await expect(host.prepareRename(PLUGINS_TXT, '*Go|ne.esp\r\n')).rejects.toThrow('Rename Symbol renames a plugin, a mod or a separator, or changes a record\'s FormKey or EditorID, and none is here.');
+    await host.rename(PLUGINS_TXT, '*Go|ne.esp\r\n', 'New.esp');
+    naming('Gone.esp');
 
-    expect(await naming().kind.renameRangeAt(gone, 3)).toBeUndefined();
-    expect(await naming().kind.renameAt(gone, 3, 'New.esp')).toBe(false);
-    await expect(kind.renameAt(gone, 3, 'New.esp')).rejects.toThrow('Mod order resolves Gone.esp to no plugin.');
-    expect(renamePlugin).not.toHaveBeenCalled();
+    await expect(host.rename(PLUGINS_TXT, '*Go|ne.esp\r\n', 'New.esp')).rejects.toThrow('Mod order resolves Gone.esp to no plugin.');
+    expect(renamed()).toEqual([]);
   });
 });
 
@@ -84,24 +70,24 @@ const DATA = { name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4
 
 describe('Rename Symbol on a plugin in the game folder', () => {
   it('is refused, saying it is no mod\'s plugin, and renames nothing', async () => {
-    const document = { uri: Uri.file(PLUGINS_TXT), getText: () => 'Fallout4.esm\r\n' };
     const owner: SymbolOwner = { ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve({ name: 'Fallout4.esm' }) };
-    const { kind, renamePlugin } = language({ owner, plugins: [DATA] });
+    language({ owner, plugins: [DATA] });
 
-    await expect(kind.renameAt(document, 3, 'New.esm')).rejects.toThrow('Fallout4.esm is a plugin in the game folder, not in a mod: only a plugin in a mod renames.');
-    expect(renamePlugin).not.toHaveBeenCalled();
+    await expect(host.rename(PLUGINS_TXT, 'Fall|out4.esm\r\n', 'New.esm')).rejects.toThrow('Fallout4.esm is a plugin in the game folder, not in a mod: only a plugin in a mod renames.');
+    expect(renamed()).toEqual([]);
   });
 });
 
 describe('referenced by on a plugin (commands.md, `referenced by` under Symbol)', () => {
-  beforeEach(() => { setInput.mockClear(); });
-
   it('lists what names the plugin, titled with its row name, anchored at a place a file names it where no active plugin holds its header', async () => {
-    await language().kind.referencedBy({ kind: 'plugin', ...BASE });
+    language();
+    host.holds([document(PLUGINS_TXT, '*Base.esm\r\n')]);
 
-    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Referenced By: Base.esm (Base Mod)', contextValue: 'modbench.pluginReferencedBy', location: { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) },
-    }));
+    await host.run('modbench.symbol.referencedBy', { argument: { kind: 'plugin', plugin: BASE } });
+
+    expect(host.referencesShown).toEqual([expect.objectContaining({
+      title: 'Referenced By: Base.esm (Base Mod)', contextValue: 'modbench.pluginReferencedBy', location: new Location(Uri.file(PLUGINS_TXT), new Range(0, 1, 0, 9)),
+    })]);
   });
 });
 
@@ -111,53 +97,59 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
   const naming = (name?: string, plugins: InstanceValue['plugins'] = rows) => language({
     plugins, owner: { ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve(name === undefined ? undefined : { name }) },
     tooltip: ({ name: file, origin }) => [file, origin, 'read-only'],
-  }).kind;
-  const document = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Mid.esp\r\n*base.ESM\r\n' };
-
-  it('spans the name under the place, as the file spells it', async () => {
-    expect(await naming('base.ESM').nameAt(document, 14)).toEqual({ start: 11, end: 19, name: 'base.ESM', symbol: plugin({ name: 'base.ESM' }) });
-  });
-
-  it('is none where no plugin is named, so another kind may claim the place', async () => {
-    expect([await naming().nameAt(document, 3), await naming().completionsAt(document, 3, COMPLETION)]).toEqual([undefined, undefined]);
   });
 
   it('has the tooltip of the row of the plugin mod order resolves the name to', async () => {
-    expect(await naming().tooltipOf(plugin({ name: 'base.ESM' }))).toEqual(['Base.esm', 'Base Mod', 'read-only']);
+    naming('base.ESM');
+
+    expect(await host.hover(PLUGINS_TXT, '*Mid.esp\r\n*bas|e.ESM\r\n')).toEqual({ text: 'Base.esm\n\nBase Mod\n\nread-only', spans: 'base.ESM' });
+  });
+
+  it('is none where no plugin is named, so another kind may claim the place', async () => {
+    naming();
+
+    expect([await host.hover(PLUGINS_TXT, '*M|id.esp\r\n'), await host.complete(PLUGINS_TXT, '*M|id.esp\r\n')]).toEqual([undefined, undefined]);
   });
 
   it('has no tooltip when mod order resolves the name to no plugin', async () => {
-    expect(await naming().tooltipOf(plugin({ name: 'Gone.esp' }))).toEqual([]);
+    naming('Gone.esp');
+
+    expect(await host.hover(PLUGINS_TXT, '*Go|ne.esp\r\n')).toEqual({ text: 'Gone.esp', spans: 'Gone.esp' });
   });
 
   it('completes where a file names a plugin with every plugin, over the name typed so far', async () => {
-    const found = await naming('Ba').completionsAt({ uri: Uri.file(PLUGINS_TXT), getText: () => '*Ba' }, 3, COMPLETION);
+    naming('Ba');
 
-    expect(found).toEqual({
-      start: 1, end: 3, icon: CompletionItemKind.File,
-      items: [{ label: 'Base.esm', detail: 'Base Mod, Other Mod' }, { label: 'Mid.esp', detail: 'Mid Mod' }],
+    expect(await host.complete(PLUGINS_TXT, '*Ba|')).toEqual({
+      isIncomplete: false,
+      items: [
+        { label: 'Base.esm', detail: 'Base Mod, Other Mod', kind: CompletionItemKind.File, insertText: undefined, replaces: 'Ba' },
+        { label: 'Mid.esp', detail: 'Mid Mod', kind: CompletionItemKind.File, insertText: undefined, replaces: 'Ba' },
+      ],
     });
   });
 
-  const located = (found: readonly { name: string; detail: string; location: unknown }[]) => found.map(({ name, detail, location }) => [name, detail, location]);
+  const located = async (query: string) => (await host.workspaceSymbols(query)).map(({ name, containerName, location }) => [name, containerName, location]);
 
   it('lists each plugin copy whose name holds the query, whatever the case, at its file', async () => {
-    const found = await naming().symbolsFor('BASE', SEARCH);
+    naming();
 
-    expect(located(found)).toEqual([
-      ['Base.esm', 'Base Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
-      ['Base.esm', 'Other Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
+    expect(await located('BASE')).toEqual([
+      ['Base.esm', 'Base Mod', new Location(Uri.file('/data/Base.esm'), new Range(0, 0, 0, 0))],
+      ['Base.esm', 'Other Mod', new Location(Uri.file('/data/Base.esm'), new Range(0, 0, 0, 0))],
     ]);
   });
 
   it('places a line that names no file at a place a file names it', async () => {
-    const kind = naming(undefined, [{ ...BASE, path: undefined, line: 0, enabled: true, winning: true }]);
+    naming(undefined, [{ ...BASE, path: undefined, line: 0, enabled: true, winning: true }]);
 
-    expect(located(await kind.symbolsFor('base', SEARCH))).toEqual([['Base.esm', 'Base Mod', { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }]]);
+    expect(await located('base')).toEqual([['Base.esm', 'Base Mod', new Location(Uri.file(PLUGINS_TXT), new Range(0, 1, 0, 9))]]);
   });
 
   it('lists no plugin that has no file and that no file names', async () => {
-    expect(await naming(undefined, [{ ...MID, path: undefined, line: 0, enabled: true, winning: true }]).symbolsFor('mid', SEARCH)).toEqual([]);
+    naming(undefined, [{ ...MID, path: undefined, line: 0, enabled: true, winning: true }]);
+
+    expect(await located('mid')).toEqual([]);
   });
 });
 
@@ -167,18 +159,17 @@ describe('where a plugin is defined, and the places files name it (symbols.md, T
     { name: 'Base.esm', origin: 'Other Mod', path: '/mods/Other Mod/Base.esm', line: 1, enabled: true, winning: false },
     { name: 'Line.esp', origin: 'Base Mod', path: undefined, line: 2, enabled: true, winning: true },
   ];
-  const showBase = vi.fn(() => Promise.resolve());
-  const indexed = () => language({ plugins, show: ({ origin }) => (origin === 'Shown Mod' ? showBase : undefined) }).kind;
+  const indexed = () => language({ plugins, show: ({ origin }) => (origin === 'Shown Mod' ? () => Promise.resolve() : undefined) }).symbols;
 
   it('is its row in Plugins, where Plugins shows one', async () => {
-    expect(await indexed().definitionOf(plugin({ name: 'Base.esm', origin: 'Shown Mod' }))).toEqual({ row: 'Plugins', show: showBase });
+    expect(await indexed().definitionOf(plugin({ name: 'Base.esm', origin: 'Shown Mod' }))).toEqual({ row: 'Plugins' });
   });
 
   it.each([
     ['the file of the copy its origin names', { name: 'Base.esm', origin: 'Other Mod' }, '/mods/Other Mod/Base.esm'],
     ['the file of the copy mod order resolves a file name alone to', { name: 'base.ESM' }, '/mods/Base Mod/Base.esm'],
   ])('is %s when Plugins shows no row for it', async (_case, named, path) => {
-    expect(await indexed().definitionOf(plugin(named))).toEqual({ shown: { kind: 'loose', path } });
+    expect(await indexed().definitionOf(plugin(named))).toEqual({ file: path });
   });
 
   it.each([
@@ -198,7 +189,7 @@ describe('where a plugin is defined, and the places files name it (symbols.md, T
 
   it('lists each place an owner reports, and each file it could not read', async () => {
     expect(await indexed().referencesTo(plugin({ name: 'Base.esm' }))).toEqual({
-      locations: [{ uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }], unread: [UNREAD],
+      references: [{ file: PLUGINS_TXT, start: { line: 0, character: 1 }, end: { line: 0, character: 9 } }], leftOut: [UNREAD],
     });
   });
 });
