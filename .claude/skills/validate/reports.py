@@ -29,9 +29,8 @@ class Result(NamedTuple):
 
 
 def in_trx(text: str) -> list[Result]:
-    """Time runs from the result's start or the assembly's first result, whichever is later: the warm-up
-    blocks every thread, so fixture setup is in none. A run one test at a time blocks none, so each result
-    is charged its whole duration."""
+    """Time runs from the result's start or the first result's end, whichever is later: the warm-up blocks
+    every thread. A run one test at a time blocks none, so each result is charged its whole duration."""
     run = ET.fromstring(text)
     elements = list(run.iterfind('.//t:UnitTestResult', TRX))
     projects = {test.attrib['id']: PureWindowsPath(next(test.iterfind('t:TestMethod', TRX)).attrib['codeBase']).stem
