@@ -1,5 +1,4 @@
-// A soak, so a tool and not a test (spec/architecture/tests.md): it runs the everyday loop until memory would show a leak,
-// and no spec line sets a figure. `npm run tools` runs it, at each release.
+// A soak, so a tool (spec/architecture/tests.md), run as docs/agents/release.md says.
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => {
@@ -60,10 +59,10 @@ async function snapshotTo(file: string): Promise<string> {
   return writeHeapSnapshot(file);
 }
 
-// The values a snapshot holds, read once the soak is done, so reading one holds nothing the other counts. A count, not bytes: a
-// value held for good is one more each round, where one string of a round's git answer can be any length.
 const isHeapSnapshot = (value: unknown): value is HeapSnapshot => typeof value === 'object' && value !== null && 'snapshot' in value && 'nodes' in value;
 
+// The values a snapshot holds, read after the soak so reading one adds nothing to the other. A count, not bytes: a leak
+// adds values each round, while one string of git's answer can be any length.
 async function heldValues(file: string): Promise<number> {
   const read: unknown = JSON.parse(await readFile(file, 'utf8'));
   if (!isHeapSnapshot(read)) throw new Error(`${file} is no heap snapshot`);
@@ -87,8 +86,8 @@ async function instance(): Promise<{ root: string; adapter: InstanceAdapter; rel
   return { root, adapter, release };
 }
 
-// Install a mod, read, commit it, read, uninstall it and commit that, read: the Mods view's everyday loop over the Instance adapter.
-// The fake VS Code forgets the watchers it made, which Modbench holds as long as it needs them.
+// Install, read, commit, read, uninstall and commit, read: the Mods view's everyday loop over the Instance adapter. The
+// fake VS Code forgets the watchers it made; Modbench holds them while it needs them.
 async function modsRound({ root, adapter, release }: Awaited<ReturnType<typeof instance>>, round: number): Promise<void> {
   const name = `Soak ${round}`;
   const folder = join(root, 'mods', name);

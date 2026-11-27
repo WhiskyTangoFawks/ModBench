@@ -313,8 +313,8 @@ export const textByStamp = stampKept(readText, texts, true);
 
 export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 
-/** A reader of what `parse` makes of a file's text, parsing again only when the text is not the one parsed before. A parse is
- *  held while `textByStamp` keeps the file's text, so a file forgotten there is forgotten here. */
+/** A reader of what `parse` makes of a file's text, parsing again only when the text changed. A parse lasts as long as
+ *  `textByStamp` keeps the text. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) => {
   const parsed = new WeakMap<Kept<string>, { readonly text: string; readonly value: T }>();
   return async (path) => {

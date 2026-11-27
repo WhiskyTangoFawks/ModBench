@@ -53,7 +53,8 @@ const WRITES = new Map<string, WritesOf>([
   ['commit', (_rest, _folder, gitDir) => gitDir],
 ]);
 
-// What a subcommand writes. A subcommand neither table holds is refused before it runs, so no write goes unnamed.
+// What a subcommand Modbench runs writes. A subcommand neither table holds is refused before it runs, so a new call
+// names its writes here first.
 function writtenBy(folder: string, args: readonly string[], ownIndex: boolean): readonly string[] {
   const at = subcommandAt(args);
   const subcommand = args[at] ?? '';
