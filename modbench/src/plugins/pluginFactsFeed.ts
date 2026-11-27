@@ -68,8 +68,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // Each `refresh` reads after the one before it answered, so an answer for a plugin never lands over a newer one.
   private refreshing: Promise<unknown> = Promise.resolve();
-  // The reason the Output was last told a re-read threw for, until a re-read answers.
-  private toldThrow?: string;
   // What the last judgement of the sorting rules to land read of files.
   private landedReads: JudgingReads = { reads: [], judges: () => false };
   // The reads of the last order and rules judged, kept while both are the same objects: the reads depend on nothing else.
@@ -211,13 +209,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     return refreshed;
   }
 
-  // ADR-0019: a re-read that threw is a background failure that recovers at the next re-read, which reads every plugin. The
-  // message line says it until then, and the Output once for each reason.
+  // ADR-0019; common.md, Reporting: a later read behind the view that failed. The next re-read reads every plugin.
   private refreshThrew(reason: string, generation: number): void {
-    if (generation !== this.generation) return;
-    if (this.toldThrow !== reason) this.deps.log(`re-reading mEdit's facts about each plugin threw: ${reason}`);
-    this.toldThrow = reason;
-    this.factsFailed(reason);
+    this.deps.log(`re-reading mEdit's facts about each plugin threw: ${reason}`);
+    if (generation === this.generation) this.factsFailed(reason);
   }
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {
@@ -227,7 +222,6 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins(named);
     if (generation !== this.generation) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.toldThrow = undefined;
     const sortingChanged = this.facts.refreshed(plugins, named);
     this.deps.publishSourceUnreadable(this.facts.problemsOf(named).sourceUnreadable, named);
     await this.readChangedOutside(named);

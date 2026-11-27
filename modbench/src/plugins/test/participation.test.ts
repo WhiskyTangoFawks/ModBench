@@ -115,11 +115,13 @@ describe('a plugin row\'s check box', () => {
   });
 
   it('restores every row it clicked once its writes end, though they failed, naming the failure of each direction by its own (common.md, A gesture that writes, story 2)', async () => {
-    const { own, row, redrawn } = await participating(REFUSED);
+    const { own, row, redrawn, item } = await participating(REFUSED);
+    (await item(row('Beta.esp'))).checkboxState = Unchecked;
 
     await host.check([[row('Alpha.esp'), Checked], [row('Beta.esp'), Unchecked]]);
 
     expect(redrawn).toEqual(expect.arrayContaining([row('Alpha.esp'), row('Beta.esp')]));
+    expect((await item(row('Beta.esp'))).checkboxState).toBe(Checked);
     expect(own('checkbox')).toMatchObject([{ severity: 'error', message: 'Failed to enable plugins.' }, { severity: 'error', message: 'Failed to disable plugins.' }]);
   });
 

@@ -8,6 +8,7 @@ import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
 import { settled } from '../../test/eventually';
 import { present } from '../../ports/present';
+import { isReadFailed } from '../../wire/readFailed';
 
 const MY_PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
 const NEW = '000900:MyPatch.esp';
@@ -59,7 +60,8 @@ async function creating({ shown = [NEW_RECORD] } = {}) {
   const view = made.view();
   return {
     client, applyWorkspaceChanges, refreshSourceControlFor, reporter: made.reporter('record.create'),
-    rows: { plugin: row('MyPatch.esp', 'ModA'), npcs, record, quest, worldspace, cell, otherNpcs },
+    rows: { plugin: row('MyPatch.esp', 'ModA'), npcs, record, quests, quest, worldspace, cell, otherNpcs },
+    filters: (text: string) => { made.shown.nameFilter.open(); present(host.inputBox(), 'the name filter').type(text); },
     run: (...args: unknown[]) => host.run('modbench.record.create', ...args),
     select: (...selected: unknown[]) => { view.selectRows(selected); },
     created: () => client.calls.filter(({ method }) => method === 'getCreateChanges').map(({ args }) => args),
@@ -282,6 +284,44 @@ describe('modbench.record.create selects the new record once its plugin\'s chang
 
     expect(revealed()).toEqual([]);
     expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects the row beneath its own plugin\'s group when another plugin shares its filename', async () => {
+    const { client, run, rows, revealed, opened } = await creating({ shown: [] });
+    const listed = client.getRecords.bind(client);
+    client.getRecords = async (...asked) => {
+      const page = await listed(...asked);
+      return asked[0].origin === 'ModB' && !isReadFailed(page) ? { ...page, items: [...page.items, NEW_RECORD] } : page;
+    };
+
+    await run(rows.otherNpcs);
+    client.change(rowsChanged([NEW], 'ModB'));
+    await settled(() => { expect(opened()).toHaveLength(1); });
+
+    expect(revealed()).toEqual([{ label: 'NewNpc', options: SELECTED }]);
+  });
+
+  it('selects no row while the name filter hides its plugin, and opens it', async () => {
+    const { client, run, rows, revealed, opened, filters } = await creating();
+
+    await run(rows.npcs);
+    filters('Other.esp');
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+
+    expect(revealed()).toEqual([]);
+  });
+
+  it('selects no row beneath a record that holds the new record, for what a record holds is not its group\'s', async () => {
+    const { client, run, rows, revealed, opened } = await creating({ shown: [] });
+    client.setQueryAnswer('getRecords', { items: [recordSummaryFixture({ formKey: OTHER, plugin: 'MyPatch.esp', editorId: 'MQ101', hasContainerChildren: true })], total: 1 });
+    client.setQueryAnswer('getContainerChildren', [{ ...NEW_RECORD, recordType: 'dial', hasContainerChildren: false, isContainer: false }]);
+
+    await run(rows.quests);
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toHaveLength(1); });
+
+    expect([revealed(), client.calls.filter(({ method }) => method === 'getContainerChildren')]).toEqual([[], []]);
   });
 
   it('waits only for the latest create', async () => {

@@ -3,14 +3,14 @@
 
 import type * as vscode from 'vscode';
 import {
-  DataTransfer, DataTransferItem, Diagnostic, DiagnosticSeverity, EventEmitter, FakeDiagnosticCollection, MarkdownString, Range, ThemeColor, ThemeIcon,
-  TreeItem, TreeItemCheckboxState, TreeItemCollapsibleState, Uri as BaseUri, uriParse,
+  CodeActionKind, DataTransfer, DataTransferItem, Diagnostic, DiagnosticSeverity, Disposable, EventEmitter, FakeDiagnosticCollection, MarkdownString, Range,
+  StatusBarAlignment, ThemeColor, ThemeIcon, TreeItem, TreeItemCheckboxState, TreeItemCollapsibleState, Uri as BaseUri, uriParse,
 } from '../../test/vscodeMock';
 import { FakeInputBox, FakeTreeViews } from '../../drivingLib/test/nameFilterViewHarness';
 
 export {
-  DataTransfer, DataTransferItem, Diagnostic, DiagnosticSeverity, EventEmitter, MarkdownString, Range, ThemeColor, ThemeIcon, TreeItem, TreeItemCheckboxState,
-  TreeItemCollapsibleState,
+  CodeActionKind, DataTransfer, DataTransferItem, Diagnostic, DiagnosticSeverity, Disposable, EventEmitter, MarkdownString, Range, StatusBarAlignment, ThemeColor,
+  ThemeIcon, TreeItem, TreeItemCheckboxState, TreeItemCollapsibleState,
 };
 
 type Handler = (...args: unknown[]) => unknown;
@@ -21,10 +21,6 @@ type Decorations = {
 type Lenses = { provideCodeLenses: (document: { uri: unknown; getText: () => string }) => vscode.CodeLens[] };
 type Actions = { provideCodeActions: (document: { uri: unknown }, range: Range, context: { diagnostics: readonly unknown[] }) => vscode.ProviderResult<CodeAction[]> };
 
-export class Disposable {
-  constructor(readonly dispose: () => void) {}
-  static from(...all: { dispose: () => unknown }[]): Disposable { return new Disposable(() => { for (const each of all) each.dispose(); }); }
-}
 
 export class Position {
   constructor(readonly line: number, readonly character: number) {}
@@ -40,8 +36,6 @@ export class CodeAction {
   constructor(readonly title: string, readonly kind: string) {}
 }
 
-export const CodeActionKind = { QuickFix: 'quickfix' };
-export const StatusBarAlignment = { Left: 1, Right: 2 };
 export const Uri = { ...BaseUri, parse: uriParse };
 
 interface StatusBarItem { text: string; tooltip?: string; command?: string; shown: boolean; disposed: boolean; show: () => void; hide: () => void; dispose: () => void }

@@ -96,15 +96,14 @@ function inFlight() {
     running.add(answer);
     void answer.finally(() => running.delete(answer)).catch(() => undefined);
   };
-  // `heard` is told each answer a method of `target` settles with.
-  const tracked = <T extends object>(target: T, heard: (value: unknown) => void = () => undefined): T => new Proxy(target, {
+  const tracked = <T extends object>(target: T, onAnswer: (value: unknown) => void = () => undefined): T => new Proxy(target, {
     get(of, key) {
       const member: unknown = Reflect.get(of, key, of);
       if (typeof member !== 'function') return member;
       return (...args: unknown[]): unknown => {
         const answer: unknown = Reflect.apply(member, of, args);
         held(answer);
-        if (answer instanceof Promise) void answer.then(heard, () => undefined);
+        if (answer instanceof Promise) void answer.then(onAnswer, () => undefined);
         return answer;
       };
     },
@@ -369,18 +368,18 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   const table = conflictTableOf(editors.mock.calls, modName(1));
   editors.mockRestore();
   const pluginsInstance = pending.tracked(instance);
-  const plugins = createPlugins({
+  const pluginsBox = createPlugins({
     client: counted, facts: pluginsInstance, channel: { ...quiet, show: () => undefined }, reporterFor: () => recordingReporter(),
     registerRepositories: () => Promise.resolve(), ask: scriptedDialog(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
   });
-  const pluginsView = plugins.onInstance({
+  const pluginsView = pluginsBox.onInstance({
     instance: pluginsInstance, commands: pluginCommandsWith(adapter), modStatuses: NO_MOD_STATUSES,
     fileReads: pending.tracked(fileReadsOver(adapter, (path) => fileAt(instance.value, path))),
     syncPlugins: pending.tracked({ run: pluginSyncOver(adapter, counted) }).run,
   });
   const pluginsTree = present(treeViews.mock.calls.find(([id]) => id === PLUGINS_KEY_ARGS.view), 'the Plugins view')[1].treeDataProvider;
-  const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsView, plugins];
+  const owned = [landingSubscription, statusing, statuses, open, modsTree, ...decorations, ...conflictTable, pluginsView, pluginsBox];
   const host = viewHost({
     Mods: Object.assign(modsTree, { filter: (text: string) => { modsTree.setFilter(text, true); } }),
     Plugins: {

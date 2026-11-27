@@ -7,14 +7,13 @@ vi.mock('vscode', async () => {
   const { fakeVscodeModule } = await import('./mo2/fakeVscodeWatcher');
   const {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri, FakeDiagnosticCollection, MarkdownString, DataTransferItem,
-    DiagnosticSeverity, Diagnostic, Range,
+    DiagnosticSeverity, Diagnostic, Range, Disposable, CodeActionKind, StatusBarAlignment,
   } = await import('./vscodeMock');
   const { FakeInputBox, FakeTreeView } = await import('../drivingLib/test/nameFilterViewHarness');
   const registered = () => ({ dispose: () => undefined });
   return {
     ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri, MarkdownString, DataTransferItem,
-    DiagnosticSeverity, Diagnostic, Range, CodeActionKind: { QuickFix: 'quickfix' }, StatusBarAlignment: { Left: 1, Right: 2 },
-    Disposable: class { constructor(readonly dispose: () => void) {} static from(...all: { dispose: () => unknown }[]) { return { dispose: () => { for (const each of all) each.dispose(); } }; } },
+    DiagnosticSeverity, Diagnostic, Range, Disposable, CodeActionKind, StatusBarAlignment,
     window: {
       registerFileDecorationProvider: registered, registerCustomEditorProvider: registered,
       createTreeView: (_id: string, { treeDataProvider, ...options }: { treeDataProvider: never }) => new FakeTreeView(treeDataProvider, options),

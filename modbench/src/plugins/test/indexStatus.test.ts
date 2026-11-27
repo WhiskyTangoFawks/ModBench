@@ -3,11 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { clientHoldingNothing, pluginsOf, pluginsOver } from './pluginsOver';
+import { clientHoldingNothing, indexedOver, pluginsOf, pluginsOver } from './pluginsOver';
 import type { PluginMetadata } from '../../client';
 import { EMPTY_SNAPSHOT, pluginMetadataFixture } from '../../client/test/fixtures';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { holdsLoadOrder, holdsNoLoadOrder, type Holds } from '../../client/test/says';
+import { changeNamesPlugin, holdsLoadOrder, holdsNoLoadOrder, type Holds } from '../../client/test/says';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { settled } from '../../test/eventually';
 import { present } from '../../ports/present';
@@ -362,5 +362,17 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     await made.tell({ total: 42, indexed: [A, B], failures: [BAD] });
 
     await settled(() => { expect(made.handOffs()).toEqual(['[loadOrder] applying reconciled load order to tree: 2 in the load order, 1 failed, of 42 plugins']); });
+  });
+});
+
+describe('a change that names plugins (ADR-0029, Consequences, bullet 5)', () => {
+  it('reads the index state of the plugins it names, and of no other', async () => {
+    const { client } = await indexedOver(['A.esp', 'B.esp']);
+    client.calls.length = 0;
+
+    changeNamesPlugin(client, A);
+    await settle();
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginsIndexing').map(({ args }) => args)).toEqual([[[A]]]);
   });
 });
