@@ -103,7 +103,7 @@ async function sourceFolderOf(
   const recorded = buildManifest(
     { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
-  const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
+  const notAssets = new Set([...recorded.sources, ...compiled]);
   const sourceManifest: Manifest = { packages: recorded.manifest.packages.filter((pkg) => pkg.kind !== 'installationFile' || !recorded.missingPackages.includes(pkg.name)), exclude: [], ignore: [], flags: new Map(), files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))) };
   const copied = [...new Set(all.map(({ path }) => path).filter((path) => !compiled.has(path)).map((path) => path.split('/')[0] ?? path))].sort();
   const taken = takenBySourceFolder(copied, manifestNameOf(sourceFolder));
