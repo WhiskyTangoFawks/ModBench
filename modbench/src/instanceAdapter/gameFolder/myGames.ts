@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { archiveListsOf, gamePathInfoForRelease } from '../../tables/gamePaths';
+import { gamePathInfoForRelease } from '../../tables/gamePaths';
 import { errorMessage } from '../../ports/errorMessage';
 import { factsOf, keptUntilNamed } from '../files';
 import type { Machine } from '../instanceAdapter';
@@ -7,8 +7,8 @@ import { detectWinePrefix } from './gamePathDetector';
 
 type MyGamesResolution = { readonly kind: 'found'; readonly folder: string } | { readonly kind: 'notFound'; readonly looked: readonly string[] };
 
-/** Answers where the release's My Games folder is, with each place looked at when it is nowhere. */
-export type MyGamesResolver = (release: string | undefined) => Promise<MyGamesResolution>;
+/** Answers where the release's My Games folder, `folderName`, is, with each place looked at when it is nowhere. */
+export type MyGamesResolver = (release: string, folderName: string) => Promise<MyGamesResolution>;
 
 const MY_GAMES = 'My Games';
 const PROTON_USER = 'steamuser';
@@ -85,9 +85,5 @@ export function myGamesResolver(instanceRoot: string, machine: Machine): MyGames
       (machine.platform === 'win32' ? windowsResolution(askDocumentsOnce, folderName) : linuxResolution(instanceRoot, machine, release, folderName)),
     (resolution) => (resolution.kind === 'found' ? resolution.folder : undefined),
   );
-  return async (release) => {
-    const folderName = archiveListsOf(release)?.myGamesFolder;
-    if (release === undefined || folderName === undefined) return { kind: 'notFound', looked: [] };
-    return resolved(`${MY_GAMES} of ${release}`, { release, folderName });
-  };
+  return (release, folderName) => resolved(`${MY_GAMES} of ${release}`, { release, folderName });
 }
