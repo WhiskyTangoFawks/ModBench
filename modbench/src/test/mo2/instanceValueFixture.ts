@@ -6,6 +6,9 @@ import { entryKey, readingFixture } from '../fakeInstanceAdapter';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
+/** What mEdit answered of an archive the value holds. */
+export type ArchiveRead = InstanceValue['archiveContents'] extends ReadonlyMap<string, infer Read> ? Read : never;
+
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloadedFiles`, …) states only that one, typed, with no cast. */
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {

@@ -70,7 +70,7 @@ describe('a test file imports, of a box, only its seam: the files another box im
       .toEqual([]);
   });
 
-  it('allows no import a file no longer makes', () => {
+  it('allows only an import its file makes', () => {
     expect(Object.entries(NEEDS_AN_INTERNAL).flatMap(([file, { imports }]) => imports.filter((one) => past.get(file)?.includes(one) !== true).map((one) => `${file}: ${one}`)))
       .toEqual([]);
   });

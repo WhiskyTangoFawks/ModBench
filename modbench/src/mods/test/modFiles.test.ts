@@ -12,13 +12,11 @@ import { registerArchiveFiles } from '../archiveFiles';
 import { modArgumentOf } from '../../drivingLib/argument';
 import { currentBoxOf } from '../../drivingLib/test/nameFilterViewHarness';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { instanceValueFixture, type ArchiveRead } from '../../test/mo2/instanceValueFixture';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { settled } from '../../test/eventually';
 import { present } from '../../ports/present';
 import { mod, indexedValueOf } from './indexedValue';
-
-type ArchiveRead = InstanceValue['archiveContents'] extends ReadonlyMap<string, infer Read> ? Read : never;
 
 const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, markedExcluded: false, includedPath: relativePath });
 

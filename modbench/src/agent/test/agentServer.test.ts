@@ -45,7 +45,7 @@ import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { fakeInstanceAdapter, fileIn, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { instanceValueFixture, type ArchiveRead } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
@@ -53,8 +53,6 @@ import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from
 import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
 import { gestureName, phrase } from '../../ports/phrase';
 import { settled } from '../../test/eventually';
-
-type ArchiveRead = InstanceValue['archiveContents'] extends ReadonlyMap<string, infer Read> ? Read : never;
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -1143,7 +1141,7 @@ describe('the agent server, reading file order conflicts', () => {
     const { client } = await clientOf(new FakeInstance(value));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Winner' }, { name: 'Loser' }] })).toMatchObject([
-      { mod: 'Winner', files: [{ file: 'a.dds', contents: { state: 'Override', row: 'Override', size: 8, modified: day } }, { file: 'b.dds', contents: {} }] },
+      { mod: 'Winner', files: [{ file: 'a.dds', contents: { state: 'Override', row: 'Override', size: 8, modified: day } }, { file: 'b.dds', contents: { state: null, row: null, size: 8 } }] },
       { mod: 'Loser', files: [{ file: 'a.dds', contents: { state: 'Master', row: 'Override', size: 8, modified: 0 } }, { file: 'b.dds', contents: { unreadable: 'no answer fixed for /instance/Loser/b.dds' } }] },
     ]);
   });

@@ -12,7 +12,7 @@ import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
 import { fakeMachine } from '../fakeMachine';
 import { fixedGameFolderSetting } from '../gameFolderSetting';
 import { watcherExcluding } from '../watcherExclusion';
-import { FOMOD_ENGINE } from '../fomodEngine';
+import { FOMOD_ENGINE, type FomodEngine } from '../fomodEngine';
 import { DEPLOYED_PATH } from '../deployedPath';
 import { expectKind } from '../expectKind';
 
@@ -30,7 +30,7 @@ export interface AdapterAnswers {
   /** VS Code's git; none unless a test fixes one. */
   hostGit?: HostGit<string>;
   watcherExclude?: WatcherExclude;
-  fomodEngine?: Parameters<typeof adapterForInstance>[0]['fomodEngine'];
+  fomodEngine?: FomodEngine;
 }
 
 /** The adapter the build composes over `root`, with what `answers` fix. */

@@ -71,10 +71,6 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
   };
 }
 
-/** An adapter's mod value, over the reads a test answers itself. */
-export const modValueOf = (reads: Parameters<typeof modValueOver>[0]): InstanceAdapter['modValue'] =>
-  (folder, asked, heldByGit) => modValueOver(reads, folder, asked, heldByGit);
-
 /** The MD5 the fake gives a downloaded file. */
 export const md5Of = (name: string): string => `md5-of-${name}`;
 

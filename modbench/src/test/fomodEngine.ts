@@ -15,8 +15,10 @@ export function engineProcessFrom(entry: string): string {
   return outfile;
 }
 
+export type FomodEngine = Parameters<typeof adapterForInstance>[0]['fomodEngine'];
+
 /** The engine as the development tree holds it: its process from its source, and the add-on npm installed. */
-export const FOMOD_ENGINE: Parameters<typeof adapterForInstance>[0]['fomodEngine'] = {
+export const FOMOD_ENGINE: FomodEngine = {
   process: engineProcessFrom(join(__dirname, '..', 'instanceAdapter', 'fomodInstaller', 'engineProcess.ts')),
   folder: join(__dirname, '..', '..', 'node_modules', '@nexusmods', 'fomod-installer-native', 'prebuilds', `${process.platform}-${process.arch}`),
   silence: 60_000,
