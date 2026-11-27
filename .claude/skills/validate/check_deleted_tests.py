@@ -27,8 +27,10 @@ MARK_WORDS = re.compile(r'^- ([^:.→]+)', re.MULTILINE)
 STRING = r'''(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`)'''
 CS_ATTRIBUTE = re.compile(r'\[\w*(?:Fact|Theory)\b')
 CS_METHOD = re.compile(r'^\s*public\b[^\n(=]*?(?P<name>\w+)\s*(?:<[^>\n]*>)?\s*\(', re.MULTILINE)
-TS_TITLE = re.compile(r'(?<![\w.$])(?:it|test)(?:\.(?:only|skip|todo|concurrent|fails))*\s*\(\s*' + STRING
-                      + r'|(?<![\w.$])(?:it|test)\.each\b.*?\)\s*\(\s*' + STRING, re.DOTALL)
+# `it` also hangs off a platform helper, as onPosix.it; a `.test(` on any other receiver is a RegExp's.
+TS_TEST = r'(?<![\w.$])(?:(?:[A-Za-z_$][\w$]*\.)?it|test)'
+TS_TITLE = re.compile(TS_TEST + r'(?:\.(?:only|skip|todo|concurrent|fails|sequential))*\s*\(\s*' + STRING
+                      + r'|' + TS_TEST + r'(?:\.\w+)*\.(?:each|for|skipIf|runIf)\b.*?\)\s*\(\s*' + STRING, re.DOTALL)
 PY_METHOD = re.compile(r'^\s*(?:async\s+)?def\s+(test_\w+)\s*\(', re.MULTILINE)
 ESCAPE = re.compile(r'\\(.)')
 
