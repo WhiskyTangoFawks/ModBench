@@ -103,7 +103,7 @@ public sealed class UnchangedSourceTreeTests : IDisposable
     }
 
     [Fact]
-    public async Task ATreeWhoseRowsCameFromItsBinary_IsReadFromItsTreeAgain_WhenItsStampsAreAsTheyWere()
+    public void ATreeWhoseRowsCameFromItsBinary_IsReadFromItsTreeAgain_WhenItsStampsAreAsTheyWere()
     {
         TimePasses();
         var build = Path.Combine(_plugin.ModFolderOf(), "build.json");

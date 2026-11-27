@@ -2,9 +2,8 @@ using System.Diagnostics;
 
 namespace MEditService.TestSupport;
 
-/// <summary>A test waits on a value, never on real time: work on a thread of its own is done when the
-/// value it announces holds. A patience bounds a wait only so a broken test fails, so no wait here answers
-/// false: a window a test waits out is a Task.Delay or Thread.Sleep, where check_test_waits.py names it.</summary>
+/// <summary>A test waits on a value, never on real time. No timed wait here answers false: a window a test
+/// waits out is a Task.Delay or Thread.Sleep, where check_test_waits.py names it.</summary>
 public static class Waits
 {
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);

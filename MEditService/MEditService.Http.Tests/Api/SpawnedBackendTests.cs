@@ -115,7 +115,7 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
 
             process.StandardInput.Close();
 
-            Assert.True(process.WaitForExit(TimeSpan.FromSeconds(15)));
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
         }
         finally
         {
@@ -144,8 +144,7 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
 
             process.StandardInput.Close();
 
-            Assert.True(process.WaitForExit(TimeSpan.FromSeconds(3)),
-                $"captured output:\n{string.Join('\n', Snapshot(lines))}");
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
             Assert.DoesNotContain(Snapshot(lines), l => l.Contains("FTL", StringComparison.Ordinal));
         }
         finally
