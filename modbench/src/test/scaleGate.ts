@@ -1,6 +1,5 @@
 // The scale gate's harness (ADR-0029, Consequences, bullet 5). Its test mocks `node:fs` and `node:fs/promises` with `countingCalls`,
-// and `vscode` with what the Mods and Plugins views register: decoration providers, a custom editor, a tree view, commands,
-// an input box, a status bar item, code lenses and code actions.
+// and `vscode` with what the Mods and Plugins views register.
 
 import * as vscode from 'vscode';
 import { vi } from 'vitest';
