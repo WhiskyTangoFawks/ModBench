@@ -24,7 +24,7 @@
   <!-- A bare dotnet test runs the tests of a branch (spec/architecture/tests.md), and Windows leaves out the POSIX-only
        ones. A filter on the command line replaces this one. -->
   <PropertyGroup>
-    <VSTestTestCaseFilter>Kind!=Tool</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter>Kind!=Tool&amp;Kind!=Generator</VSTestTestCaseFilter>
     <VSTestTestCaseFilter Condition="'$(OS)' == 'Windows_NT'">$(VSTestTestCaseFilter)&amp;Kind!=Posix</VSTestTestCaseFilter>
   </PropertyGroup>
 

@@ -21,7 +21,7 @@ public sealed class CutDownPluginGenerator
     private const int CellsPerSubBlock = 3;
     private const int RefsPerCell = 10;
 
-    [Fact, Kind(Kinds.Tool)]
+    [Fact, Kind(Kinds.Generator)]
     public void TheCutDownPlugin_IsCutFromTheInstalledFallout4esm()
     {
         Assert.True(new GameLocator().TryGetDataDirectory(GameRelease.Fallout4, out var dataDir), "Fallout 4 is not installed.");
