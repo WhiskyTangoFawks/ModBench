@@ -201,10 +201,13 @@ export class PluginFactsFeed implements vscode.Disposable {
       return;
     }
     const { loot, reads } = read;
+    const recovered = this.facts.judgingReadFailed();
     const altered = this.facts.rejudged(loot);
     this.landedReads = reads;
     this.publishSorting();
-    this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
+    // The message line is redrawn with every row, so a judgement that clears its read's failure redraws them all.
+    if (recovered) this.changed.fire(undefined);
+    else this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }
 
   /** Re-reads the facts of the plugins named and judges again, leaving the held load order as it is.

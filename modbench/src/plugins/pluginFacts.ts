@@ -402,6 +402,11 @@ export class PluginFacts {
     this.factsRead.failure = reason;
   }
 
+  /** Whether the last read of the files the sorting rules judge failed. */
+  judgingReadFailed(): boolean {
+    return this.judgingRead.failure !== undefined;
+  }
+
   /** The files the sorting rules judge could not be read; the last judgement stays. */
   judgingFailed(reason: string): void {
     this.judgingRead.failure = reason;
