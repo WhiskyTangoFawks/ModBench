@@ -14,7 +14,7 @@ import { filesBelow } from './mo2Files';
 import { foldersHeldWhole, foldersInReach } from '../foldersHeldWhole';
 import { filesHeldByGit } from '../filesHeldByGit';
 import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
-import { mo2Context } from './mo2Context';
+import { mo2Context } from './contextOver';
 import { mo2Landing } from './mo2Landing';
 import { mo2GameFiles, mo2Repository } from './mo2Repository';
 import { mo2Submodules, sourceModLinesFollowed } from './mo2Submodules';
