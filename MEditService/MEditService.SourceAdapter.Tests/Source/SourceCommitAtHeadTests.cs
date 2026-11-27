@@ -299,10 +299,15 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         var stalled = Directory.CreateDirectory(Path.Combine(_root, "stalled", ".git")).FullName;
         using (var fifo = System.Diagnostics.Process.Start("mkfifo", Path.Combine(stalled, "HEAD"))) await fifo.WaitForExitAsync();
         Git(_submodule.Instance, "config", "-f", ".gitmodules", "submodule.Mod.url", Path.Combine(_root, "stalled"));
-        using var cancelling = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cancelling = new CancellationTokenSource();
+        var cloning = Task.Run(() => CommitAtHead(_commits["second"], cancelling.Token).Stopped());
 
-        var failure = await Task.Run(() => CommitAtHead(_commits["second"], cancelling.Token).Stopped())
-            .WaitAsync(TimeSpan.FromSeconds(60));
+        SourceFailure failure;
+        await using (await Task.Run(() => new FileStream(Path.Combine(stalled, "HEAD"), FileMode.Open, FileAccess.Write)).WaitAsync(Waits.Patience))
+        {
+            await cancelling.CancelAsync();
+            failure = await cloning.WaitAsync(TimeSpan.FromSeconds(60));
+        }
 
         Assert.Equal("the clone was cancelled", failure.Reason);
         Assert.False(Directory.Exists(SourceFolder) && Directory.EnumerateFileSystemEntries(SourceFolder).Any());

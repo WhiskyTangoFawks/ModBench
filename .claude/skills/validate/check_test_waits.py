@@ -24,9 +24,15 @@ class Wait:
     text: str
 
 
+NO_TIME = r'(?!\s*(?:Timeout\.Infinite\w*\b|TimeSpan\.Zero\b|0\s*[,)]))'
+DURATION = NO_TIME + r'\s*[^\s)]'
+NOT_A_TOKEN = r'(?!\s*[\w.]*(?:[Tt]oken|[Cc]ancel\w*)\s*\))'
 SCANS = (
     Scan(re.compile(r'(?:^|/)MEditService/MEditService\.[\w.]*Test[\w.]*/.+\.cs$'),
-         re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\((?!\s*Timeout\.Infinite\b)')),
+         re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\(' + NO_TIME
+                    + r'|\bnew CancellationTokenSource\(' + DURATION
+                    + r'|\.(?:CancelAfter|WaitForExit)\(' + DURATION
+                    + r'|\.Wait(?:One)?\(' + NOT_A_TOKEN + DURATION)),
 )
 
 FIX = ('A test waits on a value or on a fake clock, never on real time. A check that something never happens, '

@@ -17,7 +17,13 @@ class Waits(unittest.TestCase):
     def test_a_wait_on_real_time_in_a_test_is_named_by_its_path_and_line(self):
         for path, line in ((BACKEND_TEST, 'await Task.Delay(50);'),
                            ('MEditService/MEditService.TestSupport/Fixtures.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(10));'),
-                           (f'/home/x/modbench/{BACKEND_TEST}', 'Assert.Same(t, await Task.WhenAny(t, Task.Delay(Patience)));')):
+                           (f'/home/x/modbench/{BACKEND_TEST}', 'Assert.Same(t, await Task.WhenAny(t, Task.Delay(Patience)));'),
+                           (BACKEND_TEST, 'using var cancelling = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));'),
+                           (BACKEND_TEST, 'cancelling.CancelAfter(Patience);'),
+                           (BACKEND_TEST, 'Assert.False(process.WaitForExit(500));'),
+                           (BACKEND_TEST, 'Assert.True(released.Wait(TimeSpan.FromSeconds(5)));'),
+                           (BACKEND_TEST, 'Assert.True(token.WaitHandle.WaitOne(Generous));'),
+                           (BACKEND_TEST, 'var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.Result : null;')):
             with self.subTest(path=path, line=line):
                 self.assertEqual(ctw.waits(path, f'class T\n{{\n    {line}\n}}'), [ctw.Wait(path, 3, line)])
 
@@ -25,6 +31,11 @@ class Waits(unittest.TestCase):
         for path, line in ((BACKEND_TEST, 'await Task.Delay(Timeout.Infinite, cancellationToken);'),
                            ('MEditService/MEditService.RecordIndex/Indexer.cs', 'await Task.Delay(interval, _timeProvider);'),
                            (BACKEND_TEST, 'await reading.Task.WaitAsync(Waits.Patience);'),
+                           (BACKEND_TEST, 'using var left = new CancellationTokenSource();'),
+                           (BACKEND_TEST, 'process.WaitForExit();'),
+                           (BACKEND_TEST, 'First.Wait(_abandoned.Token);'),
+                           (BACKEND_TEST, 'Assert.True(entered.Wait(0));'),
+                           (BACKEND_TEST, 'Waits.Signalled(released.Wait, "the release");'),
                            (ALLOWED_PATH, ALLOWED_LINE)):
             with self.subTest(path=path, line=line):
                 self.assertEqual(ctw.waits(path, f'    {line}\n'), [])

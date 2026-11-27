@@ -83,7 +83,7 @@ public sealed class RecordTypeViewsTests
             {
                 if (!entry.Message.StartsWith("Created the record type views", StringComparison.Ordinal)) return;
                 _parked.Release();
-                _released.Wait(CreationHeldAtMost);
+                Waits.Signalled(_released.Wait, "the views' creation released", CreationHeldAtMost);
             })));
             _fixture = new PluginFixtureBuilder(name).WithPlugin(Plugin.Name, mod => mod.Npcs.AddNew("LazyNpc")).Build();
             Index = Indexes.Reconciled(_fixture, loggerFactory: _loggers);

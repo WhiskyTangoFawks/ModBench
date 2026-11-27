@@ -28,7 +28,7 @@ public sealed class IndexVisibilityTests
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: RecordsPerIngestBatch, () =>
         {
             ingestPaused.Release();
-            _ = ingestResumed.Wait(PauseBound);
+            Waits.Signalled(ingestResumed.Wait, "the ingest resumed", PauseBound);
         }));
 
         var reconcile = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));

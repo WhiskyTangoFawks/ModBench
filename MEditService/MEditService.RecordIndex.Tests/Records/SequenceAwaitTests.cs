@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -45,11 +46,12 @@ public sealed class SequenceAwaitTests : IDisposable
     [Fact]
     public async Task ASequenceNotReached_IsAnsweredNotYet_OnceTheClockPassesTheTimeout()
     {
-        var pending = _index.Queries.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
+        var observed = _index.Sequence;
+        var pending = _index.Queries.AwaitSequence(observed + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
         _clock.SetUtcNow(Start + TimeSpan.FromDays(2));
 
-        Assert.False((await pending.WaitAsync(Generous)).Reached);
+        Assert.Equal(new SequenceAwaitResponse(false, observed), await pending.WaitAsync(Generous));
     }
 
     [Fact]

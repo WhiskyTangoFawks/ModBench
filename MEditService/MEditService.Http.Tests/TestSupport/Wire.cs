@@ -313,15 +313,18 @@ internal static class Wire
     /// <summary>Every frame, of any kind, up to and including the next <paramref name="anchorKind"/>
     /// that satisfies <paramref name="isTerminal"/>: an absence claim reads off this list, never off
     /// a window where nothing arrived.</summary>
-    internal static async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThrough(
+    internal static Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThrough(
+        this StreamReader reader, string anchorKind, Func<JsonElement, bool> isTerminal) =>
+        reader.FramesThroughUnbounded(anchorKind, isTerminal).WaitAsync(Patience);
+
+    private static async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughUnbounded(
         this StreamReader reader, string anchorKind, Func<JsonElement, bool> isTerminal)
     {
-        using var cts = new CancellationTokenSource(Patience);
         var collected = new List<(string Kind, JsonElement Data)>();
         string? currentKind = null;
         while (true)
         {
-            var line = await reader.ReadLineAsync(cts.Token);
+            var line = await reader.ReadLineAsync();
             if (line is null) continue;
             if (line.StartsWith("event: ", StringComparison.Ordinal))
             {

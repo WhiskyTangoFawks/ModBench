@@ -35,6 +35,13 @@ public static class Waits
         throw new TimeoutException($"Never read a value the condition holds for; the longest read took {longest}.");
     }
 
+    /// <summary>A blocking wait on a signal, such as a semaphore's <c>Wait</c> or a handle's <c>WaitOne</c>,
+    /// that throws once its patience passes.</summary>
+    public static void Signalled(Func<TimeSpan, bool> wait, string what, TimeSpan? patience = null)
+    {
+        if (!wait(patience ?? Patience)) throw new TimeoutException($"Never reached {what}.");
+    }
+
     public static async Task ReachedAsync(Func<Task<bool>> condition, string what, TimeSpan? patience = null)
     {
         var elapsed = Stopwatch.StartNew();

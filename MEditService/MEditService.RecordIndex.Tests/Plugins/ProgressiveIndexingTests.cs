@@ -114,7 +114,7 @@ public sealed class ProgressiveIndexingTests
             index.Dispose();
             order.Enqueue("unload-done");
         });
-        Assert.True(unloadAttempting.Wait(TimeSpan.FromSeconds(5)));
+        Waits.Signalled(unloadAttempting.Wait, "the unload attempting");
 
         gate.Release();
         order.Enqueue("gate-released");
@@ -214,7 +214,7 @@ public sealed class ProgressiveIndexingTests
             index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
             order.Enqueue("second-done");
         });
-        Assert.True(secondAttempting.Wait(TimeSpan.FromSeconds(5)));
+        Waits.Signalled(secondAttempting.Wait, "the second reconcile attempting");
 
         gate.Release();
         order.Enqueue("gate-released");

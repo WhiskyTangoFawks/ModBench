@@ -53,7 +53,7 @@ public class PluginReadInterruptionTests
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 2, () =>
         {
             reading.TrySetResult();
-            stuck.Wait(TimeSpan.FromMinutes(1));
+            Waits.Signalled(stuck.Wait, "the stuck read's release");
         }), timeProvider: clock);
         try
         {
