@@ -12,7 +12,7 @@ const OPTIONS = { encoding: 'utf8', maxBuffer: 1 << 28 } as const;
 type Git = (folder: string, ...args: string[]) => Promise<string>;
 type GitFed = (folder: string, input: string | Buffer, ...args: string[]) => Promise<string>;
 
-const READS = new Set(['status', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'for-each-ref', 'grep', 'show', 'check-ignore', 'check-attr', 'rev-list', 'log', 'diff', 'hash-object']);
+const READS = new Set(['rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'for-each-ref', 'grep', 'show', 'check-ignore', 'check-attr', 'rev-list', 'log', 'hash-object']);
 const READING_ARGUMENTS = new Set(['--get', '--get-all', '--get-regexp', '--list', 'get-url']);
 const WORKING_TREE_RESETS = new Set(['--hard', '--merge', '--keep']);
 
