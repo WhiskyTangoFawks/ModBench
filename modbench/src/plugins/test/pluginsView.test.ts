@@ -183,7 +183,6 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
 });
 
 describe('the Plugins view follows mEdit\'s change event', () => {
-
   async function changing() {
     const made = await indexedOver(['Test.esp', 'Other.esp']);
     const uris = await Promise.all([made.row('Test.esp'), made.row('Other.esp')].map(async (row) => (await made.item(row)).resourceUri));
