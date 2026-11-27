@@ -9,7 +9,7 @@ import { READ_SORTING_RULE_FILES } from '../../test/readSortingRuleFiles';
 import { present } from '../../ports/present';
 
 const COMPILED = { isCompiledPlugin: true };
-const MALFORMED = [['Mu.esp', 'ModE'], ['Nu.esp', 'ModC'], ['Xi.esp', 'Data/']];
+const MALFORMED = [{ plugin: 'Mu.esp', origin: 'ModE' }, { plugin: 'Nu.esp', origin: 'ModC' }, { plugin: 'Xi.esp', origin: 'Data/' }];
 
 type Named = 'alpha' | 'beta' | 'nonCompiledPlugin' | 'alsoNonCompiledPlugin' | 'inOverwrite' | 'compilable' | 'compiledPluginReadOnly'
   | 'nonCompiledPluginInSourceMod' | 'malformedInASourceMod' | 'malformedInNoSourceMod' | 'malformedInTheGameFolder' | 'moving' | 'locked'
@@ -19,7 +19,7 @@ let rowsNamed: Record<Named, unknown>;
 
 beforeAll(async () => {
   const malformed = clientHoldingNothing();
-  malformed.setQueryAnswer('getDiagnoses', MALFORMED.map(([plugin, origin]) => ({ plugin, origin, text: 'short' })));
+  malformed.setQueryAnswer('getDiagnoses', MALFORMED.map((at) => ({ ...at, text: 'short' })));
   const made = await pluginsIndexedOver([
     { name: 'Alpha.esp', origin: 'ModA' },
     { name: 'Beta.esp', origin: 'ModB', enabled: false },

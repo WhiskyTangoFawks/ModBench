@@ -371,7 +371,7 @@ describe('modbench.record.create on a container', () => {
 
     await run(rows.worldspace);
 
-    expect(present(prompt().validateInput, 'the prompt\'s validation')(input)).toBe(refusal);
+    expect(prompt().validateInput?.(input)).toBe(refusal);
   });
 
   it('creates nothing and says nothing when the grid position prompt is left with Esc', async () => {
