@@ -500,6 +500,24 @@ describe('the Plugins view\'s Problems', () => {
     });
   });
 
+  it('puts a plugin whose plugin source is unreadable on its row\'s own file as an error', async () => {
+    const onDisk = '/instance/mods/ModA/Test.esp';
+    const { client } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
+    }));
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({
+      name: 'Test.esp', origin: 'ModA', path: onDisk, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true },
+    })]);
+    holdsLoadOrder(client);
+    client.change(named('plugin-changed'));
+
+    await vi.waitFor(() => {
+      const collection = present(h.diagnostics.get('modbench-source-unreadable'), 'the source-unreadable collection');
+      expect([...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.severity)]))
+        .toEqual([[onDisk, [DiagnosticSeverity.Error]]]);
+    });
+  });
+
   it('links a malformed plugin\'s entry to decompile and repair in a mod, and not in the game folder', async () => {
     const inAMod = '/instance/mods/ModA/Test.esp';
     const inTheGameFolder = '/game/Data/Vanilla.esm';
