@@ -26,7 +26,7 @@ class Wait:
 
 NOT_ZERO_OR_INFINITE = r'(?!\s*(?:Timeout\.Infinite\w*\b|TimeSpan\.Zero\b|0\s*[,)]))'
 DURATION = NOT_ZERO_OR_INFINITE + r'\s*[^\s)]'
-NOT_A_TOKEN = r'(?!\s*(?:[\w.]*[Tt]oken|cancel\w*|ct|CancellationToken\.None)\s*\))'
+NOT_A_TOKEN = r'(?!\s*(?:[\w.]*[Tt]oken|cancel\w*|CancellationToken\.None)\s*\))'
 SCANS = (
     Scan(re.compile(r'(?:^|/)MEditService/MEditService\.[\w.]*Test[\w.]*/.+\.cs$'),
          re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\(' + NOT_ZERO_OR_INFINITE

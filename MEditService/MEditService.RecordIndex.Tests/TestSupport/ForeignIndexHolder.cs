@@ -51,7 +51,6 @@ public sealed class ForeignIndexHolder : IDisposable
         return new ForeignIndexHolder(process);
     }
 
-    // A python that neither answers nor exits (a wedged native load) fails the test with its stderr.
     private static string? AnswerOf(Process process)
     {
         var answer = Task.Run(process.StandardOutput.ReadLine);
