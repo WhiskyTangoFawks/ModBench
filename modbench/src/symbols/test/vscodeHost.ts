@@ -171,7 +171,8 @@ export const workspace = {
   get textDocuments() { return documents; },
   openTextDocument: (uri: FakeUri) => (unopenable.has(uri.fsPath)
     ? Promise.reject(new Error('The file is gone.'))
-    : Promise.resolve(documents.find((held) => held.uri.toString() === uri.toString()) ?? document(uri.fsPath, ''))),
+    : Promise.resolve(documents.find((held) => held.uri.toString() === uri.toString())
+      ?? documents.find((held) => held.uri.fsPath === uri.fsPath) ?? document(uri.fsPath, ''))),
   onDidOpenTextDocument: opened.event,
   onDidChangeTextDocument: changed.event,
   onDidCloseTextDocument: closed.event,
