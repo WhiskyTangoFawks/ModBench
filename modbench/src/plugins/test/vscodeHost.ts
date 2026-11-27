@@ -57,6 +57,8 @@ const files = new Map<string, string>();
 const progress: string[] = [];
 const collections = new Map<string, FakeDiagnosticCollection>();
 const contexts: [string, unknown][] = [];
+const executed: unknown[][] = [];
+const failing = new Map<string, Error>();
 const opened: unknown[] = [];
 const shown: unknown[] = [];
 const inputBoxes: FakeInputBox[] = [];
@@ -72,7 +74,9 @@ export const commands = {
   registerCommand: (id: string, handler: Handler) => { commandHandlers.set(id, handler); return new Disposable(() => { commandHandlers.delete(id); }); },
   executeCommand: (id: string, ...args: unknown[]) => {
     if (id === 'setContext') contexts.push([String(args[0]), args[1]]);
-    return Promise.resolve();
+    else executed.push([id, ...args]);
+    const failure = failing.get(id);
+    return failure === undefined ? Promise.resolve() : Promise.reject(failure);
   },
 };
 
@@ -180,6 +184,10 @@ export const host = {
   progress,
   /** The problems the Problems panel shows on each file of the collection, by path. */
   problems: (name: string) => [...collections.get(name) ?? []].map(([uri, each]) => [uri.fsPath, each.map(({ message, severity, code }) => ({ message, severity, code }))] as const),
+  /** Each command the box ran through VS Code, other than setContext, with its arguments, in turn. */
+  executed,
+  /** VS Code rejects each run of the command `id` with `failure`. */
+  fails: (id: string, failure: Error) => { failing.set(id, failure); },
   /** Each value a context key was set to, in turn. */
   context: (key: string) => contexts.filter(([name]) => name === key).map(([, value]) => value),
   /** Each document opened, and each shown, in turn. */
@@ -190,8 +198,8 @@ export const host = {
   /** Forgets everything registered and held, as a fresh window. */
   reset: () => {
     treeViews.clear();
-    for (const held of [commandHandlers, files, collections]) held.clear();
-    for (const held of [decorations, lenses, actions, statusBarItems, quickPicks, progress, checkboxListeners, contexts, opened, shown, inputBoxes, inputsAsked]) held.length = 0;
+    for (const held of [commandHandlers, files, collections, failing]) held.clear();
+    for (const held of [decorations, lenses, actions, statusBarItems, quickPicks, progress, checkboxListeners, contexts, executed, opened, shown, inputBoxes, inputsAsked]) held.length = 0;
     pick = () => undefined;
     input = () => undefined;
   },

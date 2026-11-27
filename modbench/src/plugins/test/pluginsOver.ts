@@ -9,6 +9,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
+import type { PluginMetadata } from '../../client';
 import { holdsLoadOrder } from '../../client/test/says';
 import { settled } from '../../test/eventually';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
@@ -87,20 +88,32 @@ export function pluginsOver({
 /** The plugins of `origin`, ModA unless named, in the order named, each enabled. */
 export const pluginsOf = (names: readonly string[], origin = 'ModA') => names.map((name, line) => ({ name, origin, path: `/mods/${origin}/${name}`, line, enabled: true, winning: true }));
 
-/** The Plugins box over the plugins `names` of `origin`, ModA unless named, which mEdit has indexed and the Instance
- *  adapter reads in that order, once its status bar says Ready. */
-export async function indexedOver(names: readonly string[], { value = {}, origin = 'ModA', ...over }: Omit<Over, 'value' | 'client' | 'adapter'> & { value?: Partial<InstanceValue>; origin?: string; reading?: Parameters<typeof readingFixture>[0]; answers?: Parameters<typeof fakeInstanceAdapter>[1] } = {}) {
-  const { reading, answers, ...rest } = over;
-  const client = clientHoldingNothing();
-  client.setQueryAnswer('getPlugins', names.map((name) => pluginMetadataFixture({ name, origin })));
+type IndexedPlugin = Partial<PluginMetadata> & { name: string; origin: string; enabled?: boolean };
+type IndexedOver = Omit<Over, 'value' | 'adapter'> & {
+  value?: Partial<InstanceValue>; reading?: Parameters<typeof readingFixture>[0]; answers?: Parameters<typeof fakeInstanceAdapter>[1];
+};
+
+/** The Plugins box over `plugins`, each enabled unless it says, which mEdit has indexed as each describes and the
+ *  Instance adapter reads in that order, once its status bar says Ready. */
+export async function pluginsIndexedOver(plugins: readonly IndexedPlugin[], { value = {}, reading, answers, client = clientHoldingNothing(), ...over }: IndexedOver = {}) {
+  client.setQueryAnswer('getPlugins', plugins.map(({ enabled: _enabled, ...plugin }) => pluginMetadataFixture(plugin)));
   client.setQueryAnswer('getPluginsIndexing', []);
-  const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })), ...reading }), answers);
+  const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: plugins.map(({ name, enabled = true }) => ({ name, enabled })), ...reading }), answers);
   const made = pluginsOver({
-    client, adapter: fake.adapter, commandsClient: { getPlugins: () => Promise.resolve([]) }, ...rest,
-    value: instanceValueFixture({ activeProfile: 'Default', plugins: pluginsOf(names, origin), ...value }),
+    client, adapter: fake.adapter, commandsClient: { getPlugins: () => Promise.resolve([]) }, ...over,
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      plugins: plugins.map(({ name, origin, enabled = true }, line) => ({ name, origin, path: `/mods/${origin}/${name}`, line, enabled, winning: true })),
+      ...value,
+    }),
   });
-  holdsLoadOrder(client, { indexed: names.map((name) => ({ name, origin })) });
+  holdsLoadOrder(client, { indexed: plugins.map(({ name, origin }) => ({ name, origin })) });
   await settled(() => { if (made.plugins.standing.mEdit().length > 0) throw new Error('mEdit is not Ready'); });
-  const row = await made.pluginRows();
-  return { ...made, fake, row: (name: string, of = origin) => row(name, of) };
+  return { ...made, fake, row: await made.pluginRows() };
+}
+
+/** The Plugins box over the plugins `names` of `origin`, ModA unless named, as {@link pluginsIndexedOver}. */
+export async function indexedOver(names: readonly string[], { origin = 'ModA', ...over }: IndexedOver & { origin?: string } = {}) {
+  const made = await pluginsIndexedOver(names.map((name) => ({ name, origin })), over);
+  return { ...made, row: (name: string, of = origin) => made.row(name, of) };
 }
