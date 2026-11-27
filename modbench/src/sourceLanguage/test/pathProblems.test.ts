@@ -224,8 +224,10 @@ describe('the paths a plugin source names that nothing answers, in the Problems 
     const waiting = language.problemsCaughtUp().then(() => { ended = true; });
     await until(() => { expect(host.reads).toHaveLength(2); });
     expect(ended).toBe(false);
-    releaseSecond(TEXT);
+    releaseSecond(`  ${TEXT}`);
     await waiting;
+
+    expect(host.problems('modbench-source').get(FILE)?.[0]?.start.character).toBe(SPAN.start + 2);
   });
 
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {

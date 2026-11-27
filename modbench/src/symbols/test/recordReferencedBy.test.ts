@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { document, host, Location, Range, TreeItem, Uri, type ShownInput } from './vscodeHost';
-
-const moved = () => new Location(Uri.file('/source/ModA/plugin-source/A.esp/Gun.json'), new Range(9, 15, 9, 15));
 import { symbolsOver } from './symbolsOver';
 import { mEditNames, spelledName } from './mEditNames';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -16,6 +14,7 @@ const GUN = '000801:A.esp';
 const GUN_FILE = '/source/ModA/plugin-source/A.esp/Gun.json';
 const GUN_TEXT = `{\n\n\n   "${GUN}" }`;
 const ANCHOR = new Location(Uri.file(GUN_FILE), new Range(3, 3, 3, 5 + GUN.length));
+const moved = () => new Location(Uri.file(GUN_FILE), new Range(9, 15, 9, 15));
 const IN_ACTIVE_OR_COMPILED = 'getReferencesInActiveOrCompiledPlugins';
 
 function asking(arrange: (client: InMemoryMEditClient) => void = () => undefined) {

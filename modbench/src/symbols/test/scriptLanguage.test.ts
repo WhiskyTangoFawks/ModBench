@@ -58,6 +58,7 @@ function language(references: PlacedReferences | ReadFailed = NONE, scripts: Pap
 }
 
 const NAMES_NOTHING = 'modbench-names';
+const asked = (made: ReturnType<typeof language>) => made.client.calls.filter(({ method }) => method === 'getPluginFilePaths');
 const goneOn = (file: string, at = { start: 0, end: 1 }) => [file, [{ message: 'Gone names nothing. No mod, Overwrite, Data folder file or archive holds Gone.', start: { line: 0, character: at.start }, end: { line: 0, character: at.end } }]];
 
 describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', () => {
@@ -170,18 +171,16 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     ['a plugin changes', (made: ReturnType<typeof language>) => { changeNamesPlugin(made.client, { name: 'Mod.esp', origin: 'Mod' }); }],
   ])('judges again when %s, asking mEdit again', async (_when, change) => {
     const made = language();
-    const asked = () => made.client.calls.filter(({ method }) => method === 'getPluginFilePaths');
-    await until(() => { expect(asked()).toHaveLength(1); });
+    await until(() => { expect(asked(made)).toHaveLength(1); });
 
     change(made);
 
-    await until(() => { expect(asked()).toHaveLength(2); });
+    await until(() => { expect(asked(made)).toHaveLength(2); });
   });
 });
 
 describe('what judges a script\'s names again', () => {
   const quiet = () => new Promise((resolve) => { setImmediate(resolve); });
-  const asked = (made: ReturnType<typeof language>) => made.client.calls.filter(({ method }) => method === 'getPluginFilePaths');
 
   it('hears no change to a file that is no plugin source, nor to a fact no script resolves against', async () => {
     const made = language();

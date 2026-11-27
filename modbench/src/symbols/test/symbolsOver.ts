@@ -1,6 +1,5 @@
 import { createSymbols, type SymbolRows } from '..';
 import type { Concerns, InstanceSubscriber, InstanceValue, ReadsFile } from '../../instanceLoader/instance';
-import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -28,7 +27,7 @@ export function instanceHolding(value: InstanceValue) {
     land: (next: InstanceValue, paths: readonly string[] = []) => {
       const before = instance.value;
       instance.value = next;
-      for (const { told, reads } of [...subscribers]) if (reads(before, paths)) void told(next, 1, { ...CHECK_THE_DISK, before, changed: () => 'every' });
+      for (const { told, reads } of [...subscribers]) if (reads(before, paths)) void told(next, 1, { named: paths, disk: false, before, changed: () => 'every' });
     },
   };
   return instance;
