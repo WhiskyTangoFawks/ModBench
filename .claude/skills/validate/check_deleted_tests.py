@@ -29,18 +29,22 @@ CS_ATTRIBUTE = re.compile(r'\[\w*(?:Fact|Theory)\b')
 CS_METHOD = re.compile(r'^\s*public\b[^\n(=]*?(?P<name>\w+)\s*(?:<[^>\n]*>)?\s*\(', re.MULTILINE)
 # A `.test(` on a receiver is a RegExp's, and a test file calls one with a string literal.
 TS_TEST = r'(?<![\w.$])(?:(?:[A-Za-z_$][\w$]*\.)?it|test)'
-TS_TITLE = re.compile(TS_TEST + r'(?:\.(?:only|skip|todo|concurrent|fails))*\s*\(\s*' + STRING
+TS_TITLE = re.compile(TS_TEST + r'(?:\.skip)?\s*\(\s*' + STRING
                       + r'|' + TS_TEST + r'\.(?:each|skipIf)\b.*?\)\s*\(\s*' + STRING, re.DOTALL)
-# ESLint's RuleTester registers each case as a test titled by its name (src/test/ruleTester.ts).
+# ESLint's RuleTester registers each case as a test titled by its name (modbench/src/test/ruleTester.ts).
 RULE_CASE = re.compile(r'\bname:\s*' + STRING)
 CASE_HELPER = re.compile(r'\bconst\s+(\w+)\s*=\s*\(\s*name\s*:')
 PY_METHOD = re.compile(r'^\s*(?:async\s+)?def\s+(test_\w+)\s*\(', re.MULTILINE)
-ESCAPE = re.compile(r'\\(.)')
+ESCAPE = re.compile(r'\\(?:u([0-9A-Fa-f]{4})|(.))')
 
 
 def cs_names(text: str) -> list[str]:
     return [method['name'] for attribute in CS_ATTRIBUTE.finditer(text)
             if (method := CS_METHOD.search(text, attribute.end()))]
+
+
+def unescape(escape: re.Match[str]) -> str:
+    return chr(int(escape[1], 16)) if escape[1] else escape[2]
 
 
 def ts_names(text: str) -> list[str]:
@@ -49,7 +53,7 @@ def ts_names(text: str) -> list[str]:
         titles += RULE_CASE.finditer(text)
         titles += (case for helper in CASE_HELPER.findall(text)
                    for case in re.finditer(rf'(?<![\w.$]){helper}\(\s*{STRING}', text))
-    return [ESCAPE.sub(r'\1', next(group for group in title.groups() if group is not None)) for title in titles]
+    return [ESCAPE.sub(unescape, next(group for group in title.groups() if group is not None)) for title in titles]
 
 
 READERS: tuple[tuple[re.Pattern[str], Callable[[str], list[str]]], ...] = (
