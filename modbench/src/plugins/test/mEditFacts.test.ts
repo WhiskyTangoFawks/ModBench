@@ -21,7 +21,9 @@ type Facts = ReturnType<typeof factsOver>;
 const compiled = async (facts: Facts, address = A) => (await facts.row(address.name, address.origin))?.context.includes('compiledPlugin');
 const factsAsked = (facts: Facts) => facts.client.calls.filter(({ method }) => method === 'getPlugins').map(({ args }) => args);
 const handOffs = (facts: Facts) => facts.output.filter((line) => line.includes('applying reconciled load order')).length;
-const refusing = (message: string): PromiseLike<never> => ({ then: (_answered, refused) => Promise.reject(new Error(message)).then(undefined, refused) });
+const refusing = (message: string, after: Promise<unknown> = Promise.resolve()): PromiseLike<never> => ({
+  then: (_answered, refused) => after.then(() => Promise.reject(new Error(message))).then(undefined, refused),
+});
 const sourceOf = (problems: readonly (readonly [string, unknown])[]) => problems.map(([path]) => path).sort();
 
 describe('the facts mEdit answers of each plugin, read at a reconcile', () => {
@@ -372,7 +374,7 @@ describe('a throw that is no failed read', () => {
     const facts = factsOver([A]);
     await facts.reconciled([held()]);
     const answer = deferred();
-    facts.client.setQueryAnswerOnce('getPlugins', { then: (answered, refused) => answer.promise.then(() => Promise.reject(new Error('the read broke'))).then(answered, refused) });
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke', answer.promise));
     await facts.changed([held()], [A]);
 
     await facts.indexed({ indexed: [A] });
