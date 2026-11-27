@@ -147,6 +147,13 @@ class Trailer(Repo):
         self.assertEqual((named, cdt.problems(self.root, 'main')), (
             ['test_removed => Kept: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so'], []))
 
+    def test_a_mark_the_branch_retires_to_a_gate_still_accounts_for_a_deletion_that_named_it(self) -> None:
+        self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
+        self.commit('delete\n\nDeleted-test: test_removed => mark: A test proves an absence')
+        self.write('CODING_STANDARDS.md', STANDARDS.replace('- A test proves an absence: a removed method. → Delete it.\n', ''))
+        self.commit('a gate holds the mark')
+        self.assertEqual(cdt.problems(self.root, 'main'), [])
+
 
 class Main(Repo):
     def test_it_ends_with_the_count_of_findings_and_fails_the_run_on_any(self) -> None:
