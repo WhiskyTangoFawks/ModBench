@@ -40,7 +40,7 @@ TS = '''describe('box', () => {
   expect(PLUGIN.test('not a title')).toBe(true);
 });
 '''
-RULES = '''const lines = (...source: string[]) => source.join('\\n');
+RULES = '''const lines = (source: string) => source;
 const fails = (name: string, code: string) => ({ name, code, errors: [{ message }] });
 new RuleTester().run('rule', rule, {
   valid: [{ name: 'a valid case', code: lines('not a title') }],
