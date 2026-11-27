@@ -16,6 +16,7 @@ function emitter<T>() {
     event: (listener: Listener<T>) => { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
     fire: (event: T) => { for (const listener of [...listeners]) listener(event); },
     clear: () => { listeners.clear(); },
+    size: () => listeners.size,
   };
 }
 
@@ -273,6 +274,8 @@ export const host = {
   close: (held: FakeDocument) => { documents = documents.filter((each) => each !== held); closed.fire(held); },
   willRenameFiles: willRename.fire,
   didRenameFiles: didRename.fire,
+  /** How many listen for VS Code's renames as they land. */
+  renameListeners: didRename.size,
   /** Disables or enables VS Code's References view. */
   referencesView: (enabled: boolean) => { referencesViewEnabled = enabled; extensionsChanged.fire(undefined); },
   /** Forgets everything registered and held, as a fresh window. */
