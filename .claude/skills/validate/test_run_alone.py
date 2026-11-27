@@ -10,7 +10,6 @@ from unittest import mock
 
 import report_fixtures as fx
 import run_alone
-from check_test_times import approval_of
 from reports import RAN, Result
 
 ROOT = pathlib.Path('/repo')
@@ -24,8 +23,8 @@ def ran(name: str, seconds: float, box: str) -> Result:
 class Commands(unittest.TestCase):
     A = 'MEditService.A.Tests'
 
-    def commands(self, kind: str, *results: Result, approved: dict[str, str] | None = None) -> list[run_alone.Command]:
-        return run_alone.commands({kind: list(results)}, ROOT, ALONE, lambda name: approval_of(name, approved or {}) is None)
+    def commands(self, kind: str, *results: Result) -> list[run_alone.Command]:
+        return run_alone.commands({kind: list(results)}, ROOT, ALONE, lambda _: True)
 
     def test_each_backend_test_over_1_s_runs_again_by_its_method_in_one_process_of_its_project_one_at_a_time(self) -> None:
         self.assertEqual(self.commands('.trx', ran('A.C.Slow', 1.5, self.A), ran('A.C.Theory(case: 1)', 2, self.A),
@@ -58,10 +57,6 @@ class Commands(unittest.TestCase):
                              'node', 'integration.mjs', '--grep', r'(Space\ disables\ it|watches\ a\ folder\ \(as\ it\ was\))$'],
                              ALONE / 'integration.mocha')])
 
-    def test_an_approved_test_over_1_s_does_not_run_again_its_approval_naming_it_or_its_theory(self) -> None:
-        self.assertEqual(self.commands('.trx', ran('A.C.Slow', 1.5, self.A), ran('A.C.Theory(case: 1)', 2, self.A),
-                                       approved={'A.C.Slow': 'r', 'A.C.Theory': 'r'}), [])
-
 
 class Main(unittest.TestCase):
     """A planted gate runner test over 1 s that fails when the merge-to-main mode reaches it, or always."""
@@ -87,11 +82,14 @@ class Main(unittest.TestCase):
         self.assertIn('test_a (test_m.C.test_a) ... ok', log.read_text())
 
     def test_a_merge_run_runs_an_approved_test_again_for_its_lapse_in_a_process_apart_and_a_branch_run_does_not(self) -> None:
-        """Apart, so a heavy approved test leaves nothing behind in an unapproved test's process."""
         for run, ran in (('branch', False), ('merge', True)):
             with self.subTest(run=run):
                 _, _, log = self.run_alone(approved='"test_a (test_m.C.test_a)" = "r"\n', run=run)
                 self.assertEqual((log.exists(), (log.parent / 'approved' / log.name).exists()), (False, ran))
+
+    def test_a_run_with_no_test_to_run_again_leaves_its_alone_folder_for_the_time_report(self) -> None:
+        _, _, log = self.run_alone(approved='"test_a (test_m.C.test_a)" = "r"\n')
+        self.assertTrue(log.parent.is_dir())
 
     def test_a_test_failing_alone_fails_the_run_naming_its_command(self) -> None:
         status, printed, _ = self.run_alone('; self.fail("alone")')

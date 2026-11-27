@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Runs again, one at a time and after the gates' other tests, each test the reports time over the 1 s ceiling,
 and writes that run's reports to a folder of its own for check_test_times.py. A branch run leaves out an approved
-test, whose verdict the run cannot change; a merge run runs it too, for its lapse. An xUnit theory runs all its
-cases."""
+test, whose verdict the run cannot change; a merge run runs it too, for its lapse, in processes of their own: a heavy
+approved test leaves nothing behind in an unapproved test's process. An xUnit theory runs all its cases."""
 import contextlib
 import os
 import re
@@ -81,9 +81,8 @@ def execute(command: Command, environment: dict[str, str]) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """A merge run also runs the approved tests over the ceiling, for their lapses, in processes of their own: a heavy
-    approved test leaves nothing behind in an unapproved test's process."""
     root, directory, alone, budgets_file, run = sys.argv[1:] if argv is None else argv
+    Path(alone).mkdir(parents=True, exist_ok=True)
     approved = tomllib.loads(Path(budgets_file).read_text()).get('approved', {})
     environment = {key: value for key, value in os.environ.items() if key != MERGE_TO_MAIN}
     start = time.monotonic()
