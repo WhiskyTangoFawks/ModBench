@@ -35,8 +35,13 @@ TS = '''describe('box', () => {
   test(`templated`, () => {});
   onPosix.it('posix only', () => {});
   onWindows.it.skipIf(process.getuid?.() === 0)('windows unless root', () => {});
-  it.runIf(ready)('when ready', () => {});
   expect(PLUGIN.test('not a title')).toBe(true);
+});
+'''
+RULES = '''const fails = (name: string, code: string) => ({ name, code, errors: [{ message }] });
+new RuleTester().run('rule', rule, {
+  valid: [{ name: 'a valid case', code: 'x' }],
+  invalid: [fails('a failing case', 'y')],
 });
 '''
 PY = '''class Case(unittest.TestCase):
@@ -55,6 +60,7 @@ class Repo(unittest.TestCase):
         self.write('CODING_STANDARDS.md', STANDARDS)
         self.write('Box.Tests/Tests.cs', CS)
         self.write('modbench/src/box/test/box.test.ts', TS)
+        self.write('modbench/src/test/rule.test.ts', RULES)
         self.write('scripts/tests/test_box.py', PY)
         self.commit('base')
         self.git('checkout', '-q', '-b', 'branch')
@@ -76,6 +82,7 @@ class Repo(unittest.TestCase):
         self.write('Box.Tests/Tests.cs', '[Fact]\npublic void Kept() { }\n')
         self.write('modbench/src/box/test/box.test.ts', "it('kept', () => {});\nonWindows.it('kept on windows', () => {});\n")
         self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
+        (self.root / 'modbench/src/test/rule.test.ts').unlink()
 
     def main(self) -> tuple[int, str]:
         printed = io.StringIO()
@@ -90,8 +97,8 @@ class Deleted(Repo):
         self.commit('delete')
         self.assertEqual(cdt.problems(self.root, 'main'), [
             f"{name}: deleted, and no trailer names its survivor: {cdt.FORM}"
-            for name in ('Removed_custom', 'Removed_fact', 'Removed_theory', 'posix only', 'rows %s', "says the editor's name",
-                         'skipped', 'templated', 'test_removed', 'when ready', 'windows unless root')])
+            for name in ('Removed_custom', 'Removed_fact', 'Removed_theory', 'a failing case', 'a valid case', 'posix only', 'rows %s',
+                         "says the editor's name", 'skipped', 'templated', 'test_removed', 'windows unless root')])
 
     def test_a_test_moved_to_another_file_or_added_and_deleted_on_the_branch_is_not_deleted(self) -> None:
         self.write('Other.Tests/Tests.cs', '[Fact]\npublic void Added() { }\n')
@@ -118,7 +125,7 @@ class Trailer(Repo):
                     'Deleted-test: skipped\nDeleted-test: test_kept => test_gone')
         self.commit("name the rest from a later commit\n\nDeleted-test: templated => kept\n"
                     "Deleted-test: says the editor's name => test_kept\nDeleted-test: posix only => kept on windows\n"
-                    "Deleted-test: windows unless root => kept\nDeleted-test: when ready => kept\nCo-Authored-By: t <t@t>")
+                    "Deleted-test: windows unless root => kept\nDeleted-test: a valid case => kept\nDeleted-test: a failing case => kept\nCo-Authored-By: t <t@t>")
         self.assertEqual(cdt.problems(self.root, 'main'), [
             "Deleted-test: skipped: reads 'Deleted-test: <deleted> => <survivor>' or 'Deleted-test: <deleted> => mark: <mark>'",
             'Removed_fact => test_gone: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
@@ -143,7 +150,7 @@ class Main(Repo):
         self.keep_only_the_kept_tests()
         self.commit('delete')
         status, printed = self.main()
-        self.assertEqual((status, printed.splitlines()[-1]), (1, '--- 11 FINDINGS ON DELETED TESTS ---'))
+        self.assertEqual((status, printed.splitlines()[-1]), (1, '--- 12 FINDINGS ON DELETED TESTS ---'))
 
     def test_it_passes_a_branch_that_deletes_nothing(self) -> None:
         self.assertEqual(self.main(), (0, '--- 0 FINDINGS ON DELETED TESTS ---\n'))

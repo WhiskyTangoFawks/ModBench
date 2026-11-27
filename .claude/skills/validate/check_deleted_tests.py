@@ -27,10 +27,13 @@ MARK_WORDS = re.compile(r'^- ([^:.→]+)', re.MULTILINE)
 STRING = r'''(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`)'''
 CS_ATTRIBUTE = re.compile(r'\[\w*(?:Fact|Theory)\b')
 CS_METHOD = re.compile(r'^\s*public\b[^\n(=]*?(?P<name>\w+)\s*(?:<[^>\n]*>)?\s*\(', re.MULTILINE)
-# `it` also hangs off a platform helper, as onPosix.it; a `.test(` on any other receiver is a RegExp's.
+# A `.test(` on a receiver is a RegExp's, and a test file calls one with a string literal.
 TS_TEST = r'(?<![\w.$])(?:(?:[A-Za-z_$][\w$]*\.)?it|test)'
-TS_TITLE = re.compile(TS_TEST + r'(?:\.(?:only|skip|todo|concurrent|fails|sequential))*\s*\(\s*' + STRING
-                      + r'|' + TS_TEST + r'(?:\.\w+)*\.(?:each|for|skipIf|runIf)\b.*?\)\s*\(\s*' + STRING, re.DOTALL)
+TS_TITLE = re.compile(TS_TEST + r'(?:\.(?:only|skip|todo|concurrent|fails))*\s*\(\s*' + STRING
+                      + r'|' + TS_TEST + r'\.(?:each|skipIf)\b.*?\)\s*\(\s*' + STRING, re.DOTALL)
+# ESLint's RuleTester registers each case as a test titled by its name (src/test/ruleTester.ts).
+RULE_CASE = re.compile(r'\bname:\s*' + STRING)
+CASE_HELPER = re.compile(r'\bconst\s+(\w+)\s*=\s*\(\s*name\s*:')
 PY_METHOD = re.compile(r'^\s*(?:async\s+)?def\s+(test_\w+)\s*\(', re.MULTILINE)
 ESCAPE = re.compile(r'\\(.)')
 
@@ -41,8 +44,12 @@ def cs_names(text: str) -> list[str]:
 
 
 def ts_names(text: str) -> list[str]:
-    return [ESCAPE.sub(r'\1', next(group for group in title.groups() if group is not None))
-            for title in TS_TITLE.finditer(text)]
+    titles = [*TS_TITLE.finditer(text)]
+    if 'RuleTester' in text:
+        titles += RULE_CASE.finditer(text)
+        titles += (case for helper in CASE_HELPER.findall(text)
+                   for case in re.finditer(rf'(?<![\w.$]){helper}\(\s*{STRING}', text))
+    return [ESCAPE.sub(r'\1', next(group for group in title.groups() if group is not None)) for title in titles]
 
 
 READERS: tuple[tuple[re.Pattern[str], Callable[[str], list[str]]], ...] = (
