@@ -41,17 +41,7 @@ public sealed class ForeignIndexHolder : IDisposable
         psi.ArgumentList.Add(NativeLibrary());
         psi.ArgumentList.Add(indexPath);
         var process = Process.Start(psi) ?? throw new InvalidOperationException("Expected python3 to start a new process.");
-        var answer = Task.Run(process.StandardOutput.ReadLine);
-        try
-        {
-            Waits.Signalled(answer.Wait, "the foreign holder's answer", TimeSpan.FromSeconds(30));
-        }
-        catch (TimeoutException)
-        {
-            process.Kill();
-            throw;
-        }
-        var line = answer.GetAwaiter().GetResult();
+        var line = AnswerOf(process);
         if (line != "held")
         {
             process.Kill();
@@ -59,6 +49,21 @@ public sealed class ForeignIndexHolder : IDisposable
             throw new InvalidOperationException($"The foreign holder could not open {indexPath}: {line} {stderr}");
         }
         return new ForeignIndexHolder(process);
+    }
+
+    // A python that neither answers nor exits (a wedged native load) fails the test with its stderr.
+    private static string? AnswerOf(Process process)
+    {
+        var answer = Task.Run(process.StandardOutput.ReadLine);
+        try
+        {
+            Waits.Signalled(answer.Wait, "the foreign holder's answer", TimeSpan.FromSeconds(30));
+        }
+        catch (TimeoutException late)
+        {
+            return late.Message;
+        }
+        return answer.GetAwaiter().GetResult();
     }
 
     public void Dispose()

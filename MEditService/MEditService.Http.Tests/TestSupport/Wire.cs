@@ -324,8 +324,7 @@ internal static class Wire
         string? currentKind = null;
         while (true)
         {
-            var line = await reader.ReadLineAsync();
-            if (line is null) continue;
+            var line = await reader.ReadLineAsync() ?? throw new EndOfStreamException($"The stream ended before its {anchorKind} frame.");
             if (line.StartsWith("event: ", StringComparison.Ordinal))
             {
                 currentKind = line["event: ".Length..];

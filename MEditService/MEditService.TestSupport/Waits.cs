@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace MEditService.TestSupport;
 
 /// <summary>A test waits on a value, never on real time. No timed wait here answers false: a window a test
-/// waits out is a Task.Delay or Thread.Sleep, where check_test_waits.py names it.</summary>
+/// waits out is a line check_test_waits.py names.</summary>
 public static class Waits
 {
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
@@ -35,8 +35,8 @@ public static class Waits
         throw new TimeoutException($"Never read a value the condition holds for; the longest read took {longest}.");
     }
 
-    /// <summary>A blocking wait on a signal, such as a semaphore's <c>Wait</c> or a handle's <c>WaitOne</c>,
-    /// that throws once its patience passes.</summary>
+    /// <summary>Takes a timed wait that answers false, such as a semaphore's <c>Wait</c>, a handle's <c>WaitOne</c>
+    /// or a task's <c>Wait</c>.</summary>
     public static void Signalled(Func<TimeSpan, bool> wait, string what, TimeSpan? patience = null)
     {
         if (!wait(patience ?? Patience)) throw new TimeoutException($"Never reached {what}.");

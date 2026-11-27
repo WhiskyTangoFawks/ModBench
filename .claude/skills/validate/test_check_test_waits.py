@@ -23,7 +23,8 @@ class Waits(unittest.TestCase):
                            (BACKEND_TEST, 'Assert.False(process.WaitForExit(500));'),
                            (BACKEND_TEST, 'Assert.True(released.Wait(TimeSpan.FromSeconds(5)));'),
                            (BACKEND_TEST, 'Assert.True(token.WaitHandle.WaitOne(Generous));'),
-                           (BACKEND_TEST, 'var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.Result : null;')):
+                           (BACKEND_TEST, 'var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.Result : null;'),
+                           (BACKEND_TEST, 'Assert.True(released.Wait(CancelBound));')):
             with self.subTest(path=path, line=line):
                 self.assertEqual(ctw.waits(path, f'class T\n{{\n    {line}\n}}'), [ctw.Wait(path, 3, line)])
 
@@ -35,6 +36,11 @@ class Waits(unittest.TestCase):
                            (BACKEND_TEST, 'process.WaitForExit();'),
                            (BACKEND_TEST, 'First.Wait(_abandoned.Token);'),
                            (BACKEND_TEST, 'Assert.True(entered.Wait(0));'),
+                           (BACKEND_TEST, 'Thread.Sleep(0);'),
+                           (BACKEND_TEST, 'await Task.Delay(TimeSpan.Zero);'),
+                           (BACKEND_TEST, 'using var held = new CancellationTokenSource(Timeout.InfiniteTimeSpan);'),
+                           (BACKEND_TEST, 'parked.Wait(cancel);'),
+                           (BACKEND_TEST, 'parked.Wait(CancellationToken.None);'),
                            (BACKEND_TEST, 'Waits.Signalled(released.Wait, "the release");'),
                            (ALLOWED_PATH, ALLOWED_LINE)):
             with self.subTest(path=path, line=line):

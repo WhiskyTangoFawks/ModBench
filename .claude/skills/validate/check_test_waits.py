@@ -24,12 +24,12 @@ class Wait:
     text: str
 
 
-NO_TIME = r'(?!\s*(?:Timeout\.Infinite\w*\b|TimeSpan\.Zero\b|0\s*[,)]))'
-DURATION = NO_TIME + r'\s*[^\s)]'
-NOT_A_TOKEN = r'(?!\s*[\w.]*(?:[Tt]oken|[Cc]ancel\w*)\s*\))'
+NOT_ZERO_OR_INFINITE = r'(?!\s*(?:Timeout\.Infinite\w*\b|TimeSpan\.Zero\b|0\s*[,)]))'
+DURATION = NOT_ZERO_OR_INFINITE + r'\s*[^\s)]'
+NOT_A_TOKEN = r'(?!\s*(?:[\w.]*[Tt]oken|cancel\w*|ct|CancellationToken\.None)\s*\))'
 SCANS = (
     Scan(re.compile(r'(?:^|/)MEditService/MEditService\.[\w.]*Test[\w.]*/.+\.cs$'),
-         re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\(' + NO_TIME
+         re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\(' + NOT_ZERO_OR_INFINITE
                     + r'|\bnew CancellationTokenSource\(' + DURATION
                     + r'|\.(?:CancelAfter|WaitForExit)\(' + DURATION
                     + r'|\.Wait(?:One)?\(' + NOT_A_TOKEN + DURATION)),

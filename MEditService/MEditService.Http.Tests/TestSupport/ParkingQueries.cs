@@ -37,7 +37,7 @@ public class ParkingQueries : DispatchProxy
             var cancel = (CancellationToken)args.Require()[1].Require();
             _parked.Require().TrySetResult(cancel);
             Waits.Signalled(cancel.WaitHandle.WaitOne, "the parked read's cancellation", Patience);
-            cancel.ThrowIfCancellationRequested();
+            throw new OperationCanceledException(cancel);
         }
         try
         {

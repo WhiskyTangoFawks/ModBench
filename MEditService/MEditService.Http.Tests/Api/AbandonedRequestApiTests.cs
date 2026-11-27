@@ -21,7 +21,7 @@ public sealed class AbandonedRequestApiTests : HostedTests
 
         await left.CancelAsync();
 
-        Waits.Signalled(token.WaitHandle.WaitOne, "the read's token cancelled once its caller left", Generous);
+        Waits.Signalled(token.WaitHandle.WaitOne, "the read's cancellation once its caller left", Generous);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
     }
 }
