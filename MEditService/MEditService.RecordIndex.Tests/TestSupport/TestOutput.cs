@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -87,6 +88,15 @@ public sealed class TestOutputFramework : SchemaWarmedTestFramework
 {
     public TestOutputFramework(IMessageSink messageSink) : base(messageSink) =>
         Log.Logger = new LoggerConfiguration().MinimumLevel.Warning().WriteTo.Sink(TestOutput.SerilogWarnings).CreateLogger();
+
+    /// <summary>The record index's first reconcile and read cost a second once per process too.</summary>
+    protected override void Warm()
+    {
+        base.Warm();
+        using var fixture = new PluginFixtureBuilder("warm-up").WithPlugin("WarmUp.esp", mod => mod.Npcs.AddNew("WarmUp")).Build();
+        using var index = Indexes.Reconciled(fixture);
+        _ = index.Queries.GetRecords(types: null, plugin: null, search: null, limit: 1, offset: 0);
+    }
 
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName) => new Executor(base.CreateExecutor(assemblyName));
 

@@ -4,7 +4,7 @@ name."""
 import json
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import NamedTuple
 
@@ -18,6 +18,7 @@ UNITTEST_DURATION = re.compile(r'^(\d+\.\d+)s +(\S.*)$')
 MOCHA_PENDING_SUMMARY = re.compile(r'^\s+\d+ pending$', re.MULTILINE)
 MOCHA_PENDING_TEST = re.compile(r'^\s+- (.+)$', re.MULTILINE)
 MOCHA_PASSED = re.compile(r'^\s+[✔√] (.+) \((\d+)ms\)$', re.MULTILINE)
+VITEST_SEPARATOR = ' > '
 FRONTEND_BOX = re.compile(r'.*/modbench/(?:src/([^/]+)/|([^/]+)/)')
 
 
@@ -29,26 +30,20 @@ class Result(NamedTuple):
 
 
 def in_trx(text: str) -> list[Result]:
-    """Time runs from the result's start or the assembly's first result, whichever is later: the
-    warm-up blocks every thread. So the first result is charged nothing, and fixture setup is in none."""
+    """Each result is charged its whole duration: a test process pays its warm-up before its first test starts."""
     run = ET.fromstring(text)
-    elements = list(run.iterfind('.//t:UnitTestResult', TRX))
     projects = {test.attrib['id']: PureWindowsPath(next(test.iterfind('t:TestMethod', TRX)).attrib['codeBase']).stem
                 for test in run.iterfind('.//t:UnitTest', TRX)}
-    ends = [datetime.fromisoformat(element.attrib['endTime']) if 'endTime' in element.attrib else None
-            for element in elements]
-    warmed = min((end for end in ends if end), default=None)
 
-    def seconds(result: ET.Element, end: datetime | None) -> float | None:
-        if end is None or warmed is None:
+    def seconds(result: ET.Element) -> float | None:
+        if 'endTime' not in result.attrib:
             return None
         hours, minutes, secs = result.get('duration', '0:0:0').split(':')
-        start = end - timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs))
-        return (end - max(start, warmed)).total_seconds()
+        return timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs)).total_seconds()
 
     return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
-                   seconds(result, end), projects[result.attrib['testId']])
-            for result, end in zip(elements, ends)]
+                   seconds(result), projects[result.attrib['testId']])
+            for result in run.iterfind('.//t:UnitTestResult', TRX)]
 
 
 def frontend_box(path: str) -> str:
@@ -60,7 +55,7 @@ def frontend_box(path: str) -> str:
 
 def in_vitest(text: str) -> list[Result]:
     """A skipped test has no duration. Vitest times a file's imports apart from its tests."""
-    return [Result(f'{Path(file["name"]).name} > {test["fullName"]}',
+    return [Result(f'{Path(file["name"]).name}{VITEST_SEPARATOR}{test["fullName"]}',
                    SKIPPED if test['status'] in VITEST_SKIPPED else RAN,
                    test['duration'] / 1000 if 'duration' in test else None, frontend_box(file['name']))
             for file in json.loads(text)['testResults'] for test in file['assertionResults']]
@@ -94,14 +89,22 @@ def in_mocha(text: str, box: str) -> list[Result]:
             + [Result(name, RAN, int(ms) / 1000, box) for name, ms in MOCHA_PASSED.findall(text)])
 
 
-READERS = {'.trx': lambda text, _: in_trx(text), '.json': lambda text, _: in_vitest(text),
-           '.unittest': in_unittest, '.mocha': in_mocha}
+TRX_REPORT, VITEST_REPORT, UNITTEST_REPORT, MOCHA_REPORT = '.trx', '.json', '.unittest', '.mocha'
+READERS = {TRX_REPORT: lambda text, _: in_trx(text), VITEST_REPORT: lambda text, _: in_vitest(text),
+           UNITTEST_REPORT: in_unittest, MOCHA_REPORT: in_mocha}
+
+
+def by_kind(directory: Path) -> dict[str, list[Result]]:
+    """Every result of every report below the folder, which must exist, by its report's suffix. A log is UTF-8,
+    with or without the byte order mark that PowerShell's Add-Content writes."""
+    if not directory.is_dir():
+        raise SystemExit(f'No reports folder {directory}.')
+    kinds: dict[str, list[Result]] = {}
+    for report in sorted(directory.rglob('*')):
+        if report.is_file() and report.suffix in READERS:
+            kinds.setdefault(report.suffix, []).extend(READERS[report.suffix](report.read_text(encoding='utf-8-sig'), report.stem))
+    return kinds
 
 
 def results(directory: Path) -> list[Result]:
-    """Every result of every report below the folder, which must exist. A log is UTF-8, with or
-    without the byte order mark that PowerShell's Add-Content writes."""
-    if not directory.is_dir():
-        raise SystemExit(f'No reports folder {directory}.')
-    return [result for report in sorted(directory.rglob('*')) if report.is_file() and report.suffix in READERS
-            for result in READERS[report.suffix](report.read_text(encoding='utf-8-sig'), report.stem)]
+    return [result for kind in by_kind(directory).values() for result in kind]
