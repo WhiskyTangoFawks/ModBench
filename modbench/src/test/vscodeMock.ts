@@ -173,3 +173,11 @@ export class FakeDiagnosticCollection {
     return [...this.entries.values()].map((e): [FakeUri, FakeDiagnostics] => [e.uri, e.diagnostics])[Symbol.iterator]();
   }
 }
+
+export class Disposable {
+  constructor(readonly dispose: () => void) {}
+  static from(...all: { dispose: () => unknown }[]): Disposable { return new Disposable(() => { for (const each of all) each.dispose(); }); }
+}
+
+export const CodeActionKind = { QuickFix: 'quickfix' };
+export const StatusBarAlignment = { Left: 1, Right: 2 };

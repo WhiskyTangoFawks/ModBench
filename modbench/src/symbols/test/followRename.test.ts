@@ -1,32 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Uri } from '../../test/vscodeMock';
 
-type FilesRenamed = { files: { oldUri: { fsPath: string; scheme: string }; newUri: { fsPath: string } }[] };
-type RenameListener = (event: FilesRenamed) => void;
-type WillRenameListener = (event: FilesRenamed & { waitUntil(thenable: Promise<unknown>): void }) => void;
-const renameListeners = vi.hoisted(() => new Set<RenameListener>());
-const willRenameListeners = vi.hoisted(() => new Set<WillRenameListener>());
-const PARTICIPANTS_TIMEOUT_MS = vi.hoisted(() => 1_000);
-vi.mock('vscode', () => ({
-  workspace: {
-    textDocuments: [],
-    onDidRenameFiles: (listener: RenameListener) => { renameListeners.add(listener); return { dispose: () => { renameListeners.delete(listener); } }; },
-    onWillRenameFiles: (listener: WillRenameListener) => { willRenameListeners.add(listener); return { dispose: () => { willRenameListeners.delete(listener); } }; },
-    getConfiguration: (section: string) => ({
-      get: (key: string, fallback: number) => (section === 'files' && key === 'participants.timeout' ? PARTICIPANTS_TIMEOUT_MS : fallback),
-    }),
-  },
-  commands: { registerCommand: () => ({ dispose: () => undefined }) },
-  Disposable: { from: (...disposables: { dispose(): void }[]) => ({ dispose: () => { for (const disposable of disposables) disposable.dispose(); } }) },
-}));
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import { followRenames, registerFollowRename, type FileRename } from '../followRename';
+import { host, Uri } from './vscodeHost';
+import { followRenames, registerFollowRename } from '..';
 import type { RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
 import type { ChangeResult } from '../../ports/changeResult';
 import type { RenameEditing } from '../../modCommands/renameEntry';
 import type { FileChanges } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
+
+type FileRename = Parameters<ReturnType<typeof followRenames>>[0][number];
+
+const PARTICIPANTS_TIMEOUT_MS = 60_000;
 
 const RENAME: FileRename = { from: '/mods/Patch Mod/Patch.esp', to: '/mods/Patch Mod/Renamed.esp' };
 const OTHER_RENAME: FileRename = { from: '/mods/Base', to: '/mods/Renamed Base' };
@@ -216,12 +203,12 @@ describe('whether VS Code renamed what a rename planned for', () => {
   const landingOf = (...renames: FileRename[]): Promise<boolean> => {
     let landed!: Promise<boolean>;
     const registered = registerFollowRename((_renames, landing) => { landed = landing; return { planned: Promise.resolve(), done: Promise.resolve() }; });
-    for (const listener of willRenameListeners) listener({ files: filesOf(renames), waitUntil: () => undefined });
+    host.willRenameFiles({ files: filesOf(renames), waitUntil: () => undefined });
     registered.dispose();
     return landed;
   };
   const heard = (...renames: FileRename[]) => {
-    for (const listener of renameListeners) listener({ files: filesOf(renames) });
+    host.didRenameFiles({ files: filesOf(renames) });
   };
 
   it('answers that it did once VS Code says it renamed each, and stops listening', async () => {
@@ -230,7 +217,7 @@ describe('whether VS Code renamed what a rename planned for', () => {
     heard(RENAME, OTHER_RENAME);
 
     expect(await landed).toBe(true);
-    expect(renameListeners.size).toBe(0);
+    expect(host.renameListeners()).toBe(0);
   });
 
   it('answers that it did not once VS Code\'s participant timeout and the rename after it have passed, when VS Code said it renamed something else', async () => {
@@ -244,6 +231,6 @@ describe('whether VS Code renamed what a rename planned for', () => {
     const before = answer;
     await vi.advanceTimersByTimeAsync(1);
 
-    expect([before, answer, renameListeners.size]).toEqual([undefined, false, 0]);
+    expect([before, answer, host.renameListeners()]).toEqual([undefined, false, 0]);
   });
 });

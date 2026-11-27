@@ -5,13 +5,24 @@ vi.mock('node:fs/promises', async (importOriginal) => (await import('./fileSyste
 
 vi.mock('vscode', async () => {
   const { fakeVscodeModule } = await import('./mo2/fakeVscodeWatcher');
-  const { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri, FakeDiagnosticCollection } = await import('./vscodeMock');
+  const {
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri, FakeDiagnosticCollection, MarkdownString, DataTransferItem,
+    DiagnosticSeverity, Diagnostic, Range, Disposable, CodeActionKind, StatusBarAlignment,
+  } = await import('./vscodeMock');
+  const { FakeInputBox, FakeTreeView } = await import('../drivingLib/test/nameFilterViewHarness');
+  const registered = () => ({ dispose: () => undefined });
   return {
-    ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
-    window: { registerFileDecorationProvider: () => ({ dispose: () => undefined }), registerCustomEditorProvider: () => ({ dispose: () => undefined }) },
-    commands: { registerCommand: () => ({ dispose: () => undefined }) },
-    languages: { createDiagnosticCollection: () => new FakeDiagnosticCollection() },
-    tasks: { registerTaskProvider: () => ({ dispose: () => undefined }) },
+    ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri, MarkdownString, DataTransferItem,
+    DiagnosticSeverity, Diagnostic, Range, Disposable, CodeActionKind, StatusBarAlignment,
+    window: {
+      registerFileDecorationProvider: registered, registerCustomEditorProvider: registered,
+      createTreeView: (_id: string, { treeDataProvider, ...options }: { treeDataProvider: never }) => new FakeTreeView(treeDataProvider, options),
+      createInputBox: () => new FakeInputBox(),
+      createStatusBarItem: () => ({ text: '', show: () => undefined, hide: () => undefined, dispose: () => undefined }),
+    },
+    commands: { registerCommand: registered, executeCommand: () => Promise.resolve() },
+    languages: { createDiagnosticCollection: () => new FakeDiagnosticCollection(), registerCodeLensProvider: registered, registerCodeActionsProvider: registered },
+    tasks: { registerTaskProvider: registered },
   };
 });
 

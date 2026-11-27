@@ -20,8 +20,8 @@ interface NamesNothingDeps {
   instance?: { readonly value: object };
   /** Told whenever what a name resolves to, or what a file names, may have changed: of one plugin's files, or of all. */
   onChanged: (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => { dispose: () => unknown };
-  /** The one bound on requests, and what it holds of mEdit's answers, dropped whenever a file may have changed. */
-  asker: { inTurn: InTurn; forget: (plugin?: PluginAddress) => void };
+  /** The one bound on requests. */
+  asker: { inTurn: InTurn };
 }
 
 const isFile = (document: vscode.TextDocument): boolean => document.uri.scheme === 'file';
@@ -141,6 +141,6 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, i
     }),
     vscode.workspace.onDidOpenTextDocument(open.judge),
     vscode.workspace.onDidChangeTextDocument(({ document }) => { open.judge(document); }),
-    vscode.workspace.onDidCloseTextDocument((document) => { open.forget(document); asker.forget(); mustJudge = true; judgeAll(); }),
+    vscode.workspace.onDidCloseTextDocument((document) => { open.forget(document); mustJudge = true; judgeAll(); }),
   );
 }
