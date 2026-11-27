@@ -36,9 +36,9 @@ export interface PluginFactsFeedDeps {
   publishChangedOutside: (warnings: readonly PluginProblem[], named?: NamedPlugins) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
-  /** The Plugin source unreadable status's other surface, the Problems panel. */
-  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
+  /** The Plugin source unreadable status's other surface, the Problems panel: the errors of the plugins `named`,
+   *  replacing theirs, or of every plugin. */
+  publishSourceUnreadable: (errors: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
@@ -47,6 +47,8 @@ export interface PluginFactsFeedDeps {
   publishSortingInfo: (info: readonly PluginProblem[]) => void;
   /** The sorting rule files' own lines in the Problems panel. */
   publishRuleFiles: (diagnostics: readonly RuleFileDiagnostic[]) => void;
+  /** The Output, where a re-read that threw is told. */
+  log: (message: string) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -201,9 +203,16 @@ export class PluginFactsFeed implements vscode.Disposable {
    *  After a failed read it reads every plugin, as any may be stale. Never supersedes a hand-off. */
   refresh(named?: NamedPlugins): Promise<void> {
     const generation = this.generation;
-    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation));
-    this.refreshing = refreshed.catch(() => undefined);
+    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation))
+      .catch((err: unknown) => { this.refreshThrew(errorMessage(err), generation); });
+    this.refreshing = refreshed;
     return refreshed;
+  }
+
+  // ADR-0019; common.md, Reporting: a later read behind the view that failed.
+  private refreshThrew(reason: string, generation: number): void {
+    this.deps.log(`re-reading mEdit's facts about each plugin threw: ${reason}`);
+    if (generation === this.generation) this.factsFailed(reason);
   }
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {

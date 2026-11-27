@@ -16,7 +16,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { exactPluginAddressKey, pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginPlace, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
-import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
+import { PluginFactsFeed, type PluginFactsClient, type PluginFactsFeedDeps } from './pluginFactsFeed';
 import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
@@ -84,7 +84,7 @@ interface PluginsTreeProviderOptions {
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The Plugin source unreadable status's other surface, the Problems panel, pointing at decompile: of the plugins
    *  `named`, or of all. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
+  publishSourceUnreadable: (errors: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
@@ -97,6 +97,8 @@ interface PluginsTreeProviderOptions {
   modStatuses: LastModStatuses;
   /** Says why a drop cannot land. */
   reporter: Reporter;
+  /** The Output. */
+  log: PluginFactsFeedDeps['log'];
 }
 
 
@@ -194,6 +196,7 @@ export class PluginsTreeProvider
       publishSortingWarnings: options.publishSortingWarnings,
       publishSortingInfo: options.publishSortingInfo,
       publishRuleFiles: options.publishRuleFiles,
+      log: options.log,
       rules: () => this.rules,
       fileFacts: (reads, trusted) => {
         const read = () => readFileFacts(reads, options.fileReads, {
@@ -213,8 +216,9 @@ export class PluginsTreeProvider
       this.readFailed = false;
       const rules = this.readRules(this.instanceValue.sortingRuleFiles);
       const rewritten = told.disk || told.named.some((path) => this.readAt().has(pathKey(path)));
-      if (rules !== this.rules || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
+      const rulesChanged = rules !== this.rules;
       this.rules = rules;
+      if (rulesChanged || rewritten || this.judgedFilesChanged(before, this.instanceValue)) void this.facts.rejudge();
       if (rowsChanged(before, this.instanceValue)) this.cache = undefined;
       else if (!recovered) return;
       this._onDidChangeTreeData.fire(undefined);

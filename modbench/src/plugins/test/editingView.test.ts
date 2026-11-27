@@ -1,120 +1,111 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('vscode', () => import('./vscodeHost'));
+
+import { clientHoldingNothing, pluginsOver } from './pluginsOver';
 import type { PutLoadOrderResult } from '../../instanceCommands/loadOrder';
-import { reportSyncFailures } from '../../drivingLib/syncFailureReport';
-import { createReconcileNarrator } from '../reconcileNarrator';
-import { editingView } from '../editingView';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import type { PluginMetadata } from '../../client';
+import { holdsLoadOrder } from '../../client/test/says';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 type Sent = Extract<PutLoadOrderResult, { sent: true }>;
 type Outcome = Sent['outcome'];
 
-const HEARD = { progress: { done: 1, total: 1, version: 7, settled: true }, indexed: [], failures: [] };
 const SNAPSHOT: Sent['snapshot'] = {
   plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [],
   dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
 };
 
 const sent = (outcome: Outcome): PutLoadOrderResult => ({ sent: true, snapshot: SNAPSHOT, outcome });
-
 const refused = (refusal: string): PutLoadOrderResult => ({ sent: false, refusal });
+const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function wired() {
-  const handed: unknown[] = [];
-  const said: string[] = [];
-  const putReports: string[] = [];
-  const logged: string[] = [];
-  const revealed = { count: 0 };
-  const reconciling = createReconcileNarrator({
-    showProgress: () => undefined, applyIndexed: () => undefined, applyRefused: () => undefined,
-    settle: (heard) => new Promise((resolve) => { setTimeout(() => { handed.push(heard); resolve(); }, 0); }), log: () => undefined,
-  });
-  const narrator = { ...reconciling, hearNow: () => { reconciling.hear(HEARD); return Promise.resolve(); } };
-  const progress = { while: (work: () => Promise<void>) => work(), say: (message: string) => { said.push(message); } };
-  const log = { info: (message: string) => { logged.push(message); } };
-  const lines: string[] = [];
-  const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => lines.push(line));
-  const view = editingView({
-    narrator, progress, log, loadOrderPut,
-    reporterFor: (tag) => ({
-      ...recordingReporter(),
-      report: (_severity, message) => { putReports.push(`${tag}: ${message}`); },
-    }),
-    revealLog: () => { revealed.count++; },
-  });
-  return { view, handed, said, putReports, logged, revealed, loadOrderPut, lines };
+function editing() {
+  const made = pluginsOver({ value: instanceValueFixture({ gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' } }) });
+  return { ...made, onPut: made.shown.editingInPluginsView.onPut, putReports: () => made.reporter('loadOrder').reports.map(({ message }) => message) };
 }
 
 describe('the entry shown', () => {
   it('runs under the progress, with the log revealed and the launch said', async () => {
-    const { view, said, revealed } = wired();
-    const ran: string[] = [];
+    const { shown, view, revealed, output } = editing();
+    const ran: unknown[] = [];
 
-    await view.around(() => { ran.push(`after ${said.join()} and ${revealed.count} reveal`); return Promise.resolve(); });
+    await shown.editingInPluginsView.around(() => { ran.push([view().message, revealed(), output]); return Promise.resolve(); });
 
-    expect(ran).toEqual(['after Starting backend… and 1 reveal']);
+    expect(ran).toEqual([['Starting backend…', 1, ['[toolbox] entering editing: starting backend']]]);
   });
 });
 
 describe('a load order the loader refused, shown', () => {
   it("says the refusal in the Plugins view's message line and in the Output", async () => {
-    const { view, loadOrderPut, lines } = wired();
+    const { onPut, view, output } = editing();
 
-    await view.onPut(refused('a.esp is provided by the mod ModA, which has no mod folder'));
+    await onPut(refused('a.esp is provided by the mod ModA, which has no mod folder'));
 
-    expect(loadOrderPut.message()).toBe('The load order is not sent: a.esp is provided by the mod ModA, which has no mod folder.');
-    expect(lines).toEqual(['put load order failed: a.esp is provided by the mod ModA, which has no mod folder']);
+    expect(view().message).toBe('The load order is not sent: a.esp is provided by the mod ModA, which has no mod folder.');
+    expect(output).toEqual(['[loadOrder] put load order failed: a.esp is provided by the mod ModA, which has no mod folder']);
   });
 
   it('clears the message line once a snapshot is sent', async () => {
-    const { view, loadOrderPut } = wired();
-    await view.onPut(refused('a.esp has no mod folder'));
+    const { onPut, view } = editing();
+    await onPut(refused('a.esp has no mod folder'));
 
-    await view.onPut(sent({ outcome: 'abandoned' }));
+    await onPut(sent({ outcome: 'abandoned' }));
 
-    expect(loadOrderPut.message()).toBeUndefined();
+    expect(view().message).toBeUndefined();
   });
 
   it('leaves the line alone for a game folder not found, which the views already tell', async () => {
-    const { view, loadOrderPut } = wired();
-    await view.onPut(refused('a.esp has no mod folder'));
+    const { onPut, view } = editing();
+    await onPut(refused('a.esp has no mod folder'));
 
-    await view.onPut({ sent: false });
+    await onPut({ sent: false });
 
-    expect(loadOrderPut.message()).toBe('The load order is not sent: a.esp has no mod folder.');
+    expect(view().message).toBe('The load order is not sent: a.esp has no mod folder.');
   });
 });
 
 describe("a put's own outcome shown", () => {
   it("reports a failed send's message verbatim, as the put's", async () => {
-    const { view, putReports, handed } = wired();
+    const { onPut, putReports } = editing();
 
-    await view.onPut(sent({ outcome: 'failed', message: 'Failed to send the load order — bad dir' }));
+    await onPut(sent({ outcome: 'failed', message: 'Failed to send the load order — bad dir' }));
 
-    expect([putReports, handed]).toEqual([['loadOrder: Failed to send the load order — bad dir'], []]);
+    expect(putReports()).toEqual(['Failed to send the load order — bad dir']);
   });
 
   it('says nothing for an abandoned send, which owns no view', async () => {
-    const { view, putReports, handed } = wired();
+    const { onPut, putReports, output } = editing();
 
-    await view.onPut(sent({ outcome: 'abandoned' }));
+    await onPut(sent({ outcome: 'abandoned' }));
 
-    expect([putReports, handed]).toEqual([[], []]);
+    expect([putReports(), output]).toEqual([[], ['[toolbox] handed mEdit the load order snapshot (0 plugins, 0 active)']]);
   });
 
   it("hands an applied send's status to the views and is done once they hold it", async () => {
-    const { view, putReports, handed } = wired();
+    const client = clientHoldingNothing();
+    let answer!: (plugins: PluginMetadata[]) => void;
+    const made = pluginsOver({ client });
+    const held = new Promise<PluginMetadata[]>((resolve) => { answer = resolve; });
+    client.setQueryAnswerOnce('getPlugins', held);
+    client.setQueryAnswerOnce('getPlugins', held);
+    holdsLoadOrder(client, { version: 7, total: 1 });
+    let done = false;
 
-    await view.onPut(sent({ outcome: 'applied', version: 7 }));
+    const putting = made.shown.editingInPluginsView.onPut(sent({ outcome: 'applied', version: 7 })).then(() => { done = true; });
+    await settle();
+    const before = done;
+    answer([]);
+    await putting;
 
-    expect(handed).toEqual([HEARD]);
-    expect(putReports).toEqual([]);
+    expect([before, made.plugins.standing.mEdit(), made.reporter('loadOrder').reports]).toEqual([false, [], []]);
   });
 
   it('shows nothing when no snapshot was sent', async () => {
-    const { view, putReports, handed, logged } = wired();
+    const { onPut, putReports, output, view } = editing();
 
-    await view.onPut({ sent: false });
+    await onPut({ sent: false });
 
-    expect([putReports, handed, logged]).toEqual([[], [], []]);
+    expect([putReports(), output, view().message]).toEqual([[], [], undefined]);
   });
 });

@@ -1,22 +1,27 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon }));
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import {
-  readReferencedBy,
-  referencedByCopyValue,
-} from '../referrerTree';
+import { document, host, TreeItem, TreeItemCollapsibleState } from './vscodeHost';
+import { symbolsOver } from './symbolsOver';
+import { mEditNames, spelledName } from './mEditNames';
+import { referencedByCopyValue } from '..';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
-type Node = ReturnType<Awaited<ReturnType<typeof readReferencedBy>>['provider']['getChildren']>[number];
-const isHolder = (node: Node): node is Extract<Node, { plugin: unknown }> => 'plugin' in node;
+interface Row extends TreeItem {
+  id?: string; description?: string; tooltip?: string; iconPath?: unknown; contextValue?: string; argument?: unknown;
+  command?: { command: string; arguments?: unknown[] }; plugin?: { name: string; origin: string };
+}
+const rowsIn = (nodes: unknown): Row[] => (Array.isArray(nodes) ? nodes.filter((node): node is Row => node instanceof TreeItem) : []);
+const isHolder = (node: Row): node is Row & { plugin: { name: string; origin: string } } => node.plugin !== undefined;
 
 const TARGET = '000001:Fallout4.esm';
+const TARGET_FILE = '/source/Fallout4.esm/plugin-source/Fallout4.esm/Target.json';
+const TARGET_TEXT = `{ "FormKey": "${TARGET}" }`;
 
 function reference(overrides: Partial<ReferenceResult> & { formKey: string }): ReferenceResult {
   return {
@@ -25,17 +30,30 @@ function reference(overrides: Partial<ReferenceResult> & { formKey: string }): R
   };
 }
 
-function indexed(references: ReferenceResult[]): InMemoryMEditClient {
-  const client = new InMemoryMEditClient();
+const indexed = (references: ReferenceResult[]) => (client: InMemoryMEditClient) => {
   client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', references);
-  client.setQueryAnswer('getPlugins', []);
   holdsLoadOrder(client);
-  return client;
-}
+};
 
-async function listOf(client: InMemoryMEditClient, list = 'a list') {
-  const read = await readReferencedBy(client, TARGET, list);
-  return { ...read, referrers: read.provider.getChildren() };
+async function listOf(arrange: (client: InMemoryMEditClient) => void) {
+  const made = symbolsOver({
+    focusedRecord: () => TARGET,
+    names: mEditNames((text) => (text === TARGET_TEXT ? [spelledName('Record', text, `"${TARGET}"`, { record: TARGET, fieldPath: 'FormKey', value: TARGET })] : [])),
+    arrange: (client) => {
+      client.setQueryAnswer('getRecordOwners', [{ name: 'Fallout4.esm', origin: 'Fallout4.esm' }]);
+      client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: TARGET_FILE });
+      client.setQueryAnswer('getComparison', null);
+      host.holds([document(TARGET_FILE, TARGET_TEXT)]);
+      arrange(client);
+    },
+  });
+  const asked = async () => {
+    await host.run('modbench.symbol.referencedBy');
+    const input = present(host.referencesShown.at(-1), 'the list shown');
+    const read = await input.resolve();
+    return { message: read.message, children: (row?: Row) => rowsIn(read.provider.getChildren(row)), referrers: rowsIn(read.provider.getChildren()), again: () => input.resolve() };
+  };
+  return { ...made, ...await asked(), askedAgain: asked };
 }
 
 const referrersOver = async (references: ReferenceResult[]) => (await listOf(indexed(references))).referrers;
@@ -52,40 +70,42 @@ describe('the Referenced By list — states', () => {
   });
 
   it('says the list may be incomplete while mEdit is still indexing plugins, beside none found', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', []);
-    client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', []);
-    client.setStatus('running');
-    client.answerSignals(() => new Promise<undefined>(() => undefined));
-    void client.signalChange(['/m/A.esp']);
-    expect((await listOf(client)).message).toBe('No references found. mEdit is still indexing plugins: this list may not be complete.');
+    const { client, message, again } = await listOf((held) => {
+      held.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', []);
+      held.setStatus('running');
+      held.answerSignals(() => new Promise<undefined>(() => undefined));
+      void held.signalChange(['/m/A.esp']);
+    });
+    expect(message).toBe('No references found. mEdit is still indexing plugins: this list may not be complete.');
     client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', [reference({ formKey: '000002:Fallout4.esm' })]);
-    expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
+    expect((await again()).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
   });
 
   it('says the list may be incomplete while a change signal is unanswered, though the status holds conflicts computed', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    client.setStatus('running');
-    client.answerSignals(() => new Promise<undefined>(() => undefined));
-    void client.signalChange(['/m/A.esp']);
-    expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
+    const { message } = await listOf((client) => {
+      indexed([reference({ formKey: '000002:Fallout4.esm' })])(client);
+      client.setStatus('running');
+      client.answerSignals(() => new Promise<undefined>(() => undefined));
+      void client.signalChange(['/m/A.esp']);
+    });
+    expect(message).toBe('mEdit is still indexing plugins: this list may not be complete.');
   });
 
   it('shows one error row naming the reason when the read fails', async () => {
-    const client = indexed([]);
-    client.setQueryFailure('getReferencesInActiveOrCompiledPlugins', { failed: 'refused', refusal: 'boom' });
-    const [error, ...rest] = (await readReferencedBy(client, TARGET, 'a list')).provider.getChildren();
+    const { referrers: [error, ...rest] } = await listOf((client) => {
+      indexed([])(client);
+      client.setQueryFailure('getReferencesInActiveOrCompiledPlugins', { failed: 'refused', refusal: 'boom' });
+    });
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
   });
 
   it('is a snapshot of the references in the active and compiled plugins: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const { provider } = await readReferencedBy(client, TARGET, 'a list');
+    const { client, children } = await listOf(indexed([reference({ formKey: '000002:Fallout4.esm' })]));
     changeNamesPlugin(client, { name: '', origin: '' });
-    provider.getChildren();
-    provider.getChildren();
+    children();
+    children();
     expect(client.calls.filter((c) => c.method.startsWith('getReferences'))).toEqual([{ method: 'getReferencesInActiveOrCompiledPlugins', args: [TARGET] }]);
   });
 });
@@ -129,9 +149,8 @@ describe('the Referenced By list — a referrer', () => {
   });
 
   it('shows collapsed, with an identity of its own in each list, whatever record it is about', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const [first] = (await listOf(client, 'one list')).referrers;
-    const [second] = (await listOf(client, 'another list')).referrers;
+    const { referrers: [first], askedAgain } = await listOf(indexed([reference({ formKey: '000002:Fallout4.esm' })]));
+    const [second] = (await askedAgain()).referrers;
     expect([first?.collapsibleState, second?.collapsibleState])
       .toEqual([TreeItemCollapsibleState.Collapsed, TreeItemCollapsibleState.Collapsed]);
     expect(first?.id).not.toBe(second?.id);
@@ -150,8 +169,8 @@ describe('the Referenced By list — a referrer', () => {
 
 describe('the Referenced By list — where a referrer is held', () => {
   async function holdersOver(references: ReferenceResult[]) {
-    const { provider, referrers: [referrer] } = await listOf(indexed(references));
-    return provider.getChildren(present(referrer, 'the referrer')).filter(isHolder);
+    const { children, referrers: [referrer] } = await listOf(indexed(references));
+    return children(present(referrer, 'the referrer')).filter(isHolder);
   }
 
   it('is one row per plugin, in the order mEdit answers, each naming its fields', async () => {
@@ -199,11 +218,12 @@ describe('the Referenced By list — what a plugin copy offers', () => {
   const HOLDS_CHILDREN = [{ type: 'dial', displayName: 'Dialog Topic' }];
 
   async function listedAs(references: ReferenceResult[], children: typeof HOLDS_CHILDREN) {
-    const client = indexed(references);
-    client.setQueryAnswer('getChildRecordTypes', children);
-    client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm'), editablePlugin('E.esp')]);
-    const { provider, referrers: [referrer] } = await listOf(client);
-    return { client, offers: provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue) };
+    const listed = await listOf((client) => {
+      indexed(references)(client);
+      client.setQueryAnswer('getChildRecordTypes', children);
+      client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm'), editablePlugin('E.esp')]);
+    });
+    return { client: listed.client, offers: listed.children(present(listed.referrers[0], 'the referrer')).map((holder) => holder.contextValue) };
   }
 
   it.each([
@@ -226,27 +246,28 @@ describe('the Referenced By list — what a plugin copy offers', () => {
   });
 
   it('offers nothing editable of a plugin mEdit answers cannot be edited', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
-    client.setQueryAnswer('getPlugins', [{ ...editablePlugin('Fallout4.esm'), isImmutable: true }]);
-    const { provider, referrers: [referrer] } = await listOf(client);
-    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
+    const { children, referrers: [referrer] } = await listOf((client) => {
+      indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })])(client);
+      client.setQueryAnswer('getPlugins', [{ ...editablePlugin('Fallout4.esm'), isImmutable: true }]);
+    });
+    expect(children(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
   });
 
   it('offers nothing editable where the plugins cannot be read', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
-    client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'no instance' });
-    const { provider } = await readReferencedBy(client, TARGET, 'a list');
-    const [referrer] = provider.getChildren();
-    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
+    const { children, referrers: [referrer] } = await listOf((client) => {
+      indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })])(client);
+      client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'no instance' });
+    });
+    expect(children(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
   });
 
   it('offers no create where what the record can hold cannot be read', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
-    client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm')]);
-    client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'boom' });
-    const { provider } = await readReferencedBy(client, TARGET, 'a list');
-    const [referrer] = provider.getChildren();
-    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder editable']);
+    const { children, referrers: [referrer] } = await listOf((client) => {
+      indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })])(client);
+      client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm')]);
+      client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'boom' });
+    });
+    expect(children(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder editable']);
   });
 });
 
@@ -269,10 +290,10 @@ describe('Referenced By\'s copy value — the text of the selected rows', () => 
   });
 
   it('copies a row beneath a referrer as the record it holds', async () => {
-    const { provider, referrers: [referrer] } = await listOf(indexed([
+    const { children, referrers: [referrer] } = await listOf(indexed([
       reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' }),
     ]));
-    const [holder] = provider.getChildren(present(referrer, 'the referrer'));
+    const [holder] = children(present(referrer, 'the referrer'));
     expect(copiedFrom([present(holder, 'its plugin copy')])).toBe('TestNPC [000002:Fallout4.esm]');
   });
 

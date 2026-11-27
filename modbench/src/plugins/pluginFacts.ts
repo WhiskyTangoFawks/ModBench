@@ -61,7 +61,7 @@ export type Expansion = { kind: 'records' } | { kind: 'error'; message: string }
 // snapshot's index failed.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'sourceUnreadable', 'changedOutside', 'malformed', 'sortingWarnings']);
+const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'changedOutside', 'malformed', 'sortingWarnings']);
 
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 

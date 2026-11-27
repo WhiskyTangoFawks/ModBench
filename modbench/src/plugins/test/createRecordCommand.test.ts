@@ -1,296 +1,393 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri } from '../../test/vscodeMock';
+import { describe, it, expect, vi } from 'vitest';
 
-interface PickItem { label: string; description?: string }
-type ShowQuickPick = (items: readonly PickItem[]) => Promise<unknown>;
-interface InputBoxOptions { prompt?: string; placeHolder?: string; value?: string; validateInput?: (value: string) => string | undefined }
-type ShowInputBox = (options: InputBoxOptions) => Promise<string | undefined>;
+vi.mock('vscode', () => import('./vscodeHost'));
 
-const { handlers, showQuickPick, showInputBox } = vi.hoisted(() => ({
-  handlers: new Map<string, (...args: unknown[]) => Promise<void>>(),
-  showQuickPick: vi.fn<ShowQuickPick>(),
-  showInputBox: vi.fn<ShowInputBox>(),
-}));
-
-vi.mock('vscode', () => ({
-  commands: {
-    registerCommand: (id: string, handler: (...args: unknown[]) => Promise<void>) => {
-      handlers.set(id, handler);
-      return { dispose: () => {} };
-    },
-  },
-  window: { showQuickPick, showInputBox },
-  TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
-  Uri,
-}));
-
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordSummaryFixture } from '../../client/test/fixtures';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { present } from '../../ports/present';
-import { registerRecordCreateCommand } from '../createRecordCommand';
+import { host, TreeItem } from './vscodeHost';
+import { pluginsIndexedOver } from './pluginsOver';
+import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
-import type { RecordPlace } from '../createdRecordSelection';
-import { PluginNode, type PluginsTreeNode } from '../pluginRows';
-import type { RecordBrowserNode } from '../RecordBrowser';
-import { cellRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
+import { settled } from '../../test/eventually';
+import { present } from '../../ports/present';
+import { isReadFailed } from '../../wire/readFailed';
 
-const PLUGIN_ROW = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
-const EDITABLE = { editable: true };
 const MY_PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
-const NPC = { type: 'npc_', count: 3, displayName: 'Non-Player Character' };
-let NPC_GROUP: RecordBrowserNode;
-let OTHER_GROUP: RecordBrowserNode;
-let RECORD_ROW: RecordBrowserNode;
-let QUEST_ROW: RecordBrowserNode;
-let CELL_ROW: RecordBrowserNode;
-let WORLDSPACE_ROW: RecordBrowserNode;
-
-beforeAll(async () => {
-  NPC_GROUP = await recordGroupRow(NPC, MY_PATCH, EDITABLE);
-  OTHER_GROUP = await recordGroupRow({ type: 'weap', displayName: 'Weapon' }, { name: 'Other.esp', origin: 'ModB' }, EDITABLE);
-  RECORD_ROW = await recordRow(recordSummaryFixture({ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp' }), 'ModA', EDITABLE);
-  QUEST_ROW = await recordRow(recordSummaryFixture({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: 'MQ101' }), 'ModA', EDITABLE, 'qust');
-  CELL_ROW = await cellRow({
-    formKey: '000802:MyPatch.esp', editorId: 'MyCell', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None',
-  }, MY_PATCH, EDITABLE);
-  WORLDSPACE_ROW = await worldspaceRow({ formKey: '000803:MyPatch.esp', hasChildren: false, hasParseFailure: false, workingTreeState: 'None' }, MY_PATCH, EDITABLE);
-  QUEST_ROW.id = 'MQ101';
-  CELL_ROW.id = 'MyCell';
-  WORLDSPACE_ROW.id = '000803:MyPatch.esp';
-});
+const NEW = '000900:MyPatch.esp';
+const OTHER = '000800:MyPatch.esp';
 const QUEST_HOLDS = [
   { type: 'dlbr', displayName: 'Dialog Branch' }, { type: 'dial', displayName: 'Dialog Topic' }, { type: 'scen', displayName: 'Scene' },
 ];
-const CREATABLE = [
-  { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
-];
-const NEW_NPC = { formKey: '000900:MyPatch.esp', moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+const CREATABLE = [{ type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' }];
+const NEW_NPC = { formKey: NEW, moves: [], deletions: [], documents: [{ path: '/source/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+const OPEN_NEW = ['modbench.record.open', { argument: { kind: 'record', formKey: NEW, plugin: MY_PATCH } }];
+const NEW_RECORD = recordSummaryFixture({ formKey: NEW, plugin: 'MyPatch.esp', editorId: 'NewNpc' });
 
-function harness(viewSelection: readonly PluginsTreeNode[] = []) {
-  const client = new InMemoryMEditClient();
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+const rowsChanged = (keys: string[], origin = 'ModA') => [{ plugin: { name: 'MyPatch.esp', origin }, keys }];
+const pluginChanged = (origin = 'ModA') => [{ plugin: { name: 'MyPatch.esp', origin } }];
+
+async function creating({ shown = [NEW_RECORD] } = {}) {
+  const applyWorkspaceChanges = vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve());
+  const refreshSourceControlFor = vi.fn();
+  const made = await pluginsIndexedOver([MY_PATCH, { name: 'MyPatch.esp', origin: 'ModB' }], {
+    sourceEditing: { applyWorkspaceChanges, oneAtATime: (job) => job(), refreshSourceControlFor },
+  });
+  const { client, rows, row } = made;
   client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
   client.setQueryAnswer('getChildRecordTypes', QUEST_HOLDS);
-  const steps: string[] = [];
-  client.setCommandHandler('getCreateChanges', (...args) => {
-    const [plugin, recordType, into] = args;
-    steps.push(`create ${plugin.name} ${plugin.origin} ${recordType}${into === undefined ? '' : ` ${JSON.stringify(into)}`}`);
-    return Promise.resolve(NEW_NPC);
-  });
-  const reporter = recordingReporter();
-  const writing: string[] = [];
-  const source = {
-    applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()),
-    oneAtATime: <T,>(job: () => Promise<T>) => job(),
-    refreshSourceControlFor: vi.fn(),
+  client.setCommandResult('getCreateChanges', NEW_NPC);
+  client.setQueryAnswer('getRecordTypes', [
+    recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), recordTypeCountFixture({ type: 'qust', count: 1, displayName: 'Quest' }),
+    recordTypeCountFixture({ type: 'wrld', count: 1, displayName: 'Worldspace' }),
+  ]);
+  client.setQueryAnswer('getRecords', { items: [
+    recordSummaryFixture({ formKey: OTHER, plugin: 'MyPatch.esp', editorId: 'MQ101' }), ...shown,
+  ], total: 1 + shown.length });
+  client.setQueryAnswer('getContainerChildren', shown.map((record) => ({ ...record, recordType: 'dial', hasContainerChildren: false, isContainer: false })));
+  client.setQueryAnswer('getWorldspaces', [{ formKey: '000803:MyPatch.esp', editorId: 'World', hasParseFailure: false, workingTreeState: 'None', hasChildren: true }]);
+  client.setQueryAnswer('getWorldspaceBlocks', { blocks: [], topCells: [{
+    formKey: '000802:MyPatch.esp', editorId: 'MyCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null,
+    hasParseFailure: false, workingTreeState: 'None',
+  }] });
+  client.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
+  const sole = async (parent: unknown) => present((await rows(parent))[0], 'a child row');
+  const [npcs, quests, worlds] = await rows(row('MyPatch.esp', 'ModA'));
+  const [record] = await rows(npcs);
+  const [quest] = await rows(quests);
+  const worldspace = await sole(worlds);
+  const cell = await sole(worldspace);
+  const [otherNpcs] = await rows(row('MyPatch.esp', 'ModB'));
+  client.calls.length = 0;
+  const view = made.view();
+  return {
+    client, applyWorkspaceChanges, refreshSourceControlFor, reporter: made.reporter('record.create'),
+    rows: { plugin: row('MyPatch.esp', 'ModA'), npcs, record, quests, quest, worldspace, cell, otherNpcs },
+    filters: (text: string) => { made.shown.nameFilter.open(); present(host.inputBox(), 'the name filter').type(text); },
+    run: (...args: unknown[]) => host.run('modbench.record.create', ...args),
+    select: (...selected: unknown[]) => { view.selectRows(selected); },
+    created: () => client.calls.filter(({ method }) => method === 'getCreateChanges').map(({ args }) => args),
+    revealed: () => view.reveals,
+    opened: () => host.executed.filter(([id]) => id === 'modbench.record.open'),
+    pick: (index: number) => { host.picks((labels) => labels[index]); },
+    pickItems: () => host.quickPicks.map(({ items }) => items),
   };
-  registerRecordCreateCommand({
-    client, reporter, source,
-    write: async (command) => {
-      writing.push('opens');
-      await command();
-      writing.push('ends');
-    },
-    createdRecords: {
-      watch: (plugin) => {
-        steps.push(`watch ${plugin.name} ${plugin.origin}`);
-        return {
-          select: (place: RecordPlace<PluginsTreeNode> | undefined, formKey: string) => {
-            const where = place === undefined ? 'nowhere in Plugins' : 'container' in place ? `beneath ${place.container.id ?? ''}` : `in ${place.recordType}`;
-            steps.push(`select ${formKey} ${where}`);
-          },
-          forget: () => { steps.push('forget'); },
-        };
-      },
-    },
-  }, () => viewSelection);
-  const create = present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'");
-  return { client, reporter, steps, writing, create, source };
 }
 
-beforeEach(() => { showQuickPick.mockReset(); showInputBox.mockReset(); });
+const SELECTED = { select: true, focus: true };
 
 describe('modbench.record.create', () => {
-  it('on a group, awaits the new record of its type, then creates it, asking nothing', async () => {
-    const { steps, create } = harness([OTHER_GROUP]);
+  it('on a group, creates the new record of its type asking nothing, then selects its row once a change to its plugin names it, and opens it as a click does', async () => {
+    const { client, run, select, rows, created, revealed, opened } = await creating();
+    select(rows.otherNpcs);
 
-    await create(NPC_GROUP);
+    await run(rows.npcs);
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
 
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'select 000900:MyPatch.esp in npc_']);
+    expect(host.quickPicks).toEqual([]);
+    expect(created()).toEqual([[MY_PATCH, 'npc_', undefined]]);
+    expect(revealed()).toEqual([{ label: 'NewNpc', options: SELECTED }]);
   });
 
   it('on a plugin, picks the record type from the types the game can create, then creates one', async () => {
-    const { steps, create } = harness();
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
+    const { run, rows, created, pick, pickItems } = await creating();
+    pick(0);
 
-    await create(PLUGIN_ROW);
+    await run(rows.plugin);
 
-    expect(showQuickPick.mock.calls[0]?.[0].map((item) => [item.label, item.description])).toEqual([
-      ['Activator', 'acti'], ['Non-Player Character', 'npc_'],
-    ]);
-    expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA acti', 'select 000900:MyPatch.esp in acti']);
+    expect(pickItems()).toEqual([['Activator', 'Non-Player Character']]);
+    expect(created()).toEqual([[MY_PATCH, 'acti', undefined]]);
   });
 
   it('from the palette, creates in the one selected plugin', async () => {
-    const { steps, create } = harness([PLUGIN_ROW]);
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[1]));
+    const { run, select, rows, created, pick } = await creating();
+    select(rows.plugin);
+    pick(1);
 
-    await create();
+    await run();
 
-    expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'select 000900:MyPatch.esp in npc_']);
+    expect(created()).toEqual([[MY_PATCH, 'npc_', undefined]]);
   });
 
-  it.each<[string, () => RecordBrowserNode | PluginNode]>([
-    ['a plugin', () => PLUGIN_ROW],
-    ['a container', () => QUEST_ROW],
-  ])('creates nothing, watches nothing and says nothing when the type pick on %s is left with Esc', async (_row, row) => {
-    const { steps, reporter, create } = harness();
-    showQuickPick.mockResolvedValue(undefined);
+  it.each([
+    ['a plugin', 'plugin'],
+    ['a container', 'quest'],
+  ] as const)('creates nothing and says nothing when the type pick on %s is left with Esc', async (_row, which) => {
+    const { client, run, rows, created, reporter } = await creating();
 
-    await create(row());
+    await run(rows[which]);
+    client.change(rowsChanged([NEW]));
+    await settle();
 
-    expect(steps).toEqual([]);
+    expect([created(), host.executed]).toEqual([[], []]);
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
-  it.each<[string, () => RecordBrowserNode | PluginNode, 'getCreatableRecordTypes' | 'getChildRecordTypes']>([
-    ['a plugin', () => PLUGIN_ROW, 'getCreatableRecordTypes'],
-    ['a container', () => QUEST_ROW, 'getChildRecordTypes'],
-  ])('says why when mEdit cannot name the types %s holds, and creates nothing', async (_row, row, query) => {
-    const { client, steps, reporter, create } = harness();
+  it.each([
+    ['a plugin', 'plugin', 'getCreatableRecordTypes'],
+    ['a container', 'quest', 'getChildRecordTypes'],
+  ] as const)('says why when mEdit cannot name the types %s holds, and creates nothing', async (_row, which, query) => {
+    const { client, run, rows, created, reporter } = await creating();
     client.setQueryFailure(query, { failed: 'refused', refusal: 'mEdit is not running' });
 
-    await create(row());
+    await run(rows[which]);
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up the record types to create.', detail: 'mEdit is not running' },
-    ]);
-    expect(steps).toEqual([]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not look up the record types to create.', detail: 'mEdit is not running' }]);
+    expect(created()).toEqual([]);
   });
 
-  it.each<[string, () => RecordBrowserNode | undefined]>([
-    ['on a record row that is no container', () => RECORD_ROW],
-    ['with no row and no single plugin, group or container selected', () => undefined],
-  ])('does nothing %s', async (_case, row) => {
-    const { steps, reporter, create } = harness([PLUGIN_ROW, NPC_GROUP]);
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
+  it.each([
+    ['on a record row that is no container', ['record'] as const],
+    ['with no row and no single plugin, group or container selected', [] as const],
+  ])('does nothing %s', async (_case, clicked) => {
+    const { run, select, rows, created, reporter, pick } = await creating();
+    select(rows.plugin, rows.npcs);
+    pick(0);
 
-    await create(row());
+    await run(...clicked.map((which) => rows[which]));
 
-    expect(steps).toEqual([]);
+    expect(created()).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
   it('creates in the group\'s own plugin when another plugin shares its filename', async () => {
-    const { steps, create } = harness();
-    const overriding = await recordGroupRow(NPC, { name: 'MyPatch.esp', origin: 'ModB' }, EDITABLE);
+    const { run, rows, created } = await creating();
 
-    await create(overriding);
+    await run(rows.otherNpcs);
 
-    expect(steps).toEqual(['watch MyPatch.esp ModB', 'create MyPatch.esp ModB npc_', 'select 000900:MyPatch.esp in npc_']);
+    expect(created()).toEqual([[{ name: 'MyPatch.esp', origin: 'ModB' }, 'npc_', undefined]]);
   });
 
-  it('lands the new record\'s FormKey', async () => {
-    const { reporter, create } = harness();
+  it('applies the changes mEdit answers as one workspace edit, refreshes Source Control, under the Plugins bar, and lands the new record\'s FormKey', async () => {
+    const { run, rows, applyWorkspaceChanges, refreshSourceControlFor, reporter } = await creating();
 
-    await create(NPC_GROUP);
+    await run(rows.npcs);
 
-    expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
+    expect(applyWorkspaceChanges.mock.calls).toEqual([[[NEW_NPC]]]);
+    expect(refreshSourceControlFor.mock.calls).toEqual([[MY_PATCH]]);
+    expect(host.progress).toEqual(['opens on modbench.pluginListTree', 'closes']);
+    expect(reporter.landings).toEqual([`Created ${NEW}.`]);
   });
 
   it('reports a refusal as mEdit words it, and stops awaiting a record it did not write', async () => {
-    const { client, steps, reporter, create } = harness();
+    const { client, run, rows, reporter } = await creating();
     const message = 'MyPatch.esp has no FormKey free after the highest of its own records, up to 0xFFF, the last a light plugin can address. Clear the light flag to draw above it.';
-    client.setCommandHandler('getCreateChanges', () => Promise.resolve({ refused: true, message }));
+    client.setCommandResult('getCreateChanges', { refused: true, message });
 
-    await create(NPC_GROUP);
+    await run(rows.npcs);
+    client.change(rowsChanged([NEW]));
+    await settle();
 
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
-    expect(steps).toEqual(['watch MyPatch.esp ModA', 'forget']);
-  });
-});
-
-describe('modbench.record.create makes the changes mEdit answers', () => {
-  it('asks, applies the answer as one workspace edit, refreshes Source Control, and selects the new record', async () => {
-    const { client, steps, source, create } = harness();
-
-    await create(NPC_GROUP);
-
-    expect(client.calls.find((c) => c.method === 'getCreateChanges')?.args).toEqual([MY_PATCH, 'npc_', undefined]);
-    expect(source.applyWorkspaceChanges).toHaveBeenCalledWith([NEW_NPC]);
-    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
-    expect(steps).toContain('select 000900:MyPatch.esp in npc_');
+    expect(host.executed).toEqual([]);
+    expect(host.progress).toEqual(['opens on modbench.pluginListTree', 'closes']);
   });
 
   it('says the record could not be created when VS Code does not apply the change, and selects nothing', async () => {
-    const { steps, source, reporter, create } = harness();
-    source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
+    const { client, run, rows, applyWorkspaceChanges, reporter } = await creating();
+    applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
 
-    await create(NPC_GROUP);
+    await run(rows.npcs);
+    client.change(rowsChanged([NEW]));
+    await settle();
 
     expect(reporter.reports).toMatchObject([{ severity: 'error', message: 'Could not create the Non-Player Character record.' }]);
-    expect(reporter.landings).toEqual([]);
-    expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'forget']);
+    expect([reporter.landings, host.executed]).toEqual([[], []]);
+  });
+
+  it('stops awaiting the record when the create throws', async () => {
+    const { client, run, rows } = await creating();
+    client.setCommandHandler('getCreateChanges', () => Promise.reject(new Error('connection reset')));
+
+    await expect(run(rows.npcs)).rejects.toThrow('connection reset');
+    client.change(rowsChanged([NEW]));
+    await settle();
+
+    expect(host.executed).toEqual([]);
+  });
+
+  it('runs the create inside the write, and asks nothing of it before the type is picked', async () => {
+    const { client, run, rows } = await creating();
+    const order: string[] = [];
+    host.picks((labels) => { order.push('picked'); return labels[1]; });
+    client.setCommandHandler('getCreateChanges', () => { order.push(`create under ${host.progress.join(', ')}`); return Promise.resolve(NEW_NPC); });
+
+    await run(rows.plugin);
+
+    expect(order).toEqual(['picked', 'create under opens on modbench.pluginListTree']);
+  });
+});
+
+describe('modbench.record.create selects the new record once its plugin\'s change names it', () => {
+  it.each([
+    ['a change naming the record', rowsChanged([NEW])],
+    ['a re-derived plugin', pluginChanged()],
+  ])('selects at once when %s came before mEdit answered the create', async (_case, change) => {
+    const { client, run, rows, revealed, opened } = await creating();
+    client.setCommandHandler('getCreateChanges', () => { client.change(change); return Promise.resolve(NEW_NPC); });
+
+    await run(rows.npcs);
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+
+    expect(revealed()).toEqual([{ label: 'NewNpc', options: SELECTED }]);
+  });
+
+  it('waits past a change before mEdit answered the create that does not name the record', async () => {
+    const { client, run, rows, opened } = await creating();
+    client.setCommandHandler('getCreateChanges', () => { client.change(rowsChanged([OTHER])); return Promise.resolve(NEW_NPC); });
+
+    await run(rows.npcs);
+    await settle();
+    expect(opened()).toEqual([]);
+
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+  });
+
+  it.each([
+    ['a change naming the record in a plugin of the same name from another origin', rowsChanged([NEW], 'ModB')],
+    ['a change that does not name the new record', rowsChanged([OTHER])],
+    ['a re-derived plugin of the same name from another origin', pluginChanged('ModB')],
+  ])('waits past %s', async (_case, change) => {
+    const { client, run, rows, opened } = await creating();
+
+    await run(rows.npcs);
+    client.change(change);
+    await settle();
+    expect(opened()).toEqual([]);
+
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+  });
+
+  it('selects the new record\'s row beneath the container it landed in, once mEdit re-derives its whole plugin', async () => {
+    const { client, run, rows, revealed, opened, pick } = await creating();
+    pick(1);
+
+    await run(rows.quest);
+    client.change(pluginChanged());
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+
+    expect(revealed()).toEqual([{ label: 'NewNpc', options: SELECTED }]);
+  });
+
+  it('opens a new record no row shows, as when the record filter hides it, selecting nothing, and once, however often a change names it again', async () => {
+    const { client, run, rows, revealed, opened } = await creating({ shown: [] });
+
+    await run(rows.npcs);
+    client.change(pluginChanged());
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+    client.change(rowsChanged([NEW]));
+    client.change(pluginChanged());
+    await settle();
+
+    expect(revealed()).toEqual([]);
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects the row beneath its own plugin\'s group when another plugin shares its filename', async () => {
+    const { client, run, rows, revealed, opened } = await creating({ shown: [] });
+    const listed = client.getRecords.bind(client);
+    client.getRecords = async (...asked) => {
+      const page = await listed(...asked);
+      return asked[0].origin === 'ModB' && !isReadFailed(page) ? { ...page, items: [...page.items, NEW_RECORD] } : page;
+    };
+
+    await run(rows.otherNpcs);
+    client.change(rowsChanged([NEW], 'ModB'));
+    await settled(() => { expect(opened()).toHaveLength(1); });
+
+    expect(revealed()).toEqual([{ label: 'NewNpc', options: SELECTED }]);
+  });
+
+  it('selects no row while the name filter hides its plugin, and opens it', async () => {
+    const { client, run, rows, revealed, opened, filters } = await creating();
+
+    await run(rows.npcs);
+    filters('Other.esp');
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
+
+    expect(revealed()).toEqual([]);
+  });
+
+  it('selects no row beneath a record that holds the new record, for what a record holds is not its group\'s', async () => {
+    const { client, run, rows, revealed, opened } = await creating();
+    client.setQueryAnswer('getRecords', { items: [recordSummaryFixture({ formKey: OTHER, plugin: 'MyPatch.esp', editorId: 'MQ101', hasContainerChildren: true })], total: 1 });
+
+    await run(rows.quests);
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toHaveLength(1); });
+
+    expect([revealed(), client.calls.filter(({ method }) => method === 'getContainerChildren')]).toEqual([[], []]);
+  });
+
+  it('waits only for the latest create', async () => {
+    const { client, run, rows, opened } = await creating();
+    const later = { ...NEW_NPC, formKey: OTHER };
+    let answerFirst = (): void => undefined;
+    const answers = [new Promise<typeof NEW_NPC>((resolve) => { answerFirst = () => { resolve(NEW_NPC); }; }), Promise.resolve(later)];
+    client.setCommandHandler('getCreateChanges', () => present(answers.shift(), 'an answer to the create'));
+    const first = run(rows.npcs);
+    await settle();
+    const second = run(rows.npcs);
+    await settle();
+    answerFirst();
+    await Promise.all([first, second]);
+    client.change(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([]);
+
+    client.change(rowsChanged([OTHER]));
+    await settled(() => { expect(opened()).toEqual([['modbench.record.open', { argument: { kind: 'record', formKey: OTHER, plugin: MY_PATCH } }]]); });
   });
 });
 
 describe('modbench.record.create on a container', () => {
-  const pickItems = () => showQuickPick.mock.calls[0]?.[0].map((item) => [item.label, item.description]);
-  const prompt = () => present(showInputBox.mock.calls[0]?.[0], 'the grid position prompt');
+  const prompt = () => present(host.inputsAsked[0], 'the grid position prompt');
 
   it('picks from the types mEdit answers the container can hold, then creates the picked type in it', async () => {
-    const { client, steps, create } = harness();
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[1]));
+    const { client, run, rows, created, pick, pickItems } = await creating();
+    pick(1);
 
-    await create(QUEST_ROW);
+    await run(rows.quest);
 
-    expect(client.calls.filter((c) => c.method === 'getChildRecordTypes').map((c) => c.args))
-      .toEqual([[{ name: 'MyPatch.esp', origin: 'ModA' }, '000801:MyPatch.esp']]);
-    expect(pickItems()).toEqual([['Dialog Branch', 'dlbr'], ['Dialog Topic', 'dial'], ['Scene', 'scen']]);
-    expect(steps).toEqual([
-      'watch MyPatch.esp ModA', 'create MyPatch.esp ModA dial {"container":"000801:MyPatch.esp"}', 'select 000900:MyPatch.esp beneath MQ101',
-    ]);
+    expect(client.calls.filter((c) => c.method === 'getChildRecordTypes').map((c) => c.args)).toEqual([[MY_PATCH, OTHER]]);
+    expect(pickItems()).toEqual([['Dialog Branch', 'Dialog Topic', 'Scene']]);
+    expect(created()).toEqual([[MY_PATCH, 'dial', { container: OTHER }]]);
   });
 
   it('creates the one type a container can hold, asking nothing', async () => {
-    const { client, steps, create } = harness();
+    const { client, run, rows, created } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'refr', displayName: 'Placed Object' }]);
 
-    await create(CELL_ROW);
+    await run(rows.cell);
 
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(steps).toEqual([
-      'watch MyPatch.esp ModA', 'create MyPatch.esp ModA refr {"container":"000802:MyPatch.esp"}', 'select 000900:MyPatch.esp beneath MyCell',
-    ]);
+    expect([host.quickPicks, host.inputsAsked]).toEqual([[], []]);
+    expect(created()).toEqual([[MY_PATCH, 'refr', { container: '000802:MyPatch.esp' }]]);
   });
 
   it('on a worldspace, prompts for the new cell\'s grid position as x, y, and creates the cell at it', async () => {
-    const { client, steps, create } = harness();
+    const { client, run, rows, created } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
-    showInputBox.mockResolvedValue(' -3 ,12 ');
+    host.types(() => ' -3 ,12 ');
 
-    await create(WORLDSPACE_ROW);
+    await run(rows.worldspace);
 
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(host.quickPicks).toEqual([]);
     expect([prompt().placeHolder, prompt().value]).toEqual(['x, y', undefined]);
-    expect(steps).toEqual([
-      'watch MyPatch.esp ModA',
-      'create MyPatch.esp ModA cell {"container":"000803:MyPatch.esp","position":{"x":-3,"y":12}}',
-      'select 000900:MyPatch.esp beneath 000803:MyPatch.esp',
-    ]);
+    expect(created()).toEqual([[MY_PATCH, 'cell', { container: '000803:MyPatch.esp', position: { x: -3, y: 12 } }]]);
   });
 
   it('on a worldspace, prompts for no grid position for a type that is no cell', async () => {
-    const { client, steps, create } = harness();
+    const { client, run, rows, created } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'road', displayName: 'Road' }]);
 
-    await create(WORLDSPACE_ROW);
+    await run(rows.worldspace);
 
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(steps).toContain('create MyPatch.esp ModA road {"container":"000803:MyPatch.esp"}');
+    expect(host.inputsAsked).toEqual([]);
+    expect(created()).toEqual([[MY_PATCH, 'road', { container: '000803:MyPatch.esp' }]]);
   });
 
   const NOT_A_GRID_POSITION = 'Two whole numbers, as x, y.';
@@ -308,118 +405,86 @@ describe('modbench.record.create on a container', () => {
     ['-3, 12', undefined],
     ['  7,-8  ', undefined],
   ])('the grid position prompt answers "%s" with %s', async (input, refusal) => {
-    const { client, create } = harness();
+    const { client, run, rows } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
-    showInputBox.mockResolvedValue(undefined);
-    await create(WORLDSPACE_ROW);
 
-    expect(present(prompt().validateInput, 'the prompt\'s validation')(input)).toBe(refusal);
+    await run(rows.worldspace);
+
+    expect(prompt().validateInput?.(input)).toBe(refusal);
   });
 
-  it('creates nothing, watches nothing and says nothing when the grid position prompt is left with Esc', async () => {
-    const { client, steps, reporter, create } = harness();
+  it('creates nothing and says nothing when the grid position prompt is left with Esc', async () => {
+    const { client, run, rows, created, reporter } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
-    showInputBox.mockResolvedValue(undefined);
 
-    await create(WORLDSPACE_ROW);
+    await run(rows.worldspace);
 
-    expect(steps).toEqual([]);
+    expect(created()).toEqual([]);
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
   it('says a container that can hold nothing, as a deleted one, holds no new record, and creates nothing', async () => {
-    const { client, steps, reporter, create } = harness();
+    const { client, run, rows, created, reporter } = await creating();
     client.setQueryAnswer('getChildRecordTypes', []);
 
-    await create(QUEST_ROW);
+    await run(rows.quest);
 
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(host.quickPicks).toEqual([]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: '"MQ101" can hold no new record.', detail: undefined }]);
-    expect(steps).toEqual([]);
+    expect(created()).toEqual([]);
   });
 
   it('from the palette, creates in the one selected container', async () => {
-    const { client, steps, create } = harness([CELL_ROW]);
+    const { client, run, select, rows, created } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'refr', displayName: 'Placed Object' }]);
+    select(rows.cell);
 
-    await create();
+    await run();
 
-    expect(steps).toContain('create MyPatch.esp ModA refr {"container":"000802:MyPatch.esp"}');
+    expect(created()).toEqual([[MY_PATCH, 'refr', { container: '000802:MyPatch.esp' }]]);
   });
 
   it('asks for neither Option a caller gives', async () => {
-    const { steps, create } = harness();
+    const { run, rows, created } = await creating();
 
-    await create(WORLDSPACE_ROW, undefined, { recordType: 'cell', position: { x: 4, y: -5 } });
+    await run(rows.worldspace, undefined, { recordType: 'cell', position: { x: 4, y: -5 } });
 
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(steps).toContain('create MyPatch.esp ModA cell {"container":"000803:MyPatch.esp","position":{"x":4,"y":-5}}');
-  });
-});
-
-describe('modbench.record.create ends when the write does', () => {
-  it('runs the create inside the write, and asks nothing of it before the type is picked', async () => {
-    const { client, writing, create } = harness();
-    showQuickPick.mockImplementation((items) => { writing.push('picked'); return Promise.resolve(items[1]); });
-    client.setCommandHandler('getCreateChanges', () => { writing.push('create'); return Promise.resolve(NEW_NPC); });
-
-    await create(PLUGIN_ROW);
-
-    expect(writing).toEqual(['picked', 'opens', 'create', 'ends']);
-  });
-
-  it('settles the watch when the create throws', async () => {
-    const { client, steps, create } = harness();
-    client.setCommandHandler('getCreateChanges', () => Promise.reject(new Error('connection reset')));
-
-    await expect(create(NPC_GROUP)).rejects.toThrow('connection reset');
-
-    expect(steps).toEqual(['watch MyPatch.esp ModA', 'forget']);
-  });
-
-  it('ends the write after mEdit refuses the create', async () => {
-    const { client, writing, create } = harness();
-    client.setCommandHandler('getCreateChanges', () => Promise.resolve({ refused: true, message: 'no answer' }));
-
-    await create(NPC_GROUP);
-
-    expect(writing).toEqual(['opens', 'ends']);
+    expect([host.quickPicks, host.inputsAsked]).toEqual([[], []]);
+    expect(created()).toEqual([[MY_PATCH, 'cell', { container: '000803:MyPatch.esp', position: { x: 4, y: -5 } }]]);
   });
 });
 
 describe('modbench.record.create on a row that is no Plugins row but carries a record Argument', () => {
-  const referencedCopy = (formKey: string) => Object.assign(new TreeItem('MyPatch.esp'), {
-    argument: { kind: 'record', formKey, plugin: MY_PATCH },
-  });
+  const referencedCopy = (formKey: string) => Object.assign(new TreeItem('MyPatch.esp'), { argument: { kind: 'record', formKey, plugin: MY_PATCH } });
 
   it('creates beneath the record in its plugin\'s copy, picking from the types that record can hold, and opens it without selecting a row', async () => {
-    const { steps, create } = harness();
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
+    const { client, run, created, revealed, opened, pick, pickItems } = await creating();
+    pick(0);
 
-    await create(referencedCopy('000801:MyPatch.esp'));
+    await run(referencedCopy(OTHER));
+    client.change(rowsChanged([NEW]));
+    await settled(() => { expect(opened()).toEqual([OPEN_NEW]); });
 
-    expect(showQuickPick.mock.calls[0]?.[0].map((item) => item.description)).toEqual(['dlbr', 'dial', 'scen']);
-    expect(steps).toEqual([
-      'watch MyPatch.esp ModA', 'create MyPatch.esp ModA dlbr {"container":"000801:MyPatch.esp"}', 'select 000900:MyPatch.esp nowhere in Plugins',
-    ]);
+    expect(pickItems()).toEqual([['Dialog Branch', 'Dialog Topic', 'Scene']]);
+    expect(created()).toEqual([[MY_PATCH, 'dlbr', { container: OTHER }]]);
+    expect(revealed()).toEqual([]);
   });
 
   it('asks for a grid position when the record can hold a cell', async () => {
-    const { client, steps, create } = harness();
+    const { client, run, created } = await creating();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
-    showInputBox.mockResolvedValue('1, 2');
+    host.types(() => '1, 2');
 
-    await create(referencedCopy('000803:MyPatch.esp'));
+    await run(referencedCopy('000803:MyPatch.esp'));
 
-    expect(steps).toContain('create MyPatch.esp ModA cell {"container":"000803:MyPatch.esp","position":{"x":1,"y":2}}');
+    expect(created()).toEqual([[MY_PATCH, 'cell', { container: '000803:MyPatch.esp', position: { x: 1, y: 2 } }]]);
   });
 
   it('creates nothing for a row that names no plugin', async () => {
-    const { steps, create } = harness();
+    const { run, created } = await creating();
 
-    await create(Object.assign(new TreeItem('Referrer'), { argument: { kind: 'record', formKey: '000801:MyPatch.esp' } }));
+    await run(Object.assign(new TreeItem('Referrer'), { argument: { kind: 'record', formKey: OTHER } }));
 
-    expect(steps).toEqual([]);
+    expect(created()).toEqual([]);
   });
 });

@@ -1,27 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
-import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { COMPLETION, SEARCH } from './fakeKinds';
 
-const setInput = vi.hoisted(() => vi.fn());
-const Range = vi.hoisted(() => class { readonly args: unknown[]; constructor(...args: unknown[]) { this.args = args; } get start() { return this.args[0]; } get end() { return this.args[1]; } });
-vi.mock('vscode', () => ({
-  Uri, Range, TreeItem, TreeItemCollapsibleState, SymbolKind, CompletionItemKind,
-  Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
-  extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
-}));
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import { scriptLanguage, type ScriptClient } from '../scriptLanguage';
+import { CompletionItemKind, document, host, Location, Range, Uri, type FakeDocument } from './vscodeHost';
+import { instanceHolding, symbolsOver } from './symbolsOver';
+import { mEditNames, spelledName } from './mEditNames';
 import type { InstanceValue, PapyrusScript } from '../../instanceLoader/instance';
 import type { CopyAt } from '../../instanceLoader/fileConflictIndex';
-import { sourceNames } from './fakeSourceNames';
-import type { SourceNames } from '../sourceNames';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import type { PluginFilePaths } from '../../client';
+import type { PlacedReferences } from '../../client/MEditClient';
+import type { ReadFailed } from '../../wire/readFailed';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { settled as until } from '../../test/eventually';
+import { present } from '../../ports/present';
+import { changeNamesPlugin, holdsLoadOrder } from '../../client/test/says';
 
 const QUEST = '000801:Mod.esp';
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/Quest.json';
 const TEXT = `{ "FormKey": "${QUEST}", "VirtualMachineAdapter": { "Scripts": [ { "Name": "Ns:Quest", "Properties": [ { "Name": "Count" } ] } ] } }`;
-const AT_SCRIPT = TEXT.indexOf('Ns:Quest') + 2;
+const AT_SCRIPT = `${TEXT.slice(0, TEXT.indexOf('Ns:Quest') + 2)}|${TEXT.slice(TEXT.indexOf('Ns:Quest') + 2)}`;
 const SPAN = { start: TEXT.indexOf('Ns:Quest'), end: TEXT.indexOf('Ns:Quest') + 'Ns:Quest'.length };
 
 const QUEST_SOURCE = '/instance/mods/Mod/Scripts/Source/User/Ns/Quest.psc';
@@ -38,63 +35,69 @@ const copyOf = (path: string): CopyAt | { none: string } => {
   if (path === 'Scripts/Other.pex') return { kind: 'loose', path: OTHER_PEX };
   return path === ARCHIVED_PEX.file ? ARCHIVED_PEX : { none: `Nothing holds ${path}.` };
 };
-const NAMED = [{ file: SOURCE, name: 'Gone' }, { file: SOURCE, name: 'Ns:Quest' }, { file: '/instance/source/Other/Npc.json', name: 'gone' }, { file: '/instance/source/Held/Npc.json', name: 'ns:quest' }];
+const OTHER_FILE = '/instance/source/Other/plugin-source/Other.esp/Npc.json';
+const namedIn = (plugin: string, origin: string, file: string, ...names: string[]): PluginFilePaths =>
+  ({ plugin: { name: plugin, origin }, paths: [], unread: [], scripts: names.map((name) => ({ formKey: QUEST, fieldPath: 'Name', sourceRelativePath: `${plugin}/${file}`, name })) });
+const NAMED = [namedIn('Mod.esp', 'Mod', 'Quest.json', 'Gone', 'Ns:Quest'), namedIn('Other.esp', 'Other', 'Npc.json', 'gone'), namedIn('Held.esp', 'Held', 'Npc.json', 'ns:quest')];
 const NONE = { copies: [], leftOut: [] };
 type Standing = Pick<InstanceValue, 'dataFolderFiles' | 'gameFolder' | 'gameFolderInWorkspace' | 'archiveContents'>;
 const JUDGING: Standing = {
   dataFolderFiles: { kind: 'listed', files: new Map() }, gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
   gameFolderInWorkspace: true, archiveContents: new Map([['/game/Data/Misc.ba2', { kind: 'read', answer: ['scripts/quest.pex'] }]]),
 };
+const NAMES = mEditNames((text) => (text === TEXT ? [spelledName('Script', TEXT, 'Ns:Quest'), { kind: 'Script', start: 0, end: 1, value: 'Gone' }] : []));
 
-function language(references: Awaited<ReturnType<ScriptClient['getPlacedScriptReferences']>> = NONE, scripts: PapyrusScript[] = SCRIPTS, standing: Partial<Standing> = {}, asking: Partial<Pick<SourceNames, 'scriptsNamed' | 'scriptsIn'>> = {}) {
-  const client: ScriptClient = { getPlacedScriptReferences: () => Promise.resolve(references) };
-  const names = sourceNames({
-    scriptAt: (file: string, _text: string, offset: number) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined),
-    scriptsNamed: () => Promise.resolve(NAMED),
-    scriptsIn: (file: string, text: string) => Promise.resolve(file === SOURCE && text === TEXT ? [{ ...SPAN, name: 'Ns:Quest' }, { start: 0, end: 1, name: 'Gone' }] : []),
-    ...asking,
-  });
+function language(references: PlacedReferences | ReadFailed = NONE, scripts: PapyrusScript[] = SCRIPTS, standing: Partial<Standing> = {}, named: PluginFilePaths[] = NAMED, held: FakeDocument[] = []) {
   const reveal = vi.fn(() => Promise.resolve());
-  const instance = { value: { papyrusScripts: scripts, ...JUDGING, ...standing } };
-  const reporter = recordingReporter();
-  return { language: scriptLanguage({ instance, names, client, reporter, copyOf, reveal }), instance, reporter, reveal };
+  const instance = instanceHolding(instanceValueFixture({ papyrusScripts: scripts, ...JUDGING, ...standing }));
+  const made = symbolsOver({
+    instance, names: NAMES, fileCopies: { copyOf, reveal }, sourceFiles: (origin) => ({ file: (relativePath) => `/instance/source/${origin}/plugin-source/${relativePath}` }),
+    arrange: (client) => { client.setQueryAnswer('getPlacedScriptReferences', references); client.setQueryAnswer('getPluginFilePaths', named); host.holds(held); },
+  });
+  return { ...made, instance, reveal };
 }
 
-const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
+const NAMES_NOTHING = 'modbench-names';
+const asked = (made: ReturnType<typeof language>) => made.client.calls.filter(({ method }) => method === 'getPluginFilePaths');
+const goneOn = (file: string, at = { start: 0, end: 1 }) => [file, [{ message: 'Gone names nothing. No mod, Overwrite, Data folder file or archive holds Gone.', start: { line: 0, character: at.start }, end: { line: 0, character: at.end } }]];
 
 describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', () => {
-
   it('has no tooltip, since a script has no row', async () => {
-    expect(await language().language.tooltipOf({ kind: 'script', name: 'Ns:Quest' })).toEqual([]);
+    language();
+
+    expect(await host.hover(SOURCE, AT_SCRIPT)).toEqual({ text: 'Ns:Quest', spans: 'Ns:Quest' });
   });
 
   it('completes to each script', async () => {
-    expect(await language().language.completionsAt(document(), AT_SCRIPT, COMPLETION)).toEqual({ ...SPAN, icon: CompletionItemKind.Class, items: [{ label: 'Ns:Quest' }, { label: 'Other' }] });
+    language();
+
+    expect(await host.complete(SOURCE, AT_SCRIPT)).toEqual({ isIncomplete: false, items: ['Ns:Quest', 'Other'].map((label) => ({ label, detail: undefined, kind: CompletionItemKind.Class, insertText: undefined, replaces: 'Ns:Quest' })) });
   });
 
   it('is found by Go to Symbol at its source, else its compiled script', async () => {
-    const { language: symbols } = language();
+    language();
 
-    expect([...await symbols.symbolsFor('QUEST', SEARCH), ...await symbols.symbolsFor('other', SEARCH)].map(({ name, location }) => [name, location])).toEqual([
-      ['Ns:Quest', { uri: Uri.file(QUEST_SOURCE), range: new Range(0, 0, 0, 0) }],
-      ['Other', { uri: Uri.file(OTHER_PEX), range: new Range(0, 0, 0, 0) }],
+    expect([...await host.workspaceSymbols('QUEST'), ...await host.workspaceSymbols('other')].map(({ name, location }) => [name, location])).toEqual([
+      ['Ns:Quest', new Location(Uri.file(QUEST_SOURCE), new Range(0, 0, 0, 0))],
+      ['Other', new Location(Uri.file(OTHER_PEX), new Range(0, 0, 0, 0))],
     ]);
   });
 
   it('is found by Go to Symbol when only an archive holds its compiled script, at that archive', async () => {
-    const { language: symbols, reveal } = language(NONE, ARCHIVE_ONLY);
+    const { reveal } = language(NONE, ARCHIVE_ONLY);
 
-    expect((await symbols.symbolsFor('packed', SEARCH)).map(({ name, location }) => [name, location])).toEqual([
-      ['Packed', { uri: Uri.file(ARCHIVED_PEX.archive), range: new Range(0, 0, 0, 0) }],
-    ]);
-    await (await symbols.symbolsFor('packed', SEARCH))[0]?.resolve?.();
-    expect(reveal.mock.calls).toEqual([[ARCHIVED_PEX]]);
+    const found = present((await host.workspaceSymbols('packed'))[0], 'the archived script');
+    await host.resolveWorkspaceSymbol(found);
+
+    expect([found.name, found.location, reveal.mock.calls]).toEqual(['Packed', new Location(Uri.file(ARCHIVED_PEX.archive), new Range(0, 0, 0, 0)), [[ARCHIVED_PEX]]]);
   });
 });
 
 describe('a script a document names that no mod, Overwrite, Data folder file or archive holds (symbols.md, The features, story 8)', () => {
   it('names nothing, saying which script, over its span, and everywhere it looked', async () => {
-    expect(await language().language.namesNothingIn(document())).toEqual([{ start: 0, end: 1, name: 'Gone', why: 'No mod, Overwrite, Data folder file or archive holds Gone.' }]);
+    language(NONE, SCRIPTS, {}, [], [document(SOURCE, TEXT)]);
+
+    await until(() => { expect([...host.problems(NAMES_NOTHING)]).toEqual([goneOn(SOURCE)]); });
   });
 
   const OUTSIDE = 'The game folder /game is outside the workspace, so its archives are not read.';
@@ -102,61 +105,103 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
   const NOT_JUDGED = 'The Problems panel does not check the scripts plugin source names.';
 
   it.each([
-    ['the Data folder is not listed', { dataFolderFiles: { kind: 'unresolved' } }, undefined],
     ['the game folder is not found', { gameFolder: { kind: 'notFound', looked: [], setting: 'gameFolder' } }, 'The game folder is not found.'],
     ['the game folder is outside the workspace, so its archives are unread', { gameFolderInWorkspace: false }, OUTSIDE],
-    ['an archive has not answered', { archiveContents: new Map([['/a.ba2', { kind: 'unanswered' }]]) }, undefined],
     ['an archive cannot be read', { archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) }, UNREADABLE],
-  ] satisfies [string, Partial<Standing>, string | undefined][])('asks mEdit nothing while %s, and says why where the state lasts', async (_case, standing, why) => {
-    const asked = { scriptsIn: vi.fn(() => Promise.resolve([])), scriptsNamed: vi.fn(() => Promise.resolve([])) };
-    const { language: unjudged, reporter } = language(NONE, SCRIPTS, standing, asked);
+  ] satisfies [string, Partial<Standing>, string][])('asks mEdit nothing while %s, and says why where the state lasts', async (_case, standing, why) => {
+    const { client, reporter } = language(NONE, SCRIPTS, standing);
 
-    const answers = [await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing([{ plugin: { name: 'Mod.esp', origin: 'Mod' } }])];
+    await until(() => { expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: NOT_JUDGED, detail: why }]); });
+    expect([client.calls.filter(({ method }) => method === 'getPluginFilePaths'), [...host.problems(NAMES_NOTHING)]]).toEqual([[], []]);
+  });
 
-    expect(answers).toEqual(why === undefined ? [undefined, undefined] : [[], []]);
-    expect([asked.scriptsIn.mock.calls, asked.scriptsNamed.mock.calls]).toEqual([[], []]);
-    expect(reporter.shownFailures).toEqual(why === undefined ? [] : [{ severity: 'warning', message: NOT_JUDGED, detail: why }]);
+  it.each([
+    ['the Data folder is not listed', { dataFolderFiles: { kind: 'unresolved' } }],
+    ['an archive has not answered', { archiveContents: new Map([['/a.ba2', { kind: 'unanswered' }]]) }],
+  ] satisfies [string, Partial<Standing>][])('says nothing while %s, and judges once it is', async (_case, standing) => {
+    const { instance, reporter } = language(NONE, SCRIPTS, standing, [], [document(SOURCE, TEXT)]);
+
+    instance.land({ ...instance.value, ...JUDGING });
+    host.change(document(SOURCE, TEXT));
+
+    await until(() => { expect([...host.problems(NAMES_NOTHING)]).toEqual([goneOn(SOURCE)]); });
+    expect(reporter.shownFailures).toEqual([]);
   });
 
   it('says it once, again only when the reason changes, and again when judging stopped after it resumed', async () => {
-    const { language: judging, instance, reporter } = language(NONE, SCRIPTS, { gameFolderInWorkspace: false });
-    const ask = () => judging.namesNothingIn(document());
-    await ask();
-    await ask();
-    instance.value = { ...instance.value, ...JUDGING, archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) };
-    await ask();
-    instance.value = { ...instance.value, ...JUDGING };
-    await ask();
-    instance.value = { ...instance.value, gameFolderInWorkspace: false };
-    await ask();
+    const { instance, reporter } = language(NONE, SCRIPTS, { gameFolderInWorkspace: false });
+    const land = async (standing: Partial<Standing>, told: number) => {
+      instance.land({ ...instance.value, ...standing });
+      host.change(document(SOURCE, TEXT));
+      await until(() => { expect(reporter.shownFailures).toHaveLength(told); });
+    };
+    await until(() => { expect(reporter.shownFailures).toHaveLength(1); });
+
+    await land({ ...JUDGING, archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) }, 2);
+    await land(JUDGING, 2);
+    await land({ gameFolderInWorkspace: false }, 3);
 
     expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([OUTSIDE, UNREADABLE, OUTSIDE]);
   });
 
   it('lists each file that holds one, once, whether or not it is open', async () => {
-    expect(await language().language.filesNamingNothing()).toEqual([SOURCE, '/instance/source/Other/Npc.json']);
+    const { files } = language();
+    files.set(SOURCE, TEXT);
+    files.set(OTHER_FILE, TEXT);
+
+    await until(() => { expect([...host.problems(NAMES_NOTHING)].sort()).toEqual([goneOn(SOURCE), goneOn(OTHER_FILE)]); });
   });
 
-  it('lists the same files while its answers and the instance value are the same, and others when either is not', async () => {
-    const named = [...NAMED];
-    const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(named));
-    const { language: judging, instance } = language(NONE, SCRIPTS, {}, { scriptsNamed: asked });
+  it('asks of the plugins a change names, and keeps what it shows where mEdit has not answered', async () => {
+    const { client, files } = language(NONE, SCRIPTS, {}, [NAMED[0] ?? namedIn('Mod.esp', 'Mod', 'Quest.json')]);
+    files.set(SOURCE, TEXT);
+    await until(() => { expect([...host.problems(NAMES_NOTHING).keys()]).toEqual([SOURCE]); });
+    client.setQueryAnswer('getPluginFilePaths', { failed: 'refused', refusal: 'the record index is not ready' });
 
-    const first = await judging.filesNamingNothing();
-    const same = await judging.filesNamingNothing([{ plugin: { name: 'Mod.esp', origin: 'Mod' } }]);
-    asked.mockResolvedValueOnce([...NAMED]);
-    const another = await judging.filesNamingNothing();
-    instance.value = { ...instance.value };
-    const afterInstance = await judging.filesNamingNothing();
+    client.change([{ plugin: { name: 'Mod.esp', origin: 'Mod' } }]);
 
-    expect([same === first, another === first, afterInstance === another]).toEqual([true, false, false]);
+    await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginFilePaths').at(-1)?.args[0]).toEqual({ name: 'Mod.esp', origin: 'Mod' }); });
+    expect([...host.problems(NAMES_NOTHING).keys()]).toEqual([SOURCE]);
   });
 
-  it('asks of the plugins it is given, and says nothing can be said where mEdit has not answered', async () => {
-    const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(undefined));
-    const only = [{ plugin: { name: 'Mod.esp', origin: 'Mod' } }];
+  it.each([
+    ['a fact a script resolves against changes', (made: ReturnType<typeof language>) => { made.instance.land({ ...made.instance.value, papyrusScripts: [...SCRIPTS] }); }],
+    ['a plugin source file changes', (made: ReturnType<typeof language>) => { made.instance.land(made.instance.value, ['/instance/source/Mod/plugin-source/Mod.esp/Npc.json']); }],
+    ['the load order settles, which says everything changed', (made: ReturnType<typeof language>) => { holdsLoadOrder(made.client, { version: 1 }); }],
+    ['a plugin changes', (made: ReturnType<typeof language>) => { changeNamesPlugin(made.client, { name: 'Mod.esp', origin: 'Mod' }); }],
+  ])('judges again when %s, asking mEdit again', async (_when, change) => {
+    const made = language();
+    await until(() => { expect(asked(made)).toHaveLength(1); });
 
-    expect([await language(NONE, SCRIPTS, {}, { scriptsNamed: asked }).language.filesNamingNothing(only), asked.mock.calls]).toEqual([undefined, [[only]]]);
+    change(made);
+
+    await until(() => { expect(asked(made)).toHaveLength(2); });
+  });
+});
+
+describe('what judges a script\'s names again', () => {
+  const quiet = () => new Promise((resolve) => { setImmediate(resolve); });
+
+  it('hears no change to a file that is no plugin source, nor to a fact no script resolves against', async () => {
+    const made = language();
+    await until(() => { expect(asked(made)).toHaveLength(1); });
+
+    made.instance.land({ ...made.instance.value, profiles: ['Default', 'Other'] }, ['/instance/mods/A/textures/a.dds']);
+    await quiet();
+
+    expect(asked(made)).toHaveLength(1);
+  });
+
+  it('hears nothing once stopped', async () => {
+    const made = language();
+    await until(() => { expect(asked(made)).toHaveLength(1); });
+
+    made.dispose();
+    made.instance.land({ ...made.instance.value, papyrusScripts: [...SCRIPTS] });
+    changeNamesPlugin(made.client, { name: 'Mod.esp', origin: 'Mod' });
+    await quiet();
+
+    expect(asked(made)).toHaveLength(1);
   });
 });
 
@@ -169,37 +214,40 @@ describe('where a Papyrus script is defined, and the records that attach it', ()
   it.each([
     ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],
     ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: OTHER_PEX }],
-    ['at its archived compiled script when only an archive holds it', 'Packed', ARCHIVE_ONLY, { shown: ARCHIVED_PEX }],
+    ['at its archived compiled script when only an archive holds it', 'Packed', ARCHIVE_ONLY, { archived: { archive: ARCHIVED_PEX.archive, file: ARCHIVED_PEX.file } }],
     ['at its compiled script when its source is a copy the game gets nowhere', 'Outside', [{ name: 'Outside', sourceDataPath: 'Scripts/Source/Base/Outside.psc', compiledDataPath: 'Scripts/Other.pex' }], { file: OTHER_PEX }],
     ['nowhere when neither its source nor its compiled script is a copy the game gets, refusing', 'Outside', [{ name: 'Outside', sourceDataPath: 'Scripts/Source/Base/Outside.psc', compiledDataPath: 'Scripts/Outside.pex' }], { refused: 'Nothing holds Scripts/Outside.pex.' }],
     ['nowhere when no copy of its compiled script is held, refusing', 'Packed', [{ name: 'Packed', compiledDataPath: 'Scripts/Gone.pex' }], { refused: 'Nothing holds Scripts/Gone.pex.' }],
     ['nowhere when no mod holds it, refusing', 'Ns:Quest', [], { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' }],
   ])('defines a script %s', async (_case, name, scripts, expected) => {
-    expect(await language(NONE, scripts).language.definitionOf({ kind: 'script', name })).toEqual(expected);
+    expect(await language(NONE, scripts).symbols.definitionOf({ kind: 'script', name })).toEqual(expected);
   });
 
   it('lists each member of a record mEdit says attaches it, and why it left out each copy it could not read', async () => {
-    const { language: answering } = language({ copies: [copy('Mod')], leftOut: ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'] });
+    const { symbols } = language({ copies: [copy('Mod')], leftOut: ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'] });
 
-    const found = await answering.referencesTo({ kind: 'script', name: 'Ns:Quest' });
-
-    expect('locations' in found && [found.locations.map(({ uri, range }) => [uri, range]), found.unread]).toEqual([
-      [[Uri.file(SOURCE), new Range(0, SPAN.start, 0, SPAN.end)]],
-      ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'],
-    ]);
+    expect(await symbols.referencesTo({ kind: 'script', name: 'Ns:Quest' })).toEqual({
+      references: [{ file: SOURCE, start: { line: 0, character: SPAN.start }, end: { line: 0, character: SPAN.end } }],
+      leftOut: ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'],
+    });
   });
 
   it('says why it could not read what mEdit reads', async () => {
-    const { language: failing } = language({ failed: 'refused', refusal: 'the record index is not ready' });
+    const { symbols } = language({ failed: 'refused', refusal: 'the record index is not ready' });
 
-    expect(await failing.referencesTo({ kind: 'script', name: 'Ns:Quest' })).toEqual({ locations: [], unread: ['the plugins mEdit reads: the record index is not ready'] });
+    expect(await symbols.referencesTo({ kind: 'script', name: 'Ns:Quest' })).toEqual({ references: [], leftOut: ['the plugins mEdit reads: the record index is not ready'] });
   });
 
   it('lists where plugin source attaches it in VS Code\'s References view, titled with its name', async () => {
-    setInput.mockClear();
+    language({ copies: [copy('Mod')], leftOut: [] }, SCRIPTS, {}, NAMED, [document(SOURCE, TEXT)]);
 
-    await language({ copies: [copy('Mod')], leftOut: [] }).language.referencedBy({ kind: 'script', name: 'Ns:Quest' });
+    const running = host.run('modbench.symbol.referencedBy');
+    const [pick] = host.quickPicks;
+    pick?.type('Ns:Quest');
+    await until(() => { expect(pick?.qp.items.map(({ label }) => label)).toEqual(['Ns:Quest']); });
+    pick?.accept(pick.qp.items[0] ?? { label: '' });
+    await running;
 
-    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({ title: 'Referenced By: Ns:Quest', contextValue: 'modbench.scriptReferencedBy' }));
+    expect(host.referencesShown).toEqual([expect.objectContaining({ title: 'Referenced By: Ns:Quest', contextValue: 'modbench.scriptReferencedBy' })]);
   });
 });

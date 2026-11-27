@@ -1,14 +1,18 @@
-import { describe, expect, it } from 'vitest';
-import { rulesReader, type SortingRuleFiles } from '../../sortingRules/lootMetadata';
-import { sortingRuleFileLines } from '../sortingRuleFilesMessage';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('vscode', () => import('./vscodeHost'));
+
+import { pluginsOver } from './pluginsOver';
+import type { SortingRuleFiles } from '../../sortingRules/lootMetadata';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 type SortingRuleFile = SortingRuleFiles['masterlist'];
 const text = (body: string): SortingRuleFile => ({ path: '/i/f.yaml', kind: 'text', text: body });
 const absent: SortingRuleFile = { path: '/i/f.yaml', kind: 'absent' };
-const linesOf = (parts: { masterlist?: SortingRuleFile; userlist?: SortingRuleFile }) =>
-  sortingRuleFileLines(rulesReader()({ masterlist: text('plugins: []\n'), prelude: absent, userlist: absent, ...parts }));
+const linesOf = (parts: Partial<SortingRuleFiles>) =>
+  pluginsOver({ value: instanceValueFixture({ sortingRuleFiles: { masterlist: text('plugins: []\n'), prelude: absent, userlist: absent, ...parts } }) }).plugins.standing.sortingRules();
 
-describe('sortingRuleFileLines', () => {
+describe('what the agent is told of the sorting rule files', () => {
   it('says nothing while the masterlist and userlist read', () => {
     expect(linesOf({})).toEqual([]);
   });
