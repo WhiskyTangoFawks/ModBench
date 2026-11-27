@@ -1,33 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
+
 import { join } from 'node:path';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri } from '../../test/vscodeMock';
-
-const { registerCommand, createQuickPick } = vi.hoisted(() => ({
-  registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
-  createQuickPick: vi.fn(),
-}));
-
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand: vi.fn() },
-    window: { createQuickPick, withProgress: recordedWithProgress },
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-    Uri,
-  };
-});
-
-import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
-import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
+import type * as vscode from 'vscode';
+import { modsViewOn } from './modsViewOn';
+import { answers, seen } from './modsVscode';
+import { progressSteps } from '../../test/recordedProgress';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { registerPublisherTagCommands, publisherKeyContext } from '../publisherTagCommands';
-import { FileNode, FolderNode } from '../modFiles';
-import { ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
-import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { modCommands } from '../../modCommands/modCommands';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { file, folder, indexedValueOf, mod } from './indexedValue';
+
+type Row = vscode.TreeItem;
+type ModsView = ReturnType<typeof modsViewOn>;
 
 const INCLUDE: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
 const ALWAYS_ENABLED: PublisherTag = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
@@ -35,169 +21,171 @@ const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
 const DECLARED = [INCLUDE, IGNORE, ALWAYS_ENABLED];
 
 const LISTED: Record<string, readonly PublisherTag[]> = {
-  '/instance/mods/M': [INCLUDE, ALWAYS_ENABLED],
-  '/instance/mods/M/a.dds': [INCLUDE],
-  '/instance/mods/M/textures': [IGNORE],
+  '/instance/M': [INCLUDE, ALWAYS_ENABLED],
+  '/instance/M/a.dds': [INCLUDE],
+  '/instance/M/textures': [IGNORE],
+  '/instance/Overwrite/a.dds': [INCLUDE],
 };
-const value: InstanceValue = {
-  ...instanceValueFixture({
-    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
-  }),
+
+const valueWith = async (over: Partial<InstanceValue>): Promise<InstanceValue> => ({
+  ...await indexedValueOf(
+    [mod('M'), mod('N')],
+    { M: { files: [file('M', 'a.dds'), file('M', 'b.dds'), file('M', 'textures/c.dds')], folders: [folder('M', 'textures')] }, N: { files: [file('N', 'd.dds')] } },
+    { files: [file('Overwrite', 'a.dds')] },
+  ),
+  paths: { overwriteDir: '/instance/Overwrite', downloadsDir: '', modDirs: new Map([['M', '/instance/M'], ['N', '/instance/N']]), sourceDirs: new Map() },
   publisherTags: DECLARED,
   publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [], unshippable: { file: '', reason: () => undefined } },
-};
-
-const instance = { ...instanceThatReads, value };
+  ...over,
+});
 
 const origin = { kind: 'mod', name: 'M' } as const;
-const modM = new ModNode({ kind: 'mod', name: 'M', enabled: true });
-const modN = new ModNode({ kind: 'mod', name: 'N', enabled: true });
-const fileA = new FileNode(modM, origin, fileIn('/instance/mods/M', 'a.dds'), 'a.dds');
-const fileB = new FileNode(modM, origin, fileIn('/instance/mods/M', 'b.dds'), 'b.dds');
-const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/instance/mods/M/textures', includedPath: 'textures', excluded: false }, [], [], 'textures');
-const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, fileIn('/instance/mods/M', 'a.dds'), 'a.dds');
 
-function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
-  const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
-  if (!call) throw new Error(`command not registered: ${commandId}`);
-  return Promise.resolve(call[1](...args));
-}
+const tagging = async (over: Partial<InstanceValue> = {}, answered: InstanceAnswers = {}): Promise<ModsView> =>
+  modsViewOn({ value: await valueWith(over), adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('M', 'N') }), { publisherTags: DECLARED, ...answered }) });
 
-const register = (selection: readonly ModlistNode[] = [], answers: InstanceAnswers = {}) => {
-  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('M', 'N') }), { publisherTags: DECLARED, ...answers });
-  const reporter = recordingReporter();
-  registerPublisherTagCommands(modCommands(fake.adapter), instance, () => selection, reporter);
-  return { fake, reporter };
-};
+type Find = (view: ModsView) => Promise<Row>;
+const modM: Find = ({ row }) => row('M');
+const modN: Find = ({ row }) => row('N');
+const inM = (name: string): Find => async ({ row }) => await row(name, await row('M'));
+const fileA = inM('a.dds');
+const fileB = inM('b.dds');
+const folderTextures = inM('textures');
+const inOverwrite: Find = async ({ row }) => await row('a.dds', await row('Overwrite'));
+
+const rowsOf = (view: ModsView, finds: readonly Find[]): Promise<Row[]> => Promise.all(finds.map((find) => find(view)));
+
+const KEYS = ['hasPublisher', 'hasPathPublisher', 'holdsTaggableRow', 'holdsPublisherTag'];
+const keysShown = (): Record<string, unknown> => Object.fromEntries(KEYS.map((key) => [key, seen.contextKeys.get(`modbench.mod.${key}`)]));
 
 const tagChange = (change: 'add' | 'remove', tag: string, ...paths: string[]) => ({ verb: 'changePublisherTag', change, tag, paths });
 const inModM = (relativePath: string) => join('/instance/mods/M', relativePath);
 
-let offered: string[];
-const pickByLabel = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => {
-  offered = items.map((item) => item.label);
-  return items.find((item) => item.label === label);
-}));
-const escape = () => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => {
-  offered = items.map((item) => item.label);
-  return undefined;
-}));
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  progressSteps.length = 0;
-  offered = [];
-});
+const picking = (label: string | undefined): void => { answers.createdQuickPick = (items) => items.find((item) => item.label === label); };
+const offered = (): string[] | undefined => seen.createdQuickPicks.at(-1)?.items.map(({ label }) => label);
 
 describe('the keys the publisher tag items of the menus wait on (mods.md, Menus and keys)', () => {
   const keys = { hasPublisher: true, hasPathPublisher: true };
 
-  it.each<[string, InstanceValue, ModlistNode[], object]>([
-    ['a mod row whose folder holds a tag', value, [modM, fileB], { ...keys, holdsPublisherTag: true }],
-    ['no row that holds a tag', value, [fileB, modN], { ...keys, holdsPublisherTag: false }],
-    ['a file row that holds a tag', value, [modN, fileA], { ...keys, holdsPublisherTag: true }],
-    ['a folder row that holds a tag', value, [modN, folderTextures], { ...keys, holdsPublisherTag: true }],
-    ['a publisher whose tags mark no path, over no row', { ...value, publisherTags: [ALWAYS_ENABLED] }, [], { hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false }],
-    ['an Overwrite row alone, though the configuration lists a tag on its path', value, [inOverwrite], { holdsTaggableRow: false, holdsPublisherTag: false }],
-    ['an Overwrite row beside a mod that holds no tag', value, [inOverwrite, modN], { holdsTaggableRow: true, holdsPublisherTag: false }],
-    ['an Overwrite row beside a file that holds a tag', value, [inOverwrite, fileA], { holdsTaggableRow: true, holdsPublisherTag: true }],
-  ])('over %s', (_case, state, selection, expected) => {
-    expect(publisherKeyContext(state, selection)).toMatchObject(expected);
+  it.each<[string, Partial<InstanceValue>, Find[], object]>([
+    ['a mod row whose folder holds a tag', {}, [modM, fileB], { ...keys, holdsPublisherTag: true }],
+    ['no row that holds a tag', {}, [fileB, modN], { ...keys, holdsPublisherTag: false }],
+    ['a file row that holds a tag', {}, [modN, fileA], { ...keys, holdsPublisherTag: true }],
+    ['a folder row that holds a tag', {}, [modN, folderTextures], { ...keys, holdsPublisherTag: true }],
+    ['a publisher whose tags mark no path, over no row', { publisherTags: [ALWAYS_ENABLED] }, [], { hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false }],
+    ['an Overwrite row alone, though the configuration lists a tag on its path', {}, [inOverwrite], { holdsTaggableRow: false, holdsPublisherTag: false }],
+    ['an Overwrite row beside a mod that holds no tag', {}, [inOverwrite, modN], { holdsTaggableRow: true, holdsPublisherTag: false }],
+    ['an Overwrite row beside a file that holds a tag', {}, [inOverwrite, fileA], { holdsTaggableRow: true, holdsPublisherTag: true }],
+  ])('over %s', async (_case, state, selection, expected) => {
+    const view = await tagging(state);
+
+    view.view.selectRows(await rowsOf(view, selection));
+
+    expect(keysShown()).toMatchObject(expected);
   });
 
-  it.each([{ kind: 'none' }, { kind: 'unreadable', reason: 'x' }] as const)('say no publisher while its configuration is %j', (publisherConfiguration) => {
-    expect(publisherKeyContext({ ...value, publisherConfiguration }, [modM])).toMatchObject({ hasPublisher: false, hasPathPublisher: false, holdsPublisherTag: false });
+  it.each([{ kind: 'none' }, { kind: 'unreadable', reason: 'x' }] as const)('say no publisher while its configuration is %j', async (publisherConfiguration) => {
+    const view = await tagging({ publisherConfiguration });
+
+    view.view.selectRows(await rowsOf(view, [modM]));
+
+    expect(keysShown()).toMatchObject({ hasPublisher: false, hasPathPublisher: false, holdsPublisherTag: false });
   });
 });
 
 describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
   it('offers every declared tag over mods, and adds the picked one to every selected mod', async () => {
-    pickByLabel('Always Enabled');
-    const { fake } = register();
+    const view = await tagging();
+    picking('Always Enabled');
+    const [m, n, a] = await rowsOf(view, [modM, modN, fileA]);
 
-    await invoke('modbench.mod.addPublisherTag', modM, [modM, modN, fileA]);
+    await view.run('modbench.mod.addPublisherTag', m, [m, n, a]);
 
-    expect(offered).toEqual(['Include', 'Ignore', 'Always Enabled']);
-    expect(fake.calls).toEqual([tagChange('add', 'Always Enabled', '/instance/mods/M', '/instance/mods/N')]);
+    expect(offered()).toEqual(['Include', 'Ignore', 'Always Enabled']);
+    expect(view.adapter.calls).toEqual([tagChange('add', 'Always Enabled', '/instance/mods/M', '/instance/mods/N')]);
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'progress closes']);
   });
 
   it('offers only the tags that mark paths over files and folders, and adds to the files and folders alone', async () => {
-    pickByLabel('Ignore');
-    const { fake } = register();
+    const view = await tagging();
+    picking('Ignore');
+    const [a, textures, m] = await rowsOf(view, [fileA, folderTextures, modM]);
 
-    await invoke('modbench.mod.addPublisherTag', fileA, [fileA, folderTextures, modM]);
+    await view.run('modbench.mod.addPublisherTag', a, [a, textures, m]);
 
-    expect(offered).toEqual(['Include', 'Ignore']);
-    expect(fake.calls).toEqual([tagChange('add', 'Ignore', inModM('a.dds'), inModM('textures'))]);
+    expect(offered()).toEqual(['Include', 'Ignore']);
+    expect(view.adapter.calls).toEqual([tagChange('add', 'Ignore', inModM('a.dds'), inModM('textures'))]);
   });
 
   it('takes the view\'s selection from the palette', async () => {
-    pickByLabel('Include');
-    const { fake } = register([fileB]);
+    const view = await tagging();
+    picking('Include');
+    view.view.selectRows(await rowsOf(view, [fileB]));
 
-    await invoke('modbench.mod.addPublisherTag');
+    await view.run('modbench.mod.addPublisherTag');
 
-    expect(fake.calls).toEqual([tagChange('add', 'Include', inModM('b.dds'))]);
+    expect(view.adapter.calls).toEqual([tagChange('add', 'Include', inModM('b.dds'))]);
   });
 
   it('changes nothing on Esc', async () => {
-    escape();
-    const { fake, reporter } = register();
+    const view = await tagging();
 
-    await invoke('modbench.mod.addPublisherTag', modM);
+    await view.run('modbench.mod.addPublisherTag', await modM(view));
 
-    expect([fake.calls, reporter.reports]).toEqual([[], []]);
+    expect([view.adapter.calls, view.reporter.reports]).toEqual([[], []]);
   });
 
   it('names each refused row and why, and nothing for those that landed', async () => {
-    pickByLabel('Include');
-    const { reporter } = register([], { outsideInstance: new Set([inModM('a.dds')]) });
+    const view = await tagging({}, { outsideInstance: new Set([inModM('a.dds')]) });
+    picking('Include');
+    const [a, b] = await rowsOf(view, [fileA, fileB]);
 
-    await invoke('modbench.mod.addPublisherTag', fileA, [fileA, fileB]);
+    await view.run('modbench.mod.addPublisherTag', a, [a, b]);
 
-    expect(reporter.reports).toEqual([
+    expect(view.reporter.reports).toEqual([
       { severity: 'error', message: 'Could not add Include on 1 of 2 file and folder rows.', detail: '"M/a.dds" (It is outside the instance.)' },
     ]);
   });
 
   it('reports a refusal of the whole selection', async () => {
-    pickByLabel('Include');
-    const { reporter } = register([], { refusals: refusing('changePublisherTag', 'compiler_settings.json is not JSON') });
+    const view = await tagging({}, { refusals: refusing('changePublisherTag', 'compiler_settings.json is not JSON') });
+    picking('Include');
 
-    await invoke('modbench.mod.addPublisherTag', modM);
+    await view.run('modbench.mod.addPublisherTag', await modM(view));
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to add Include.', detail: 'compiler_settings.json is not JSON' }]);
+    expect(view.reporter.reports).toEqual([{ severity: 'error', message: 'Failed to add Include.', detail: 'compiler_settings.json is not JSON' }]);
   });
 
   it('takes an agent\'s rows and tag without a pick', async () => {
-    const { fake } = register();
+    const view = await tagging();
 
-    await invoke('modbench.mod.addPublisherTag', new AgentCall(
+    await view.run('modbench.mod.addPublisherTag', new AgentCall(
       [{ kind: 'mod', name: 'M' }, { kind: 'file', origin, relativePath: 'textures' }], { tag: 'Include' }));
 
-    expect(createQuickPick).not.toHaveBeenCalled();
-    expect(fake.calls).toEqual([tagChange('add', 'Include', '/instance/mods/M', inModM('textures'))]);
+    expect(seen.createdQuickPicks).toEqual([]);
+    expect(view.adapter.calls).toEqual([tagChange('add', 'Include', '/instance/mods/M', inModM('textures'))]);
   });
 });
 
 describe('remove publisher tag (publishing.md, Publisher tags, story 2)', () => {
   it('offers only the tags the selection holds, in the publisher\'s order, and removes the picked one from every selected row', async () => {
-    pickByLabel('Include');
-    const { fake } = register();
+    const view = await tagging();
+    picking('Include');
+    const [textures, a, b] = await rowsOf(view, [folderTextures, fileA, fileB]);
 
-    await invoke('modbench.mod.removePublisherTag', folderTextures, [folderTextures, fileA, fileB]);
+    await view.run('modbench.mod.removePublisherTag', textures, [textures, a, b]);
 
-    expect(offered).toEqual(['Include', 'Ignore']);
-    expect(fake.calls).toEqual([tagChange('remove', 'Include', inModM('textures'), inModM('a.dds'), inModM('b.dds'))]);
+    expect(offered()).toEqual(['Include', 'Ignore']);
+    expect(view.adapter.calls).toEqual([tagChange('remove', 'Include', inModM('textures'), inModM('a.dds'), inModM('b.dds'))]);
   });
 
   it('offers nothing, and changes nothing, over rows that hold no tag', async () => {
-    const { fake } = register();
+    const view = await tagging();
+    const b = await fileB(view);
 
-    await invoke('modbench.mod.removePublisherTag', fileB, [fileB]);
+    await view.run('modbench.mod.removePublisherTag', b, [b]);
 
-    expect(createQuickPick).not.toHaveBeenCalled();
-    expect(fake.calls).toEqual([]);
+    expect(seen.createdQuickPicks).toEqual([]);
+    expect(view.adapter.calls).toEqual([]);
   });
 });

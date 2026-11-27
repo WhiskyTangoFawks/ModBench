@@ -34,6 +34,8 @@ export class ModsTreeView extends FakeTreeView {
 export class FakeWebviewPanel {
   title: string;
   disposed = false;
+  /** The options `createWebviewPanel` opened the panel with. */
+  panelOptions: unknown;
   readonly posted: unknown[] = [];
   private readonly heard: { message: Listener<unknown>[]; dispose: (() => void)[] } = { message: [], dispose: [] };
   readonly webview = {
@@ -71,6 +73,8 @@ export const seen = {
   decorationProviders: [] as vscode.FileDecorationProvider[],
   diagnostics: new Map<string, FakeDiagnosticCollection>(),
   customEditors: new Map<string, CustomEditor>(),
+  /** The options each custom editor was registered with, by view type. */
+  customEditorOptions: new Map<string, unknown>(),
   /** Each panel a custom editor or `createWebviewPanel` opened, in order. */
   panels: [] as FakeWebviewPanel[],
   fileSystems: new Map<string, unknown>(),
@@ -188,7 +192,10 @@ export const vscodeModule = {
   workspace: {
     ...fakeVscodeModule().workspace,
     getConfiguration: () => ({ get: (key: string) => answers.settings.get(key) }),
-    onDidChangeConfiguration: (listener: Listener<{ affectsConfiguration(section: string): boolean }>) => { settingListeners.push(listener); return noDisposable(); },
+    onDidChangeConfiguration: (listener: Listener<{ affectsConfiguration(section: string): boolean }>) => {
+      settingListeners.push(listener);
+      return { dispose: () => { const at = settingListeners.indexOf(listener); if (at >= 0) settingListeners.splice(at, 1); } };
+    },
     registerFileSystemProvider: (scheme: string, provider: unknown) => { seen.fileSystems.set(scheme, provider); return noDisposable(); },
     get workspaceFolders() { return seen.workspaceFolders; },
     updateWorkspaceFolders: (start: number, deleteCount: number, ...added: { uri: vscode.Uri; name: string }[]) => {
@@ -220,8 +227,12 @@ export const vscodeModule = {
     setStatusBarMessage: (message: string) => { seen.statusBar.push(message); return noDisposable(); },
     withProgress,
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => { seen.decorationProviders.push(provider); return noDisposable(); },
-    registerCustomEditorProvider: (viewType: string, provider: CustomEditor) => { seen.customEditors.set(viewType, provider); return noDisposable(); },
-    createWebviewPanel: (_viewType: string, title: string) => openPanel(title),
+    registerCustomEditorProvider: (viewType: string, provider: CustomEditor, options?: unknown) => {
+      seen.customEditors.set(viewType, provider);
+      seen.customEditorOptions.set(viewType, options);
+      return noDisposable();
+    },
+    createWebviewPanel: (_viewType: string, title: string, _column?: unknown, options?: unknown) => Object.assign(openPanel(title), { panelOptions: options }),
   },
   commands: {
     ...filterBoxCommandsMock(seen),
