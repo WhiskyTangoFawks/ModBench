@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -42,9 +43,10 @@ public sealed class IngestRetentionTests : IDisposable
         Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryTheIngestsRowsOutgrow}'");
 
-        Waits.Reached(() => index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Holds(out _, out _), "a read in the memory limit");
+        IReadOnlyList<ReferenceResult>? references = null;
+        Waits.Reached(() => index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Holds(out references, out _), "a read in the memory limit");
 
-        Assert.Equal(ReferringRecordCount, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Value().Count);
+        Assert.Equal(ReferringRecordCount, references?.Count);
     }
 
     private static IEnumerable<PluginDocument> ReferringRecords()
