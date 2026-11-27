@@ -151,6 +151,10 @@ echo "=== Deleted tests and their survivors ==="
 python3 "$ROOT/.claude/skills/validate/check_deleted_tests.py" "$ROOT" main \
   || { echo "--- DELETED TEST GATE FAILED ---"; FAILED=true; }
 
+echo "=== Test waits on real time ==="
+python3 "$ROOT/.claude/skills/validate/check_test_waits.py" "$ROOT" \
+  || { echo "--- TEST WAIT GATE FAILED ---"; FAILED=true; }
+
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
 # A bare dotnet test runs a branch's tests: MEditService/Directory.Build.props holds their filter, and a

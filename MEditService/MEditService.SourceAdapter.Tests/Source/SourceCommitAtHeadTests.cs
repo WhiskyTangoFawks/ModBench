@@ -296,13 +296,20 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     [Fact, Kind(Kinds.Posix)]
     public async Task ACloneCancelledWhileGitWaits_StopsGit_LeavingTheFolderHoldingNothing()
     {
-        var stalled = Directory.CreateDirectory(Path.Combine(_root, "stalled", ".git")).FullName;
-        using (var fifo = System.Diagnostics.Process.Start("mkfifo", Path.Combine(stalled, "HEAD"))) await fifo.WaitForExitAsync();
+        var head = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "stalled", ".git")).FullName, "HEAD");
+        using (var fifo = System.Diagnostics.Process.Start("mkfifo", head)) await fifo.WaitForExitAsync();
         Git(_submodule.Instance, "config", "-f", ".gitmodules", "submodule.Mod.url", Path.Combine(_root, "stalled"));
-        using var cancelling = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cancelling = new CancellationTokenSource();
+        var cloning = Task.Run(() => CommitAtHead(_commits["second"], cancelling.Token).Stopped());
+        var gitReadingHead = Task.Run(() => new FileStream(head, FileMode.Open, FileAccess.Write));
 
-        var failure = await Task.Run(() => CommitAtHead(_commits["second"], cancelling.Token).Stopped())
-            .WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.Same(gitReadingHead, await Task.WhenAny(gitReadingHead, cloning).WaitAsync(Waits.Patience));
+        SourceFailure failure;
+        await using (await gitReadingHead)
+        {
+            await cancelling.CancelAsync();
+            failure = await cloning.WaitAsync(Waits.Patience);
+        }
 
         Assert.Equal("the clone was cancelled", failure.Reason);
         Assert.False(Directory.Exists(SourceFolder) && Directory.EnumerateFileSystemEntries(SourceFolder).Any());

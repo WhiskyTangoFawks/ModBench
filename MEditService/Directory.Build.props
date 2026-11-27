@@ -22,12 +22,10 @@
   </PropertyGroup>
 
   <!-- A bare dotnet test runs the tests of a branch (spec/architecture/tests.md), and Windows leaves out the POSIX-only
-       ones. A virtual machine, MEDIT_VIRTUAL_MACHINE=true, leaves out the measured ones. A filter on the command line
-       replaces this one. -->
+       ones. A filter on the command line replaces this one. -->
   <PropertyGroup>
-    <VSTestTestCaseFilter>Kind!=Tool</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter>Kind!=Tool&amp;Kind!=Generator</VSTestTestCaseFilter>
     <VSTestTestCaseFilter Condition="'$(OS)' == 'Windows_NT'">$(VSTestTestCaseFilter)&amp;Kind!=Posix</VSTestTestCaseFilter>
-    <VSTestTestCaseFilter Condition="'$(MEDIT_VIRTUAL_MACHINE)' == 'true'">$(VSTestTestCaseFilter)&amp;Kind!=Measured</VSTestTestCaseFilter>
   </PropertyGroup>
 
   <!-- Every production box, by the same naming rule the architecture gates read the solution

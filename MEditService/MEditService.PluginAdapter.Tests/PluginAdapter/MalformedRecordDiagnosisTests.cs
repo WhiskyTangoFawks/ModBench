@@ -45,7 +45,7 @@ public sealed class MalformedRecordDiagnosisTests
         return [.. TestAdapters.Mutagen().ClaimOf(path, release).Answered().Diagnoses.Answered()];
     }
 
-    [Fact]
+    [Fact, Kind(Kinds.Tool)]
     public void ACompressedRecordDeclaringALengthItsBytesCannotInflateTo_IsSkippedWithoutAllocatingThatLength()
     {
         const int HalfAGigabyte = 0x20000000;

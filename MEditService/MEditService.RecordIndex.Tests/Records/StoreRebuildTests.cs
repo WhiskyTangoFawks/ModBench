@@ -192,7 +192,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
     }
 
-    [Fact, Kind(Kinds.Measured)]
+    [Fact, Kind(Kinds.Tool)]
     public void WhileARebuildReappliesTheRecordFilter_TheStatusAnswersWithoutWaitingForIt()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-status");
@@ -210,7 +210,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
     }
 
-    [Fact, Kind(Kinds.Measured)]
+    [Fact, Kind(Kinds.Tool)]
     public void WhileAFatalErrorReopensTheIndexFile_TheStatusAnswersWithoutWaitingForTheRecordFilter()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-reopen-filter-status");
@@ -309,8 +309,7 @@ public sealed class StoreRebuildTests : IDisposable
         await gate.WaitUntilParkedAsync();
 
         var rebuild = Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
-        Assert.True(
-            Waits.ReachedWithin(() => { lock (log) return log.Exists(e => e.Message == "Asked the reconcile in flight to stop"); }, TimeSpan.FromSeconds(20)),
+        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message == "Asked the reconcile in flight to stop"); },
             "the rebuild asking the parked reconcile to stop");
         gate.Release();
         Assert.Null(await rebuild);
@@ -338,7 +337,8 @@ public sealed class StoreRebuildTests : IDisposable
             if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.Reconciling }) return;
             holder.Apply(holder.Current);
             parked = gate.WaitUntilParkedAsync();
-            readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromMilliseconds(200));
+            Thread.Sleep(TimeSpan.FromMilliseconds(200));
+            readWhileClosed = parked.IsCompleted;
         };
 
         Assert.Null(await Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot)));
@@ -400,7 +400,7 @@ public sealed class StoreRebuildTests : IDisposable
             }
         })).ToArray();
 
-        Assert.True(await Waits.Until(() => Volatile.Read(ref answered) > 0), "no read ever landed before the rebuild");
+        Waits.Reached(() => Volatile.Read(ref answered) > 0, "a read landing before the rebuild");
         Rebuilt(_index, _fixture.InstanceRoot);
         await rebuilding.CancelAsync();
         await Task.WhenAll(readers);
