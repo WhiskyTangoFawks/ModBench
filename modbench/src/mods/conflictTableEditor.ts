@@ -70,7 +70,8 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         ? { type: CONFLICT_TABLE_SHOWN, table } : { type: CONFLICT_TABLE_SHOWN, table, notice };
       void panel.webview.postMessage(message);
     };
-    const show = async (view: Pick<TableInstance, 'value' | 'sequence'>) => {
+    const show = async ({ value, sequence }: Pick<TableInstance, 'value' | 'sequence'>) => {
+      const view = { value, sequence };
       const mine = ++newest;
       try {
         const files = copiesToRead(view.value, conflictPaths(view, mod));
