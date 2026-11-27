@@ -60,7 +60,7 @@ describe('handing mEdit an unsaved document', () => {
   it('hands only the newest change of a document that waits behind the one in flight', async () => {
     const mEdit = await runningHandOver();
     let answerFirst!: () => void;
-    mEdit.answerWith(() => new Promise((resolve) => { answerFirst = () => { resolve(new Response(null, { status: 204 })); }; }));
+    mEdit.answerWith(() => new Promise((resolve) => { answerFirst = () => { resolve(noContent()); }; }));
 
     mEdit.client.handUnsavedDocument(typed('first', 1));
     mEdit.client.handUnsavedDocument(typed('second', 2));

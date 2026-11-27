@@ -3,6 +3,7 @@ import { applyEdit, clipboard, commandHandlers, editorVscode } from './editorVsc
 
 vi.mock('vscode', () => editorVscode);
 
+import type { RecordEditChangesOutcome } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { changeNamesPlugin } from '../../client/test/says';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -19,7 +20,7 @@ const identity = { formKey: address.formKey, plugin: plugin.name, origin: plugin
 
 beforeEach(forgetEditor);
 
-function makeDeps(answer: Awaited<ReturnType<InMemoryMEditClient['getEditChanges']>>) {
+function makeDeps(answer: RecordEditChangesOutcome) {
   const meditClient = new InMemoryMEditClient();
   meditClient.setQueryAnswer('getEditChanges', answer);
   meditClient.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: FILE });
@@ -93,7 +94,7 @@ describe('an edit of a record', () => {
     ['an edit applied', applied({ documents: [{ path: FILE, text: 'edited' }] }), [['7']]],
     ['an edit that changes nothing', applied(), [['7']]],
     ['an edit mEdit refuses', { applied: false, refusal: 'ReadOnly', message: 'Read-only.' }, []],
-  ] as [string, Awaited<ReturnType<InMemoryMEditClient['getEditChanges']>>, string[][]][])('runs what follows only for %s', async (_what, answer, copied) => {
+  ] as [string, RecordEditChangesOutcome, string[][]][])('runs what follows only for %s', async (_what, answer, copied) => {
     const { cut } = makeDeps(answer);
     clipboard.writeText.mockResolvedValue(undefined);
 

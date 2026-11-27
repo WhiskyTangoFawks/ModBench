@@ -18,7 +18,6 @@ function addressInfo(address: ReturnType<Server['address']>): AddressInfo {
   return address;
 }
 
-
 function spawning(overrides: Partial<Backend> = {}, { log, ignoresStdinClose = false }: { log?: LeveledLog; ignoresStdinClose?: boolean } = {}) {
   const { backend, spawned } = spawnedBackend(overrides, backendProcesses({ ignoresStdinClose }));
   return { client: clientOver(backend, { log }), spawned };
