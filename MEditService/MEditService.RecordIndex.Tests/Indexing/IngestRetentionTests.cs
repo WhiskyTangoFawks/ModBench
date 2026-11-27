@@ -3,6 +3,8 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
@@ -16,8 +18,8 @@ public sealed class IngestRetentionTests : IDisposable
     private const string Target = "000800:Streamed.esp";
     private const int MegabyteRecordCount = 160;
     private const int MegabyteEditorId = 1 << 20;
-    private const int ReferringRecordCount = 2_000;
-    private const string MemoryTheIngestsRowsOutgrow = "3MB";
+    private const int ReferringRecordCount = 6_000;
+    private const string MemoryTheIngestsRowsOutgrow = "5MB";
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-ingest").WithPlugin(Plugin).Build();
 
@@ -38,11 +40,13 @@ public sealed class IngestRetentionTests : IDisposable
     public void AfterAPluginsIngest_AReadAnswersInAMemoryLimitTheIngestsRowsOutgrow()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Plugin, ReferringRecords)));
+        Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryTheIngestsRowsOutgrow}'");
 
-        Waits.Reached(() => index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Holds(out _, out _), "a read in the memory limit");
+        IReadOnlyList<ReferenceResult>? references = null;
+        Waits.Reached(() => index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Holds(out references, out _), "a read in the memory limit");
 
-        Assert.Equal(ReferringRecordCount, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Value().Count);
+        Assert.Equal(ReferringRecordCount, references?.Count);
     }
 
     private static IEnumerable<PluginDocument> ReferringRecords()
