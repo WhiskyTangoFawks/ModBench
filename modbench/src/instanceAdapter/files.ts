@@ -313,15 +313,17 @@ export const textByStamp = stampKept(readText, texts, true);
 
 export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 
-/** A reader of what `parse` makes of a file's text, parsing again only when the text is not the one parsed before. */
+/** A reader of what `parse` makes of a file's text, parsing again only when the text changed. A parse lasts as long as
+ *  `textByStamp` keeps the text. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) => {
-  const parsed = new Map<string, { readonly text: string; readonly value: T }>();
+  const parsed = new WeakMap<Kept<string>, { readonly text: string; readonly value: T }>();
   return async (path) => {
     const text = await textByStamp(path);
-    const held = parsed.get(pathKey(path));
+    const kept = texts.get(pathKey(path));
+    const held = kept && parsed.get(kept);
     if (held?.text === text) return held.value;
     const value = parse(text);
-    parsed.set(pathKey(path), { text, value });
+    if (kept !== undefined) parsed.set(kept, { text, value });
     return value;
   };
 };

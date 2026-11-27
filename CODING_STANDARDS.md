@@ -37,7 +37,7 @@ These are the marks a skipped loop or a drifted layer leaves. A review looks for
 
 - A hunk changes behaviour and no test in the diff covers it. → Name the hunk. Red comes before green.
 - A diff adds a test that another test already proves, or that proves all another does and more. → Keep the one that proves more.
-- A diff deletes a test. → Its commit names the test that still proves the rule, or the mark that says nothing needs to. Check that the named test asserts the rule and still stands at the merge.
+- A diff deletes a test. → Its commit names the test or tool that still proves the rule, or the mark that says nothing needs to. Check that the named test or tool asserts the rule and still stands at the merge.
 - A test cannot fail. Its expected value is computed the way the code computes it, or it asserts only that a value exists or nothing threw, or it asserts what its own double was told to return. → Assert a known literal from the spec, or delete the test.
 - A test asserts shape: a type, method or field exists, or a call returned an object. → Assert the outcome a caller observes, or delete it. The compiler holds shape.
 - A test proves an absence: a removed method, a retired field, an old wire form. → Delete it. The compiler holds absence.

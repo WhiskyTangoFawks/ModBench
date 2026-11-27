@@ -186,7 +186,8 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
   }
 };
 
-const modKey = (rootOnly: boolean, folder: string): string => `mod|${rootOnly}|${folder}`;
+const MOD_KEY = 'mod|';
+const modKey = (rootOnly: boolean, folder: string): string => `${MOD_KEY}${rootOnly}|${folder}`;
 
 /** An instance's origin files, a walk answered again while each folder it listed answers the same listing. A reading that
  *  starts forgets each walk of a mod the reading before it did not ask for. */
@@ -197,14 +198,14 @@ export function originFilesReader(
   const walked = new Map<string, Walked | undefined>();
   // Each reading hands its own mod folders, so other folders start one, and what is asked until the next counts as used.
   // Overlapping readings take turns starting, so a walk one still needs can be forgotten and made again.
-  const readings = new Map<boolean, { readonly folders: ModFolders; readonly used: Set<string> }>();
+  let reading: { readonly folders: ModFolders; readonly used: Set<string> } | undefined;
 
-  const started = (rootOnly: boolean, folders: ModFolders): void => {
-    const before = readings.get(rootOnly);
+  const started = (folders: ModFolders): void => {
+    const before = reading;
     if (before?.folders === folders) return;
-    readings.set(rootOnly, { folders, used: new Set() });
+    reading = { folders, used: new Set() };
     if (before === undefined) return;
-    for (const key of walked.keys()) if (key.startsWith(modKey(rootOnly, '')) && !before.used.has(key)) {
+    for (const key of walked.keys()) if (key.startsWith(MOD_KEY) && !before.used.has(key)) {
       walked.delete(key);
       context.watch.listed(key, undefined);
     }
@@ -226,11 +227,11 @@ export function originFilesReader(
       return walkedOnce(`overwrite|${rootOnly}`, () => listOverwrite(dir, rootOnly),
         ({ root, files, folders, notes }) => ({ origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes }));
     }
-    if (typeof modFolders === 'object') started(rootOnly, modFolders);
+    if (typeof modFolders === 'object') started(modFolders);
     const folder = await originFolder(context, origin, modFolders);
     if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
     const key = modKey(rootOnly, folder);
-    readings.get(rootOnly)?.used.add(key);
+    reading?.used.add(key);
     return walkedOnce(key, () => walkMod(folder, rootOnly),
       ({ files, folders, notes }) => ({ origin: origin.name, folder, files, folders, notes }));
   };

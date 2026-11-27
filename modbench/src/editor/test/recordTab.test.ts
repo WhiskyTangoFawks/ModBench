@@ -130,6 +130,19 @@ describe('a record tab going with the record to its new FormKey and reading it t
     expect(opened.map(formKeyOf)).toEqual([NEW, NEW, ELSEWHERE]);
   });
 
+  it('holds only the tabs showing the record, so a tab showing another reads it as soon as mEdit reports it', async () => {
+    const { client, showing, held } = tabsOver();
+    const [, elsewhere] = [showing(OLD), showing(ELSEWHERE)];
+    const { editing, answer } = held();
+
+    client.change(rowsChanged([ELSEWHERE]));
+    const whileInFlight = loadsOf(elsewhere);
+    answer(undefined);
+    await editing;
+
+    expect(whileInFlight).toEqual([{ type: 'loadRecord', formKey: ELSEWHERE }]);
+  });
+
   it('sends an edit fired with no tab, addressed with the pre-move key, to the new key, holding and following the tab that moved', async () => {
     const { client, showing, moved, held, sentTo, formKeyOf } = tabsOver();
     const [tabMoved, elsewhere] = [showing(OLD), showing(ELSEWHERE)];

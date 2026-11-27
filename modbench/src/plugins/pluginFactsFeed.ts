@@ -7,7 +7,6 @@ import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableP
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
 import { judgingReads } from '../sortingRules/lootJudge';
-import type { LootEntry } from '../sortingRules/lootMetadata';
 
 type JudgingReads = ReturnType<typeof judgingReads>;
 import type { ReadRules } from '../sortingRules/lootMetadata';
@@ -70,8 +69,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private refreshing: Promise<unknown> = Promise.resolve();
   // What the last judgement of the sorting rules to land read of files.
   private landedReads: JudgingReads = { reads: [], judges: () => false };
-  // The reads of the last order and rules judged, kept while both are the same objects: the reads depend on nothing else.
-  private judging?: { readonly order: readonly PluginAddress[]; readonly entries: readonly LootEntry[]; readonly reads: JudgingReads };
   // The last `rejudge` asked.
   private rejudging: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
@@ -159,15 +156,10 @@ export class PluginFactsFeed implements vscode.Disposable {
   private async lootRules(active: readonly PluginAddress[], trusted: boolean): Promise<{ loot: LootInput; reads: JudgingReads }> {
     for (;;) {
       const read = this.deps.rules();
-      const reads = this.readsOf(active, read.entries);
+      const reads = judgingReads(refsOf(active), read.entries);
       const files = await this.deps.fileFacts(reads.reads, trusted);
       if (read === this.deps.rules()) return { loot: { entries: read.entries, groups: read.groups, files }, reads };
     }
-  }
-
-  private readsOf(order: readonly PluginAddress[], entries: readonly LootEntry[]): JudgingReads {
-    if (this.judging?.order !== order || this.judging.entries !== entries) this.judging = { order, entries, reads: judgingReads(refsOf(order), entries) };
-    return this.judging.reads;
   }
 
   /** Whether the last judgement of the sorting rules to land read a file, relative to the Data folder: its presence, bytes or version. */

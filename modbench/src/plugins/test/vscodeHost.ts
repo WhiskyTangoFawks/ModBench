@@ -188,6 +188,10 @@ export const host = {
   shown,
   /** The input box opened last, as the name filter's. */
   inputBox: () => inputBoxes.at(-1),
+  /** Forgets what it recorded of the gestures run, keeping what is registered and shown. */
+  forgetRecorded: () => {
+    for (const recorded of [quickPicks, progress, contexts, executed, opened, inputsAsked]) recorded.length = 0;
+  },
   /** Forgets everything registered and held, as a fresh window. */
   reset: () => {
     treeViews.clear();
