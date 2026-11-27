@@ -113,6 +113,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     modStatuses: deps.modStatuses,
     fileReads: deps.fileReads,
     reporter: reporterFor('pluginListTree.drop'),
+    log: (message) => log('error', `[loadOrder] ${message}`),
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
     publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,
       (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),

@@ -47,6 +47,8 @@ export interface PluginFactsFeedDeps {
   publishSortingInfo: (info: readonly PluginProblem[]) => void;
   /** The sorting rule files' own lines in the Problems panel. */
   publishRuleFiles: (diagnostics: readonly RuleFileDiagnostic[]) => void;
+  /** The Output, where a re-read that threw is told. */
+  log: (message: string) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -66,6 +68,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // Each `refresh` reads after the one before it answered, so an answer for a plugin never lands over a newer one.
   private refreshing: Promise<unknown> = Promise.resolve();
+  // The reason the Output was last told a re-read threw for, until a re-read answers.
+  private toldThrow?: string;
   // What the last judgement of the sorting rules to land read of files.
   private landedReads: JudgingReads = { reads: [], judges: () => false };
   // The reads of the last order and rules judged, kept while both are the same objects: the reads depend on nothing else.
@@ -201,9 +205,19 @@ export class PluginFactsFeed implements vscode.Disposable {
    *  After a failed read it reads every plugin, as any may be stale. Never supersedes a hand-off. */
   refresh(named?: NamedPlugins): Promise<void> {
     const generation = this.generation;
-    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation));
-    this.refreshing = refreshed.catch(() => undefined);
+    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation))
+      .catch((err: unknown) => { this.refreshThrew(errorMessage(err), generation); });
+    this.refreshing = refreshed;
     return refreshed;
+  }
+
+  // ADR-0019: a re-read that threw is a background failure that recovers at the next re-read, which reads every plugin. The
+  // message line says it until then, and the Output once for each reason.
+  private refreshThrew(reason: string, generation: number): void {
+    if (generation !== this.generation) return;
+    if (this.toldThrow !== reason) this.deps.log(`re-reading mEdit's facts about each plugin threw: ${reason}`);
+    this.toldThrow = reason;
+    this.factsFailed(reason);
   }
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {
@@ -213,6 +227,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins(named);
     if (generation !== this.generation) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
+    this.toldThrow = undefined;
     const sortingChanged = this.facts.refreshed(plugins, named);
     this.deps.publishSourceUnreadable(this.facts.problemsOf(named).sourceUnreadable, named);
     await this.readChangedOutside(named);

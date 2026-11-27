@@ -16,7 +16,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { exactPluginAddressKey, pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginPlace, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
-import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
+import { PluginFactsFeed, type PluginFactsClient, type PluginFactsFeedDeps } from './pluginFactsFeed';
 import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
@@ -97,6 +97,8 @@ interface PluginsTreeProviderOptions {
   modStatuses: LastModStatuses;
   /** Says why a drop cannot land. */
   reporter: Reporter;
+  /** The Output. */
+  log: PluginFactsFeedDeps['log'];
 }
 
 
@@ -194,6 +196,7 @@ export class PluginsTreeProvider
       publishSortingWarnings: options.publishSortingWarnings,
       publishSortingInfo: options.publishSortingInfo,
       publishRuleFiles: options.publishRuleFiles,
+      log: options.log,
       rules: () => this.rules,
       fileFacts: (reads, trusted) => {
         const read = () => readFileFacts(reads, options.fileReads, {

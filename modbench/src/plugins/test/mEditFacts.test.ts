@@ -340,6 +340,21 @@ describe('a throw that is no failed read', () => {
     expect([thrown, facts.message()]).toEqual([new Error('the scan broke'), undefined]);
   });
 
+  it('of a re-read says the last good read shows on the message line, and the throw in the Output once however often it repeats', async () => {
+    const facts = factsOver([A]);
+    await facts.reconciled([held()]);
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke'));
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke'));
+
+    await facts.changed([held()]);
+    await facts.changed([held()]);
+
+    expect([facts.message(), facts.output.filter((line) => line.includes('the read broke'))]).toEqual([
+      "Showing the last good read: mEdit's facts about each plugin: the read broke",
+      ["[loadOrder] re-reading mEdit's facts about each plugin threw: the read broke"],
+    ]);
+  });
+
   it('reads the next re-read after one that threw', async () => {
     const facts = factsOver([A]);
     await facts.indexed({ indexed: [A] });
