@@ -42,6 +42,7 @@ These are the marks a skipped loop or a drifted layer leaves. A review looks for
 - A test asserts shape: a type, method or field exists, or a call returned an object. → Assert the outcome a caller observes, or delete it. The compiler holds shape.
 - A test proves an absence: a removed method, a retired field, an old wire form. → Delete it. The compiler holds absence.
 - A test reaches past the seam: a private member, or a row read around the interface. → Move it to the seam and assert the outcome there.
+- A test file is named for a file behind its box's seam. → Name it for what the seam offers.
 - A refactor hunk arrives with an edit to the test of the same behaviour. → The test was coupled to the implementation. Rewrite it at the seam so the next refactor leaves it alone.
 - A test name says which method runs. → Rename it to say which behaviour holds.
 - A test contains a loop or a conditional. → Make each case a row of a table, or split it into one test per path.
