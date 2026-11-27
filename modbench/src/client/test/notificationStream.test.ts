@@ -1,348 +1,248 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { SseNotificationSubscriber } from '../notificationStream';
-import type { NotificationKind } from '../MEditClient';
-import type { NotificationEvent } from '../apiClient';
-import { IGNORED_THROWS, notificationEventFixture, recordedThrows } from './fixtures';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { MEditClient } from '..';
+import { EMPTY_SNAPSHOT, notificationEventFixture, recordedThrows } from './fixtures';
 import { leveledLog } from '../../test/leveledLog';
-import { present } from '../../ports/present';
 import { settled } from '../../test/eventually';
+import { fakeMEdit, runningMEdit } from './fakeMEdit';
 
-function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
-  return notificationEventFixture({ kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, ...overrides });
+type NotificationEvent = ReturnType<typeof notificationEventFixture>;
+
+const encoder = new TextEncoder();
+const malformed = encoder.encode('event: rows-changed\ndata: {"kind":"rows-changed"}\n\n');
+const setAside = (folder: string, paths: string[] = ['.medit_tmp_aside_x/Patch.esp']): NotificationEvent =>
+  notificationEventFixture({ kind: 'files-set-aside', folder, setAside: paths });
+
+/** What the client tells as set aside, past the fake's own marks. */
+function setAsidesHeard(client: MEditClient): { folder: string; paths: readonly string[] }[] {
+  const heard: { folder: string; paths: readonly string[] }[] = [];
+  client.onFilesSetAside((told) => { if (!told.folder.startsWith('/heard/')) heard.push(told); });
+  return heard;
 }
 
-function sseFrame(event: NotificationEvent): Uint8Array {
-  return new TextEncoder().encode(`event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`);
-}
+const foldersHeard = (client: MEditClient): { readonly folders: readonly string[] } => {
+  const heard = setAsidesHeard(client);
+  return { get folders() { return heard.map(({ folder }) => folder); } };
+};
 
-function commentFrame(): Uint8Array {
-  return new TextEncoder().encode(': connected\n\n');
-}
-
-function frameOfValidJsonMissingTheFieldsAnEventRequires(): Uint8Array {
-  return new TextEncoder().encode('event: rows-changed\ndata: {"kind":"rows-changed"}\n\n');
-}
-
-function scriptedStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(controller) {
-      for (const chunk of chunks) controller.enqueue(chunk);
-      controller.close();
-    },
-  });
-}
-
-function streamResponse(chunks: Uint8Array[]): Response {
-  return new Response(scriptedStream(chunks), { status: 200 });
-}
-
-const unopened = () => new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never opened')), listenerThrows: IGNORED_THROWS });
+const npc = { path: '/m/plugin-source/A.esp/Npc.json', text: '{}', version: 1 };
+const handedOver = (mEdit: ReturnType<typeof fakeMEdit>) =>
+  mEdit.fetch.mock.calls.filter(([request]) => request.url.includes('/unsaved-document')).length;
+const unsavedTaken = ['/unsaved-document', () => Promise.resolve(new Response(null, { status: 204 }))] as const;
 
 describe('SseNotificationSubscriber', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => { vi.useRealTimers(); });
 
   it('dispatches an event frame and skips a comment-only one', async () => {
-    const event = rowsChanged(['000001:Test.esp']);
-    const openStream = vi.fn().mockResolvedValue(streamResponse([commentFrame(), sseFrame(event)]));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream });
-    const received: unknown[] = [];
-    subscriber.onNotification('rows-changed', (p) => received.push(p));
+    const { client, streams, fire } = await runningMEdit();
+    const heard = foldersHeard(client);
 
-    subscriber.start();
-    await settled(() => expect(received).toHaveLength(1));
+    streams[0]?.write(encoder.encode(': connected\n\n'));
+    await fire(setAside('/mods/ModA'));
 
-    expect(received[0]).toEqual({ plugin: { name: event.plugin, origin: event.origin }, keys: event.keys });
-    subscriber.stop();
+    expect(heard.folders).toEqual(['/mods/ModA']);
   });
 
   it.each([
-    ['the stream ends', () => Promise.resolve(streamResponse([]))],
-    ['a malformed frame, without dispatching it', () => Promise.resolve(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))],
-    ['openStream itself rejects', () => Promise.reject(new Error('ECONNREFUSED'))],
-  ])('reconnects after %s, without a live backend, as a one-shot adapter would be silently killed by a hiccup for the rest of the session', async (_, firstAttempt) => {
-    const openStream = vi.fn()
-      .mockImplementationOnce(firstAttempt)
-      .mockResolvedValueOnce(streamResponse([sseFrame(rowsChanged(['000002:Other.esp']))]));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
-    const received: unknown[] = [];
-    subscriber.onNotification('rows-changed', (p) => received.push(p));
+    ['the stream ends', [], (mEdit: ReturnType<typeof fakeMEdit>) => { mEdit.streams[0]?.end(); }, 2],
+    ['a malformed frame, without dispatching it', [], (mEdit: ReturnType<typeof fakeMEdit>) => { mEdit.streams[0]?.write(malformed); }, 2],
+    ['openStream itself rejects', [0], () => undefined, 1],
+  ])('reconnects after %s, without a live backend, as a one-shot adapter would be silently killed by a hiccup for the rest of the session', async (_, refusedOpens, drop, opened) => {
+    const mEdit = await runningMEdit({ refusedOpens });
+    const heard = foldersHeard(mEdit.client);
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(1000);
-    await settled(() => expect(received).toHaveLength(1));
+    drop(mEdit);
+    await settled(() => { expect(mEdit.streams).toHaveLength(opened); });
+    await mEdit.fire(setAside('/mods/ModB'));
 
-    expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received).toEqual([{ plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000002:Other.esp'] }]);
-    subscriber.stop();
+    expect(heard.folders).toEqual(['/mods/ModB']);
   });
 
   it('a throwing listener is reported as thrown and does not drop the stream, and the listeners after it hear the frame', async () => {
-    const openStream = vi.fn().mockResolvedValue(streamResponse([sseFrame(rowsChanged(['000001:Test.esp']))]));
     const log = leveledLog();
     const { sink, threw } = recordedThrows();
-    const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
-    const heard: unknown[] = [];
-    subscriber.onNotification('rows-changed', () => { throw new Error('listener broke'); });
-    subscriber.onNotification('rows-changed', (p) => heard.push(p));
+    const { client, streams, fire } = await runningMEdit({ log, listenerThrows: sink });
+    client.onFilesSetAside(({ folder }) => { if (folder === '/mods/ModA') throw new Error('listener broke'); });
+    const heard = foldersHeard(client);
 
-    subscriber.start();
-    await settled(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
+    await fire(setAside('/mods/ModA'));
 
-    expect(heard).toHaveLength(1);
+    expect(heard.folders).toEqual(['/mods/ModA']);
     expect(threw.map((t) => t.detail)).toEqual(['listener broke']);
     expect(log.lines.warn.join('\n')).not.toContain('stream dropped');
-    subscriber.stop();
+    expect(streams).toHaveLength(1);
   });
 
   it('says a listener recovered once a call of it that threw is followed by one that returns', async () => {
-    const frames = [sseFrame(rowsChanged(['a'])), sseFrame(rowsChanged(['b']))];
-    const openStream = vi.fn().mockResolvedValue(streamResponse(frames));
-    const log = leveledLog();
     const { sink, threw, recovered } = recordedThrows();
-    const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
+    const { client, fire } = await runningMEdit({ listenerThrows: sink });
     const listener = vi.fn().mockImplementationOnce(() => { throw new Error('once'); });
-    subscriber.onNotification('rows-changed', listener);
+    client.onFilesSetAside(listener);
 
-    subscriber.start();
-    await settled(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
+    await fire(setAside('/mods/ModA'));
 
     expect(threw).toHaveLength(1);
-    expect(recovered).toEqual([listener]);
-    subscriber.stop();
+    expect(recovered.filter((called) => called === listener)).toEqual([listener]);
   });
 
   it('a throwing reopen listener is reported as thrown and does not drop the stream, and the listeners after it hear the reopen', async () => {
-    const openStream = vi.fn().mockImplementation(() => Promise.resolve(streamResponse([])));
     const log = leveledLog();
     const { sink, threw } = recordedThrows();
-    const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
-    const heard = vi.fn();
-    subscriber.onReconnected(() => { throw new Error('reopen listener broke'); });
-    subscriber.onReconnected(heard);
+    const mEdit = await runningMEdit({ log, listenerThrows: sink, routes: [unsavedTaken] });
+    mEdit.client.handUnsavedDocument(npc);
+    await settled(() => { expect(handedOver(mEdit)).toBe(1); });
+    mEdit.client.onDidChange(() => { throw new Error('reopen listener broke'); });
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(1000);
-    await settled(() => expect(log.lines.info).toHaveLength(2));
+    await mEdit.reopen();
 
-    expect(heard).toHaveBeenCalledTimes(1);
+    await settled(() => { expect(handedOver(mEdit)).toBe(2); });
     expect(threw.map((t) => t.detail)).toEqual(['reopen listener broke']);
     expect(log.lines.warn.join('\n')).not.toContain('stream dropped');
-    subscriber.stop();
   });
 
   it('aborts the attempt when a malformed frame drops it, so the connection does not stay open', async () => {
-    const signals: AbortSignal[] = [];
-    const openStream = vi.fn().mockImplementation((signal: AbortSignal) => {
-      signals.push(signal);
-      return Promise.resolve(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]));
-    });
-    const log = leveledLog();
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, log, reconnectDelayMs: 100_000 });
+    const { streams } = await runningMEdit();
 
-    subscriber.start();
-    await settled(() => expect(log.lines.warn.join('\n')).toContain('stream dropped'));
+    streams[0]?.write(malformed);
 
-    expect(signals[0]?.aborted).toBe(true);
-    subscriber.stop();
+    await settled(() => { expect(streams[0]?.signal.aborted).toBe(true); });
   });
 
   it('start() is idempotent — a second call while running opens no second stream', async () => {
-    const openStream = vi.fn().mockResolvedValue(streamResponse([]));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 100_000 });
+    const { client, streams, fire } = await runningMEdit();
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    subscriber.start();
+    await client.start();
+    await fire();
 
-    expect(openStream).toHaveBeenCalledTimes(1);
-    subscriber.stop();
+    expect(streams).toHaveLength(1);
   });
 
   it('start() after a stop() taken between attempts opens one stream at once, not a delayed pair, the sleeping loop not waking on its own beside a second loop', async () => {
-    const openStream = vi.fn().mockResolvedValue(streamResponse([]));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 2000 });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const mEdit = await runningMEdit({ reconnectDelayMs: 2000 });
+    mEdit.streams[0]?.end();
+    await vi.advanceTimersByTimeAsync(0);
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    subscriber.stop();
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(2));
-
+    await mEdit.exit();
+    await mEdit.start();
     await vi.advanceTimersByTimeAsync(2000);
-    expect(openStream).toHaveBeenCalledTimes(3);
-    subscriber.stop();
-  });
 
-  it('whenConnected() settles only once the stream has answered', async () => {
-    let answer: ((response: Response) => void) | undefined;
-    const openStream = vi.fn().mockImplementation(() => new Promise<Response>((r) => { answer = r; }));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream });
-    let connected = false;
-
-    subscriber.start();
-    void subscriber.whenConnected().then(() => { connected = true; });
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    expect(connected).toBe(false);
-
-    present(answer, 'the promise-settling connection callback')(streamResponse([]));
-    await settled(() => expect(connected).toBe(true));
-    subscriber.stop();
+    expect(mEdit.streams).toHaveLength(2);
   });
 
   it('whenConnected() settles when the attempt fails, so the caller goes on without progress rather than waiting for a stream it will never get', async () => {
-    const openStream = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 100_000 });
-    let connected = false;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const put = vi.fn(() => new Promise<Response>(() => {}));
+    const { client } = fakeMEdit({ refusedOpens: [0], reconnectDelayMs: 100_000, routes: [['/load-order', put]] });
+    await client.start();
 
-    subscriber.start();
-    void subscriber.whenConnected().then(() => { connected = true; });
-    await settled(() => expect(connected).toBe(true));
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
 
-    subscriber.stop();
+    await settled(() => { expect(put).toHaveBeenCalledOnce(); });
   });
 
   it('announces a reopen after a drop, and not the first open, as a backend the client attached to without owning it can restart under a live status', async () => {
-    const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([]))
-      .mockResolvedValueOnce(streamResponse([]))
-      .mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
-    const reconnects = vi.fn();
-    subscriber.onReconnected(reconnects);
+    const mEdit = fakeMEdit();
+    const changes: unknown[] = [];
+    mEdit.client.onDidChange((change) => changes.push(change));
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    expect(reconnects).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1000);
-    await vi.advanceTimersByTimeAsync(1000);
+    await mEdit.start();
+    expect(changes).toEqual([undefined]);
+    await mEdit.reopen();
+    await mEdit.reopen();
 
-    expect(openStream).toHaveBeenCalledTimes(3);
-    expect(reconnects).toHaveBeenCalledTimes(2);
-    subscriber.stop();
+    expect(changes).toEqual([undefined, undefined, undefined]);
   });
 
   it('announces no reopen for the first open after a stop and start', async () => {
-    const openStream = vi.fn().mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
-    const reconnects = vi.fn();
-    subscriber.onReconnected(reconnects);
+    const mEdit = await runningMEdit();
+    await mEdit.exit();
+    const changes: unknown[] = [];
+    mEdit.client.onDidChange((change) => changes.push(change));
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    subscriber.stop();
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(2));
+    await mEdit.start();
+    await mEdit.fire();
 
-    expect(reconnects).not.toHaveBeenCalled();
-    subscriber.stop();
+    expect(changes).toEqual([undefined]);
   });
 
   it('announces no reopen for an attempt that failed', async () => {
-    const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([]))
-      .mockRejectedValue(new Error('ECONNREFUSED'));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
-    const reconnects = vi.fn();
-    subscriber.onReconnected(reconnects);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const mEdit = await runningMEdit({ refusedOpens: [1], reconnectDelayMs: 1000 });
+    const changes: unknown[] = [];
+    mEdit.client.onDidChange((change) => changes.push(change));
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
+    mEdit.streams[0]?.end();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(openStream).toHaveBeenCalledTimes(2);
-    expect(reconnects).not.toHaveBeenCalled();
-    subscriber.stop();
+    expect(changes).toEqual([]);
   });
 
   it('stop() aborts the in-flight attempt and stops retrying', async () => {
-    let sawSignal: AbortSignal | undefined;
-    const openStream = vi.fn().mockImplementation((signal: AbortSignal) => {
-      sawSignal = signal;
-      return new Promise<Response>(() => {});
-    });
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { client, streams } = await runningMEdit();
 
-    subscriber.start();
-    await settled(() => expect(openStream).toHaveBeenCalledTimes(1));
-    subscriber.stop();
+    await client.stop();
+    expect(streams[0]?.signal.aborted).toBe(true);
+    streams[0]?.end();
+    await vi.runAllTimersAsync();
 
-    expect(sawSignal?.aborted).toBe(true);
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(openStream).toHaveBeenCalledTimes(1);
+    expect(streams).toHaveLength(1);
   });
 });
 
 describe('SseNotificationSubscriber — typed listeners', () => {
-  const loadOrderStatus: NotificationEvent['loadOrderStatus'] = {
-    state: 'Ready', totalPlugins: 3, activePlugins: 2, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }],
-    conflictsComputed: true, failures: [], version: 4, validating: false,
-  };
-  const modlistProgress: NotificationEvent['modlistProgress'] = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
+  const progress = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
 
-  const filesSetAside = rowsChanged([], { kind: 'files-set-aside', folder: '/mods/ModA', setAside: ['.medit_tmp_aside_x/Patch.esp'] });
-
-  const cases: [NotificationKind, NotificationEvent, unknown][] = [
-    ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), {
-      totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false, validating: false,
-    }],
-    ['version-in-git-progress', rowsChanged([], { kind: 'version-in-git-progress', modlistProgress, versionInGitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
-    ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
-    ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
-    ['files-set-aside', filesSetAside, { folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }],
-  ];
-
-  function listenToEveryKind(subscriber: SseNotificationSubscriber): unknown[] {
+  async function versionInGit(...events: NotificationEvent[]) {
+    const mEdit = await runningMEdit({ routes: [['/version-in-git', () => new Promise<Response>(() => {})]] });
     const heard: unknown[] = [];
-    const hear = (kind: NotificationKind) => (payload: unknown) => { heard.push([kind, payload]); };
-    subscriber.onNotification('load-order-status', hear('load-order-status'));
-    subscriber.onNotification('version-in-git-progress', hear('version-in-git-progress'));
-    subscriber.onNotification('rows-changed', hear('rows-changed'));
-    subscriber.onNotification('plugin-changed', hear('plugin-changed'));
-    subscriber.onNotification('files-set-aside', hear('files-set-aside'));
+    void mEdit.client.versionInGit([], { onProgress: (status) => { heard.push(status); } });
+    await settled(() => { expect(mEdit.fetch.mock.calls.some(([request]) => request.url.includes('/version-in-git'))).toBe(true); });
+    await mEdit.fire(...events);
     return heard;
   }
 
-  it.each(cases)('hands a %s listener its kind\'s payload, and no listener of another kind anything', (kind, event, payload) => {
-    const subscriber = unopened();
-    const heard = listenToEveryKind(subscriber);
+  it('hands the progress of version in git to the call that asked for it', async () => {
+    const heard = await versionInGit(notificationEventFixture({ kind: 'version-in-git-progress', modlistProgress: progress, versionInGitPhase: 'Parsing' }));
 
-    subscriber.dispatch(event);
-
-    expect(heard).toEqual([[kind, payload]]);
+    expect(heard).toEqual([{ ...progress, phase: 'Parsing' }]);
   });
 
-  it.each(['load-order-status', 'version-in-git-progress', 'files-set-aside'] as const)('skips a %s frame missing its payload', (kind) => {
-    const subscriber = unopened();
-    const heard: unknown[] = [];
-    subscriber.onNotification(kind, (p) => heard.push(p));
-
-    subscriber.dispatch(rowsChanged([], { kind }));
-
-    expect(heard).toEqual([]);
+  it.each([
+    ['load-order-status', async () => {
+      const { client, fire } = await runningMEdit();
+      await fire(notificationEventFixture({ kind: 'load-order-status' }));
+      return client.recordIndexProgress;
+    }],
+    ['version-in-git-progress', async () => (await versionInGit(notificationEventFixture({ kind: 'version-in-git-progress' }))).at(0)],
+    ['files-set-aside', async () => {
+      const { client, fire } = await runningMEdit();
+      const heard = setAsidesHeard(client);
+      await fire(notificationEventFixture({ kind: 'files-set-aside' }));
+      return heard.at(0);
+    }],
+  ])('skips a %s frame missing its payload', async (_kind, heard) => {
+    await expect(heard()).resolves.toBeUndefined();
   });
 
   it('hands a files-set-aside listener the folder and paths a frame off the stream carries', async () => {
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: () => Promise.resolve(streamResponse([sseFrame(filesSetAside)])) });
-    const heard: unknown[] = [];
-    subscriber.onNotification('files-set-aside', (p) => heard.push(p));
+    const { client, fire } = await runningMEdit();
+    const heard = setAsidesHeard(client);
 
-    subscriber.start();
-    await settled(() => expect(heard).toEqual([{ folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }]));
-    subscriber.stop();
+    await fire(setAside('/mods/ModA'));
+
+    expect(heard).toEqual([{ folder: '/mods/ModA', paths: ['.medit_tmp_aside_x/Patch.esp'] }]);
   });
 
-  it('unsubscribe stops a typed listener', () => {
-    const subscriber = unopened();
-    const typed: unknown[] = [];
-    const off = subscriber.onNotification('plugin-changed', (p) => typed.push(p));
+  it('unsubscribe stops a typed listener', async () => {
+    const { client, fire } = await runningMEdit();
+    const typed: string[] = [];
+    const off = client.onFilesSetAside(({ folder }) => typed.push(folder));
 
-    subscriber.dispatch(rowsChanged([], { kind: 'plugin-changed' }));
+    await fire(setAside('/mods/ModA'));
     off();
-    subscriber.dispatch(rowsChanged([], { kind: 'plugin-changed' }));
+    await fire(setAside('/mods/ModB'));
 
-    expect(typed).toHaveLength(1);
+    expect(typed).not.toContain('/mods/ModB');
   });
 });
