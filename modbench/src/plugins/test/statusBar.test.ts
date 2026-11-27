@@ -25,7 +25,7 @@ function statusBar(status: InMemoryMEditClient['status'] = 'running') {
   client.setQueryAnswer('getPlugins', PLUGINS.map((plugin) => pluginMetadataFixture(plugin)));
   client.setQueryAnswer('getPluginsIndexing', []);
   const made = pluginsOver({
-    client, value: instanceValueFixture({ plugins: [...pluginsOf(['A.esp', 'B.esp']), { ...PLUGINS[2], path: '/mods/ModA/Disabled.esp', line: 2, enabled: false, winning: true }] }),
+    client, value: instanceValueFixture({ plugins: [...pluginsOf(['A.esp', 'B.esp']), ...pluginsOf(['Disabled.esp']).map((plugin) => ({ ...plugin, line: 2, enabled: false }))] }),
   });
   const ready = async () => {
     holdsLoadOrder(client, { indexed: PLUGINS });
