@@ -17,12 +17,13 @@ const FOLDER = '/instance/mods/ModA';
 const OTHER = '/instance/mods/ModB';
 
 function over(initial: readonly ModStatus[], plugins: InstanceValue['plugins'] = []) {
-  const statuses = new HeldModStatuses({ statuses: initial });
+  const statuses = new HeldModStatuses();
+  statuses.answer(initial);
   const { diagnostics } = modsViewOn({
     value: instanceValueFixture({ plugins, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: OTHER }] }),
     statuses,
   });
-  return { collection: diagnostics('modbench-mod-status'), becomes: (next: readonly ModStatus[]) => { statuses.becomes({ statuses: next }); } };
+  return { collection: diagnostics('modbench-mod-status'), becomes: (next: readonly ModStatus[]) => { statuses.answer(next); } };
 }
 
 const messagesOn = (collection: FakeDiagnosticCollection, file: string) => (collection.get(Uri.file(file)) ?? []).map(({ message, severity }) => [message, severity]);

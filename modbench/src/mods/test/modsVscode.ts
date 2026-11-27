@@ -107,6 +107,14 @@ export function changeSetting(key: string, value: unknown): void {
 /** The user cancels the notification last shown. */
 export const cancelNotification = (): void => { cancels.at(-1)?.(); };
 
+/** VS Code reads `uri` through the file system registered for its scheme. */
+export function readFile(uri: { scheme: string }): Promise<Uint8Array> {
+  const system = seen.fileSystems.get(uri.scheme);
+  const readsFiles = (held: unknown): held is { readFile(uri: unknown): Uint8Array | Thenable<Uint8Array> } => typeof held === 'object' && held !== null && 'readFile' in held;
+  if (!readsFiles(system)) return Promise.reject(new Error(`No file system serves ${uri.scheme}.`));
+  return Promise.resolve(system.readFile(uri));
+}
+
 export function forgetSeen(): void {
   for (const held of Object.values(seen)) {
     if (held instanceof Map) held.clear();

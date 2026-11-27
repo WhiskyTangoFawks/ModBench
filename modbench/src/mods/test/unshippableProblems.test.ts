@@ -24,7 +24,8 @@ const configuration = (shippable: (path: string) => boolean = () => false): Publ
 type Entries = ReadonlyMap<string, FileRead<readonly string[]>>;
 
 function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration, packaged: Record<string, readonly string[]> = {}, entries: Record<string, Entries> = {}) {
-  const statuses = new HeldModStatuses({ statuses: initial, packaged, entries });
+  const statuses = new HeldModStatuses();
+  statuses.answer(initial, { packaged, entries });
   const { instance, diagnostics } = modsViewOn({
     value: instanceValueFixture({
       publisherConfiguration, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: '/instance/mods/ModB' }],
@@ -34,7 +35,7 @@ function over(initial: readonly ModStatus[], publisherConfiguration: PublisherCo
   return {
     collection: diagnostics('modbench-unshippable'), instance,
     becomes: (next: readonly ModStatus[], nextPackaged?: Record<string, readonly string[]>, nextEntries?: Record<string, Entries>) => {
-      statuses.becomes({ statuses: next, packaged: nextPackaged, entries: nextEntries });
+      statuses.answer(next, { packaged: nextPackaged, entries: nextEntries });
     },
   };
 }
