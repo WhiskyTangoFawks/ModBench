@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { manifestText } from '../manifestText';
-import { readManifest } from '../manifestRead';
-import type { Manifest } from '../manifestAdapter';
+import { manifestIn, manifestText, type Manifest, type ManifestRead } from '../manifestAdapter';
+import { modFolderHolding } from './modFolderHolding';
 
 const H1 = 'AAAAAAAAAAA=';
 const H2 = 'BBBBBBBBBBA=';
@@ -85,6 +84,14 @@ const builtSourceMod = (
 
 const noMember = '{\n"version":1\n}\n';
 
+const readManifest = (text: string): Promise<ManifestRead | undefined> => manifestIn(modFolderHolding({ 'Mod.manifest.json': text }));
+
+async function manifestOf(text: string): Promise<Manifest> {
+  const read = await readManifest(text);
+  if (read === undefined || 'refused' in read) throw new Error(`the manifest is refused: ${read?.refused ?? 'none'}`);
+  return read.manifest;
+}
+
 describe('a manifest the adapter reads and writes', () => {
   it.each([
     ['the example formats/manifest.md gives', specExample],
@@ -93,16 +100,12 @@ describe('a manifest the adapter reads and writes', () => {
     ['flags, between ignore and files, with each plugin\'s flags by name', withFlags],
     ['a built source mod, with a file a step makes', builtSourceMod],
     ['a manifest with no member but its version', noMember],
-  ])('round-trips %s byte for byte', (_name, text) => {
-    const read = readManifest(text);
-    if (!('manifest' in read)) throw new Error(read.refused);
-    expect(manifestText(read.manifest)).toBe(text);
+  ])('round-trips %s byte for byte', async (_name, text) => {
+    expect(manifestText(await manifestOf(text))).toBe(text);
   });
 
-  it('reads each file by its path with its hash, and a file a step makes with none', () => {
-    const read = readManifest(builtSourceMod);
-    if (!('manifest' in read)) throw new Error(read.refused);
-    expect([...read.manifest.files]).toEqual([['Mod.esp', H1], ['textures/made.dds', null]]);
+  it('reads each file by its path with its hash, and a file a step makes with none', async () => {
+    expect([...(await manifestOf(builtSourceMod)).files]).toEqual([['Mod.esp', H1], ['textures/made.dds', null]]);
   });
 
   it('writes packages in the schema\'s order of kinds, installation files by name, and paths by path, ignoring case first', () => {
@@ -128,21 +131,20 @@ describe('a manifest the adapter reads and writes', () => {
     );
   });
 
-  it('reads any text the schema accepts, whatever its spacing and order', () => {
-    const read = readManifest(`{ "files": { "a.esp": "${H1}" }, "version": 1 }`);
-    expect(read).toEqual({ manifest: { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.esp', H1]]) } });
+  it('reads any text the schema accepts, whatever its spacing and order', async () => {
+    expect(await readManifest(`{ "files": { "a.esp": "${H1}" }, "version": 1 }`)).toEqual({ manifest: { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.esp', H1]]) } });
   });
 });
 
 describe('a manifest the adapter refuses', () => {
-  it('refuses a manifest of the format before version 1, saying update manifest may write it over', () => {
-    expect(readManifest('{\n"files": [\n{"path":"a.txt"}\n]\n}\n')).toEqual({
+  it('refuses a manifest of the format before version 1, saying update manifest may write it over', async () => {
+    expect(await readManifest('{\n"files": [\n{"path":"a.txt"}\n]\n}\n')).toEqual({
       refused: 'its manifest is in a format before version 1, and Modbench reads only version 1', olderFormat: true,
     });
   });
 
-  it('refuses a manifest of another version, naming both (formats/CLAUDE.md, Versions)', () => {
-    expect(readManifest('{"version":2}')).toEqual({ refused: 'its manifest is version 2, and Modbench reads only version 1' });
+  it('refuses a manifest of another version, naming both (formats/CLAUDE.md, Versions)', async () => {
+    expect(await readManifest('{"version":2}')).toEqual({ refused: 'its manifest is version 2, and Modbench reads only version 1' });
   });
 
   it.each([
@@ -187,8 +189,7 @@ describe('a manifest the adapter refuses', () => {
     ['{"version":1,"packages":[{"kind":"gameFolder","host":{"steam":{"app":0}}}]}', 'its manifest cannot be read at its package 1'],
     ['{"version":1,"packages":[{"kind":"gameFolder","host":{"steam":{"app":1,"depots":{"a":"1"}}}}]}', 'its manifest cannot be read at its package 1'],
     ['{"version":1,"packages":[{"kind":"submodule","name":"Mod"}]}', 'its manifest cannot be read at its package 1'],
-  ])('refuses %j naming where', (text, where) => {
-    const read = readManifest(text);
-    expect('refused' in read ? read.refused : '').toContain(where);
+  ])('refuses %j naming where', async (text, where) => {
+    expect(await readManifest(text)).toEqual({ refused: expect.stringContaining(where) as unknown });
   });
 });
