@@ -191,12 +191,23 @@ export class PluginFactsFeed implements vscode.Disposable {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
-    const { loot, reads } = await this.lootRules(judged, true);
+    const read = await this.lootRules(judged, true).catch((err: unknown) => ({ threw: errorMessage(err) }));
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
+    // ADR-0019; common.md, Reporting: a later read behind the view that failed.
+    if ('threw' in read) {
+      this.deps.log(`judging the sorting rules again threw: ${read.threw}`);
+      this.facts.judgingFailed(read.threw);
+      this.changed.fire(undefined);
+      return;
+    }
+    const { loot, reads } = read;
+    const recovered = this.facts.judgingReadFailed();
     const altered = this.facts.rejudged(loot);
     this.landedReads = reads;
     this.publishSorting();
-    this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
+    // The message line is redrawn with every row, so a judgement that clears its read's failure redraws them all.
+    if (recovered) this.changed.fire(undefined);
+    else this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }
 
   /** Re-reads the facts of the plugins named and judges again, leaving the held load order as it is.

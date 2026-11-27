@@ -629,6 +629,21 @@ describe('a mod\'s conflict table, open in a tab', () => {
     expect(rowCounts(panel)).toEqual([2]);
   });
 
+  it('shows the value it read the copies of, though the instance moves on to a change to another mod while they are read', async () => {
+    const instance = new FakeInstance(await shared());
+    const held = shut();
+    const { panel, reporter, adapter } = await askedOn(instance, {}, { stampsHeldUntil: held.gate });
+    await settled(() => { expect(adapter.stamped).not.toEqual([]); });
+
+    instance.value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
+      High: { files: [file('High', 'a.dds')] }, Middle: { files: [file('Middle', 'a.dds')] }, Low: { files: [file('Low', 'a.dds')] },
+    });
+    held.open();
+    await everyChainedPromiseSettled();
+
+    expect([reporter.shownFailures, tablesOf(panel).map((table) => (table.kind === 'table' ? table.columns.length : table.kind))]).toEqual([[], [2]]);
+  });
+
   describe('a copy that cannot be read', () => {
     it('is one line in the Output, naming the copy and why, however often the disk changes', async () => {
       const instance = new FakeInstance(await shared());

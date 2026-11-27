@@ -31,12 +31,8 @@ type DetectWinePrefix = () => Promise<string | null>;
 /** Wine fixes `Z:` to the filesystem root and `C:` to the prefix's own `drive_c`; any other
  *  letter is a user-defined `dosdevices` mapping that can point anywhere, so it is surfaced as
  *  an error rather than guessed at. */
-export async function normalizeGamePath(
-  p: string,
-  platform: NodeJS.Platform,
-  detectPrefix: DetectWinePrefix,
-): Promise<string> {
-  if (platform === 'win32') return win32.normalize(p);
+export async function normalizeGamePath(p: string, detectPrefix: DetectWinePrefix): Promise<string> {
+  if (process.platform === 'win32') return win32.normalize(p);
 
   const match = /^([A-Za-z]):(.*)$/s.exec(p);
   if (!match) return p.replaceAll('\\', '/');
@@ -102,7 +98,7 @@ async function managerGamePath(managed: ManagerGamePath, machine: Machine): Prom
   if (raw === undefined) return { look: { place, answer: NOT_SET }, fallThrough: true };
   let root: string;
   try {
-    root = await normalizeGamePath(raw, machine.platform, winePrefixDetectorFor(release, machine));
+    root = await normalizeGamePath(raw, winePrefixDetectorFor(release, machine));
   } catch (err) {
     return { look: { place, answer: errorMessage(err) }, fallThrough: false };
   }

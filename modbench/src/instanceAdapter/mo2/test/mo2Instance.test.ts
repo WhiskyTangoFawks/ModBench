@@ -226,8 +226,9 @@ describe('the MO2 Instance adapter', () => {
           expect(await nameAt(join(root, 'Other.7z'))).toBeUndefined();
         });
 
-        it('answers why the downloaded files could not be read when the downloads folder is unresolved', async () => {
-          const unresolved = adapterOver(root, { machine: await downloadsUnresolvable(root) });
+        onPosix.it('answers why the downloaded files could not be read when the downloads folder is unresolved', async () => {
+          await downloadsUnresolvable(root);
+          const unresolved = adapterOver(root);
 
           expect(await unresolved.downloadedFileAt(join(root, listed))).toEqual({ kind: 'unreadable', reason: expect.stringMatching(/^download_directory "D:\\downloads" could not be resolved/) as unknown });
         });

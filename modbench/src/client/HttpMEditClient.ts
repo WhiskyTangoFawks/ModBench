@@ -41,6 +41,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 // 30s is an ordinary HTTP-client default for every read: a slow one and a hung one look the same to the tree.
 // A write has no limit: the writer finishes its own write.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
+const SIGNAL_WAIT_CAP_MS = 10_000;
 
 // The call answers the changes a write makes, which Modbench makes itself; or it writes files, which its answer names.
 type Writes<T> = { readonly answersChanges: true } | { readonly written: (answer: T) => readonly string[] };
@@ -178,7 +179,7 @@ class HttpMEditClient implements MEditClient {
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal, answered) => this.putLoadOrder(snapshot, signal, answered),
       signalChange: (paths) => this.postSignalChange(paths),
-    });
+    }, SIGNAL_WAIT_CAP_MS);
     this.changes = keepRecordIndexChanges({
       onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),

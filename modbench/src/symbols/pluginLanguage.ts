@@ -14,7 +14,7 @@ import { locateRecord, locationOf } from './recordLocation';
 import { selectingItsRow } from './definitionShown';
 import { refuseGameFolderPlugin } from './gameFolderPlugin';
 import type { SourceNames } from './sourceNames';
-import type { Definition, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
+import type { Definition, Presented, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
 
 interface PluginLanguageDeps {
   /** The instance's plugin rows, the plugins the game loads with no line among them. */
@@ -77,7 +77,7 @@ export function pluginLanguage({ plugins, reporter, client, owners, names, renam
     return first.locations[0] ?? { refused: header?.refused ?? `No active plugin holds ${headerFormKeyOf(plugin)}.` };
   };
 
-  const kind: SymbolKind<PluginNamed> = {
+  const kind: SymbolKind<PluginNamed, Presented> = {
     referencedBy: (named) => {
       const plugin = pluginNamed(named, plugins());
       return showReferencedBy({
@@ -90,7 +90,7 @@ export function pluginLanguage({ plugins, reporter, client, owners, names, renam
       return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'plugin', ...found.named } };
     },
     /** Its row in Plugins, else its file. */
-    definitionOf(named): Promise<Definition> {
+    definitionOf(named): Promise<Definition<Presented>> {
       const plugin = pluginNamed(named, plugins());
       if (plugin === undefined) return Promise.resolve(unresolved(named));
       const show = rows()?.show(plugin);

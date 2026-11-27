@@ -280,6 +280,33 @@ describe('judging again as the rules change while a judgement is in flight', () 
     expect([errors(), redrawn]).toEqual([0, []]);
   });
 
+  const judgingThrew = async () => {
+    const broken = deferred();
+    const facts = judging([A], { masterlist: NO_RULES, gates: [Promise.resolve(), broken.promise.then(() => { throw new Error('the read broke'); })] });
+    await facts.reconciled([held()]);
+    await facts.masterlistIs(MISSING);
+    broken.resolve();
+    await settle();
+    return facts;
+  };
+
+  it('says the last good read shows on the message line, and the throw in the Output, when a read of a file throws', async () => {
+    const facts = await judgingThrew();
+
+    expect([facts.message(), facts.output.filter((line) => line.includes('the read broke'))]).toEqual([
+      'Showing the last good read: the files the sorting rules judge: the read broke',
+      ['[loadOrder] judging the sorting rules again threw: the read broke'],
+    ]);
+  });
+
+  it('clears the message line once a judgement lands after one whose read threw', async () => {
+    const facts = await judgingThrew();
+
+    await facts.masterlistIs(NO_RULES);
+
+    expect(facts.message()).toBeUndefined();
+  });
+
   it('judges a reconcile by the rules that stand when its reads land', async () => {
     const slow = deferred();
     const facts = judging([A], { masterlist: NO_RULES, gates: [slow.promise] });

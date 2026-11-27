@@ -30,7 +30,7 @@ export function downloadsDirectoryResolver(machine: Machine): DownloadsDirectory
     const substituted = raw.replaceAll(BASE_DIR_VARIABLE, instanceRoot);
     let normalized: string;
     try {
-      normalized = await normalizeGamePath(substituted, machine.platform, winePrefixDetectorFor(gameOfSettings(iniText).gameRelease, machine));
+      normalized = await normalizeGamePath(substituted, winePrefixDetectorFor(gameOfSettings(iniText).gameRelease, machine));
     } catch (err) {
       return { kind: 'unresolved', reason: `download_directory "${raw}" could not be resolved: ${errorMessage(err)}` };
     }

@@ -7,7 +7,7 @@ import { heldText } from '../textDocuments/heldText';
 import type { Reporter } from '../ports/reporter';
 import { listedPlaced } from './placedReferences';
 import { listedAtCopy, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
-import type { Definition, FileNamed, Listed, Named, References, SymbolKind } from './symbolKind';
+import type { Definition, Presented, FileNamed, Listed, Named, References, SymbolKind } from './symbolKind';
 
 export type FileClient = Pick<MEditClient, 'getPlacedFileReferences'>;
 
@@ -55,7 +55,7 @@ const foldedPathOf = (held: string): string => foldPath(held.replaceAll('\\\\', 
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
-export function fileLanguage({ instance, reporter, client, names, copyOf, reveal, tooltip }: FileLanguageDeps): SymbolKind<FileNamed> {
+export function fileLanguage({ instance, reporter, client, names, copyOf, reveal, tooltip }: FileLanguageDeps): SymbolKind<FileNamed, Presented> {
   const pathAt = async (document: AskedIn, offset: number, token?: vscode.CancellationToken): Promise<Named<FileNamed> | undefined> => {
     const found = await names.fileAt(document.uri.fsPath, heldText(document), offset, token);
     if (found === undefined) return undefined;
@@ -74,13 +74,13 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     symbol: { kind: 'file', path }, name: path, detail: 'file', icon: vscode.SymbolKind.File, ...listedAtCopy(copy, reveal),
   });
 
-  const kind: SymbolKind<FileNamed> = {
+  const kind: SymbolKind<FileNamed, Presented> = {
     nameAt: pathAt,
     referencedBy: (named) => showReferencedBy({
       reporter, subject: named.path, contextValue: 'modbench.fileReferencedBy', references: () => referencesTo(named),
     }),
     /** The copy the game gets, inside its archive when archived. */
-    definitionOf({ path }): Promise<Definition> {
+    definitionOf({ path }): Promise<Definition<Presented>> {
       const copy = copyOf(path);
       return Promise.resolve(holdsCopy(copy) ? { shown: copy } : { refused: copy.none });
     },
