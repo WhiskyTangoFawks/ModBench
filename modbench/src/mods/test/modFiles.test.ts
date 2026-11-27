@@ -4,7 +4,6 @@ vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import type * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../../instanceLoader/instance';
-import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { TreeItemCollapsibleState, ThemeIcon, ThemeColor, FakeUri } from '../../test/vscodeMock';
 import { labelOf, modsViewOn } from './modsViewOn';
@@ -13,7 +12,7 @@ import { registerArchiveFiles } from '../archiveFiles';
 import { modArgumentOf } from '../../drivingLib/argument';
 import { currentBoxOf } from '../../drivingLib/test/nameFilterViewHarness';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { instanceValueFixture, type ArchiveRead } from '../../test/mo2/instanceValueFixture';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { settled } from '../../test/eventually';
 import { present } from '../../ports/present';

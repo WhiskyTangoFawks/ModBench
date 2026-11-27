@@ -8,38 +8,20 @@ vi.mock('vscode', () => ({
   Disposable: class { constructor(readonly dispose: () => void) {} },
 }));
 
-import { toldOf } from '../../instanceLoader/told';
 import { publishRepository } from '../repositoryContext';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import type { InstanceSubscriber } from '../../instanceLoader/instance';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-function instanceHolding(holdsRepository: boolean, repositorySetUp = false) {
-  const subscribers: InstanceSubscriber[] = [];
-  const disposed: true[] = [];
-  return {
-    instance: {
-      value: instanceValueFixture({ holdsRepository, repositorySetUp }),
-      subscribe: (subscriber: InstanceSubscriber) => {
-        subscribers.push(subscriber);
-        return { dispose: () => { disposed.push(true); } };
-      },
-    },
-    land: (held: boolean, setUp = false) => {
-      const value = instanceValueFixture({ holdsRepository: held, repositorySetUp: setUp });
-      for (const subscriber of subscribers) void subscriber(value, 1, toldOf(value, value, { named: [], disk: true }, undefined));
-    },
-    disposed,
-  };
-}
+const holding = (holdsRepository: boolean, repositorySetUp = false) => instanceValueFixture({ holdsRepository, repositorySetUp });
 
 describe('publishRepository', () => {
   it('tells the menus whether the instance holds a repository, now and from each value the Instance loader lands', () => {
-    const { instance, land } = instanceHolding(false);
+    const instance = new FakeInstance(holding(false));
 
     publishRepository(instance, '/instance');
-    land(true, true);
+    instance.publish(holding(true, true));
 
     expect(executeCommand.mock.calls).toEqual([
       ['setContext', 'modbench.modlist.instanceRoots', ['file:///instance']],
@@ -51,10 +33,12 @@ describe('publishRepository', () => {
   });
 
   it('stops listening once disposed', () => {
-    const { instance, disposed } = instanceHolding(true);
+    const instance = new FakeInstance(holding(true));
 
     publishRepository(instance, '/instance').dispose();
+    executeCommand.mockClear();
+    instance.publish(holding(false));
 
-    expect(disposed).toEqual([true]);
+    expect(executeCommand.mock.calls).toEqual([]);
   });
 });

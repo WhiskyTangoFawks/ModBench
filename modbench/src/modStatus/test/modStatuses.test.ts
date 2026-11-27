@@ -1,27 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, FileRead, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
-import { modValueOver } from '../../instanceAdapter/modValue';
 import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
 import { settled as until } from '../../test/eventually';
+import { fakeInstanceAdapter, readingFixture, type FakeInstanceAdapter, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 
 type ArchiveEntries = StatusSource['archiveContents'] extends ReadonlyMap<string, infer Entries> ? Entries : never;
 
 let root: string;
 let logged: string[];
 let asked: string[];
-let hashed: string[];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-statuses-'));
   logged = [];
   asked = [];
-  hashed = [];
   installationFiles = new Map();
   heldWhole = new Set();
   heldByGit = new Map();
@@ -37,23 +35,26 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const reads: Parameters<typeof modValueOver>[0] = {
-  filesIn: async (folder) => (await readdir(folder).catch(() => [])).filter((name) => !name.endsWith('.manifest.json')),
-  fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: async (path): ReturnType<typeof reads.originFileHash> => {
-    hashed.push(path);
-    return hashingContents ? { kind: 'read', answer: { hash: await readFile(path, 'utf8'), size: 0 } } : { kind: 'unreadable', reason: 'unhashed' };
+let written: Map<string, Record<string, string>>;
+
+const answers: InstanceAnswers = {
+  get folderFiles() {
+    return new Map([...written].map(([folder, files]) => [folder, Object.keys(files)]));
   },
-  exclusionMark: '.mohidden',
-  downloadedFile: (name) => {
-    const download = downloads.get(name);
-    return Promise.resolve({ kind: 'read', answer: download && { ...download, path: name, size: 1 } });
+  get hashes() {
+    const files = [...written].flatMap(([folder, held]) => Object.entries(held).map(([file, text]) => [join(folder, file), { hash: text, size: 0 }] as const));
+    return hashingContents ? new Map(files) : undefined;
   },
-  gamePlace: () => Promise.resolve(undefined),
-  gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
-  submodule: () => Promise.resolve({ lacks: 'no submodule' }),
-  sourceFolderTracked: () => Promise.resolve(false),
+  get downloadedFiles() {
+    return new Map([...downloads].map(([name, download]) => [name, { kind: 'read', answer: { ...download, path: name, size: 1 } }] as const));
+  },
 };
+
+let fake: FakeInstanceAdapter;
+beforeEach(() => {
+  written = new Map();
+  fake = fakeInstanceAdapter(readingFixture(), answers);
+});
 
 const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };
 
@@ -61,6 +62,7 @@ async function folderOf(name: string, files: Record<string, string> = {}): Promi
   const folder = join(root, 'mods', name);
   await mkdir(folder, { recursive: true });
   await Promise.all(Object.entries(files).map(([file, text]) => writeFile(join(folder, file), text)));
+  written.set(folder, files);
   return folder;
 }
 
@@ -97,7 +99,7 @@ const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'folders
     : Promise.resolve(installationFiles.get(mod) ?? { kind: 'read', answer: undefined })),
   modValue: (folder, wanted, held) => {
     asked.push(basename(folder));
-    return modValueOver(reads, folder, wanted, held);
+    return fake.adapter.modValue(folder, wanted, held);
   },
 };
 
@@ -198,7 +200,7 @@ describe('Mod status (mod-status trace)', () => {
     statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
     await statuses.current();
 
-    expect(hashed).toEqual([]);
+    expect(fake.hashed).toEqual([]);
   });
 
   describe('the files a package holds, by bytes or by name (publishing.md, What ships, story 2)', () => {
@@ -435,7 +437,7 @@ describe('Mod status (mod-status trace)', () => {
     expect([...derived.values()].map(({ heldWhole: held, noManifest, differing, gone }) => [held, noManifest, differing, gone])).toEqual([
       [true, false, [], []], [true, false, [], []],
     ]);
-    expect([asked, hashed]).toEqual([[], []]);
+    expect([asked, fake.hashed]).toEqual([[], []]);
   });
 
 

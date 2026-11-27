@@ -8,7 +8,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
-import { manifestIn } from '../../manifestAdapter/manifestFiles';
+import { manifestIn } from '../../manifestAdapter/manifestAdapter';
 import { updateManifest } from '../updateManifest';
 import { statusNow } from '../../test/statusNow';
 

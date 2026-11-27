@@ -26,7 +26,6 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { toldOf } from '../../instanceLoader/told';
 import { progressSteps } from '../../test/recordedProgress';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -252,7 +251,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
     unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
-    void present(subscribers[0], 'the instance subscriber')(value, 2, toldOf(value, value, { named: [], disk: true }, undefined));
+    void present(subscribers[0], 'the instance subscriber')(value, 2, { named: [], disk: true, before: value, changed: () => 'every' });
 
     await settled(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
   });

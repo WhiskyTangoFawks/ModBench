@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held, reads: 0 }));
@@ -30,9 +30,9 @@ import type { Argument } from '../../wire/argument';
 import type { SymbolIndex } from '../../symbols/symbolIndex';
 import type { SymbolName } from '../../symbols/symbolKind';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { file as indexedFile, indexedValueOf, mod as indexedMod } from '../../mods/test/indexedValue';
 import { Refusal } from '../../drivingLib/refusal';
 import {
   buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackReusing, type ConflictEntry,
@@ -45,7 +45,7 @@ import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { fakeInstanceAdapter, fileIn, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { instanceValueFixture, type ArchiveRead } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
@@ -1118,6 +1118,32 @@ describe('the agent server, reading file order conflicts', () => {
         { file: 'skip.txt', excluded: true, gotten: false, publisherTags: [] },
       ],
     }]);
+  });
+
+  it('reads the state of each mod\'s copy of a file and of its row, with the copy\'s size and date, or why it cannot be read, as the conflict table shows them', async () => {
+    const value = await indexedValueOf([indexedMod('Winner'), indexedMod('Loser')], {
+      Winner: { files: [indexedFile('Winner', 'a.dds'), indexedFile('Winner', 'b.dds')] },
+      Loser: { files: [indexedFile('Loser', 'a.dds'), indexedFile('Loser', 'b.dds')] },
+    });
+    const day = 86_400_000;
+    Object.assign(copyAnswers, {
+      stamps: new Map([
+        ['/instance/Winner/a.dds', { size: 8n, modifiedNs: 86_400_000_000_000n }],
+        ['/instance/Winner/b.dds', { size: 8n, modifiedNs: 86_400_000_000_000n }],
+        ['/instance/Loser/a.dds', { size: 8n, modifiedNs: 0n }],
+      ]),
+      hashes: new Map([
+        ['/instance/Winner/a.dds', { size: 8, hash: 'new' }], ['/instance/Winner/b.dds', { size: 8, hash: 'same' }],
+        ['/instance/Loser/a.dds', { size: 8, hash: 'old' }], ['/instance/Loser/b.dds', { size: 8, hash: 'same' }],
+      ]),
+    });
+    onTestFinished(() => { delete copyAnswers.stamps; delete copyAnswers.hashes; });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Winner' }, { name: 'Loser' }] })).toMatchObject([
+      { mod: 'Winner', files: [{ file: 'a.dds', contents: { state: 'Override', row: 'Override', size: 8, modified: day } }, { file: 'b.dds', contents: { state: null, row: null, size: 8, modified: day } }] },
+      { mod: 'Loser', files: [{ file: 'a.dds', contents: { state: 'Master', row: 'Override', size: 8, modified: 0 } }, { file: 'b.dds', contents: { unreadable: 'no answer fixed for /instance/Loser/b.dds' } }] },
+    ]);
   });
 
   it('refuses a name that means a mod and a separator, listing each as the agent can name it, and picks neither', async () => {

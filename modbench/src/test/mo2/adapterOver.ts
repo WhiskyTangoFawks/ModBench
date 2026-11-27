@@ -1,23 +1,18 @@
 import type {
-  InstallationFileReader, DownloadedFile, InstanceAdapter, InstanceReading, Machine, ModlistEntry, OriginFiles, PluginEntry, Subscription, WatcherExclude,
+  InstallationFileReader, DownloadedFile, InstanceAdapter, InstanceReading, Machine, ModlistEntry, PluginEntry, Subscription, WatcherExclude,
 } from '../../instanceAdapter/instanceAdapter';
 import { fileProblemsFake } from '../fileProblemsFake';
 import type { FileProblems } from '../../ports/fileProblems';
 import { adapterForInstance } from '../../instanceAdapter/openInstance';
-import type { Mo2InstanceOptions } from '../../instanceAdapter/mo2/mo2Instance';
-import { mo2Context } from '../../instanceAdapter/mo2/contextOver';
-import type { FomodEngine } from '../../instanceAdapter/fomodInstaller/fomodInstaller';
 import type { HostGit } from '../../ports/repository';
 import { hostWithoutGit } from '../hostGitDouble';
-import type { ReadingSource } from '../../instanceAdapter/instanceReading';
-import { readingSource } from '../../instanceAdapter/mo2/mo2Reads';
 import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
 import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
 import { fakeMachine } from '../fakeMachine';
 import { fixedGameFolderSetting } from '../gameFolderSetting';
 import { watcherExcluding } from '../watcherExclusion';
-import { FOMOD_ENGINE } from '../fomodEngine';
+import { FOMOD_ENGINE, type FomodEngine } from '../fomodEngine';
 import { DEPLOYED_PATH } from '../deployedPath';
 import { expectKind } from '../expectKind';
 
@@ -38,7 +33,8 @@ export interface AdapterAnswers {
   fomodEngine?: FomodEngine;
 }
 
-const optionsOver = (root: string, answers: AdapterAnswers): Mo2InstanceOptions => ({
+/** The adapter the build composes over `root`, with what `answers` fix. */
+export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter => adapterForInstance({
   instanceRoot: root,
   installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]),
   fileProblems: answers.fileProblems ?? fileProblemsFake(),
@@ -48,37 +44,23 @@ const optionsOver = (root: string, answers: AdapterAnswers): Mo2InstanceOptions 
   watcherExclude: answers.watcherExclude ?? watcherExcluding(),
   hostGit: answers.hostGit ?? hostWithoutGit,
   machine: fakeMachine(answers.machine),
+  scriptEnvironmentFileSetting: () => answers.pythonEnvFile,
 });
-
-/** The parts of one reading, each asked on its own. */
-export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(mo2Context(optionsOver(root, answers)), undefined, DEPLOYED_PATH);
-
-/** The adapter the build composes over `root`, with what `answers` fix. */
-export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  adapterForInstance({ ...optionsOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */
 export const readInstanceOf = (root: string): Promise<InstanceReading> => adapterOver(root).reading();
 
-export const readModlistEntries = (root: string, profile = 'Default'): Promise<ModlistEntry[]> =>
-  sourceOver(root).modOrder(profile);
+export const readModlistEntries = async (root: string): Promise<readonly ModlistEntry[]> => (await adapterOver(root).modOrder()).mods;
 
-export const readPluginLines = (root: string, profile = 'Default'): Promise<PluginEntry[]> =>
-  sourceOver(root).pluginOrder(profile);
+export const readPluginLines = async (root: string): Promise<readonly PluginEntry[]> => (await readInstanceOf(root)).pluginOrder;
 
-export const readActiveProfile = async (root: string): Promise<string> => (await sourceOver(root).settings()).profile;
+export const readActiveProfile = (root: string): Promise<string> => adapterOver(root).activeProfile();
 
 /** A downloaded file as the adapter lists it; undefined when it is not listed. */
 export async function readDownloadedFile(root: string, name: string): Promise<DownloadedFile | undefined> {
   const { downloadedFiles } = await readInstanceOf(root);
   return expectKind(downloadedFiles, 'listed').files?.find((file) => file.name === name);
-}
-
-/** Each listed mod's own files, as a reading holds them. */
-export async function modFilesOf(source: ReadingSource, entries: readonly ModlistEntry[]): Promise<Map<string, OriginFiles>> {
-  const mods = entries.filter((entry) => entry.kind === 'mod');
-  return new Map(await Promise.all(mods.map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name }, 'list')] as const)));
 }
 
 type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];

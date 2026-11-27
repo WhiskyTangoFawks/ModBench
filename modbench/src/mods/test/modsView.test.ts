@@ -10,37 +10,19 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
 import { ModStatuses } from '../../modStatus/modStatuses';
-import { modValueOver } from '../../instanceAdapter/modValue';
 import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestedIn } from '../../test/modStatusFixture';
-import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { settled } from '../../test/eventually';
-
-const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> => ({
-  foldersHeldWhole: () => Promise.resolve(new Set()),
-  filesHeldByGit: () => Promise.resolve(new Map()),
-  installationFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  modValue: (folder, asked, heldByGit) => modValueOver({
-  filesIn: listing,
-  fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  exclusionMark: '.mohidden',
-  downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gamePlace: () => Promise.resolve(undefined),
-  gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
-  submodule: () => Promise.resolve({ lacks: 'no submodule' }),
-  sourceFolderTracked: () => Promise.resolve(false),
-  }, folder, asked, heldByGit),
-});
 
 const currentBox = currentBoxOf(seen);
 
@@ -484,7 +466,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
   });
 
   it('counts each mod Mod status derives with no manifest', async () => {
-    const statuses = new ModStatuses(foldersHoldingNothing(), () => undefined, () => Promise.resolve([]));
+    const statuses = new ModStatuses(fakeInstanceAdapter().adapter, () => undefined, () => Promise.resolve([]));
     const { view } = modsViewOn({ value: holdingModA, statuses });
 
     statuses.derive(holdingModA);
@@ -498,7 +480,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     const folder = join(root, 'ModA');
     await manifestedIn(folder);
     const holdingManifested = instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')], modFolders: [{ kind: 'mod', name: 'ModA', path: folder, modName: 'ModA' }] });
-    const statuses = new ModStatuses(foldersHoldingNothing(() => Promise.reject(new Error('EACCES'))), () => undefined, () => Promise.resolve([]));
+    const statuses = new ModStatuses(fakeInstanceAdapter(readingFixture(), { unlistableFolders: new Map([[folder, 'EACCES']]) }).adapter, () => undefined, () => Promise.resolve([]));
     const { view } = modsViewOn({ value: holdingManifested, statuses });
 
     statuses.derive(holdingManifested);
