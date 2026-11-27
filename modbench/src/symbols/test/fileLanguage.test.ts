@@ -1,141 +1,133 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
-import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { COMPLETION, SEARCH } from './fakeKinds';
+import { describe, expect, it, vi } from 'vitest';
 
-const { setInput, TEXT } = vi.hoisted(() => ({ setInput: vi.fn(), TEXT: '{ "FormKey": "000801:Mod.esp", "Diffuse": "Decals\\\\Stain_d.dds", "EditorID": "Stain" }' }));
-vi.mock('vscode', () => ({
-  Uri, TreeItem, TreeItemCollapsibleState, SymbolKind, CompletionItemKind,
-  Position: class { constructor(readonly line: number, readonly character: number) {} },
-  Range: class { readonly start: unknown; readonly end: unknown; constructor(startLine: number, startCharacter: number, endLine: number, endCharacter: number) { this.start = { line: startLine, character: startCharacter }; this.end = { line: endLine, character: endCharacter }; } },
-  Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
-  extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
-}));
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import { fileLanguage, type FileClient } from '../fileLanguage';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { CompletionItemKind, document, host, Location, Range, Uri } from './vscodeHost';
+import { instanceHolding, rowsOf, symbolsOver } from './symbolsOver';
+import { mEditNames } from './mEditNames';
+import type { DocumentName, PlacedReferences } from '../../client';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FileConflictLookup, foldPath, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
-import type { NamedFile, SourceNames } from '../sourceNames';
-import { sourceNames } from './fakeSourceNames';
 
+const TEXT = '{ "FormKey": "000801:Mod.esp", "Diffuse": "Decals\\\\Stain_d.dds", "EditorID": "Stain" }';
 const HOLDER = '000801:Mod.esp';
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/TextureSet.json';
 const NAMED = TEXT.indexOf('Decals');
 const FILE = 'textures/decals/stain_d.dds';
 const UNREAD = '000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx';
 const ARCHIVE = '/instance/mods/Mod/Mod - Textures.ba2';
-const PLACED = { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } };
-const SPAN = { start: NAMED, end: NAMED + 'Decals\\\\Stain_d.dds'.length };
+const SPELLED = 'Decals\\\\Stain_d.dds';
+const PLACED = { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + SPELLED.length } };
+const SPAN = { start: NAMED, end: NAMED + SPELLED.length };
+const AT_PATH = `${TEXT.slice(0, NAMED + 2)}|${TEXT.slice(NAMED + 2)}`;
 
 const LOOSE: CopyAt = { kind: 'loose', path: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' };
 const ARCHIVED = { kind: 'archived', gameRelease: 'Fallout4', archive: ARCHIVE, file: 'textures/decals/other_d.dds' } as const satisfies CopyAt;
 
 const NO_COPY = { none: `No enabled mod, Overwrite or loose file in the Data folder holds ${FILE}.` };
 const NONE = { copies: [], leftOut: [] };
+const NAMES_FILE = { kind: 'File' as const, ...SPAN, value: 'Decals\\Stain_d.dds', dataPath: FILE };
 
 interface Doubles {
   copy?: CopyAt | { none: string };
-  named?: NamedFile;
-  typedAt?: Awaited<ReturnType<SourceNames['pathTypedAt']>>;
+  named?: readonly DocumentName[];
   tooltip?: string;
   rocks?: number;
 }
 
-function language(answer: Awaited<ReturnType<FileClient['getPlacedFileReferences']>>, { copy = LOOSE, named, typedAt, tooltip, rocks = 0 }: Doubles = {}) {
-  const reporter = recordingReporter();
-  const getPlacedFileReferences = vi.fn(() => Promise.resolve(answer));
+function language(answer: PlacedReferences, { copy = LOOSE, named = [NAMES_FILE], tooltip, rocks = 0 }: Doubles = {}) {
   const reveal = vi.fn(() => Promise.resolve());
-  const client: FileClient = { getPlacedFileReferences };
   const stackedCopies = new FileConflictLookup<StackedFile>();
   stackedCopies.set({ relativePath: 'Textures/Decals/Stain_d.dds', copies: [] });
-  for (let rock = 0; rock < rocks; rock += 1) stackedCopies.set({ relativePath: `meshes/rocks/rock${rock}.nif`, copies: [] });
-  const value = {
-    stackedCopies,
+  Array.from({ length: rocks }, (_, rock) => stackedCopies.set({ relativePath: `meshes/rocks/rock${rock}.nif`, copies: [] }));
+  const value = instanceValueFixture({
+    stackedCopies, gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' }, gameFolderInWorkspace: true,
     dataFolderFiles: {
-      kind: 'listed' as const,
+      kind: 'listed',
       files: new Map(['meshes/rock.nif', 'meshes/textures/stray.dds', 'textures/readme.txt'].map((path) => [path, { path: `/game/Data/${path}`, relativePath: path }])),
     },
     gameFolderArchived: { ...NO_GAME_FOLDER_ARCHIVED, copies: new Map([['textures/decals/other_d.dds', ARCHIVED]]) },
-  };
+  });
   const copyOf = vi.fn((path: string) => {
     if (foldPath(path) === FILE) return copy;
     if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
     return foldPath(path) === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
-  const names = sourceNames({
-    fileAt: () => Promise.resolve(named),
-    pathTypedAt: () => Promise.resolve(typedAt),
+  const made = symbolsOver({
+    instance: instanceHolding(value), names: mEditNames(() => named), fileCopies: { copyOf, reveal },
+    rows: rowsOf({ mods: { fileTooltip: () => tooltip, dataPathOf: (row) => (row === FILE_ROW ? FILE : undefined) } }),
+    arrange: (client) => { client.setQueryAnswer('getPlacedFileReferences', answer); },
   });
-  return { reporter, getPlacedFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
+  return { ...made, reveal, copyOf, stackedCopies };
 }
 
-describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
-  const document = { uri: Uri.file(SOURCE), getText: () => TEXT };
+const FILE_ROW = { label: 'Stain_d.dds' };
+const atCopy = (path: string) => new Location(Uri.file(path), new Range(0, 0, 0, 0));
 
+describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
   it.each([
-    ['the file by its path in the Data folder', { ...SPAN, given: 'Decals\\Stain_d.dds', path: FILE }, { ...SPAN, name: FILE, symbol: { kind: 'file', path: FILE } }],
-    ['nothing, saying why, by the path as given, where mEdit could not tell which file it names', { ...SPAN, given: 'Decals\\Stain_d.dds', refused: 'Data/Stain_d.dds is no path its asset type holds' },
-      { ...SPAN, name: 'Decals\\Stain_d.dds', symbol: { refused: 'Data/Stain_d.dds is no path its asset type holds' } }],
-  ])('names %s', async (_case, named, expected) => {
-    expect(await language(NONE, { named }).nameAt(document, NAMED + 2)).toEqual(expected);
+    ['the file by its path in the Data folder', NAMES_FILE, FILE],
+    ['nothing, saying why, by the path as given, where mEdit could not tell which file it names', { ...NAMES_FILE, dataPath: null, refusal: 'Data/Stain_d.dds is no path its asset type holds' }, 'Decals\\Stain_d.dds'],
+  ])('names %s', async (_case, named, text) => {
+    language(NONE, { named: [named] });
+
+    expect(await host.hover(SOURCE, AT_PATH)).toEqual({ text, spans: SPELLED });
   });
 
   it.each([
-    ['its row\'s, a line to each of its lines', 'Main.ba2/textures/decals/stain_d.dds\nwon by the game folder: /game/Data/textures/decals/stain_d.dds', ['Main.ba2/textures/decals/stain_d.dds', 'won by the game folder: /game/Data/textures/decals/stain_d.dds']],
-    ['none where Mods shows no row for it', undefined, []],
-  ])('its tooltip is %s', async (_case, tooltip, lines) => {
-    expect(await language(NONE, { tooltip }).tooltipOf({ kind: 'file', path: FILE })).toEqual(lines);
+    ['its row\'s, a line to each of its lines', 'Main.ba2/textures/decals/stain_d.dds\nwon by the game folder: /game/Data/textures/decals/stain_d.dds', 'Main.ba2/textures/decals/stain_d.dds\n\nwon by the game folder: /game/Data/textures/decals/stain_d.dds'],
+    ['none where Mods shows no row for it, so its hover is its path', undefined, FILE],
+  ])('its tooltip is %s', async (_case, tooltip, text) => {
+    language(NONE, { tooltip });
+
+    expect((await host.hover(SOURCE, AT_PATH))?.text).toEqual(text);
   });
 });
 
 describe('where a file is defined, and the records that name it (symbols.md, The symbols, File)', () => {
   it.each([
-    ['a loose file at the copy the game gets', LOOSE, { shown: LOOSE }],
-    ['an archived file inside its archive', ARCHIVED, { shown: ARCHIVED }],
+    ['a loose file at the copy the game gets', LOOSE, { file: LOOSE.path }],
+    ['an archived file inside its archive', ARCHIVED, { archived: { archive: ARCHIVE, file: ARCHIVED.file } }],
     ['nothing for a file no copy exists of, refusing with what was searched', NO_COPY, { refused: NO_COPY.none }],
   ])('defines %s', async (_case, copy, expected) => {
-    expect(await language(NONE, { copy }).definitionOf({ kind: 'file', path: FILE })).toEqual(expected);
+    expect(await language(NONE, { copy }).symbols.definitionOf({ kind: 'file', path: FILE })).toEqual(expected);
   });
 
   it('lists each record that names it at its member, and each copy it could not read', async () => {
-    const kind = language({
+    const { symbols } = language({
       copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, document: { kind: 'OwnFile', location: SOURCE }, ranges: [PLACED] }], leftOut: [UNREAD],
     });
 
-    expect(await kind.referencesTo({ kind: 'file', path: FILE })).toEqual({
-      locations: [{ uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } }],
-      unread: [UNREAD],
-    });
+    expect(await symbols.referencesTo({ kind: 'file', path: FILE })).toEqual({ references: [{ file: SOURCE, ...PLACED }], leftOut: [UNREAD] });
   });
 });
 
 describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4)', () => {
-  it('lists each file of a mod, the Data folder or a game archive whose path holds the query, whatever the case, at the copy the game gets', async () => {
-    const found = await language(NONE).symbolsFor('DECALS', SEARCH);
+  const listed = async (query: string) => (await host.workspaceSymbols(query)).map(({ name, location }) => [name, location]);
 
-    expect(found.map(({ name, location }) => [name, location])).toEqual([
-      ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }],
-      ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }],
-    ]);
+  it('lists each file of a mod, the Data folder or a game archive whose path holds the query, whatever the case, at the copy the game gets', async () => {
+    language(NONE);
+
+    expect(await listed('DECALS')).toEqual([['Textures/Decals/Stain_d.dds', atCopy(LOOSE.path)], ['textures/decals/other_d.dds', atCopy(ARCHIVE)]]);
   });
 
   it('reads a query spelled with backslashes as one spelled with forward slashes', async () => {
-    const found = await language(NONE).symbolsFor('Decals\\Stain', SEARCH);
+    language(NONE);
 
-    expect(found.map(({ name }) => name)).toEqual(['Textures/Decals/Stain_d.dds']);
+    expect((await listed('Decals\\Stain')).map(([name]) => name)).toEqual(['Textures/Decals/Stain_d.dds']);
   });
 
   it('lists no file the game gets no copy of, and says in the Output that it matched and went unlisted', async () => {
-    const { reporter, ...kind } = language(NONE);
+    const { reporter } = language(NONE);
 
-    expect(await kind.symbolsFor('rock', SEARCH)).toEqual([]);
+    expect(await listed('rock')).toEqual([]);
     expect(reporter.shownFailures.map(({ severity, message }) => [severity, message])).toEqual([['warning', 'Go to Symbol in Workspace lists 0 of the 1 files whose path holds "rock".']]);
   });
 
   it('lists at most a thousand files on a modlist of many, placing no more, and says in the Output how many more match (principles.md, Usable first; Never silently wrong)', async () => {
-    const { reporter, copyOf, ...kind } = language(NONE, { rocks: 1001 });
+    const { reporter, copyOf } = language(NONE, { rocks: 1001 });
 
-    expect([(await kind.symbolsFor('rocks/', SEARCH)).length, copyOf.mock.calls.length]).toEqual([1000, 1000]);
+    expect([(await listed('rocks/')).length, copyOf.mock.calls.length]).toEqual([1000, 1000]);
     expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
       'Go to Symbol in Workspace lists 1000 of the 1001 files whose path holds "rocks/".',
       'It lists at most 1000, and none whose copy the game gets is outside the workspace. Type more of the path to narrow the list.',
@@ -143,44 +135,47 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
   });
 
   it('lists every match, saying nothing, where no more match than it lists', async () => {
-    const { reporter, ...kind } = language(NONE, { rocks: 2 });
+    const { reporter } = language(NONE, { rocks: 2 });
 
-    expect([(await kind.symbolsFor('rocks/', SEARCH)).map(({ name }) => name), reporter.shownFailures]).toEqual([['meshes/rocks/rock0.nif', 'meshes/rocks/rock1.nif'], []]);
+    expect([(await listed('rocks/')).map(([name]) => name), reporter.shownFailures]).toEqual([['meshes/rocks/rock0.nif', 'meshes/rocks/rock1.nif'], []]);
   });
 
   it('reads an instance value\'s files once, however many keystrokes ask', async () => {
-    const { stackedCopies, ...kind } = language(NONE, { rocks: 10 });
+    const { stackedCopies } = language(NONE, { rocks: 10 });
     const read = vi.spyOn(stackedCopies, 'values');
 
-    await kind.symbolsFor('r', SEARCH);
-    await kind.symbolsFor('ro', SEARCH);
-    await kind.symbolsFor('roc', SEARCH);
+    await host.workspaceSymbols('r');
+    await host.workspaceSymbols('ro');
+    await host.workspaceSymbols('roc');
 
     expect(read).toHaveBeenCalledOnce();
   });
 
   it('shows the copy in the Explorer when the user picks it, as its definition is', async () => {
-    const { reveal, ...kind } = language(NONE);
-    const [picked] = await kind.symbolsFor('stain', SEARCH);
+    const { reveal } = language(NONE);
+    const [picked] = await host.workspaceSymbols('stain');
 
-    expect(await picked?.resolve?.()).toBeUndefined();
-    expect(reveal.mock.calls).toEqual([[LOOSE]]);
+    expect([(picked && await host.resolveWorkspaceSymbol(picked))?.location, reveal.mock.calls]).toEqual([atCopy(LOOSE.path), [[LOOSE]]]);
   });
 });
 
 describe('completion at a path (symbols.md, The features, story 5)', () => {
-  const document = { uri: Uri.file(SOURCE), getText: () => TEXT };
   const TEXTURES = { folder: 'Textures', extensions: ['.DDS'] };
   const MESHES = { folder: 'Meshes', extensions: ['.nif'] };
   const offeredFor = (typed: string, assetType = TEXTURES, rocks = 0) => {
-    const { reporter, ...kind } = language(NONE, { typedAt: { ...SPAN, typed, assetType }, rocks });
-    return { reporter, found: kind.completionsAt(document, NAMED, COMPLETION) };
+    const field = `{ "Diffuse": "${typed}" }`;
+    const start = field.indexOf(typed, field.indexOf(': '));
+    const { reporter } = language(NONE, { named: [{ kind: 'File', start, end: start + typed.length, value: typed, assetType }], rocks });
+    return { reporter, found: host.complete(SOURCE, `${field.slice(0, start + typed.length)}|${field.slice(start + typed.length)}`) };
   };
 
   it('offers each file in its asset type\'s folder, whatever the case, that takes one of its extensions, as plugin source spells it', async () => {
     expect(await offeredFor('').found).toEqual({
-      ...SPAN, icon: CompletionItemKind.File, isIncomplete: false,
-      items: [{ label: 'Decals\\Stain_d.dds', insertText: 'Decals\\\\Stain_d.dds' }, { label: 'decals\\other_d.dds', insertText: 'decals\\\\other_d.dds' }],
+      isIncomplete: false,
+      items: [
+        { label: 'Decals\\Stain_d.dds', detail: undefined, kind: CompletionItemKind.File, insertText: 'Decals\\\\Stain_d.dds', replaces: '' },
+        { label: 'decals\\other_d.dds', detail: undefined, kind: CompletionItemKind.File, insertText: 'decals\\\\other_d.dds', replaces: '' },
+      ],
     });
   });
 
@@ -193,7 +188,9 @@ describe('completion at a path (symbols.md, The features, story 5)', () => {
   });
 
   it('offers nothing where no path is', async () => {
-    expect(await language(NONE).completionsAt(document, NAMED, COMPLETION)).toBeUndefined();
+    language(NONE, { named: [] });
+
+    expect(await host.complete(SOURCE, AT_PATH)).toBeUndefined();
   });
 
   it.each([
@@ -203,24 +200,22 @@ describe('completion at a path (symbols.md, The features, story 5)', () => {
     const { reporter, found } = offeredFor(typed, MESHES, 1001);
 
     expect(await found.then((offered) => [offered?.items.length, offered?.isIncomplete])).toEqual([1000, true]);
-    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[message, 'It lists at most 1000. Type more of the path to narrow the list.']]);
+    expect(reporter.shownFailures.map(({ message: said, detail }) => [said, detail])).toEqual([[message, 'It lists at most 1000. Type more of the path to narrow the list.']]);
   });
 });
 
 describe('referenced by on a file (commands.md, `referenced by` under Symbol)', () => {
-  beforeEach(() => { setInput.mockClear(); });
-
   it('lists the records that name its path in the Data folder, titled with the path', async () => {
-    const files = language({
+    const { client } = language({
       copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, document: { kind: 'OwnFile', location: SOURCE }, ranges: [PLACED] }], leftOut: [],
     });
+    host.holds([document(SOURCE, TEXT)]);
 
-    await files.referencedBy({ kind: 'file', path: FILE });
+    await host.run('modbench.symbol.referencedBy', FILE_ROW);
 
-    expect(files.getPlacedFileReferences.mock.calls).toEqual([[FILE, undefined]]);
-    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
-      title: `Referenced By: ${FILE}`, contextValue: 'modbench.fileReferencedBy',
-      location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },
-    }));
+    expect(client.calls.filter(({ method }) => method === 'getPlacedFileReferences').map(({ args }) => args)).toEqual([[FILE, undefined]]);
+    expect(host.referencesShown).toEqual([expect.objectContaining({
+      title: `Referenced By: ${FILE}`, contextValue: 'modbench.fileReferencedBy', location: new Location(Uri.file(SOURCE), new Range(0, PLACED.start.character, 0, PLACED.end.character)),
+    })]);
   });
 });
