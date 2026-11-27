@@ -71,6 +71,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
       void panel.webview.postMessage(message);
     };
     const show = async ({ value, sequence }: Pick<TableInstance, 'value' | 'sequence'>) => {
+      // The instance is live: its value moves on while the copies are read.
       const view = { value, sequence };
       const mine = ++newest;
       try {

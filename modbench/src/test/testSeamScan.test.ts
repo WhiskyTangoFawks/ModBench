@@ -7,6 +7,10 @@ import { importSpecifiers, isTestSupport, plantedTree, productionFiles, resolved
 import { tsFiles } from './tsFiles';
 
 const NEEDS_AN_INTERNAL: Readonly<Record<string, { readonly why: string; readonly imports: readonly string[] }>> = {
+  'client/test/InMemoryMEditClient.ts': {
+    why: 'the client\'s second adapter: it sends the load order and tells lateness by the client\'s own rules, never a copy of them (ADR-0014)',
+    imports: ['client/lateness.ts', 'client/loadOrderSender.ts'],
+  },
   'test/agentGestures.test.ts': {
     why: 'reads the agent\'s table of gestures against the gestures the spec catalogs',
     imports: ['agent/gestures.ts'],
