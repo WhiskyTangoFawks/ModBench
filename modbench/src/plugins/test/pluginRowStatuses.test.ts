@@ -214,6 +214,14 @@ describe('which statuses stay and which land (plugins.md, A row, bullets)', () =
     expect((await rowOf(facts)).tooltip).toContain(`Error: ${missingMaster('Ghost.esm')}`);
   });
 
+  it('keeps the last sorting statuses through a re-read that changes nothing the sorting rules judge', async () => {
+    const facts = await over(lackingMasters('Ghost.esm'));
+
+    await facts.changed([held({ masters: ['Ghost.esm'], isImmutable: true })], [A]);
+
+    expect((await rowOf(facts)).tooltip).toContain(`Error: ${missingMaster('Ghost.esm')}`);
+  });
+
   it('keeps a failed plugin failed through a tick that does not name it, until a reconcile lands', async () => {
     const facts = await over(failed);
 
