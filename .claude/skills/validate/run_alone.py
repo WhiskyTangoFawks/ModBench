@@ -80,10 +80,8 @@ def class_of(method: str) -> str:
 
 
 def run_again(root: Path, directory: Path, alone: Path, execute: Callable[[Command], bool]) -> bool:
-    """Whether every run passed. A backend project's tests run in one process; the first, if over the ceiling, runs
-    again beside a test of another class, another of them or else the project's fastest, until another runs first.
-    xUnit orders a run's collections at random but a collection's tests always alike, and a class is a collection
-    unless it names one."""
+    """Whether every run passed. A backend project's first test, if over the ceiling, runs again beside one of another
+    class until another runs first: xUnit orders collections at random, and a class is one unless it names one."""
     kinds = reports.by_kind(directory)
     loaded = kinds.get(reports.TRX_REPORT, [])
     passed = True

@@ -51,7 +51,7 @@ def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
 
 def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> int:
     """The number of tests over the ceiling no approval names. A test over it under load that ran again alone is
-    judged on its fastest run there; a test beside it there, under the ceiling under load, is judged under load."""
+    judged on its fastest run there, and any other test where it ran."""
     fastest_alone = fastest_runs(alone)
     ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in fastest_alone}
     judged = [result._replace(seconds=fastest_alone[result.name]) if result.name in ran_again else result for result in results]
