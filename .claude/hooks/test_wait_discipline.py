@@ -84,7 +84,7 @@ class BuildSlot(unittest.TestCase):
         for command in ("dotnet test -v minimal", "dotnet build", "cd MEditService && dotnet test --filter X",
                         "npm run test:unit -- src/x.test.ts", "npm run build", "npm test",
                         "MSBUILDDISABLENODEREUSE=1 dotnet build", "dotnet format --verify-no-changes",
-                        "cd modbench && npx vitest run src/x", "npm run package",
+                        "cd modbench && npx vitest run src/x", "npm run package", "npm run tools",
                         "dotnet publish MEditService.Http -c Release"):
             with self.subTest(command=command):
                 run = self.check(command)

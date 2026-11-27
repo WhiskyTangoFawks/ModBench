@@ -16,7 +16,7 @@ from hook_caller import is_subagent
 DETACHED = "bash .claude/skills/validate/detached.sh"
 SLOT_RUN = (pathlib.Path(__file__).resolve().parents[1] / "skills/validate/slot-run.sh").as_posix()
 BUILD = "|".join((r"\bdotnet\s+(?:build|test|format|publish)(?![\w-])",
-                  r"\bnpm\s+(?:run\s+)?(?:test|build|package)\b",
+                  r"\bnpm\s+(?:run\s+)?(?:test|build|package|tools)\b",
                   r"\bnpx\s+vitest\b"))
 DOTNET_RUN = r"\bdotnet\s+run\b"
 HEREDOC = re.compile(r"(?<!<)<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?^\s*\2\s*$", re.DOTALL | re.MULTILINE)
