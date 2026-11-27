@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { showWarningMessage } = vi.hoisted(() => ({ showWarningMessage: vi.fn() }));
 vi.mock('vscode', () => ({ window: { showWarningMessage } }));
 
-import { askQuestion } from '../dialog';
+import { askQuestion } from './dialog';
 
 describe('askQuestion', () => {
   beforeEach(() => { vi.clearAllMocks(); });
