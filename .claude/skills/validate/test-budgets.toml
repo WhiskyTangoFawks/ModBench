@@ -60,7 +60,6 @@ wire = 5
 [approved]
 "MEditService.Codec.Tests.RealData.RecordTextCodecRealDataTests.EveryRecordOfTheRealPlugin_AndItsHeader_ReadBackToTheTextTheCodecWroteForThem" = "round-trips the 3,000-odd records of the committed cut-down real plugin"
 "MEditService.Codec.Tests.Schema.SchemaReflectorTotalClassificationTests.TheWalk_ClassifiesEveryPropertyItReaches_AndMutagenAnswersEveryDefaultAndAlphaItAsks" = "walks every property of a game's Mutagen types"
-"MEditService.Codec.Tests.Serialization.EncodingNormalizationTests.AStringReadFromALocalizedMaster_WrittenIntoAPluginNotLocalized_IsTheStringItsRereadHolds_UnlessItsTextIsLost" = "writes and rereads a localized master and a patch on disk"
 "MEditService.PluginAdapter.Tests.PluginAdapter.SkyrimModelIdentityTests.DivergenceFrom_WhenOneLanguageOfATranslatedStringDiffers_NamesItsLanguage" = "writes two Skyrim plugins with archived string tables in several languages"
 "MEditService.RecordIndex.Tests.Indexing.IngestRetentionTests.APluginsIngest_LetsGoOfARecordItHasWritten_BeforeItReadsThePluginsLast" = "ingests 160 records with 1 MiB editor IDs, about 160 MB"
 "MEditService.RecordIndex.Tests.Indexing.ReReadMemoryTests.APluginWhoseReferencesOutgrowDuckDbsMemoryLimit_IsReadAndReadAgainWhole" = "12,000 records of 50 references each must outgrow a 32 MB DuckDB memory limit"
@@ -73,6 +72,7 @@ wire = 5
 "MEditService.RecordIndex.Tests.Query.ManyRecordsMemoryTests.RecordsWhoseCopiesNoSortHoldsAtOnce_AreEachAnsweredWhole" = "400 records with 100 KB or 8 MB names must outgrow a 128 MB limit"
 "MEditService.RecordIndex.Tests.Query.StreamedSelectTests.ASelectJoiningCopiesToTheirMastersRecordsOfTheSameBody_AnswersInMemoryTheBodiesOutgrow" = "24,000 two-kilobyte bodies, about 48 MB, joined past a 40 MB limit"
 "MEditService.RecordIndex.Tests.Query.StreamedSelectTests.ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow" = "24,000 two-kilobyte bodies, about 48 MB, must outgrow a 40 MB limit"
+"MEditService.RecordIndex.Tests.RealData.RealDataReadGoldenTests.ReferencesAndResolution_MatchGolden" = "queries every record of the committed cut-down real plugin against golden output"
 "MEditService.RecordIndex.Tests.RealData.SourceIngestParityTests.AFreshlyIngestedRealPlugin_ValidatesClean_AndAnnouncesNothingOfIt" = "ingests the committed cut-down real plugin, then waits on its checks"
 "MEditService.RecordIndex.Tests.Records.StoreRebuildTests.AFilterClearedWhileARebuildRefills_LeavesTheRefilledRowsUnfiltered" = "parks a refill at a gated plugin read, then waits for its release"
 "MEditService.RecordIndex.Tests.Records.StoreRebuildTests.WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter" = "parks a refill at a gated plugin read, then waits for its release"
