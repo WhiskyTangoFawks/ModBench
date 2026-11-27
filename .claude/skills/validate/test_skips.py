@@ -30,7 +30,7 @@ class Main(unittest.TestCase):
         self.assertEqual(
             (code, printed.splitlines()),
             (1, ['skipped  A.Skipped', 'skipped  test_skipped (m.C.test_skipped)', 'skipped  skipped',
-                 'skipped  a.test.ts > skipped', '--- 4 TESTS SKIPPED ---']))
+                 'skipped  src/a.test.ts > skipped', '--- 4 TESTS SKIPPED ---']))
 
     def test_it_passes_when_nothing_skipped(self):
         (self.dir / 'a.trx').write_text(fx.trx(fx.trx_result('A.Ran')))

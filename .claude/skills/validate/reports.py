@@ -1,6 +1,7 @@
 """Reads every test report under a directory: TRX, Vitest JSON, and unittest and mocha logs. A
 result's box is its backend test project, its folder under modbench/src/ or else modbench/, or its log's
-name."""
+name. A Vitest result's name starts with its file's path under modbench/, as two boxes' test files can share a
+file name."""
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -19,7 +20,7 @@ MOCHA_PENDING_SUMMARY = re.compile(r'^\s+\d+ pending$', re.MULTILINE)
 MOCHA_PENDING_TEST = re.compile(r'^\s+- (.+)$', re.MULTILINE)
 MOCHA_PASSED = re.compile(r'^\s+[✔√] (.+) \((\d+)ms\)$', re.MULTILINE)
 VITEST_SEPARATOR = ' > '
-FRONTEND_BOX = re.compile(r'.*/modbench/(?:src/([^/]+)/|([^/]+)/)')
+FRONTEND_FILE = re.compile(r'.*/modbench/((?:src/([^/]+)/|([^/]+)/).*)')
 
 
 class Result(NamedTuple):
@@ -46,19 +47,23 @@ def in_trx(text: str) -> list[Result]:
             for result in run.iterfind('.//t:UnitTestResult', TRX)]
 
 
-def frontend_box(path: str) -> str:
-    match = FRONTEND_BOX.match(path)
+def frontend_file(path: str) -> tuple[str, str]:
+    """The file's path under modbench/, and its box."""
+    match = FRONTEND_FILE.match(path)
     if match is None:
         raise ValueError(f'{path} is not under modbench/')
-    return match[1] or match[2]
+    return match[1], match[2] or match[3]
 
 
 def in_vitest(text: str) -> list[Result]:
     """A skipped test has no duration. Vitest times a file's imports apart from its tests."""
-    return [Result(f'{Path(file["name"]).name}{VITEST_SEPARATOR}{test["fullName"]}',
-                   SKIPPED if test['status'] in VITEST_SKIPPED else RAN,
-                   test['duration'] / 1000 if 'duration' in test else None, frontend_box(file['name']))
-            for file in json.loads(text)['testResults'] for test in file['assertionResults']]
+    results: list[Result] = []
+    for report in json.loads(text)['testResults']:
+        path, box = frontend_file(report['name'])
+        results += [Result(f'{path}{VITEST_SEPARATOR}{test["fullName"]}', SKIPPED if test['status'] in VITEST_SKIPPED else RAN,
+                           test['duration'] / 1000 if 'duration' in test else None, box)
+                    for test in report['assertionResults']]
+    return results
 
 
 def in_unittest(text: str, box: str) -> list[Result]:

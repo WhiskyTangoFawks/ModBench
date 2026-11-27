@@ -240,11 +240,6 @@ if $HOLDS_SLOT; then
   ALONE_ARGS=("$ALONE")
 fi
 
-echo "=== Test times and budget ==="
-python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" \
-  "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" "${ALONE_ARGS[@]}" \
-  || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
-
 if $HOLDS_SLOT; then
   echo "=== Test data over its size ==="
   python3 "$ROOT/.claude/skills/validate/check_test_data.py" "$ROOT" \
@@ -253,6 +248,12 @@ if $HOLDS_SLOT; then
   python3 "$ROOT/.claude/skills/validate/check_test_only_code.py" "$ROOT/MEditService" \
   || { echo "--- BACKEND TEST-ONLY CODE GATE FAILED ---"; FAILED=true; }
 fi
+
+# Last, so the wall time is the whole run's and its yellow flags end the verdict.
+echo "=== Test times and budget ==="
+python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" \
+  "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" "${ALONE_ARGS[@]}" \
+  || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
 
 if $FAILED; then
   exit 1

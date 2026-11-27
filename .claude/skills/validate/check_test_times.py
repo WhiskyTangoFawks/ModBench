@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Reads the test reports under a directory (see reports.py), names each test over 100 ms, and prints each
 box's summed test time and the run's wall time against its budget in the budget file. Once FAILS_THE_RUN is on,
-a Linux run fails on a box over its budget or without one, and on a test over the 1 s ceiling the file does
-not approve. Once WINDOWS_FAILS_THE_RUN is on, the Windows run fails on its wall time, and on nothing else.
-On a merge run, an approval whose tests all ran under the ceiling alone is reported as lapsed and fails nothing."""
+a Linux run fails on a test over the 1 s ceiling the file does not approve. The budgets fail nothing: each box over
+its budget or without one, each run over its wall budget and each approval that lapsed ends the report with a
+yellow flag for the developer."""
 import sys
 import tomllib
 from pathlib import Path
@@ -13,12 +13,11 @@ import reports
 SLOW_SECONDS = 0.1
 CEILING_SECONDS = 1.0
 FAILS_THE_RUN = False
-WINDOWS_FAILS_THE_RUN = False
 # The source scans, the gates' own tests and the integration tests: the budget file's `other` holds them.
 NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
 OTHER = 'the tests of no box'
 WINDOWS = 'windows'
-MERGE = 'merge'
+FLAG = 'YELLOW FLAG: '
 
 
 def slow_tests(results: list[reports.Result]) -> list[tuple[str, float]]:
@@ -32,13 +31,14 @@ def approval_of(name: str, approved: dict[str, str]) -> str | None:
     return next((key for key in approved if name == key or name.startswith(f'{key}(')), None)
 
 
-def lapsed(results: list[reports.Result], approved: dict[str, str]) -> list[tuple[str, float]]:
-    """Each approval whose tests ran, all under the ceiling, with its slowest test's time, slowest first."""
+def lapse_flags(results: list[reports.Result], approved: dict[str, str]) -> list[str]:
+    """Each approval whose tests ran, all under the ceiling, slowest first."""
     slowest: dict[str, float] = {}
     for result in results:
         if result.seconds is not None and (key := approval_of(result.name, approved)) is not None:
             slowest[key] = max(slowest.get(key, 0), result.seconds)
-    return sorted(((key, seconds) for key, seconds in slowest.items() if seconds < CEILING_SECONDS), key=lambda lapse: -lapse[1])
+    return [f'{key} took {seconds:.2f} s at most, so its approval lapsed'
+            for key, seconds in sorted(slowest.items(), key=lambda lapse: -lapse[1]) if seconds < CEILING_SECONDS]
 
 
 def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
@@ -50,9 +50,10 @@ def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
     return fastest
 
 
-def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str], lapses_too: bool) -> int:
-    """The number of tests over the ceiling no approval names. A test over it under load that ran again alone is
-    judged on its fastest run there. Only a merge run reruns an approved test, so only it reports lapses."""
+def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> tuple[int, list[str]]:
+    """The number of tests over the ceiling no approval names, and the lapse flags. A test over it under load that ran
+    again alone is judged on its fastest run there. Only a merge run reruns an approved test, so on a branch run an
+    approval lapses only by a test under the ceiling under load."""
     fastest_alone = fastest_runs(alone)
     ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in fastest_alone}
     judged = [result._replace(seconds=fastest_alone[result.name]) if result.name in ran_again else result for result in results]
@@ -60,13 +61,8 @@ def report_ceiling(results: list[reports.Result], alone: list[reports.Result], a
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
         print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in ran_again else ""}, NOT APPROVED')
-    lapses = lapsed(judged, approved) if lapses_too else []
-    for name, seconds in lapses:
-        print(f'{seconds:7.2f} s  {name}: APPROVAL LAPSED')
-    lapse_count = f', {len(lapses)} APPROVALS LAPSED' if lapses_too else ''
-    print(f'--- {len(ran_again)} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED'
-          f'{lapse_count} ---')
-    return len(unapproved)
+    print(f'--- {len(ran_again)} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED ---')
+    return len(unapproved), lapse_flags(judged, approved)
 
 
 def box_times(results: list[reports.Result]) -> list[tuple[str, float]]:
@@ -77,42 +73,34 @@ def box_times(results: list[reports.Result]) -> list[tuple[str, float]]:
     return sorted(times.items(), key=lambda box: -box[1])
 
 
-def against(seconds: float, budget: float | None, name: str) -> tuple[str, bool]:
-    """The line, and whether it fails."""
+def over_budget(name: str, seconds: float, budget: float | None, digits: int) -> list[str]:
+    took = f'{name} took {seconds:.{digits}f} s'
     if budget is None:
-        return f'{seconds:7.1f} s  {name}: NO BUDGET', True
-    over = seconds > budget
-    late = f': OVER BUDGET by {seconds - budget:.1f} s' if over else ''
-    return f'{seconds:7.1f} s of {budget:4g} s  {name}{late}', over
+        return [f'{took}, and has no budget']
+    return [f'{took}, over its {budget:g} s budget by {seconds - budget:.{digits}f} s'] if seconds > budget else []
 
 
-def report_budgets(times: list[tuple[str, float]], boxes: dict[str, float], other: float) -> int:
-    """The number of budgets overrun or missing."""
+def report_budgets(times: list[tuple[str, float]], boxes: dict[str, float], other: float) -> list[str]:
+    """The flags of the budgets overrun or missing."""
     no_box = [(box, seconds) for box, seconds in times if box in NO_BOX]
-    lines = [against(seconds, boxes.get(box), box) for box, seconds in times if box not in NO_BOX]
-    lines.append(against(sum(seconds for _, seconds in no_box), other, OTHER))
-    for line, _ in lines:
-        print(line)
+    judged = [(box, seconds, boxes.get(box)) for box, seconds in times if box not in NO_BOX]
+    judged.append((OTHER, sum(seconds for _, seconds in no_box), other))
+    for name, seconds, budget in judged:
+        print(f'{seconds:7.1f} s  {name}' if budget is None else f'{seconds:7.1f} s of {budget:4g} s  {name}')
     for box, seconds in no_box:
         print(f'  {seconds:7.1f} s  {box}')
-    failing = sum(fails for _, fails in lines)
-    print(f'--- {failing} BUDGETS OVERRUN OR MISSING ---')
-    return failing
+    return [flag for name, seconds, budget in judged for flag in over_budget(name, seconds, budget, 1)]
 
 
-def report_wall(elapsed: float, budget: float) -> bool:
-    """Whether the run is over its budget."""
-    over = elapsed > budget
-    late = f': OVER BUDGET by {elapsed - budget:.0f} s' if over else ''
-    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget{late}')
-    return over
+def report_wall(elapsed: float, budget: float, run: str) -> list[str]:
+    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget')
+    return over_budget(f'the {run} run', elapsed, budget, 0)
 
 
 def main(argv: list[str] | None = None) -> int:
     """The run is a budget file's key under [wall]: branch, merge or windows."""
     directory, elapsed_argument, budgets_file, run, *optional = sys.argv[1:] if argv is None else argv
     (alone_folder,) = optional or [None]
-    elapsed = float(elapsed_argument)
     budgets = tomllib.loads(Path(budgets_file).read_text())
     results = reports.results(Path(directory))
     slow = slow_tests(results)
@@ -120,15 +108,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f'{seconds:7.2f} s  {name}')
     print(f'--- {len(slow)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
     times = box_times(results)
+    unapproved, flags = 0, []
     if run == WINDOWS:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
-        return int(report_wall(elapsed, budgets['wall'][run]) and WINDOWS_FAILS_THE_RUN)
-    alone = reports.results(Path(alone_folder)) if alone_folder else []
-    failing = (report_ceiling(results, alone, budgets.get('approved', {}), run == MERGE)
-               + report_budgets(times, budgets['boxes'], budgets['other']))
-    report_wall(elapsed, budgets['wall'][run])
-    return int(FAILS_THE_RUN and bool(failing))
+    else:
+        alone = reports.results(Path(alone_folder)) if alone_folder else []
+        unapproved, flags = report_ceiling(results, alone, budgets.get('approved', {}))
+        flags += report_budgets(times, budgets['boxes'], budgets['other'])
+    flags += report_wall(float(elapsed_argument), budgets['wall'][run], run)
+    for flag in flags:
+        print(f'{FLAG}{flag}')
+    return int(FAILS_THE_RUN and bool(unapproved))
 
 
 if __name__ == '__main__':
