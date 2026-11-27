@@ -4,8 +4,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../../wire/sourceMod';
-import { buildFileAgainst, buildFileIn, buildFileText, manifestFileFor, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
-import { manifestText } from '../manifestText';
+import { buildFileAgainst, buildFileIn, buildFileText, manifestFileFor, manifestIn, manifestText, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
 import { writeBuildFile } from '../../test/buildFiles';
 import { onPosix } from '../../test/platform';
 

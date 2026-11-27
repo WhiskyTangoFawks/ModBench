@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { buildFileText, type BuildFile } from '../buildFile';
-import { readBuildFile } from '../buildFileRead';
+import { BUILD_FILE } from '../../wire/sourceMod';
+import { buildFileIn, buildFileText, type BuildFile, type BuildFileRead } from '../manifestAdapter';
+import { modFolderHolding } from './modFolderHolding';
 
-const read = (text: string): ReturnType<typeof readBuildFile> => readBuildFile(text);
+const read = (text: string): Promise<BuildFileRead | undefined> => buildFileIn(modFolderHolding({ [BUILD_FILE]: text }));
 
 describe('a build file the adapter reads and refuses', () => {
-  it('reads each step in order: each built-in step with its paths, each archive with the files it packs, and each task with the page of its tool', () => {
+  it('reads each step in order: each built-in step with its paths, each archive with the files it packs, and each task with the page of its tool', async () => {
     const text = JSON.stringify({
       version: 1,
       steps: [
@@ -15,7 +16,7 @@ describe('a build file the adapter reads and refuses', () => {
       ],
     });
 
-    expect(read(text)).toEqual({
+    expect(await read(text)).toEqual({
       buildFile: {
         steps: [
           { kind: 'decompile', paths: ['A.esp'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures', 'readme.txt'] },
@@ -26,8 +27,8 @@ describe('a build file the adapter reads and refuses', () => {
     });
   });
 
-  it('reads archives of one pack step that pack different paths, a file that shares the name of an archive, and one path packed by two pack steps', () => {
-    expect(read('{"version":1,"steps":[{"pack":{"a.ba2":["x.nif"],"b.ba2":["y.nif","a.ba2"]}},{"pack":{"c.ba2":["x.nif"]}}]}')).toEqual({
+  it('reads archives of one pack step that pack different paths, a file that shares the name of an archive, and one path packed by two pack steps', async () => {
+    expect(await read('{"version":1,"steps":[{"pack":{"a.ba2":["x.nif"],"b.ba2":["y.nif","a.ba2"]}},{"pack":{"c.ba2":["x.nif"]}}]}')).toEqual({
       buildFile: {
         steps: [
           { kind: 'pack', archives: [{ path: 'a.ba2', files: ['x.nif'] }, { path: 'b.ba2', files: ['y.nif', 'a.ba2'] }] },
@@ -37,14 +38,14 @@ describe('a build file the adapter reads and refuses', () => {
     });
   });
 
-  it('reads an unpack step as the archives of the source folder with the files each unpacks', () => {
-    expect(read('{"version":1,"steps":[{"unpack":{"Main.ba2":["meshes/a.nif","b.nif"]}}]}')).toEqual({
+  it('reads an unpack step as the archives of the source folder with the files each unpacks', async () => {
+    expect(await read('{"version":1,"steps":[{"unpack":{"Main.ba2":["meshes/a.nif","b.nif"]}}]}')).toEqual({
       buildFile: { steps: [{ kind: 'unpack', archives: [{ path: 'Main.ba2', files: ['meshes/a.nif', 'b.nif'] }] }] },
     });
   });
 
-  it('reads a script step by its path in the source folder and a default script step by its name, each with its arguments', () => {
-    expect(read('{"version":1,"steps":[{"script":"scripts/fix.py","args":["A.esp"]},{"defaultScript":"clean","args":["B.esp"]},{"script":"x.py"},{"defaultScript":"clean"}]}')).toEqual({
+  it('reads a script step by its path in the source folder and a default script step by its name, each with its arguments', async () => {
+    expect(await read('{"version":1,"steps":[{"script":"scripts/fix.py","args":["A.esp"]},{"defaultScript":"clean","args":["B.esp"]},{"script":"x.py"},{"defaultScript":"clean"}]}')).toEqual({
       buildFile: {
         steps: [
           { kind: 'script', script: 'scripts/fix.py', args: ['A.esp'] }, { kind: 'defaultScript', name: 'clean', args: ['B.esp'] },
@@ -54,17 +55,17 @@ describe('a build file the adapter reads and refuses', () => {
     });
   });
 
-  it('reads a build file that holds only its version', () => {
-    expect(read('{"version":1}')).toEqual({ buildFile: { steps: [] } });
+  it('reads a build file that holds only its version', async () => {
+    expect(await read('{"version":1}')).toEqual({ buildFile: { steps: [] } });
   });
 
-  it('reads back the text it writes', () => {
+  it('reads back the text it writes', async () => {
     const buildFile: BuildFile = {
       steps: [{ kind: 'copy', paths: ['textures', 'a.ini'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'pack', archives: [{ path: 'a.ba2', files: ['x.nif'] }] }, { kind: 'unpack', archives: [{ path: 'b.ba2', files: ['y.nif'] }] }, { kind: 'task', task: 'T', args: ['x'] },
         { kind: 'script', script: 'fix.py', args: ['A.esp'] }, { kind: 'defaultScript', name: 'clean', args: [] }],
     };
 
-    expect(read(buildFileText(buildFile))).toEqual({ buildFile });
+    expect(await read(buildFileText(buildFile))).toEqual({ buildFile });
   });
 
   it.each([
@@ -108,8 +109,7 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"version":1,"steps":[{"task":"Zip","page":7}]}', 'its build file cannot be read at its step 1'],
     ['{"version":1,"steps":[{"task":"Zip","path":"C:/zip.exe"}]}', "its build file's step 1 holds 'path', which Modbench does not read"],
     ['{"version":1,"steps":[\n{"task":"a"}\n{"task":"b"}\n]}', 'line 3'],
-  ])('refuses %j naming where', (text, where) => {
-    const refused = read(text);
-    expect('refused' in refused ? refused.refused : '').toContain(where);
+  ])('refuses %j naming where', async (text, where) => {
+    expect(await read(text)).toEqual({ refused: expect.stringContaining(where) as unknown });
   });
 });

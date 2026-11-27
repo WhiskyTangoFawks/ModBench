@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { heldTexts, NO_FILE_CHANGES, type RenamePlan } from '../../symbolNames/symbolNames';
-import { manifestDownloadedFileReferences, manifestEntryReferences, manifestEntryNames } from '../manifestEntryReferences';
+import { manifestDownloadedFileReferences, manifestEntryReferences, manifestEntryNames } from '../manifestAdapter';
 
 let root: string;
 let modFolder: string;
