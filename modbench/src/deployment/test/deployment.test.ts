@@ -525,7 +525,7 @@ describe('a deploy killed part way through its changes', () => {
     busy.links = [];
     await link(failed.winner, join(folder, 'Data', 'b.esp'));
 
-    expect(await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)).toEqual([join('Data', 'b.esp')]);
+    expect(await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)).toEqual(['Data/b.esp']);
   });
 });
 
@@ -822,7 +822,7 @@ describe('the files in the deployment folder deploy does not manage', () => {
     await link(gone.winner, join(folder, 'Data', 'Meshes', 'Gone.nif'));
 
     expect([relinked.unmanaged, again.unmanaged, await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)])
-      .toEqual([[], [], [join('Data', 'Meshes', 'Gone.nif')]]);
+      .toEqual([[], [], ['Data/Meshes/Gone.nif']]);
   });
 
   it('names each, below any folder, and none that deploy wrote or has set aside', async () => {
