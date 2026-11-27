@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { factsOver } from './pluginsOver';
+import { deferred, factsOver, settle } from './pluginsOver';
 import type { PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { holdsLoadOrder, holdsNoLoadOrder } from '../../client/test/says';
@@ -16,17 +16,13 @@ const REFUSED = { failed: 'refused', refusal: '503' } as const;
 
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
 const diagnosis = (text: string): PluginDiagnosisReport => ({ plugin: 'A.esp', origin: 'SomeMod', text });
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-}
 
 type Facts = ReturnType<typeof factsOver>;
 const compiled = async (facts: Facts, address = A) => (await facts.row(address.name, address.origin))?.context.includes('compiledPlugin');
 const factsAsked = (facts: Facts) => facts.client.calls.filter(({ method }) => method === 'getPlugins').map(({ args }) => args);
+const handOffs = (facts: Facts) => facts.output.filter((line) => line.includes('applying reconciled load order')).length;
+const refusing = (message: string): PromiseLike<never> => ({ then: (_answered, refused) => Promise.reject(new Error(message)).then(undefined, refused) });
 const sourceOf = (problems: readonly (readonly [string, unknown])[]) => problems.map(([path]) => path).sort();
 
 describe('the facts mEdit answers of each plugin, read at a reconcile', () => {
@@ -41,21 +37,35 @@ describe('the facts mEdit answers of each plugin, read at a reconcile', () => {
     ]);
   });
 
-  it.each([
-    ['re-read', [], async (facts: Facts) => { await facts.indexed(); await facts.changed(UNREACHABLE); }],
-    ['hand-off', [Promise.resolve(UNREACHABLE)], (facts: Facts) => facts.reconciled(UNREACHABLE)],
-  ] as const)('a failed %s that mEdit going away superseded leaves the rows to the disconnect', async (_read, before, read) => {
+  const disconnected = [undefined, { kind: 'error', message: 'mEdit is disconnected.' }];
+
+  it('a failed re-read that mEdit going away superseded leaves the rows to the disconnect', async () => {
     const facts = factsOver([A]);
     const answer = deferred<ReadFailed>();
-    for (const earlier of before) facts.client.setQueryAnswerOnce('getPlugins', earlier);
     facts.client.setQueryAnswerOnce('getPlugins', answer.promise);
+    await facts.indexed();
+    await facts.changed(UNREACHABLE);
 
-    await read(facts);
     await facts.unreachable();
     answer.resolve(UNREACHABLE);
     await settle();
 
-    expect([facts.message(), await facts.expansion('A.esp')]).toEqual([undefined, { kind: 'error', message: 'mEdit is disconnected.' }]);
+    expect([facts.message(), await facts.expansion('A.esp')]).toEqual(disconnected);
+  });
+
+  it('a failed hand-off that mEdit going away superseded leaves the rows to the disconnect', async () => {
+    const facts = factsOver([A]);
+    const answer = deferred<ReadFailed>();
+    facts.client.setQueryAnswerOnce('getPlugins', Promise.resolve(UNREACHABLE));
+    facts.client.setQueryAnswerOnce('getPlugins', answer.promise);
+    await facts.reconciled(UNREACHABLE);
+    const whileTheHandOffReads = facts.message();
+
+    await facts.unreachable();
+    answer.resolve(UNREACHABLE);
+    await settle();
+
+    expect([whileTheHandOffReads, facts.message(), await facts.expansion('A.esp')]).toEqual([undefined, ...disconnected]);
   });
 
   it('drops a reconcile answer that lands after a newer event', async () => {
@@ -64,12 +74,13 @@ describe('the facts mEdit answers of each plugin, read at a reconcile', () => {
     facts.client.setQueryAnswerOnce('getPlugins', Promise.resolve([]));
     facts.client.setQueryAnswerOnce('getPlugins', answer.promise);
     await facts.reconciled([]);
+    const whileTheHandOffReads = handOffs(facts);
 
     await facts.indexed();
     answer.resolve([held({ isCompiledPlugin: true })]);
     await settle();
 
-    expect(await compiled(facts)).toBe(false);
+    expect([whileTheHandOffReads, await compiled(facts)]).toEqual([0, false]);
   });
 
   it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
@@ -80,11 +91,11 @@ describe('the facts mEdit answers of each plugin, read at a reconcile', () => {
     await facts.reconciled([held({ isCompiledPlugin: true })]);
 
     await facts.changed([held({ isCompiledPlugin: true })]);
+    const whileTheHandOffReads = handOffs(facts);
     answer.resolve([held({ isCompiledPlugin: true })]);
     await settle();
 
-    expect(facts.output.filter((line) => line.includes('applying reconciled load order'))).toHaveLength(1);
-    expect(await compiled(facts)).toBe(true);
+    expect([whileTheHandOffReads, handOffs(facts), await compiled(facts)]).toEqual([0, 1, true]);
   });
 });
 
@@ -308,3 +319,51 @@ describe('the malformed-plugin scan', () => {
     expect([host.problems('modbench-diagnosis'), (await facts.row('A.esp'))?.description]).toEqual([[], undefined]);
   });
 });
+
+describe('a throw that is no failed read', () => {
+  it('is not folded into the unreadable-plugin-list rows, and reaches the caller', async () => {
+    const facts = factsOver([A]);
+    facts.client.setQueryAnswerOnce('getPlugins', Promise.resolve([]));
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke'));
+
+    await facts.reconciled([held()]);
+
+    expect([facts.message(), facts.output.filter((line) => line.includes('threw'))]).toEqual([
+      undefined, ['[loadOrder] handing the reconciled load order to the views threw: the read broke'],
+    ]);
+  });
+
+  it('is not folded into a failed scan on the rows, and is left unhandled', async () => {
+    const facts = factsOver([A]);
+    facts.client.setQueryAnswerOnce('getDiagnoses', refusing('the scan broke'));
+
+    const thrown = await nextUnhandledRejection(() => facts.reconciled([held()]));
+
+    expect([thrown, facts.message()]).toEqual([new Error('the scan broke'), undefined]);
+  });
+
+  it('reads the next re-read after one that threw', async () => {
+    const facts = factsOver([A]);
+    await facts.indexed({ indexed: [A] });
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke'));
+    await facts.changed([held({ isCompiledPlugin: true })]);
+    const afterTheThrow = await compiled(facts);
+
+    await facts.changed([held({ isCompiledPlugin: true })]);
+
+    expect([afterTheThrow, await compiled(facts)]).toEqual([false, true]);
+  });
+});
+
+async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
+  const others = process.listeners('unhandledRejection');
+  process.removeAllListeners('unhandledRejection');
+  try {
+    return await new Promise((resolve) => {
+      process.once('unhandledRejection', resolve);
+      void trigger();
+    });
+  } finally {
+    for (const listener of others) process.on('unhandledRejection', listener);
+  }
+}

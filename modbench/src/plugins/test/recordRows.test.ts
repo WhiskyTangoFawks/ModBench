@@ -349,6 +349,12 @@ describe('the rows a group reads, and their working-tree state', () => {
     expect([present(row, 'the override row').resourceUri?.path, await badgeOf(row?.resourceUri)]).toEqual(['/Other.esp/Data%2F/000000%3AFallout4.esm', 'M']);
   });
 
+  it('a record nothing has cached yet has no working-tree state', async () => {
+    await readGroup(makeClient({ records: { items: [makeRecord(0, 'Modified')], total: 1 } }));
+
+    expect(await badgeOf(Uri.parse('medit-record:/Plugin0.esp/Data%2F/000000%3AFallout4.esm'))).toBeUndefined();
+  });
+
   it('a URI outside the medit-record: scheme has no working-tree state', async () => {
     const { browser, typeNode } = await readGroup(makeClient({ records: { items: [makeRecord(0, 'Modified')], total: 1 } }));
     const [row] = await browser.children(typeNode);

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host, Uri } from './vscodeHost';
-import { factsOver, type Shown } from './pluginsOver';
+import { deferred, factsOver, settle, type Shown } from './pluginsOver';
 import type { PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { settled } from '../../test/eventually';
@@ -13,7 +13,7 @@ const B = { name: 'B.esp', origin: 'SomeMod' };
 
 type Facts = ReturnType<typeof factsOver>;
 type Tell = (facts: Facts) => Promise<void>;
-type Scene = readonly [readonly Shown[], Tell];
+type Scene = readonly [readonly Shown[], Tell, string?];
 
 const held = (overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name: 'A.esp', isCompiledPlugin: true, ...overrides });
 const failure = (reason: string, address = A): PluginLoadFailure => ({ ...address, reason });
@@ -30,14 +30,14 @@ const reconciledWith = (overrides: Partial<PluginMetadata>): Scene => [[A], (fac
 const failed: Scene = [[A], (facts) => facts.reconciled([], { failures: [failure('Malformed record')] })];
 const lackingMasters = (...ghosts: string[]): Scene => [[A], (facts) => facts.reconciled([held({ masters: ghosts })])];
 const masterFlagAfterB = (overrides: Partial<PluginMetadata> = {}): Scene => [[B, A], (facts) => facts.reconciled([held({ isMaster: true, ...overrides }), held(B)])];
-const loadsBeforeB: Scene = [[A, B], (facts) => facts.reconciled([held(), held(B)])];
+const loadsBeforeB: Scene = [[A, B], (facts) => facts.reconciled([held(), held(B)]), A_AFTER_B];
 const unreadable = reconciledWith({ hasParseFailure: true });
 const sourceUnreadable = reconciledWith({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } });
 const sourceUnreadableForGood = reconciledWith({ pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } });
 const changed: Scene = [[A], (facts) => facts.reconciled([held()], { changedOutside: [A] })];
 const malformed: Scene = [[A], (facts) => facts.reconciled([held()], { diagnoses: [diagnosis('first'), diagnosis('second')] })];
 
-async function over([shown, tell]: Scene, masterlist?: string): Promise<Facts> {
+async function over([shown, tell, masterlist]: Scene): Promise<Facts> {
   const facts = factsOver(shown, { masterlist });
   await tell(facts);
   return facts;
@@ -54,7 +54,6 @@ const FAILED_INDEX = { kind: 'failed', message: 'the record index threw' } as co
 const RECORDS = { kind: 'records' } as const;
 const INDEXING = { kind: 'indexing' } as const;
 const errorOf = (message: string) => ({ kind: 'error', message }) as const;
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 const then = (...steps: Tell[]): Tell => async (facts) => { for (const step of steps) await step(facts); };
 
 describe('the sorting rules are judged once a reconcile completes (plugins.md, A row, Plugin)', () => {
@@ -97,7 +96,7 @@ describe('the status table (plugins.md, A row, Plugin)', () => {
     ['changed outside Modbench', changed, 'warning', 'changed outside Modbench', [CHANGED_TEXT]],
     ['malformed', malformed, 'warning', 'malformed', ['Malformed: first; second']],
   ])('%s', async (_label, scene, icon, words, tooltipLines) => {
-    const facts = await over(scene, scene === loadsBeforeB ? A_AFTER_B : undefined);
+    const facts = await over(scene);
 
     expect(await rowOf(facts)).toMatchObject({ icon, description: words, tooltip: ['A.esp', 'SomeMod', ...tooltipLines] });
   });
@@ -329,12 +328,13 @@ describe('what a row states about its plugin', () => {
   });
 
   it.each([
-    ['a mod without a repository', 'SomeMod', [], ['inNonSourceMod']],
-    ['a mod with a repository', 'SourceMod', ['SourceMod'], ['inSourceMod']],
-    ['Overwrite', 'overwrite/', [], ['inOverwrite']],
-    ['the game folder', 'Data/', [], []],
-  ])('states where it lives: %s', async (_label, origin, listedSourceMods, place) => {
-    const facts = factsOver([{ name: 'A.esp', origin }], { value: { listedSourceMods: new Set(listedSourceMods) } });
+    ['a mod without a repository', 'SomeMod', 'SomeMod', [], ['inNonSourceMod']],
+    ['a mod with a repository', 'SourceMod', 'SourceMod', ['SourceMod'], ['inSourceMod']],
+    ['a mod named without case', 'sourcemod', 'SourceMod', ['SourceMod'], ['inSourceMod']],
+    ['Overwrite', 'overwrite/', 'SomeMod', [], ['inOverwrite']],
+    ['the game folder', 'Data/', 'SomeMod', [], []],
+  ])('states where it lives: %s', async (_label, origin, mod, listedSourceMods, place) => {
+    const facts = factsOver([{ name: 'A.esp', origin }], { value: { mods: [{ kind: 'mod', name: mod, enabled: true }], listedSourceMods: new Set(listedSourceMods) } });
 
     expect((await rowOf(facts, { name: 'A.esp', origin })).context.filter((word) => word.startsWith('in'))).toEqual(place);
   });
@@ -401,7 +401,12 @@ describe('what a row expands into (plugins.md, States, stories 2-4 and 6)', () =
     ['another window holds the record index', then(heldAOnly, (facts) => facts.refused(HELD_ELSEWHERE)), errorOf(HELD_ELSEWHERE.message), errorOf(HELD_ELSEWHERE.message)],
     ['the snapshot failed', then(heldAOnly, (facts) => facts.refused(FAILED_INDEX)), RECORDS, errorOf(FAILED_INDEX.message)],
     ['a failure of B over mEdit unreachable', then(failedB, (facts) => facts.unreachable()), RECORDS, errorOf('Malformed record')],
+    ['the other window over mEdit unreachable', then((facts) => facts.refused(HELD_ELSEWHERE), (facts) => facts.unreachable()),
+      errorOf(HELD_ELSEWHERE.message), errorOf(HELD_ELSEWHERE.message)],
+    ['mEdit unreachable, then another window', then((facts) => facts.unreachable(), (facts) => facts.refused(HELD_ELSEWHERE)),
+      errorOf(HELD_ELSEWHERE.message), errorOf(HELD_ELSEWHERE.message)],
     ['a tick after a refusal', then((facts) => facts.refused(HELD_ELSEWHERE), heldAOnly), RECORDS, INDEXING],
+    ['a tick after mEdit was unreachable', then((facts) => facts.unreachable(), heldAOnly), RECORDS, INDEXING],
     ['the hand-off after a refusal', then((facts) => facts.refused(FAILED_INDEX), (facts) => facts.reconciled([held()])), RECORDS, INDEXING],
   ])('%s', async (_label, tell, forA, forB) => {
     const facts = await over([[A, B], tell]);
@@ -712,6 +717,29 @@ describe('the record filter hides a plugin with no record it matches (plugins.md
     const { facts, plugins } = await matching(matches);
 
     expect([await shownOf(facts, plugins), facts.message()]).toEqual([shown, message]);
+  });
+
+  it('forgets that no plugin matched once the record filter changes', async () => {
+    const { facts, plugins } = await matching([false]);
+    const answer = deferred<PluginMetadata[]>();
+    facts.client.setQueryAnswerOnce('getPlugins', answer.promise);
+    host.files.set('weapons.sql', SQL);
+    facts.client.setQueryAnswer('getActiveFilter', { sql: SQL, source: 'weapons.sql' });
+
+    await host.run('modbench.record.filter', Uri.file('/workspace/weapons.sql'));
+    await settle();
+
+    expect([await shownOf(facts, plugins), facts.message()]).toEqual([[true], undefined]);
+  });
+
+  it('hides a plugin by its own answer, not by the answer for another plugin of its name', async () => {
+    const shared = (origin: string) => ({ name: 'Shared.esp', origin });
+    const facts = factsOver([shared('ModA'), shared('ModB')]);
+    await facts.reconciled([held({ ...shared('ModA'), hasMatchingRecords: true }), held({ ...shared('ModB'), hasMatchingRecords: false })]);
+
+    await filtered(facts);
+
+    expect([(await facts.row('Shared.esp', 'ModA')) !== undefined, (await facts.row('Shared.esp', 'ModB')) !== undefined]).toEqual([true, false]);
   });
 
   it('keeps a plugin hidden through a tick that indexes nothing yet', async () => {

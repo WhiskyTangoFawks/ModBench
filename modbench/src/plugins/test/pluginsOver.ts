@@ -8,12 +8,13 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { pluginMetadataFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import type { loadFailuresOf, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, LoadOrderRefusal } from '../../client';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { READ_SORTING_RULE_FILES } from '../../test/readSortingRuleFiles';
 import { holdsLoadOrder } from '../../client/test/says';
 import { settled } from '../../test/eventually';
+import { present } from '../../ports/present';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { pluginArgumentOf } from '../../drivingLib/argument';
@@ -132,7 +133,15 @@ interface Reconcile extends Told { diagnoses?: PluginDiagnosisReport[] | ReadFai
 
 type IndexOfPlugin = Parameters<typeof loadFailuresOf>[0][number];
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
+/** Settles once every answer the fakes hold has landed. */
+export const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+/** An answer the test lands when it chooses. */
+export function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
 const SOME_MOD = 'SomeMod';
 const addressOf = ({ name, origin = SOME_MOD }: Shown): PluginAddress => ({ name, origin });
 const pathOf = ({ name, origin }: PluginAddress) => (origin === 'Data/' ? `/game/Data/${name}` : `/mods/${origin}/${name}`);
@@ -145,7 +154,7 @@ export function factsOver(shown: readonly Shown[], { masterlist, userlist, value
 } = {}) {
   const client = over.client ?? clientHoldingNothing();
   client.setQueryAnswer('getPluginsIndexing', []);
-  if (over.client === undefined) client.setQueryAnswer('getRecordTypes', []);
+  if (over.client === undefined) client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'weap', count: 0 })]);
   const lines = shown.filter(({ noLine }) => noLine !== true);
   const noLine = shown.filter(({ noLine }) => noLine === true).map(addressOf);
   const origins = [...new Set(shown.map(addressOf).map(({ origin }) => origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
@@ -217,11 +226,11 @@ export function factsOver(shown: readonly Shown[], { masterlist, userlist, value
     pluginRow: rowOf,
     /** What the row of the plugin expands into: its records, Still indexing… or the error row's reason. */
     expansion: async (name: string, origin = SOME_MOD) => {
-      const [first] = await made.rows(await rowOf(name, origin));
-      const item = first === undefined ? undefined : await made.item(first);
-      if (item?.contextValue === 'indexing') return { kind: 'indexing' } as const;
-      if (item?.contextValue === 'error') return { kind: 'error', message: typeof item.tooltip === 'string' ? item.tooltip : '' } as const;
-      return { kind: 'records' } as const;
+      const item = await made.item(present((await made.rows(present(await rowOf(name, origin), `the row of ${name}`)))[0], `what the row of ${name} expands into`));
+      if (item.contextValue === 'indexing') return { kind: 'indexing' } as const;
+      if (item.contextValue === 'error') return { kind: 'error', message: typeof item.tooltip === 'string' ? item.tooltip : '' } as const;
+      if (item.contextValue?.startsWith('recordType') === true) return { kind: 'records' } as const;
+      throw new Error(`the row of ${name} expands into ${String(item.contextValue)}`);
     },
     /** The view's message line. */
     message: () => made.view().message,

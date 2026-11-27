@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { DiagnosticSeverity, host } from './vscodeHost';
-import { factsOver, type Shown } from './pluginsOver';
+import { deferred, factsOver, settle, type Shown } from './pluginsOver';
 import type { PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import type { FileReads } from '../../sortingRules/lootConditions';
@@ -15,13 +15,7 @@ const USERLIST = '/instance/userlist.yaml';
 
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
 const texts = (collection: string) => host.problems(collection).flatMap(([, shown]) => shown.map(({ message }) => message));
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
-  return { promise, resolve };
-}
 
 function recordedReads(gates: Promise<void>[] = []) {
   const asked: { kind: string; path: string; trusted: boolean }[] = [];
@@ -220,6 +214,16 @@ describe('judging again as the facts are re-read', () => {
     expect(facts.asked).toHaveLength(1);
   });
 
+  it('judges again when mEdit\'s answer for a named plugin leaves it out', async () => {
+    const facts = judging([A, B]);
+    await facts.reconciled(reads(true));
+    const atTheReconcile = texts('modbench-sorting-errors').length;
+
+    await facts.changed([], [B]);
+
+    expect([atTheReconcile, texts('modbench-sorting-errors')]).toEqual([1, []]);
+  });
+
   it('judges nothing before the first reconcile', async () => {
     const facts = judging([A, B]);
     await facts.indexed({ indexed: [A, B] });
@@ -231,26 +235,32 @@ describe('judging again as the facts are re-read', () => {
 });
 
 describe('judging again as the rules change while a judgement is in flight', () => {
-  const READ_G = "    msg: [{type: say, content: m, condition: 'readable(\"../G.exe\")'}]\n";
-  const NO_RULES = `plugins:\n  - name: A.esp\n${READ_G}`;
-  const MISSING = `plugins:\n  - name: A.esp\n    req: [Missing.esp]\n${READ_G}`;
+  const SAYS_ON_G = "    msg: [{type: say, content: m, condition: 'readable(\"../G.exe\")'}]\n";
+  const NO_RULES = `plugins:\n  - name: A.esp\n${SAYS_ON_G}`;
+  const MISSING = `plugins:\n  - name: A.esp\n    req: [Missing.esp]\n${SAYS_ON_G}`;
+  const redrawsOf = (facts: ReturnType<typeof judging>) => {
+    const redrawn: unknown[] = [];
+    facts.view().treeDataProvider.onDidChangeTreeData?.((row) => redrawn.push(row));
+    return redrawn;
+  };
   const errors = () => texts('modbench-sorting-errors').length;
 
   it('publishes the newest judgement, never an older one that resolves after it', async () => {
-    const older = deferred();
+    const older = deferred<undefined>();
     const facts = judging([A], { masterlist: NO_RULES, gates: [Promise.resolve(), older.promise] });
     await facts.reconciled([held()]);
     await facts.masterlistIs(MISSING);
     await facts.masterlistIs(NO_RULES);
+    const redrawn = redrawsOf(facts);
 
-    older.resolve();
+    older.resolve(undefined);
     await settle();
 
-    expect(errors()).toBe(0);
+    expect([errors(), redrawn]).toEqual([0, []]);
   });
 
   it('drops a judgement of the old order that resolves after a reconcile landed the new one', async () => {
-    const slow = deferred();
+    const slow = deferred<undefined>();
     const master = { name: 'M.esp', origin: 'SomeMod' };
     const facts = judging([{ ...master, enabled: false }, A], { masterlist: NO_RULES, gates: [Promise.resolve(), slow.promise] });
     const both = [held({ masters: ['M.esp'] }), held(master)];
@@ -259,20 +269,21 @@ describe('judging again as the rules change while a judgement is in flight', () 
     const { value } = facts.instance;
     facts.instance.publish({ ...value, plugins: value.plugins.map((plugin) => ({ ...plugin, enabled: true })) }, { named: [], disk: false });
     await facts.reconciled(both);
+    const redrawn = redrawsOf(facts);
 
-    slow.resolve();
+    slow.resolve(undefined);
     await settle();
 
-    expect(errors()).toBe(0);
+    expect([errors(), redrawn]).toEqual([0, []]);
   });
 
   it('judges a reconcile by the rules that stand when its reads land', async () => {
-    const slow = deferred();
+    const slow = deferred<undefined>();
     const facts = judging([A], { masterlist: NO_RULES, gates: [slow.promise] });
     await facts.reconciled([held()]);
     await facts.masterlistIs(MISSING);
 
-    slow.resolve();
+    slow.resolve(undefined);
     await settle();
 
     expect(errors()).toBe(1);
