@@ -1,121 +1,97 @@
-import { describe, it, expect } from 'vitest';
-import { survivingSelection } from '../survivingSelection';
+import { describe, it, expect, vi } from 'vitest';
 
-interface Row { id: string }
+vi.mock('vscode', () => import('./vscodeHost'));
 
-const everyRowShown = (row: Row): Row => row;
+import { host } from './vscodeHost';
+import { pluginsOver } from './pluginsOver';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { present } from '../../ports/present';
 
-function fakeView(initial: readonly Row[] = []) {
-  const listeners: ((e: { selection: readonly Row[] }) => void)[] = [];
-  const view = {
-    selection: initial,
-    onDidChangeSelection: (listener: (e: { selection: readonly Row[] }) => void) => {
-      listeners.push(listener);
-      return { dispose: () => { listeners.splice(listeners.indexOf(listener), 1); } };
-    },
-  };
+const valueOf = (...names: string[]) =>
+  instanceValueFixture({ plugins: names.map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })) });
+
+async function selecting(...names: string[]) {
+  const instance = new FakeInstance(valueOf(...names));
+  const made = pluginsOver({ instance, value: instance.value });
+  const [a, b] = await made.rows();
+  const rebuildFiringNoEvent = () => { Object.assign(made.view(), { selection: [] }); };
+  const shows = async (...shown: string[]) => { instance.publish(valueOf(...shown)); await made.rows(); };
   return {
-    view,
-    select: (rows: readonly Row[]) => {
-      view.selection = rows;
-      for (const listener of listeners) listener({ selection: rows });
-    },
-    rebuildFiringNoEvent: () => { view.selection = []; },
-    rowsReturned: (rows: readonly Row[]) => { view.selection = rows; },
+    ...made, a: present(a, 'the first row'), b, shows, rebuildFiringNoEvent,
+    select: (rows: readonly unknown[]) => { made.view().selectRows(rows); },
+    followed: () => made.shown.followed.selection,
   };
 }
 
-describe('survivingSelection', () => {
-  it('answers the view\'s selection', () => {
-    const { view, select } = fakeView();
-    const selection = survivingSelection(view, everyRowShown);
+describe('the selection the Plugins view follows', () => {
+  it('answers the view\'s selection', async () => {
+    const { a, select, followed } = await selecting('A.esp');
 
-    select([{ id: 'a' }]);
+    select([a]);
 
-    expect(selection.rows()).toEqual([{ id: 'a' }]);
+    expect(followed()).toEqual([a]);
   });
 
-  it('keeps the selection while a rebuilt tree has not handed its rows back', () => {
-    const { view, select, rebuildFiringNoEvent } = fakeView();
-    const selection = survivingSelection(view, everyRowShown);
-    select([{ id: 'a' }]);
-
+  it('answers the view\'s selection once the tree has handed its rows back', async () => {
+    const { a, b, select, rebuildFiringNoEvent, followed, view } = await selecting('A.esp', 'B.esp');
+    select([a]);
     rebuildFiringNoEvent();
 
-    expect(selection.rows()).toEqual([{ id: 'a' }]);
+    Object.assign(view(), { selection: [b] });
+
+    expect(followed()).toEqual([b]);
   });
 
-  it('answers the view\'s selection once the tree has handed its rows back', () => {
-    const { view, select, rebuildFiringNoEvent, rowsReturned } = fakeView();
-    const selection = survivingSelection(view, everyRowShown);
-    select([{ id: 'a' }]);
-    rebuildFiringNoEvent();
-
-    rowsReturned([{ id: 'b' }]);
-
-    expect(selection.rows()).toEqual([{ id: 'b' }]);
-  });
-
-  it('answers nothing once the user has cleared the selection', () => {
-    const { view, select } = fakeView();
-    const selection = survivingSelection(view, everyRowShown);
-    select([{ id: 'a' }]);
+  it('answers nothing once the user has cleared the selection', async () => {
+    const { a, select, followed } = await selecting('A.esp');
+    select([a]);
 
     select([]);
 
-    expect(selection.rows()).toEqual([]);
+    expect(followed()).toEqual([]);
   });
 
-  it('starts from the selection the view already holds', () => {
-    const { view, rebuildFiringNoEvent } = fakeView([{ id: 'a' }]);
-    const selection = survivingSelection(view, everyRowShown);
+  it('answers nothing for a row that has gone for good', async () => {
+    const { a, select, rebuildFiringNoEvent, shows, followed } = await selecting('A.esp', 'B.esp');
+    select([a]);
 
+    await shows('B.esp');
     rebuildFiringNoEvent();
 
-    expect(selection.rows()).toEqual([{ id: 'a' }]);
+    expect(followed()).toEqual([]);
   });
 
-  it('stops listening when disposed', () => {
-    const { view, select } = fakeView();
-    const selection = survivingSelection(view, everyRowShown);
-    selection.dispose();
+  it('answers nothing for a row the tree hides, even after the row is shown again', async () => {
+    const { a, select, rebuildFiringNoEvent, shows, followed } = await selecting('A.esp', 'B.esp');
+    select([a]);
+    await shows('B.esp');
+    rebuildFiringNoEvent();
+    expect(followed()).toEqual([]);
 
-    select([{ id: 'a' }]);
-    view.selection = [];
+    await shows('A.esp', 'B.esp');
 
-    expect(selection.rows()).toEqual([]);
+    expect(followed()).toEqual([]);
   });
 
-  it('answers nothing for a row that has gone for good', () => {
-    const { view, select, rebuildFiringNoEvent } = fakeView();
-    const selection = survivingSelection(view, () => undefined);
-    select([{ id: 'a' }]);
+  it('answers the row the tree shows now for the one that was selected', async () => {
+    const { a, select, rebuildFiringNoEvent, shows, followed, rows } = await selecting('A.esp');
+    select([a]);
 
+    await shows('A.esp');
     rebuildFiringNoEvent();
 
-    expect(selection.rows()).toEqual([]);
+    const [rebuilt] = await rows();
+    expect([followed()[0] === rebuilt, rebuilt === a]).toEqual([true, false]);
   });
 
-  it('answers nothing for a row the tree hides, even after the row is shown again', () => {
-    const { view, select, rebuildFiringNoEvent } = fakeView();
-    let hidden = true;
-    const selection = survivingSelection(view, (row) => (hidden ? undefined : row));
-    select([{ id: 'a' }]);
-    rebuildFiringNoEvent();
-    expect(selection.rows()).toEqual([]);
+  it('stops listening when disposed', async () => {
+    const { a, select, followed, dispose } = await selecting('A.esp');
+    dispose();
 
-    hidden = false;
+    select([a]);
+    Object.assign(host.treeView(), { selection: [] });
 
-    expect(selection.rows()).toEqual([]);
-  });
-
-  it('answers the row the tree shows now for the one that was selected', () => {
-    const { view, select, rebuildFiringNoEvent } = fakeView();
-    const rebuilt = { id: 'a' };
-    const selection = survivingSelection(view, () => rebuilt);
-    select([{ id: 'a' }]);
-    rebuildFiringNoEvent();
-
-    expect(selection.rows()[0]).toBe(rebuilt);
+    expect(followed()).toEqual([]);
   });
 });

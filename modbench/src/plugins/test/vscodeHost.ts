@@ -80,7 +80,14 @@ export const window = {
       checkboxListeners.push(listener);
       return new Disposable(() => undefined);
     };
-    return Object.assign(treeViews.create(id, options), { onDidChangeCheckboxState });
+    const view = treeViews.create(id, options);
+    const heard = view.onDidChangeSelection;
+    const onDidChangeSelection = (listener: (event: { selection: readonly unknown[] }) => void) => {
+      let listening = true;
+      heard((event) => { if (listening) listener(event); });
+      return new Disposable(() => { listening = false; });
+    };
+    return Object.assign(view, { onDidChangeCheckboxState, onDidChangeSelection });
   },
   registerFileDecorationProvider: (provider: Decorations) => { decorations.push(provider); return new Disposable(() => undefined); },
   createStatusBarItem: () => {

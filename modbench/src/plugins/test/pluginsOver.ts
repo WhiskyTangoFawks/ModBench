@@ -83,21 +83,22 @@ export function pluginsOver({
 }
 
 /** The plugins of ModA, in the order named, each enabled. */
-export const pluginsOfModA = (names: readonly string[]) => names.map((name, line) => ({ name, origin: 'ModA', path: `/mods/ModA/${name}`, line, enabled: true, winning: true }));
+export const pluginsOfModA = (names: readonly string[], origin = 'ModA') => names.map((name, line) => ({ name, origin, path: `/mods/${origin}/${name}`, line, enabled: true, winning: true }));
 
-/** The Plugins box over ModA's plugins `names`, which mEdit has indexed and the Instance adapter reads in that order,
- *  once its status bar says Ready. */
-export async function indexedOver(names: readonly string[], { value = {}, ...over }: Omit<Over, 'value' | 'client' | 'adapter'> & { value?: Partial<InstanceValue>; reading?: Parameters<typeof readingFixture>[0]; answers?: Parameters<typeof fakeInstanceAdapter>[1] } = {}) {
+/** The Plugins box over the plugins `names` of `origin`, ModA unless named, which mEdit has indexed and the Instance
+ *  adapter reads in that order, once its status bar says Ready. */
+export async function indexedOver(names: readonly string[], { value = {}, origin = 'ModA', ...over }: Omit<Over, 'value' | 'client' | 'adapter'> & { value?: Partial<InstanceValue>; origin?: string; reading?: Parameters<typeof readingFixture>[0]; answers?: Parameters<typeof fakeInstanceAdapter>[1] } = {}) {
   const { reading, answers, ...rest } = over;
   const client = clientHoldingNothing();
-  client.setQueryAnswer('getPlugins', names.map((name) => pluginMetadataFixture({ name, origin: 'ModA' })));
+  client.setQueryAnswer('getPlugins', names.map((name) => pluginMetadataFixture({ name, origin })));
   client.setQueryAnswer('getPluginsIndexing', []);
   const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })), ...reading }), answers);
   const made = pluginsOver({
     client, adapter: fake.adapter, commandsClient: { getPlugins: () => Promise.resolve([]) }, ...rest,
-    value: instanceValueFixture({ activeProfile: 'Default', plugins: pluginsOfModA(names), ...value }),
+    value: instanceValueFixture({ activeProfile: 'Default', plugins: pluginsOfModA(names, origin), ...value }),
   });
-  holdsLoadOrder(client, { indexed: names.map((name) => ({ name, origin: 'ModA' })) });
+  holdsLoadOrder(client, { indexed: names.map((name) => ({ name, origin })) });
   await settled(() => { if (made.plugins.standing.mEdit().length > 0) throw new Error('mEdit is not Ready'); });
-  return { ...made, fake, row: await made.pluginRows() };
+  const row = await made.pluginRows();
+  return { ...made, fake, row: (name: string, of = origin) => row(name, of) };
 }
