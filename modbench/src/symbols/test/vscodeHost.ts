@@ -1,11 +1,11 @@
 // The VS Code the Symbols box registers with: a test file mocks `vscode` with this module, and reads through `host`
 // what the box registered and what it shows.
 
-import { TreeItem, TreeItemCollapsibleState, Uri as BaseUri, uriParse, type FakeUri } from '../../test/vscodeMock';
+import { ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri as BaseUri, uriParse, type FakeUri } from '../../test/vscodeMock';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 
-export { TreeItem, TreeItemCollapsibleState };
+export { ThemeIcon, TreeItem, TreeItemCollapsibleState };
 
 type Listener<T> = (event: T) => void;
 type Handler = (...args: unknown[]) => unknown;
