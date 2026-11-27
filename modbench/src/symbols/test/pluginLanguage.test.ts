@@ -5,7 +5,7 @@ vi.mock('vscode', () => import('./vscodeHost'));
 import { CompletionItemKind, document, host, Location, Range, Uri } from './vscodeHost';
 import { instanceHolding, rowsOf, symbolsOver } from './symbolsOver';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { SymbolOwner } from '../../symbolNames/symbolNames';
+import { heldTexts, type HeldTexts, type PlaceInFile, type PlacedCopy, type PluginName, type PluginSymbol, type SymbolOwner, type SymbolReading } from '../../symbolNames/symbolNames';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
@@ -191,5 +191,94 @@ describe('where a plugin is defined, and the places files name it (symbols.md, T
     expect(await indexed().referencesTo(plugin({ name: 'Base.esm' }))).toEqual({
       references: [{ file: PLUGINS_TXT, start: { line: 0, character: 1 }, end: { line: 0, character: 9 } }], leftOut: [UNREAD],
     });
+  });
+});
+
+describe('the plugins of the instance (ADR-0013)', () => {
+  it('hold the plugins the game loads with no line beside the plugins with a line', async () => {
+    symbolsOver({ instance: instanceHolding(instanceValueFixture({
+      plugins: [{ name: 'Mod.esp', origin: 'Mod', path: '/Mod/Mod.esp', line: 0, enabled: true, winning: true }],
+      pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
+    })) });
+
+    expect((await host.workspaceSymbols('.es')).map(({ name, containerName }) => [name, containerName])).toEqual([['Fallout4.esm', 'Data/'], ['Mod.esp', 'Mod']]);
+  });
+});
+
+describe('Find All References on a plugin (symbols.md, The features, story 2)', () => {
+  const BASE_LOSING = { name: 'Base.esm', origin: 'Old Base Mod' };
+  const CHILD = { name: 'Child.esp', origin: 'Child Mod' };
+  const PLUGINS = [{ ...BASE, winning: true }, { ...BASE_LOSING, winning: false }, { ...CHILD, winning: true }].map((row, line) => ({ ...row, path: `/data/${row.name}`, line, enabled: true }));
+  const place = (file: string, line: number): PlaceInFile => ({ file, start: { line, character: 1 }, end: { line, character: 9 } });
+  const locationOfPlace = ({ file, start, end }: PlaceInFile) => new Location(Uri.file(file), new Range(start.line, start.character, end.line, end.character));
+  const range = (line: number, character: number) => ({ start: { line, character }, end: { line, character: character + 9 } });
+
+  function owning(reading: SymbolReading, named: PluginName = BASE): SymbolOwner & { asked: [PluginSymbol, HeldTexts][] } {
+    const asked: [PluginSymbol, HeldTexts][] = [];
+    return { asked, read: (symbol, held) => { asked.push([symbol, held]); return Promise.resolve(reading); }, nameAt: () => Promise.resolve(named), plan: () => Promise.reject(new Error('Not planned here.')) };
+  }
+  const referencesTo = (owners: SymbolOwner[]) => {
+    const made = symbolsOver({ instance: instanceHolding(instanceValueFixture({ plugins: PLUGINS })), owners });
+    return { ...made, found: host.references(PLUGINS_TXT, '*Bas|e.esm\r\n') };
+  };
+
+  it('lists each place an owner reports that names the plugin, handing each owner the unsaved text', async () => {
+    const owner = owning({ references: [{ place: place(PLUGINS_TXT, 1), names: { name: 'Base.esm' } }], leftOut: [] });
+    const unsaved = document('/source/Child Mod/build.json', '{}', { isDirty: true });
+    const { found } = referencesTo([owner]);
+    host.holds([unsaved]);
+
+    expect(await found).toEqual([locationOfPlace(place(PLUGINS_TXT, 1))]);
+    expect(owner.asked.map(([{ name, origin }, held]) => [{ name, origin }, held])).toEqual([[BASE, heldTexts([['/source/Child Mod/build.json', '{}']])]]);
+  });
+
+  it('leaves out a name that names another copy: a file name alone names the copy mod order resolves it to', async () => {
+    const owner = owning({ references: [
+      { place: place(PLUGINS_TXT, 1), names: { name: 'Base.esm' } },
+      { place: place('/source/Old Base Mod/build.json', 2), names: { name: 'Base.esm', origin: 'Old Base Mod' } },
+    ], leftOut: [] }, BASE_LOSING);
+
+    expect(await referencesTo([owner]).found).toEqual([locationOfPlace(place('/source/Old Base Mod/build.json', 2))]);
+  });
+
+  it('lists a copy at each range mEdit placed it, in its own file or its rendered document, and a master at its plugin\'s header (story 10)', async () => {
+    const header: PlacedCopy = { formKey: '000000:Child.esp', plugin: CHILD, document: { kind: 'Rendered', location: 'Header.json' }, ranges: [range(0, 0)] };
+    const npc: PlacedCopy = { formKey: '000800:Child.esp', plugin: CHILD, document: { kind: 'OwnFile', location: '/source/Child Mod/Npc.json' }, ranges: [range(1, 4), range(2, 4)] };
+
+    expect(await referencesTo([owning({ references: [{ copy: header, names: { name: 'Base.esm' } }, { copy: npc, names: { name: 'Base.esm' } }], leftOut: [] })]).found).toEqual([
+      new Location(Uri.from({ scheme: 'modbench-rendered', path: '/Child%20Mod/Child.esp/Header.json', query: 'formKey=000000%3AChild.esp&name=Child.esp&origin=Child+Mod' }), new Range(0, 0, 0, 9)),
+      new Location(Uri.file('/source/Child Mod/Npc.json'), new Range(1, 4, 1, 13)),
+      new Location(Uri.file('/source/Child Mod/Npc.json'), new Range(2, 4, 2, 13)),
+    ]);
+  });
+
+  it('leaves out a placed copy whose name resolves to another copy', async () => {
+    const copy: PlacedCopy = { formKey: '000800:Child.esp', plugin: CHILD, document: { kind: 'Rendered', location: 'Npc.json' }, ranges: [range(0, 0)] };
+
+    expect(await referencesTo([owning({ references: [{ copy, names: { name: 'Base.esm' } }], leftOut: [] }, BASE_LOSING)]).found).toEqual([]);
+  });
+
+  it('says why a copy it could not place went unread only where the copy names the plugin asked of', async () => {
+    const reading: SymbolReading = { references: [{ unread: '000800:Child.esp in Child.esp (Child Mod): its file is gone.', names: { name: 'Base.esm' } }], leftOut: [] };
+    const unread = async (named: PluginName) => {
+      const { found, reporter } = referencesTo([owning(reading, named)]);
+      await found;
+      return reporter.shownFailures.map(({ detail }) => detail);
+    };
+
+    expect([await unread(BASE), await unread(BASE_LOSING)]).toEqual([['000800:Child.esp in Child.esp (Child Mod): its file is gone.'], []]);
+  });
+
+  it('says why each file an owner could not read, or that threw, went unread (common.md, Reporting)', async () => {
+    const { found, reporter } = referencesTo([
+      owning({ references: [], leftOut: ['/userlist.yaml: it does not read'] }),
+      { ...owning({ references: [], leftOut: [] }), read: () => Promise.reject(new Error('The disk is gone.')) },
+    ]);
+
+    expect(await found).toEqual([]);
+    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([
+      ['Find All References on Base.esm could not read a file that may name it.', '/userlist.yaml: it does not read'],
+      ['Find All References on Base.esm could not read a file that may name it.', 'The disk is gone.'],
+    ]);
   });
 });

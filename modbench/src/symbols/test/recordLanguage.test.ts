@@ -7,7 +7,11 @@ import { symbolsOver } from './symbolsOver';
 import { mEditNames, spelledName } from './mEditNames';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { localFailure } from '../../wire/readFailed';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { cancellableToken, pluginMetadataFixture } from '../../client/test/fixtures';
+import type { CompareResult, PlacedReferences } from '../../client';
+import { comparisonOf, type Copy } from '../../test/comparison';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
+import { copyDocumentUri } from '../../textDocuments/recordDocument';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -174,5 +178,86 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
     const { reporter } = await referencedBy((client) => { client.setQueryAnswer('getRecordOwners', []); });
 
     expect([host.referencesShown, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', `No active plugin holds ${GUN}.`]]]);
+  });
+});
+
+describe('a record\'s hover (symbols.md, The symbols)', () => {
+  const AT_GUN = GUN_TEXT.replace(`"${GUN}"`, '"0008|01:A.esp"');
+  const comparison = (copies: Copy[] = [{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'Gun' }]): CompareResult => comparisonOf(GUN, copies);
+  const hovering = (answer: CompareResult | null) => kind({ arrange: (client) => { client.setQueryAnswer('getComparison', answer); } });
+
+  it.each([
+    ['shows EditorID [FormKey], the record type and the winning plugin', comparison(), `\`Gun [${GUN}]\`\n\nWeapon\n\nWinner: A.esp`],
+    ['names the winner among several copies, and takes its EditorID', comparison([
+      { plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: false, editorId: 'Old' },
+      { plugin: 'Patch.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: 'New' },
+    ]), `\`New [${GUN}]\`\n\nWeapon\n\nWinner: Patch.esp`],
+    ['shows the FormKey alone when the winner has no EditorID', comparison([{ plugin: 'A.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, editorId: null }]), `\`${GUN}\`\n\nWeapon\n\nWinner: A.esp`],
+  ])('%s', async (_case, answer, text) => {
+    hovering(answer);
+
+    expect((await host.hover(GUN_FILE, AT_GUN))?.text).toBe(text);
+  });
+
+  it('asks mEdit with the token of the hover it answers', async () => {
+    const { client } = hovering(comparison());
+    const { token } = cancellableToken();
+
+    await host.hover(GUN_FILE, AT_GUN, token);
+
+    expect(client.calls.filter(({ method }) => method === 'getComparison')).toEqual([{ method: 'getComparison', args: [GUN, undefined, token] }]);
+  });
+
+  it('answers nothing, and writes why to the Output, when mEdit cannot answer', async () => {
+    const { reporter } = kind({ arrange: (client) => { client.getComparison = () => Promise.reject(new Error('mEdit is down.')); } });
+
+    expect((await host.hover(GUN_FILE, AT_GUN))?.text).toBe(GUN);
+    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Hover cannot describe ${GUN}.`, detail: 'mEdit is down.' }]);
+  });
+});
+
+describe('Find All References on a FormKey (symbols.md, The features, story 2)', () => {
+  const STAND = '000700:A.esp';
+  const modB = { name: 'B.esp', origin: 'ModB' };
+  const on = (line: number, character: number) => ({ start: { line, character }, end: { line, character: character + 16 } });
+  const OWN_FILE = { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Stand.json' } as const;
+  const RENDERED = { kind: 'Rendered', location: 'Stand - 000700_A.esp.json' } as const;
+  const PLACED: PlacedReferences = {
+    copies: [
+      { formKey: STAND, plugin: modA, document: OWN_FILE, ranges: [on(2, 11), on(3, 15)] },
+      { formKey: STAND, plugin: modB, document: RENDERED, ranges: [on(2, 11)] },
+    ],
+    leftOut: [],
+  };
+  const AT_GUN = GUN_TEXT.replace(`"${GUN}"`, '"0008|01:A.esp"');
+  const referencing = () => kind({ arrange: (client) => { client.setQueryAnswer('getPlacedReferences', PLACED); } });
+  const asked = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getPlacedReferences');
+
+  it('asks mEdit with the token of the request it answers', async () => {
+    const { client } = referencing();
+    const { token } = cancellableToken();
+
+    await host.references(GUN_FILE, AT_GUN, token);
+
+    expect(asked(client)).toEqual([{ method: 'getPlacedReferences', args: [GUN, token] }]);
+  });
+
+  it('asks mEdit once, for the record, whatever the number of referrers, and nothing else', async () => {
+    const { client } = referencing();
+    const before = client.calls.length;
+
+    await host.references(GUN_FILE, AT_GUN);
+
+    expect(client.calls.slice(before)).toEqual([{ method: 'getPlacedReferences', args: [GUN, { isCancellationRequested: false }] }]);
+  });
+
+  it('lists each place each copy names the record, at the copy\'s document', async () => {
+    referencing();
+
+    expect(await host.references(GUN_FILE, AT_GUN)).toEqual([
+      new Location(copyDocumentUri({ formKey: STAND, plugin: modA }, OWN_FILE), new Range(2, 11, 2, 27)),
+      new Location(copyDocumentUri({ formKey: STAND, plugin: modA }, OWN_FILE), new Range(3, 15, 3, 31)),
+      new Location(copyDocumentUri({ formKey: STAND, plugin: modB }, RENDERED), new Range(2, 11, 2, 27)),
+    ]);
   });
 });
