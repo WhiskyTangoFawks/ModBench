@@ -616,8 +616,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
   it('shows the answer of the newest value only, though an older one answers last', async () => {
     const instance = new FakeInstance(await shared());
     const older = shut();
-    const { panel, copies } = await askedOn(instance, {}, { stampsHeldUntil: older.gate });
-    await settled(() => { expect(copies.stamped).not.toEqual([]); });
+    const { panel, copies, adapter } = await askedOn(instance, {}, { stampsHeldUntil: older.gate });
+    await settled(() => { expect(adapter.stamped).not.toEqual([]); });
     copies.stampsHeldUntil = undefined;
 
     await publishedTo(instance, indexedValueOf([mod('High'), mod('Low')], {
@@ -704,8 +704,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
     it('is not reported once a newer value has asked', async () => {
       const instance = new FakeInstance(await shared());
       const older = shut();
-      const { panel, reporter, copies } = await askedOn(instance, {}, { stampsHeldUntil: older.gate, stampFailure: 'old' });
-      await settled(() => { expect(copies.stamped).not.toEqual([]); });
+      const { panel, reporter, copies, adapter } = await askedOn(instance, {}, { stampsHeldUntil: older.gate, stampFailure: 'old' });
+      await settled(() => { expect(adapter.stamped).not.toEqual([]); });
       copies.stampsHeldUntil = undefined;
       copies.stampFailure = undefined;
 
