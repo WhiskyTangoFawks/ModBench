@@ -1,9 +1,9 @@
 import { downloadedFileArgumentOf, modArgumentOf, pluginArgumentOf, separatorArgumentOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import type { RecordNamed, RowSymbol } from './symbolKind';
+import type { RecordNamed, PresentedSymbol } from './symbolKind';
 
 /** The symbol a row stands for; undefined where it stands for none. */
-export function symbolOfRow(row: unknown, dataPathOf: (row: unknown) => string | undefined): RowSymbol | RecordNamed | undefined {
+export function symbolOfRow(row: unknown, dataPathOf: (row: unknown) => string | undefined): PresentedSymbol | RecordNamed | undefined {
   const record = recordArgumentOf(row);
   const plugin = pluginArgumentOf(row)?.plugin;
   const downloaded = downloadedFileArgumentOf(row)?.row.name;

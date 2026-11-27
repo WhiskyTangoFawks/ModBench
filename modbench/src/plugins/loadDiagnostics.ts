@@ -7,10 +7,6 @@ import { exactPluginAddressKey } from '../wire/pluginAddress';
 import { STATUS_SEVERITY, type PluginPlace, type PluginProblem, type StatusKind } from './pluginFacts';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 
-/** A status's problem, at the severity its row shows. */
-export const problemSeverity = (kind: StatusKind): vscode.DiagnosticSeverity =>
-  (STATUS_SEVERITY[kind] === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error);
-
 /** Targets the plugin binary itself, which is where a malformed plugin's diagnoses, a change
  *  outside Modbench and a failed read's diagnosis all live. One call answers for the plugins `named`,
  *  or for the whole load order. */
@@ -56,6 +52,9 @@ function clearOf(collection: vscode.DiagnosticCollection, named: NamedPlugins): 
 }
 
 const SEVERITY = { error: vscode.DiagnosticSeverity.Error, warning: vscode.DiagnosticSeverity.Warning, info: vscode.DiagnosticSeverity.Information } as const;
+
+/** A status's problem, at the severity its row shows. */
+export const problemSeverity = (kind: StatusKind): vscode.DiagnosticSeverity => SEVERITY[STATUS_SEVERITY[kind]];
 
 /** The sorting rule files' own lines, each at its level. */
 export function publishRuleFileDiagnostics(collection: vscode.DiagnosticCollection, entries: readonly RuleFileDiagnostic[]): void {

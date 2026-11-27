@@ -9,11 +9,11 @@ export type PluginNamed = { readonly kind: 'plugin' } & PluginName;
 export type RecordNamed = { readonly kind: 'record'; readonly formKey: string };
 export type FileNamed = { readonly kind: 'file'; readonly path: string };
 
-/** The symbol of a kind that has a row: never a record or a script, the only kinds whose definition is a place. */
-export type RowSymbol = PluginNamed | EntrySymbol | FileNamed;
+/** A symbol whose definition is presented: a row or a copy, never a place. */
+export type PresentedSymbol = PluginNamed | EntrySymbol | FileNamed;
 
 /** A symbol by its name: a record by its FormKey, a file by its path in the Data folder. */
-export type SymbolName = RowSymbol | RecordNamed | ScriptSymbol;
+export type SymbolName = PresentedSymbol | RecordNamed | ScriptSymbol;
 
 /** A row to select in the view `row` names, or a copy to show in the Explorer. */
 export type Presented = { readonly row: string; readonly show: Reveal } | { readonly shown: CopyAt };
@@ -148,7 +148,7 @@ export async function askedAt(kinds: SymbolKinds, document: AskedIn, offset: num
   return undefined;
 }
 
-export function asked(kinds: SymbolKinds, symbol: RowSymbol): AskedSymbol<Presented>;
+export function asked(kinds: SymbolKinds, symbol: PresentedSymbol): AskedSymbol<Presented>;
 export function asked(kinds: SymbolKinds, symbol: SymbolName): AskedSymbol;
 export function asked(kinds: SymbolKinds, symbol: SymbolName): AskedSymbol {
   switch (symbol.kind) {
