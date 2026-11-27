@@ -208,7 +208,10 @@ describe('the links a plugin source holds to missing records, in the Problems pa
     const { client, problems, asked } = feed();
     await problems();
     const end = late(client);
-    [{ plugin: PLUGIN, keys: ['1'] }, { plugin: PLUGIN, keys: ['2'] }, { plugin: other, keys: ['3'] }, { plugin: other }].forEach((change) => { client.change([change]); });
+    client.change([{ plugin: PLUGIN, keys: ['1'] }]);
+    client.change([{ plugin: PLUGIN, keys: ['2'] }]);
+    client.change([{ plugin: other, keys: ['3'] }]);
+    client.change([{ plugin: other }]);
     expect(asked()).toHaveLength(1);
 
     end();
@@ -276,7 +279,10 @@ describe('the links a plugin source holds to missing records, in the Problems pa
     named(1);
     await until(() => { expect(asked()).toHaveLength(2); });
 
-    [2, 3, 4, 5].forEach(named);
+    named(2);
+    named(3);
+    named(4);
+    named(5);
     answerFirst([]);
     await problems();
 

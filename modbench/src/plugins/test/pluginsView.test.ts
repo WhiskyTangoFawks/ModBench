@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { DiagnosticSeverity, host, Uri } from './vscodeHost';
-import { clientHoldingNothing, indexedOver, pluginsOver } from './pluginsOver';
+import { clientHoldingNothing, indexedOver, pluginsOf, pluginsOver } from './pluginsOver';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { pluginArgumentOf } from '../../drivingLib/argument';
 import { waitForMessage } from '../../drivingLib/test/nameFilterViewHarness';
@@ -23,14 +23,13 @@ const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as cons
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
 const UNTITLED = Uri.parse('untitled:Untitled-1');
 
-const named = (kind: 'rows-changed' | 'plugin-changed', keys: string[] = []) =>
-  [kind === 'rows-changed' ? { plugin: { name: 'Test.esp', origin: 'ModA' }, keys } : { plugin: { name: 'Test.esp', origin: 'ModA' } }];
+const TEST_PLUGIN = { name: 'Test.esp', origin: 'ModA' };
+const rowsChanged = (keys: string[] = []) => [{ plugin: TEST_PLUGIN, keys }];
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const pluginReads = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPlugins').length;
-const lineOf = (name: string, line: number, origin = 'SomeMod') => ({ name, path: `/fixture/${name}`, origin, line, enabled: true, winning: true });
-const found = (...names: string[]): InstanceValue => instanceValueFixture({ plugins: names.map((name, line) => lineOf(name, line)), gameFolder: FOUND });
-const notFound = (...names: string[]): InstanceValue => instanceValueFixture({ plugins: names.map((name, line) => lineOf(name, line)), gameFolder: GAME_FOLDER_NOT_FOUND });
+const found = (...names: string[]): InstanceValue => instanceValueFixture({ plugins: pluginsOf(names, 'SomeMod'), gameFolder: FOUND });
+const notFound = (...names: string[]): InstanceValue => instanceValueFixture({ plugins: pluginsOf(names, 'SomeMod'), gameFolder: GAME_FOLDER_NOT_FOUND });
 const documentAt = (name: string, sql = ARMOR_SQL) => { host.files.set(name, sql); return Uri.file(`/workspace/${name}`); };
 const picked = () => host.quickPicks.map(({ items }) => items);
 
@@ -123,7 +122,7 @@ describe('the Plugins view\'s selection for a key', () => {
 
 describe('the Plugins view says its one selected row to Symbols (commands.md, `go to` and `referenced by` under Symbol)', () => {
   const shownWith = () => instanceValueFixture({
-    plugins: ['A.esp', 'B.esp'].map((name, line) => lineOf(name, line)), gameFolder: FOUND,
+    plugins: pluginsOf(['A.esp', 'B.esp'], 'SomeMod'), gameFolder: FOUND,
     pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
   });
 
@@ -164,7 +163,7 @@ describe('the Plugins view\'s selection relates to its masters (plugins.md, The 
 });
 
 describe('the Plugins view\'s selection and the highlight (plugins.md, The highlight, stories 3 and 6)', () => {
-  const value = () => instanceValueFixture({ mods: [{ kind: 'mod', name: 'SomeMod', enabled: true }], plugins: ['A.esp', 'B.esp'].map((name, line) => lineOf(name, line)), gameFolder: FOUND });
+  const value = () => instanceValueFixture({ mods: [{ kind: 'mod', name: 'SomeMod', enabled: true }], plugins: pluginsOf(['A.esp', 'B.esp'], 'SomeMod'), gameFolder: FOUND });
 
   it('relates a selected plugin to the mod it comes from', async () => {
     const { shown, rows } = pluginsOver({ value: value() });
@@ -199,7 +198,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
   it('redraws only the named plugin\'s row, and re-reads only its records and its facts, with no diagnosis scan', async () => {
     const { client, row, uris, redrawn, decorationChanges } = await changing();
 
-    client.change(named('rows-changed'));
+    client.change(rowsChanged());
 
     await settled(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
@@ -222,7 +221,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const { client, dispose } = await changing();
 
     dispose();
-    client.change(named('rows-changed'));
+    client.change(rowsChanged());
     await settle();
 
     expect(client.calls).toEqual([]);
@@ -280,7 +279,7 @@ describe('the Plugins view\'s Problems', () => {
 
     holdsLoadOrder(client);
     client.setQueryAnswer('getPluginsIndexing', [{ name: 'Test.esp', origin: 'ModA', state: 'Indexed', changedOutside: true }]);
-    client.change(named('plugin-changed'));
+    client.change([{ plugin: TEST_PLUGIN }]);
 
     await settled(() => {
       expect(host.problems('modbench-changed-outside').map(([path, shown]) => [path, shown.map(({ severity }) => severity)])).toEqual([[onDisk, [DiagnosticSeverity.Warning]]]);
@@ -320,16 +319,16 @@ describe('the Plugins view\'s Problems', () => {
   });
 
   it('replaces the diagnoses of the last scan wholesale, for one scan answers for the whole load order', async () => {
-    const value = instanceValueFixture({ plugins: ['A.esp', 'B.esp'].map((name, line) => lineOf(name, line, 'ModA')) });
+    const value = instanceValueFixture({ plugins: pluginsOf(['A.esp', 'B.esp']) });
     const { client } = pluginsOver({ value });
     client.setQueryAnswer('getDiagnoses', [{ plugin: 'A.esp', origin: 'ModA', text: 'old' }]);
     holdsLoadOrder(client, { total: 3, version: 1 });
-    await settled(() => { expect(host.problems('modbench-diagnosis').map(([path]) => path)).toEqual(['/fixture/A.esp']); });
+    await settled(() => { expect(host.problems('modbench-diagnosis').map(([path]) => path)).toEqual(['/mods/ModA/A.esp']); });
 
     client.setQueryAnswer('getDiagnoses', [{ plugin: 'B.esp', origin: 'ModA', text: 'new' }]);
     holdsLoadOrder(client, { total: 3, version: 2 });
 
-    await settled(() => { expect(host.problems('modbench-diagnosis').map(([path]) => path)).toEqual(['/fixture/B.esp']); });
+    await settled(() => { expect(host.problems('modbench-diagnosis').map(([path]) => path)).toEqual(['/mods/ModA/B.esp']); });
   });
 
   const linkTo = (command: string) => ({
@@ -378,13 +377,13 @@ describe('the Plugins view\'s Problems', () => {
       changedOutside.map((plugin) => ({ ...plugin, state: 'Indexed' as const, changedOutside: true }));
 
     async function bothChangedOutside() {
-      const value = instanceValueFixture({ plugins: ['A.esp', 'B.esp'].map((name, line) => lineOf(name, line, 'ModA')) });
+      const value = instanceValueFixture({ plugins: pluginsOf(['A.esp', 'B.esp']) });
       const instance = new FakeInstance(value);
       const { client } = pluginsOver({ value, instance });
       holdsLoadOrder(client);
       client.setQueryAnswer('getPluginsIndexing', indexing(A, B));
       client.change([{ plugin: A }, { plugin: B }]);
-      await settled(() => { expect(host.problems('modbench-changed-outside').map(([path]) => path).sort()).toEqual(['/fixture/A.esp', '/fixture/B.esp']); });
+      await settled(() => { expect(host.problems('modbench-changed-outside').map(([path]) => path).sort()).toEqual(['/mods/ModA/A.esp', '/mods/ModA/B.esp']); });
       return { client, instance, value };
     }
 
@@ -394,7 +393,7 @@ describe('the Plugins view\'s Problems', () => {
 
       client.change([{ plugin: A }]);
 
-      await settled(() => { expect(host.problems('modbench-changed-outside').map(([path]) => path)).toEqual(['/fixture/B.esp']); });
+      await settled(() => { expect(host.problems('modbench-changed-outside').map(([path]) => path)).toEqual(['/mods/ModA/B.esp']); });
     });
 
     it('clears the problems of a plugin the change names where they were set, though the load order holds no file of it now', async () => {
@@ -404,7 +403,7 @@ describe('the Plugins view\'s Problems', () => {
 
       client.change([{ plugin: A }]);
 
-      await settled(() => { expect(host.problems('modbench-changed-outside').map(([path]) => path)).toEqual(['/fixture/B.esp']); });
+      await settled(() => { expect(host.problems('modbench-changed-outside').map(([path]) => path)).toEqual(['/mods/ModA/B.esp']); });
     });
   });
 });
@@ -426,7 +425,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     expect(await badgeOf(uri)).toBeUndefined();
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
-    client.change(named('rows-changed', [FORM_KEY]));
+    client.change(rowsChanged([FORM_KEY]));
     await settled(() => { expect(changes).toContainEqual([uri]); });
     await rows(group);
 
@@ -690,7 +689,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.holds('a');
       await view.filter(documentAt('a'));
 
-      view.client.change(named('rows-changed'));
+      view.client.change(rowsChanged());
       await settle();
 
       expect(view.activeFilterReads()).toBe(1);
@@ -815,14 +814,10 @@ describe('the Plugins view\'s message line and name filter', () => {
   const NO_MATCH = 'No matches for "zzznomatch".';
   const messageIs = (expected: string | undefined, label: string) => waitForMessage(host.treeView(), (m) => m === expected, label);
 
-  async function applyFilter(client: InMemoryMEditClient, source: string | undefined) {
-    if (source === undefined) {
-      client.change(named('rows-changed'));
-    } else {
-      client.setQueryAnswer('setFilter', null);
-      client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source });
-      await host.run('modbench.record.filter', documentAt(source));
-    }
+  async function applyFilter(client: InMemoryMEditClient, source = 'armor.sql') {
+    client.setQueryAnswer('setFilter', null);
+    client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source });
+    await host.run('modbench.record.filter', documentAt(source));
   }
 
   async function shown(value: InstanceValue, over: { client?: InMemoryMEditClient; syncPlugins?: PluginSyncRun } = {}) {
@@ -875,13 +870,13 @@ describe('the Plugins view\'s message line and name filter', () => {
   });
 
   describe('given a record filter that matches nothing', () => {
-    async function filteredView(testModMatches: boolean, source?: string) {
+    async function filteredView(testModMatches: boolean, apply: (client: InMemoryMEditClient) => Promise<void> = applyFilter) {
       const client = clientHoldingNothing();
       client.setQueryAnswer('getPlugins', [heldPlugin('Other.esp', false), heldPlugin('TestMod.esp', testModMatches)]);
       const sync = syncRefusing();
       const result = await shown(found('Other.esp', 'TestMod.esp'), { client, syncPlugins: sync.syncPlugins });
       await handedOff(client);
-      await applyFilter(client, source);
+      await apply(client);
       return { ...result, client, sync };
     }
 
@@ -893,20 +888,20 @@ describe('the Plugins view\'s message line and name filter', () => {
     }
 
     it('says so in its message line, naming the source', async () => {
-      const { view } = await filteredView(false, 'armor.sql');
+      const { view } = await filteredView(false);
 
       await messageIs('No records match armor.sql.', 'the no-match message');
       expect(view().message).toBe('No records match armor.sql.');
     });
 
     it('says nothing while no record filter is in force, whatever the facts say', async () => {
-      const { view, sync } = await filteredView(false);
+      const { view, sync } = await filteredView(false, (client) => { client.change(rowsChanged()); return Promise.resolve(); });
 
       expect(await lineOnceRendersHaveLanded(view, sync)).toBe(LAST_SYNC_MESSAGE);
     });
 
     it('takes the message back once the filter clears', async () => {
-      const { client } = await filteredView(false, 'armor.sql');
+      const { client } = await filteredView(false);
       await messageIs('No records match armor.sql.', 'the no-match message');
 
       client.setQueryAnswer('getPlugins', [heldPlugin('Other.esp', true), heldPlugin('TestMod.esp', true)]);
@@ -922,18 +917,18 @@ describe('the Plugins view\'s message line and name filter', () => {
     const SYNC_MESSAGE = `plugins.txt is not synced: ${SYNC_REASON}.`;
     const NO_RECORD_MATCH = 'No records match armor.sql.';
 
-    async function refusedView(recordFilter?: string) {
+    async function refusedView() {
       const client = clientHoldingNothing();
       client.setQueryAnswer('getPlugins', [heldPlugin('TestMod.esp', false)]);
       const sync = syncRefusing();
       const result = await shown(found('TestMod.esp'), { client, syncPlugins: sync.syncPlugins });
       await handedOff(client);
-      await applyFilter(client, recordFilter);
+      await applyFilter(client);
       return { ...result, sync };
     }
 
     it('gives the agent the sync refusal, without the no-match line the view shows beside it', async () => {
-      const { sync, plugins } = await refusedView('armor.sql');
+      const { sync, plugins } = await refusedView();
 
       await sync.refuse(SYNC_REASON);
       await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
@@ -942,7 +937,7 @@ describe('the Plugins view\'s message line and name filter', () => {
     });
 
     it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
-      const { sync } = await refusedView('armor.sql');
+      const { sync } = await refusedView();
 
       await sync.refuse(SYNC_REASON);
       await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
@@ -964,32 +959,5 @@ describe('the Plugins view\'s message line and name filter', () => {
       plugins.say(undefined);
       await messageIs(GAME_FOLDER_MESSAGE, 'the game folder message returning');
     });
-  });
-});
-
-describe('a collapsed row\'s badge, from the states beneath it', () => {
-  it('is a dot on a plugin row with changes beneath it, only while the row is collapsed', async () => {
-    const { client, rows, item, view } = pluginsOver({ value: found('A.esp') });
-    client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: ['Modified'], recordTypes: {}, records: {} });
-    const row = present((await rows())[0], 'the A.esp row');
-    const uri = (await item(row)).resourceUri;
-
-    const collapsed = await badgeOf(uri);
-    view().expand(row);
-    const expanded = await badgeOf(uri);
-    view().collapse(row);
-
-    expect([collapsed, expanded, await badgeOf(uri)]).toEqual(['•', undefined, '•']);
-  });
-
-  it('puts a failed read of the states beneath on the view\'s message line, and decorates nothing', async () => {
-    const { client, rows, item, view } = pluginsOver({ value: found('A.esp') });
-    client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
-    const row = present((await rows())[0], 'the A.esp row');
-
-    const badge = await badgeOf((await item(row)).resourceUri);
-
-    expect(badge).toBeUndefined();
-    await waitForMessage(view(), (message) => message === 'Failed to load: boom', 'the failed read of the states beneath');
   });
 });

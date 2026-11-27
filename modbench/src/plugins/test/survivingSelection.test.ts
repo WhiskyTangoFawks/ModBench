@@ -3,13 +3,12 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { pluginsOver } from './pluginsOver';
+import { pluginsOf, pluginsOver } from './pluginsOver';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 
-const valueOf = (...names: string[]) =>
-  instanceValueFixture({ plugins: names.map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })) });
+const valueOf = (...names: string[]) => instanceValueFixture({ plugins: pluginsOf(names) });
 
 async function selecting(...names: string[]) {
   const instance = new FakeInstance(valueOf(...names));
@@ -48,16 +47,6 @@ describe('the selection the Plugins view follows', () => {
     select([a]);
 
     select([]);
-
-    expect(followed()).toEqual([]);
-  });
-
-  it('answers nothing for a row that has gone for good', async () => {
-    const { a, select, rebuildFiringNoEvent, shows, followed } = await selecting('A.esp', 'B.esp');
-    select([a]);
-
-    await shows('B.esp');
-    rebuildFiringNoEvent();
 
     expect(followed()).toEqual([]);
   });

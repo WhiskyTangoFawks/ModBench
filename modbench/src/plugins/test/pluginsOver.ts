@@ -84,8 +84,8 @@ export function pluginsOver({
   };
 }
 
-/** The plugins of ModA, in the order named, each enabled. */
-export const pluginsOfModA = (names: readonly string[], origin = 'ModA') => names.map((name, line) => ({ name, origin, path: `/mods/${origin}/${name}`, line, enabled: true, winning: true }));
+/** The plugins of `origin`, ModA unless named, in the order named, each enabled. */
+export const pluginsOf = (names: readonly string[], origin = 'ModA') => names.map((name, line) => ({ name, origin, path: `/mods/${origin}/${name}`, line, enabled: true, winning: true }));
 
 /** The Plugins box over the plugins `names` of `origin`, ModA unless named, which mEdit has indexed and the Instance
  *  adapter reads in that order, once its status bar says Ready. */
@@ -97,7 +97,7 @@ export async function indexedOver(names: readonly string[], { value = {}, origin
   const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })), ...reading }), answers);
   const made = pluginsOver({
     client, adapter: fake.adapter, commandsClient: { getPlugins: () => Promise.resolve([]) }, ...rest,
-    value: instanceValueFixture({ activeProfile: 'Default', plugins: pluginsOfModA(names, origin), ...value }),
+    value: instanceValueFixture({ activeProfile: 'Default', plugins: pluginsOf(names, origin), ...value }),
   });
   holdsLoadOrder(client, { indexed: names.map((name) => ({ name, origin })) });
   await settled(() => { if (made.plugins.standing.mEdit().length > 0) throw new Error('mEdit is not Ready'); });

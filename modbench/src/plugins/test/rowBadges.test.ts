@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host, ThemeColor, ThemeIcon, Uri } from './vscodeHost';
-import { indexedOver, pluginsOver } from './pluginsOver';
+import { indexedOver, pluginsOf, pluginsOver } from './pluginsOver';
 import type { WorkingTreeStatesBeneath } from '../../client';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -140,6 +140,17 @@ describe('a row with changes beneath it', () => {
     expect(await decorationOf(uri)).toEqual(decoration);
   });
 
+  it('is a dot on a plugin row with changes beneath it, only while the row is collapsed', async () => {
+    const { uri, view, row } = await pluginRow({ ...NOTHING, plugin: ['Modified'] });
+
+    const collapsed = (await decorationOf(uri))?.badge;
+    view().expand(row('A.esp'));
+    const expanded = (await decorationOf(uri))?.badge;
+    view().collapse(row('A.esp'));
+
+    expect([collapsed, expanded, (await decorationOf(uri))?.badge]).toEqual(['•', undefined, '•']);
+  });
+
   it('shows its own letter rather than the dot when it has a change of its own', async () => {
     const { uriOf, rowsOf } = await worldspaceRows({ worldspace: 'Added' }, { ...NOTHING, records: { 'w:Plugin0.esp': ['Modified'] } });
 
@@ -242,7 +253,7 @@ describe('the states beneath a row', () => {
 
   it('keep to the plugin\'s origin, so two plugins of one name answer apart', async () => {
     const { client, pluginRows, item } = pluginsOver({
-      value: instanceValueFixture({ plugins: ['ModA', 'Data/'].map((origin, line) => ({ name: 'A.esp', origin, path: `/${origin}/A.esp`, line, enabled: true, winning: true })) }),
+      value: instanceValueFixture({ plugins: [...pluginsOf(['A.esp']), ...pluginsOf(['A.esp'], 'Data/')] }),
     });
     const row = await pluginRows();
 
@@ -312,10 +323,11 @@ describe('the rows that are expanded', () => {
   it('stay expanded across a refresh, for VS Code keeps them open by their ids', async () => {
     const { client, view, group, uri } = await groupRow();
     view().expand(group);
+    const changes = host.decorationChanges();
 
     client.change(undefined);
     changeNamesPlugin(client, { name: 'A.esp', origin: 'ModA' });
-    await settle();
+    await settled(() => { expect(changes).toContain(undefined); });
 
     expect(await decorationOf(uri)).toBeUndefined();
   });

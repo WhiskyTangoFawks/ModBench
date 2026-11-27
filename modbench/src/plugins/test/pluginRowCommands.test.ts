@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { clientHoldingNothing, pluginsOver } from './pluginsOver';
+import { clientHoldingNothing, pluginsOf, pluginsOver } from './pluginsOver';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { gestureName, phrase } from '../../ports/phrase';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -25,6 +25,8 @@ const changedSource = beneath('Modified');
 
 type Over = Parameters<typeof pluginsOver>[0];
 
+const decompileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'decompile').map((c) => c.args);
+
 async function gesturing(answers: readonly (string | undefined)[], over: Over & { holdsRepository?: boolean } = {}) {
   const { holdsRepository = false, ...rest } = over;
   const client = rest.client ?? clientHoldingNothing();
@@ -33,7 +35,7 @@ async function gesturing(answers: readonly (string | undefined)[], over: Over & 
     client, ask, ...rest,
     value: instanceValueFixture({
       holdsRepository, mods: [{ kind: 'mod', name: 'ModA', enabled: true }], listedSourceMods: new Set(['ModA']),
-      plugins: [FIRST, SECOND, MALFORMED, SELECTED].map(({ name, origin }, line) => ({ name, origin, path: `/m/${name}`, line, enabled: true, winning: true })),
+      plugins: pluginsOf([FIRST, SECOND, MALFORMED, SELECTED].map(({ name }) => name)),
     }),
   });
   const row = await made.pluginRows();
@@ -42,8 +44,6 @@ async function gesturing(answers: readonly (string | undefined)[], over: Over & 
 }
 
 describe('modbench.plugin.decompile', () => {
-  const decompileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'decompile').map((c) => c.args);
-
   async function decompiling(client: InMemoryMEditClient, answer: string | undefined) {
     const made = await gesturing([answer], { client });
     return { ...made, reporter: made.reporter('plugin.decompile'), run: (...args: unknown[]) => host.run('modbench.plugin.decompile', ...args) };
@@ -257,7 +257,7 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
     const answered = await run(calling(FIRST, SECOND));
 
-    expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[FIRST, SECOND], false]]);
+    expect(decompileCalls(client)).toEqual([[[FIRST, SECOND], false]]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [SECOND], refused: [{ item: FIRST, reason: outcome.refused[0]?.reason }] } });
     expect(ask.asked).toEqual([]);
     expect(reporter.reports).toEqual([]);
@@ -271,7 +271,7 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
     await run(new AgentCall([{ kind: 'plugin', plugin: SECOND }], { force: true }));
 
-    expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[SECOND], true]]);
+    expect(decompileCalls(client)).toEqual([[[SECOND], true]]);
   });
 
   const FACT = 'Second.esp cannot be decompiled.';
@@ -318,7 +318,7 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
     await expect(run(new AgentCall([{ kind: 'mod', name: 'ModA' }], {}))).rejects.toBeInstanceOf(Refusal);
 
-    expect(client.calls.filter((c) => c.method === 'decompile')).toEqual([]);
+    expect(decompileCalls(client)).toEqual([]);
   });
 });
 

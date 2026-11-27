@@ -3,14 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host, ThemeColor, Uri } from './vscodeHost';
-import { pluginsOver, pluginsOfModA } from './pluginsOver';
+import { pluginsOver, pluginsOf } from './pluginsOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const GREY = { color: new ThemeColor('disabledForeground') };
 
 async function greying() {
   const made = pluginsOver({
-    value: instanceValueFixture({ plugins: pluginsOfModA(['Fallout4.esm']), pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }] }),
+    value: instanceValueFixture({ plugins: pluginsOf(['Fallout4.esm']), pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }] }),
   });
   const row = await made.pluginRows();
   const uriOf = async (name: string, origin?: string) => (await made.item(row(name, origin))).resourceUri;
