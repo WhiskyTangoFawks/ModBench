@@ -697,7 +697,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     it.each([
       ['a longer name', '2'],
       ['a space and more', ' Backup'],
-      ['a plus', '+'],
+      ['a plus', '+old'],
       ['a parenthesis', '(GOG)'],
       ['a letter beyond ASCII', 'é'],
     ])('holds a path whose folder\'s name begins with a folder\'s and goes on with %s as it is', async (_name, more) => {

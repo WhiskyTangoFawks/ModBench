@@ -68,7 +68,6 @@ const text = (root: string, relative: string): Promise<string> => readFile(join(
 
 const modNames = (order: readonly ModlistEntry[]): string[] => order.map((e) => `${e.kind}:${e.name}:${e.enabled}`);
 
-/** A profile's mod order, as a change to it is handed the order. */
 async function modOrderOf(adapter: InstanceAdapter, profile: string): Promise<readonly ModlistEntry[]> {
   let order: readonly ModlistEntry[] = [];
   await adapter.changeModOrder(profile, (stands) => {
@@ -1691,7 +1690,7 @@ describe('the MO2 Instance adapter', () => {
 
     describe('an origin\'s files', () => {
       const mod = (name: string) => ({ kind: 'mod' as const, name });
-      const listing = (mod: string): Promise<void> => appendFile(join(root, DEFAULT_MODLIST), `+${mod}\n`);
+      const listing = (mod: string): Promise<void> => appendFile(join(root, DEFAULT_MODLIST), `\n+${mod}`);
       const filesIn = (reading: InstanceReading, origin: FileOrigin): OriginFiles =>
         (origin.kind === 'mod' ? present(reading.modFiles.get(origin.name), `the files of ${origin.name}`) : reading.runtimeOutput);
       const filesOf = async (origin: FileOrigin): Promise<OriginFiles> => filesIn(await adapter.reading(), origin);

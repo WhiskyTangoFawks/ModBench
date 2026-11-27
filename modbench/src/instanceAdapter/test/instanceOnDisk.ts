@@ -16,7 +16,7 @@ import { DEPLOYED_PATH } from '../../test/deployedPath';
 
 /** MO2's settings naming `gameName`, the Default profile selected, and `general` lines added to [General]. */
 export const settingsNaming = (gameName = 'Fallout 4', ...general: string[]): string =>
-  ['[General]', `gameName=${gameName}`, 'selected_profile=@ByteArray(Default)', ...general, ''].join('\n');
+  [`[General]\ngameName=${gameName}`, 'selected_profile=@ByteArray(Default)', ...general, ''].join('\n');
 
 /** A path as QSettings writes it in a value: each backslash doubled. */
 export const qSettingsPath = (path: string): string => `@ByteArray(${path.replaceAll('\\', '\\\\')})`;
