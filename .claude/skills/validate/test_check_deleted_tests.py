@@ -10,7 +10,10 @@ import unittest
 import check_deleted_tests as cdt
 
 STANDARDS = ('## Comments\n- A comment restates an ADR. → Cite it.\n'
-             '## Tests\n- A test proves an absence: a removed method. → Delete it.\n## Naming\n')
+             '## Tests\n- A test proves an absence: a removed method. → Delete it.\n'
+             '- A test cannot fail. → Assert a known literal, or delete the test.\n'
+             '- A test reaches past the seam: a private member. → Move it to the seam and assert the outcome there.\n'
+             '## Naming\n')
 CS = '''public class Tests
 {
     [Fact]
@@ -131,11 +134,19 @@ class Trailer(Repo):
                     "Deleted-test: windows unless root => kept\nDeleted-test: a valid case => kept\nDeleted-test: a light plugin\u2019s header => kept\nDeleted-test: a failing case => kept\nCo-Authored-By: t <t@t>")
         self.assertEqual(cdt.problems(self.root, 'main'), [
             "Deleted-test: skipped: reads 'Deleted-test: <deleted> => <survivor>' or 'Deleted-test: <deleted> => mark: <mark>'",
-            'Removed_fact => test_gone: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
-            'Removed_custom => mark: A comment restates an ADR: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
-            'rows %s => mark: A test: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so',
+            'Removed_fact => test_gone: no test at the tip and no mark of CODING_STANDARDS.md § Tests whose fix deletes the test',
+            'Removed_custom => mark: A comment restates an ADR: no test at the tip and no mark of CODING_STANDARDS.md § Tests whose fix deletes the test',
+            'rows %s => mark: A test: no test at the tip and no mark of CODING_STANDARDS.md § Tests whose fix deletes the test',
             f'skipped: deleted, and no trailer names its survivor: {cdt.FORM}',
         ])
+
+    def test_a_mark_accounts_for_a_deletion_only_when_its_fix_deletes_the_test(self) -> None:
+        self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
+        self.write('Box.Tests/Tests.cs', CS.replace('Removed_fact', 'Kept_too'))
+        self.commit('delete\n\nDeleted-test: test_removed => mark: A test reaches past the seam\n'
+                    'Deleted-test: Removed_fact => mark: A test cannot fail')
+        self.assertEqual(cdt.problems(self.root, 'main'), [
+            'test_removed => mark: A test reaches past the seam: no test at the tip and no mark of CODING_STANDARDS.md § Tests whose fix deletes the test'])
 
     def test_a_survivor_deleted_later_on_the_branch_is_named_until_a_later_trailer_names_one_that_stands(self) -> None:
         self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
@@ -145,7 +156,14 @@ class Trailer(Repo):
         named = cdt.problems(self.root, 'main')
         self.commit('repair\n\nDeleted-test: test_removed => Renamed')
         self.assertEqual((named, cdt.problems(self.root, 'main')), (
-            ['test_removed => Kept: no test at the tip and no mark of CODING_STANDARDS.md § Tests reads so'], []))
+            ['test_removed => Kept: no test at the tip and no mark of CODING_STANDARDS.md § Tests whose fix deletes the test'], []))
+
+    def test_the_latest_commit_that_names_a_deletion_overrules_an_earlier_one(self) -> None:
+        self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
+        self.commit('delete\n\nDeleted-test: test_removed => Kept')
+        self.commit('correct\n\nDeleted-test: test_removed => mark: A test reaches past the seam')
+        self.assertEqual(cdt.problems(self.root, 'main'), [
+            'test_removed => mark: A test reaches past the seam: no test at the tip and no mark of CODING_STANDARDS.md § Tests whose fix deletes the test'])
 
     def test_a_mark_the_branch_retires_to_a_gate_still_accounts_for_a_deletion_that_named_it(self) -> None:
         self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
