@@ -167,6 +167,32 @@ describe('the load order rows, each origin the wire contract\'s literal reserved
   });
 });
 
+describe('the load order rows of the plugin files at a mod\'s root no line names, sent with no line', () => {
+  const at = (mod: string, ...paths: string[]): OriginFile[] => paths.map((path) => fileIn(`/mods/${mod}`, path));
+  const linked = { relativePath: 'Linked.esp', path: '/mods/ModA/Linked.esp', sourcePath: '/shared/Real.esp', excluded: false, markedExcluded: false, includedPath: 'Linked.esp' };
+
+  it.each<[string, string[], Record<string, OriginFile[]>, LoadOrderPluginRow[]]>([
+    ['every mod\'s copy of the filename', [], { ModA: at('ModA', 'Optional.esp'), ModB: at('ModB', 'Optional.esp') }, [
+      { name: 'Optional.esp', path: '/mods/ModA/Optional.esp', origin: 'ModA', line: null, enabled: false, winning: true },
+      { name: 'Optional.esp', path: '/mods/ModB/Optional.esp', origin: 'ModB', line: null, enabled: false, winning: false },
+    ]],
+    ['an .esm and an .esl as well as an .esp', [], { ModA: at('ModA', 'Master.esm', 'Light.esl') }, [
+      { name: 'Master.esm', path: '/mods/ModA/Master.esm', origin: 'ModA', line: null, enabled: false, winning: true },
+      { name: 'Light.esl', path: '/mods/ModA/Light.esl', origin: 'ModA', line: null, enabled: false, winning: true },
+    ]],
+    ['a linked plugin, at the path it is read from: the link\'s target', [], { ModA: [linked] }, [
+      { name: 'Linked.esp', path: '/shared/Real.esp', origin: 'ModA', line: null, enabled: false, winning: true },
+    ]],
+    ['no file that is not a plugin, none below the root, and no bare ".esp"', [], { ModA: at('ModA', 'readme.txt', 'Textures/Foo.dds', 'scripts/Nested.esp', '.esp') }, []],
+    ['a plugin whose origin and filename join to the text of a listed pair, with a character a Linux name may hold', ['B|C.esp'], { A: at('A', 'B|C.esp'), 'A|B': at('A|B', 'C.esp') }, [
+      { name: 'B|C.esp', path: '/mods/A/B|C.esp', origin: 'A', line: 0, enabled: true, winning: true },
+      { name: 'C.esp', path: '/mods/A|B/C.esp', origin: 'A|B', line: null, enabled: false, winning: true },
+    ]],
+  ])('sends %s', (_case, order, filesByMod, rows) => {
+    expect(buildLoadOrderRows(lines(order), builtIndex(filesByMod, []), [], GAME_FOLDER, NO_DATA_PLUGINS)).toEqual(rows);
+  });
+});
+
 describe('the load order rows of plugins whose names or origins differ only in case', () => {
   it('sends both files of one mod, the line naming the one the Mod override order resolves the name to, at that file\'s spelling', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } }, { A: [fileIn('/mods/A', 'Foo.esp'), fileIn('/mods/A', 'foo.esp')] });
