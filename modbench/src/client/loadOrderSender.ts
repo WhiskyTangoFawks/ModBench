@@ -73,7 +73,7 @@ function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: A
 
 // One snapshot waits and one is in flight. An arrival replaces the one waiting, so the newest
 // lands instead of a queue of stale ones each paying an index.
-function createSendSlot(wire: LoadOrderWire, sendable: () => boolean, signalWaitCapMs: number | undefined, changed: () => void) {
+function createSendSlot(wire: LoadOrderWire, sendable: () => boolean, signalWaitCapMs: number, changed: () => void) {
   let waiting: Waiting | undefined;
   let inFlight: AbortController | undefined;
   let unanswered = false;
@@ -118,17 +118,14 @@ function createSendSlot(wire: LoadOrderWire, sendable: () => boolean, signalWait
   };
 
   // A signal waits for the snapshots handed before it to be answered, so mEdit checks the load order it was handed,
-  // and with a cap a stream of snapshots delays it by a bounded time.
+  // and a stream of snapshots delays it by a bounded time.
   const pumpSignal = (): void => {
     if (owed === undefined || signalling) return;
-    if (waiting || unanswered) {
-      if (signalWaitCapMs === undefined) return;
-      owed.since ??= Date.now();
-      const waited = Date.now() - owed.since;
-      if (waited < signalWaitCapMs) {
-        signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, signalWaitCapMs - waited);
-        return;
-      }
+    owed.since ??= Date.now();
+    const waited = Date.now() - owed.since;
+    if ((waiting || unanswered) && waited < signalWaitCapMs) {
+      signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, signalWaitCapMs - waited);
+      return;
     }
     sendSignal(owed);
   };
@@ -192,9 +189,8 @@ function createSendSlot(wire: LoadOrderWire, sendable: () => boolean, signalWait
   };
 }
 
-/** `signalWaitCapMs` bounds how long a change signal waits for the snapshots handed before it; without one it waits for
- *  them to be answered. */
-export function createLoadOrderSender(wire: LoadOrderWire, signalWaitCapMs?: number): LoadOrderSender {
+/** `signalWaitCapMs` bounds how long a change signal waits for the snapshots handed before it to be answered. */
+export function createLoadOrderSender(wire: LoadOrderWire, signalWaitCapMs: number): LoadOrderSender {
   const pendingChanges = new EventEmitter();
   const launches = new EventEmitter<Promise<LaunchOutcome>>();
   const exits = new EventEmitter();
