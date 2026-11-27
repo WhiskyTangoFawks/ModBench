@@ -171,7 +171,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     it('asks which plugin\'s copy to open, and opens the one picked', async () => {
       registerHeldByBoth();
-      showQuickPick.mockImplementation((items: readonly unknown[]) => Promise.resolve(items[1]));
+      showQuickPick.mockImplementation((items) => Promise.resolve(items[1]));
 
       await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
 

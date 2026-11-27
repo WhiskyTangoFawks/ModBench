@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { type FakeUri, Uri } from '../../test/vscodeMock';
+import type { FakeUri } from '../../test/vscodeMock';
 
 interface ChangeEvent { type: number; uri: FakeUri }
 interface Provider {
@@ -8,46 +8,15 @@ interface Provider {
   writeFile(uri: FakeUri, content: Uint8Array): Promise<void>;
   onDidChangeFile(listener: (events: ChangeEvent[]) => void): unknown;
 }
-interface Registration { provider: Provider; options?: { isReadonly?: boolean } }
 
-const providers = new Map<string, Registration>();
-const closeListeners: Array<(doc: { uri: FakeUri }) => void> = [];
-const showTextDocument = vi.fn<(doc: { uri: FakeUri }, opts?: unknown) => Promise<unknown>>();
+import { commandHandlers, documentCloses, editorVscode, fileSystemOptions, fileSystems, showTextDocument } from './editorVscode';
 
-vi.mock('vscode', () => ({
-  workspace: {
-    registerFileSystemProvider: (scheme: string, provider: Provider, options?: { isReadonly?: boolean }) => {
-      providers.set(scheme, { provider, options });
-      return { dispose: () => providers.delete(scheme) };
-    },
-    onDidCloseTextDocument: (listener: (doc: { uri: FakeUri }) => void) => {
-      closeListeners.push(listener);
-      return { dispose: () => undefined };
-    },
-    openTextDocument: (uri: FakeUri) => Promise.resolve({ uri }),
-  },
-  window: { showTextDocument: (doc: { uri: FakeUri }, opts?: unknown) => showTextDocument(doc, opts) },
-  Uri,
-  EventEmitter: class {
-    private readonly listeners: Array<(e: unknown) => void> = [];
-    event = (listener: (e: unknown) => void) => { this.listeners.push(listener); return { dispose: () => undefined }; };
-    fire(e: unknown) { this.listeners.forEach(l => l(e)); }
-    dispose() { this.listeners.length = 0; }
-  },
-  Disposable: class { constructor(public dispose: () => void) {} },
-  FileType: { File: 1 },
-  FileChangeType: { Changed: 1 },
-  FileSystemError: {
-    FileNotFound: (what: FakeUri | string) => new Error(`FileNotFound ${typeof what === 'string' ? what : what.path}`),
-    NoPermissions: (uri: FakeUri) => new Error(`NoPermissions ${uri.path}`),
-  },
-  ViewColumn: { Beside: -2 },
-}));
+vi.mock('vscode', () => editorVscode);
 
-import { ExtendedFieldDocuments, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type CompareResult } from '../../client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
+import { forgetEditor, register } from './editorHarness';
 
 type Diff = CompareResult['diffs'][number];
 
@@ -65,7 +34,12 @@ const comparison = (diffs: Diff[], holders: Array<[string, string]> = [['Fallout
 
 const descriptionOf = (value: string) => comparison([diff('Description', { 'Fallout4.esm': value })]);
 
-const deacon: OpenExtendedFieldEditorParams = {
+interface FieldParams {
+  formKey: string; plugin: string; origin: string; path: { kind: string; name?: string; index?: number }[];
+  recordLabel: string; fieldName: string; readOnly: boolean;
+}
+
+const deacon: FieldParams = {
   formKey: '000123:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data/', path: [{ kind: 'member', name: 'Description' }],
   recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', readOnly: false,
 };
@@ -75,45 +49,51 @@ const pluginChanged = (plugin: string, origin: string) => [{ plugin: { name: plu
 
 let client: InMemoryMEditClient;
 let reporter: RecordingReporter;
-let commit: ReturnType<typeof vi.fn<(field: unknown, value: string) => Promise<void>>>;
 
-function makeDocuments(): ExtendedFieldDocuments {
-  return new ExtendedFieldDocuments({
-    client, commit, reporter,
-  });
+const NO_CHANGE = { applied: true as const, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [] };
+
+function makeDocuments() {
+  const { editor } = register({ meditClient: client, reporterOf: reporter });
+  const open = async (params: FieldParams): Promise<void> => {
+    await commandHandlers.get('modbench.record.openFieldValue')?.({
+      webviewSection: 'stringValue', value: '', preventDefaultContextMenuItems: true, ...params,
+    });
+  };
+  return { open, dispose: () => { editor.dispose(); } };
 }
 
+const commits = () => client.calls.filter(({ method }) => method === 'getEditChanges').map(({ args }) => args);
+
+const isUri = (value: unknown): value is FakeUri => typeof value === 'object' && value !== null && 'path' in value && 'scheme' in value;
 const shownUri = (call = -1): FakeUri => {
-  const shown = showTextDocument.mock.calls.at(call);
-  if (!shown) throw new Error('nothing was shown');
-  return shown[0].uri;
+  const shown = showTextDocument.mock.calls.at(call)?.[0].uri;
+  if (!isUri(shown)) throw new Error('nothing was shown');
+  return shown;
 };
-const registration = (scheme: string): Registration => {
-  const reg = providers.get(scheme);
-  if (!reg) throw new Error(`no provider for ${scheme}`);
-  return reg;
+const isProvider = (value: unknown): value is Provider => typeof value === 'object' && value !== null && 'readFile' in value;
+const provider = (scheme = 'modbench-field'): Provider => {
+  const registered = fileSystems.get(scheme);
+  if (!isProvider(registered)) throw new Error(`no provider for ${scheme}`);
+  return registered;
 };
-const provider = (scheme = 'modbench-field'): Provider => registration(scheme).provider;
 const textOf = async (uri: FakeUri, scheme = 'modbench-field'): Promise<string> =>
   new TextDecoder().decode(await provider(scheme).readFile(uri));
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
-const closeTab = (uri: FakeUri): void => closeListeners.forEach(listener => listener({ uri }));
+const closeTab = (uri: FakeUri): void => { documentCloses.forEach(listener => { listener({ uri }); }); };
 function recordChanges(scheme = 'modbench-field'): ChangeEvent[][] {
   const seen: ChangeEvent[][] = [];
   provider(scheme).onDidChangeFile(events => seen.push(events));
   return seen;
 }
 
-let documents: ExtendedFieldDocuments;
+let documents: ReturnType<typeof makeDocuments>;
 beforeEach(() => {
-  providers.clear();
-  closeListeners.length = 0;
-  showTextDocument.mockReset();
-  showTextDocument.mockResolvedValue(undefined);
+  forgetEditor();
   client = new InMemoryMEditClient();
   client.setQueryAnswer('getComparison', descriptionOf('a long description'));
+  client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/Data/plugin-source/Fallout4.esm/Deacon.json' });
+  client.setQueryAnswer('getEditChanges', NO_CHANGE);
   reporter = recordingReporter();
-  commit = vi.fn(() => Promise.resolve());
   documents = makeDocuments();
 });
 
@@ -129,7 +109,7 @@ describe('the extended-field documents', () => {
   it('a tab restored with no open before it reads the field\'s current value', async () => {
     await documents.open(deacon);
     const restored = shownUri();
-    providers.clear();
+    documents.dispose();
     documents = makeDocuments();
     client.setQueryAnswer('getComparison', descriptionOf('what mEdit holds now'));
 
@@ -229,8 +209,11 @@ describe('the extended-field documents', () => {
     await provider().writeFile(shownUri(), encode('first'));
     await provider().writeFile(shownUri(), encode('second'));
 
-    const address = { formKey: deacon.formKey, plugin: { name: 'Fallout4.esm', origin: 'Data/' }, path: deacon.path };
-    expect(commit.mock.calls).toEqual([[address, 'first'], [address, 'second']]);
+    const plugin = { name: 'Fallout4.esm', origin: 'Data/' };
+    expect(commits()).toEqual([
+      [deacon.formKey, plugin, { op: 'set', path: deacon.path, value: 'first' }],
+      [deacon.formKey, plugin, { op: 'set', path: deacon.path, value: 'second' }],
+    ]);
   });
 
   it('closing without saving commits nothing', async () => {
@@ -239,7 +222,7 @@ describe('the extended-field documents', () => {
 
     closeTab(shownUri());
 
-    expect(commit).not.toHaveBeenCalled();
+    expect(commits()).toEqual([]);
   });
 
   it('a multi-line value reads back byte for byte', async () => {
@@ -297,8 +280,8 @@ describe('the extended-field documents', () => {
     it('registers the read-only scheme read-only, and the editable one not', async () => {
       await documents.open({ ...deacon, readOnly: true });
 
-      expect(registration('modbench-field-readonly').options).toEqual({ isReadonly: true });
-      expect(registration('modbench-field').options).toBeUndefined();
+      expect(fileSystemOptions.get('modbench-field-readonly')).toEqual({ isReadonly: true });
+      expect(fileSystemOptions.get('modbench-field')).toBeUndefined();
     });
 
     it('shows the value, refuses a write and commits nothing', async () => {
@@ -306,13 +289,13 @@ describe('the extended-field documents', () => {
 
       expect(await textOf(shownUri(), 'modbench-field-readonly')).toBe('a long description');
       await expect(provider('modbench-field-readonly').writeFile(shownUri(), encode('x'))).rejects.toThrow('NoPermissions');
-      expect(commit).not.toHaveBeenCalled();
+      expect(commits()).toEqual([]);
     });
   });
 
   it('disposing unregisters both schemes', () => {
     documents.dispose();
 
-    expect([...providers.keys()]).toEqual([]);
+    expect([fileSystems.has('modbench-field'), fileSystems.has('modbench-field-readonly')]).toEqual([false, false]);
   });
 });

@@ -11,16 +11,22 @@ export const editorProviders = new Map<string, unknown>();
 export const editorProviderOptions = new Map<string, unknown>();
 export const editorProviderDisposals = { count: 0 };
 export const fileSystems = new Map<string, unknown>();
+export const fileSystemOptions = new Map<string, unknown>();
 export const openedDocuments: unknown[] = [];
 export const documentChanges = new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>();
 export const disk = new Map<string, string | Uint8Array>();
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
-export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
-export const showQuickPick = vi.fn<(items: readonly unknown[], options?: unknown) => Promise<unknown>>();
+/** Each workspace edit asked of VS Code, which lands unless a test says otherwise. */
+export const applyEdit = vi.fn<(edit: { made: unknown[] }) => Promise<boolean>>(() => Promise.resolve(true));
+/** What a test reads of a quick pick item the Editor offers. */
+export interface QuickPickItemLike { label: string; description?: string; detail?: string; mode?: string; plugin?: { name: string; origin: string } }
+export const showQuickPick = vi.fn<(items: readonly QuickPickItemLike[], options?: { canPickMany?: boolean; placeHolder?: string }) => Promise<unknown>>();
 export const showInputBox = vi.fn<(options: { value?: string }) => Promise<string | undefined>>();
-export const showTextDocument = vi.fn<(document: unknown, options?: unknown) => Promise<unknown>>(() => Promise.resolve(undefined));
+export const showTextDocument = vi.fn<(document: { uri: unknown }, options?: unknown) => Promise<unknown>>(() => Promise.resolve(undefined));
 export const clipboard = { readText: vi.fn<() => Promise<string>>(), writeText: vi.fn<(text: string) => Promise<void>>() };
 export const contentProviders = new Map<string, unknown>();
+/** Each progress VS Code shows, as it opens and as it ends. */
+export const progressShown: string[] = [];
 export const textDocuments: { uri: unknown }[] = [];
 export const documentCloses = new Set<(document: { uri: unknown }) => void>();
 
@@ -67,7 +73,13 @@ export const editorVscode = {
   FileType: { File: 1 },
   FileChangeType: { Changed: 1 },
   env: { clipboard: { readText: () => clipboard.readText(), writeText: (text: string) => clipboard.writeText(text) } },
-  WorkspaceEdit: class { renameFile() { return undefined; } createFile() { return undefined; } replace() { return undefined; } },
+  WorkspaceEdit: class {
+    readonly made: unknown[] = [];
+    renameFile(from: { path: string }, to: { path: string }) { this.made.push(['move', from.path, to.path]); }
+    deleteFile(uri: { path: string }, options: unknown) { this.made.push(['delete', uri.path, options]); }
+    createFile(uri: { path: string }) { this.made.push(['create', uri.path]); }
+    replace(uri: { path: string }, _range: unknown, text: string) { this.made.push(['replace', uri.path, text]); }
+  },
   Disposable: class {
     constructor(public dispose: () => void) {}
     static from(...parts: { dispose(): void }[]) { return { dispose: () => parts.forEach((part) => part.dispose()) }; }
@@ -89,9 +101,10 @@ export const editorVscode = {
     executeCommand: (...args: unknown[]) => executeCommand(...args),
   },
   workspace: {
-    registerFileSystemProvider: (scheme: string, provider: unknown) => {
+    registerFileSystemProvider: (scheme: string, provider: unknown, options?: unknown) => {
       fileSystems.set(scheme, provider);
-      return { dispose: () => undefined };
+      fileSystemOptions.set(scheme, options);
+      return { dispose: () => { fileSystems.delete(scheme); } };
     },
     registerTextDocumentContentProvider: (scheme: string, provider: unknown) => {
       contentProviders.set(scheme, provider);
@@ -119,14 +132,21 @@ export const editorVscode = {
       openedDocuments.push(uri);
       return Promise.resolve({ uri, getText: () => '{}', isDirty: false });
     },
-    applyEdit: () => applyEdit(),
+    applyEdit: (edit: { made: unknown[] }) => applyEdit(edit),
   },
   window: {
     tabGroups: { get all() { return tabGroups; }, close: () => Promise.resolve(true) },
-    withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
-    showTextDocument: (document: unknown, options?: unknown) => showTextDocument(document, options),
+    withProgress: async (_options: unknown, task: () => Promise<unknown>) => {
+      progressShown.push('opens');
+      try {
+        return await task();
+      } finally {
+        progressShown.push('ends');
+      }
+    },
+    showTextDocument: (document: { uri: unknown }, options?: unknown) => showTextDocument(document, options),
     showInputBox: (options: { value?: string }) => showInputBox(options),
-    showQuickPick: (items: readonly unknown[], options?: unknown) => showQuickPick(items, options),
+    showQuickPick: (items: readonly QuickPickItemLike[], options?: { canPickMany?: boolean; placeHolder?: string }) => showQuickPick(items, options),
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
     createTreeView: () => ({ selection: [], onDidChangeSelection: () => ({ dispose: () => undefined }), dispose: () => undefined }),
     createQuickPick: () => createQuickPick(),
@@ -175,6 +195,7 @@ export function forgetVscode(): void {
   commandHandlers.clear();
   contextKeys.clear();
   fileSystems.clear();
+  fileSystemOptions.clear();
   openedDocuments.length = 0;
   disk.clear();
   tabGroups.length = 0;
@@ -189,6 +210,7 @@ export function forgetVscode(): void {
   clipboard.readText.mockReset();
   clipboard.writeText.mockReset();
   contentProviders.clear();
+  progressShown.length = 0;
   textDocuments.length = 0;
   documentCloses.clear();
   createQuickPick.mockReset();

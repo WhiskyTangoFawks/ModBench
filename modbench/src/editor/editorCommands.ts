@@ -86,7 +86,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   };
   const commitDeps: FieldCommitDeps = {
     editGateOf: (address) => tabs.gateShowing(address),
-    edit: (address, envelope) => applyRecordEdit(writeDeps, address, envelope),
+    edit: (address, envelope, applied) => applyRecordEdit(writeDeps, address, envelope, applied),
   };
   const extendedFields = new ExtendedFieldDocuments({
     client: meditClient, reporter: deps.reporterFor('extendedField'),

@@ -5,7 +5,8 @@ import { createFocusedView } from '../../drivingLib/focusedView';
 import { Uri } from '../../test/vscodeMock';
 import { commandHandlers, editorProviders, editorVscode, fakePanel, forgetVscode, type FakePanel } from './editorVscode';
 
-export type ModFacts = Parameters<typeof createEditor>[0]['modFacts'];
+type EditorDeps = Parameters<typeof createEditor>[0];
+export type ModFacts = EditorDeps['modFacts'];
 
 export const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -59,7 +60,11 @@ interface Registered {
   meditClient?: InMemoryMEditClient;
   recordViewIds?: readonly string[];
   modFacts?: ModFacts;
-  loadOrder?: Parameters<typeof createEditor>[0]['loadOrderComing'];
+  loadOrder?: EditorDeps['loadOrderComing'];
+  reporterOf?: ReturnType<EditorDeps['reporterFor']>;
+  ask?: EditorDeps['ask'];
+  sourceEditing?: EditorDeps['sourceEditing'];
+  instance?: EditorDeps['instance'];
 }
 
 /** Creates the Editor with the view `test.view` selecting `selection`. */
@@ -67,6 +72,8 @@ export function register({
   selection = () => [], meditClient = new InMemoryMEditClient(),
   recordViewIds = ['test.view'], modFacts = NO_MODS,
   loadOrder = { now: () => true, onChanged: () => ({ dispose: () => undefined }) },
+  reporterOf = reporter, ask = vi.fn(), instance = { refresh: () => Promise.resolve(undefined) },
+  sourceEditing = { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
 }: Registered = {}) {
   const focusedView = createFocusedView();
   const outputChannel = outputChannelDouble();
@@ -75,14 +82,14 @@ export function register({
     meditClient,
     loadOrderComing: loadOrder,
     outputChannel,
-    reporterFor: () => reporter,
-    ask: vi.fn(),
+    reporterFor: () => reporterOf,
+    ask,
     focusedView,
     recordViewIds,
     modFacts,
     recordWriteProgressView: 'test.view',
-    instance: { refresh: () => Promise.resolve(undefined) },
-    sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+    instance,
+    sourceEditing,
   });
   focusedView.follow('test.view', {
     get selection() { return selection(); },
