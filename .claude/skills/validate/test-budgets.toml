@@ -73,7 +73,6 @@ wire = 5
 "MEditService.RecordIndex.Tests.Query.ManyRecordsMemoryTests.RecordsWhoseCopiesNoSortHoldsAtOnce_AreEachAnsweredWhole" = "400 records with 100 KB or 8 MB names must outgrow a 128 MB limit"
 "MEditService.RecordIndex.Tests.Query.StreamedSelectTests.ASelectJoiningCopiesToTheirMastersRecordsOfTheSameBody_AnswersInMemoryTheBodiesOutgrow" = "24,000 two-kilobyte bodies, about 48 MB, joined past a 40 MB limit"
 "MEditService.RecordIndex.Tests.Query.StreamedSelectTests.ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow" = "24,000 two-kilobyte bodies, about 48 MB, must outgrow a 40 MB limit"
-"MEditService.RecordIndex.Tests.RealData.RealDataReadGoldenTests.ReferencesAndResolution_MatchGolden" = "queries every record of the committed cut-down real plugin against golden output"
 "MEditService.RecordIndex.Tests.RealData.SourceIngestParityTests.AFreshlyIngestedRealPlugin_ValidatesClean_AndAnnouncesNothingOfIt" = "ingests the committed cut-down real plugin, then waits on its checks"
 "MEditService.RecordIndex.Tests.Records.StoreRebuildTests.AFilterClearedWhileARebuildRefills_LeavesTheRefilledRowsUnfiltered" = "parks a refill at a gated plugin read, then waits for its release"
 "MEditService.RecordIndex.Tests.Records.StoreRebuildTests.WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter" = "parks a refill at a gated plugin read, then waits for its release"
