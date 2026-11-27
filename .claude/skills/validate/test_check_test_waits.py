@@ -10,6 +10,7 @@ import unittest
 import check_test_waits as ctw
 
 BACKEND_TEST = 'MEditService/MEditService.Http.Tests/Api/WaitTests.cs'
+FRONTEND_TEST = 'modbench/src/client/test/wait.test.ts'
 ALLOWED_PATH, ALLOWED_LINE = next(iter(ctw.ALLOWED))
 
 
@@ -24,7 +25,15 @@ class Waits(unittest.TestCase):
                            (BACKEND_TEST, 'Assert.True(released.Wait(TimeSpan.FromSeconds(5)));'),
                            (BACKEND_TEST, 'Assert.True(token.WaitHandle.WaitOne(Generous));'),
                            (BACKEND_TEST, 'var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.Result : null;'),
-                           (BACKEND_TEST, 'Assert.True(released.Wait(CancelBound));')):
+                           (BACKEND_TEST, 'Assert.True(released.Wait(CancelBound));'),
+                           (FRONTEND_TEST, 'await new Promise((resolve) => setTimeout(resolve, 20));'),
+                           (FRONTEND_TEST, 'new Promise((resolve) => setTimeout(() => resolve(TIMED_OUT), ms)),'),
+                           (f'/home/x/{FRONTEND_TEST}', 'await sleep(PROBE_SPACING_MS);'),
+                           (FRONTEND_TEST, 'await vi.waitFor(() => { expect(heard).toEqual([]); }, { timeout: 200 });'),
+                           (FRONTEND_TEST, 'await vi.waitUntil(() => listed.length === 1, 500);'),
+                           ('modbench/src/drivingLib/test/viewHarness.ts', 'await new Promise((resolve) => setTimeout(resolve, 5));'),
+                           ('modbench/src/test/integration/extension.test.ts', 'await new Promise(r => setTimeout(r, 100));'),
+                           ('modbench/webview/src/Grid.test.tsx', 'await new Promise((resolve) => setTimeout(resolve, 50));')):
             with self.subTest(path=path, line=line):
                 self.assertEqual(ctw.waits(path, f'class T\n{{\n    {line}\n}}'), [ctw.Wait(path, 3, line)])
 
@@ -42,6 +51,13 @@ class Waits(unittest.TestCase):
                            (BACKEND_TEST, 'parked.Wait(cancel);'),
                            (BACKEND_TEST, 'parked.Wait(CancellationToken.None);'),
                            (BACKEND_TEST, 'Waits.Signalled(released.Wait, "the release");'),
+                           (FRONTEND_TEST, 'const turn = () => new Promise<void>((resolve) => { setTimeout(resolve, 0); });'),
+                           (FRONTEND_TEST, 'else setTimeout(() => { finish(run, end.exitCode); }, 0);'),
+                           (FRONTEND_TEST, "vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });"),
+                           (FRONTEND_TEST, 'await vi.advanceTimersByTimeAsync(1000);'),
+                           (FRONTEND_TEST, 'await vi.waitFor(() => { expect([before, errors()]).toEqual([[MISSING], []]); }, { interval: 1 });'),
+                           (FRONTEND_TEST, 'await sleep(0);'),
+                           ('modbench/src/client/backendLifecycle.ts', 'setTimeout(retry, 1000);'),
                            (ALLOWED_PATH, ALLOWED_LINE)):
             with self.subTest(path=path, line=line):
                 self.assertEqual(ctw.waits(path, f'    {line}\n'), [])

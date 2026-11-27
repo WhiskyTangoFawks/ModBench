@@ -22,6 +22,7 @@ import { sourceCommands } from '../sourceCommands';
 import { instanceRepositoryCommands } from '../instanceRepositoryCommands';
 import { hostWithoutGit } from '../../test/hostGitDouble';
 import { onPosix } from '../../test/platform';
+import { fileSystemClockMovedOn } from '../../test/fileSystemClock';
 
 let root: string;
 
@@ -81,7 +82,7 @@ async function aSourceMod(buildFile: Partial<BuildFile> = {}, made: readonly Mad
   });
   const tasks = recordingTasks(['Optimise']);
   const stepping = { ...tasks, whyStepFailed: async (...ran: Parameters<typeof tasks.whyStepFailed>) => {
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await fileSystemClockMovedOn();
     const failed = await step();
     return typeof failed === 'string' ? failed : tasks.whyStepFailed(...ran);
   } };

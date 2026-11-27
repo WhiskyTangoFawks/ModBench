@@ -9,7 +9,7 @@ vi.mock('vscode', async () => {
 
 import { Instance } from '../instanceLoader/instance';
 import { ambientWrites } from '../instanceLoader/ambientWrites';
-import { modSyncOn } from '../mods/modSync';
+import { modSyncOn, type ModSyncOn } from '../mods/modSync';
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import { entryRenameCommands } from '../modCommands/renameEntry';
 import { heldTexts } from '../symbolNames/symbolNames';
@@ -27,9 +27,12 @@ const RENAMED = 'zz Renamed Probe';
 
 let root: string | undefined;
 let instance: Instance | undefined;
+let modSyncing: ModSyncOn | undefined;
 
 afterEach(async () => {
   instance?.dispose();
+  modSyncing?.dispose();
+  await modSyncing?.modSync.settled();
   writesToldTo({ told: () => Promise.resolve({ subscribed: Promise.resolve() }) });
   if (root !== undefined) await rm(root, { recursive: true, force: true });
 });
@@ -44,7 +47,8 @@ async function wired() {
   instance = loader;
   writesToldTo(loader);
   const { syncMods, wrote } = recordedSyncs(modSyncOver(adapter));
-  const { modSync } = modSyncOn({ instance: loader, syncMods, channel: { error: () => undefined, info: () => undefined } });
+  modSyncing = modSyncOn({ instance: loader, syncMods, channel: { error: () => undefined, info: () => undefined } });
+  const { modSync } = modSyncing;
   await loader.refresh();
   await modSync.settled();
   await loader.refresh();

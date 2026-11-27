@@ -35,7 +35,8 @@ import { pluginsTextOf } from '../loadOrderFileCodec/pluginsText';
 import { handingOneChange } from '../drivingLib/writingGesture';
 import { fileAt } from '../instanceLoader/filePresence';
 import { FileConflictLookup } from '../instanceLoader/fileConflictIndex';
-import { toldAfter, writesToldTo } from '../repositoriesLib/writesTold';
+import { diskCheckedBy, toldAfter, writesToldTo } from '../repositoriesLib/writesTold';
+import { ambientWrites } from '../instanceLoader/ambientWrites';
 import { heardChanges } from '../symbols/heardChanges';
 import { SCRIPTS_READ } from '../symbols/scriptLanguage';
 import { registerDeployCommands } from '../toolbox/deployGesture';
@@ -407,6 +408,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
     instance, reporterFor: () => recordingReporter(),
   });
   writesToldTo(instance);
+  diskCheckedBy(ambientWrites);
   const settled = async () => {
     await Promise.all([modSyncing.modSync.settled(), pending.settled()]);
     await host.settled();

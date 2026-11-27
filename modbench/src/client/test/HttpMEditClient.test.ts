@@ -14,6 +14,7 @@ import { settled as until } from '../../test/eventually';
 import { fakeLogChannel, jsonResponse, neverFetch, noContent, routedFetch } from './fakeMEdit';
 
 const DEBUG_LEVEL = 2;
+const microtasksDrained = () => new Promise<void>((resolve) => { setImmediate(resolve); });
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
@@ -1169,7 +1170,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(handedOver).toHaveBeenCalled());
 
     const gesturing = gesture(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await microtasksDrained();
     expect(requests).toEqual([]);
 
     answerHandOver();
@@ -1199,7 +1200,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(handedOver).toHaveBeenCalled());
 
     const asking = reading(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await microtasksDrained();
     expect(requests).toEqual([]);
 
     answerHandOver();
@@ -1223,7 +1224,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(putLoadOrder).toBe(true));
 
     const gesturing = gesture(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await microtasksDrained();
     expect(requests).toEqual([]);
 
     answerPut();
@@ -1265,7 +1266,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(putLoadOrder).toBe(true));
 
     const asking = reading(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await microtasksDrained();
     expect(requests).toEqual([]);
 
     answerPut();
@@ -1368,8 +1369,8 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     expect(await asking).toEqual(cancelled);
 
     answerHandOver();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(requests).toEqual([]);
+    await client.getPlugins();
+    expect(requests).toHaveLength(1);
   });
 
   it('is aborted when it is cancelled in flight, and logs no failure', async () => {
@@ -1415,7 +1416,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
 
   it('aborts the rows still streaming, when it is cancelled after their headers arrived', async () => {
     let aborted = false;
-    let sentRow = false;
+    let rowRead = false;
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-document', noContent],
@@ -1425,9 +1426,9 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
         const body = new ReadableStream<Uint8Array>({
           start: (controller) => {
             controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ row: { n: 1 } })}\n`));
-            sentRow = true;
             req.signal.addEventListener('abort', () => { aborted = true; controller.error(new Error('aborted')); });
           },
+          pull: () => { rowRead = true; },
         });
         return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'application/x-ndjson' } }));
       }],
@@ -1438,8 +1439,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const { token: streaming, cancel } = cancellableToken();
 
     const asking = client.selectRows('SELECT 1', 1000, streaming);
-    await until(() => expect(sentRow).toBe(true));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => expect(rowRead).toBe(true));
     cancel();
 
     expect(await asking).toEqual(cancelled);
@@ -1482,7 +1482,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await microtasksDrained();
     expect(client.recordIndexMayBeLate).toBe(true);
 
     push(readyTickThatSettlesPutLoadOrder());
@@ -1510,7 +1510,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
       const signalled = client.signalChange([]).then(() => { settled = true; });
       await until(() => { expect(client.recordIndexMayBeLate).toBe(true); });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await microtasksDrained();
       expect(settled).toBe(false);
 
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
