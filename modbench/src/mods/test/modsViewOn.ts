@@ -37,7 +37,8 @@ interface Options<I> extends Partial<Omit<ModsViewDeps, 'instance'>> {
   sourceCommands?: Partial<SourceCommands>;
 }
 
-/** Settles once every promise chained so far has: what a check that something did not happen waits for. */
+/** Settles once every promise chained so far has: what a check that something did not happen waits for, and a step
+ *  that must land before the next one changes what the fakes answer. */
 export const everyChainedPromiseSettled = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve); });
 
 /** The label VS Code shows on the row. */

@@ -461,10 +461,14 @@ describe('a mod\'s conflict table, open in a tab', () => {
     const shown = modsViewOn({ instance, adapter: fakeInstanceAdapter(readingFixture(), copies) });
     return { ...shown, copies, panel: await openedOn(shown, 'High') };
   };
-  const readyOn = async (instance: FakeInstance, held?: Record<string, Held>, more?: InstanceAnswers) => {
+  const askedOn = async (instance: FakeInstance, held?: Record<string, Held>, more?: InstanceAnswers) => {
     const opened = await openOn(instance, held, more);
     opened.panel.receive(READY);
-    await everyChainedPromiseSettled();
+    return opened;
+  };
+  const readyOn = async (instance: FakeInstance, held?: Record<string, Held>, more?: InstanceAnswers) => {
+    const opened = await askedOn(instance, held, more);
+    await settled(() => { expect(opened.panel.posted).not.toEqual([]); });
     return opened;
   };
   const publishedTo = async (instance: FakeInstance, value: InstanceValue | Promise<InstanceValue>) => {
@@ -613,7 +617,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
   it('shows the answer of the newest value only, though an older one answers last', async () => {
     const instance = new FakeInstance(await shared());
     const older = shut();
-    const { panel, copies } = await readyOn(instance, {}, { stampsHeldUntil: older.gate });
+    const { panel, copies } = await askedOn(instance, {}, { stampsHeldUntil: older.gate });
+    await settled(() => { expect(copies.stamped).not.toEqual([]); });
     copies.stampsHeldUntil = undefined;
 
     await publishedTo(instance, indexedValueOf([mod('High'), mod('Low')], {
@@ -632,9 +637,11 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
       await publishedTo(instance, shared());
 
-      expect([reporter.shownFailures, reporter.reports]).toEqual([
-        [{ severity: 'warning', message: 'Conflicts: "High"\'s copy of a.dds could not be read.', detail: 'in use' }], [],
-      ]);
+      await settled(() => {
+        expect([reporter.shownFailures, reporter.reports]).toEqual([
+          [{ severity: 'warning', message: 'Conflicts: "High"\'s copy of a.dds could not be read.', detail: 'in use' }], [],
+        ]);
+      });
     });
 
     it('is said again when it recovers and fails again, and when its reason changes', async () => {
@@ -650,7 +657,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       await publishedAs(copiesOf('a.dds', { High: 'in use' }));
       await publishedAs(copiesOf('a.dds', { High: 'access denied' }));
 
-      expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['in use', 'in use', 'access denied']);
+      await settled(() => { expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['in use', 'in use', 'access denied']); });
     });
 
     it('is told apart by its origin: a mod named as Overwrite is not Overwrite', async () => {
@@ -663,7 +670,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
       await publishedTo(instance, value);
 
-      expect(reporter.shownFailures).toHaveLength(2);
+      await settled(() => { expect(reporter.shownFailures).toHaveLength(2); });
     });
   });
 
@@ -671,11 +678,13 @@ describe('a mod\'s conflict table, open in a tab', () => {
     it('is, before any table, the error row in place of it and a line in the Output, with no notification', async () => {
       const { panel, reporter } = await readyOn(new FakeInstance(await shared()), {}, { stampFailure: 'disk gone' });
 
-      expect([shownOn(panel), reporter.shownFailures, reporter.reports]).toEqual([
-        [{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'error', reason: 'disk gone' } }],
-        [{ severity: 'error', message: 'Failed to read the copies of "High"\'s conflicts.', detail: 'disk gone' }],
-        [],
-      ]);
+      await settled(() => {
+        expect([shownOn(panel), reporter.shownFailures, reporter.reports]).toEqual([
+          [{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'error', reason: 'disk gone' } }],
+          [{ severity: 'error', message: 'Failed to read the copies of "High"\'s conflicts.', detail: 'disk gone' }],
+          [],
+        ]);
+      });
     });
 
     it('is, after a table, the rows staying under the message line, which the next good read clears', async () => {
@@ -687,15 +696,17 @@ describe('a mod\'s conflict table, open in a tab', () => {
       copies.stampFailure = undefined;
       await publishedTo(instance, shared());
 
-      const [first, failed, recovered] = shownOn(panel);
-      expect([failed, recovered]).toEqual([{ ...first, notice: 'Showing the last good read: disk gone' }, first]);
-      expect([reporter.shownFailures.length, reporter.reports]).toEqual([1, []]);
+      await settled(() => {
+        const [first, failed, recovered] = shownOn(panel);
+        expect([failed, recovered, reporter.shownFailures.length, reporter.reports]).toEqual([{ ...first, notice: 'Showing the last good read: disk gone' }, first, 1, []]);
+      });
     });
 
     it('is not reported once a newer value has asked', async () => {
       const instance = new FakeInstance(await shared());
       const older = shut();
-      const { panel, reporter, copies } = await readyOn(instance, {}, { stampsHeldUntil: older.gate, stampFailure: 'old' });
+      const { panel, reporter, copies } = await askedOn(instance, {}, { stampsHeldUntil: older.gate, stampFailure: 'old' });
+      await settled(() => { expect(copies.stamped).not.toEqual([]); });
       copies.stampsHeldUntil = undefined;
       copies.stampFailure = undefined;
 
