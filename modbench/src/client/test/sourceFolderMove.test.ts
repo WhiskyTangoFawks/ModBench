@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { heldTexts, type Planned } from '../../symbolNames/symbolNames';
 import type { MEditClient } from '../MEditClient';
-import { sourceFolderMove, type SourceFolderMoveOf } from '../sourceFolderMove';
+import { sourceFolderMove } from '..';
 
 type MoveClient = Pick<MEditClient, 'getSourceFolderMoveChanges' | 'followSourceFolderMove'>;
+type SourceFolderMoveOf = Parameters<typeof sourceFolderMove>[1];
 
 const MOD = { kind: 'mod', name: 'Old' } as const;
 const MOVE = { from: '/instance/source/Old', to: '/instance/source/New', files: [{ from: 'Old.manifest.json', to: 'New.manifest.json' }] };

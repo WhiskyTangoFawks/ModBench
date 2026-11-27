@@ -45,6 +45,8 @@ scripts = 5
 sortingRules = 5
 sourceCommands = 10
 sourceLanguage = 5
+# Activation, the composition root: the tests beside modbench/src/*.ts.
+src = 5
 symbolNames = 5
 symbols = 5
 tables = 5

@@ -7,9 +7,10 @@ import { modValueOver } from '../../instanceAdapter/modValue';
 import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
-import type { ArchiveEntries } from '../archiveEntries';
 import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
 import { settled as until } from '../../test/eventually';
+
+type ArchiveEntries = StatusSource['archiveContents'] extends ReadonlyMap<string, infer Entries> ? Entries : never;
 
 let root: string;
 let logged: string[];

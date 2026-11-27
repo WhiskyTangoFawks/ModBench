@@ -1,56 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { clipboard, commandHandlers as handlers, editorVscode, executed, showInputBox, showTextDocument } from './editorVscode';
 
-const handlers = new Map<string, (ctx?: unknown, option?: unknown) => Promise<void> | void>();
-const registerCommand = vi.fn((command: string, handler: (ctx?: unknown, option?: unknown) => Promise<void> | void) => {
-  handlers.set(command, handler);
-  return { dispose: vi.fn() };
-});
-const showInputBox = vi.fn<(options: { value?: string }) => Promise<string | undefined>>();
-const executeCommand = vi.fn<(command: string, ...args: unknown[]) => Promise<void>>();
-const writeText = vi.fn<(text: string) => Promise<void>>();
-vi.mock('vscode', () => ({
-  commands: {
-    registerCommand: (...args: [string, (ctx?: unknown, option?: unknown) => void]) => registerCommand(...args),
-    executeCommand: (...args: [string, ...unknown[]]) => executeCommand(...args),
-  },
-  window: { showInputBox: (options: { value?: string }) => showInputBox(options) },
-  env: { clipboard: { writeText: (text: string) => writeText(text) } },
-}));
+vi.mock('vscode', () => editorVscode);
 
-import type { FieldAddress, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
-
-const openExtendedFieldEditor =
-  vi.fn<(params: OpenExtendedFieldEditorParams) => Promise<void>>();
-
-import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from '../recordPanelContextCommands';
-import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
+import type { RecordEditChangesOutcome } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { WEBVIEW_TO_EXTENSION, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../../wire/messages';
 import { present } from '../../ports/present';
+import { editAnswered, editorOver, forgetEditor } from './editorHarness';
 
-beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); writeText.mockReset(); });
+beforeEach(forgetEditor);
 
-type RecordPanelContextCommandDeps = Parameters<typeof registerRecordPanelContextCommands>[0];
-
-const gateSendingEachWriteWhereItWasAddressed: RecordPanelContextCommandDeps['editGateOf'] =
-  () => async (address, write) => { await write(address.formKey); };
-
-function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
-  const edit = vi.fn<FieldCommitDeps['edit']>(async (_address, _envelope, applied) => { await applied?.(); return undefined; });
-  const deps: RecordPanelContextCommandDeps = {
-    edit,
-    extendedFields: { open: openExtendedFieldEditor },
-    editGateOf: gateSendingEachWriteWhereItWasAddressed,
-    focusedCell: () => undefined,
-    ...overrides,
-  };
-  return { deps, edit };
+function focusedOn({ focusedCell = null, edits = editAnswered() }: { focusedCell?: unknown; edits?: RecordEditChangesOutcome } = {}) {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/MyMod.esp/Npc.json' });
+  client.setQueryAnswer('getEditChanges', edits);
+  const { open } = editorOver({ meditClient: client });
+  open('000801:A.esp').receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: focusedCell, entered: true });
+  return { client };
 }
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
 
 const ADDRESS = { formKey: IDENTITY.formKey, plugin: { name: IDENTITY.plugin, origin: IDENTITY.origin } };
 
-const editsOf = (edit: ReturnType<typeof makeDeps>['edit']) => edit.mock.calls.map(([address, envelope]) => [address, envelope]);
-const envelopesOf = (edit: ReturnType<typeof makeDeps>['edit']) => edit.mock.calls.map(([, envelope]) => envelope);
+const editsAsked = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getEditChanges').map(({ args }) => args);
+const editsOf = (client: InMemoryMEditClient) => editsAsked(client).map(([formKey, plugin, envelope]) => [{ formKey, plugin }, envelope]);
+const envelopesOf = (client: InMemoryMEditClient) => editsAsked(client).map(([, , envelope]) => envelope);
 
 function parentContext(path: ArrayParentContext['path']): ArrayParentContext {
   return { webviewSection: 'arrayParent', ...IDENTITY, path, preventDefaultContextMenuItems: true };
@@ -90,134 +66,81 @@ describe('right-click array ops write one envelope from the host', () => {
     ['Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for',
       'moveElementUp', elementContext([...FIRST_VALUE]), { op: 'move', path: FIRST_VALUE, value: -1 }],
   ])('%s', async (_, command, context, envelope) => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await present(handlers.get(`modbench.record.${command}`), command)(context);
 
-    expect(editsOf(edit)).toEqual([[ADDRESS, envelope]]);
+    expect(editsOf(client)).toEqual([[ADDRESS, envelope]]);
   });
 
   it('Add lands the value a drop supplies in its add envelope', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
       parentContext([{ kind: 'member', name: 'Values' }]), 6);
 
-    expect(envelopesOf(edit)).toEqual([{ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 }]);
   });
 
   it('does nothing when a command fires with no context', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(undefined);
 
-    expect(edit).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toEqual([]);
   });
 });
 
-const fieldOf = ({ formKey, plugin, origin, path }: StringValueContext): FieldAddress => ({ formKey, plugin: { name: plugin, origin }, path });
-
-describe('right-click edits go through the gate of the panels showing the record, which holds its reads and sends the write to the FormKey the record is at now', () => {
-  const movedGate = (gated: string[]): RecordPanelContextCommandDeps['editGateOf'] =>
-    () => async (address, write) => { gated.push(address.formKey); await write('000900:Fallout4.esm'); };
-
-  it('a save of the extended editor writes through the gate of the panel it was opened from', async () => {
-    const gated: string[] = [];
-    const { deps, edit } = makeDeps({ editGateOf: movedGate(gated) });
-    registerRecordPanelContextCommands(deps);
-
-    await commitField(deps, fieldOf(stringContext()), 'saved');
-
-    expect(gated).toEqual([IDENTITY.formKey]);
-    expect(edit.mock.calls.map(([address]) => address.formKey)).toEqual(['000900:Fallout4.esm']);
-  });
-});
-
-describe('the extended editor opens and saves from the host, from the context it is handed rather than asking the panel for anything', () => {
-  function openedWith(): OpenExtendedFieldEditorParams {
-    return present(openExtendedFieldEditor.mock.calls.at(-1), "the last openExtendedFieldEditor call")[0];
-  }
-
+describe('the extended editor opens from the host, from the context it is handed rather than asking the panel for anything', () => {
   it('opens the tab with the record label and the row\'s own label from the context', async () => {
-    const { deps } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    focusedOn();
 
     await present(handlers.get('modbench.record.openFieldValue'), "the handler registered for 'modbench.record.openFieldValue'")(stringContext({
       recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id', readOnly: true,
     }));
 
-    expect(openedWith()).toMatchObject({
-      recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id', formKey: IDENTITY.formKey,
-      plugin: IDENTITY.plugin, origin: IDENTITY.origin, readOnly: true,
-    });
-  });
-
-  it('a save lands one set envelope at the leaf\'s own path', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-    const path = [
-      { kind: 'member', name: 'Container' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
-    ] as StringValueContext['path'];
-
-    await commitField(deps, fieldOf(stringContext({ path })), 'edited in the tab');
-
-    expect(editsOf(edit)).toEqual([[ADDRESS, { op: 'set', path, value: 'edited in the tab' }]]);
-  });
-
-  it('a second save of the same tab writes again', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-
-    await commitField(deps, fieldOf(stringContext()), 'first save');
-    await commitField(deps, fieldOf(stringContext()), 'second save');
-
-    expect(envelopesOf(edit).map(({ value }) => value)).toEqual(['first save', 'second save']);
+    expect(showTextDocument.mock.calls.map(([document]) => String(document.uri))).toEqual([
+      `modbench-field-readonly:/Deacon [000123:Fallout4.esm]/Id [MyMod.esp]?${JSON.stringify({ formKey: IDENTITY.formKey, plugin: ADDRESS.plugin, path: [{ kind: 'member', name: 'Description' }] })}`,
+    ]);
   });
 });
 
 describe('a field gesture from the palette, which hands it no cell', () => {
   it('acts on the focused cell of the record tab in focus', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }];
-    const { deps, edit } = makeDeps({ focusedCell: () => elementContext(path) });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: elementContext(path) });
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'remove', path }]);
   });
 
   it('removes the element a caller addresses by its copy and path, with no panel context', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')({ ...IDENTITY, path });
 
-    expect(editsOf(edit)).toEqual([[ADDRESS, { op: 'remove', path }]]);
+    expect(editsOf(client)).toEqual([[ADDRESS, { op: 'remove', path }]]);
   });
 
   it('does nothing with no focused cell', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(edit).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toEqual([]);
   });
 
   it('acts on a cell whose context carries its section beside another, as a string element of an array does', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Names' }, { kind: 'index', index: 0 }];
-    const { deps, edit } = makeDeps({
-      focusedCell: () => ({ ...elementContext(path), webviewSection: 'arrayElement stringValue' }),
+    const { client } = focusedOn({
+      focusedCell: { ...elementContext(path), webviewSection: 'arrayElement stringValue' },
     });
-    registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'remove', path }]);
   });
 });
 
@@ -227,71 +150,67 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
   const editField = () => present(handlers.get('modbench.record.editField'), 'the editField handler');
 
   it('writes the envelope to the plugin copy its Argument names', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await editField()(IDENTITY, envelope);
 
-    expect(editsOf(edit)).toEqual([[ADDRESS, envelope]]);
+    expect(editsOf(client)).toEqual([[ADDRESS, envelope]]);
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
     showInputBox.mockResolvedValue('a new description');
-    const { deps, edit } = makeDeps({ focusedCell: () => stringContext() });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: stringContext() });
 
     await editField()();
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
-    expect(editsOf(edit)).toEqual([[
+    expect(editsOf(client)).toEqual([[
       ADDRESS, { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
     ]]);
   });
 
   it('from the palette, writes nothing when the prompt is dismissed', async () => {
     showInputBox.mockResolvedValue(undefined);
-    const { deps, edit } = makeDeps({ focusedCell: () => stringContext() });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: stringContext() });
 
     await editField()();
 
-    expect(edit).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toEqual([]);
   });
 
   it('from the palette, on a cell that is not a string value, writes nothing', async () => {
-    const { deps, edit } = makeDeps({ focusedCell: () => parentContext(path) });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: parentContext(path) });
 
     await editField()();
 
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(edit).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toEqual([]);
   });
 
   it('writes nothing for an Argument that is not a record\'s plugin copy', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn();
 
     await editField()({ formKey: IDENTITY.formKey }, envelope);
 
-    expect(edit).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toEqual([]);
   });
 });
 
 describe('modbench.record.openReference', () => {
   function reference() {
-    registerRecordPanelContextCommands(makeDeps().deps);
+    focusedOn();
+    handlers.set('modbench.record.open', () => undefined);
     return present(handlers.get('modbench.record.openReference'), "the handler registered for 'modbench.record.openReference'");
   }
 
   it('opens the record the clicked reference points to, not the record the panel shows', async () => {
     await reference()({ webviewSection: 'cell reference', ...IDENTITY, referenceTarget: '000F:Fallout4.esm' });
-    expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', { argument: { kind: 'record', formKey: '000F:Fallout4.esm' } });
+    expect(executed()).toContainEqual(['modbench.record.open', { argument: { kind: 'record', formKey: '000F:Fallout4.esm' } }]);
   });
 
   it('opens nothing from a cell that holds no reference', async () => {
     await reference()({ webviewSection: 'cell', ...IDENTITY });
-    expect(executeCommand).not.toHaveBeenCalled();
+    expect(executed()).toEqual([]);
   });
 });
 
@@ -304,35 +223,31 @@ describe('modbench.record.cut, the focused cell\'s value copied and removed in o
   const cut = () => present(handlers.get('modbench.record.cut'), 'the cut handler');
 
   it('copies a field\'s value and sets the field to nothing, in one edit', async () => {
-    const { deps, edit } = makeDeps({ focusedCell: () => editableCell(true) });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: editableCell(true) });
 
     await cut()();
 
-    expect(writeText.mock.calls).toEqual([['7']]);
-    expect(envelopesOf(edit)).toEqual([{ op: 'set', path: LEVEL, value: null }]);
+    expect(clipboard.writeText.mock.calls).toEqual([['7']]);
+    expect(envelopesOf(client)).toEqual([{ op: 'set', path: LEVEL, value: null }]);
   });
 
   it('copies an element and removes it, in one edit', async () => {
     const element = { ...editableCell(true), webviewSection: 'cell arrayElement editableCell', copyText: '4', path: ELEMENT };
-    const { deps, edit } = makeDeps({ focusedCell: () => element });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: element });
 
     await cut()();
 
-    expect(writeText.mock.calls).toEqual([['4']]);
-    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path: ELEMENT }]);
+    expect(clipboard.writeText.mock.calls).toEqual([['4']]);
+    expect(envelopesOf(client)).toEqual([{ op: 'remove', path: ELEMENT }]);
   });
 
   it('leaves the clipboard as it was when the edit is refused', async () => {
-    const refusing = vi.fn<FieldCommitDeps['edit']>(() => Promise.resolve(undefined));
-    const { deps } = makeDeps({ focusedCell: () => editableCell(true), edit: refusing });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: editableCell(true), edits: { applied: false, refusal: 'ReadOnly', message: 'Read-only.' } });
 
     await cut()();
 
-    expect(refusing).toHaveBeenCalled();
-    expect(writeText).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toHaveLength(1);
+    expect(clipboard.writeText).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -340,12 +255,11 @@ describe('modbench.record.cut, the focused cell\'s value copied and removed in o
     ['a cell that cannot be edited', { webviewSection: 'cell', copyText: '7' }],
     ['no focused cell', undefined],
   ])('copies nothing and edits nothing on %s', async (_what, cell) => {
-    const { deps, edit } = makeDeps({ focusedCell: () => cell });
-    registerRecordPanelContextCommands(deps);
+    const { client } = focusedOn({ focusedCell: cell });
 
     await cut()();
 
-    expect(writeText).not.toHaveBeenCalled();
-    expect(edit).not.toHaveBeenCalled();
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+    expect(editsAsked(client)).toEqual([]);
   });
 });

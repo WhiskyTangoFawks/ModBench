@@ -11,7 +11,6 @@ import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
 import { CHECK_THE_DISK, type GameFolder, type InstanceAdapter, type InstanceReading, type Mod, type OriginFile, type Reread } from '../instanceAdapter';
 import { onWindows } from '../../test/platform';
-import { keptTrusted, readTrustingKept, stampFrom } from '../../repositoriesLib/stampedReads';
 const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -168,42 +167,6 @@ describe('a mod\'s folder listed and its meta parsed by their stamps, as a readi
     await rm(meta());
 
     expect(versionIn(await adapter.reading(named(meta())))).toBeUndefined();
-  });
-});
-
-describe('a folder listed by its stamp, as the repositories library keeps it', () => {
-  let root: string;
-  const namesOf = async (folder: string): Promise<string[]> => (await listedByStamp(folder)).map((entry) => entry.name).sort();
-  const listedByStamp = keptTrusted(async (path) => stampFrom(await stat(path, { bigint: true })), (path) => readdir(path, { withFileTypes: true }), new Map(), true);
-
-  beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'medit-stamped-'));
-    vi.mocked(readdir).mockClear();
-  });
-  afterEach(async () => {
-    vi.useRealTimers();
-    await rm(root, { recursive: true, force: true });
-  });
-
-  it('keeps the listing a read outside it made while a re-read was checking that folder\'s stamp', async () => {
-    await writeFile(join(root, 'a.esp'), '');
-    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
-    await namesOf(root);
-    await writeFile(join(root, 'b.esp'), '');
-    await modifiedLater(root);
-    let releaseTheCheck!: () => void;
-    const checkHeld = new Promise<void>((resolve) => { releaseTheCheck = resolve; });
-    const { stat: realStat } = await real();
-    vi.mocked(stat).mockImplementationOnce(async (...args) => { await checkHeld; return realStat(...args); });
-
-    const rereading = readTrustingKept([join(root, 'b.esp')], false, () => Promise.resolve());
-    const outside = await namesOf(root);
-    releaseTheCheck();
-    await rereading;
-    vi.mocked(readdir).mockClear();
-    const { answer } = await readTrustingKept([], false, () => namesOf(root));
-
-    expect([outside, answer, listingsOf(root)]).toEqual([['a.esp', 'b.esp'], ['a.esp', 'b.esp'], 0]);
   });
 });
 

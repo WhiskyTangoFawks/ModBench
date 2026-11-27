@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { ignoreFiles, type FileToIgnore } from '../ignoreFiles';
+import { ORDER_SENT } from '../../test/orderSent';
+import { recordingTasks } from '../../test/recordingTasks';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { hostWithoutGit } from '../../test/hostGitDouble';
+import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
+import { instanceRepositoryCommands } from '../instanceRepositoryCommands';
+
+type FileToIgnore = Parameters<ReturnType<typeof instanceRepositoryCommands>['ignoreFiles']>[0][number];
 
 const HA = 'AAAAAAAAAAA=';
 const HB = 'BBBBBBBBBBA=';
@@ -31,7 +38,10 @@ function over(held: Partial<Manifest> | undefined, files: Record<string, string>
     fake,
     run: async (files_: readonly FileToIgnore[], ignore: boolean) => {
       if (held !== undefined) await writeManifestIn(folder, { ...EMPTY, ...held });
-      return ignoreFiles({ adapter: fake.adapter }, files_, ignore);
+      return instanceRepositoryCommands({
+        client: new InMemoryMEditClient(), adapter: fake.adapter, nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: root,
+        hostGit: hostWithoutGit, trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(),
+      }).ignoreFiles(files_, ignore);
     },
     manifest: async () => {
       const read = await manifestIn(folder);

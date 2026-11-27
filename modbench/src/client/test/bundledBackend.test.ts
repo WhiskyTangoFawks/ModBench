@@ -1,30 +1,40 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
+import { answered } from './healthAnswer';
+import { backendProcesses, clientOver } from './fakeMEdit';
 
-import { bundledBackendPath, spawnPiped } from '../bundledBackend';
+const spawn = vi.hoisted(() => vi.fn());
+vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal<typeof import('node:child_process')>(), spawn }));
 
-describe('bundledBackendPath', () => {
-  it.each([
-    ['win32', 'MEditService.Http.exe'],
-    ['linux', 'MEditService.Http'],
-  ] as const)('on %s, names the backend %s', (platform, file) => {
-    expect(bundledBackendPath(platform, join('x', 'out'))).toBe(join('x', 'backend', file));
+const processes = backendProcesses();
+
+async function startedAndStopped(): Promise<void> {
+  const client = clientOver({ freePort: () => Promise.resolve(5172), checkHealth: () => Promise.resolve(answered(true)) });
+  await client.start();
+  await client.stop();
+}
+
+describe('the backend the client spawns', () => {
+  beforeEach(() => {
+    spawn.mockReset();
+    spawn.mockImplementation((executable: string, args: string[]) => processes.spawn(executable, args));
   });
-});
 
-describe('spawnPiped', () => {
+  it('is the one the extension ships beside its bundle, named for the platform it runs on', async () => {
+    await startedAndStopped();
+
+    expect(spawn.mock.calls.map(([executable]: unknown[]) => executable)).toEqual([
+      join(__dirname, '..', '..', 'backend', process.platform === 'win32' ? 'MEditService.Http.exe' : 'MEditService.Http'),
+    ]);
+  });
+
   it('hands the backend a stdin it can watch, and asks it to exit when that stdin closes', async () => {
-    const reportArgsAndWaitForStdinToEnd =
-      "process.stdout.write(JSON.stringify(process.argv.slice(-2))); process.stdin.on('end', () => process.exit(7)); process.stdin.resume();";
-    const child = spawnPiped(process.execPath, ['-e', reportArgsAndWaitForStdinToEnd, '--']);
-    let out = '';
-    child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString(); });
-    const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
+    await startedAndStopped();
 
-    expect(child.stdin).not.toBeNull();
-    child.stdin.end();
-
-    expect(await exited).toBe(7);
-    expect(JSON.parse(out)).toEqual(['--ExitWhenStdinCloses', 'true']);
+    expect(spawn.mock.calls.map(([, args, options]: unknown[]) => [args, options])).toEqual([[
+      ['--urls', 'http://localhost:5172', '--ExitWhenStdinCloses', 'true'],
+      { detached: false, stdio: ['pipe', 'pipe', 'pipe'] },
+    ]]);
+    expect(processes.spawned.at(-1)?.stdin.writableFinished).toBe(true);
   });
 });

@@ -5,7 +5,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { instanceRepositoryCommands } from '../instanceRepositoryCommands';
 import type { HostGit } from '../../ports/repository';
-import { hostGitFailingToActivate, hostGitRecordingInits } from '../../test/hostGitDouble';
+import { hostGitFailingToActivate, hostGitRecordingInits, hostWithoutGit } from '../../test/hostGitDouble';
 import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
 
 function commandsOver(answers: InstanceAnswers = {}, hostGit?: HostGit<string>) {
@@ -122,6 +122,13 @@ describe('instanceRepositoryCommands git init', () => {
     expect([result, adapter.calls]).toEqual([
       { applied: false, refusal: 'git is not available' }, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'takeBackIgnoreList' }],
     ]);
+  });
+
+  it.each([
+    ['VS Code has no git extension', hostWithoutGit, "VS Code's git extension is not available."],
+    ['git made no repository', hostGitRecordingInits([], null), "VS Code's git did not make /instance a repository."],
+  ])('refuses when %s, naming why', async (_case, hostGit, refusal) => {
+    expect(await commandsOver({}, hostGit).commands.gitInit()).toEqual({ applied: false, refusal });
   });
 
   it('names the ignore list that remains when it could not be taken back', async () => {

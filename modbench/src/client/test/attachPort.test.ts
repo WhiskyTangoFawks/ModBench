@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { attachPortOf } from '../attachPort';
+import { attachPortOf } from '..';
 
 describe('the port to attach to', () => {
   it('is the number the setting holds, read by the key attachToBackendPort', () => {

@@ -6,7 +6,7 @@ vi.mock('vscode', () => ({
   Uri: { file: (path: string) => ({ fsPath: path }) },
 }));
 
-import { moveToTrash } from '../trash';
+import { moveToTrash } from './trash';
 
 describe('moveToTrash', () => {
   beforeEach(() => { vi.clearAllMocks(); });

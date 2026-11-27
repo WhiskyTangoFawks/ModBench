@@ -16,13 +16,6 @@ export interface GameHeld {
   readonly depots: readonly Depot[];
 }
 
-// Where a package holds a file's bytes: the installation file by its name, or the game folder, the path in it, and the hash.
-interface Source {
-  readonly installationFile?: string;
-  readonly packagePath: string;
-  readonly hash: string;
-}
-
 export interface DownloadedFile {
   readonly file: InstallationFile;
   readonly package: Extract<ManifestPackage, { kind: 'installationFile' }>;
@@ -35,8 +28,6 @@ export function nexusFileOf(adapter: Pick<InstanceAdapter, 'nexusFileAt'>): (pag
     return at?.fileId === undefined ? undefined : { game: at.game, mod: Number(at.modId), file: Number(at.fileId) };
   };
 }
-
-const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 /** The installation file with the host and version its downloaded file's own metadata gives, none when that gives none, never the mod's. */
 export const describedBy = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page' | 'directUrl' | 'version' | 'pageUnreadable'> | undefined): InstallationFile => ({
@@ -66,10 +57,10 @@ export interface ManifestSources {
   readonly downloadedFiles: readonly DownloadedFile[];
 }
 
-/** A manifest as update manifest records it, each file's source, and the files no package it names holds. */
+/** A manifest as update manifest records it, the files a package it names holds, and the files none holds. */
 export interface Recorded {
   readonly manifest: Manifest;
-  readonly sources: ReadonlyMap<string, Source>;
+  readonly heldFiles: ReadonlySet<string>;
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
   /** The held packages this machine lacks, and the changed files no present package holds that one of them might. */
@@ -79,13 +70,7 @@ export interface Recorded {
   readonly notes: readonly string[];
 }
 
-// An entry at the file's own path before another that holds its bytes.
-const entryHolding = (entries: readonly { readonly path: string; readonly hash: string }[], file: HashedModFile): string | undefined =>
-  (entries.find((entry) => entry.hash === file.hash && sameIgnoringCase(entry.path, file.path)) ?? entries.find((entry) => entry.hash === file.hash))?.path;
-
-const gameFileHolding = (game: GameHeld, file: HashedModFile): string | undefined =>
-  (game.files.find((held) => held.hash === file.hash && sameIgnoringCase(held.pathInFolder ?? held.path, file.path))
-    ?? game.files.find((held) => held.hash === file.hash))?.path;
+const holds = (files: readonly { readonly hash: string }[], file: HashedModFile): boolean => files.some((held) => held.hash === file.hash);
 
 // The store that holds the game's files, none unless the Steam install holds the bytes of every file taken; the held manifest's host while the files it takes from the game keep their bytes.
 function gameFolderPackage(game: GameHeld, taken: readonly HashedModFile[], held: Manifest | undefined): ManifestPackage {
@@ -101,7 +86,6 @@ function gameFolderPackage(game: GameHeld, taken: readonly HashedModFile[], held
 export const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
 
 interface Holder {
-  readonly source: Source;
   readonly download?: DownloadedFile;
   readonly hosted: boolean;
 }
@@ -111,7 +95,7 @@ interface Holder {
 export function buildManifest(
   { installationFile, game, downloadedFiles }: ManifestSources, files: readonly HashedModFile[], exclude: readonly string[], held: Manifest | undefined,
 ): Recorded {
-  const sources = new Map<string, Source>();
+  const heldFiles = new Set<string>();
   const used: DownloadedFile[] = installationFile === undefined ? [] : [installationFile];
   const others = downloadedFiles.filter((other) => other.package.name !== installationFile?.package.name);
   const present = new Set([...downloadedFiles, ...installationFile === undefined ? [] : [installationFile]].map(({ package: pkg }) => pkg.name));
@@ -120,16 +104,13 @@ export function buildManifest(
   const takenFromTheGame: HashedModFile[] = [];
   const unplaced: HashedModFile[] = [];
   const hiddenFiles: string[] = [];
-  const downloadHolder = (one: DownloadedFile, file: HashedModFile): Holder[] => {
-    const path = entryHolding(one.file.entries, file);
-    return path === undefined ? [] : [{ source: { installationFile: one.package.name, packagePath: path, hash: file.hash }, download: one, hosted: one.package.host !== undefined }];
-  };
+  const downloadHolder = (one: DownloadedFile, file: HashedModFile): Holder[] =>
+    (holds(one.file.entries, file) ? [{ download: one, hosted: one.package.host !== undefined }] : []);
   for (const file of files) {
-    const fromGame = game === undefined ? undefined : gameFileHolding(game, file);
     const steamHolds = game?.steamApp !== undefined && game.files.some((one) => one.root === game.steamAt && one.hash === file.hash);
     const holders: Holder[] = [
       ...installationFile === undefined ? [] : downloadHolder(installationFile, file),
-      ...fromGame === undefined ? [] : [{ source: { packagePath: fromGame, hash: file.hash }, hosted: steamHolds }],
+      ...game === undefined || !holds(game.files, file) ? [] : [{ hosted: steamHolds }],
       ...[...used, ...others.filter((other) => !used.includes(other))].filter((one) => one !== installationFile).flatMap((one) => downloadHolder(one, file)),
     ];
     const unchanged = held?.files.get(file.path) === file.hash;
@@ -142,7 +123,7 @@ export function buildManifest(
       else hiddenFiles.push(file.path);
       continue;
     }
-    sources.set(file.path, holder.source);
+    heldFiles.add(file.path);
     if (holder.download === undefined) takenFromTheGame.push(file);
     else if (!used.includes(holder.download)) used.push(holder.download);
   }
@@ -166,7 +147,7 @@ export function buildManifest(
   ];
   const notes = used.flatMap(({ file }) => file.pageUnreadable === undefined ? [] : [`the page of ${basename(file.path)} could not be read, so its manifest names no host: ${file.pageUnreadable}`]);
   return {
-    manifest, sources, notes, hiddenFiles, missingPackages: missing.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
+    manifest, heldFiles, notes, hiddenFiles, missingPackages: missing.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
     ...filesNoPackageHolds(manifest, packageFiles),
   };
 }

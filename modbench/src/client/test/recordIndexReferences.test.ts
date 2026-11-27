@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { heldTexts, type RenamePlan, type ResolvedPlugin } from '../../symbolNames/symbolNames';
 import type { MEditClient } from '../MEditClient';
-import { recordIndexReferences, type SourceFilesOf } from '../recordIndexReferences';
+import { recordIndexReferences } from '..';
 
 const symbol = { name: 'Base.esm', origin: 'BaseMod' };
 const child = { name: 'Child.esp', origin: 'ChildMod' };
@@ -11,7 +11,7 @@ type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getPlacedPlugin
 const NAMES_UNASKED = { getPluginSourceNames: (): never => { throw new Error('not asked'); } };
 
 const SOURCE_FILES = [{ from: 'Base - Main.ba2', to: 'New - Main.ba2' }];
-const sourceFiles: SourceFilesOf = () => Promise.resolve(SOURCE_FILES);
+const sourceFiles: Parameters<typeof recordIndexReferences>[1] = () => Promise.resolve(SOURCE_FILES);
 
 const SOURCE_CHANGES = {
   treeName: 'BASE.esm',

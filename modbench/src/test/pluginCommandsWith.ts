@@ -1,8 +1,8 @@
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import type { PlaceMods } from '../pluginCommands/decompileAndRepair';
 import { pluginCommands, type PluginCommands } from '../pluginCommands/plugins';
 
 type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];
+type PlaceMods = Parameters<typeof pluginCommands>[0]['placeMods'];
 
 /** Plugin commands bound to `adapter`, a client that answers only what a test fixes, and the flow placing mods as the test makes it. */
 export function pluginCommandsWith(
