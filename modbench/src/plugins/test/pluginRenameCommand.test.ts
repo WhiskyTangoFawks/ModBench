@@ -43,8 +43,8 @@ async function renaming() {
   });
   const row = await made.pluginRows();
   const run = (...args: unknown[]) => host.run('modbench.plugin.rename', ...args);
-  const validate = async (value: string): Promise<string | undefined> => {
-    let validated: string | undefined;
+  const validate = async (value: string): Promise<unknown> => {
+    let validated: unknown;
     host.types(async (options) => { validated = await options.validateInput?.(value) ?? undefined; return undefined; });
     await run(row('Patch.esp'));
     return validated;

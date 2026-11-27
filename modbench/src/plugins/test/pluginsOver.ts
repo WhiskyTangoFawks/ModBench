@@ -36,7 +36,7 @@ export const NO_FILE_READS: FileReads = {
   readable: () => Promise.resolve({ kind: 'read', value: false }), trusting: (read) => read(),
 };
 
-interface Over extends Partial<Omit<Deps, 'client' | 'facts'>>, Partial<Omit<InstanceDeps, 'instance' | 'commands'>> {
+interface Over extends Partial<Omit<Deps, 'client' | 'facts'>>, Partial<Omit<InstanceDeps, 'instance'>> {
   value?: InstanceValue;
   instance?: InstanceDeps['instance'] & Deps['facts'];
   client?: InMemoryMEditClient;
@@ -49,7 +49,7 @@ const SYNCED: PluginSyncRun = () => Promise.resolve({ applied: true, wrote: fals
 /** The Plugins box in a fresh VS Code, over an instance holding `value` and an mEdit that holds nothing until scripted. */
 export function pluginsOver({
   value = instanceValueFixture(), instance = new FakeInstance(value), client = clientHoldingNothing(), adapter = fakeInstanceAdapter().adapter, commandsClient,
-  syncPlugins = SYNCED, modStatuses = NO_MOD_STATUSES, fileReads = NO_FILE_READS, ...over
+  commands = pluginCommandsWith(adapter, commandsClient), syncPlugins = SYNCED, modStatuses = NO_MOD_STATUSES, fileReads = NO_FILE_READS, ...over
 }: Over = {}) {
   host.reset();
   const reporters = new Map<string, RecordingReporter>();
@@ -67,7 +67,7 @@ export function pluginsOver({
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     ...over,
   });
-  const shown = plugins.onInstance({ instance, commands: pluginCommandsWith(adapter, commandsClient), modStatuses, fileReads, syncPlugins });
+  const shown = plugins.onInstance({ instance, commands, modStatuses, fileReads, syncPlugins });
   const view = () => host.treeView(PLUGINS_KEY_ARGS.view);
   const rows = async (parent?: unknown) => (await view().treeDataProvider.getChildren(parent)) ?? [];
   const item = async (row: unknown) => await view().treeDataProvider.getTreeItem(row);
