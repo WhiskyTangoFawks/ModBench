@@ -4,7 +4,7 @@
 import { dirname } from 'node:path';
 import { newestVersion } from './codecs/versionInfo';
 import { effectiveModId } from './codecs/nexusFileName';
-import { type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
+import { changeOwnedKeysInText, type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
 import { copyTree, ensureDir, get, ignoreSkippedLink, listDir, makeDir, makeTempDir, remove, rename, sameBytes, withLock, write, writeTrashing } from '../files';
 import type { MoveToTrash } from '../../ports/trash';
@@ -169,7 +169,7 @@ export function mo2Landing(
         nexusFileStatus: first?.fileCategory, installedFileKeys: installedFileKeys.length === 0 ? undefined : installedFileKeys,
       });
       const carried = await get(modMetaFileIn(folder), '');
-      const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), shortNameOfRelease((await source.settings()).gameRelease)));
+      const metaText = changeOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), shortNameOfRelease((await source.settings()).gameRelease)));
       if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
     },
     install: async (installed, target, trash, answer) => {

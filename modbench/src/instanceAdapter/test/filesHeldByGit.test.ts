@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { filesHeldByGit } from '../filesHeldByGit';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../test/mo2/adapterOver';
+
+vi.mock('vscode', () => fakeVscodeModule());
 
 let root: string;
 const made: string[] = [];
@@ -34,7 +37,7 @@ async function instance(files: Readonly<Record<string, string>>, repository = tr
 }
 
 const heldIn = async (...folders: string[]): Promise<string[][]> => {
-  const held = await filesHeldByGit(root, folders);
+  const held = await adapterOver(root).filesHeldByGit(folders);
   return folders.map((one) => [...held.get(one) ?? ['not answered']].sort());
 };
 
@@ -88,6 +91,6 @@ describe('the files git holds in a folder', () => {
     await instance({ 'mods/ModA/a.nif': 'a' }, false);
     await mkdir(join(root, '.git'));
 
-    await expect(filesHeldByGit(root, [join(root, 'mods', 'ModA')])).rejects.toThrow();
+    await expect(adapterOver(root).filesHeldByGit([join(root, 'mods', 'ModA')])).rejects.toThrow();
   });
 });

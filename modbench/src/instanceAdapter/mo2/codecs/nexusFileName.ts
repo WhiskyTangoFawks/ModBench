@@ -11,5 +11,4 @@ const idInFileName = (fileName: string): string | undefined => {
 };
 
 /** The metadata's mod ID, else the file name's: MO2's install takes the name's only where the metadata has none. */
-export const effectiveModId = (metaModId: string | undefined, fileName: string | undefined): string | undefined =>
-  metaModId ?? (fileName === undefined ? undefined : idInFileName(fileName));
+export const effectiveModId = (metaModId: string | undefined, fileName: string): string | undefined => metaModId ?? idInFileName(fileName);

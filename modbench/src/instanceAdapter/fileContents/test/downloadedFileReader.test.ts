@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { downloadedFileReader } from '../downloadedFileReader';
+import { downloadedFileReader } from '../../instanceAdapter';
 import { onPosix } from '../../../test/platform';
 
 describe('downloadedFileReader, spawning the binary itself', () => {

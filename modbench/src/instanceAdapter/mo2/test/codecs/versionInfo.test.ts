@@ -1,5 +1,25 @@
-import { describe, it, expect } from 'vitest';
-import { canonicalVersion, isUpdateAvailable } from '../../codecs/versionInfo';
+import { describe, it, expect, vi } from 'vitest';
+import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
+import { expectKind } from '../../../../test/expectKind';
+import { mo2InstanceHolding } from '../../../test/instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+const lineOf = (key: string, value: string | undefined): string => (value === undefined ? '' : `${key}=${value}\r\n`);
+
+async function updateAvailable(version: string | undefined, newest: string | undefined): Promise<boolean | undefined> {
+  const { adapter } = mo2InstanceHolding({
+    'profiles/Default/modlist.txt': '+M\r\n',
+    'mods/M/meta.ini': `[General]\r\n${lineOf('version', version)}${lineOf('newestVersion', newest)}`,
+  });
+  return (await adapter.reading()).mods.find((entry) => entry.kind === 'mod')?.updateAvailable;
+}
+
+async function written(version: string): Promise<string | undefined> {
+  const { adapter } = mo2InstanceHolding({ 'downloads/Release.7z': 'bytes' });
+  await adapter.writeNexusFileInfo('Release.7z', { game: 'fallout4', modID: '1', version });
+  return expectKind((await adapter.reading()).downloadedFiles, 'listed').files?.[0]?.meta?.version;
+}
 
 describe('whether a newer version is an update, in MO2 VersionInfo\'s order (uibase versioninfo.cpp)', () => {
   it.each([
@@ -37,8 +57,8 @@ describe('whether a newer version is an update, in MO2 VersionInfo\'s order (uib
     ['no newest version shows nothing', '1.0', undefined, false],
     ['a blank newest version shows nothing', '1.0', '', false],
     ['neither', undefined, undefined, false],
-  ])('%s: %s to %s is %s', (_, version, newest, expected) => {
-    expect(isUpdateAvailable(version, newest)).toBe(expected);
+  ])('%s: %s to %s is %s', async (_, version, newest, expected) => {
+    expect(await updateAvailable(version, newest)).toBe(expected);
   });
 });
 
@@ -57,8 +77,8 @@ describe('a version in its canonical form, as VersionInfo::canonicalString write
     ['d2020.1.2', 'd2020.1.2.0'],
     ['1.2 extra', '1.2.0.0extra'],
     ['final', '1.0.0.0'],
-    ['', ''],
-  ])('writes %j as %j', (version, canonical) => {
-    expect(canonicalVersion(version)).toBe(canonical);
+    ['', undefined],
+  ])('writes %j as %j', async (version, canonical) => {
+    expect(await written(version)).toBe(canonical);
   });
 });

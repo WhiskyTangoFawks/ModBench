@@ -1,43 +1,43 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isWithin, overlappedGameRoot } from '../pathWithin';
+import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+import { instanceOnDisk } from '../../test/instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
 
 let root: string;
+let instance: string;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'within-'));
   await mkdir(join(root, 'Fallout4', 'Data'), { recursive: true });
+  await mkdir(join(root, 'Fallout4 deployed'));
+  instance = await instanceOnDisk();
 });
 
-afterEach(() => rm(root, { recursive: true, force: true }));
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+  await rm(instance, { recursive: true, force: true });
+});
 
-describe('isWithin', () => {
-  it.each([
-    ['the folder itself', 'Fallout4', 'Fallout4', true],
-    ['a folder below it', 'Fallout4', 'Fallout4/Data', true],
-    ['a folder beside it whose name starts with its name', 'Fallout4', 'Fallout4 deployed', false],
-    ['a folder above it', 'Fallout4/Data', 'Fallout4', false],
-  ])('answers for %s', async (_case, folder, path, within) => {
-    expect(await isWithin(join(root, folder), join(root, path))).toBe(within);
+describe('the game folder a folder overlaps', () => {
+  const overlapping = (folder: string, gameFolderSettingValue = join(root, 'Fallout4')): Promise<string | undefined> =>
+    adapterOver(instance, { gameFolderSettingValue }).gameFolderOverlapping(folder);
+
+  it.each([['is it', 'Fallout4'], ['holds it', '.'], ['sits inside it', 'Fallout4/Data']])('is the game root when the folder %s', async (_case, folder) => {
+    expect(await overlapping(join(root, folder))).toBe(join(root, 'Fallout4'));
   });
 
-  it('resolves a link, so a folder reached through one is within its target', async () => {
+  it('is the game root for a folder reached through a link into it', async () => {
     await symlink(join(root, 'Fallout4'), join(root, 'link'));
 
-    expect(await isWithin(join(root, 'Fallout4'), join(root, 'link', 'Data'))).toBe(true);
-  });
-});
-
-describe('overlappedGameRoot', () => {
-  const game = (): { kind: 'found'; root: string } => ({ kind: 'found', root: join(root, 'Fallout4') });
-
-  it.each([['is it', 'Fallout4'], ['holds it', '.'], ['sits inside it', 'Fallout4/Data']])('answers the game root when the folder %s', async (_case, folder) => {
-    expect(await overlappedGameRoot(game(), join(root, folder))).toBe(join(root, 'Fallout4'));
+    expect(await overlapping(join(root, 'link', 'Data'))).toBe(join(root, 'Fallout4'));
   });
 
-  it('answers none for a folder beside it, and for a game folder not found', async () => {
-    expect([await overlappedGameRoot(game(), join(root, 'Fallout4 deployed')), await overlappedGameRoot({ kind: 'notFound' }, root)]).toEqual([undefined, undefined]);
+  it('is none for a folder beside it whose name starts with its name, and for a game folder not found', async () => {
+    expect([await overlapping(join(root, 'Fallout4 deployed')), await overlapping(root, join(root, 'nowhere'))]).toEqual([undefined, undefined]);
   });
 });

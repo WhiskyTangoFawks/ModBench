@@ -1,13 +1,20 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { scriptEnvironmentFile } from '../scriptEnvironmentFile';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { InstanceAdapter } from '../instanceAdapter';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../test/mo2/adapterOver';
+import { instanceOnDisk } from './instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+const scriptEnvironmentFile = (root: string, setting: () => string | undefined): InstanceAdapter['scriptEnvironmentFile'] =>
+  adapterOver(root, { get pythonEnvFile() { return setting(); } }).scriptEnvironmentFile;
 
 describe('the file the Python tooling reads its environment from', () => {
   let root: string;
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'script-env-'));
+    root = await instanceOnDisk();
     await mkdir(join(root, 'config'));
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
