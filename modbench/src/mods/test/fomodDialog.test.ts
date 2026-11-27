@@ -10,6 +10,7 @@ import { scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 import type { FomodDialog } from '../../modCommands/modCommands';
 import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 
@@ -18,8 +19,6 @@ const SHOWN: FomodState = { ...STATE, image: '', steps: [] };
 const RELEASE = '/staging/release';
 const OPENS = 'progress opens on modbench.modList';
 const CLOSES = 'progress closes';
-
-const everyChainedPromiseSettled = () => new Promise((resolve) => { setImmediate(resolve); });
 
 type Shown = ReturnType<typeof modsViewOn>;
 
@@ -144,17 +143,16 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     vi.spyOn(instance, 'refresh').mockReturnValueOnce(new Promise<void>((resolve) => { read = resolve; }));
     const view = modsViewOn({ instance });
     const installing = installOnThePage(view);
-    await everyChainedPromiseSettled();
+    await settled(() => { expect(pagesHanded(view)).toHaveLength(1); });
     const page = present(pagesHanded(view)[0], 'the page the install was handed');
 
     page.asking(true);
-    await everyChainedPromiseSettled();
-    const asked = [...progressSteps];
+    await settled(() => { expect(progressSteps).toEqual([OPENS, CLOSES]); });
     page.asking(false);
     const answered = [...progressSteps];
     read();
     await installing;
 
-    expect([asked, answered]).toEqual([[OPENS, CLOSES], [OPENS, CLOSES, OPENS]]);
+    expect(answered).toEqual([OPENS, CLOSES, OPENS]);
   });
 });

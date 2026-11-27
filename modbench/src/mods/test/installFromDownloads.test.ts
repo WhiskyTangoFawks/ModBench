@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { modsViewOn } from './modsViewOn';
+import { installs, modsViewOn } from './modsViewOn';
 import { answers, seen } from './modsVscode';
 import { progressSteps } from '../../test/recordedProgress';
 import type { DownloadedFileRow, LocatedDownloadedFileRow, UpgradeCandidate } from '../../instanceLoader/instance';
@@ -41,7 +41,6 @@ const installRow = (row: Partial<DownloadedFileRow> = {}, answered: InstanceAnsw
   return installed(file, [file], answered, pick);
 };
 
-const installs = ({ adapter }: View) => adapter.calls.flatMap((call) => (call.verb === 'install' ? [{ package: call.package, target: call.target, fomod: call.fomod }] : []));
 const FOO = { kind: 'archive', path: '/downloads/foo.7z' };
 const ON_THE_PAGE = { kind: 'dialog', dialog: expect.anything() as unknown, steps: [] };
 const AS_NEW_MOD = [{ package: FOO, target: { kind: 'new', name: 'foo' }, fomod: ON_THE_PAGE }];

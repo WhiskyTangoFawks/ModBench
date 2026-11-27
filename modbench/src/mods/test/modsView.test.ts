@@ -2,7 +2,7 @@ import { describe, it, expect, vi, onTestFinished } from 'vitest';
 
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { modsViewOn } from './modsViewOn';
+import { everyChainedPromiseSettled, modsViewOn } from './modsViewOn';
 import { seen } from './modsVscode';
 import { currentBoxOf } from '../../drivingLib/test/nameFilterViewHarness';
 import { Uri } from '../../test/vscodeMock';
@@ -43,7 +43,6 @@ const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () =>
 });
 
 const currentBox = currentBoxOf(seen);
-const everyChainedPromiseSettled = () => new Promise((resolve) => setImmediate(resolve));
 
 const silentChannel = { error: () => undefined, info: () => undefined };
 const modSyncAnswering = (sync: ModSyncRun) => createModSync(sync, silentChannel, 'modlist.txt');

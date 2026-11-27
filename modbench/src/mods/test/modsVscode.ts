@@ -83,9 +83,9 @@ export const seen = {
   quickPicks: [] as { labels: string[]; options: unknown }[],
   createdQuickPicks: [] as ReturnType<typeof quickPickChoosing>[],
   inputBoxes: [] as vscode.InputBoxOptions[],
+  openDialogs: [] as vscode.OpenDialogOptions[],
   /** What a notification's progress said, and whether it offered to cancel. */
   notifications: [] as { cancellable: boolean; messages: string[] }[],
-  statusBar: [] as string[],
   openedExternally: [] as string[],
   workspaceFolders: undefined as { uri: vscode.Uri; name: string }[] | undefined,
 };
@@ -231,8 +231,8 @@ export const vscodeModule = {
       return pick;
     },
     showInputBox: (options: vscode.InputBoxOptions) => { seen.inputBoxes.push(options); return Promise.resolve(answers.inputBox(options)); },
-    showOpenDialog: (options: vscode.OpenDialogOptions) => Promise.resolve(answers.openDialog(options)),
-    setStatusBarMessage: (message: string) => { seen.statusBar.push(message); return noDisposable(); },
+    showOpenDialog: (options: vscode.OpenDialogOptions) => { seen.openDialogs.push(options); return Promise.resolve(answers.openDialog(options)); },
+    setStatusBarMessage: noDisposable,
     withProgress,
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => { seen.decorationProviders.push(provider); return noDisposable(); },
     registerCustomEditorProvider: (viewType: string, provider: CustomEditor, options?: unknown) => {

@@ -37,6 +37,8 @@ type Shown = ReturnType<typeof modsViewOn>;
 type Row = vscode.TreeItem;
 type Origin = { kind: 'mod'; name: string } | { kind: 'runtimeOutput' };
 
+const MODLIST_MIME = 'application/vnd.medit.modlist-node';
+
 const over = (mods: ModlistEntry[], extra: Partial<InstanceValue> = {}) => modsViewOn({ value: valueOf(mods, extra) });
 const ordered = () => over(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
 
@@ -179,9 +181,12 @@ describe('what the view says of itself', () => {
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
     const { view, instance } = over([mod('A')]);
+    const redrawn = vi.fn();
+    view.treeDataProvider.onDidChangeTreeData?.(redrawn);
 
     instance.fail('EACCES modlist.txt');
     await settled(() => { expect(view.message).toBe('Showing the last good read: EACCES modlist.txt'); });
+    expect(redrawn).toHaveBeenCalledTimes(1);
 
     instance.publish(valueOf([mod('A')]));
     await settled(() => { expect(view.message).toBeUndefined(); });
@@ -489,11 +494,11 @@ describe('the Mods tree\'s rows', () => {
       const { row, view } = dnd();
       const controller = present(view.options.dragAndDropController, 'the drag and drop controller');
       const transfer = new DataTransfer();
-      transfer.set(present(controller.dragMimeTypes[0], 'the drag\'s type'), new DataTransferItem(payload));
+      transfer.set(MODLIST_MIME, new DataTransferItem(payload));
 
       await controller.handleDrop?.(await row('Delta'), transfer, new FakeCancellationToken());
 
-      expect([controller.dropMimeTypes, movesFired()]).toEqual([controller.dragMimeTypes, []]);
+      expect([controller.dragMimeTypes, controller.dropMimeTypes, movesFired()]).toEqual([[MODLIST_MIME], [MODLIST_MIME], []]);
     });
 
     it('a drop asks for no refresh, since a drop moves no row on screen', async () => {

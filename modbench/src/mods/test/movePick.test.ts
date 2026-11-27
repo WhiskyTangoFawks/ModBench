@@ -50,13 +50,18 @@ describe('the move pick for mods', () => {
     expect(pickItems()).toEqual([[['Ungrouped', 'current'], ['Late', undefined], ['Middle', undefined], ['Early', 'current']]]);
   });
 
-  it('each item carries the place the mods land in', async () => {
+  it.each([
+    ['Ungrouped', { kind: 'ungrouped' }],
+    ['Late', { kind: 'separator', name: 'Late' }],
+    ['Middle', { kind: 'separator', name: 'Middle' }],
+    ['Early', { kind: 'separator', name: 'Early' }],
+  ] as const)('each item carries the place the mods land in: %s', async (label, place) => {
     const { run, row, adapter } = await shownSorted();
-    pickLabelled('Late');
+    pickLabelled(label);
 
-    await run('modbench.mod.move', await row('Gamma'));
+    await run('modbench.mod.move', await row('Beta', await row('Middle')));
 
-    await settled(() => { expect(adapter.calls).toEqual(moved({ kind: 'moveMods', mods: ['Gamma'], place: { kind: 'separator', name: 'Late' }, end: 'winning' })); });
+    await settled(() => { expect(adapter.calls).toEqual(moved({ kind: 'moveMods', mods: ['Beta'], place, end: 'winning' })); });
   });
 });
 

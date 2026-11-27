@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import type * as vscode from 'vscode';
-import { labelOf, modsViewOn } from './modsViewOn';
+import { labelOf, modsViewOn, revealed } from './modsViewOn';
 import { answers, seen, vscodeModule } from './modsVscode';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { progressSteps } from '../../test/recordedProgress';
@@ -19,7 +19,7 @@ import type { AskQuestion } from '../../ports/dialog';
 import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { Argument } from '../../wire/argument';
-import { isUri, modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
+import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
 import type { InstanceRepositoryCommands } from '../../sourceCommands/instanceRepositoryCommands';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 
@@ -58,9 +58,6 @@ const validatorOfThePrompt = (): ((value: string) => unknown) => {
 };
 
 const typing = (name: string | undefined): void => { answers.inputBox = () => name; };
-
-const revealed = (): (string | undefined)[] =>
-  seen.executed.filter(([command]) => command === 'revealInExplorer').map(([, uri]) => (isUri(uri) ? uri.fsPath : undefined));
 
 const nothingOpened = (): void => {
   expect([seen.inputBoxes, seen.createdQuickPicks]).toEqual([[], []]);

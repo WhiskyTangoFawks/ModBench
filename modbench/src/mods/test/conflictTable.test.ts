@@ -2,26 +2,23 @@ import { afterEach, describe, it, expect, vi, onTestFinished } from 'vitest';
 
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { modsViewOn } from './modsViewOn';
+import { everyChainedPromiseSettled, modsViewOn } from './modsViewOn';
 import { answers, changeSetting, seen, vscodeModule, type FakeWebviewPanel } from './modsVscode';
 import { file, indexedValueOf, mod } from './indexedValue';
 import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown, type ConflictRow, type ConflictTable } from '../../wire/conflictTable';
-import type { CopyReads } from '../sameCopies';
-import type { FileRead, FileStamp } from '../archivedCopies';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { fakeInstanceAdapter, pluginFilesHeld, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { instanceOver } from '../../test/instanceOver';
 import { Uri } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 
 const CELL_VALUE_SETTING = 'modbench.mods.conflictTable.cellValue';
 const READY = { type: CONFLICT_TABLE_READY };
 const SECOND_NS = 1_000_000_000n;
-
-const everyChainedPromiseSettled = () => new Promise((resolve) => { setImmediate(resolve); });
 
 type Held = { readonly size: bigint; readonly modifiedNs: bigint; readonly hash: string } | string;
 
@@ -30,25 +27,16 @@ const stamped = (size: bigint, modifiedSeconds = 0n): Held => ({ size, modifiedN
 const copiesOf = (relativePath: string, copies: Record<string, number | string>): Record<string, Held> => Object.fromEntries(
   Object.entries(copies).map(([name, held]) => [`/instance/${name}/${relativePath}`, typeof held === 'number' ? { size: 1n, modifiedNs: 0n, hash: `${held}` } : held]));
 
-class LooseCopies implements CopyReads {
-  readonly asked: string[] = [];
-  failure: string | undefined;
-  gate: Promise<void> = Promise.resolve();
-
-  constructor(public held: Readonly<Record<string, Held>> = {}) {}
-
-  fileStamp(path: string): Promise<FileRead<FileStamp>> {
-    this.asked.push(path);
-    const { failure } = this;
-    const held = this.held[path] ?? { size: 1n, modifiedNs: 0n, hash: path };
-    return this.gate.then(() => (failure === undefined ? undefined : Promise.reject(new Error(failure))))
-      .then(() => (typeof held === 'string' ? { kind: 'unreadable', reason: held } : { kind: 'read', answer: held }));
-  }
-
-  originFileHash(path: string): Promise<FileRead<{ readonly hash: string }>> {
-    const held = this.held[path];
-    return Promise.resolve({ kind: 'read', answer: { hash: typeof held === 'object' ? held.hash : path } });
-  }
+/** What the adapter answers of each copy of `value`'s files: one stamp and contents of its own, but as `held` says. */
+function copiesAnswering(value: InstanceValue, held: Readonly<Record<string, Held>> = {}): InstanceAnswers {
+  const paths = [...value.filesByMod.values(), value.overwriteFiles].flat().map(({ path }) => path);
+  const copies = new Map<string, Held>([...paths.map((path): [string, Held] => [path, { size: 1n, modifiedNs: 0n, hash: path }]), ...Object.entries(held)]);
+  const read = [...copies].flatMap(([path, copy]) => (typeof copy === 'string' ? [] : [[path, copy] as const]));
+  return {
+    stamps: new Map(read.map(([path, { size, modifiedNs }]) => [path, { size, modifiedNs }])),
+    hashes: new Map(read.map(([path, { size, hash }]) => [path, { size: Number(size), hash }])),
+    unreadableStamps: new Map([...copies].flatMap(([path, copy]) => (typeof copy === 'string' ? [[path, copy] as const] : []))),
+  };
 }
 
 function shut(): { readonly gate: Promise<void>; readonly open: () => void } {
@@ -67,11 +55,11 @@ async function openedOn(shown: Shown, name: string): Promise<FakeWebviewPanel> {
 }
 
 async function tableOf(value: InstanceValue, name: string, held: Record<string, Held> = {}, cellValue?: string): Promise<ConflictTable> {
-  const shown = modsViewOn({ value, copyReads: new LooseCopies(held) });
+  const shown = modsViewOn({ value, adapter: fakeInstanceAdapter(readingFixture(), copiesAnswering(value, held)) });
   answers.settings.set(CELL_VALUE_SETTING, cellValue);
   const panel = await openedOn(shown, name);
   panel.receive(READY);
-  await everyChainedPromiseSettled();
+  await settled(() => { expect(tablesOf(panel)).not.toEqual([]); });
   return present(tablesOf(panel).at(-1), 'the table shown');
 }
 
@@ -466,14 +454,15 @@ describe('the conflict table\'s cell values', () => {
 describe('a mod\'s conflict table, open in a tab', () => {
   const firstRowValues = (panel: FakeWebviewPanel) => tablesOf(panel).map((table) => firstRowCells(table).map((cell) => cell?.value));
   const rowCounts = (panel: FakeWebviewPanel) => tablesOf(panel).map((table) => (table.kind === 'table' ? table.rows.length : undefined));
-  const stampedHighOverLow = () => new LooseCopies({ '/instance/High/a.dds': stamped(2_048n), '/instance/Low/a.dds': stamped(512n) });
+  const stampedHighOverLow = { '/instance/High/a.dds': stamped(2_048n), '/instance/Low/a.dds': stamped(512n) };
 
-  const openOn = async (instance: FakeInstance, copies = new LooseCopies()) => {
-    const shown = modsViewOn({ instance, copyReads: copies });
+  const openOn = async (instance: FakeInstance, held?: Record<string, Held>, more: InstanceAnswers = {}) => {
+    const copies = { ...copiesAnswering(instance.value, held), ...more };
+    const shown = modsViewOn({ instance, adapter: fakeInstanceAdapter(readingFixture(), copies) });
     return { ...shown, copies, panel: await openedOn(shown, 'High') };
   };
-  const readyOn = async (instance: FakeInstance, copies?: LooseCopies) => {
-    const opened = await openOn(instance, copies);
+  const readyOn = async (instance: FakeInstance, held?: Record<string, Held>, more?: InstanceAnswers) => {
+    const opened = await openOn(instance, held, more);
     opened.panel.receive(READY);
     await everyChainedPromiseSettled();
     return opened;
@@ -489,9 +478,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
     const panel = await openedOn(modsViewOn({ value: await shared(), adapter }), 'High');
 
     panel.receive(READY);
-    await everyChainedPromiseSettled();
 
-    expect(firstRowValues(panel)).toEqual([['512 B', '2 KB']]);
+    await settled(() => { expect(firstRowValues(panel)).toEqual([['512 B', '2 KB']]); });
   });
 
   it('is titled with the mod\'s name, and loads the conflict table\'s page', async () => {
@@ -507,37 +495,35 @@ describe('a mod\'s conflict table, open in a tab', () => {
   });
 
   it('shows the table, in the states the which-copies answer for the mod\'s paths gives, once the page is ready to hear it', async () => {
-    const { panel, copies } = await openOn(new FakeInstance(await shared()), stampedHighOverLow());
+    const { panel, adapter } = await openOn(new FakeInstance(await shared()), stampedHighOverLow);
 
     panel.receive({ type: 'log' });
     await everyChainedPromiseSettled();
     const beforeReady = [...panel.posted];
     panel.receive(READY);
-    await everyChainedPromiseSettled();
 
-    expect([beforeReady, copies.asked]).toEqual([[], ['/instance/High/a.dds', '/instance/Low/a.dds']]);
+    await settled(() => { expect([beforeReady, adapter.stamped]).toEqual([[], ['/instance/High/a.dds', '/instance/Low/a.dds']]); });
     expect(shownOn(panel)).toMatchObject([{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'table', rows: [{ state: 'Override' }] } }]);
   });
 
   describe('the cell value setting', () => {
     it.each([['unset', undefined], ['not a value it offers', 'colour']])('shows the size when the setting is %s', async (_, setting) => {
-      const { panel } = await openOn(new FakeInstance(await shared()), stampedHighOverLow());
+      const { panel } = await openOn(new FakeInstance(await shared()), stampedHighOverLow);
       answers.settings.set(CELL_VALUE_SETTING, setting);
 
       panel.receive(READY);
-      await everyChainedPromiseSettled();
 
-      expect(firstRowValues(panel)).toEqual([['512 B', '2 KB']]);
+      await settled(() => { expect(firstRowValues(panel)).toEqual([['512 B', '2 KB']]); });
     });
 
     it('shows the value it names, and shows again when it changes, until the tab closes', async () => {
-      const { panel } = await openOn(new FakeInstance(await shared()), stampedHighOverLow());
+      const { panel } = await openOn(new FakeInstance(await shared()), stampedHighOverLow);
       answers.settings.set(CELL_VALUE_SETTING, 'contents');
       panel.receive(READY);
-      await everyChainedPromiseSettled();
+      await settled(() => { expect(firstRowValues(panel)).toEqual([['A', 'B']]); });
 
       changeSetting(CELL_VALUE_SETTING, 'dateModified');
-      await everyChainedPromiseSettled();
+      await settled(() => { expect(firstRowValues(panel)).toHaveLength(2); });
       panel.dispose();
       changeSetting(CELL_VALUE_SETTING, 'size');
       await everyChainedPromiseSettled();
@@ -546,46 +532,44 @@ describe('a mod\'s conflict table, open in a tab', () => {
     });
 
     it('shows again for this setting only, not for another', async () => {
-      const { panel } = await readyOn(new FakeInstance(await shared()), stampedHighOverLow());
+      const { panel } = await readyOn(new FakeInstance(await shared()), stampedHighOverLow);
 
       changeSetting('modbench.something', 'on');
       changeSetting(CELL_VALUE_SETTING, 'contents');
-      await everyChainedPromiseSettled();
 
-      expect(firstRowValues(panel)).toEqual([['512 B', '2 KB'], ['A', 'B']]);
+      await settled(() => { expect(firstRowValues(panel)).toEqual([['512 B', '2 KB'], ['A', 'B']]); });
     });
   });
 
   it('shows a table while the instance is not read yet, asking for no copies', async () => {
-    const { panel, copies } = await readyOn(new FakeInstance(instanceValueFixture(), 0));
+    const { panel, adapter } = await readyOn(new FakeInstance(instanceValueFixture(), 0));
 
-    expect([tablesOf(panel), copies.asked]).toEqual([[{ kind: 'table', columns: [], rows: [] }], []]);
+    expect([tablesOf(panel), adapter.stamped]).toEqual([[{ kind: 'table', columns: [], rows: [] }], []]);
   });
 
   it('follows the disk: each new instance value shows, until the tab closes', async () => {
     const instance = new FakeInstance(await shared());
-    const { panel } = await openOn(instance);
+    const { panel, adapter } = await openOn(instance);
 
     await publishedTo(instance, indexedValueOf([mod('High')], { High: { files: [file('High', 'a.dds')] } }));
     panel.dispose();
-    await publishedTo(instance, indexedValueOf([mod('Low')], {}));
+    await publishedTo(instance, shared());
 
-    expect(tablesOf(panel)).toEqual([{ kind: 'message', text: 'No file order conflicts.' }]);
+    expect([tablesOf(panel), adapter.stamped]).toEqual([[{ kind: 'message', text: 'No file order conflicts.' }], []]);
   });
 
   it('shows again once another mod gains a copy of a file its mod holds, though the change names no file it read', async () => {
     const unchangedLow = { files: [file('Low', 'a.dds')] };
     const before = await indexedValueOf([mod('High'), mod('Low')], { High: { files: [file('High', 'own.dds')] }, Low: unchangedLow });
     const instance = new FakeInstance(before);
-    const panel = await openedOn(modsViewOn({ instance, copyReads: new LooseCopies() }), 'Low');
+    const panel = await openedOn(modsViewOn({ instance, adapter: fakeInstanceAdapter(readingFixture(), copiesAnswering(before)) }), 'Low');
     const { files, filesByMod, foldersByMod, stackedCopies } = await indexedValueOf([mod('High'), mod('Low')], {
       High: { files: [file('High', 'own.dds'), file('High', 'a.dds')] }, Low: unchangedLow,
     });
 
     instance.publish({ ...before, files, filesByMod, foldersByMod, stackedCopies }, { named: [], disk: false });
-    await everyChainedPromiseSettled();
 
-    expect(rowCounts(panel)).toEqual([1]);
+    await settled(() => { expect(rowCounts(panel)).toEqual([1]); });
   });
 
   describe('a change named by path', () => {
@@ -599,8 +583,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
       })).adapter);
       onTestFinished(() => { instance.dispose(); });
       await instance.refresh();
-      const copies = new LooseCopies();
-      const panel = await openedOn(modsViewOn({ instance, copyReads: copies }), 'High');
+      const copies = fakeInstanceAdapter(readingFixture(), copiesAnswering(instance.value));
+      const panel = await openedOn(modsViewOn({ instance, adapter: copies }), 'High');
       panel.receive(READY);
       await everyChainedPromiseSettled();
       return { instance, copies };
@@ -612,9 +596,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
       await instance.refresh(['/instance/mods/Low/b.dds']);
       await instance.refresh(['/instance/mods/Low/a.dds']);
-      await everyChainedPromiseSettled();
 
-      expect(copies.asked).toEqual(twice);
+      await settled(() => { expect(copies.stamped).toEqual(twice); });
     });
 
     it('on Windows, reads its copies again when a change names one in another case, as the watcher spells a path', async () => {
@@ -622,19 +605,16 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const { instance, copies } = await onDisk();
 
       await instance.refresh(['/INSTANCE/mods/Low/A.DDS']);
-      await everyChainedPromiseSettled();
 
-      expect(copies.asked).toEqual(twice);
+      await settled(() => { expect(copies.stamped).toEqual(twice); });
     });
   });
 
   it('shows the answer of the newest value only, though an older one answers last', async () => {
     const instance = new FakeInstance(await shared());
     const older = shut();
-    const copies = new LooseCopies();
-    copies.gate = older.gate;
-    const { panel } = await readyOn(instance, copies);
-    copies.gate = Promise.resolve();
+    const { panel, copies } = await readyOn(instance, {}, { stampsHeldUntil: older.gate });
+    copies.stampsHeldUntil = undefined;
 
     await publishedTo(instance, indexedValueOf([mod('High'), mod('Low')], {
       High: { files: [file('High', 'a.dds'), file('High', 'b.dds')] }, Low: { files: [file('Low', 'a.dds'), file('Low', 'b.dds')] },
@@ -648,7 +628,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
   describe('a copy that cannot be read', () => {
     it('is one line in the Output, naming the copy and why, however often the disk changes', async () => {
       const instance = new FakeInstance(await shared());
-      const { reporter } = await readyOn(instance, new LooseCopies(copiesOf('a.dds', { High: 'in use' })));
+      const { reporter } = await readyOn(instance, copiesOf('a.dds', { High: 'in use' }));
 
       await publishedTo(instance, shared());
 
@@ -661,7 +641,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const instance = new FakeInstance(await shared());
       const { reporter, copies } = await openOn(instance);
       const publishedAs = async (held: Record<string, Held>) => {
-        copies.held = held;
+        copies.unreadableStamps = copiesAnswering(instance.value, held).unreadableStamps;
         await publishedTo(instance, shared());
       };
 
@@ -678,8 +658,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
         Overwrite: { files: [file('mods/Overwrite', 'a.dds')] }, High: { files: [file('High', 'a.dds')] },
       }, { files: [file('overwrite', 'a.dds')] });
       const instance = new FakeInstance(value);
-      const { reporter, copies } = await readyOn(instance, new LooseCopies(copiesOf('a.dds', { 'mods/Overwrite': 'in use' })));
-      copies.held = copiesOf('a.dds', { 'mods/Overwrite': 'in use', overwrite: 'in use' });
+      const { reporter, copies } = await readyOn(instance, copiesOf('a.dds', { 'mods/Overwrite': 'in use' }));
+      copies.unreadableStamps = copiesAnswering(value, copiesOf('a.dds', { 'mods/Overwrite': 'in use', overwrite: 'in use' })).unreadableStamps;
 
       await publishedTo(instance, value);
 
@@ -689,9 +669,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
   describe('a which-copies request that failed', () => {
     it('is, before any table, the error row in place of it and a line in the Output, with no notification', async () => {
-      const copies = new LooseCopies();
-      copies.failure = 'disk gone';
-      const { panel, reporter } = await readyOn(new FakeInstance(await shared()), copies);
+      const { panel, reporter } = await readyOn(new FakeInstance(await shared()), {}, { stampFailure: 'disk gone' });
 
       expect([shownOn(panel), reporter.shownFailures, reporter.reports]).toEqual([
         [{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'error', reason: 'disk gone' } }],
@@ -704,9 +682,9 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const instance = new FakeInstance(await shared());
       const { panel, reporter, copies } = await readyOn(instance);
 
-      copies.failure = 'disk gone';
+      copies.stampFailure = 'disk gone';
       await publishedTo(instance, shared());
-      copies.failure = undefined;
+      copies.stampFailure = undefined;
       await publishedTo(instance, shared());
 
       const [first, failed, recovered] = shownOn(panel);
@@ -717,12 +695,9 @@ describe('a mod\'s conflict table, open in a tab', () => {
     it('is not reported once a newer value has asked', async () => {
       const instance = new FakeInstance(await shared());
       const older = shut();
-      const copies = new LooseCopies();
-      copies.gate = older.gate;
-      copies.failure = 'old';
-      const { panel, reporter } = await readyOn(instance, copies);
-      copies.gate = Promise.resolve();
-      copies.failure = undefined;
+      const { panel, reporter, copies } = await readyOn(instance, {}, { stampsHeldUntil: older.gate, stampFailure: 'old' });
+      copies.stampsHeldUntil = undefined;
+      copies.stampFailure = undefined;
 
       await publishedTo(instance, shared());
       older.open();

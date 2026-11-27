@@ -135,11 +135,16 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     const shown = shownWith(await middleOfThree());
     const uri = uriOf(await shown.row('Low'));
     const before = await carriedOn(shown, uri);
-    const told = await toldTheProviderOf('Redundant', uri);
+    const told = seen.decorationProviders.map((provider) => {
+      const heard: unknown[] = [];
+      provider.onDidChangeFileDecorations?.((uris) => { heard.push(uris); });
+      return heard;
+    });
 
     shown.instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
 
-    expect([before, told, await carriedOn(shown, uri)]).toEqual([['Redundant'], [undefined], []]);
+    const theGreyAndEachIndicator = [[undefined], ...MOD_INDICATORS.map(() => [undefined])];
+    expect([before, told, await carriedOn(shown, uri)]).toEqual([['Redundant'], theGreyAndEachIndicator, []]);
   });
 
   it('asks VS Code to decorate again only for the indicator whose setting changed', async () => {

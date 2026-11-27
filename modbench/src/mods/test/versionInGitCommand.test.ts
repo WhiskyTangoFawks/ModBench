@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { modsViewOn } from './modsViewOn';
+import { modsViewOn, revealed } from './modsViewOn';
 import { answers, seen } from './modsVscode';
 import { pluginRow, PLUGINS_VIEW } from './sourceGestureHarness';
 import { mod } from './indexedValue';
@@ -16,7 +16,6 @@ import { FakeTreeView } from '../../drivingLib/test/nameFilterViewHarness';
 import { type VersionInGitOutcome, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { gestureName, phrase } from '../../ports/phrase';
-import { isUri } from '../../drivingLib/argument';
 import { sourceCommands, type SourceCommands } from '../../sourceCommands/sourceCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
@@ -94,7 +93,6 @@ describe('modbench.mod.versionInGit', () => {
     answers.quickPick = (items) => { const label = labels.shift(); return items.find((item) => item.label === label); };
   };
   const pickedAmong = () => seen.quickPicks.map(({ labels }) => labels);
-  const revealed = () => seen.executed.filter(([command]) => command === 'revealInExplorer').map(([, uri]) => (isUri(uri) ? uri.fsPath : uri));
 
   it('on a plugin row, puts the plugin\'s mod under git after the one pick', async () => {
     const commands = invokeVersionInGit();

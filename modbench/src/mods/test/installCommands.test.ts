@@ -2,8 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import type * as vscode from 'vscode';
-import { modsViewOn } from './modsViewOn';
+import { installs, modsViewOn } from './modsViewOn';
 import { answers, seen } from './modsVscode';
 import { Uri } from '../../test/vscodeMock';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -22,16 +21,12 @@ const installing = (answered: InstanceAnswers = {}) => modsViewOn({
 
 type View = ReturnType<typeof installing>;
 
-const installs = ({ adapter }: View) => adapter.calls.flatMap((call) => (call.verb === 'install' ? [{ package: call.package, target: call.target, fomod: call.fomod }] : []));
-
 const PICKED = { archive: 'Archive…', folder: 'Folder…' } as const;
 
-function answering(packageKind: keyof typeof PICKED | undefined, picked?: string, name?: string): vscode.OpenDialogOptions[] {
-  const opened: vscode.OpenDialogOptions[] = [];
+function answering(packageKind: keyof typeof PICKED | undefined, picked?: string, name?: string): void {
   answers.quickPick = (items) => items.find(({ label }) => label === (packageKind && PICKED[packageKind]));
-  answers.openDialog = (options) => { opened.push(options); return picked === undefined ? undefined : [Uri.file(picked)]; };
+  answers.openDialog = () => (picked === undefined ? undefined : [Uri.file(picked)]);
   answers.inputBox = () => name;
-  return opened;
 }
 
 const ON_THE_PAGE = { kind: 'dialog', dialog: expect.anything() as unknown, steps: [] };
@@ -75,11 +70,11 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
     ['folder', 'folder', '/somewhere/Loose Files', { canSelectFiles: false, canSelectFolders: true, canSelectMany: false }],
   ] as const)('%s: the OS picker offers what install takes, and installs the pick as a new mod under the name prompted', async (_case, packageKind, path, dialog) => {
     const view = installing();
-    const opened = answering(packageKind, path, 'New Mod');
+    answering(packageKind, path, 'New Mod');
 
     await view.run('modbench.mod.install');
 
-    expect(opened).toEqual([expect.objectContaining(dialog)]);
+    expect(seen.openDialogs).toEqual([expect.objectContaining(dialog)]);
     expect(installs(view)).toEqual([{ package: { kind: packageKind, path }, target: NEW_MOD, fomod: ON_THE_PAGE }]);
   });
 });
@@ -169,7 +164,7 @@ describe('modbench.mod.install called by the agent', () => {
   const install = (view: View, argument: AgentCall['argument'], options: object) => view.run('modbench.mod.install', new AgentCall(argument, options));
   const refusalOf = (view: View, argument: AgentCall['argument'], options: object) => install(view, argument, options).then(() => undefined, (error: unknown) => error);
   const nothingAsked = () => {
-    expect([seen.quickPicks, seen.inputBoxes]).toEqual([[], []]);
+    expect([seen.quickPicks, seen.openDialogs, seen.inputBoxes]).toEqual([[], [], []]);
   };
 
   it('installs the downloaded file named as a new mod under the name given, asking nothing, and answers the mod written', async () => {

@@ -233,9 +233,12 @@ describe('the Downloads view reacts to the Instance, never scans on its own', ()
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
     const instance = instanceListing();
     viewOver(instance);
+    const redrawn = vi.fn();
+    downloadsTree().treeDataProvider.onDidChangeTreeData?.(redrawn);
 
     instance.fail('EACCES downloads');
     await settled(() => expect(downloadsTree().message).toBe('Showing the last good read: EACCES downloads'));
+    expect(redrawn).toHaveBeenCalledTimes(1);
 
     instance.publish(valueListing());
     await settled(() => expect(downloadsTree().message).toBeUndefined());
@@ -449,7 +452,7 @@ describe('the Downloads view dims the row of an excluded file it shows (colour o
 
     instance.publish(valueListing(row('zzznew.7z')));
 
-    expect(fired).toHaveBeenCalled();
+    expect(fired).toHaveBeenCalledTimes(1);
   });
 });
 

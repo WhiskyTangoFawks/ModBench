@@ -4,7 +4,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import { createModsView } from '../modsView';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { ArchivedCopies } from '../archivedCopies';
-import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
+import { isUri, modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import { ModStatuses } from '../../modStatus/modStatuses';
@@ -37,8 +37,19 @@ interface Options<I> extends Partial<Omit<ModsViewDeps, 'instance'>> {
   sourceCommands?: Partial<SourceCommands>;
 }
 
+/** Settles once every promise chained so far has: what a check that something did not happen waits for. */
+export const everyChainedPromiseSettled = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve); });
+
 /** The label VS Code shows on the row. */
 export const labelOf = ({ label }: Row): string | undefined => (typeof label === 'object' ? label.label : label);
+
+/** Each install the adapter was asked for: the package, where it lands, and the FOMOD's answer. */
+export const installs = ({ adapter }: { adapter: FakeInstanceAdapter }) =>
+  adapter.calls.flatMap((call) => (call.verb === 'install' ? [{ package: call.package, target: call.target, fomod: call.fomod }] : []));
+
+/** The path of each folder revealed in the Explorer. */
+export const revealed = (): (string | undefined)[] =>
+  seen.executed.filter(([command]) => command === 'revealInExplorer').map(([, uri]) => (isUri(uri) ? uri.fsPath : undefined));
 
 const namedBy = (row: Row): string | undefined => modArgumentOf(row)?.name ?? separatorArgumentOf(row)?.name ?? labelOf(row);
 
