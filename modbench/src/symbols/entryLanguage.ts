@@ -7,7 +7,7 @@ import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFil
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { atFile, nameHolds, placeLocation, readBy, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
 import { selectingItsRow } from './definitionShown';
-import type { Definition, Listed, References, SymbolKind } from './symbolKind';
+import type { Definition, Presented, Listed, References, SymbolKind } from './symbolKind';
 
 interface EntryLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'mods' | 'downloadedFiles' | 'profiles'> } | undefined;
@@ -87,7 +87,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     return { locations: found.map(placeLocation), unread };
   };
 
-  const kind: SymbolKind<EntrySymbol> = {
+  const kind: SymbolKind<EntrySymbol, Presented> = {
     async nameAt(document, offset) {
       for (const owner of owners) {
         const found = await owner.nameAt(document.uri.fsPath, heldText(document), offset);
@@ -96,7 +96,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       return undefined;
     },
     /** A mod's or a separator's row in Mods, a downloaded file's row in Downloads. A mod with no row is its folder. */
-    definitionOf(named): Promise<Definition> {
+    definitionOf(named): Promise<Definition<Presented>> {
       const entry = entryListed(named);
       if (entry === undefined) return Promise.resolve({ refused: unlisted(named) });
       if (entry.kind === 'profile') return Promise.resolve({ none: `A ${NOUNS[entry.kind]} has no definition.` });

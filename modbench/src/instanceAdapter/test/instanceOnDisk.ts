@@ -3,7 +3,7 @@ import { appendFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { onTestFinished } from 'vitest';
-import type { InstanceAdapter, Machine } from '../instanceAdapter';
+import type { InstanceAdapter } from '../instanceAdapter';
 import { adapterOver, type AdapterAnswers } from '../../test/mo2/adapterOver';
 
 /** MO2's settings naming `gameName`, the Default profile selected, and `general` lines added to [General]. */
@@ -57,10 +57,9 @@ export async function gameOnDisk(files: Readonly<Record<string, string | Buffer>
 }
 
 /** Points the downloads folder of the instance at `root`, whose settings end in their [Settings] section, at a drive letter
- *  Wine has no translation for; the machine on which it resolves to no folder. */
-export async function downloadsUnresolvable(root: string): Promise<Partial<Machine>> {
+ *  Wine has no translation for, which on Linux resolves to no folder. */
+export async function downloadsUnresolvable(root: string): Promise<void> {
   await appendFile(join(root, 'ModOrganizer.ini'), `download_directory=${qSettingsPath('D:\\downloads')}\r\n`);
-  return { platform: 'linux' };
 }
 
 /** A meta.ini that records the file a mod was installed from, as MO2 writes the path: a QSettings string, its backslashes escaped. */
