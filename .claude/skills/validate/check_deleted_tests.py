@@ -23,7 +23,7 @@ ARROW = ' => '
 MARK = 'mark: '
 FORM = f"'{KEY}: <deleted>{ARROW}<survivor>' or '{KEY}: <deleted>{ARROW}{MARK}<mark>'"
 STANDARDS = 'CODING_STANDARDS.md'
-UNRESOLVED = f'no test at the tip and no mark of {STANDARDS} § Tests whose fix deletes the test'
+UNRESOLVED = f'no test at the tip and no mark of {STANDARDS} § Tests whose fix deletes the test and moves none'
 TESTS_SECTION = re.compile(r'^## Tests\n(.*?)(?=^## |\Z)', re.MULTILINE | re.DOTALL)
 MARK_DELETING_THE_TEST = re.compile(r'^- ([^:.→\n]+)[^→\n]*→(?![^\n]*\bmove\b)[^\n]*\bdelete\b', re.MULTILINE | re.IGNORECASE)
 STRING = r'''(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`)'''
