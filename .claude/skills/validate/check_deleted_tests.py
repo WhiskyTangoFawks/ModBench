@@ -2,9 +2,8 @@
 """Names each test deleted since the base that no trailer accounts for, each trailer of a deleted test that
 resolves to nothing, and each trailer without its arrow (CODING_STANDARDS.md § Tests, "A diff deletes a test").
 A deleted test is a name the merge base holds more often than HEAD, so a moved test is not one. The trailers of
-the commits since the base account for it when one of them names a test at HEAD, or a mark of § Tests at HEAD
-or at the merge base, so a mark the branch retires to a gate still holds, by its words before the first colon,
-full stop or arrow:
+the commits since the base account for it when one of them names a test at HEAD, or, by its words before the
+first colon, full stop or arrow, a mark of § Tests at HEAD or at the merge base:
 
     Deleted-test: <deleted> => <survivor>
     Deleted-test: <deleted> => mark: <mark>

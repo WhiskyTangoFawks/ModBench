@@ -285,7 +285,7 @@ class TimeReport(FakeDotnet):
         self.assertNotIn("--- TEST DATA REPORT FAILED ---", run.stdout)
         self.assertIn("OnlyTests  MEditService.Http/Source.cs", run.stdout)
         self.assertIn("--- 1 MEMBERS ONLY TESTS REACH ---", run.stdout)
-        self.assertIn("--- BACKEND TEST-ONLY CODE REPORT FAILED ---", run.stdout)
+        self.assertIn("--- BACKEND TEST-ONLY CODE GATE FAILED ---", run.stdout)
         self.assertEqual(run.returncode, 1)
 
     def test_the_switch_of_the_test_data_report_fails_the_run(self) -> None:

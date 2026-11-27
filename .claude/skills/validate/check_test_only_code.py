@@ -3,7 +3,7 @@
 property or field declared public, internal or protected, found by its name in the source text, so a
 name shared with other code is never named. A static class is reached through its members, and reflection
 may find a type whose base production tests assignability to, so neither is named. It over-reports a
-framework interface's implementation that a test calls. Exits 1 when it names one."""
+framework interface's implementation that a test calls. Exits 1 when it names any member."""
 import re
 import sys
 from collections import Counter
