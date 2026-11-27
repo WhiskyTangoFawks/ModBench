@@ -71,9 +71,7 @@ describe('the game folder', () => {
 
       expect(await resolved({ gamePath: `Z:${root.replaceAll('/', '\\')}`, detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
     });
-  });
 
-  onPosix.describe("(Wine translates a drive letter only on Linux)", () => {
     it("is in the Proton prefix's drive_c for a C:-drive game path", async () => {
       const prefix = await temp();
       const root = join(prefix, 'drive_c', 'Games', 'Fallout4');

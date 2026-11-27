@@ -1690,7 +1690,7 @@ describe('the MO2 Instance adapter', () => {
 
     describe('an origin\'s files', () => {
       const mod = (name: string) => ({ kind: 'mod' as const, name });
-      const listing = (mod: string): Promise<void> => appendFile(join(root, DEFAULT_MODLIST), `\n+${mod}`);
+      const listing = (line: string): Promise<void> => appendFile(join(root, DEFAULT_MODLIST), `${line}\n`);
       const filesIn = (reading: InstanceReading, origin: FileOrigin): OriginFiles =>
         (origin.kind === 'mod' ? present(reading.modFiles.get(origin.name), `the files of ${origin.name}`) : reading.runtimeOutput);
       const filesOf = async (origin: FileOrigin): Promise<OriginFiles> => filesIn(await adapter.reading(), origin);
@@ -1907,7 +1907,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'sibling.dds'), '');
         await symlink(folder, join(folder, 'loop'));
 
-        await listing('Cycle');
+        await listing('+Cycle');
 
         const files = await filesOf(mod('Cycle'));
 
@@ -1987,7 +1987,7 @@ describe('the MO2 Instance adapter', () => {
         execFileSync('mkfifo', [join(root, 'real-pipe')]);
         await symlink(join(root, 'real-pipe'), join(folder, 'linked-pipe'));
 
-        await listing('Pipes');
+        await listing('+Pipes');
 
         const files = await filesOf(mod('Pipes'));
 
@@ -1998,8 +1998,8 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers no files for a mod with no folder, or a name that gives it none', async () => {
-        await listing('No Such Mod');
-        await listing('../profiles');
+        await listing('+No Such Mod');
+        await listing('+../profiles');
 
         const reading = await adapter.reading();
 
