@@ -34,26 +34,23 @@ public class GamesRegisteredTestFramework : XunitTestFramework
         var key = ModKey.FromFileName("WarmUp.esp");
         var fallout4 = new Fallout4Mod(key, Fallout4Release.Fallout4);
         fallout4.Npcs.AddNew("WarmUp");
-        var written = WriteAndRead(fallout4, scratch, at => Fallout4Mod.CreateFromBinaryOverlay(at, Fallout4Release.Fallout4));
+        var written = WriteAndRead(fallout4, scratch, "fallout4", at => Fallout4Mod.CreateFromBinaryOverlay(at, Fallout4Release.Fallout4));
         var skyrim = new SkyrimMod(key, SkyrimRelease.SkyrimSE);
         skyrim.Npcs.AddNew("WarmUp");
-        WriteAndRead(skyrim, Directory.CreateDirectory(Path.Combine(scratch, "skyrim")).FullName,
-            at => SkyrimMod.CreateFromBinaryOverlay(at, SkyrimRelease.SkyrimSE));
+        WriteAndRead(skyrim, scratch, "skyrim", at => SkyrimMod.CreateFromBinaryOverlay(at, SkyrimRelease.SkyrimSE));
         var starfield = new StarfieldMod(key, StarfieldRelease.Starfield);
         starfield.Npcs.AddNew("WarmUp");
-        WriteAndRead(starfield, Directory.CreateDirectory(Path.Combine(scratch, "starfield")).FullName,
-            at => StarfieldMod.CreateFromBinaryOverlay(at, StarfieldRelease.Starfield));
+        WriteAndRead(starfield, scratch, "starfield", at => StarfieldMod.CreateFromBinaryOverlay(at, StarfieldRelease.Starfield));
 
         fallout4.Npcs.First().EditorID = "WarmUpDiffering";
-        var differing = WriteAndRead(fallout4, Directory.CreateDirectory(Path.Combine(scratch, "differing")).FullName,
-            at => Fallout4Mod.CreateFromBinaryOverlay(at, Fallout4Release.Fallout4));
+        var differing = WriteAndRead(fallout4, scratch, "differing", at => Fallout4Mod.CreateFromBinaryOverlay(at, Fallout4Release.Fallout4));
         _ = TestAdapters.Mutagen().DivergenceFrom(
             key.FileName, written, differing, EmptyLoadOrder.Of(GameRelease.Fallout4), HandedStrings.Of(written));
     }
 
-    private static string WriteAndRead(IMod mod, string folder, Func<ModPath, IModDisposeGetter> read)
+    private static string WriteAndRead(IMod mod, string scratch, string folder, Func<ModPath, IModDisposeGetter> read)
     {
-        var at = new ModPath(mod.ModKey, Path.Combine(folder, mod.ModKey.FileName));
+        var at = new ModPath(mod.ModKey, Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, folder)).FullName, mod.ModKey.FileName));
         mod.WriteToBinary(at.Path);
         using var written = read(at);
         _ = written.EnumerateMajorRecords().Count();

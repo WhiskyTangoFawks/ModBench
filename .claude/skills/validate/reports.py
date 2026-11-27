@@ -4,7 +4,7 @@ name."""
 import json
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import NamedTuple
 
@@ -30,34 +30,20 @@ class Result(NamedTuple):
 
 
 def in_trx(text: str) -> list[Result]:
-    """Time runs from the result's start or the first result's end, whichever is later: the warm-up blocks
-    every thread. A run one test at a time blocks none, so each result is charged its whole duration."""
+    """Each result is charged its whole duration: a test process pays its warm-up before its first test starts."""
     run = ET.fromstring(text)
-    elements = list(run.iterfind('.//t:UnitTestResult', TRX))
     projects = {test.attrib['id']: PureWindowsPath(next(test.iterfind('t:TestMethod', TRX)).attrib['codeBase']).stem
                 for test in run.iterfind('.//t:UnitTest', TRX)}
 
-    def span(result: ET.Element) -> tuple[datetime, datetime] | None:
+    def seconds(result: ET.Element) -> float | None:
         if 'endTime' not in result.attrib:
             return None
-        end = datetime.fromisoformat(result.attrib['endTime'])
         hours, minutes, secs = result.get('duration', '0:0:0').split(':')
-        return end - timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs)), end
-
-    spans = [span(element) for element in elements]
-    timed = [times for times in spans if times]
-    warmed = min((end for _, end in timed), default=None)
-    blocked = warmed if warmed and sum(start < warmed for start, _ in timed) > 1 else None
-
-    def seconds(times: tuple[datetime, datetime] | None) -> float | None:
-        if times is None:
-            return None
-        start, end = times
-        return (end - (max(start, blocked) if blocked else start)).total_seconds()
+        return timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs)).total_seconds()
 
     return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
-                   seconds(times), projects[result.attrib['testId']])
-            for result, times in zip(elements, spans)]
+                   seconds(result), projects[result.attrib['testId']])
+            for result in run.iterfind('.//t:UnitTestResult', TRX)]
 
 
 def frontend_box(path: str) -> str:

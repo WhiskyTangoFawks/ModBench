@@ -18,7 +18,7 @@ WINDOWS_FAILS_THE_RUN = False
 NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
 OTHER = 'the tests of no box'
 WINDOWS = 'windows'
-BRANCH, MERGE = 'branch', 'merge'
+MERGE = 'merge'
 
 
 def slow_tests(results: list[reports.Result]) -> list[tuple[str, float]]:

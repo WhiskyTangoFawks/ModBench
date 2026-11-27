@@ -143,7 +143,7 @@ class Boxes(Reports):
 
     def setUp(self) -> None:
         super().setUp()
-        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 1, project='B.Tests'), fx.trx_result('A.Two', 3, 2.5, project='B.Tests'),
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0, project='B.Tests'), fx.trx_result('A.Two', 3, 2, project='B.Tests'),
                                     fx.trx_result('A.Skipped', outcome='NotExecuted', project='B.Tests')))
         self.report('unit.json', fx.vitest(('/repo/modbench/src/plugins/a.test.ts', [('one', 'passed', 1500)]),
                                            ('/repo/modbench/webview/b.test.tsx', [('two', 'passed', 500)])))
