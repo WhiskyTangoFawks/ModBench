@@ -114,6 +114,12 @@ class Ceiling(Reports):
         (self.alone / 'b.trx').write_text(fx.trx(fx.trx_result('A.Unapproved', 3, 0.5)))
         self.assertIn('--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED', self.judged(self.APPROVALS)[1])
 
+    def test_a_test_under_1_s_under_load_that_ran_alone_beside_one_over_it_is_judged_under_load(self) -> None:
+        (self.alone / 'b.trx').write_text(fx.trx(fx.trx_result('A.First', 3, 3), fx.trx_result('A.Unapproved', 3.4, 0.4)))
+        _, printed = self.judged(self.APPROVALS)
+        self.assertNotIn('A.First', printed)
+        self.assertIn('--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED', printed)
+
     def test_a_test_slow_alone_that_ran_again_by_itself_fails(self) -> None:
         (self.alone / 'a.trx').write_text(fx.trx(fx.trx_result('A.Unapproved', 3, 1.5)))
         self.assertIn('   1.50 s  A.Unapproved: OVER THE 1 s CEILING ALONE, NOT APPROVED\n', self.judged(self.APPROVALS)[1])

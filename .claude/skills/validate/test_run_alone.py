@@ -43,27 +43,27 @@ class Backend(unittest.TestCase):
             self.runs.append(command.argv)
             results = pathlib.Path(command.argv[command.argv.index('--results-directory') + 1])
             results.mkdir(parents=True, exist_ok=True)
-            report = results / f'{len(self.runs)}.trx'
-            report.write_text(self.one_at_a_time(*orders[len(self.runs) - 1]))
-            os.utime(report, (len(self.runs), len(self.runs)))
+            name = command.argv[command.argv.index('--logger') + 1].removeprefix('trx;LogFileName=')
+            (results / name).write_text(self.one_at_a_time(*orders[len(self.runs) - 1]))
             return True
-        run_alone.again(ROOT, self.dir / 'reports', self.dir / 'alone', execute)
+        run_alone.run_again(ROOT, self.dir / 'reports', self.dir / 'alone', execute)
         return [argv[argv.index('--filter') + 1].split('|') for argv in self.runs]
 
     def test_each_backend_test_over_1_s_runs_again_by_its_method_in_one_process_of_its_project_one_at_a_time(self) -> None:
         self.load(('A.C.Slow', 1.5), ('A.C.Theory(case: 1)', 2), ('A.C.Quick', 0.9))
         self.again([('A.C.Quick', 0.5), ('A.C.Slow', 0.5)])
-        self.assertEqual(self.runs, [['dotnet', 'test', 'MEditService.A.Tests', '--no-build', '-v', 'quiet', '--logger', 'trx',
-                                      '--results-directory', str(self.dir / 'alone/backend/MEditService.A.Tests'), '--filter',
+        self.assertEqual(self.runs, [['dotnet', 'test', 'MEditService.A.Tests', '--no-build', '-v', 'quiet',
+                                      '--logger', 'trx;LogFileName=0.trx', '--results-directory',
+                                      str(self.dir / 'alone/backend/MEditService.A.Tests'), '--filter',
                                       'FullyQualifiedName=A.C.Slow|FullyQualifiedName=A.C.Theory', '--',
                                       'xUnit.ParallelizeTestCollections=false']])
 
-    def test_a_first_test_over_1_s_runs_again_beside_another_until_another_runs_first(self) -> None:
-        self.load(('A.C.Slow', 1.5), ('A.C.Other', 2))
-        self.assertEqual(self.again([('A.C.Slow', 3), ('A.C.Other', 0.5)], [('A.C.Slow', 3), ('A.C.Other', 0.5)],
-                                    [('A.C.Other', 0.5), ('A.C.Slow', 0.4)]),
-                         [['FullyQualifiedName=A.C.Other', 'FullyQualifiedName=A.C.Slow']]
-                         + [['FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.C.Other']] * 2)
+    def test_a_first_test_over_1_s_runs_again_beside_one_of_another_class_until_another_runs_first(self) -> None:
+        self.load(('A.C.Slow', 1.5), ('A.C.Same', 2), ('A.E.Other', 2))
+        self.assertEqual(self.again([('A.C.Slow', 3), ('A.C.Same', 0.5), ('A.E.Other', 0.5)], [('A.C.Slow', 3), ('A.E.Other', 0.5)],
+                                    [('A.E.Other', 0.5), ('A.C.Slow', 0.4)]),
+                         [['FullyQualifiedName=A.C.Same', 'FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.E.Other']]
+                         + [['FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.E.Other']] * 2)
 
     def test_a_lone_test_over_1_s_runs_again_beside_its_projects_fastest_and_stops_after_two_more_runs(self) -> None:
         self.load(('A.C.Slow', 1.5), ('A.D.Fast', 0.01), ('A.D.Faster', 0.001))

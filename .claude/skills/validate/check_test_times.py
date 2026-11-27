@@ -40,21 +40,25 @@ def lapsed(results: list[reports.Result], approved: dict[str, str]) -> list[tupl
     return sorted(((key, seconds) for key, seconds in slowest.items() if seconds < CEILING_SECONDS), key=lambda lapse: -lapse[1])
 
 
+def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
+    """Each test's fastest timed run."""
+    fastest: dict[str, float] = {}
+    for result in results:
+        if result.seconds is not None:
+            fastest[result.name] = min(result.seconds, fastest.get(result.name, result.seconds))
+    return fastest
+
+
 def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> int:
-    """The number of tests over the ceiling no approval names. A test that ran again alone is judged on its fastest run
-    there."""
-    fastest: dict[str, reports.Result] = {}
-    for result in alone:
-        kept = fastest.get(result.name)
-        if kept is None or (result.seconds is not None and (kept.seconds is None or result.seconds < kept.seconds)):
-            fastest[result.name] = result
-    again = set(fastest)
+    """The number of tests over the ceiling no approval names. A test over it under load that ran again alone is
+    judged on its fastest run there; a test beside it there, under the ceiling under load, is judged under load."""
+    again = fastest_runs(alone)
     ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in again}
-    judged = [result for result in results if result.name not in again] + list(fastest.values())
+    judged = [result._replace(seconds=again[result.name]) if result.name in ran_again else result for result in results]
     unapproved = [(name, seconds) for name, seconds in slow_tests(judged)
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
-        print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in again else ""}, NOT APPROVED')
+        print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in ran_again else ""}, NOT APPROVED')
     lapses = lapsed(judged, approved)
     for name, seconds in lapses:
         print(f'{seconds:7.2f} s  {name}: APPROVAL LAPSED')
