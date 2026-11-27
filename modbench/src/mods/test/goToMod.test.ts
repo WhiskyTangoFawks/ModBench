@@ -1,143 +1,103 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
+import { describe, it, expect, vi } from 'vitest';
 
-const { registerCommand, showQuickPick } = vi.hoisted(() => ({
-  registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
-  showQuickPick: vi.fn<(items: readonly { label: string }[]) => Promise<unknown>>(),
-}));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand },
-  window: { showQuickPick },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri,
-}));
-
-import { registerGoToModCommand } from '../goToMod';
-import { ModNode, OverwriteNode } from '../ModListProvider';
-import { FileNode } from '../modFiles';
-import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
-import type { FileOrigin } from '../../instanceLoader/instance';
-import { fileIn } from '../../test/fakeInstanceAdapter';
-import { present } from '../../ports/present';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { modsViewOn } from './modsViewOn';
+import { answers, seen } from './modsVscode';
+import { modOrigin } from '../../instanceLoader/fileConflictIndex';
+import { currentBoxOf } from '../../drivingLib/test/nameFilterViewHarness';
+import { file, folder, indexedValueOf, mod } from './indexedValue';
 
 const PATH = 'textures/a.dds';
-const entryOf = (...providers: FileOrigin[]): ConflictEntry => ({
-  relativePath: PATH, winner: '/w', winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers,
-});
-const high = modOrigin('High');
-const middle = modOrigin('Middle');
-const low = modOrigin('Low');
+const revealOf = (name: string) => ({ label: name, options: { select: true, focus: true } });
+
+async function setup(...names: string[]) {
+  const shown = modsViewOn({ value: await indexedValueOf(names.map((name) => mod(name)), Object.fromEntries(names.map((name) => [name, { files: [file(name, PATH)], folders: [folder(name, 'textures')] }]))) });
+  const fileOf = async (name: string) => shown.row('a.dds', await shown.row('textures', await shown.row(name)));
+  const invoke = (...args: unknown[]) => shown.run('modbench.mod.goToMod', ...args);
+  return { ...shown, fileOf, invoke };
+}
 
 describe('the go to mod command', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  const copy = fileIn('/m', PATH);
-  const modRows = new Map(['High', 'Middle', 'Low'].map((name) => [name, new ModNode({ kind: 'mod', name, enabled: true })]));
-  const overwriteRow = new OverwriteNode([], 'MO2');
-  const rowOf = (origin: FileOrigin) => (origin.kind === 'mod' ? modRows.get(origin.name) : overwriteRow);
-
-  function setup(providers: FileOrigin[], rowFor: (origin: FileOrigin) => ModNode | OverwriteNode | undefined = rowOf) {
-    const files = new FileConflictLookup();
-    files.set(entryOf(...providers));
-    const reveal = vi.fn((_row: unknown) => Promise.resolve());
-    const reporter = recordingReporter();
-    let selection: FileNode[] = [];
-    registerGoToModCommand({ value: instanceValueFixture({ files }) }, reporter, { selection: () => selection, rowFor, reveal });
-    const rowIn = (origin: FileOrigin) => {
-      const parent = rowOf(origin) ?? overwriteRow;
-      const row = new FileNode(parent, origin, copy, 'a.dds');
-      selection = [row];
-      return row;
-    };
-    const handler = present(registerCommand.mock.calls.find((c) => c[0] === 'modbench.mod.goToMod'), 'the go to mod command')[1];
-    const invoke = (...args: unknown[]) => Promise.resolve(handler(...args));
-    return { reveal, reporter, rowIn, invoke };
-  }
-
   it('selects the one candidate with no pick', async () => {
-    const { reveal, rowIn, invoke } = setup([high, low]);
+    const { view, fileOf, invoke } = await setup('High', 'Low');
 
-    await invoke(rowIn(high));
+    await invoke(await fileOf('High'));
 
-    expect(reveal.mock.calls).toEqual([[modRows.get('Low')]]);
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect([view.reveals, seen.quickPicks]).toEqual([[revealOf('Low')], []]);
   });
 
   it('picks among the several the winning copy wins over, in mod order, losing first, and selects the pick', async () => {
-    const { reveal, rowIn, invoke } = setup([high, middle, low]);
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[1]));
+    const { view, fileOf, invoke } = await setup('High', 'Middle', 'Low');
+    answers.quickPick = (items) => items[1];
 
-    await invoke(rowIn(high));
+    await invoke(await fileOf('High'));
 
-    expect(showQuickPick.mock.calls[0]?.[0].map((item) => item.label)).toEqual(['Low', 'Middle']);
-    expect(reveal.mock.calls).toEqual([[modRows.get('Middle')]]);
+    expect(seen.quickPicks.map(({ labels }) => labels)).toEqual([['Low', 'Middle']]);
+    expect(view.reveals).toEqual([revealOf('Middle')]);
   });
 
   it('selects nothing when the pick is dismissed', async () => {
-    const { reveal, reporter, rowIn, invoke } = setup([high, middle, low]);
-    showQuickPick.mockResolvedValue(undefined);
+    const { view, reporter, fileOf, invoke } = await setup('High', 'Middle', 'Low');
 
-    await invoke(rowIn(high));
+    await invoke(await fileOf('High'));
 
-    expect(reveal).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
+    expect([view.reveals, reporter.reports]).toEqual([[], []]);
   });
 
   it('takes the other mod as its option, with no pick', async () => {
-    const { reveal, rowIn, invoke } = setup([high, middle, low]);
+    const { view, fileOf, invoke } = await setup('High', 'Middle', 'Low');
 
-    await invoke(rowIn(high), undefined, low);
+    await invoke(await fileOf('High'), undefined, modOrigin('Low'));
 
-    expect(reveal.mock.calls).toEqual([[modRows.get('Low')]]);
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect([view.reveals, seen.quickPicks]).toEqual([[revealOf('Low')], []]);
   });
 
   it('refuses an option that names no copy this one relates to, rather than selecting something else', async () => {
-    const { reveal, reporter, rowIn, invoke } = setup([high, middle, low]);
+    const { view, reporter, fileOf, invoke } = await setup('High', 'Middle', 'Low');
 
-    await invoke(rowIn(high), undefined, modOrigin('Stranger'));
-    await invoke(rowIn(high), undefined, 'Low');
+    await invoke(await fileOf('High'), undefined, modOrigin('Stranger'));
+    await invoke(await fileOf('High'), undefined, 'Low');
 
-    expect(reveal).not.toHaveBeenCalled();
-    expect(reporter.reports.map((r) => r.message)).toEqual(['Failed to go to a mod.', 'Failed to go to a mod.']);
+    expect(view.reveals).toEqual([]);
+    expect(reporter.reports.map(({ message }) => message)).toEqual(['Failed to go to a mod.', 'Failed to go to a mod.']);
   });
 
   it('does nothing for a copy no conflict holds, and for a row that is not a file', async () => {
-    const { reveal, rowIn, invoke } = setup([high]);
+    const { view, row, fileOf, invoke } = await setup('High');
 
-    await invoke(rowIn(high));
-    await invoke(modRows.get('High'));
+    await invoke(await fileOf('High'));
+    await invoke(await row('High'));
 
-    expect(reveal).not.toHaveBeenCalled();
+    expect(view.reveals).toEqual([]);
   });
 
   it('says so when no row shows the mod, rather than selecting nothing in silence', async () => {
-    const { reveal, reporter, rowIn, invoke } = setup([high, low], () => undefined);
+    const { mods, view, reporter, fileOf, invoke } = await setup('High', 'Low');
+    mods.nameFilter.open();
+    currentBoxOf(seen)().type('high');
 
-    await invoke(rowIn(high));
+    await invoke(await fileOf('High'));
 
-    expect(reveal).not.toHaveBeenCalled();
+    expect(view.reveals).toEqual([]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to go to "Low".', detail: 'No row shows it.' }]);
   });
 
   it('reports a reveal that fails', async () => {
-    const { reveal, reporter, rowIn, invoke } = setup([high, low]);
-    reveal.mockRejectedValueOnce(new Error('no such row'));
+    const { view, reporter, fileOf, invoke } = await setup('High', 'Low');
+    view.revealRefusal = new Error('no such row');
 
-    await invoke(rowIn(high));
+    await invoke(await fileOf('High'));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to go to "Low".', detail: 'no such row' }]);
   });
 
   it('acts on the one selected file when a key hands it no row', async () => {
-    const { reveal, rowIn, invoke } = setup([high, low]);
-    rowIn(high);
+    const { view, fileOf, invoke } = await setup('High', 'Low');
+    view.selectRows([await fileOf('High')]);
 
     await invoke();
 
-    expect(reveal.mock.calls).toEqual([[modRows.get('Low')]]);
+    expect(view.reveals).toEqual([revealOf('Low')]);
   });
 });
