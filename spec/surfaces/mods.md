@@ -214,6 +214,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery.
 6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2
+7. Two folders or files of what I install whose paths differ only in case read as one, as Windows reads them. Two files with different content that then fall on one path to refuse the install, naming both. Cites: Windows and Linux alike; MO2; Never silently wrong
 
 ### Uninstall
 

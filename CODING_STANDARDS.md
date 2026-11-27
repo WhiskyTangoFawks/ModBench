@@ -52,6 +52,7 @@ These are the marks a skipped loop or a drifted layer leaves. A review looks for
 - Several tests differ only in inputs and expected values. → Make them one table.
 - A test file builds data that a shared fixture already builds. → Use the fixture.
 - A test's input is larger than its rule needs: a real plugin where one record proves the rule, a modlist where two plugins do. → Use the smallest input that fails without the code.
+- A branch or a value only tests reach. → Delete it and the tests that reach it.
 
 ## Naming
 
