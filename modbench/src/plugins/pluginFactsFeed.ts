@@ -209,7 +209,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     return refreshed;
   }
 
-  // ADR-0019; common.md, Reporting: a later read behind the view that failed. The next re-read reads every plugin.
+  // ADR-0019; common.md, Reporting: a later read behind the view that failed.
   private refreshThrew(reason: string, generation: number): void {
     this.deps.log(`re-reading mEdit's facts about each plugin threw: ${reason}`);
     if (generation === this.generation) this.factsFailed(reason);

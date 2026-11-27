@@ -356,6 +356,34 @@ describe('a throw that is no failed read', () => {
     expect(factsAsked(facts).slice(-2)).toEqual([[[A]], []]);
   });
 
+  it('of each re-read tells the Output, though it repeats the last throw\'s reason', async () => {
+    const facts = factsOver([A]);
+    await facts.reconciled([held()]);
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke'));
+    facts.client.setQueryAnswerOnce('getPlugins', refusing('the read broke'));
+
+    await facts.changed([held()], [A]);
+    await facts.changed([held()], [A]);
+
+    expect(facts.output.filter((line) => line.includes('the read broke'))).toHaveLength(2);
+  });
+
+  it('of a re-read a newer tick superseded tells the Output, and leaves the message line to the tick', async () => {
+    const facts = factsOver([A]);
+    await facts.reconciled([held()]);
+    const answer = deferred();
+    facts.client.setQueryAnswerOnce('getPlugins', { then: (answered, refused) => answer.promise.then(() => Promise.reject(new Error('the read broke'))).then(answered, refused) });
+    await facts.changed([held()], [A]);
+
+    await facts.indexed({ indexed: [A] });
+    answer.resolve();
+    await settle();
+
+    expect([facts.message(), facts.output.filter((line) => line.includes('the read broke'))]).toEqual([
+      undefined, ["[loadOrder] re-reading mEdit's facts about each plugin threw: the read broke"],
+    ]);
+  });
+
   it('reads the next re-read after one that threw', async () => {
     const facts = factsOver([A]);
     await facts.indexed({ indexed: [A] });

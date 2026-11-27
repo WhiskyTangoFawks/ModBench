@@ -313,9 +313,8 @@ describe('modbench.record.create selects the new record once its plugin\'s chang
   });
 
   it('selects no row beneath a record that holds the new record, for what a record holds is not its group\'s', async () => {
-    const { client, run, rows, revealed, opened } = await creating({ shown: [] });
+    const { client, run, rows, revealed, opened } = await creating();
     client.setQueryAnswer('getRecords', { items: [recordSummaryFixture({ formKey: OTHER, plugin: 'MyPatch.esp', editorId: 'MQ101', hasContainerChildren: true })], total: 1 });
-    client.setQueryAnswer('getContainerChildren', [{ ...NEW_RECORD, recordType: 'dial', hasContainerChildren: false, isContainer: false }]);
 
     await run(rows.quests);
     client.change(rowsChanged([NEW]));

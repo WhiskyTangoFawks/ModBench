@@ -21,7 +21,6 @@ type Decorations = {
 type Lenses = { provideCodeLenses: (document: { uri: unknown; getText: () => string }) => vscode.CodeLens[] };
 type Actions = { provideCodeActions: (document: { uri: unknown }, range: Range, context: { diagnostics: readonly unknown[] }) => vscode.ProviderResult<CodeAction[]> };
 
-
 export class Position {
   constructor(readonly line: number, readonly character: number) {}
 }
