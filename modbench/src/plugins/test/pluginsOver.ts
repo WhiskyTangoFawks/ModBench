@@ -7,7 +7,10 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { pluginArgumentOf } from '../../drivingLib/argument';
@@ -76,4 +79,25 @@ export function pluginsOver({
     client, instance, plugins, shown, reporters, reporter: reporterFor, output, view, rows, item, rowsNamed, pluginRows,
     dispose: () => { shown.dispose(); plugins.dispose(); },
   };
+}
+
+/** The plugins of ModA, in the order named, each enabled. */
+export const pluginsOfModA = (names: readonly string[]) => names.map((name, line) => ({ name, origin: 'ModA', path: `/mods/ModA/${name}`, line, enabled: true, winning: true }));
+
+/** The Plugins box over ModA's plugins `names`, which mEdit has indexed and the Instance adapter reads in that order,
+ *  once its status bar says Ready. */
+export async function indexedOver(names: readonly string[], { value = {}, ...over }: Omit<Over, 'value' | 'client' | 'adapter'> & { value?: Partial<InstanceValue>; reading?: Parameters<typeof readingFixture>[0]; answers?: Parameters<typeof fakeInstanceAdapter>[1] } = {}) {
+  const { reading, answers, ...rest } = over;
+  const client = clientHoldingNothing();
+  client.setQueryAnswer('getPlugins', names.map((name) => pluginMetadataFixture({ name, origin: 'ModA' })));
+  client.setQueryAnswer('getPluginsIndexing', []);
+  const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })), ...reading }), answers);
+  const made = pluginsOver({
+    client, adapter: fake.adapter, commandsClient: { getPlugins: () => Promise.resolve([]) }, ...rest,
+    value: instanceValueFixture({ activeProfile: 'Default', plugins: pluginsOfModA(names), ...value }),
+  });
+  holdsLoadOrder(client, { indexed: names.map((name) => ({ name, origin: 'ModA' })) });
+  await settled(() => { if (made.plugins.standing.mEdit().length > 0) throw new Error('mEdit is not Ready'); });
+  const rows = await made.pluginRows();
+  return { ...made, fake, row: (name: string) => rows.get(name) };
 }

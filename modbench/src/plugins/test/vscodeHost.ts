@@ -16,7 +16,7 @@ export {
 type Handler = (...args: unknown[]) => unknown;
 type Decorations = { provideFileDecoration: (uri: unknown) => vscode.ProviderResult<vscode.FileDecoration> };
 type Lenses = { provideCodeLenses: (document: { getText: () => string }) => vscode.CodeLens[] };
-type Actions = { provideCodeActions: (document: { uri: unknown }, range: unknown, context: { diagnostics: readonly unknown[] }) => vscode.ProviderResult<CodeAction[]> };
+type Actions = { provideCodeActions: (document: { uri: unknown }, range: Range, context: { diagnostics: readonly unknown[] }) => vscode.ProviderResult<CodeAction[]> };
 
 export class Disposable {
   constructor(readonly dispose: () => void) {}
@@ -53,12 +53,14 @@ const lenses: Lenses[] = [];
 const actions: Actions[] = [];
 const statusBarItems: StatusBarItem[] = [];
 const inputBoxes: FakeInputBox[] = [];
-const quickPicks: { items: string[]; placeHolder: string | undefined }[] = [];
+const quickPicks: { items: string[]; placeHolder: string | undefined; canPickMany: boolean }[] = [];
 const inputs: { prompt: string | undefined; value: string | undefined }[] = [];
 const files = new Map<string, string>();
 const shownDocuments: unknown[] = [];
 const statusMessages: string[] = [];
-let pick: (labels: readonly string[]) => string | undefined = () => undefined;
+const progress: string[] = [];
+const checkboxListeners: ((event: { items: readonly [unknown, number][] }) => unknown)[] = [];
+let pick: (labels: readonly string[]) => string | readonly string[] | undefined = () => undefined;
 let input: (asked: { prompt?: string; value?: string }) => string | undefined = () => undefined;
 
 const workspacePath = (path: string) => path.replace(/^\/workspace\//, '');
@@ -74,7 +76,13 @@ export const commands = {
 };
 
 export const window = {
-  createTreeView: (id: string, options: vscode.TreeViewOptions<unknown>) => treeViews.create(id, options),
+  createTreeView: (id: string, options: vscode.TreeViewOptions<unknown>) => {
+    const onDidChangeCheckboxState = (listener: (event: { items: readonly [unknown, number][] }) => unknown) => {
+      checkboxListeners.push(listener);
+      return new Disposable(() => undefined);
+    };
+    return Object.assign(treeViews.create(id, options), { onDidChangeCheckboxState });
+  },
   registerFileDecorationProvider: (provider: Decorations) => { decorations.push(provider); return new Disposable(() => undefined); },
   createStatusBarItem: () => {
     const item: StatusBarItem = {
@@ -83,12 +91,16 @@ export const window = {
     statusBarItems.push(item);
     return item;
   },
-  withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
-  showQuickPick: async <T extends string | vscode.QuickPickItem>(items: readonly T[] | Promise<readonly T[]>, options?: { placeHolder?: string }) => {
+  withProgress: async (options: { location: { viewId: string } | number }, task: () => Promise<unknown>) => {
+    progress.push(`opens on ${typeof options.location === 'number' ? options.location : options.location.viewId}`);
+    try { return await task(); } finally { progress.push('closes'); }
+  },
+  showQuickPick: async <T extends string | vscode.QuickPickItem>(items: readonly T[] | Promise<readonly T[]>, options?: { placeHolder?: string; canPickMany?: boolean }) => {
     const offered = await items;
     const labels = offered.map(labelOf);
-    quickPicks.push({ items: labels, placeHolder: options?.placeHolder });
+    quickPicks.push({ items: labels, placeHolder: options?.placeHolder, canPickMany: options?.canPickMany === true });
     const picked = pick(labels);
+    if (options?.canPickMany === true) return picked && offered.filter((item) => [picked].flat().includes(labelOf(item)));
     return offered.find((item) => labelOf(item) === picked);
   },
   showInputBox: async (options: { prompt?: string; value?: string; validateInput?: (value: string) => unknown } = {}) => {
@@ -144,27 +156,34 @@ export const host = {
   /** What each decoration provider draws on the row at `uri`, in registration order. */
   decorate: (uri: unknown) => Promise.all(decorations.map((provider) => Promise.resolve(provider.provideFileDecoration(uri)))),
   lenses: (text: string) => lenses.flatMap((provider) => provider.provideCodeLenses({ getText: () => text })),
-  codeActions: async (path: string, diagnostics: readonly unknown[]) =>
-    (await Promise.all(actions.map((provider) => Promise.resolve(provider.provideCodeActions({ uri: Uri.file(path) }, undefined, { diagnostics }))))).flatMap((each) => each ?? []),
+  /** The code actions offered on `line` of the file at `path`. */
+  codeActions: async (path: string, line: number) => {
+    const at = new Range(line, 0, line, 0);
+    return (await Promise.all(actions.map((provider) => Promise.resolve(provider.provideCodeActions({ uri: Uri.file(path) }, at, { diagnostics: [] }))))).flatMap((each) => each ?? []);
+  },
   statusBarItems,
   inputBoxes,
   /** Each quick pick shown, its labels and placeholder. */
   quickPicks,
   /** Each input box asked, its prompt and value. */
   inputs,
-  /** Picks the item whose label `answer` returns. */
-  picks: (answer: (labels: readonly string[]) => string | undefined) => { pick = answer; },
+  /** Picks the items whose labels `answer` returns. */
+  picks: (answer: (labels: readonly string[]) => string | readonly string[] | undefined) => { pick = answer; },
   /** Types the answer `answer` returns into each input box. */
   types: (answer: (asked: { prompt?: string; value?: string }) => string | undefined) => { input = answer; },
   /** The workspace's files, by path from its root. */
   files,
   shownDocuments,
   statusMessages,
+  /** The user clicks the check boxes of `items`, each to its state; settles once every listener has. */
+  check: (items: readonly [unknown, number][]) => Promise.all(checkboxListeners.map((listener) => listener({ items }))),
+  /** Each progress opened and closed, in turn. */
+  progress,
   /** Forgets everything registered and held, as a fresh window. */
   reset: () => {
     treeViews.clear();
     for (const held of [commandHandlers, contexts, collections, files]) held.clear();
-    for (const held of [executed, decorations, lenses, actions, statusBarItems, inputBoxes, quickPicks, inputs, shownDocuments, statusMessages]) held.length = 0;
+    for (const held of [executed, decorations, lenses, actions, statusBarItems, inputBoxes, quickPicks, inputs, shownDocuments, statusMessages, progress, checkboxListeners]) held.length = 0;
     pick = () => undefined;
     input = () => undefined;
   },
