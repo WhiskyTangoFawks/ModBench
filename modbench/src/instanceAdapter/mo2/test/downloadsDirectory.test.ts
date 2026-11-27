@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { appendFile, rm } from 'node:fs/promises';
+import { describe, it, expect, afterEach, beforeEach, onTestFinished, vi } from 'vitest';
+import { appendFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NO_DETECTORS } from '../../../test/noDetectors';
 import { onPosix } from '../../../test/platform';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
@@ -11,6 +11,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import type { DownloadedFiles } from '../../instanceAdapter';
 import { qSettingsPath } from '../../test/instanceOnDisk';
+import { steamIn, steamPrefixIn } from '../../test/steamOnDisk';
 
 describe('the downloads directory resolver', () => {
   let root: string;
@@ -48,10 +49,11 @@ describe('the downloads directory resolver', () => {
   });
 
   onPosix.it("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
-    const prefix = join('/home', 'user', '.steam', 'compatdata', '377160', 'pfx');
+    const steam = await mkdtemp(join(tmpdir(), 'steam-'));
+    onTestFinished(() => rm(steam, { recursive: true, force: true }));
 
-    expect(await downloadedFilesWith('C:\\Games\\MO2\\downloads', { detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) } }))
-      .toEqual(resolved(join(prefix, 'drive_c', 'Games/MO2/downloads')));
+    expect(await downloadedFilesWith('C:\\Games\\MO2\\downloads', { machine: await steamIn(steam) }))
+      .toEqual(resolved(join(steamPrefixIn(steam), 'drive_c', 'Games/MO2/downloads')));
   });
 
   onPosix.describe('(Wine translates a drive letter only on Linux) an untranslatable download_directory answers unresolved with why rather than guessing at the default folder, which is not the folder MO2 names', () => {

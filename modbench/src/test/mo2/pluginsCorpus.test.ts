@@ -22,7 +22,7 @@ async function syncWithGameFolderHolding(dir: string, plugin: string): Promise<P
   const game = join(dir, 'Game');
   await mkdir(join(game, 'Data'), { recursive: true });
   await writeFile(join(game, 'Data', plugin), '');
-  return pluginSyncOver(adapterOver(dir, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }), NOT_INDEXED);
+  return pluginSyncOver(adapterOver(dir, { gameFolderSettingValue: game }), NOT_INDEXED);
 }
 
 function pluginsFileHeld(dir: string): { release: () => void; done: Promise<void> } {

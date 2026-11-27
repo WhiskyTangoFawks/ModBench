@@ -112,7 +112,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
     it('answers for the game\'s Data folder', async () => {
       await put('game/Data/Scripts/Actor.pex');
-      const withGame = adapterOver(root, { gameFolder: { kind: 'found', root: at('game'), dataFolder: at('game/Data') } });
+      const withGame = adapterOver(root, { gameFolderSettingValue: at('game') });
 
       expect(await withGame.originHoldsFile({ kind: 'dataFolder' }, 'scripts/actor.pex')).toBe(true);
       expect(await withGame.originHoldsFile({ kind: 'dataFolder' }, 'Scripts/Quest.pex')).toBe(false);

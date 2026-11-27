@@ -6,6 +6,8 @@ import { scriptEnvironmentFile } from './scriptEnvironmentFile';
 import { withPublisher } from './publisher';
 import { wabbajackPublisher } from './wabbajack/wabbajackPublisher';
 
+export { thisMachine } from './machine';
+
 export const isInstance = isMo2Instance;
 export function adapterForInstance(options: Mo2InstanceOptions & { scriptEnvironmentFileSetting: () => string | undefined }): InstanceAdapter {
   const publisher = wabbajackPublisher(options.instanceRoot, { neverShipped: [overwriteDir(options.instanceRoot)], enabledMods: enabledModsIn(options.instanceRoot) });

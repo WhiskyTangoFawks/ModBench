@@ -20,8 +20,6 @@ import { adapterOver } from './mo2/adapterOver';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
-const DATA_FOLDER = '/game/Data';
-const DATA_FOLDER_FOUND = { kind: 'found', root: '/game', dataFolder: DATA_FOLDER } as const;
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -46,7 +44,7 @@ async function settledWiredInstance(): Promise<{
   roots.push(root);
   const instance = new Instance({
     gameFolderSettingId: GAME_FOLDER_SETTING_ID,
-    adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
+    adapter: adapterOver(root),
     log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
   });
   instances.push(instance);

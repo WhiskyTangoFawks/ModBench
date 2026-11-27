@@ -51,9 +51,8 @@ afterEach(async () => {
 describe('a rename while a recompute is reading', () => {
   it('keeps the renamed mod\'s line, its place and its enabled state, and mod sync writes nothing, whichever files the recompute read after the folder moved', async () => {
     root = cloneCorpusFixture();
-    const gameFolder = { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } as const;
-    const writer = adapterOver(root, { gameFolder });
-    const reader = sourceOver(root, { gameFolder });
+    const writer = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
+    const reader = sourceOver(root, { gameFolderSettingValue: join(root, 'Game') });
 
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });

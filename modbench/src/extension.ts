@@ -34,7 +34,7 @@ import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { downloadedFileReader, isPluginSourcePath, type InstanceAdapter, type EntryRef } from './instanceAdapter/instanceAdapter';
 import type { CopyReads } from './mods/sameCopies';
-import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
+import { adapterForInstance, isInstance, thisMachine } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
 import type { DeploymentRead } from './agent/instanceReads';
 import type { PluginsShown } from './drivingLib/pluginsShown';
@@ -209,7 +209,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, watcherExclude: watcherExcludeSetting, hostGit, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
+        instanceRoot, gameFolderSetting, watcherExclude: watcherExcludeSetting, hostGit, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath, machine: thisMachine,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, log: outputChannel, medit, workspace: workspaceFolders,

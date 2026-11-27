@@ -322,7 +322,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'medit-fomod-game-'));
       try {
         await mkdir(join(game, 'Data'));
-        const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } });
+        const adapter = adapterOver(root, { gameFolderSettingValue: game });
 
         await adapter.install(await fomod(`<conditionalFileInstalls><patterns>${[
           conditional('<fileDependency file="Patch Mod.esp" state="Active"/>', 'active.esp'),
@@ -349,7 +349,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       afterEach(() => rm(game, { recursive: true, force: true }));
 
       const installed = async (...dependencies: [string, string][]): Promise<unknown> =>
-        adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }).install(
+        adapterOver(root, { gameFolderSettingValue: game }).install(
           await fomod(`<conditionalFileInstalls><patterns>${dependencies.map(([dependency, destination]) => conditional(dependency, destination)).join('')}</patterns></conditionalFileInstalls>`),
           { kind: 'new', name: MOD }, trash, { kind: 'choices', steps: [] },
         );

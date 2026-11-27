@@ -6,7 +6,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { adapterAsBuilt } from './instanceOnDisk';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { watcherExcluding } from '../../test/watcherExclusion';
 
@@ -33,7 +33,7 @@ describe('what the user excluded from VS Code\'s watch (files.watcherExclude) na
   });
 
   const unwatched = async (patterns: Record<string, boolean>): Promise<{ folder: string; reason: string }[]> => {
-    const adapter = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding(patterns) });
+    const adapter = adapterOver(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding(patterns) });
     const subscription = adapter.subscribe(() => undefined);
     try {
       const { unwatchedFolders } = await adapter.reading();

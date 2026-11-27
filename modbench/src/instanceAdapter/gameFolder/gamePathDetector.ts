@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
-import * as os from 'node:os';
-import { posix, win32 } from 'node:path';
+import { join } from 'node:path';
 import { readOrAbsent } from '../files';
+import type { Machine } from '../instanceAdapter';
 
 export interface GamePaths {
   dataFolder: string;
@@ -26,14 +26,8 @@ function libraryEntries(content: string): { path: string; block: string }[] {
 const parseLibraryFoldersVdf = (content: string, appId: string): string | null =>
   libraryEntries(content).find(({ block }) => block.includes(`"${appId}"`))?.path ?? null;
 
-/** Takes `platform` explicitly (rather than reading `process.platform` itself) so tests can
- *  exercise both branches directly instead of stubbing global process state. */
-export async function detectGamePaths(
-  platform: NodeJS.Platform,
-  game: GameAutodetect,
-  runRegQuery: () => Promise<string>,
-): Promise<GamePaths | null> {
-  return platform === 'win32' ? detectWindows(runRegQuery, game) : detectLinux(game);
+export async function detectGamePaths(machine: Machine, game: GameAutodetect): Promise<GamePaths | null> {
+  return machine.platform === 'win32' ? detectWindows(machine, game) : detectLinux(machine, game);
 }
 
 async function findLibraryInVdfs(vdfPaths: string[], steamAppId: string): Promise<string | null> {
@@ -50,31 +44,31 @@ async function findLibraryInVdfs(vdfPaths: string[], steamAppId: string): Promis
 
 function windowsVdfPaths(steamPath: string): string[] {
   return [
-    win32.join(steamPath, 'steamapps', 'libraryfolders.vdf'),
-    win32.join(steamPath, 'config', 'libraryfolders.vdf'),
+    join(steamPath, 'steamapps', 'libraryfolders.vdf'),
+    join(steamPath, 'config', 'libraryfolders.vdf'),
   ];
 }
 
-const linuxSteamRoot = (): string => posix.join(os.homedir(), '.steam', 'steam');
+const linuxSteamRoot = ({ homeFolder }: Machine): string => join(homeFolder, '.steam', 'steam');
 
-/** Where Steam is on `platform`, when Modbench looks for its prefixes there. */
-export const steamRootOn = (platform: NodeJS.Platform): string | undefined => (platform === 'linux' ? linuxSteamRoot() : undefined);
+/** Where Steam is on `machine`, when Modbench looks for its prefixes there. */
+export const steamRootOn = (machine: Machine): string | undefined => (machine.platform === 'linux' ? linuxSteamRoot(machine) : undefined);
 
 /** Steam's root, then every other library its libraryfolders.vdf names. A libraryfolders.vdf that cannot be read rejects. */
 export async function steamLibraries(steamRoot: string): Promise<string[]> {
-  const content = await readOrAbsent(() => readFile(posix.join(steamRoot, 'config', 'libraryfolders.vdf'), 'utf-8'), '');
+  const content = await readOrAbsent(() => readFile(join(steamRoot, 'config', 'libraryfolders.vdf'), 'utf-8'), '');
   return [...new Set([steamRoot, ...libraryEntries(content).map(({ path }) => path)])];
 }
 
-function findSteamLibrary(steamAppId: string): Promise<string | null> {
-  return findLibraryInVdfs([posix.join(linuxSteamRoot(), 'config', 'libraryfolders.vdf')], steamAppId);
+function findSteamLibrary(machine: Machine, steamAppId: string): Promise<string | null> {
+  return findLibraryInVdfs([join(linuxSteamRoot(machine), 'config', 'libraryfolders.vdf')], steamAppId);
 }
 
-async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
-  const library = await findSteamLibrary(game.steamAppId);
+async function detectLinux(machine: Machine, game: GameAutodetect): Promise<GamePaths | null> {
+  const library = await findSteamLibrary(machine, game.steamAppId);
   if (!library) return null;
   try {
-    const dataFolder = posix.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
+    const dataFolder = join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
     await access(dataFolder);
     return { dataFolder };
   } catch {
@@ -84,27 +78,20 @@ async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
 
 /** The Proton prefix root (`steamapps/compatdata/<appid>/pfx`) for the release's Steam library,
  *  so Wine drive-letter translation does not re-derive it. */
-export async function detectWinePrefix(steamAppId: string): Promise<string | null> {
-  const library = await findSteamLibrary(steamAppId);
-  return library ? posix.join(library, 'steamapps', 'compatdata', steamAppId, 'pfx') : null;
+export async function detectWinePrefix(machine: Machine, steamAppId: string): Promise<string | null> {
+  const library = await findSteamLibrary(machine, steamAppId);
+  return library ? join(library, 'steamapps', 'compatdata', steamAppId, 'pfx') : null;
 }
 
-function parseRegQuerySteamPath(stdout: string): string | null {
-  const path = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/)?.[1];
-  return path !== undefined ? path.trim() : null;
-}
+const STEAM_KEY = 'HKCU\\Software\\Valve\\Steam';
 
-async function detectWindows(
-  runRegQuery: () => Promise<string>,
-  game: GameAutodetect,
-): Promise<GamePaths | null> {
+async function detectWindows(machine: Machine, game: GameAutodetect): Promise<GamePaths | null> {
   try {
-    const stdout = await runRegQuery();
-    const steamPath = parseRegQuerySteamPath(stdout);
+    const steamPath = await machine.registryValue(STEAM_KEY, 'SteamPath');
     if (!steamPath) return null;
 
     const library = (await findLibraryInVdfs(windowsVdfPaths(steamPath), game.steamAppId)) ?? steamPath;
-    const dataFolder = win32.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
+    const dataFolder = join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
     await access(dataFolder);
     return { dataFolder };
   } catch {

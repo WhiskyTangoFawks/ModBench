@@ -30,7 +30,7 @@ async function instanceTakingFromTheGame() {
   await put('Game/Data/a.nif', 'a');
   await put('Game/Data/b.nif', 'b');
   const gameRoot = join(root, 'Game');
-  const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') } });
+  const adapter = adapterOver(root, { gameFolderSettingValue: gameRoot });
   return { adapter, update: () => updateManifest({ adapter }, ['Mod'], {}, false, []) };
 }
 
@@ -65,7 +65,7 @@ describe('update manifest over an instance on disk', () => {
   it('leaves it with none differing in the next session, which reads the hashes its manifest records', async () => {
     const { update } = await instanceTakingFromTheGame();
     await update();
-    const next = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
+    const next = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
 
     const status = await statusNow(next, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 

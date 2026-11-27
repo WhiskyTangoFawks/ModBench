@@ -1,15 +1,12 @@
 // Where the game is: the setting, then the manager's game path, then Steam and Wine detection.
 
-import { exec } from 'node:child_process';
-import { dirname, join, posix, win32 } from 'node:path';
-import { promisify } from 'node:util';
+import { dirname, join, win32 } from 'node:path';
 import { gamePathInfoForRelease } from '../../tables/gamePaths';
-import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
-import { documentsFolder } from './documentsFolder';
+import { detectGamePaths, detectWinePrefix, type GameAutodetect } from './gamePathDetector';
 import { factsOf } from '../files';
 import { present } from '../../ports/present';
 import { errorMessage } from '../../ports/errorMessage';
-import type { FoundGameFolder, GameFolder, GameFolderLook, GameFolderSetting, SteamInstall } from '../instanceAdapter';
+import type { FoundGameFolder, GameFolder, GameFolderLook, GameFolderSetting, Machine, SteamInstall } from '../instanceAdapter';
 import { installedDepots } from './steamAppManifest';
 
 export const DATA_FOLDER = 'Data';
@@ -30,25 +27,6 @@ export type GameFolderResolver = (managed: ManagerGamePath) => Promise<GameFolde
 export type SteamInstallResolver = (release: string | undefined) => Promise<SteamInstall | undefined>;
 
 type DetectWinePrefix = () => Promise<string | null>;
-
-/** What Steam is asked, injectable so both fallbacks are testable without a Steam install. */
-export interface GameDetectors {
-  paths: (game: GameAutodetect) => Promise<GamePaths | null>;
-  winePrefix: (steamAppId: string) => Promise<string | null>;
-  /** The user's Documents folder as Windows has it, wherever it was redirected to. */
-  documents: () => Promise<string>;
-}
-
-const execAsync = promisify(exec);
-
-export const STEAM: GameDetectors = {
-  paths: (game) =>
-    detectGamePaths(process.platform, game, () =>
-      execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
-    ),
-  winePrefix: detectWinePrefix,
-  documents: () => documentsFolder(),
-};
 
 /** Wine fixes `Z:` to the filesystem root and `C:` to the prefix's own `drive_c`; any other
  *  letter is a user-defined `dosdevices` mapping that can point anywhere, so it is surfaced as
@@ -76,7 +54,7 @@ export async function normalizeGamePath(
   if (!prefix) {
     throw new Error(`Cannot translate Wine path '${p}': the Proton prefix could not be determined`);
   }
-  return posix.join(prefix, 'drive_c', posixRest);
+  return join(prefix, 'drive_c', posixRest);
 }
 
 async function hasDataFolder(root: string): Promise<boolean> {
@@ -98,9 +76,9 @@ function autodetectFacts(release: string | undefined): GameAutodetect | undefine
 /** The Wine prefix detector for a release — `normalizeGamePath`'s own translation, shared so a
  *  path other than the game path (the manager's downloads folder, set through the same native
  *  dialog under Wine) translates a `C:` drive the same way. */
-export function winePrefixDetectorFor(release: string | undefined, detectors: GameDetectors = STEAM): DetectWinePrefix {
+export function winePrefixDetectorFor(release: string | undefined, machine: Machine): DetectWinePrefix {
   const facts = autodetectFacts(release);
-  return () => (facts ? detectors.winePrefix(facts.steamAppId) : Promise.resolve(null));
+  return () => (facts ? detectWinePrefix(machine, facts.steamAppId) : Promise.resolve(null));
 }
 
 // A setting left at its empty default is not set: every branch below reads absence as undefined.
@@ -119,28 +97,28 @@ const noDataFolder = (place: string, root: string): Looked =>
 
 // A configured folder that cannot be used refuses to fall through to Steam: resolving a different
 // game folder entirely would hide the real problem. Only a manager naming no folder falls through.
-async function managerGamePath(managed: ManagerGamePath, detectors: GameDetectors): Promise<Looked> {
+async function managerGamePath(managed: ManagerGamePath, machine: Machine): Promise<Looked> {
   const { path: raw, place, release } = managed;
   if (raw === undefined) return { look: { place, answer: NOT_SET }, fallThrough: true };
   let root: string;
   try {
-    root = await normalizeGamePath(raw, process.platform, winePrefixDetectorFor(release, detectors));
+    root = await normalizeGamePath(raw, machine.platform, winePrefixDetectorFor(release, machine));
   } catch (err) {
     return { look: { place, answer: errorMessage(err) }, fallThrough: false };
   }
   return (await hasDataFolder(root)) ? { found: root } : noDataFolder(place, root);
 }
 
-async function steamInstall(facts: GameAutodetect, detectors: GameDetectors): Promise<FoundGameFolder | undefined> {
-  const detected = await detectors.paths(facts);
+async function steamInstall(facts: GameAutodetect, machine: Machine): Promise<FoundGameFolder | undefined> {
+  const detected = await detectGamePaths(machine, facts);
   return detected ? { kind: 'found', root: dirname(detected.dataFolder), dataFolder: detected.dataFolder } : undefined;
 }
 
 /** The game's install in Steam's library, wherever the game folder is. */
-export function steamInstallResolver(detectors: GameDetectors = STEAM): SteamInstallResolver {
+export function steamInstallResolver(machine: Machine): SteamInstallResolver {
   return async (release) => {
     const facts = autodetectFacts(release);
-    const install = facts ? await steamInstall(facts, detectors) : undefined;
+    const install = facts ? await steamInstall(facts, machine) : undefined;
     if (facts === undefined || install === undefined) return undefined;
     const { depots, problems } = await installedDepots(dirname(dirname(install.root)), facts.steamAppId);
     return { ...install, steamApp: Number(facts.steamAppId), depots, depotProblems: problems };
@@ -149,7 +127,7 @@ export function steamInstallResolver(detectors: GameDetectors = STEAM): SteamIns
 
 /** The setting, then the manager's game path, then autodetect. A folder the setting or the manager
  *  names that has no Data folder refuses to fall through: the user chose that folder. */
-export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDetectors = STEAM): GameFolderResolver {
+export function gameFolderResolver(setting: GameFolderSetting, machine: Machine): GameFolderResolver {
   const settingPlace = `the game folder setting, ${setting.id}`;
   return async (managed: ManagerGamePath): Promise<GameFolder> => {
     const facts = autodetectFacts(managed.release);
@@ -165,7 +143,7 @@ export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDe
     }
     looked.push({ place: settingPlace, answer: NOT_SET });
 
-    const fromManager = await managerGamePath(managed, detectors);
+    const fromManager = await managerGamePath(managed, machine);
     if ('found' in fromManager) return at(fromManager.found);
     looked.push(fromManager.look);
     if (!fromManager.fallThrough) return notFound();
@@ -174,7 +152,7 @@ export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDe
       return notFound();
     }
     // Last, because a detection reads Steam's library file and runs `reg query` on Windows.
-    const detected = await steamInstall(facts, detectors);
+    const detected = await steamInstall(facts, machine);
     if (detected) return detected;
     looked.push({ place: STEAM_PLACE, answer: 'the game is in no Steam library' });
     return notFound();
