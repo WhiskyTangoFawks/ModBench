@@ -43,6 +43,16 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
     expect(await kind().symbols.definitionOf(RECORD)).toEqual({ place: { file: GUN_FILE, ...AT_MEMBER } });
   });
 
+  it('is the plugin of a copy that has no plugin source, as the agent reads it', async () => {
+    const RENDERED = { kind: 'Rendered', location: 'Gun - 000801_A.esp.json' } as const;
+    const { symbols } = kind({ arrange: (client) => {
+      client.setQueryAnswer('getCopyDocument', RENDERED);
+      host.holds([{ ...document('', GUN_TEXT), uri: copyDocumentUri({ formKey: GUN, plugin: modA }, RENDERED) }]);
+    } });
+
+    expect(await symbols.definitionOf(RECORD)).toEqual({ plugin: modA });
+  });
+
   it.each([
     ['the record\'s document states no FormKey member for it', () => kind({ text: '{ "EditorID": "Gun" }' }), `${GUN_FILE} states no ${GUN} member.`],
     ['no active plugin holds it', () => kind({ arrange: (client) => { client.setQueryAnswer('getRecordOwners', []); } }), `No active plugin holds ${GUN}.`],
@@ -249,6 +259,16 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
     await host.references(GUN_FILE, AT_GUN);
 
     expect(client.calls.slice(before)).toEqual([{ method: 'getPlacedReferences', args: [GUN, { isCancellationRequested: false }] }]);
+  });
+
+  it('reads each place in plugin source as its place, and one in a copy with no plugin source as the record that holds it, as the agent reads them', async () => {
+    const { symbols } = referencing();
+
+    expect(await symbols.referencesTo(RECORD)).toEqual({ references: [
+      { file: OWN_FILE.location, start: { line: 2, character: 11 }, end: { line: 2, character: 27 } },
+      { file: OWN_FILE.location, start: { line: 3, character: 15 }, end: { line: 3, character: 31 } },
+      { formKey: STAND, plugin: modB },
+    ], leftOut: [] });
   });
 
   it('lists each place each copy names the record, at the copy\'s document', async () => {

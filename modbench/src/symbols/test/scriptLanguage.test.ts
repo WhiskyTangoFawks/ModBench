@@ -11,6 +11,7 @@ import type { PlacedReferences, PluginFilePaths } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { settled as until } from '../../test/eventually';
+import { changeNamesPlugin, holdsLoadOrder } from '../../client/test/says';
 
 const QUEST = '000801:Mod.esp';
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/Quest.json';
@@ -158,6 +159,20 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
 
     await until(() => { expect(client.calls.filter(({ method }) => method === 'getPluginFilePaths').at(-1)?.args[0]).toEqual({ name: 'Mod.esp', origin: 'Mod' }); });
     expect([...host.problems(NAMES_NOTHING).keys()]).toEqual([SOURCE]);
+  });
+
+  it.each([
+    ['the instance changes', (made: ReturnType<typeof language>) => { made.instance.land({ ...made.instance.value }); }],
+    ['the load order settles, which says everything changed', (made: ReturnType<typeof language>) => { holdsLoadOrder(made.client, { version: 1 }); }],
+    ['a plugin changes', (made: ReturnType<typeof language>) => { changeNamesPlugin(made.client, { name: 'Mod.esp', origin: 'Mod' }); }],
+  ])('judges again when %s, asking mEdit again', async (_when, change) => {
+    const made = language();
+    const asked = () => made.client.calls.filter(({ method }) => method === 'getPluginFilePaths');
+    await until(() => { expect(asked()).toHaveLength(1); });
+
+    change(made);
+
+    await until(() => { expect(asked()).toHaveLength(2); });
   });
 });
 
