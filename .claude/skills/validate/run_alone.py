@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 import reports
-from check_test_times import CEILING_SECONDS, MERGE, approval_of
+from check_test_times import BRANCH, CEILING_SECONDS, MERGE, approval_of
 
 UNITTEST_FOLDERS = {'validate': '.claude/skills/validate', 'hooks': '.claude/hooks', 'scripts': 'scripts'}
 UNITTEST_ID = re.compile(r'\((\S+)\)$')
@@ -78,8 +78,9 @@ def execute(command: Command, environment: dict[str, str]) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """The run is branch or merge."""
     root, directory, alone, budgets_file, run = sys.argv[1:] if argv is None else argv
+    if run not in (BRANCH, MERGE):
+        raise SystemExit(f'A run is {BRANCH} or {MERGE}, not {run}.')
     approved = {} if run == MERGE else tomllib.loads(Path(budgets_file).read_text()).get('approved', {})
     environment = {key: value for key, value in os.environ.items() if key != MERGE_TO_MAIN}
     Path(alone).mkdir(parents=True, exist_ok=True)

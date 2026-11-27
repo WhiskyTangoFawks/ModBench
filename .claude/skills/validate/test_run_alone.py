@@ -50,7 +50,7 @@ class Commands(unittest.TestCase):
                              'npx', 'vitest', 'run', '--no-file-parallelism', '--reporter=json', '--outputFile.json=/alone/unit.json',
                              '-t', r'^(the\ box\ \(one\)\ works|two)$', '/a.test.ts', '/b.test.tsx'])])
 
-    def test_the_integration_tests_over_1_s_run_again_in_one_vs_code_matching_each_title_leaving_its_log(self) -> None:
+    def test_the_integration_tests_over_1_s_run_again_in_one_run_of_their_runner_matching_each_title_leaving_its_log(self) -> None:
         self.assertEqual(self.commands('.mocha', ran('watches a folder (as it was)', 7, 'integration'),
                                        ran('Space disables it', 1.2, 'integration'), ran('quick', 0.5, 'integration')),
                          [run_alone.Command(ROOT / 'modbench', [
@@ -67,40 +67,32 @@ class Main(unittest.TestCase):
     TEST = ('import os, unittest\nclass C(unittest.TestCase):\n    def test_a(self):\n'
             '        self.assertNotIn("MEDIT_MERGE_TO_MAIN", os.environ){}\n')
 
-    @staticmethod
-    def budgets(root: pathlib.Path) -> pathlib.Path:
-        budgets = root / 'budgets.toml'
-        budgets.write_text('[approved]\n')
-        return budgets
-
-    def run_alone(self, also: str) -> tuple[int, str, pathlib.Path]:
+    def run_alone(self, also: str = '', approved: str = '', run: str = 'branch') -> tuple[int, str, pathlib.Path]:
         root = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
         folder = root / '.claude/skills/validate'
         folder.mkdir(parents=True)
         (folder / 'test_m.py').write_text(self.TEST.format(also))
         (root / 'reports').mkdir()
         (root / 'reports' / 'validate.unittest').write_text(fx.unittest_log(durations=[('test_a (test_m.C.test_a)', 1.5)]))
+        (root / 'budgets.toml').write_text(f'[approved]\n{approved}')
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed), mock.patch.dict(os.environ, {'MEDIT_MERGE_TO_MAIN': 'true'}):
-            status = run_alone.main([str(root), str(root / 'reports'), str(root / 'alone'), str(self.budgets(root)), 'branch'])
+            status = run_alone.main([str(root), str(root / 'reports'), str(root / 'alone'), str(root / 'budgets.toml'), run])
         return status, printed.getvalue(), root / 'alone' / 'validate.unittest'
 
     def test_a_test_runs_again_as_a_branch_run_leaving_its_log(self) -> None:
-        status, _, log = self.run_alone('')
+        status, _, log = self.run_alone()
         self.assertEqual(status, 0)
         self.assertIn('test_a (test_m.C.test_a) ... ok', log.read_text())
 
     def test_a_merge_run_runs_an_approved_test_again_for_its_lapse_and_a_branch_run_does_not(self) -> None:
-        root = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
-        (root / 'reports').mkdir()
-        (root / 'reports' / 'validate.unittest').write_text(fx.unittest_log(durations=[('test_a (test_m.C.test_a)', 1.5)]))
-        budgets = root / 'budgets.toml'
-        budgets.write_text('[approved]\n"test_a (test_m.C.test_a)" = "r"\n')
-        for run, ran_again in (('branch', []), ('merge', [['python3', '-m', 'unittest', '-v', '--durations', '0', 'test_m.C.test_a']])):
-            with (self.subTest(run=run), contextlib.redirect_stdout(io.StringIO()),
-                  mock.patch.object(run_alone, 'execute', autospec=True, return_value=True) as execute):
-                run_alone.main([str(root), str(root / 'reports'), str(root / 'alone'), str(budgets), run])
-                self.assertEqual([call.args[0].argv for call in execute.call_args_list], ran_again)
+        for run, ran in (('branch', False), ('merge', True)):
+            with self.subTest(run=run):
+                self.assertEqual(self.run_alone(approved='"test_a (test_m.C.test_a)" = "r"\n', run=run)[2].exists(), ran)
+
+    def test_a_run_neither_branch_nor_merge_is_refused(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.run_alone(run='windows')
 
     def test_a_test_failing_alone_fails_the_run_naming_its_command(self) -> None:
         status, printed, _ = self.run_alone('; self.fail("alone")')

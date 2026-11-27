@@ -4,14 +4,19 @@ using MEditService.Codec.Serialization;
 using MEditService.Codec.Skyrim;
 using MEditService.Codec.Starfield;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Skyrim;
+using Mutagen.Bethesda.Starfield;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
 namespace MEditService.TestSupport;
 
-/// <summary>The game projects registered before any test runs, as the composition root registers
-/// them before the service starts. A cost paid once per process runs in <see cref="Warm"/>, before the
-/// first test starts, so no test's time holds it and the ceiling judges each test on its own cost.</summary>
+/// <summary>The game projects registered before any test runs, as the composition root registers them before the
+/// service starts. A cost paid once per process runs in <see cref="Warm"/> before the first test starts, so the
+/// ceiling judges each test on its own cost.</summary>
 public class GamesRegisteredTestFramework : XunitTestFramework
 {
     public GamesRegisteredTestFramework(IMessageSink messageSink) : base(messageSink) =>
@@ -22,7 +27,39 @@ public class GamesRegisteredTestFramework : XunitTestFramework
             [GameCategory.Starfield] = StarfieldCodec.Instance,
         });
 
-    protected virtual void Warm() { }
+    /// <summary>Mutagen's first write and read of each game's plugin, and the first time the round-trip gate tells two
+    /// Fallout 4 plugins apart.</summary>
+    protected virtual void Warm()
+    {
+        using var scratch = new ScratchDirectory("medit-warm-up-");
+        var key = ModKey.FromFileName("WarmUp.esp");
+        var fallout4 = new Fallout4Mod(key, Fallout4Release.Fallout4);
+        fallout4.Npcs.AddNew("WarmUp");
+        var written = WriteAndRead(fallout4, scratch, at => Fallout4Mod.CreateFromBinaryOverlay(at, Fallout4Release.Fallout4));
+        var skyrim = new SkyrimMod(key, SkyrimRelease.SkyrimSE);
+        skyrim.Npcs.AddNew("WarmUp");
+        WriteAndRead(skyrim, Directory.CreateDirectory(Path.Combine(scratch, "skyrim")).FullName,
+            at => SkyrimMod.CreateFromBinaryOverlay(at, SkyrimRelease.SkyrimSE));
+        var starfield = new StarfieldMod(key, StarfieldRelease.Starfield);
+        starfield.Npcs.AddNew("WarmUp");
+        WriteAndRead(starfield, Directory.CreateDirectory(Path.Combine(scratch, "starfield")).FullName,
+            at => StarfieldMod.CreateFromBinaryOverlay(at, StarfieldRelease.Starfield));
+
+        fallout4.Npcs.First().EditorID = "WarmUpDiffering";
+        var differing = WriteAndRead(fallout4, Directory.CreateDirectory(Path.Combine(scratch, "differing")).FullName,
+            at => Fallout4Mod.CreateFromBinaryOverlay(at, Fallout4Release.Fallout4));
+        _ = TestAdapters.Mutagen().DivergenceFrom(
+            key.FileName, written, differing, EmptyLoadOrder.Of(GameRelease.Fallout4), HandedStrings.Of(written));
+    }
+
+    private static string WriteAndRead(IMod mod, string folder, Func<ModPath, IModDisposeGetter> read)
+    {
+        var at = new ModPath(mod.ModKey, Path.Combine(folder, mod.ModKey.FileName));
+        mod.WriteToBinary(at.Path);
+        using var written = read(at);
+        _ = written.EnumerateMajorRecords().Count();
+        return at.Path;
+    }
 
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName) =>
         new Executor(assemblyName, SourceInformationProvider, DiagnosticMessageSink, Warm);

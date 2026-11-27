@@ -4,7 +4,7 @@ using Xunit.Abstractions;
 namespace MEditService.TestSupport;
 
 /// <summary>Schema reflection costs seconds once per process too.</summary>
-public class SchemaWarmedTestFramework(IMessageSink messageSink) : MutagenWarmedTestFramework(messageSink)
+public class SchemaWarmedTestFramework(IMessageSink messageSink) : GamesRegisteredTestFramework(messageSink)
 {
     protected override void Warm()
     {
