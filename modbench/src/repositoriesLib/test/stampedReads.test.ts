@@ -1,8 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { keptTrusted, readTrustingKept, stampFrom, trustingKept } from '../stampedReads';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readdir: vi.fn(actual.readdir), stat: vi.fn(actual.stat) };
+});
+
+const real = (): Promise<typeof import('node:fs/promises')> => vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+const listingsOf = (folder: string): number => vi.mocked(readdir).mock.calls.filter(([path]) => path === folder).length;
 
 const keptByStamp = <T>(read: (path: string) => Promise<T>): ((path: string) => Promise<T>) =>
   keptTrusted(async (path) => stampFrom(await stat(path, { bigint: true })), read);
@@ -152,5 +160,41 @@ describe('a read naming many files, with many kept (ADR-0029, Consequences, bull
     await Promise.all(Array.from({ length: 200 }, (_, n) => reader(`/instance/mods/Kept/${n}.dds`)));
 
     expect(await comparisonsOf(200)).toBe(await comparisonsOf(1));
+  });
+});
+
+describe('a folder listed by its stamp, as the repositories library keeps it', () => {
+  let root: string;
+  const namesOf = async (folder: string): Promise<string[]> => (await listedByStamp(folder)).map((entry) => entry.name).sort();
+  const listedByStamp = keptTrusted(async (path) => stampFrom(await stat(path, { bigint: true })), (path) => readdir(path, { withFileTypes: true }), new Map(), true);
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'medit-stamped-'));
+    vi.mocked(readdir).mockClear();
+  });
+  afterEach(async () => {
+    vi.useRealTimers();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('keeps the listing a read outside it made while a re-read was checking that folder\'s stamp', async () => {
+    await writeFile(join(root, 'a.esp'), '');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    await namesOf(root);
+    await writeFile(join(root, 'b.esp'), '');
+    await modifiedLater(root);
+    let releaseTheCheck!: () => void;
+    const checkHeld = new Promise<void>((resolve) => { releaseTheCheck = resolve; });
+    const { stat: realStat } = await real();
+    vi.mocked(stat).mockImplementationOnce(async (...args) => { await checkHeld; return realStat(...args); });
+
+    const rereading = readTrustingKept([join(root, 'b.esp')], false, () => Promise.resolve());
+    const outside = await namesOf(root);
+    releaseTheCheck();
+    await rereading;
+    vi.mocked(readdir).mockClear();
+    const { answer } = await readTrustingKept([], false, () => namesOf(root));
+
+    expect([outside, answer, listingsOf(root)]).toEqual([['a.esp', 'b.esp'], ['a.esp', 'b.esp'], 0]);
   });
 });

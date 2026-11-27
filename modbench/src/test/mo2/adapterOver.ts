@@ -76,7 +76,7 @@ export const managerOver = (root: string, answers: AdapterAnswers = {}, publishe
 
 /** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
+  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: answers.fileProblems ?? fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */
