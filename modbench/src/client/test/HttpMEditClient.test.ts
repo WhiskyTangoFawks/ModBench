@@ -2,7 +2,7 @@ import { EMPTY_SNAPSHOT, IGNORED_THROWS, cancellableToken, loadOrderStatusEventF
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { leveledLog } from '../../test/leveledLog';
-import { createMEditClient } from '../HttpMEditClient';
+import { createMEditClient } from '..';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { PassThrough, Readable } from 'node:stream';

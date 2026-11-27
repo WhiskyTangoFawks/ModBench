@@ -1,10 +1,11 @@
 import { vi } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createEditor } from '..';
-import type { ModFacts } from '../modsByOrigin';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { Uri } from '../../test/vscodeMock';
 import { forgetVscode } from './editorVscode';
+
+export type ModFacts = Parameters<typeof createEditor>[0]['modFacts'];
 
 export const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 

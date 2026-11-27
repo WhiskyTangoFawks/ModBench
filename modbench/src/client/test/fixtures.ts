@@ -1,6 +1,5 @@
 import { vi } from 'vitest';
-import type { ListenerThrows } from '../notificationStream';
-import type { NotificationEvent } from '../apiClient';
+import type { createMEditClient } from '..';
 import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
 import type { components } from '../../wire/generated/api';
 import type { InMemoryMEditClient } from './InMemoryMEditClient';
@@ -8,6 +7,8 @@ import type { LoadOrderSnapshot, ReadCancellation } from '../MEditClient';
 import { isReadFailed } from '../../wire/readFailed';
 
 type CompiledPlugin = components['schemas']['CompiledPlugin'];
+type NotificationEvent = components['schemas']['NotificationEvent'];
+type ListenerThrows = Parameters<typeof createMEditClient>[0]['listenerThrows'];
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
  *  the fields it cares about needs no cast to reach the wire type. */

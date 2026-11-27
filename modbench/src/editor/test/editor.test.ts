@@ -9,8 +9,7 @@ vi.mock('vscode', () => editorVscode);
 
 import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { ModFacts } from '../modsByOrigin';
-import { fakeLoadOrder, forgetEditor, NO_MODS, register } from './editorHarness';
+import { fakeLoadOrder, forgetEditor, NO_MODS, register, type ModFacts } from './editorHarness';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
