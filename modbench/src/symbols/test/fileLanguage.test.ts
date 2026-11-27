@@ -67,12 +67,13 @@ const atCopy = (path: string) => new Location(Uri.file(path), new Range(0, 0, 0,
 
 describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
   it.each([
-    ['the file by its path in the Data folder', NAMES_FILE, FILE],
-    ['nothing, saying why, by the path as given, where mEdit could not tell which file it names', { ...NAMES_FILE, dataPath: null, refusal: 'Data/Stain_d.dds is no path its asset type holds' }, 'Decals\\Stain_d.dds'],
-  ])('names %s', async (_case, named, text) => {
+    ['the file by its path in the Data folder', NAMES_FILE, { text: FILE, spans: SPELLED }],
+    ['nothing, saying why, by the path as given, where mEdit could not tell which file it names', { ...NAMES_FILE, dataPath: null, refusal: 'Data/Stain_d.dds is no path its asset type holds' }, { text: 'Decals\\Stain_d.dds', spans: SPELLED }],
+    ['nothing where the path is empty', { ...NAMES_FILE, value: '', dataPath: null }, undefined],
+  ])('names %s', async (_case, named, hover) => {
     language(NONE, { named: [named] });
 
-    expect(await host.hover(SOURCE, AT_PATH)).toEqual({ text, spans: SPELLED });
+    expect(await host.hover(SOURCE, AT_PATH)).toEqual(hover);
   });
 
   it.each([

@@ -8,7 +8,7 @@ import { mEditNames, spelledName } from './mEditNames';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { localFailure } from '../../wire/readFailed';
 import { cancellableToken, pluginMetadataFixture } from '../../client/test/fixtures';
-import type { CompareResult } from '../../client';
+import type { CompareResult, MEditClient } from '../../client';
 import type { PlacedReferences } from '../../client/MEditClient';
 import { comparisonOf, type Copy } from '../../test/comparison';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
@@ -26,9 +26,9 @@ const NAMES = mEditNames((text) => [
   ...text.includes(MEMBER) ? [spelledName('Declaration', text, MEMBER, { record: GUN }), spelledName('Record', text, `"${GUN}"`, { record: GUN, fieldPath: 'FormKey', value: GUN })] : [],
 ]);
 
-function kind({ text = GUN_TEXT, focused, arrange = () => undefined }: { text?: string; focused?: string; arrange?: (client: InMemoryMEditClient) => void } = {}) {
+function kind({ text = GUN_TEXT, focused, names = NAMES, arrange = () => undefined }: { text?: string; focused?: string; names?: Pick<MEditClient, 'getPluginSourceNames'>; arrange?: (client: InMemoryMEditClient) => void } = {}) {
   return symbolsOver({
-    names: NAMES, focusedRecord: () => focused,
+    names, focusedRecord: () => focused,
     arrange: (client) => {
       client.setQueryAnswer('getRecordOwners', [modA]);
       client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
@@ -59,6 +59,7 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
     ['no active plugin holds it', () => kind({ arrange: (client) => { client.setQueryAnswer('getRecordOwners', []); } }), `No active plugin holds ${GUN}.`],
     ['the winning plugin holds no copy', () => kind({ arrange: (client) => { client.setQueryAnswer('getCopyDocument', null); } }), `A.esp (ModA) holds no ${GUN}.`],
     ['its document fails to open', () => kind({ arrange: () => { host.unopenable.add(GUN_FILE); } }), `Where ${GUN} is defined could not be read: The file is gone.`],
+    ['mEdit cannot tell what its document names', () => kind({ names: { getPluginSourceNames: () => Promise.resolve(localFailure('mEdit is down')) } }), `Where ${GUN} is defined could not be read: mEdit is down`],
   ])('refuses, saying why, where %s', async (_case, arrange, refused) => {
     expect(await arrange().symbols.definitionOf(RECORD)).toEqual({ refused });
   });

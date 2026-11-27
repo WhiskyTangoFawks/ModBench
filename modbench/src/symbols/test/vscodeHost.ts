@@ -258,6 +258,7 @@ export const host = {
   /** Sets the documents VS Code holds, as at the start. */
   holds: (held: FakeDocument[]) => { documents = held; },
   change: (held: FakeDocument) => { changed.fire({ document: held, contentChanges: [{}] }); },
+  close: closed.fire,
   willRenameFiles: willRename.fire,
   didRenameFiles: didRename.fire,
   /** How many listen for VS Code's renames as they land. */

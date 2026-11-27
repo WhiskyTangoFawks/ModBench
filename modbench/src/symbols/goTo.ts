@@ -40,7 +40,6 @@ export function registerGoTo({ kinds, reporter, reveal, selection, dataPathOf }:
       reporter.report('error', `Could not go to ${nameOf(symbol)}: ${'refused' in definition ? definition.refused : definition.none}`);
       return;
     }
-    const location = await showDefinition(definition, reveal);
-    if (location !== undefined) await vscode.commands.executeCommand('vscode.open', location.uri, { selection: location.range });
+    await showDefinition(definition, reveal);
   });
 }
