@@ -122,6 +122,7 @@ const providers: { [K in keyof Providers]?: Providers[K] } = {};
 const collections = new Map<string, DiagnosticCollection>();
 const referencesShown: ReferencesViewInput[] = [];
 const quickPicks: ReturnType<typeof fakeQuickPick<{ label: string }>>[] = [];
+const unopenable = new Set<string>();
 let documents: FakeDocument[] = [];
 let referencesViewEnabled = true;
 
@@ -168,7 +169,9 @@ export function document(path: string, text: string, { scheme = 'file', isDirty 
 
 export const workspace = {
   get textDocuments() { return documents; },
-  openTextDocument: (uri: FakeUri) => Promise.resolve(documents.find((held) => held.uri.toString() === uri.toString()) ?? document(uri.fsPath, '')),
+  openTextDocument: (uri: FakeUri) => (unopenable.has(uri.fsPath)
+    ? Promise.reject(new Error('The file is gone.'))
+    : Promise.resolve(documents.find((held) => held.uri.toString() === uri.toString()) ?? document(uri.fsPath, ''))),
   onDidOpenTextDocument: opened.event,
   onDidChangeTextDocument: changed.event,
   onDidCloseTextDocument: closed.event,
@@ -260,6 +263,8 @@ export const host = {
   referencesShown,
   /** Each quick pick the box showed, with the user's acts on it. */
   quickPicks,
+  /** Each path VS Code fails to open, saying the file is gone. */
+  unopenable,
   /** Sets the documents VS Code holds, as at the start. */
   holds: (held: FakeDocument[]) => { documents = held; },
   open: (held: FakeDocument) => { documents = [...documents, held]; opened.fire(held); },
@@ -272,7 +277,7 @@ export const host = {
   /** Forgets everything registered and held, as a fresh window. */
   reset: () => {
     for (const each of [opened, changed, closed, willRename, didRename, extensionsChanged]) each.clear();
-    for (const held of [commandHandlers, collections]) held.clear();
+    for (const held of [commandHandlers, collections, unopenable]) held.clear();
     for (const kind of Object.keys(providers)) Reflect.deleteProperty(providers, kind);
     executed.length = 0;
     referencesShown.length = 0;

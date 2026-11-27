@@ -1,24 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
-import { CompletionItemKind, SymbolKind } from './iconsMock';
 
-const setInput = vi.hoisted(() => vi.fn<(input: { location: { uri: { path: string }; range: unknown } }) => void>());
-vi.mock('vscode', () => ({
-  extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
-  Uri, SymbolKind, CompletionItemKind, TreeItem, TreeItemCollapsibleState,
-  Position: class { constructor(readonly line: number, readonly character: number) {} },
-  Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
-  Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
-}));
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import * as vscode from 'vscode';
-import { recordLanguage } from '../recordLanguage';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { CompletionItemKind, document, host, Location, Range, Uri } from './vscodeHost';
+import { symbolsOver } from './symbolsOver';
+import { mEditNames, spelledName } from './mEditNames';
+import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { localFailure } from '../../wire/readFailed';
-import { sourceNames, spelledIn } from './fakeSourceNames';
-import { COMPLETION, SEARCH } from './fakeKinds';
-import { present } from '../../ports/present';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const GUN = '000801:A.esp';
@@ -26,179 +14,165 @@ const modA = { name: 'A.esp', origin: 'ModA' };
 const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
 const GUN_TEXT = `{\n  "FormKey": "${GUN}",\n  "EditorID": "Gun"\n}`;
 const RECORD = { kind: 'record', formKey: GUN } as const;
+const MEMBER = `"FormKey": "${GUN}"`;
+const AT_MEMBER = { start: { line: 1, character: 2 }, end: { line: 1, character: 2 + MEMBER.length } };
+const AT_FORMKEY = { start: { line: 1, character: 13 }, end: { line: 1, character: 15 + GUN.length } };
+const NAMES = mEditNames((text) => [
+  ...text.includes(MEMBER) ? [spelledName('Declaration', text, MEMBER, { record: GUN }), spelledName('Record', text, `"${GUN}"`, { record: GUN, fieldPath: 'FormKey', value: GUN })] : [],
+]);
 
-function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ getText: () => GUN_TEXT }) } = {}) {
-  const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getRecordOwners', [modA]);
-  client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
-  const opened: unknown[] = [];
-  const reporter = recordingReporter();
-  const record = recordLanguage({
-    client, reporter, names: sourceNames({
-      declarationIn: (text: string, formKey: string) => Promise.resolve(spelledIn(text, `"FormKey": "${formKey}"`)),
-      formKeyIn: (text: string, formKey: string) => Promise.resolve(spelledIn(text, `"${formKey}"`)),
-    }),
-    open: async (uri: vscode.Uri) => { opened.push(uri); return { ...await open(), positionAt: (offset: number) => new vscode.Position(0, offset) }; },
+function kind({ text = GUN_TEXT, focused, arrange = () => undefined }: { text?: string; focused?: string; arrange?: (client: InMemoryMEditClient) => void } = {}) {
+  return symbolsOver({
+    names: NAMES, focusedRecord: () => focused,
+    arrange: (client) => {
+      client.setQueryAnswer('getRecordOwners', [modA]);
+      client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
+      client.setQueryAnswer('getComparison', null);
+      host.holds([document(GUN_FILE, text)]);
+      arrange(client);
+    },
   });
-  return { client, opened, record, reporter };
 }
 
 describe('where a record is defined (symbols.md, The symbols, Record)', () => {
   it('is the winning copy\'s file at the record\'s own FormKey member', async () => {
-    const member = GUN_TEXT.indexOf(`"FormKey": "${GUN}"`);
-
-    expect(await kind().record.definitionOf(RECORD)).toMatchObject({
-      at: { uri: { scheme: 'file', path: GUN_FILE }, range: { start: { character: member }, end: { character: member + `"FormKey": "${GUN}"`.length } } },
-    });
+    expect(await kind().symbols.definitionOf(RECORD)).toEqual({ place: { file: GUN_FILE, ...AT_MEMBER } });
   });
 
   it.each([
-    ['the record\'s document states no FormKey member for it', () => kind({ open: () => Promise.resolve({ getText: () => '{ "EditorID": "Gun" }' }) }), `${GUN_FILE} states no ${GUN} member.`],
-    ['no active plugin holds it', (k: ReturnType<typeof kind>) => { k.client.setQueryAnswer('getRecordOwners', []); return k; }, `No active plugin holds ${GUN}.`],
-    ['the winning plugin holds no copy', (k: ReturnType<typeof kind>) => { k.client.setQueryAnswer('getCopyDocument', null); return k; }, `A.esp (ModA) holds no ${GUN}.`],
-    ['its document fails to open', () => kind({ open: () => Promise.reject(new Error('The file is gone.')) }), `Where ${GUN} is defined could not be read: The file is gone.`],
+    ['the record\'s document states no FormKey member for it', () => kind({ text: '{ "EditorID": "Gun" }' }), `${GUN_FILE} states no ${GUN} member.`],
+    ['no active plugin holds it', () => kind({ arrange: (client) => { client.setQueryAnswer('getRecordOwners', []); } }), `No active plugin holds ${GUN}.`],
+    ['the winning plugin holds no copy', () => kind({ arrange: (client) => { client.setQueryAnswer('getCopyDocument', null); } }), `A.esp (ModA) holds no ${GUN}.`],
+    ['its document fails to open', () => kind({ arrange: () => { host.unopenable.add(GUN_FILE); } }), `Where ${GUN} is defined could not be read: The file is gone.`],
   ])('refuses, saying why, where %s', async (_case, arrange, refused) => {
-    expect(await arrange(kind()).record.definitionOf(RECORD)).toEqual({ refused });
+    expect(await arrange().symbols.definitionOf(RECORD)).toEqual({ refused });
   });
 });
 
 describe('what references a record, and its hover (symbols.md, The symbols, Record)', () => {
   it('lists the places mEdit gives, reporting what it left out as unread, and opens no document', async () => {
-    const { client, opened, record } = kind();
-    const range = { start: { line: 1, character: 2 }, end: { line: 1, character: 18 } };
     const leftOut = `000701:A.esp in B.esp (ModB): its text names ${GUN} nowhere.`;
-    client.setQueryAnswer('getPlacedReferences', { leftOut: [leftOut], copies: [
-      { formKey: '000700:A.esp', plugin: modA, document: { kind: 'OwnFile', location: GUN_FILE }, ranges: [range] },
-    ] });
+    const range = { start: { line: 1, character: 2 }, end: { line: 1, character: 18 } };
+    const { symbols } = kind({ arrange: (client) => {
+      client.setQueryAnswer('getPlacedReferences', { leftOut: [leftOut], copies: [{ formKey: '000700:A.esp', plugin: modA, document: { kind: 'OwnFile', location: GUN_FILE }, ranges: [range] }] });
+      host.unopenable.add(GUN_FILE);
+    } });
 
-    const found = await record.referencesTo(RECORD);
-
-    expect([found, opened]).toMatchObject([{ locations: [{ uri: { path: GUN_FILE } }], unread: [leftOut] }, []]);
+    expect(await symbols.referencesTo(RECORD)).toEqual({ references: [{ file: GUN_FILE, ...range }], leftOut: [leftOut] });
   });
 
   it('refuses, rather than list nothing, while mEdit cannot answer over every plugin', async () => {
-    const { client, record } = kind();
-    client.setQueryFailure('getPlacedReferences', { failed: 'refused', refusal: 'The record index is still reading.' });
+    const { symbols } = kind({ arrange: (client) => { client.setQueryFailure('getPlacedReferences', { failed: 'refused', refusal: 'The record index is still reading.' }); } });
 
-    expect(await record.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: The record index is still reading.` });
+    expect(await symbols.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: The record index is still reading.` });
   });
 
   it('has no tooltip for a FormKey no active plugin holds, so its hover is its name', async () => {
-    const { client, record } = kind();
-    client.setQueryAnswer('getComparison', null);
+    kind();
 
-    expect(await record.tooltipOf(RECORD)).toEqual([]);
+    expect(await host.hover(GUN_FILE, GUN_TEXT.replace(`"${GUN}"`, `"0008|01:A.esp"`))).toEqual({ text: GUN, spans: `"${GUN}"` });
   });
 });
 
 describe('Go to Symbol in Workspace on a record (symbols.md, The features, story 4)', () => {
-  const searching = () => {
-    const k = kind();
-    k.client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp', isCompiledPlugin: true })]);
-    k.client.setQueryAnswer('searchRecords', {
+  const searching = (arrange: (client: InMemoryMEditClient) => void = () => undefined) => kind({ arrange: (client) => {
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp', isCompiledPlugin: true })]);
+    client.setQueryAnswer('searchRecords', {
       items: [{ formKey: GUN, plugin: modA.name, origin: modA.origin, editorId: 'Gun', loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }],
       total: 1,
     });
-    return k;
-  };
+    arrange(client);
+  } });
 
   it('refuses a pick it cannot open, saying why, so VS Code opens nothing', async () => {
-    const { client, record, reporter } = searching();
-    client.setQueryAnswer('getCopyDocument', null);
-    const [listed] = await record.symbolsFor('Gun', SEARCH);
+    const { reporter } = searching((client) => { client.setQueryAnswer('getCopyDocument', null); });
+    const [listed] = await host.workspaceSymbols('Gun');
 
-    await expect(present(listed?.resolve, 'its resolve')()).rejects.toThrow(`Go to Symbol in Workspace cannot open Gun [${GUN}].`);
+    await expect(listed && host.resolveWorkspaceSymbol(listed)).rejects.toThrow(`Go to Symbol in Workspace cannot open Gun [${GUN}].`);
     expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([`A.esp (ModA) holds no ${GUN}.`]);
   });
 
   it('lists a copy at its plugin\'s file, and opens it at its FormKey member in its document once picked', async () => {
-    const { record } = searching();
-    const [listed] = await record.symbolsFor('Gun', SEARCH);
-    const member = GUN_TEXT.indexOf(`"FormKey": "${GUN}"`);
+    searching();
+    const [listed] = await host.workspaceSymbols('Gun');
+    const at = listed?.location;
 
-    expect([listed?.location.uri.path, await listed?.resolve?.()]).toMatchObject([
-      '/mods/ModA/A.esp', { uri: { path: GUN_FILE }, range: { start: { character: member } } },
+    expect([at, (listed && await host.resolveWorkspaceSymbol(listed))?.location]).toEqual([
+      new Location(Uri.file('/mods/ModA/A.esp'), new Range(0, 0, 0, 0)), new Location(Uri.file(GUN_FILE), new Range(1, 2, 1, 2 + MEMBER.length)),
     ]);
   });
 });
 
 describe('completion at a reference field (symbols.md, The features, story 5)', () => {
-  const FIELD = '{ "Armor": "Gu" }';
-  const SPAN = { start: FIELD.indexOf('Gu'), end: FIELD.indexOf('Gu') + 2 };
-  const document = { uri: Uri.file(GUN_FILE), getText: () => FIELD };
   const copy = (formKey: string, editorId: string | null, plugin = modA) => ({
     formKey, plugin: plugin.name, origin: plugin.origin, editorId, loadOrderIndex: 0, isWinner: true, workingTreeState: 'None' as const,
     hasContainerChildren: false, hasParseFailure: false,
   });
   const completing = (typed: string) => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp' }), pluginMetadataFixture({ name: 'B.esp', origin: 'ModB', path: '/mods/ModB/B.esp' })]);
-    client.setQueryAnswer('searchRecords', { items: [copy(GUN, 'Gun'), copy(GUN, 'Gun', { name: 'B.esp', origin: 'ModB' }), copy('000901:A.esp', null)], total: 30 });
-    const record = recordLanguage({
-      client, reporter: recordingReporter(), names: sourceNames({ referenceTypedAt: () => Promise.resolve({ ...SPAN, typed, types: ['ARMO', 'WEAP'] }) }),
-      open: () => Promise.reject(new Error('Completion opens nothing.')),
+    const field = `{ "Armor": "${typed}" }`;
+    const at = field.indexOf('"', field.indexOf(': ') + 2) + 1;
+    const made = symbolsOver({
+      names: mEditNames(() => [{ kind: 'Reference', start: at, end: at + typed.length, value: typed, validFormKeyTypes: ['ARMO', 'WEAP'] }]),
+      arrange: (client) => {
+        client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp' }), pluginMetadataFixture({ name: 'B.esp', origin: 'ModB', path: '/mods/ModB/B.esp' })]);
+        client.setQueryAnswer('searchRecords', { items: [copy(GUN, 'Gun'), copy(GUN, 'Gun', { name: 'B.esp', origin: 'ModB' }), copy('000901:A.esp', null)], total: 30 });
+      },
     });
-    return { client, offered: record.completionsAt(document, SPAN.end, COMPLETION) };
+    const asked = () => made.client.calls.filter(({ method }) => method === 'searchRecords' || method === 'getPlugins');
+    return { asked, offered: host.complete(GUN_FILE, `${field.slice(0, at + typed.length)}|${field.slice(at + typed.length)}`) };
   };
 
   it('offers each record Go to Symbol in Workspace finds once, by EditorID or FormKey, of the types the field allows, for the text typed so far', async () => {
-    const { client, offered } = completing('Gu');
+    const { asked, offered } = completing('Gu');
 
     expect(await offered).toEqual({
-      ...SPAN, icon: CompletionItemKind.Reference, isIncomplete: true,
-      items: [{ label: 'Gun', detail: GUN, insertText: GUN }, { label: '000901:A.esp', detail: '000901:A.esp', insertText: '000901:A.esp' }],
+      isIncomplete: true,
+      items: [
+        { label: 'Gun', detail: GUN, kind: CompletionItemKind.Reference, insertText: GUN, replaces: 'Gu' },
+        { label: '000901:A.esp', detail: '000901:A.esp', kind: CompletionItemKind.Reference, insertText: '000901:A.esp', replaces: 'Gu' },
+      ],
     });
-    expect(client.calls.filter(({ method }) => method === 'searchRecords').map(({ args }) => args.slice(0, 2))).toEqual([['Gu', ['ARMO', 'WEAP']]]);
+    expect(asked().filter(({ method }) => method === 'searchRecords').map(({ args }) => args.slice(0, 2))).toEqual([['Gu', ['ARMO', 'WEAP']]]);
   });
 
   it('offers nothing before anything is typed, asking mEdit nothing', async () => {
-    const { client, offered } = completing('');
+    const { asked, offered } = completing('');
 
-    expect([await offered, client.calls]).toEqual([undefined, []]);
+    expect([await offered, asked()]).toEqual([undefined, []]);
   });
 });
 
 describe('referenced by on a record anchors its list wherever a plugin holds it (symbols.md, The symbols, Record)', () => {
-  function asking(arrange: (k: ReturnType<typeof kind>) => void = () => undefined) {
-    const k = kind();
-    k.client.setQueryAnswer('getComparison', null);
-    arrange(k);
-    setInput.mockClear();
-    return k;
-  }
-  const shownLocation = () => setInput.mock.calls.at(-1)?.[0].location;
+  const referencedBy = async (arrange: (client: InMemoryMEditClient) => void = () => undefined) => {
+    const made = kind({ focused: GUN, arrange });
+    await host.run('modbench.symbol.referencedBy');
+    return made;
+  };
+  const ANCHOR = new Location(Uri.file(GUN_FILE), new Range(AT_FORMKEY.start.line, AT_FORMKEY.start.character, AT_FORMKEY.end.line, AT_FORMKEY.end.character));
 
   it('anchors at the record\'s FormKey in its winning copy', async () => {
-    const { record } = asking();
+    await referencedBy();
 
-    await record.referencedBy(RECORD);
-
-    expect(shownLocation()).toMatchObject({ uri: { path: GUN_FILE }, range: { start: { line: 0, character: GUN_TEXT.indexOf(`"${GUN}"`) } } });
+    expect(host.referencesShown.map(({ location }) => location)).toEqual([ANCHOR]);
   });
 
   it('lists its referrers where several compiled plugins hold the record, anchored at the first one\'s copy', async () => {
-    const { client, record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwners', [modA, { name: 'B.esp', origin: 'ModB' }]); });
+    const { client, reporter } = await referencedBy((held) => { held.setQueryAnswer('getRecordOwners', [modA, { name: 'B.esp', origin: 'ModB' }]); });
 
-    await record.referencedBy(RECORD);
-
-    expect([shownLocation(), client.calls.filter((c) => c.method === 'getCopyDocument').map((c) => c.args), reporter.reports]).toMatchObject([
-      { uri: { path: GUN_FILE }, range: { start: { line: 0, character: GUN_TEXT.indexOf(`"${GUN}"`) } } }, [[modA, GUN]], [],
+    expect([host.referencesShown.map(({ location }) => location), client.calls.filter((c) => c.method === 'getCopyDocument').map((c) => c.args), reporter.reports]).toEqual([
+      [ANCHOR], [[modA, GUN]], [],
     ]);
   });
 
   it('is refused, saying why, where mEdit cannot say which plugin owns the record', async () => {
-    const { record, reporter } = asking((k) => { k.client.setQueryFailure('getRecordOwners', localFailure('mEdit is down')); });
+    const { reporter } = await referencedBy((client) => { client.setQueryFailure('getRecordOwners', localFailure('mEdit is down')); });
 
-    await record.referencedBy(RECORD);
-
-    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'mEdit is down']]]);
+    expect([host.referencesShown, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'mEdit is down']]]);
   });
 
   it('is refused, saying why, where no plugin holds the record', async () => {
-    const { record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwners', []); });
+    const { reporter } = await referencedBy((client) => { client.setQueryAnswer('getRecordOwners', []); });
 
-    await record.referencedBy(RECORD);
-
-    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', `No active plugin holds ${GUN}.`]]]);
+    expect([host.referencesShown, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', `No active plugin holds ${GUN}.`]]]);
   });
 });
