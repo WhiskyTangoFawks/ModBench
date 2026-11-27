@@ -84,7 +84,7 @@ interface PluginsTreeProviderOptions {
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The Plugin source unreadable status's other surface, the Problems panel, pointing at decompile: of the plugins
    *  `named`, or of all. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
+  publishSourceUnreadable: (errors: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */

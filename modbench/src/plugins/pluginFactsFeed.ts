@@ -36,9 +36,9 @@ export interface PluginFactsFeedDeps {
   publishChangedOutside: (warnings: readonly PluginProblem[], named?: NamedPlugins) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
-  /** The Plugin source unreadable status's other surface, the Problems panel. */
-  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
+  /** The Plugin source unreadable status's other surface, the Problems panel: the errors of the plugins `named`,
+   *  replacing theirs, or of every plugin. */
+  publishSourceUnreadable: (errors: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */

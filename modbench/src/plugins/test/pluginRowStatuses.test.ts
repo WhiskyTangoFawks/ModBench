@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', () => import('./vscodeHost'));
 
-import { host, Uri } from './vscodeHost';
+import { DiagnosticSeverity, host, Uri } from './vscodeHost';
 import { deferred, factsOver, settle, type Shown } from './pluginsOver';
 import type { PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
@@ -89,9 +89,9 @@ describe('the status table (plugins.md, A row, Plugin)', () => {
     ['one sorting error from the game moving it', masterFlagAfterB(), 'error', '1 error', [MASTER_FLAG_LINE]],
     ['one sorting warning', loadsBeforeB, 'warning', '1 warning', [LOAD_AFTER_LINE]],
     ['unreadable records', unreadable, 'error', 'unreadable records', ['This plugin holds a record that could not be read into its document.']],
-    ['plugin source unreadable', sourceUnreadable, 'warning', 'plugin source unreadable',
+    ['plugin source unreadable', sourceUnreadable, 'error', 'plugin source unreadable',
       ['read-only', 'Plugin source unreadable: Its folder is gone. Its records are those of its plugin file, until decompile writes its source.']],
-    ['plugin source unreadable that decompile does not repair', sourceUnreadableForGood, 'warning', 'plugin source unreadable',
+    ['plugin source unreadable that decompile does not repair', sourceUnreadableForGood, 'error', 'plugin source unreadable',
       ['read-only', 'Plugin source unreadable: Twin folders. Its records are those of its plugin file.']],
     ['changed outside Modbench', changed, 'warning', 'changed outside Modbench', [CHANGED_TEXT]],
     ['malformed', malformed, 'warning', 'malformed', ['Malformed: first; second']],
@@ -269,19 +269,19 @@ describe('which statuses stay and which land (plugins.md, A row, bullets)', () =
 describe('the Problems panel reads the answers the rows read', () => {
   const problems = (collection: string) => host.problems(collection).map(([path, shown]) => [path, shown.map(({ message }) => message)]);
 
-  it('lists a warning for each plugin whose plugin source is unreadable, as the reconcile answered, and whether decompile repairs it', async () => {
+  it('lists an error for each plugin whose plugin source is unreadable, as the reconcile answered, and whether decompile repairs it', async () => {
     const facts = factsOver([A, B]);
     await facts.reconciled([
       held({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
       held({ ...B, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } }),
     ]);
-    const unreadableThen = host.problems('modbench-source-unreadable').map(([path, shown]) => [path, shown.map(({ message, code }) => [message, code !== undefined])]);
+    const unreadableThen = host.problems('modbench-source-unreadable').map(([path, shown]) => [path, shown.map(({ message, severity, code }) => [message, severity, code !== undefined])]);
 
     await facts.reconciled([held()]);
 
     expect([unreadableThen, problems('modbench-source-unreadable')]).toEqual([[
-      ['/mods/SomeMod/A.esp', [['Plugin source unreadable: Its folder is gone.', true]]],
-      ['/mods/SomeMod/B.esp', [['Plugin source unreadable: Twin folders.', false]]],
+      ['/mods/SomeMod/A.esp', [['Plugin source unreadable: Its folder is gone.', DiagnosticSeverity.Error, true]]],
+      ['/mods/SomeMod/B.esp', [['Plugin source unreadable: Twin folders.', DiagnosticSeverity.Error, false]]],
     ], []]);
   });
 
