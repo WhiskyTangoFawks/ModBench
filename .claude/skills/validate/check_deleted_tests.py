@@ -2,9 +2,9 @@
 """Names each test deleted since the base that no trailer accounts for, each trailer of a deleted test that
 resolves to nothing, and each trailer without its arrow (CODING_STANDARDS.md § Tests, "A diff deletes a test").
 A deleted test is a name the merge base holds more often than HEAD, so a moved test is not one. The trailers of
-the latest commit since the base that names it account for it when one of them names a test at HEAD, or, by its words before the
-first colon, full stop or arrow, a mark of § Tests at HEAD or at the merge base whose fix deletes the test, so says
-nothing needs proving:
+the latest commit since the base that names it account for it when one of them names a test at HEAD, or, by its
+words before the first colon, full stop or arrow, a mark of § Tests at HEAD or at the merge base whose fix deletes
+the test and moves none, so says nothing needs proving:
 
     Deleted-test: <deleted> => <survivor>
     Deleted-test: <deleted> => mark: <mark>
@@ -23,8 +23,9 @@ ARROW = ' => '
 MARK = 'mark: '
 FORM = f"'{KEY}: <deleted>{ARROW}<survivor>' or '{KEY}: <deleted>{ARROW}{MARK}<mark>'"
 STANDARDS = 'CODING_STANDARDS.md'
+UNRESOLVED = f'no test at the tip and no mark of {STANDARDS} § Tests whose fix deletes the test'
 TESTS_SECTION = re.compile(r'^## Tests\n(.*?)(?=^## |\Z)', re.MULTILINE | re.DOTALL)
-MARK_DELETING_THE_TEST = re.compile(r'^- ([^:.→\n]+)[^→\n]*→[^\n]*\bdelete\b', re.MULTILINE | re.IGNORECASE)
+MARK_DELETING_THE_TEST = re.compile(r'^- ([^:.→\n]+)[^→\n]*→(?![^\n]*\bmove\b)[^\n]*\bdelete\b', re.MULTILINE | re.IGNORECASE)
 STRING = r'''(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`)'''
 CS_ATTRIBUTE = re.compile(r'\[\w*(?:Fact|Theory)\b')
 CS_METHOD = re.compile(r'^\s*public\b[^\n(=]*?(?P<name>\w+)\s*(?:<[^>\n]*>)?\s*\(', re.MULTILINE)
@@ -101,21 +102,21 @@ def problems(repo: Path, base: str) -> list[str]:
     at_tip = test_names(repo, 'HEAD')
     deleted = test_names(repo, merge_base) - at_tip
     marks = marks_deleting_the_test_at(repo, 'HEAD') | marks_deleting_the_test_at(repo, merge_base)
-    commits = git(repo, 'log', f'--format=%x00%(trailers:key={KEY},valueonly,unfold)', f'{merge_base}..HEAD').split('\0')[1:]
+    commits = git(repo, 'log', '--topo-order', f'--format=%x00%(trailers:key={KEY},valueonly,unfold)', f'{merge_base}..HEAD').split('\0')[1:]
     found: list[str] = []
-    named_by: dict[str, list[str]] = {}
+    named_by: dict[str, list[tuple[str, str]]] = {}
     for commit in commits:
-        in_commit: dict[str, list[str]] = {}
+        in_commit: dict[str, list[tuple[str, str]]] = {}
         for trailer in filter(None, commit.splitlines()):
-            gone, arrow, _ = trailer.partition(ARROW)
+            gone, arrow, survivor = trailer.partition(ARROW)
             if not arrow:
                 found.append(f'{KEY}: {trailer}: reads {FORM}')
             elif gone not in named_by:
-                in_commit.setdefault(gone, []).append(trailer)
+                in_commit.setdefault(gone, []).append((trailer, survivor))
         named_by |= in_commit
-    found += [f'{trailer}: no test at the tip and no mark of {STANDARDS} § Tests whose fix deletes the test'
-              for gone, trailers in named_by.items() if gone in deleted
-              and not any(stands(trailer.partition(ARROW)[2], at_tip, marks) for trailer in trailers) for trailer in trailers]
+    for gone, trailers in named_by.items():
+        if gone in deleted and not any(stands(survivor, at_tip, marks) for _, survivor in trailers):
+            found += [f'{trailer}: {UNRESOLVED}' for trailer, _ in trailers]
     found += [f'{name}: deleted, and no trailer names its survivor: {FORM}' for name in sorted(deleted) if name not in named_by]
     return found
 

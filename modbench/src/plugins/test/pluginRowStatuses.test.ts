@@ -206,18 +206,13 @@ describe('which statuses stay and which land (plugins.md, A row, bullets)', () =
     expect((await rowOf(facts)).description).toBeUndefined();
   });
 
-  it('keeps the last sorting statuses through a tick that indexes the plugin', async () => {
+  it.each<[string, Tell]>([
+    ['a tick that indexes the plugin', (facts) => facts.indexed({ indexed: [A] })],
+    ['a re-read that changes nothing the sorting rules judge', (facts) => facts.changed([held({ masters: ['Ghost.esm'], isImmutable: true })], [A])],
+  ])('keeps the last sorting statuses through %s', async (_, through) => {
     const facts = await over(lackingMasters('Ghost.esm'));
 
-    await facts.indexed({ indexed: [A] });
-
-    expect((await rowOf(facts)).tooltip).toContain(`Error: ${missingMaster('Ghost.esm')}`);
-  });
-
-  it('keeps the last sorting statuses through a re-read that changes nothing the sorting rules judge', async () => {
-    const facts = await over(lackingMasters('Ghost.esm'));
-
-    await facts.changed([held({ masters: ['Ghost.esm'], isImmutable: true })], [A]);
+    await through(facts);
 
     expect((await rowOf(facts)).tooltip).toContain(`Error: ${missingMaster('Ghost.esm')}`);
   });
