@@ -10,12 +10,12 @@ from reports import RAN, SKIPPED, Result
 
 
 class Readers(unittest.TestCase):
-    def test_a_trx_result_is_skipped_when_not_executed_and_carries_the_time_after_the_assemblys_first_result(self):
+    def test_a_trx_result_is_skipped_when_not_executed_and_carries_its_whole_duration_though_it_ran_beside_others(self) -> None:
         self.assertEqual(
             reports.in_trx(fx.trx(
-                fx.trx_result('A.First', 40, 40), fx.trx_result('A.Blocked', 40.1, 40.1), fx.trx_result('A.Slow', 43, 43),
+                fx.trx_result('A.First', 40, 40), fx.trx_result('A.Beside', 40.1, 40.1), fx.trx_result('A.Slow', 43, 43),
                 fx.trx_result('A.Skipped(x: 1)', outcome='NotExecuted'))),
-            [Result('A.First', RAN, 0, 'A.Tests'), Result('A.Blocked', RAN, 0.1, 'A.Tests'), Result('A.Slow', RAN, 3, 'A.Tests'),
+            [Result('A.First', RAN, 40, 'A.Tests'), Result('A.Beside', RAN, 40.1, 'A.Tests'), Result('A.Slow', RAN, 43, 'A.Tests'),
              Result('A.Skipped(x: 1)', SKIPPED, None, 'A.Tests')])
 
     def test_a_trx_results_box_is_the_test_project_whose_assembly_ran_it(self) -> None:
