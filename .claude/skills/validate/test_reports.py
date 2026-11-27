@@ -32,12 +32,13 @@ class Readers(unittest.TestCase):
         self.assertEqual([result.box for result in reports.in_vitest(fx.vitest(*files))],
                          ['instanceAdapter', 'test', 'webview', 'src'])
 
-    def test_a_vitest_test_is_named_with_its_file_and_is_skipped_when_pending_or_todo(self):
+    def test_a_vitest_test_is_named_with_its_files_path_under_modbench_and_is_skipped_when_pending_or_todo(self):
         self.assertEqual(
             reports.in_vitest(fx.vitest(('/repo/modbench/src/a.test.ts', [
-                ('ran', 'passed', 2500), ('skipped', 'pending', None), ('todo', 'todo', None)]))),
-            [Result('a.test.ts > ran', RAN, 2.5, 'src'), Result('a.test.ts > skipped', SKIPPED, None, 'src'),
-             Result('a.test.ts > todo', SKIPPED, None, 'src')])
+                ('ran', 'passed', 2500), ('skipped', 'pending', None), ('todo', 'todo', None)]),
+                ('/repo/modbench/src/plugins/test/a.test.ts', [('ran', 'passed', 2500)]))),
+            [Result('src/a.test.ts > ran', RAN, 2.5, 'src'), Result('src/a.test.ts > skipped', SKIPPED, None, 'src'),
+             Result('src/a.test.ts > todo', SKIPPED, None, 'src'), Result('src/plugins/test/a.test.ts > ran', RAN, 2.5, 'plugins')])
 
     def test_a_unittest_log_holds_each_skip_by_name_and_each_other_tests_time_from_its_durations(self):
         self.assertEqual(
