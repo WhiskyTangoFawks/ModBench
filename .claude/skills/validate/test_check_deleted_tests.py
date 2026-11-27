@@ -150,6 +150,15 @@ class Trailer(Repo):
             f'test_removed => mark: A test reaches past the seam: {cdt.UNRESOLVED}',
             f'Removed_theory => mark: A responsibility moves to another box: {cdt.UNRESOLVED}'])
 
+    def test_a_tool_at_the_tip_accounts_for_a_deletion_and_a_title_in_no_test_or_tool_does_not(self) -> None:
+        self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
+        self.write('Box.Tests/Tests.cs', CS.replace('Removed_fact', 'Kept_too'))
+        self.write('modbench/src/test/memorySoak.tool.ts', "it('holds memory flat over a session', async () => {});\n")
+        self.write('modbench/src/test/harness.ts', "it('only a helper', () => {});\n")
+        self.commit('a soak proves them\n\nDeleted-test: test_removed => holds memory flat over a session\n'
+                    'Deleted-test: Removed_fact => only a helper')
+        self.assertEqual(cdt.problems(self.root, 'main'), [f'Removed_fact => only a helper: {cdt.UNRESOLVED}'])
+
     def test_a_survivor_deleted_later_on_the_branch_is_named_until_a_later_trailer_names_one_that_stands(self) -> None:
         self.write('scripts/tests/test_box.py', '    def test_kept(self) -> None: ...\n')
         self.commit('delete\n\nDeleted-test: test_removed => Kept')

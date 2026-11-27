@@ -2,15 +2,15 @@
 """Names each test deleted since the base that no trailer accounts for, each trailer of a deleted test that
 resolves to nothing, and each trailer without its arrow (CODING_STANDARDS.md § Tests, "A diff deletes a test").
 A deleted test is a name the merge base holds more often than HEAD, so a moved test is not one. The trailers of
-the latest commit since the base that names it account for it when one of them names a test at HEAD, or, by its
-words before the first colon, full stop or arrow, a mark of § Tests at HEAD or at the merge base whose fix deletes
-the test and moves none, so says nothing needs proving:
+the latest commit since the base that names it account for it when one of them names a test or a tool at HEAD, or,
+by its words before the first colon, full stop or arrow, a mark of § Tests at HEAD or at the merge base whose fix
+deletes the test and moves none, so says nothing needs proving:
 
     Deleted-test: <deleted> => <survivor>
     Deleted-test: <deleted> => mark: <mark>
 
-A name is a C# method's under an attribute that ends in Fact or Theory, a TypeScript it or test title as written,
-or a Python test_ method's."""
+A name is a C# method's under an attribute that ends in Fact or Theory, a tool's among them, a TypeScript it or test
+title as written in a test or a tool (*.tool.ts), or a Python test_ method's."""
 import re
 import subprocess
 import sys
@@ -60,7 +60,7 @@ def ts_names(text: str) -> list[str]:
 
 READERS: tuple[tuple[re.Pattern[str], Callable[[str], list[str]]], ...] = (
     (re.compile(r'\.cs$'), cs_names),
-    (re.compile(r'\.test\.[cm]?[jt]sx?$'), ts_names),
+    (re.compile(r'\.(?:test|tool)\.[cm]?[jt]sx?$'), ts_names),
     (re.compile(r'(?:^|/)test_[^/]*\.py$'), PY_METHOD.findall),
 )
 
