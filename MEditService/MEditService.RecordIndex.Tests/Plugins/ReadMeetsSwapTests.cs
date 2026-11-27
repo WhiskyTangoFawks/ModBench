@@ -81,9 +81,7 @@ public sealed class ReadMeetsSwapTests : IDisposable
         gate.Release();
 
         Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
-        Assert.True(
-            Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)),
-            "the reopened index answering Ready");
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the reopened index answering Ready");
         Assert.All(data.Plugins, plugin => Assert.NotEmpty(index.ListedIn(plugin.Key)));
     }
 }

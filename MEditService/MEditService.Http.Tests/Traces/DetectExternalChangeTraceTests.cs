@@ -37,7 +37,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         await Client.SignalChange(path);
 
         await stream.EventsUntil("plugin-changed", NamesThePlugin);
-        await Wire.Eventually(async () => await Client.ChangedOutside(Plugin), "the plugin read as changed outside");
+        await Waits.ReachedAsync(async () => await Client.ChangedOutside(Plugin), "the plugin read as changed outside");
     }
 
     private static bool NamesThePlugin(JsonElement change) =>

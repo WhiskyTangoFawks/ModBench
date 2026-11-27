@@ -1,6 +1,7 @@
 using System.Globalization;
 using DuckDB.NET.Data;
 using DuckDB.NET.Native;
+using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 

@@ -1,4 +1,5 @@
 using MEditService.Http.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -20,7 +21,7 @@ public sealed class AbandonedRequestApiTests : HostedTests
 
         await left.CancelAsync();
 
-        Assert.True(token.WaitHandle.WaitOne(Generous), "The read's token stayed live after its caller left.");
+        Waits.Signalled(token.WaitHandle.WaitOne, "the read's cancellation once its caller left", Generous);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
     }
 }

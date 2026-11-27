@@ -188,7 +188,8 @@ public sealed class WholeSetRefusalTests
         await gate.WaitUntilParkedAsync();
 
         var asked = Task.Run(() => index.Queries.GetRecordOwnersForAWrite(Held(holder), [npc]));
-        var answeredWhileParked = Waits.ReachedWithin(() => asked.IsCompleted, TimeSpan.FromMilliseconds(200));
+        Thread.Sleep(TimeSpan.FromMilliseconds(200));
+        var answeredWhileParked = asked.IsCompleted;
         gate.Release();
 
         Assert.False(answeredWhileParked);

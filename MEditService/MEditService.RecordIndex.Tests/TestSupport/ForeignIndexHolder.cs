@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
@@ -40,17 +41,28 @@ public sealed class ForeignIndexHolder : IDisposable
         psi.ArgumentList.Add(NativeLibrary());
         psi.ArgumentList.Add(indexPath);
         var process = Process.Start(psi) ?? throw new InvalidOperationException("Expected python3 to start a new process.");
-        // Bounded: a python that neither answers nor exits (a wedged native load) must fail the test
-        // with a diagnosis, not hang the suite.
-        var answer = Task.Run(process.StandardOutput.ReadLine);
-        var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.GetAwaiter().GetResult() : null;
+        var line = AnswerOf(process);
         if (line != "held")
         {
             process.Kill();
             var stderr = process.StandardError.ReadToEnd();
-            throw new InvalidOperationException($"The foreign holder could not open {indexPath}: {line ?? "(no answer within 30 s)"} {stderr}");
+            throw new InvalidOperationException($"The foreign holder could not open {indexPath}: {line} {stderr}");
         }
         return new ForeignIndexHolder(process);
+    }
+
+    private static string? AnswerOf(Process process)
+    {
+        var answer = Task.Run(process.StandardOutput.ReadLine);
+        try
+        {
+            Waits.Signalled(answer.Wait, "the foreign holder's answer", TimeSpan.FromSeconds(30));
+        }
+        catch (TimeoutException late)
+        {
+            return late.Message;
+        }
+        return answer.GetAwaiter().GetResult();
     }
 
     public void Dispose()
@@ -58,7 +70,7 @@ public sealed class ForeignIndexHolder : IDisposable
         if (_disposed) return;
         _disposed = true;
         if (!_process.HasExited) _process.Kill();
-        _process.WaitForExit(10_000);
+        _process.WaitForExit();
         _process.Dispose();
     }
 
