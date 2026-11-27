@@ -39,7 +39,8 @@ SCANS = (
 )
 
 FIX = ('A test waits on a value or on a fake clock, never on real time. A check that something never happens, '
-       'where nothing later announces that it did not, is a line ALLOWED in check_test_waits.py names.')
+       'where nothing later announces that it did not, and a delay a fake clock advances, are lines ALLOWED in '
+       'check_test_waits.py names.')
 
 RECORD_INDEX_TESTS = 'MEditService/MEditService.RecordIndex.Tests/'
 FRONTEND = 'modbench/src/'
