@@ -240,11 +240,6 @@ fi
         switched = self.validate / script
         switched.write_text(switched.read_text().replace("\nFAILS_THE_RUN = False", "\nFAILS_THE_RUN = True"))
 
-    def plant_an_http_tests_budget_of_4_s_and_switch_it_on(self) -> None:
-        self.write(".claude/skills/validate/test-budgets.toml",
-                   'other = 60\n[boxes]\n"MEditService.Http.Tests" = 4\n[wall]\nbranch = 300\nmerge = 600\nwindows = 900\n')
-        self.switch_on("check_test_times.py")
-
 
 class BranchTests(FakeDotnet):
     """A filter on the command line replaces the branch's filter in MEditService/Directory.Build.props."""
@@ -305,12 +300,15 @@ class TimeReport(FakeDotnet):
         self.assertIn("--- TEST DATA REPORT FAILED ---", run.stdout)
         self.assertEqual(run.returncode, 1)
 
-    def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self) -> None:
-        self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
+    def test_a_box_over_its_budget_is_flagged_after_every_other_gate_and_fails_nothing_though_the_switch_is_on(self) -> None:
+        self.write(".claude/skills/validate/test-budgets.toml",
+                   'other = 60\n[boxes]\n"MEditService.Http.Tests" = 4\n[wall]\nbranch = 300\nmerge = 600\nwindows = 900\n'
+                   '[approved]\n"Fake.Slow" = "r"\n')
+        self.switch_on("check_test_times.py")
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("    5.1 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.1 s\n", run.stdout)
-        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
-        self.assertEqual(run.returncode, 1)
+        self.assertRegex(run.stdout, r"=== Backend code only tests reach ===\n(.*\n)*=== Test times and budget ===\n(.*\n)*"
+                                     r"YELLOW FLAG: MEditService.Http.Tests took 5.1 s, over its 4 s budget by 1.1 s\n")
+        self.assertNotIn("--- TEST TIME REPORT FAILED ---", run.stdout)
 
     def test_the_comment_gate_alone_prints_the_time_report_of_its_unittests_and_no_other(self):
         self.write(".claude/hooks/test_probe.py",
@@ -319,9 +317,9 @@ class TimeReport(FakeDotnet):
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
         self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n"
+                                     r" +0\.0 s of +\d+ s  the tests of no box\n +0\.0 s  hooks\n"
                                      r"--- 0 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED ---\n"
-                                     r" +0\.0 s of +\d+ s  the tests of no box\n"
-                                     r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN OR MISSING ---\nWall time \d+ s of 300 s budget\n")
+                                     r"Wall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
         self.assertNotIn("TEST DATA FILES", run.stdout)
@@ -362,13 +360,9 @@ class FrontendDependencies(FakeDotnet):
 class MergeToMain(FakeDotnet):
     MODE = "--merge-to-main"
 
-    def test_a_box_over_its_budget_fails_the_run_once_the_switch_is_on_and_the_wall_time_reads_against_the_merge_budget(self):
-        self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
-        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("    5.1 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.1 s\n", run.stdout)
+    def test_the_wall_time_reads_against_the_merge_budget(self):
+        run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed"))
         self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
-        self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
-        self.assertEqual(run.returncode, 1)
 
     def test_the_environment_form_of_the_mode_runs_the_tier(self):
         run, _ = self.run_after_changing("spec/a.d2", MEDIT_MERGE_TO_MAIN="true", FAKE_TRX=self.trx("Passed"))

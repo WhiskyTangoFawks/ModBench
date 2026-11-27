@@ -44,11 +44,12 @@ class Commands(unittest.TestCase):
                                             ALONE / 'validate.unittest')])
 
     def test_the_vitest_tests_over_1_s_run_again_in_one_run_of_their_files_one_file_at_a_time_matching_each_whole_name(self) -> None:
-        self.assertEqual(self.commands('.json', ran('a.test.ts > the box (one) works', 1.5, 'plugins'),
-                                       ran('b.test.tsx > two', 2, 'webview'), ran('a.test.ts > quick', 0.5, 'plugins')),
+        self.assertEqual(self.commands('.json', ran('src/plugins/a.test.ts > the box (one) works', 1.5, 'plugins'),
+                                       ran('webview/src/b.test.tsx > two', 2, 'webview'),
+                                       ran('src/plugins/a.test.ts > quick', 0.5, 'plugins')),
                          [run_alone.Command(ROOT / 'modbench', [
                              'npx', 'vitest', 'run', '--no-file-parallelism', '--reporter=json', '--outputFile.json=/alone/unit.json',
-                             '-t', r'^(the\ box\ \(one\)\ works|two)$', '/a.test.ts', '/b.test.tsx'])])
+                             '-t', r'^(the\ box\ \(one\)\ works|two)$', 'src/plugins/a.test.ts', 'webview/src/b.test.tsx'])])
 
     def test_the_integration_tests_over_1_s_run_again_in_one_run_of_their_runner_matching_each_title_leaving_its_log(self) -> None:
         self.assertEqual(self.commands('.mocha', ran('watches a folder (as it was)', 7, 'integration'),

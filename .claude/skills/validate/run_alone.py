@@ -15,10 +15,11 @@ from pathlib import Path
 from typing import NamedTuple
 
 import reports
-from check_test_times import CEILING_SECONDS, MERGE, approval_of
+from check_test_times import CEILING_SECONDS, approval_of
 
 UNITTEST_FOLDERS = {'validate': '.claude/skills/validate', 'hooks': '.claude/hooks', 'scripts': 'scripts'}
 UNITTEST_ID = re.compile(r'\((\S+)\)$')
+MERGE = 'merge'
 # The gates' own tests start runs of the gates, which are branch runs.
 MERGE_TO_MAIN = 'MEDIT_MERGE_TO_MAIN'
 
@@ -60,7 +61,7 @@ def commands(kinds: dict[str, list[reports.Result]], root: Path, alone: Path, ch
         pattern = '|'.join(re.escape(test) for _, test in vitest)
         found.append(Command(root / 'modbench', [
             'npx', 'vitest', 'run', '--no-file-parallelism', '--reporter=json', f'--outputFile.json={alone / "unit.json"}',
-            '-t', f'^({pattern})$', *sorted({f'/{file}' for file, _ in vitest})]))
+            '-t', f'^({pattern})$', *sorted({file for file, _ in vitest})]))
     # Mocha matches a pattern against a test's suite and its title together, so the title ends it.
     integration = sorted(name for names in over_ceiling(kinds.get(reports.MOCHA_REPORT, []), chosen).values() for name in names)
     if integration:
