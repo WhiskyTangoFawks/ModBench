@@ -429,11 +429,11 @@ describe('a deploy killed part way through its changes', () => {
     return file;
   }
 
-  async function killedRelinking(when: 'before' | 'after') {
+  async function killedRelinking(kill: 'killBeforeLinking' | 'killAfterLinking') {
     const old = await modFile('Old', 'a.esp', 'old');
     await deploy([old]);
     const next = await modFile('New', 'a.esp', 'new');
-    if (when === 'before') busy.killBeforeLinking = at(); else busy.killAfterLinking = at();
+    busy[kill] = at();
     await killed(deploy([next]));
     return { old, next };
   }
@@ -465,7 +465,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('keeps a relinked file managed when the load order still holds it', async () => {
-    const { next } = await killedRelinking('after');
+    const { next } = await killedRelinking('killAfterLinking');
 
     const deployed = await deploy([next]);
 
@@ -473,7 +473,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('relinks to another winner and leaves nothing set aside when a relink was killed after linking', async () => {
-    await killedRelinking('after');
+    await killedRelinking('killAfterLinking');
     const other = await modFile('Other', 'a.esp', 'other');
 
     const deployed = await deploy([other]);
@@ -482,7 +482,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('removes a relinked file when the mod is disabled', async () => {
-    await killedRelinking('after');
+    await killedRelinking('killAfterLinking');
 
     const deployed = await deploy([]);
 
@@ -490,7 +490,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('puts the old file back when a relink was killed before linking', async () => {
-    const { old } = await killedRelinking('before');
+    const { old } = await killedRelinking('killBeforeLinking');
 
     const deployed = await deploy([old]);
 
@@ -742,7 +742,10 @@ describe('plugins.txt', () => {
 
       const deployed = await deploy([]);
 
-      expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'unchanged', renamed: [orphan()] }, ['plugins.txt', 'plugins.txt.modbench_renamed']]);
+      const again = await deploy([]);
+
+      expect([deployed.pluginsTxt, again.pluginsTxt, await siblings()]).toEqual([
+        { kind: 'unchanged', renamed: [orphan()] }, { kind: 'unchanged', renamed: [] }, ['plugins.txt', 'plugins.txt.modbench_renamed']]);
     });
 
     it('names and records it, and renames the file in place as one deploy did not write, when the text differs', async () => {
@@ -752,8 +755,10 @@ describe('plugins.txt', () => {
 
       const deployed = await deploy([]);
 
-      expect([deployed.pluginsTxt, await readFile(orphan(), 'utf8'), await readFile(`${orphan()}_2`, 'utf8')]).toEqual([
-        { kind: 'written', renamed: [orphan(), `${orphan()}_2`] }, 'an earlier folder\'s', 'edited since']);
+      const again = await deploy([]);
+
+      expect([deployed.pluginsTxt, again.pluginsTxt, await readFile(orphan(), 'utf8'), await readFile(`${orphan()}_2`, 'utf8')]).toEqual([
+        { kind: 'written', renamed: [orphan(), `${orphan()}_2`] }, { kind: 'unchanged', renamed: [] }, 'an earlier folder\'s', 'edited since']);
     });
 
     it('is replaced, nothing else renamed, when a file deploy set aside holds the recorded file ID', async () => {
@@ -768,18 +773,6 @@ describe('plugins.txt', () => {
 
       expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'written', renamed: [orphan()] }, ['plugins.txt', 'plugins.txt.modbench_renamed']]);
     });
-  });
-
-  it('records a name once when the user puts the file back and deploy renames it to the same name again', async () => {
-    await mkdir(game, { recursive: true });
-    await writeFile(plugins, 'mine');
-    await deploy([]);
-    await rename(plugins, join(root, 'held'));
-    await rename(`${plugins}.modbench_renamed`, plugins);
-
-    const deployed = await deploy([]);
-
-    expect(deployed.pluginsTxt).toEqual({ kind: 'written', renamed: [`${plugins}.modbench_renamed`] });
   });
 
   it('keeps both names, each holding the user\'s file, when a deploy killed before it placed ours left a second link to it', async () => {

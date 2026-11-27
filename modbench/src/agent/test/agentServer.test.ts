@@ -646,30 +646,32 @@ describe('the agent server, given an instance value', () => {
   describe('a list_problems call the agent cancels', () => {
     class RefreshHeard extends InMemoryMEditClient {
       cancellation: ReadCancellation | undefined;
-      constructor(private readonly heldUntilCancelled: boolean) { super(); }
       override refreshRecordIndexLateness(cancellation?: ReadCancellation): Promise<void> {
-        if (this.cancellation !== undefined || !this.heldUntilCancelled) {
-          this.cancellation ??= cancellation;
-          return super.refreshRecordIndexLateness();
-        }
+        this.cancellation ??= cancellation;
+        return super.refreshRecordIndexLateness();
+      }
+    }
+    class RefreshHeldUntilCancelled extends RefreshHeard {
+      override refreshRecordIndexLateness(cancellation?: ReadCancellation): Promise<void> {
+        if (this.cancellation !== undefined) return super.refreshRecordIndexLateness(cancellation);
         this.cancellation = cancellation;
         return new Promise((resolve) => { cancellation?.onCancellationRequested(() => { resolve(); }); });
       }
     }
     const cancelledCall = async (mEdit: RefreshHeard) => {
-      const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+      const { client, errored } = await clientOf(new FakeInstance(VALUE), mEdit);
       const cancelled = new AbortController();
       client.callTool({ name: 'list_problems', arguments: {} }, undefined, { signal: cancelled.signal }).catch(() => undefined);
       await settled(() => { expect(mEdit.cancellation).toBeDefined(); });
-      return { client, cancelled };
+      return { client, cancelled, errored };
     };
     beforeEach(() => { diagnosticsHeld.reads = 0; });
 
     it('stops waiting on feeds that never settle, and reads no problems once they do', async () => {
       let caughtUp: (() => void) | undefined;
       feeds.caughtUp = () => new Promise<void>((resolve) => { caughtUp = resolve; });
-      const mEdit = new RefreshHeard(false);
-      const { client, cancelled } = await cancelledCall(mEdit);
+      const mEdit = new RefreshHeard();
+      const { client, cancelled, errored } = await cancelledCall(mEdit);
       await settled(() => { expect(caughtUp).toBeDefined(); });
 
       cancelled.abort();
@@ -678,20 +680,20 @@ describe('the agent server, given an instance value', () => {
       feeds.caughtUp = () => Promise.resolve();
       await read(client, 'list_problems');
 
-      expect(diagnosticsHeld.reads).toBe(1);
+      expect([diagnosticsHeld.reads, errored]).toEqual([1, []]);
     });
 
     it('asks nothing of the feeds once cancelled while it refreshed the record index\'s lateness', async () => {
       let asked = 0;
       feeds.caughtUp = () => { asked += 1; return Promise.resolve(); };
-      const mEdit = new RefreshHeard(true);
-      const { client, cancelled } = await cancelledCall(mEdit);
+      const mEdit = new RefreshHeldUntilCancelled();
+      const { client, cancelled, errored } = await cancelledCall(mEdit);
 
       cancelled.abort();
       await settled(() => { expect(mEdit.cancellation?.isCancellationRequested).toBe(true); });
       await read(client, 'list_problems');
 
-      expect(asked).toBe(1);
+      expect([asked, errored]).toEqual([1, []]);
     });
   });
 

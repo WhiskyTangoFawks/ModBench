@@ -1,6 +1,5 @@
 import { vi } from 'vitest';
-import type { createMEditClient } from '..';
-import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
+import type { createMEditClient, PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '..';
 import type { components } from '../../wire/generated/api';
 import type { InMemoryMEditClient } from './InMemoryMEditClient';
 import type { LoadOrderSnapshot, ReadCancellation } from '../MEditClient';

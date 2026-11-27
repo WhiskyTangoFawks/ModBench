@@ -269,7 +269,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     expect(held()).toEqual([['/deployed/a.ini', 'Deploy does not manage this file.']]);
   });
 
-  it('is one warning on each file, at where it is', async () => {
+  it('are a warning on each file, at where it is', async () => {
     const { run } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['Data/MCM/settings.ini', 'game.exe'] });
 
     await run();
@@ -291,7 +291,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     }]);
   });
 
-  it('is offered on no file where no mod file can land at its path', async () => {
+  it('carry no link to move to Overwrite on a file where no mod file can land at its path', async () => {
     const { run } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['Data/.hidden'] });
 
     await run();

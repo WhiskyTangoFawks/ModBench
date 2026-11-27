@@ -124,13 +124,11 @@ describe('instanceRepositoryCommands git init', () => {
     ]);
   });
 
-  it('fails when VS Code has no git extension', async () => {
-    expect(await commandsOver({}, hostWithoutGit).commands.gitInit()).toEqual({ applied: false, refusal: "VS Code's git extension is not available." });
-  });
-
-  it('fails when git made no repository', async () => {
-    expect(await commandsOver({}, hostGitRecordingInits([], null)).commands.gitInit())
-      .toEqual({ applied: false, refusal: "VS Code's git did not make /instance a repository." });
+  it.each([
+    ['VS Code has no git extension', hostWithoutGit, "VS Code's git extension is not available."],
+    ['git made no repository', hostGitRecordingInits([], null), "VS Code's git did not make /instance a repository."],
+  ])('refuses when %s, naming why', async (_case, hostGit, refusal) => {
+    expect(await commandsOver({}, hostGit).commands.gitInit()).toEqual({ applied: false, refusal });
   });
 
   it('names the ignore list that remains when it could not be taken back', async () => {

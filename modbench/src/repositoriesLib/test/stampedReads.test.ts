@@ -9,7 +9,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readdir: vi.fn(actual.readdir), stat: vi.fn(actual.stat) };
 });
 
-const real = (): Promise<typeof import('node:fs/promises')> => vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+const actualFs = (): Promise<typeof import('node:fs/promises')> => vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
 const listingsOf = (folder: string): number => vi.mocked(readdir).mock.calls.filter(([path]) => path === folder).length;
 
 const keptByStamp = <T>(read: (path: string) => Promise<T>): ((path: string) => Promise<T>) =>
@@ -185,7 +185,7 @@ describe('a folder listed by its stamp, as the repositories library keeps it', (
     await modifiedLater(root);
     let releaseTheCheck!: () => void;
     const checkHeld = new Promise<void>((resolve) => { releaseTheCheck = resolve; });
-    const { stat: realStat } = await real();
+    const { stat: realStat } = await actualFs();
     vi.mocked(stat).mockImplementationOnce(async (...args) => { await checkHeld; return realStat(...args); });
 
     const rereading = readTrustingKept([join(root, 'b.esp')], false, () => Promise.resolve());
