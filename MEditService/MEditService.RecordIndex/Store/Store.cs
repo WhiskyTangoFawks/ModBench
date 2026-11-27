@@ -940,9 +940,9 @@ internal sealed class Store : IDisposable
         first?.Throw();
     }
 
-    // DuckDB's own checkpoint leaves an ingest's rows and index nodes in memory no read can evict
-    // (IngestRetentionTests). A plain CHECKPOINT fails while a transaction is open where FORCE waits for
-    // it (DuckDB 1.4): it is paid with no read open.
+    // Until a checkpoint, an ingest's rows and index nodes hold memory no read can evict, and DuckDB checkpoints
+    // by itself only past its WAL threshold (IngestRetentionTests). A plain CHECKPOINT fails beside an open
+    // transaction, so it is paid with no read open.
     private void RequestCheckpoint()
     {
         if (CheckpointDue()) Task.Run(PayCheckpoint);

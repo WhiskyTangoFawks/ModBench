@@ -41,6 +41,8 @@ public sealed class IngestRetentionTests : IDisposable
         IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryTheIngestsRowsOutgrow}'");
 
         Waits.Reached(() => index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Holds(out _, out _), "a read in the memory limit");
+
+        Assert.Equal(ReferringRecordCount, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Value().Count);
     }
 
     private static IEnumerable<PluginDocument> ReferringRecords()
