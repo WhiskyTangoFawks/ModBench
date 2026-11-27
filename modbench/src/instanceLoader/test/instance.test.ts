@@ -32,6 +32,7 @@ const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
   ({ origin: name, folder: `/instance/mods/${name}`, files: relativePaths.map((path) => fileIn(`/instance/mods/${name}`, path)), folders: [], notes: [] });
 
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
+const FOUND_VERSIONS: ProgramVersions = { kind: 'found', game: { kind: 'read', version: '1.10.163.0' }, extender: { kind: 'notFound', program: 'f4se_loader.exe' } };
 const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
 type Fixture = Partial<InstanceReading> & Partial<Pick<InstanceAdapter, 'fileStamp'>>;
 
@@ -115,7 +116,7 @@ describe('Instance — the value', () => {
     const mods = [mod(NONO), separator('Section'), mod('Harder VATS', false)];
     const { instance } = loader({
       mods, modFolders: modFoldersOf(NONO, 'Hand Extracted Mod'), profile: 'Secondary', profiles: ['Default', 'Secondary'],
-      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER, programVersions: { kind: 'unknownGame' }, gameFolderLinks: 4,
+      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER, programVersions: FOUND_VERSIONS, gameFolderLinks: 4,
     });
 
     await instance.refresh();
@@ -127,7 +128,7 @@ describe('Instance — the value', () => {
     expect(value.profiles).toEqual(['Default', 'Secondary']);
     expect(value.gameName).toBe('Fallout 4');
     expect(value.gameFolder).toEqual(GAME_FOLDER);
-    expect(value.programVersions).toEqual({ kind: 'unknownGame' });
+    expect(value.programVersions).toEqual(FOUND_VERSIONS);
     expect(value.gameFolderLinks).toBe(4);
   });
 

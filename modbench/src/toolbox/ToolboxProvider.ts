@@ -45,7 +45,7 @@ const linksText = (count: number): string => `${count} ${count === 1 ? 'link' : 
 function foundTooltip(root: string, { programVersions, gameFolderLinks }: ToolboxValue): string {
   const versions = programVersions.kind === 'found'
     ? [`Game: ${gameVersionText(programVersions.game)}`, `Script extender: ${versionText(programVersions.extender)}`]
-    : ['Modbench knows no program of this game'];
+    : [];
   return [root, ...versions, ...(gameFolderLinks > 0 ? [linksText(gameFolderLinks)] : [])].join('\n');
 }
 
