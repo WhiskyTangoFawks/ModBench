@@ -37,7 +37,7 @@ export const rowsOf = (over: { plugins?: Partial<SymbolRows['plugins']>; mods?: 
 
 export const sourceFolders: Deps['sourceFiles'] = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 
-interface Over extends Partial<Omit<Deps, 'client' | 'asker' | 'names'>> {
+interface Over extends Partial<Omit<Deps, 'client' | 'asker'>> {
   /** Scripts mEdit before the box first asks it. */
   arrange?: (client: InMemoryMEditClient) => void;
 }

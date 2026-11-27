@@ -37,9 +37,11 @@ export class Range {
   }
 }
 
+interface UriOf { readonly scheme: string; readonly path: string; readonly fsPath: string; toString: () => string }
+
 export class Location {
   readonly range: Range;
-  constructor(readonly uri: FakeUri, at: Range | Position) { this.range = at instanceof Range ? at : new Range(at, at); }
+  constructor(readonly uri: UriOf, at: Range | Position) { this.range = at instanceof Range ? at : new Range(at, at); }
 }
 
 export class MarkdownString {
@@ -65,7 +67,9 @@ export class SymbolInformation {
   constructor(readonly name: string, readonly kind: number, readonly containerName: string, public location: Location) {}
 }
 
-export class WorkspaceEdit {}
+export class WorkspaceEdit {
+  readonly size = 0;
+}
 
 export class Diagnostic {
   source?: string;
@@ -91,7 +95,7 @@ export const Uri = { ...BaseUri, parse: uriParse };
 
 interface At { line: number; character: number }
 export interface FakeDocument {
-  uri: FakeUri; isDirty: boolean; languageId: string; version: number; getText: () => string;
+  uri: UriOf; isDirty: boolean; languageId: string; version: number; getText: () => string;
   offsetAt: (at: At) => number; positionAt: (offset: number) => Position; lineAt: (line: number) => { text: string };
 }
 

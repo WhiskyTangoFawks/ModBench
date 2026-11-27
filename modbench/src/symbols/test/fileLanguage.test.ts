@@ -5,7 +5,8 @@ vi.mock('vscode', () => import('./vscodeHost'));
 import { CompletionItemKind, document, host, Location, Range, Uri } from './vscodeHost';
 import { instanceHolding, rowsOf, symbolsOver } from './symbolsOver';
 import { mEditNames } from './mEditNames';
-import type { DocumentName, PlacedReferences } from '../../client';
+import type { DocumentName } from '../../client';
+import type { PlacedReferences } from '../../client/MEditClient';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FileConflictLookup, foldPath, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
 

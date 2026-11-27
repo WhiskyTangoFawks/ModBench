@@ -14,7 +14,6 @@ import { pluginMetadataFixture } from '../../client/test/fixtures';
 const FILE = '/instance/source/Mod/plugin-source/Mod.esp/Npc.json';
 const TEXT = '{ "Model": "Actors\\\\Npc.nif" }';
 const AT = `${TEXT.slice(0, 14)}|${TEXT.slice(14)}`;
-const SPELLED = 'Actors\\\\Npc.nif';
 const PATH = 'meshes/actors/npc.nif';
 const NAMED_FILE: DocumentName = { kind: 'File', start: 12, end: 26, value: 'Actors\\Npc.nif', dataPath: PATH };
 const OWN = new Location(Uri.file(FILE), new Range(0, 12, 0, 26));
@@ -22,7 +21,7 @@ const LOOSE: CopyAt = { kind: 'loose', path: '/mods/Mod/meshes/actors/npc.nif' }
 const ARCHIVED: CopyAt = { kind: 'archived', gameRelease: 'Fallout4', archive: '/mods/Mod/Mod - Main.ba2', file: PATH };
 const NO_COPY = { none: `No enabled mod holds ${PATH}.` };
 
-function naming(named: readonly DocumentName[], { copy = LOOSE as CopyAt | { none: string }, ...over }: { copy?: CopyAt | { none: string } } & Parameters<typeof symbolsOver>[0] = {}) {
+function naming(named: readonly DocumentName[], { copy = LOOSE, ...over }: { copy?: CopyAt | { none: string } } & Parameters<typeof symbolsOver>[0] = {}) {
   const reveal = vi.fn((_copy: CopyAt) => Promise.resolve());
   const made = symbolsOver({ names: mEditNames(() => named), fileCopies: { copyOf: () => copy, reveal }, ...over });
   return { ...made, reveal };

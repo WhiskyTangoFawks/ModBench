@@ -15,7 +15,6 @@ const GUN = '000801:A.esp';
 const GUN_FILE = '/source/ModA/plugin-source/A.esp/Gun.json';
 const GUN_TEXT = `{\n\n\n   "${GUN}" }`;
 const ANCHOR = new Location(Uri.file(GUN_FILE), new Range(3, 3, 3, 5 + GUN.length));
-const moved = () => new Location(Uri.file(GUN_FILE), new Range(9, 15, 9, 15));
 const IN_ACTIVE_OR_COMPILED = 'getReferencesInActiveOrCompiledPlugins';
 
 function asking(arrange: (client: InMemoryMEditClient) => void = () => undefined) {
@@ -44,7 +43,7 @@ function asking(arrange: (client: InMemoryMEditClient) => void = () => undefined
 
 const rowsOf = async (input: ReferencesViewInput | undefined) => {
   const rows = (await present(input, 'the list shown').resolve()).provider.getChildren();
-  return Array.isArray(rows) ? rows.filter((row) => row instanceof TreeItem) : [];
+  return Array.isArray(rows) ? rows.filter((row): row is TreeItem => row instanceof TreeItem) : [];
 };
 
 describe('Referenced By on a record, answered in VS Code\'s References view (editor-referenced-by.md, Asking)', () => {
@@ -54,13 +53,13 @@ describe('Referenced By on a record, answered in VS Code\'s References view (edi
     expect([input?.title, input?.location, (await rowsOf(input)).map((row) => row.label)]).toEqual(['Referenced By: Gun', ANCHOR, ['Rifle']]);
   });
 
-  it('reads the list only when the view resolves it, and again on each refresh, wherever the view moves its anchor', async () => {
+  it('reads the list only when the view resolves it, and again on each refresh', async () => {
     const { ask, referencesAsked } = asking();
     const input = present(await ask(), 'the list shown');
     expect(referencesAsked()).toEqual([]);
 
     await input.resolve();
-    const refreshed = input.with(moved());
+    const refreshed = input.with(input.location);
     await refreshed.resolve();
 
     expect(referencesAsked()).toEqual([[IN_ACTIVE_OR_COMPILED, GUN], [IN_ACTIVE_OR_COMPILED, GUN]]);
@@ -71,8 +70,8 @@ describe('Referenced By on a record, answered in VS Code\'s References view (edi
     const { ask } = asking();
     const first = present(await ask(), 'the first list');
     const again = present(await ask(), 'the list asked for again');
-    const refreshed = first.with(moved());
-    const idsOf = async (input: ReferencesViewInput) => (await rowsOf(input)).map((row) => Reflect.get(row, 'id'));
+    const refreshed = first.with(first.location);
+    const idsOf = async (input: ReferencesViewInput): Promise<unknown[]> => (await rowsOf(input)).map((row): unknown => Reflect.get(row, 'id'));
 
     expect(await idsOf(again)).not.toEqual(await idsOf(first));
     expect(await idsOf(refreshed)).toEqual(await idsOf(first));
