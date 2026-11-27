@@ -104,6 +104,15 @@ class Ceiling(Reports):
                 self.assertTrue(printed.endswith('YELLOW FLAG: A.FastAloneApproved took 0.50 s at most, so its approval lapsed\n'
                                                  'YELLOW FLAG: A.Lapsed took 0.40 s at most, so its approval lapsed\n'), printed)
 
+    def test_the_report_ends_below_the_box_times_with_each_test_over_the_ceiling_the_wall_time_and_the_flags(self) -> None:
+        _, printed = self.judged(self.APPROVALS)
+        self.assertTrue(printed.endswith('the tests of no box\n'
+                                         '   1.50 s  A.Unapproved: OVER THE 1 s CEILING ALONE, NOT APPROVED\n'
+                                         '--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 1 OVER THE CEILING NOT APPROVED ---\n'
+                                         'Wall time 10 s of 600 s budget\n'
+                                         'YELLOW FLAG: A.FastAloneApproved took 0.50 s at most, so its approval lapsed\n'
+                                         'YELLOW FLAG: A.Lapsed took 0.40 s at most, so its approval lapsed\n'), printed)
+
     def test_an_unapproved_test_over_the_ceiling_fails_the_run_once_the_switch_is_on_and_a_lapse_never_does(self) -> None:
         all_approved = self.APPROVALS + '"A.Unapproved" = "r"\n'
         for budgets, switch, status in ((self.APPROVALS, False, 0), (self.APPROVALS, True, 1), (all_approved, True, 0)):
@@ -147,7 +156,8 @@ class Boxes(Reports):
 
     def test_it_prints_each_box_against_its_budget_and_the_tests_of_no_box_together_against_other(self) -> None:
         self.assertIn('    2.0 s of    4 s  B.Tests\n    1.5 s of    2 s  plugins\n    0.5 s of    1 s  webview\n'
-                      '    1.2 s of    3 s  the tests of no box\n      1.2 s  hooks\nWall time 10 s of 300 s budget\n',
+                      '    1.2 s of    3 s  the tests of no box\n      1.2 s  hooks\n'
+                      '--- 0 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED ---\nWall time 10 s of 300 s budget\n',
                       self.with_budgets(self.BUDGETS)[1])
 
     def test_a_box_over_its_budget_or_with_none_ends_the_report_with_a_flag_and_fails_nothing_though_the_switch_is_on(self) -> None:

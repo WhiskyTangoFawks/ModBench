@@ -317,9 +317,9 @@ class TimeReport(FakeDotnet):
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
         self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n"
+                                     r" +0\.0 s of +\d+ s  the tests of no box\n +0\.0 s  hooks\n"
                                      r"--- 0 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED ---\n"
-                                     r" +0\.0 s of +\d+ s  the tests of no box\n"
-                                     r" +0\.0 s  hooks\nWall time \d+ s of 300 s budget\n")
+                                     r"Wall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
         self.assertIn("test_probe (test_probe.Probe.test_probe)", log.read_text().split("Slowest test durations")[1])
         self.assertNotIn("TEST DATA FILES", run.stdout)

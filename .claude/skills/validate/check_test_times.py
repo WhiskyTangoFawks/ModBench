@@ -113,9 +113,10 @@ def main(argv: list[str] | None = None) -> int:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
     else:
+        budget_overruns = report_budgets(times, budgets['boxes'], budgets['other'])
         alone = reports.results(Path(alone_folder)) if alone_folder else []
         unapproved, flags = report_ceiling(results, alone, budgets.get('approved', {}))
-        flags += report_budgets(times, budgets['boxes'], budgets['other'])
+        flags += budget_overruns
     flags += report_wall(float(elapsed_argument), budgets['wall'][run], run)
     for flag in flags:
         print(f'{FLAG}{flag}')
