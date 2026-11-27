@@ -1,11 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
+vi.mock('vscode', async () => {
+  const { taskModule } = await import('../../test/taskDouble');
+  const { FakeDiagnosticCollection } = await import('../../test/vscodeMock');
+  const module = taskModule();
+  return {
+    ...module,
+    commands: { ...module.commands, registerCommand: () => ({ dispose: () => undefined }) },
+    languages: { createDiagnosticCollection: () => new FakeDiagnosticCollection() },
+  };
+});
 
 import { executeCommand, registered, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { DeployResult } from '../../instanceCommands/deploy';
-import { registerDeployTask } from '../deployTask';
+import { registerDeployCommands } from '../deployGesture';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const DEFINITION = { type: 'modbench.instance.deploy' };
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
@@ -14,7 +24,12 @@ const landed = (overrides: Partial<DeployResult & { applied: true }> = {}): Depl
 
 async function deploy(answered: DeployResult | { applied: false; refusal: string }) {
   const reporter = recordingReporter();
-  registerDeployTask(reporter);
+  const unanswered = () => Promise.reject(new Error('the task runs deploy through its command'));
+  registerDeployCommands({
+    commands: { deploy: unanswered, purge: unanswered, moveToOverwrite: unanswered, unmanaged: unanswered },
+    instance: { subscribe: () => ({ dispose: () => undefined }), landed: () => Promise.resolve(instanceValueFixture()), sequence: 1, refresh: () => Promise.resolve(undefined) },
+    reporterFor: () => reporter,
+  });
   return { ...await runRegisteredTask(DEFINITION, { resolves: answered }), reporter };
 }
 

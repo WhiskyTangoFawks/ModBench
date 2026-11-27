@@ -8,7 +8,7 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { isRefused, type MEditClient, type PluginAddress, type SourceModIn } from '../../client';
-import type { PlaceMods } from '../decompileAndRepair';
+import type { pluginCommands } from '../plugins';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const OTHER = { name: 'Other.esp', origin: 'Quay' };
@@ -30,7 +30,7 @@ describe('decompileAndRepair', () => {
   let placing: Placing;
   let requests: { readonly mods: readonly string[]; readonly where?: SourceModIn }[];
 
-  const placeMods: PlaceMods = async (request, run, landedBy) => {
+  const placeMods: Parameters<typeof pluginCommands>[0]['placeMods'] = async (request, run, landedBy) => {
     requests.push(request);
     const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where ?? 'NewRepository' } }]));
     if (placing.whole !== undefined) return { refused: true, message: placing.whole };
