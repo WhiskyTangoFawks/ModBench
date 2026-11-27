@@ -11,6 +11,8 @@ A test stands up a part of the [zoom-out](target-architecture.d2) and feeds it a
 | any part of the system | Windows | each merge to main |
 
 - A behaviour's test is at the seam of the box whose code decides it.
+- A box's tests and its fixtures sit in one test folder of its own, a test project on mEdit. No folder in it mirrors a part of the box. A test file of a box that draws a view holds the tests of one section of a surface it draws, named for the section. Any other box's test file holds the tests of one group of what its public interface offers, named in the interface's words. The tests of a band's lib sit the same way, and a test file of a lib holds the tests of one lib file that a box uses. A refactor inside a box then moves no test, and a behaviour's test is found from its surface or its seam.
+- A test of boxes that only the composition root wires together is a test of its process's composition root. The scans sit in a folder of their own, and so do the fakes that the tests of several boxes share.
 - A branch runs the tests of each box it touches, and of every box that reaches that box through the references [layers.d2](layers.d2) governs.
 - A test's ceiling is 1 s, so every run affords every test it selects. A gate fails a slower test, unless the developer approved it by name, with its reason. An approval lapses when its test runs under 1 s.
 - Each box's tests have a time budget, on their summed time, and the other tests a gate runs share one. With the build, they bring a branch's gates to their verdict within 5 minutes, and a merge to main's within 10.
