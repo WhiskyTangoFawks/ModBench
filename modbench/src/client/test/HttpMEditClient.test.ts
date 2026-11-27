@@ -2,7 +2,7 @@ import { EMPTY_SNAPSHOT, IGNORED_THROWS, cancellableToken, loadOrderStatusEventF
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { leveledLog } from '../../test/leveledLog';
-import { createMEditClient } from '../HttpMEditClient';
+import { createMEditClient } from '..';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { PassThrough, Readable } from 'node:stream';
@@ -11,17 +11,9 @@ import { answerOf as read, isReadFailed } from '../../wire/readFailed';
 import { answered } from './healthAnswer';
 import { diskCheckedBy } from '../../repositoriesLib/writesTold';
 import { settled as until } from '../../test/eventually';
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-}
-
-function neverFetch(): (input: Request) => Promise<Response> {
-  return () => new Promise<Response>(() => {});
-}
+import { fakeLogChannel, jsonResponse, neverFetch, noContent, routedFetch } from './fakeMEdit';
 
 const DEBUG_LEVEL = 2;
-const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), logLevel: 3 });
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
@@ -63,15 +55,6 @@ function loadOrderStatusTick(loadOrderStatus: Parameters<typeof loadOrderStatusE
 
 const readyTickThatSettlesPutLoadOrder = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
 
-const noContent = () => Promise.resolve(new Response(null, { status: 204 }));
-
-function routedFetch(routes: [match: string, handle: (req: Request) => Promise<Response>][]) {
-  return vi.fn((req: Request) => {
-    const route = routes.find(([match]) => req.url.includes(match));
-    if (!route) return Promise.reject(new Error(`unrouted fetch: ${req.method} ${req.url}`));
-    return route[1](req);
-  });
-}
 
 describe('HttpMEditClient — the process is the client\'s own', () => {
   it('reports the backend\'s status changes to its listeners, until one unsubscribes', async () => {

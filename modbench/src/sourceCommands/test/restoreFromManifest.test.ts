@@ -12,7 +12,8 @@ import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } f
 import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
-import { restoreFromManifest, type RestoreStatus } from '../restoreFromManifest';
+import { instanceRepositoryCommands, type RestoreStatus } from '../instanceRepositoryCommands';
+import { hostWithoutGit } from '../../test/hostGitDouble';
 import { holdsLoadOrder } from '../../client/test/says';
 import { settled } from '../../test/eventually';
 
@@ -72,9 +73,10 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);
   const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: steps };
+  const commands = instanceRepositoryCommands({ ...deps, instanceRoot: root, hostGit: hostWithoutGit });
   return {
-    fake, client, hashes, steps, deps,
-    restore: (asked: readonly string[], options: Parameters<typeof restoreFromManifest>[2] = {}) => restoreFromManifest(deps, asked, options, false),
+    fake, client, hashes, steps, deps, commands,
+    restore: (asked: readonly string[], options: Parameters<typeof commands.restoreFromManifest>[1] = {}) => commands.restoreFromManifest(asked, options, false),
   };
 }
 
@@ -101,9 +103,9 @@ describe('restore from manifest', () => {
   });
 
   it('passes over a mod whose whole folder git holds when it runs on every manifest, refusing none', async () => {
-    const { deps } = await heldWholeSetup();
+    const { commands } = await heldWholeSetup();
 
-    const outcome = await restoreFromManifest(deps, ['ModA', 'ModB'], {}, true);
+    const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], {}, true);
 
     expect([outcome.refused, outcome.landed.map(({ mod }) => mod)]).toEqual([[], ['ModB']]);
   });

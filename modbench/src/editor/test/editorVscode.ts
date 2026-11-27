@@ -11,12 +11,35 @@ export const editorProviders = new Map<string, unknown>();
 export const editorProviderOptions = new Map<string, unknown>();
 export const editorProviderDisposals = { count: 0 };
 export const fileSystems = new Map<string, unknown>();
+export const fileSystemOptions = new Map<string, unknown>();
 export const openedDocuments: unknown[] = [];
 export const documentChanges = new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>();
 export const disk = new Map<string, string | Uint8Array>();
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
-export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
-export const showQuickPick = vi.fn<(items: readonly unknown[], options?: unknown) => Promise<unknown>>();
+/** Each workspace edit asked of VS Code, which lands unless a test says otherwise. */
+export const applyEdit = vi.fn<(edit: { made: unknown[] }) => Promise<boolean>>(() => Promise.resolve(true));
+/** What a test reads of a quick pick item the Editor offers. */
+export interface QuickPickItemLike { label: string; description?: string; detail?: string; mode?: string; plugin?: { name: string; origin: string } }
+export const showQuickPick = vi.fn<(items: readonly QuickPickItemLike[], options?: { canPickMany?: boolean; placeHolder?: string }) => Promise<unknown>>();
+export const showInputBox = vi.fn<(options: { value?: string }) => Promise<string | undefined>>();
+export const showTextDocument = vi.fn<(document: { uri: unknown }, options?: unknown) => Promise<unknown>>(() => Promise.resolve(undefined));
+export const clipboard = { readText: vi.fn<() => Promise<string>>(), writeText: vi.fn<(text: string) => Promise<void>>() };
+export const contentProviders = new Map<string, unknown>();
+/** Each progress VS Code shows, as it opens and as it ends. */
+export const progressShown: string[] = [];
+export const textDocuments: { uri: unknown }[] = [];
+export const documentCloses = new Set<(document: { uri: unknown }) => void>();
+
+function quickPickClosedAtOnce() {
+  const hidden: (() => void)[] = [];
+  return {
+    show: () => { hidden.forEach((listener) => { listener(); }); }, dispose: () => undefined,
+    onDidChangeValue: () => undefined, onDidAccept: () => undefined, onDidHide: (listener: () => void) => { hidden.push(listener); },
+  };
+}
+
+/** Each quick pick the Editor makes: by default one that closes as it is shown. */
+export const createQuickPick = vi.fn<() => unknown>(quickPickClosedAtOnce);
 
 interface UriParts { scheme: string; path: string; query?: string }
 
@@ -30,7 +53,11 @@ function uriOf(parts: UriParts): object {
   });
 }
 
-class FileSystemError extends Error { code = ''; }
+class FileSystemError extends Error {
+  code = '';
+  static FileNotFound = (what: { path: string } | string) => new FileSystemError(`FileNotFound ${typeof what === 'string' ? what : what.path}`);
+  static NoPermissions = (uri: { path: string }) => new FileSystemError(`NoPermissions ${uri.path}`);
+}
 
 function dispatch(...[id, ...args]: unknown[]): Promise<unknown> {
   if (id === 'setContext') contextKeys.set(String(args[0]), args[1]);
@@ -43,7 +70,16 @@ export const executed = () => executeCommand.mock.calls.filter(([id]) => id !== 
 
 export const editorVscode = {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, Range, FileSystemError,
-  WorkspaceEdit: class { renameFile() { return undefined; } createFile() { return undefined; } replace() { return undefined; } },
+  FileType: { File: 1 },
+  FileChangeType: { Changed: 1 },
+  env: { clipboard: { readText: () => clipboard.readText(), writeText: (text: string) => clipboard.writeText(text) } },
+  WorkspaceEdit: class {
+    readonly made: unknown[] = [];
+    renameFile(from: { path: string }, to: { path: string }) { this.made.push(['move', from.path, to.path]); }
+    deleteFile(uri: { path: string }, options: unknown) { this.made.push(['delete', uri.path, options]); }
+    createFile(uri: { path: string }) { this.made.push(['create', uri.path]); }
+    replace(uri: { path: string }, _range: unknown, text: string) { this.made.push(['replace', uri.path, text]); }
+  },
   Disposable: class {
     constructor(public dispose: () => void) {}
     static from(...parts: { dispose(): void }[]) { return { dispose: () => parts.forEach((part) => part.dispose()) }; }
@@ -65,12 +101,16 @@ export const editorVscode = {
     executeCommand: (...args: unknown[]) => executeCommand(...args),
   },
   workspace: {
-    registerFileSystemProvider: (scheme: string, provider: unknown) => {
+    registerFileSystemProvider: (scheme: string, provider: unknown, options?: unknown) => {
       fileSystems.set(scheme, provider);
-      return { dispose: () => undefined };
+      fileSystemOptions.set(scheme, options);
+      return { dispose: () => { fileSystems.delete(scheme); } };
     },
-    registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
-    textDocuments: [],
+    registerTextDocumentContentProvider: (scheme: string, provider: unknown) => {
+      contentProviders.set(scheme, provider);
+      return { dispose: () => contentProviders.delete(scheme) };
+    },
+    get textDocuments() { return textDocuments; },
     fs: {
       readFile: ({ fsPath, path }: { fsPath?: string; path?: string }) => {
         const held = disk.get(fsPath ?? path ?? '');
@@ -78,7 +118,10 @@ export const editorVscode = {
         return Promise.resolve(typeof held === 'string' ? new TextEncoder().encode(held) : held);
       },
     },
-    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    onDidCloseTextDocument: (listener: (document: { uri: unknown }) => void) => {
+      documentCloses.add(listener);
+      return { dispose: () => documentCloses.delete(listener) };
+    },
     onDidOpenTextDocument: () => ({ dispose: () => undefined }),
     onDidSaveTextDocument: () => ({ dispose: () => undefined }),
     onDidChangeTextDocument: (listener: (event: { document: unknown; contentChanges: unknown[] }) => void) => {
@@ -89,22 +132,24 @@ export const editorVscode = {
       openedDocuments.push(uri);
       return Promise.resolve({ uri, getText: () => '{}', isDirty: false });
     },
-    applyEdit: () => applyEdit(),
+    applyEdit: (edit: { made: unknown[] }) => applyEdit(edit),
   },
   window: {
     tabGroups: { get all() { return tabGroups; }, close: () => Promise.resolve(true) },
-    withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
-    showTextDocument: () => Promise.resolve(),
-    showQuickPick: (items: readonly unknown[], options?: unknown) => showQuickPick(items, options),
+    withProgress: async (_options: unknown, task: () => Promise<unknown>) => {
+      progressShown.push('opens');
+      try {
+        return await task();
+      } finally {
+        progressShown.push('ends');
+      }
+    },
+    showTextDocument: (document: { uri: unknown }, options?: unknown) => showTextDocument(document, options),
+    showInputBox: (options: { value?: string }) => showInputBox(options),
+    showQuickPick: (items: readonly QuickPickItemLike[], options?: { canPickMany?: boolean; placeHolder?: string }) => showQuickPick(items, options),
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
     createTreeView: () => ({ selection: [], onDidChangeSelection: () => ({ dispose: () => undefined }), dispose: () => undefined }),
-    createQuickPick: () => {
-      const hidden: (() => void)[] = [];
-      return {
-        show: () => { hidden.forEach((listener) => { listener(); }); }, dispose: () => undefined,
-        onDidChangeValue: () => undefined, onDidAccept: () => undefined, onDidHide: (listener: () => void) => { hidden.push(listener); },
-      };
-    },
+    createQuickPick: () => createQuickPick(),
     registerCustomEditorProvider: (viewType: string, provider: unknown, options: unknown) => {
       editorProviders.set(viewType, provider);
       editorProviderOptions.set(viewType, options);
@@ -150,6 +195,7 @@ export function forgetVscode(): void {
   commandHandlers.clear();
   contextKeys.clear();
   fileSystems.clear();
+  fileSystemOptions.clear();
   openedDocuments.length = 0;
   disk.clear();
   tabGroups.length = 0;
@@ -158,4 +204,15 @@ export function forgetVscode(): void {
   applyEdit.mockReset();
   applyEdit.mockResolvedValue(true);
   showQuickPick.mockReset();
+  showInputBox.mockReset();
+  showTextDocument.mockReset();
+  showTextDocument.mockResolvedValue(undefined);
+  clipboard.readText.mockReset();
+  clipboard.writeText.mockReset();
+  contentProviders.clear();
+  progressShown.length = 0;
+  textDocuments.length = 0;
+  documentCloses.clear();
+  createQuickPick.mockReset();
+  createQuickPick.mockImplementation(quickPickClosedAtOnce);
 }

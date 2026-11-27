@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } from './vscodeMock';
+import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } from './test/vscodeMock';
 
 vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
-import { problemsHostOver } from '../problemsHost';
+import { problemsHostOver } from './problemsHost';
 
 const FILE = '/instance/ModOrganizer.ini';
 

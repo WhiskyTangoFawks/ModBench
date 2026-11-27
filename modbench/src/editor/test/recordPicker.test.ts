@@ -1,32 +1,42 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createQuickPick, editorVscode } from './editorVscode';
 
-const createQuickPick = vi.fn<(...args: unknown[]) => unknown>();
-
-vi.mock('vscode', () => ({
-  window: { createQuickPick: (...args: unknown[]) => createQuickPick(...args) },
-}));
+vi.mock('vscode', () => editorVscode);
 
 import type * as vscode from 'vscode';
-import { pickRecord, type RecordPickerDeps } from '../recordPicker';
 import type { RecordSummary } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import { present } from '../../ports/present';
 import { settled } from '../../test/eventually';
+import { editorOver, forgetEditor, reporter } from './editorHarness';
 
-beforeEach(() => { createQuickPick.mockReset(); });
+beforeEach(forgetEditor);
+
+const picked = (formKey: string | null) => ({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'p1', formKey });
+
+function pickRecord(client: InMemoryMEditClient, seed: string, validTypes: string[]): Promise<unknown> {
+  const tab = editorOver({ meditClient: client }).open('000801:A.esp');
+  const reply = new Promise<unknown>((resolve) => {
+    tab.webview.postMessage.mockImplementation((message: unknown) => { resolve(message); return Promise.resolve(true); });
+  });
+  tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'p1', seed, validTypes });
+  return reply;
+}
 
 const makeRecord = (i: number, editorId: string | null = `Record${i}`): RecordSummary =>
   recordSummaryFixture({ formKey: `${String(i).padStart(6, '0')}:Fallout4.esm`, plugin: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, editorId });
 
 const makeFakeQuickPick = () => fakeQuickPick<vscode.QuickPickItem & { formKey?: string }>();
 
-describe('pickRecord', () => {
+describe('the record picker a tab opens for a reference field', () => {
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })) {
-    const shownOnSurface = vi.fn();
-    const deps: RecordPickerDeps = { meditClient: { searchRecords }, reporter: { shownOnSurface } };
-    return { deps, searchRecords, shownOnSurface };
+    const deps = new InMemoryMEditClient();
+    deps.searchRecords = searchRecords;
+    return { deps, searchRecords, shownOnSurface: reporter.shownOnSurface };
   }
 
   afterEach(() => { vi.useRealTimers(); });
@@ -247,7 +257,7 @@ describe('pickRecord', () => {
     const dispatchPromise = pickRecord(deps, '', ['npc_']);
     accept({ label: 'Picked [X]', formKey: 'X' });
 
-    await expect(dispatchPromise).resolves.toBe('X');
+    await expect(dispatchPromise).resolves.toEqual(picked('X'));
     expect(qp.hide).toHaveBeenCalled();
     expect(qp.dispose).toHaveBeenCalled();
   });
@@ -267,7 +277,7 @@ describe('pickRecord', () => {
     expect(qp.hide).not.toHaveBeenCalled();
 
     qp.hide();
-    await expect(dispatchPromise).resolves.toBeNull();
+    await expect(dispatchPromise).resolves.toEqual(picked(null));
   });
 
   it('resolves to null and disposes the picker when dismissed without a selection', async () => {
@@ -278,7 +288,7 @@ describe('pickRecord', () => {
     const dispatchPromise = pickRecord(deps, '', []);
     escape();
 
-    await expect(dispatchPromise).resolves.toBeNull();
+    await expect(dispatchPromise).resolves.toEqual(picked(null));
     expect(qp.dispose).toHaveBeenCalled();
   });
 
@@ -310,7 +320,7 @@ describe('pickRecord', () => {
     expect(qp.hide).not.toHaveBeenCalled();
 
     qp.hide();
-    await expect(result).resolves.toBeNull();
+    await expect(result).resolves.toEqual(picked(null));
   });
 
   it('a later successful search replaces the failure row', async () => {

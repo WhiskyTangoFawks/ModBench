@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
-const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
+const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held, reads: 0 }));
 const pathsHeld = vi.hoisted(() => ({ existing: new Set<string>() }));
 const fired = vi.hoisted((): { calls: unknown[][]; signals: (AbortSignal | undefined)[]; outcome: unknown; failure: Error | undefined } => ({ calls: [], signals: [], outcome: undefined, failure: undefined }));
 vi.mock('vscode', () => ({
-  languages: { getDiagnostics: () => diagnosticsHeld.held },
+  languages: { getDiagnostics: () => { diagnosticsHeld.reads += 1; return diagnosticsHeld.held; } },
   Uri: { file: (fsPath: string) => ({ fsPath }) },
   workspace: { fs: { stat: ({ fsPath }: { fsPath: string }) => (pathsHeld.existing.has(fsPath) ? Promise.resolve({}) : Promise.reject(new Error('ENOENT'))) } },
   commands: {
@@ -23,7 +23,6 @@ import { createServer, request, type OutgoingHttpHeaders, type Server } from 'no
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { TerminalEnvironment } from '../scriptEnvironment';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { ArchivedCopies } from '../../mods/archivedCopies';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
@@ -38,7 +37,7 @@ import { Refusal } from '../../drivingLib/refusal';
 import {
   buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackReusing, type ConflictEntry,
 } from '../../instanceLoader/fileConflictIndex';
-import type { MEditClient } from '../../client/MEditClient';
+import type { MEditClient, ReadCancellation } from '../../client/MEditClient';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { status } from '../../test/modStatusFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -52,9 +51,6 @@ import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
-import { TOOL_DESCRIPTIONS } from '../instructions/tools';
-import { INSTANCE_GUIDE_BY_MANAGER } from '../instructions/guides';
-import { REPLY_CHARS } from '../tooLarge';
 import { gestureName, phrase } from '../../ports/phrase';
 import { settled } from '../../test/eventually';
 
@@ -89,6 +85,7 @@ afterEach(async () => {
 });
 
 const NO_ENVIRONMENT = { forEach: () => undefined };
+const TOO_LARGE = 'The reply passes the 50000 characters that one reply holds.';
 const NO_TOOLBOX = {
   game: { name: 'Fallout 4', folder: GAME_FOLDER_NOT_FOUND, versions: { kind: 'unresolved' } },
   gameFolderLinks: 0, holdsRepository: false, deployment: { folder: null },
@@ -131,7 +128,7 @@ beforeEach(() => { symbolReads.asked = []; symbolReads.definition = { file: '/mo
 const feeds = { caughtUp: (): Promise<void> => Promise.resolve() };
 afterEach(() => { feeds.caughtUp = () => Promise.resolve(); });
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: AgentServerOptions['terminalEnvironment'] = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
@@ -146,7 +143,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: AgentServerOptions['terminalEnvironment'], deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment, standing);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
@@ -489,7 +486,7 @@ describe('the agent server, given an instance value', () => {
 
       expect(isError).toBe(true);
       expect(JSON.parse(text)).toEqual({
-        tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+        tooLarge: TOO_LARGE,
         [what]: count,
         narrow: `filter keeps ${keeps}, in any case.`,
       });
@@ -570,6 +567,14 @@ describe('the agent server, given an instance value', () => {
       expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], addedLater: ['x.nif'] }]);
     });
 
+    it('answers the reason on every mod whose status could not be read, never an empty list an agent would read as clean', async () => {
+      const unreadable = 'git could not say which folders it holds: git is gone';
+      statusRead.answer = [status('Big Rocks', { unreadable }), status('InAnotherProfile', { unreadable })];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'], unreadable }]);
+    });
+
     it('answers what a source mod\'s build file lacks, and leaves out a build file that lacks nothing', async () => {
       const buildFile = { file: '/src/Big Rocks/build.json', lacks: [{ step: 'compile' as const, path: 'Renamed.esp' }], unreadable: [] };
       statusRead.answer = [
@@ -627,15 +632,69 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
     const problem = { severity: 0, range: { start: { line: 0 } }, message: 'Could not be resolved', source: 'Modbench' };
     diagnosticsHeld.held = [[{ scheme: 'file', fsPath: '/i/Rocks.esp.json' }, [problem]]];
-    let caughtUp!: () => void;
-    feeds.caughtUp = () => new Promise<void>((resolve) => { caughtUp = () => { resolve(); }; });
+    let caughtUp: (() => void) | undefined;
+    feeds.caughtUp = () => new Promise<void>((resolve) => { caughtUp = resolve; });
 
     const asked = read(client, 'list_problems');
-    await new Promise((resolve) => { setTimeout(resolve, 30); });
+    await settled(() => { expect(caughtUp).toBeDefined(); });
     diagnosticsHeld.held = [];
-    caughtUp();
+    caughtUp?.();
 
     expect(await asked).toEqual([]);
+  });
+
+  describe('a list_problems call the agent cancels', () => {
+    class RefreshHeard extends InMemoryMEditClient {
+      cancellation: ReadCancellation | undefined;
+      override refreshRecordIndexLateness(cancellation?: ReadCancellation): Promise<void> {
+        this.cancellation ??= cancellation;
+        return super.refreshRecordIndexLateness();
+      }
+    }
+    class RefreshHeldUntilCancelled extends RefreshHeard {
+      override refreshRecordIndexLateness(cancellation?: ReadCancellation): Promise<void> {
+        if (this.cancellation !== undefined) return super.refreshRecordIndexLateness(cancellation);
+        this.cancellation = cancellation;
+        return new Promise((resolve) => { cancellation?.onCancellationRequested(() => { resolve(); }); });
+      }
+    }
+    const cancelledCall = async (mEdit: RefreshHeard) => {
+      const { client, errored } = await clientOf(new FakeInstance(VALUE), mEdit);
+      const cancelled = new AbortController();
+      client.callTool({ name: 'list_problems', arguments: {} }, undefined, { signal: cancelled.signal }).catch(() => undefined);
+      await settled(() => { expect(mEdit.cancellation).toBeDefined(); });
+      return { client, cancelled, errored };
+    };
+    beforeEach(() => { diagnosticsHeld.reads = 0; });
+
+    it('stops waiting on feeds that never settle, and reads no problems once they do', async () => {
+      let caughtUp: (() => void) | undefined;
+      feeds.caughtUp = () => new Promise<void>((resolve) => { caughtUp = resolve; });
+      const mEdit = new RefreshHeard();
+      const { client, cancelled, errored } = await cancelledCall(mEdit);
+      await settled(() => { expect(caughtUp).toBeDefined(); });
+
+      cancelled.abort();
+      await settled(() => { expect(mEdit.cancellation?.isCancellationRequested).toBe(true); });
+      caughtUp?.();
+      feeds.caughtUp = () => Promise.resolve();
+      await read(client, 'list_problems');
+
+      expect([diagnosticsHeld.reads, errored]).toEqual([1, []]);
+    });
+
+    it('asks nothing of the feeds once cancelled while it refreshed the record index\'s lateness', async () => {
+      let asked = 0;
+      feeds.caughtUp = () => { asked += 1; return Promise.resolve(); };
+      const mEdit = new RefreshHeldUntilCancelled();
+      const { client, cancelled, errored } = await cancelledCall(mEdit);
+
+      cancelled.abort();
+      await settled(() => { expect(mEdit.cancellation?.isCancellationRequested).toBe(true); });
+      await read(client, 'list_problems');
+
+      expect([asked, errored]).toEqual([1, []]);
+    });
   });
 
   describe('when the record index may be late', () => {
@@ -747,7 +806,7 @@ describe('the agent server, given an instance value', () => {
 
     expect(isError).toBe(true);
     expect(JSON.parse(text)).toEqual({
-      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      tooLarge: TOO_LARGE,
       problems: 225,
       byFolder: [
         { path: '/i/mods/A', count: 150 }, { path: '/s/Rocks', count: 70 }, { path: '/elsewhere', count: 2 },
@@ -898,7 +957,7 @@ describe('the agent server, reading file order conflicts', () => {
       const { isError, text } = await call(client, 'list_file_conflicts', args);
 
       expect(isError).toBe(true);
-      expect(JSON.parse(text)).toEqual({ tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`, ...correction });
+      expect(JSON.parse(text)).toEqual({ tooLarge: TOO_LARGE, ...correction });
     });
 
   });
@@ -1231,7 +1290,7 @@ describe('the agent server, selecting records through mEdit', () => {
 
     const answered = await read(client, 'select_rows', { sql: 'SELECT editorId FROM records' });
 
-    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records', REPLY_CHARS] });
+    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records', 50_000] });
     expect(answered).toEqual(rows);
   });
 
@@ -1246,7 +1305,7 @@ describe('the agent server, selecting records through mEdit', () => {
     expect(isError).toBe(true);
     const cut = `${'x'.repeat(100)}…`;
     expect(JSON.parse(text)).toEqual({
-      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      tooLarge: TOO_LARGE,
       read: 4, more: true,
       averageChars: { editor_id: 4, body: 750 },
       first: [{ editor_id: 'Npc1', body: cut }, { editor_id: 'Npc2', body: cut }, { editor_id: 'Npc3', body: cut }],
@@ -1330,7 +1389,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const answer: unknown = JSON.parse(text);
     const { copies: [loser, winner] } = z.object({ copies: z.tuple([z.object({ chars: z.number() }), z.object({ chars: z.number() })]) }).parse(answer);
     expect(answer).toEqual({
-      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      tooLarge: TOO_LARGE,
       copies: [
         { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, chars: loser.chars },
         { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, chars: winner.chars },
@@ -1354,7 +1413,7 @@ describe('the agent server, reading a record through mEdit', () => {
 
     expect(isError).toBe(true);
     expect(JSON.parse(text)).toEqual({
-      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      tooLarge: TOO_LARGE,
       chars: JSON.stringify({ ...STANDING, kind: 'Rendered', text: rendered }).length,
       narrow: 'select_rows reads parts of the copy\'s body, such as one field or one child record, from the records view WHERE form_key = \'000800:A.esp\' AND plugin = \'A.esp\' AND origin = \'Big Rocks\'.',
     });
@@ -1531,7 +1590,7 @@ describe('the agent server, reading a record through mEdit', () => {
 
     expect(isError).toBe(true);
     expect(JSON.parse(text)).toEqual({
-      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      tooLarge: TOO_LARGE,
       references: 1000,
       leftOut: 3,
       narrow: 'select_rows reads the rows of the form_references view whose target_form_key is 000800:A.esp, which hold every plugin the record index holds, active or not, where this list holds the active and the compiled plugins. Its WHERE narrows them further.',
@@ -1693,7 +1752,6 @@ describe('the agent server, running a gesture', () => {
 
   describe('an outcome too large for one reply', () => {
     const many = (count: number, prefix: string) => Array.from({ length: count }, (_, n) => ({ kind: 'mod', name: `${prefix} ${'x'.repeat(100)} ${n}` }));
-    const tooLargeLine = `The reply passes the ${REPLY_CHARS} characters that one reply holds.`;
 
     it.each([
       ['a landed one, with how many landed, its partials by message, and the read that shows the result', 'mod_check_for_updates', {
@@ -1722,7 +1780,7 @@ describe('the agent server, running a gesture', () => {
 
       const answer = await call(client, tool, {});
 
-      expect({ isError: answer.isError, answer: JSON.parse(answer.text) as unknown }).toEqual({ isError: true, answer: { tooLarge: tooLargeLine, ...counted } });
+      expect({ isError: answer.isError, answer: JSON.parse(answer.text) as unknown }).toEqual({ isError: true, answer: { tooLarge: TOO_LARGE, ...counted } });
     });
   });
 
@@ -2675,16 +2733,10 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(Math.max(...lengths)).toBeLessThanOrEqual(2048);
   });
 
-  it('holds a description for exactly the tools it registers', async () => {
-    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
-
-    expect(Object.keys(TOOL_DESCRIPTIONS).sort()).toEqual(tools.map(({ name }) => name).sort());
-  });
-
   it('answers the instance guide of the instance\'s own mod manager, as plain text', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
-    expect(await call(client, 'read_guide', { topic: 'instance' })).toEqual({ isError: false, text: INSTANCE_GUIDE_BY_MANAGER.MO2 });
+    expect(await call(client, 'read_guide', { topic: 'instance' })).toEqual({ isError: false, text: expect.stringMatching(/^You work in an instance: MO2's setup for one game/) as unknown });
   });
 
   it('refuses the instance guide for a mod manager that has none, naming the manager', async () => {

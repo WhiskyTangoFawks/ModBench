@@ -1,26 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter, Uri } from '../../test/vscodeMock';
+import { contentProviders, editorVscode, textDocuments } from './editorVscode';
 
-const h = vi.hoisted(() => ({
-  providers: new Map<string, unknown>(),
-  textDocuments: [] as { uri: unknown }[],
-}));
+vi.mock('vscode', () => editorVscode);
 
-vi.mock('vscode', () => ({
-  EventEmitter,
-  Uri,
-  Disposable: class { constructor(public dispose: () => void) {} },
-  workspace: {
-    registerTextDocumentContentProvider: (scheme: string, provider: unknown) => {
-      h.providers.set(scheme, provider);
-      return { dispose: () => h.providers.delete(scheme) };
-    },
-    get textDocuments() { return h.textDocuments; },
-  },
-}));
-
-import { RenderedDocuments } from '../renderedDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { editorOver, forgetEditor } from './editorHarness';
 
 interface ContentProvider {
   provideTextDocumentContent(uri: unknown): Promise<string>;
@@ -33,22 +17,19 @@ const isContentProvider = (value: unknown): value is ContentProvider =>
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const NAME = 'Gun - 000801_A.esp.json';
-const renderedUri = (path: string, query: string) => Uri.from({ scheme: 'modbench-rendered', path, query });
+const renderedUri = (path: string, query: string) => editorVscode.Uri.from({ scheme: 'modbench-rendered', path, query });
 const GUN_URI = renderedUri(`/ModA/A.esp/${NAME}`, 'formKey=000801%3AA.esp&name=A.esp&origin=ModA');
 
 function rendered(client = new InMemoryMEditClient()) {
-  const documents = new RenderedDocuments(client);
-  const [provider] = h.providers.values();
+  editorOver({ meditClient: client });
+  const provider = contentProviders.get('modbench-rendered');
   if (!isContentProvider(provider)) throw new Error('no content provider registered');
   const changed: unknown[] = [];
   provider.onDidChange((uri) => changed.push(uri));
-  return { documents, provider, changed };
+  return { provider, changed };
 }
 
-beforeEach(() => {
-  h.providers.clear();
-  h.textDocuments.length = 0;
-});
+beforeEach(forgetEditor);
 
 describe('a rendered document\'s text', () => {
   it('is the text mEdit renders the copy as', async () => {
@@ -76,7 +57,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
     const uri = GUN_URI;
-    h.textDocuments.push({ uri }, { uri: renderedUri('/ModA/A.esp/Other.json', 'formKey=000802%3AA.esp&name=A.esp&origin=ModA') });
+    textDocuments.push({ uri }, { uri: renderedUri('/ModA/A.esp/Other.json', 'formKey=000802%3AA.esp&name=A.esp&origin=ModA') });
 
     client.change(rowsChanged(modA, [GUN]));
 
@@ -86,7 +67,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
   it('stays as it is when another plugin\'s copy of its record changed', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
-    h.textDocuments.push({ uri: GUN_URI });
+    textDocuments.push({ uri: GUN_URI });
 
     client.change(rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
 
@@ -97,7 +78,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
     const uri = GUN_URI;
-    h.textDocuments.push({ uri }, { uri: { scheme: 'file', path: uri.path, query: uri.query } });
+    textDocuments.push({ uri }, { uri: { scheme: 'file', path: `/ModA/A.esp/${NAME}`, query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA' } });
 
     client.change([{ plugin: { name: 'A.esp', origin: 'ModA' } }]);
 

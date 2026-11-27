@@ -19,7 +19,7 @@ vi.mock('vscode', () => {
 });
 
 import * as vscode from 'vscode';
-import { hostTasks } from '../tasks';
+import { hostTasks } from './tasks';
 
 const SETTINGS = {
   detail: 'Optimises textures', group: { id: 'build' }, isBackground: true, presentationOptions: { reveal: 2 }, runOptions: { reevaluateOnRerun: false },

@@ -240,3 +240,43 @@ describe('pathsOf: the file of each of LOOT\'s condition functions that reads on
     expect(pathsOf(condition).length > 0).toBe(read.length > 0);
   });
 });
+
+describe('version(): LOOT\'s version order', () => {
+  it.each([
+    ['1.2.3', '==', '1.2.3'],
+    ['01.02.03', '==', '1.2.3'],
+    ['1.2', '==', '1.2.0.0'],
+    ['1,2,3,4', '==', '1.2.3.4'],
+    ['0, 2, 0, 12', '==', '0.2.0.12'],
+    ['1.2.3-alpha', '==', '1.2.3 alpha'],
+    ['1.2.3-alpha.1', '==', '1.2.3-alpha_1'],
+    ['1.10', '>', '1.9'],
+    ['1.0.1', '>', '1.0'],
+    ['1.0.0-alpha', '<', '1.0.0'],
+    ['1-beta', '<', '1.0.1-beta'],
+    ['1.A', '>', '1.1'],
+    ['1.1A', '>', '1.1'],
+    ['1.2', '>', '1.1A'],
+    ['1.1A', '>', '1.0'],
+    ['1.0.0-alpha', '<', '1.0.0-Beta'],
+    ['1.0.0-2', '<', '1.0.0-alpha'],
+    ['1.0.0-alpha', '<', '1.0.0-alpha.1'],
+    ['1.0.0+build5', '==', '1.0.0'],
+  ])('holds %s %s %s', (actual, comparator, given) => {
+    expect(value(`version("../G.exe", ${comparator}, "${given}")`, { answers: { 'version:../G.exe': actual } })).toBe(true);
+  });
+});
+
+describe('version(): the version a plugin\'s description states', () => {
+  it.each([
+    ['Version: 2.0.5 of the patch', '==', '2.0.5', true],
+    ['Unofficial Patch v1.0.5', '==', '1.0.5', true],
+    ['1.2.3', '==', '1.2.3', true],
+    ['Released 3/4/2020 10:11:12', '==', '3/4/2020 10:11:12', true],
+    ['Compatible with 4', '!=', '4', false],
+    ['No number here', '!=', '1', false],
+    ['v7', '==', '7', true],
+  ])('reads %j %s %j as %s', (description, comparator, given, expected) => {
+    expect(value(`version("P.esp", ${comparator}, "${given}")`, { files: ['P.esp'], descriptions: { 'P.esp': description } })).toBe(expected);
+  });
+});

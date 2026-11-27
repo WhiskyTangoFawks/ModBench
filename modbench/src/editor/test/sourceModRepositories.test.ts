@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
   Uri: { file: (fsPath: string) => ({ fsPath }) },
 }));
 
-import { sourceModRepositoriesOver } from '../sourceModRepositories';
+import { sourceModRepositoriesOver } from '..';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { settled } from '../../test/eventually';
