@@ -82,7 +82,8 @@ class Ceiling(Reports):
     def setUp(self) -> None:
         super().setUp()
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0.05), fx.trx_result('A.Unapproved', 5, 2),
-                                    fx.trx_result('A.SlowAlone', 5, 3), fx.trx_result('A.FastAlone', 5, 2), fx.trx_result('A.FastAloneApproved', 5, 2),
+                                    fx.trx_result('A.SlowAlone', 5, 3), fx.trx_result('A.FastAlone', 5, 2),
+                                    fx.trx_result('A.FastAloneApproved', 5, 2),
                                     fx.trx_result('A.Theory(case: 1)', 6, 2.5), fx.trx_result('A.Theory(case: 2)', 6, 1.5),
                                     fx.trx_result('A.Lapsed', 6, 0.4)))
         alone = tempfile.TemporaryDirectory()
@@ -93,8 +94,14 @@ class Ceiling(Reports):
             fx.trx_result('A.FastAlone', 6, 0.5), fx.trx_result('A.FastAloneApproved', 7, 0.5),
             fx.trx_result('A.Theory(case: 1)', 9, 1.5), fx.trx_result('A.Theory(case: 2)', 10, 0.5)))
 
-    def judged(self, budgets: str) -> tuple[int, str]:
-        return self.main(10, budgets=budgets, alone=self.alone)
+    def judged(self, budgets: str, run: str = 'merge') -> tuple[int, str]:
+        return self.main(10, run, budgets=budgets, alone=self.alone)
+
+    def test_a_branch_run_judges_the_ceiling_alone_and_leaves_the_lapses_to_a_merge_run(self) -> None:
+        _, printed = self.judged(self.APPROVALS, 'branch')
+        self.assertIn('   1.50 s  A.Unapproved: OVER THE 1 s CEILING ALONE, NOT APPROVED\n'
+                      '--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 1 OVER THE CEILING NOT APPROVED ---\n', printed)
+        self.assertNotIn('LAPSED', printed)
 
     def test_it_names_each_test_over_the_ceiling_no_approval_names_by_its_own_or_its_theorys_and_each_approval_that_lapsed(self) -> None:
         """A.NotRun's approval did not run, so it did not lapse; A.Theory's lapses only once all its cases run under 1 s alone."""

@@ -235,6 +235,7 @@ ALONE_ARGS=()
 if $HOLDS_SLOT; then
   echo "=== Tests over 1 s, again alone ==="
   python3 "$ROOT/.claude/skills/validate/run_alone.py" "$ROOT" "$REPORTS" "$ALONE" \
+    "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" \
   || { echo "--- ALONE RUN FAILED ---"; FAILED=true; }
   ALONE_ARGS=("$ALONE")
 fi

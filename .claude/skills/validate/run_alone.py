@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """Runs again, one at a time and after the gates' other tests, each test the reports time over the 1 s ceiling,
-and writes that run's reports to a folder of its own for check_test_times.py. An xUnit theory runs all its
-cases. An integration test does not run again: modbench's integration runner passes no test filter through."""
+and writes that run's reports to a folder of its own for check_test_times.py. A branch run leaves out an approved
+test, whose verdict the run cannot change; a merge run runs it too, for its lapse. An xUnit theory runs all its
+cases."""
 import contextlib
 import os
 import re
 import subprocess
 import sys
 import time
-from collections.abc import Callable
+import tomllib
 from pathlib import Path
 from typing import NamedTuple
 
 import reports
-from check_test_times import CEILING_SECONDS
+from check_test_times import CEILING_SECONDS, MERGE, approval_of
 
 UNITTEST_FOLDERS = {'validate': '.claude/skills/validate', 'hooks': '.claude/hooks', 'scripts': 'scripts'}
 UNITTEST_ID = re.compile(r'\((\S+)\)$')
-RETRIES = 2
 # The gates' own tests start runs of the gates, which are branch runs.
 MERGE_TO_MAIN = 'MEDIT_MERGE_TO_MAIN'
 
@@ -32,96 +32,61 @@ def method_of(name: str) -> str:
     return name.split('(', 1)[0]
 
 
-def over_ceiling(results: list[reports.Result]) -> dict[str, set[str]]:
-    """The names of each box's tests over the ceiling."""
+def over_ceiling(results: list[reports.Result], approved: dict[str, str]) -> dict[str, set[str]]:
+    """The names of each box's tests over the ceiling that no approval names."""
     boxes: dict[str, set[str]] = {}
     for result in results:
-        if result.seconds is not None and result.seconds > CEILING_SECONDS:
+        if result.seconds is not None and result.seconds > CEILING_SECONDS and approval_of(result.name, approved) is None:
             boxes.setdefault(result.box, set()).add(result.name)
     return boxes
 
 
-def backend(root: Path, box: str, report: Path, methods: list[str]) -> Command:
-    return Command(root / 'MEditService', [
-        'dotnet', 'test', box, '--no-build', '-v', 'quiet', '--logger', f'trx;LogFileName={report.name}',
-        '--results-directory', str(report.parent),
-        '--filter', '|'.join(f'FullyQualifiedName={method}' for method in methods), '--', 'xUnit.ParallelizeTestCollections=false'])
-
-
-def others(kinds: dict[str, list[reports.Result]], root: Path, alone: Path) -> list[Command]:
-    """One process for each unittest folder, and one for every vitest file."""
+def commands(kinds: dict[str, list[reports.Result]], root: Path, alone: Path, approved: dict[str, str]) -> list[Command]:
+    """One process for each backend project and each unittest folder, one for every vitest file, and one VS Code."""
     found: list[Command] = []
-    for box, names in sorted(over_ceiling(kinds.get(reports.UNITTEST_REPORT, [])).items()):
+    for box, names in sorted(over_ceiling(kinds.get(reports.TRX_REPORT, []), approved).items()):
+        methods = '|'.join(f'FullyQualifiedName={method}' for method in sorted({method_of(name) for name in names}))
+        found.append(Command(root / 'MEditService', [
+            'dotnet', 'test', box, '--no-build', '-v', 'quiet', '--logger', 'trx', '--results-directory', str(alone / 'backend'),
+            '--filter', methods, '--', 'xUnit.ParallelizeTestCollections=false']))
+    for box, names in sorted(over_ceiling(kinds.get(reports.UNITTEST_REPORT, []), approved).items()):
         ids = sorted(match[1] for name in names if (match := UNITTEST_ID.search(name)))
         found.append(Command(root / UNITTEST_FOLDERS[box], ['python3', '-m', 'unittest', '-v', '--durations', '0', *ids],
                              alone / f'{box}.unittest'))
-    vitest = sorted(name.split(reports.VITEST_SEPARATOR, 1) for names in over_ceiling(kinds.get(reports.VITEST_REPORT, [])).values()
-                    for name in names)
+    vitest = sorted(name.split(reports.VITEST_SEPARATOR, 1)
+                    for names in over_ceiling(kinds.get(reports.VITEST_REPORT, []), approved).values() for name in names)
     if vitest:
         pattern = '|'.join(re.escape(test) for _, test in vitest)
         found.append(Command(root / 'modbench', [
             'npx', 'vitest', 'run', '--no-file-parallelism', '--reporter=json', f'--outputFile.json={alone / "unit.json"}',
             '-t', f'^({pattern})$', *sorted({f'/{file}' for file, _ in vitest})]))
+    # Mocha matches a pattern against a test's suite and its title together, so the title ends it.
+    integration = sorted(name for names in over_ceiling(kinds.get(reports.MOCHA_REPORT, []), approved).values() for name in names)
+    if integration:
+        found.append(Command(root / 'modbench', ['node', 'integration.mjs', '--grep', f'({"|".join(map(re.escape, integration))})$'],
+                             alone / 'integration.mocha'))
     return found
 
 
-def first_over_ceiling(report: Path) -> str | None:
-    """The method of the run's first test, when that test, which paid the process's warm-up, is over the ceiling."""
-    if not report.exists():
-        return None
-    text = report.read_text(encoding='utf-8-sig')
-    first = reports.ran_first(text)
-    over = any(result.name == first and (result.seconds or 0) > CEILING_SECONDS for result in reports.in_trx(text))
-    return method_of(first) if first and over else None
-
-
-def class_of(method: str) -> str:
-    return method.rsplit('.', 1)[0]
-
-
-def run_again(root: Path, directory: Path, alone: Path, execute: Callable[[Command], bool]) -> bool:
-    """Whether every run passed. A backend project's first test, if over the ceiling, runs again beside one of another
-    class until another runs first: xUnit orders collections at random, and a class is one unless it names one."""
-    kinds = reports.by_kind(directory)
-    loaded = kinds.get(reports.TRX_REPORT, [])
-    passed = True
-    for box, names in sorted(over_ceiling(loaded).items()):
-        methods = sorted({method_of(name) for name in names})
-        fastest = [method_of(result.name) for result in sorted(
-            (result for result in loaded if result.box == box and result.seconds is not None and method_of(result.name) not in methods),
-            key=lambda result: result.seconds or 0)]
-        report = alone / 'backend' / box / '0.trx'
-        passed &= execute(backend(root, box, report, methods))
-        for attempt in range(1, RETRIES + 1):
-            first = first_over_ceiling(report)
-            if first not in methods:
-                break
-            beside = next((method for method in methods + fastest if class_of(method) != class_of(first)), None)
-            if beside is None:
-                break
-            report = report.with_name(f'{attempt}.trx')
-            passed &= execute(backend(root, box, report, [first, beside]))
-    for command in others(kinds, root, alone):
-        passed &= execute(command)
-    return passed
+def execute(command: Command, environment: dict[str, str]) -> bool:
+    with command.log.open('w') if command.log else contextlib.nullcontext() as log:
+        done = subprocess.run(command.argv, cwd=command.folder, env=environment, stdout=log,
+                              stderr=subprocess.STDOUT if log else None, check=False)
+    if done.returncode:
+        print(f'Failed alone, exit {done.returncode}: {" ".join(command.argv)}')
+    return done.returncode == 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    root, directory, alone = map(Path, sys.argv[1:] if argv is None else argv)
+    """The run is branch or merge."""
+    root, directory, alone, budgets_file, run = sys.argv[1:] if argv is None else argv
+    approved = {} if run == MERGE else tomllib.loads(Path(budgets_file).read_text()).get('approved', {})
     environment = {key: value for key, value in os.environ.items() if key != MERGE_TO_MAIN}
-
-    def execute(command: Command) -> bool:
-        with command.log.open('w') if command.log else contextlib.nullcontext() as log:
-            done = subprocess.run(command.argv, cwd=command.folder, env=environment, stdout=log,
-                                  stderr=subprocess.STDOUT if log else None, check=False)
-        if done.returncode:
-            print(f'Failed alone, exit {done.returncode}: {" ".join(command.argv)}')
-        return done.returncode == 0
-
-    alone.mkdir(parents=True, exist_ok=True)
+    Path(alone).mkdir(parents=True, exist_ok=True)
     start = time.monotonic()
-    passed = run_again(root, directory, alone, execute)
-    print(f'Again alone: {time.monotonic() - start:.0f} s')
+    found = commands(reports.by_kind(Path(directory)), Path(root), Path(alone), approved)
+    passed = all([execute(command, environment) for command in found])
+    print(f'Again alone: {len(found)} runs in {time.monotonic() - start:.0f} s')
     return int(not passed)
 
 

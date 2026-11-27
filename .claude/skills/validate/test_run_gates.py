@@ -270,7 +270,7 @@ class TimeReport(FakeDotnet):
 
     def test_a_test_over_1_s_under_load_runs_again_alone_and_the_ceiling_judges_its_time_there(self) -> None:
         for alone, line in ((5, "   5.00 s  Fake.Slow: OVER THE 1 s CEILING ALONE, NOT APPROVED\n"),
-                            (0.5, "--- 1 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n")):
+                            (0.5, "--- 1 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED ---\n")):
             with self.subTest(alone=alone):
                 run, _ = self.run_after_changing(f"MEditService/MEditService.Http/{alone}.cs", "--backend", FAKE_TRX=self.trx("Passed", 5),
                                                  FAKE_ALONE_TRX=self.trx("Passed", alone, "alone.trx"))
@@ -319,7 +319,7 @@ class TimeReport(FakeDotnet):
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
         self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n"
-                                     r"--- 0 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n"
+                                     r"--- 0 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED ---\n"
                                      r" +0\.0 s of +\d+ s  the tests of no box\n"
                                      r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN OR MISSING ---\nWall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")

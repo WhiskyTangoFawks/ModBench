@@ -60,12 +60,6 @@ def in_trx(text: str) -> list[Result]:
             for result, times in zip(elements, spans)]
 
 
-def ran_first(text: str) -> str | None:
-    """The name of a TRX run's first result to end: in a run one test at a time, the one that paid the warm-up."""
-    ended = [result for result in ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX) if 'endTime' in result.attrib]
-    return min(ended, key=lambda result: datetime.fromisoformat(result.attrib['endTime'])).attrib['testName'] if ended else None
-
-
 def frontend_box(path: str) -> str:
     match = FRONTEND_BOX.match(path)
     if match is None:

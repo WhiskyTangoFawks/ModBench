@@ -3,7 +3,7 @@
 box's summed test time and the run's wall time against its budget in the budget file. Once FAILS_THE_RUN is on,
 a Linux run fails on a box over its budget or without one, and on a test over the 1 s ceiling the file does
 not approve. Once WINDOWS_FAILS_THE_RUN is on, the Windows run fails on its wall time, and on nothing else.
-An approval whose tests all ran under the ceiling is reported as lapsed and fails nothing."""
+On a merge run, an approval whose tests all ran under the ceiling alone is reported as lapsed and fails nothing."""
 import sys
 import tomllib
 from pathlib import Path
@@ -18,6 +18,7 @@ WINDOWS_FAILS_THE_RUN = False
 NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
 OTHER = 'the tests of no box'
 WINDOWS = 'windows'
+MERGE = 'merge'
 
 
 def slow_tests(results: list[reports.Result]) -> list[tuple[str, float]]:
@@ -49,9 +50,10 @@ def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
     return fastest
 
 
-def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> int:
+def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str], lapses_too: bool) -> int:
     """The number of tests over the ceiling no approval names. A test over it under load that ran again alone is
-    judged on its fastest run there, and any other test where it ran."""
+    judged on its fastest run there, and any other test where it ran. Only a merge run runs an approved test again, so
+    only it reports the lapses."""
     fastest_alone = fastest_runs(alone)
     ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in fastest_alone}
     judged = [result._replace(seconds=fastest_alone[result.name]) if result.name in ran_again else result for result in results]
@@ -59,11 +61,12 @@ def report_ceiling(results: list[reports.Result], alone: list[reports.Result], a
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
         print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in ran_again else ""}, NOT APPROVED')
-    lapses = lapsed(judged, approved)
+    lapses = lapsed(judged, approved) if lapses_too else []
     for name, seconds in lapses:
         print(f'{seconds:7.2f} s  {name}: APPROVAL LAPSED')
-    print(f'--- {len(ran_again)} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED, '
-          f'{len(lapses)} APPROVALS LAPSED ---')
+    lapse_count = f', {len(lapses)} APPROVALS LAPSED' if lapses_too else ''
+    print(f'--- {len(ran_again)} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED'
+          f'{lapse_count} ---')
     return len(unapproved)
 
 
@@ -123,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f'{seconds:7.1f} s  {box}')
         return int(report_wall(elapsed, budgets['wall'][run]) and WINDOWS_FAILS_THE_RUN)
     alone = reports.results(Path(alone_folder)) if alone_folder else []
-    failing = (report_ceiling(results, alone, budgets.get('approved', {}))
+    failing = (report_ceiling(results, alone, budgets.get('approved', {}), run == MERGE)
                + report_budgets(times, budgets['boxes'], budgets['other']))
     report_wall(elapsed, budgets['wall'][run])
     return int(FAILS_THE_RUN and bool(failing))
