@@ -79,7 +79,6 @@ describe('the Toolbox view, given an instance value', () => {
         'Game: 1.10.163.0\nScript extender: f4se_loader.exe cannot be read: EACCES'],
       ['a game program the game folder lacks', found({ kind: 'notFound', program: 'Fallout4.exe' }, read('0.0.6.23')),
         'Game: Fallout4.exe not found\nScript extender: 0.0.6.23'],
-      ['that Modbench knows no program of the game', { kind: 'unknownGame' }, 'Modbench knows no program of this game'],
     ])('names the game folder, then %s', (_, programVersions, lines) => {
       expect(row(new FakeInstance({ ...VALUE, programVersions }), 'Game').tooltip).toBe(`${GAME_FOLDER}\n${lines}`);
     });

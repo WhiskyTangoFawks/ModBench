@@ -123,6 +123,12 @@ export interface InstanceAnswers {
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
+  /** Why the stamp of each path cannot be read, by the path; it wins over `stamps`. */
+  unreadableStamps?: ReadonlyMap<string, string>;
+  /** Each stamp read answers once this settles, as it is when the read is asked. */
+  stampsHeldUntil?: Promise<void>;
+  /** The message each stamp read rejects with, as it is when the read is asked. */
+  stampFailure?: string;
   /** What a file reads as, by the path it is read from: the mod order's winner, else its path in the Data folder. */
   dataFiles?: ReadonlyMap<string, { checksum?: number; version?: string; readable?: boolean }>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
@@ -200,6 +206,8 @@ export interface FakeInstanceAdapter {
   readonly calls: readonly AdapterCall[];
   forgetCalls(): void;
   readonly hashed: string[];
+  /** Each path whose stamp was read, in order. */
+  readonly stamped: string[];
   /** Every `reading()` after this answers the reading with these fields replaced. */
   read(next: Partial<InstanceReading>): void;
   /** Signals a change to `path`, or one with no path. */
@@ -289,6 +297,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let current = reading;
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
+  const stamped: string[] = [];
   const letInByLines = new Set<string>();
   const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
   const listeners = new Set<ChangeListener>();
@@ -437,7 +446,15 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     commitFolder: (folder, message) => record({ verb: 'commitFolder', folder, message }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
-    fileStamp: (path) => answer(answers.stamps?.get(path), path),
+    fileStamp: (path) => {
+      stamped.push(path);
+      const { stampsHeldUntil = Promise.resolve(), stampFailure } = answers;
+      const reason = answers.unreadableStamps?.get(path);
+      return stampsHeldUntil.then(() => {
+        if (stampFailure !== undefined) throw new Error(stampFailure);
+        return reason === undefined ? answer(answers.stamps?.get(path), path) : { kind: 'unreadable' as const, reason };
+      });
+    },
     originFileHash: (path) => {
       hashed.push(path);
       return answer(answers.hashes?.get(path), path);
@@ -667,7 +684,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   };
 
   return {
-    adapter, hashed,
+    adapter, hashed, stamped,
     get calls() { return calls; },
     forgetCalls: () => { calls = []; },
     read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...(next.mods !== undefined && next.modGroups === undefined ? { modGroups: groupModOrder(next.mods) } : {}), ...next }; },

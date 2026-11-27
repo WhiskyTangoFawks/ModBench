@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { manifestAt, manifestIn, type Manifest } from '../manifestAdapter';
-import { manifestText } from '../manifestText';
+import { manifestAt, manifestIn, manifestText, type Manifest } from '../manifestAdapter';
 import { readTrustingKept } from '../../repositoriesLib/stampedReads';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
