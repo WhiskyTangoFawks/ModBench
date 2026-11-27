@@ -1,63 +1,59 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
+import { modsViewOn } from './modsViewOn';
+import { TreeItemCheckboxState } from '../../test/vscodeMock';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing } from '../../test/fakeInstanceAdapter';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { settled } from '../../test/eventually';
+import { mod } from './indexedValue';
 
-vi.mock('vscode', () => ({
-  commands: { executeCommand },
-  TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
-  TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor,
-  Uri,
-}));
+const { Checked, Unchecked } = TreeItemCheckboxState;
 
-import { onModCheckboxChanged } from '../modCheckboxHandler';
-import { ModNode, OverwriteNode } from '../ModListProvider';
-
-beforeEach(() => { executeCommand.mockClear(); });
-
-const restored: (readonly ModNode[])[] = [];
-const restore = (clicked: readonly ModNode[]) => { restored.push(clicked); };
-beforeEach(() => { restored.length = 0; });
-
-function modNode(name: string, enabled = true): ModNode {
-  return new ModNode({ kind: 'mod', name, enabled });
+function modsOf(entries: ModlistEntry[], refusals?: ReturnType<typeof refusing>) {
+  const adapter = fakeInstanceAdapter(readingFixture({ mods: entries, modFolders: modFoldersOf(...entries) }), { refusals });
+  return modsViewOn({ value: instanceValueFixture({ mods: entries }), adapter });
 }
+
+const enabling = (...mods: [string, boolean][]) =>
+  ({ verb: 'changeModOrder', profile: 'Default', changes: mods.map(([name, enabled]) => ({ kind: 'enable', mod: name, enabled })) });
 
 describe('a checkbox click in Mods', () => {
   it('fires enable once over every mod the click checked', async () => {
-    const a = modNode('A', false);
-    const b = modNode('B', false);
+    const { view, row, adapter } = modsOf([mod('A', false), mod('B', false)]);
 
-    await onModCheckboxChanged({ items: [[a, 1], [b, 1]] }, restore);
+    view.check([[await row('A'), Checked], [await row('B'), Checked]]);
 
-    expect(executeCommand.mock.calls).toEqual([['modbench.mod.enable', a, [a, b]]]);
+    await settled(() => { expect(adapter.calls).toEqual([enabling(['A', true], ['B', true])]); });
   });
 
   it('fires disable for the mods it unchecked and enable for the ones it checked, each once', async () => {
-    const on = modNode('On', false);
-    const off = modNode('Off');
+    const { view, row, adapter } = modsOf([mod('On', false), mod('Off')]);
 
-    await onModCheckboxChanged({ items: [[off, 0], [on, 1]] }, restore);
+    view.check([[await row('Off'), Unchecked], [await row('On'), Checked]]);
 
-    expect(executeCommand.mock.calls).toEqual([
-      ['modbench.mod.enable', on, [on]],
-      ['modbench.mod.disable', off, [off]],
-    ]);
+    await settled(() => { expect(adapter.calls).toEqual([enabling(['On', true]), enabling(['Off', false])]); });
   });
 
   it('restores every mod row it clicked once the commands end, though one failed (common.md, A gesture that writes, story 2)', async () => {
-    executeCommand.mockRejectedValueOnce(new Error('refused'));
-    const [a, b] = [modNode('A'), modNode('B', false)];
+    const { view, row, reporter } = modsOf([mod('A'), mod('B', false)], refusing('changeModOrder', 'refused'));
+    const [a, b] = [await row('A'), await row('B')];
+    const redrawn: unknown[] = [];
+    view.treeDataProvider.onDidChangeTreeData?.((rows) => { redrawn.push(rows); });
 
-    await expect(onModCheckboxChanged({ items: [[a, 0], [b, 1]] }, restore)).rejects.toThrow('refused');
+    view.check([[a, Unchecked], [b, Checked]]);
 
-    expect(restored).toEqual([[a, b]]);
+    await settled(() => { expect(redrawn).toEqual([a, b]); });
+    expect(reporter.reports.map(({ message }) => message)).toEqual(['Failed to enable mods.', 'Failed to disable mods.']);
   });
 
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
-    await onModCheckboxChanged({ items: [[new OverwriteNode([], 'MO2'), 1]] }, restore);
+    const { view, row, adapter } = modsOf([mod('A', false)]);
 
-    expect(executeCommand).not.toHaveBeenCalled();
+    view.check([[await row('Overwrite'), Checked], [await row('A'), Checked]]);
+
+    await settled(() => { expect(adapter.calls).toEqual([enabling(['A', true])]); });
   });
 });
