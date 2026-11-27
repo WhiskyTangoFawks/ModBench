@@ -1,34 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type * as vscode from 'vscode';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri } from '../../test/vscodeMock';
+import { describe, it, expect, vi } from 'vitest';
 
-const { registerCommand, showInputBox } = vi.hoisted(() => ({
-  registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
-  showInputBox: vi.fn<(options?: vscode.InputBoxOptions) => Promise<string | undefined>>(),
-}));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand: vi.fn() },
-    window: { showInputBox, withProgress: recordedWithProgress },
-    workspace: { textDocuments: [] },
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri,
-  };
-});
-
-import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
-import { registerEntryRenameCommands } from '../entryRenameCommands';
-import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { modsViewOn } from './modsViewOn';
+import { answers, seen } from './modsVscode';
+import { progressSteps } from '../../test/recordedProgress';
+import { MODS_KEY_ARGS } from '../gestureEntry';
 import { Refusal } from '../../drivingLib/refusal';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { MODS_KEY_ARGS } from '../gestureEntry';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { modCommands } from '../../modCommands/modCommands';
-import { entryRenameCommands } from '../../modCommands/renameEntry';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { oneAtATime } from '../../textDocuments/oneAtATime';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
 import type { InstanceReading, ModlistEntry } from '../../instanceAdapter/instanceAdapter';
@@ -37,111 +18,101 @@ import { mod } from './indexedValue';
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
-function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
-  const call = registerCommand.mock.calls.findLast((c) => c[0] === commandId);
-  if (!call) throw new Error(`command not registered: ${commandId}`);
-  return Promise.resolve(call[1](...args));
-}
-
-const promptOptions = (): vscode.InputBoxOptions => present(showInputBox.mock.calls.at(-1)?.[0], 'the options of the prompt the gesture opened');
 const validatorOfThePrompt = (): ((value: string) => unknown) => {
-  const options = promptOptions();
+  const options = present(seen.inputBoxes.at(-1), 'the options of the prompt the gesture opened');
   return (value) => options.validateInput?.(value);
 };
 
+const typing = (name: string | undefined): void => { answers.inputBox = () => name; };
+
 const SOURCE_MOVES = [{ from: '/instance/source/Mod A', to: '/source/Renamed' }];
 
-function renamesOver(entries: readonly ModlistEntry[], { answers = {}, reading = {}, selection = [] }: { answers?: InstanceAnswers; reading?: Partial<InstanceReading>; selection?: readonly ModlistNode[] } = {}) {
-  const fake = fakeInstanceAdapter(readingFixture({ mods: [...entries], modFolders: modFoldersOf(...entries), ...reading }), answers);
-  const client = new InMemoryMEditClient();
-  client.setCommandResult('getSourceFolderMoveChanges', { moves: SOURCE_MOVES, deletions: [], documents: [] });
-  client.setCommandResult('followSourceFolderMove', { followed: true });
+function renamesOver(entries: readonly ModlistEntry[], { answers: answered = {}, reading = {} }: { answers?: InstanceAnswers; reading?: Partial<InstanceReading> } = {}) {
+  const adapter = fakeInstanceAdapter(readingFixture({ mods: [...entries], modFolders: modFoldersOf(...entries), ...reading }), answered);
   const apply = vi.fn<SourceEditing['applyWorkspaceChanges']>().mockResolvedValue();
-  const source: SourceEditing = { applyWorkspaceChanges: apply, oneAtATime: oneAtATime(), refreshSourceControlFor: vi.fn() };
-  const reporter = recordingReporter();
-  const instance = { ...instanceThatReads, value: instanceValueFixture({ mods: [...entries] }) };
-  registerEntryRenameCommands({
-    commands: modCommands(fake.adapter), renames: entryRenameCommands({ adapter: fake.adapter, client }), source, instance, reporter,
-  }, () => selection);
-  return { fake, client, apply, reporter };
+  const view = modsViewOn({
+    value: instanceValueFixture({ mods: [...entries] }), adapter,
+    source: { applyWorkspaceChanges: apply, oneAtATime: oneAtATime(), refreshSourceControlFor: () => undefined },
+  });
+  view.client.setCommandResult('getSourceFolderMoveChanges', { moves: SOURCE_MOVES, deletions: [], documents: [] });
+  view.client.setCommandResult('followSourceFolderMove', { followed: true });
+  return { ...view, apply };
 }
 
 const renamed = (calls: readonly AdapterCall[]) => calls.filter((call) => call.verb === 'renameModFolder' || call.verb === 'changeModOrder');
 
-beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
-
 describe('rename mod', () => {
   const mods = [mod('Mod A'), mod('Mod B')];
-  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
-  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
 
   it('prompts with the right-clicked mod\'s name and renames it, not the selection around it', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, reporter } = renamesOver(mods);
+    const { run, row, adapter, reporter } = renamesOver(mods);
+    typing('Renamed');
+    const [modA, modB] = [await row('Mod A'), await row('Mod B')];
 
-    await invoke('modbench.mod.rename', modB, [modA, modB]);
+    await run('modbench.mod.rename', modB, [modA, modB]);
 
-    expect(promptOptions()).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
-    expect(renamed(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' });
+    expect(seen.inputBoxes.at(-1)).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
+    expect(renamed(adapter.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' });
     expect(reporter.reports).toEqual([]);
   });
 
   it('renames the mod Rename Symbol supplies to the name it supplies, asking nothing', async () => {
-    const { fake, reporter } = renamesOver(mods, { selection: [modA] });
+    const { run, row, view, adapter, reporter } = renamesOver(mods);
+    view.selectRows([await row('Mod A')]);
 
-    await invoke('modbench.mod.rename', undefined, undefined, { oldName: 'Mod B', newName: 'Renamed' });
+    await run('modbench.mod.rename', undefined, undefined, { oldName: 'Mod B', newName: 'Renamed' });
 
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(renamed(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' });
+    expect(seen.inputBoxes).toEqual([]);
+    expect(renamed(adapter.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' });
     expect(reporter.reports).toEqual([]);
   });
 
   it('renames the one selected mod from F2', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake } = renamesOver(mods, { selection: [modA] });
+    const { run, row, view, adapter } = renamesOver(mods);
+    typing('Renamed');
+    view.selectRows([await row('Mod A')]);
 
-    await invoke('modbench.mod.rename', MODS_KEY_ARGS);
+    await run('modbench.mod.rename', MODS_KEY_ARGS);
 
-    expect(renamed(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod A', to: 'Renamed' });
+    expect(renamed(adapter.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod A', to: 'Renamed' });
   });
 
   it('asks the command in the prompt whether the name is free of the other mods, the mod\'s own name being free', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
-    renamesOver(mods);
+    const { run, row } = renamesOver(mods);
 
-    await invoke('modbench.mod.rename', modB);
+    await run('modbench.mod.rename', await row('Mod B'));
     const validate = validatorOfThePrompt();
 
     expect([await validate('mod a'), await validate('mod b')]).toEqual(['A mod with this name already exists', undefined]);
   });
 
   it('applies its owners\' changes through Text documents, as one workspace edit', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { apply } = renamesOver(mods, { reading: { sourceModFolders: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) } });
+    const { run, row, apply } = renamesOver(mods, { reading: { sourceModFolders: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) } });
+    typing('Renamed');
 
-    await invoke('modbench.mod.rename', modA);
+    await run('modbench.mod.rename', await row('Mod A'));
 
     expect(apply).toHaveBeenCalledOnce();
     expect(apply).toHaveBeenCalledWith(expect.arrayContaining([{ moves: SOURCE_MOVES, deletions: [], documents: [] }]));
   });
 
   it('says its folder and lines were not renamed when its folder could not move', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { reporter } = renamesOver(mods, { answers: { refusals: refusing('renameModFolder', 'is in the way') } });
+    const { run, row, reporter } = renamesOver(mods, { answers: { refusals: refusing('renameModFolder', 'is in the way') } });
+    typing('Renamed');
 
-    await invoke('modbench.mod.rename', modA);
+    await run('modbench.mod.rename', await row('Mod A'));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not rename "Mod A": its folder and lines were not renamed.', detail: 'is in the way' }]);
   });
 
   it('lands with one warning naming each profile whose line could not be renamed', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
     const lineRefusalIn: Record<string, string> = { Default: 'disk full', Secondary: 'locked' };
-    const { reporter } = renamesOver(mods, {
+    const { run, row, reporter } = renamesOver(mods, {
       answers: { refusals: (call) => (call.verb === 'changeModOrder' ? lineRefusalIn[call.profile] : undefined) }, reading: { profiles: ['Default', 'Secondary'] },
     });
+    typing('Renamed');
 
-    await invoke('modbench.mod.rename', modA);
+    await run('modbench.mod.rename', await row('Mod A'));
 
     expect(reporter.reports).toEqual([{
       severity: 'warning',
@@ -154,40 +125,40 @@ describe('rename mod', () => {
     const renameCall = (name: string) => new AgentCall([{ kind: 'mod', name: 'Mod A' }], { name });
 
     it('renames the mod given to the name given, never the selection, asking nothing, and answers the outcome', async () => {
-      const { fake, reporter } = renamesOver(mods, { selection: [modB] });
+      const { run, row, view, adapter, reporter } = renamesOver(mods);
+      view.selectRows([await row('Mod B')]);
 
-      const answered = await invoke('modbench.mod.rename', renameCall('Renamed'));
+      const answered = await run('modbench.mod.rename', renameCall('Renamed'));
 
-      expect(renamed(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod A', to: 'Renamed' });
+      expect(renamed(adapter.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod A', to: 'Renamed' });
       expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] } });
-      expect([showInputBox.mock.calls, reporter.reports]).toEqual([[], []]);
+      expect([seen.inputBoxes, reporter.reports]).toEqual([[], []]);
     });
 
     it('answers a rename to the mod\'s own name as nothing landed, writing and reporting nothing', async () => {
-      const { fake, reporter } = renamesOver(mods);
+      const { run, adapter, reporter } = renamesOver(mods);
 
-      expect(await invoke('modbench.mod.rename', renameCall('Mod A'))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
-      expect([fake.calls, reporter.reports]).toEqual([[], []]);
+      expect(await run('modbench.mod.rename', renameCall('Mod A'))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
+      expect([adapter.calls, reporter.reports]).toEqual([[], []]);
     });
 
     it('refuses an Argument of more than one mod', async () => {
-      const { fake } = renamesOver(mods);
+      const { run, adapter } = renamesOver(mods);
 
-      await expect(invoke('modbench.mod.rename', new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
-      expect(fake.calls).toEqual([]);
+      await expect(run('modbench.mod.rename', new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+      expect(adapter.calls).toEqual([]);
     });
   });
 });
 
 describe('a rename prompt asks the command nothing of an empty name, so an unreadable mod order shows no error there', () => {
-  it.each([
-    ['modbench.mod.rename', new ModNode({ kind: 'mod', name: 'Mod A', enabled: true })],
-    ['modbench.separator.rename', new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, [])],
-  ])('%s', async (command, row) => {
-    showInputBox.mockResolvedValueOnce(undefined);
-    renamesOver([mod('Mod A'), separator('Group A')], { answers: { unreadReads: { modOrder: 'modlist.txt is locked' } } });
+  it.each<[string, (view: ReturnType<typeof renamesOver>) => Promise<unknown>]>([
+    ['modbench.mod.rename', async ({ row }) => await row('Mod A', await row('Group A'))],
+    ['modbench.separator.rename', ({ row }) => row('Group A')],
+  ])('%s', async (command, clicked) => {
+    const view = renamesOver([mod('Mod A'), separator('Group A')], { answers: { unreadReads: { modOrder: 'modlist.txt is locked' } } });
 
-    await invoke(command, row);
+    await view.run(command, await clicked(view));
     const validate = validatorOfThePrompt();
 
     expect([await validate(''), await validate('Named')]).toEqual([undefined, 'modlist.txt is locked']);
@@ -196,53 +167,53 @@ describe('a rename prompt asks the command nothing of an empty name, so an unrea
 
 describe('rename separator', () => {
   const entries = [separator('Group A'), mod('Mod A'), separator('Group B'), separator('Taken Meanwhile')];
-  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
-  const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
   const renameLine = { verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'renameSeparator', from: 'Group B', to: 'Renamed' }] };
 
   it('renames the separator Rename Symbol supplies to the name it supplies, asking nothing', async () => {
-    const { fake } = renamesOver(entries, { selection: [groupA] });
+    const { run, row, view, adapter } = renamesOver(entries);
+    view.selectRows([await row('Group A')]);
 
-    await invoke('modbench.separator.rename', undefined, undefined, { oldName: 'Group B', newName: 'Renamed' });
+    await run('modbench.separator.rename', undefined, undefined, { oldName: 'Group B', newName: 'Renamed' });
 
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(renamed(fake.calls)).toEqual([renameLine]);
+    expect(seen.inputBoxes).toEqual([]);
+    expect(renamed(adapter.calls)).toEqual([renameLine]);
   });
 
   it('prompts with the right-clicked separator\'s name and renames it, not the selection around it', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake } = renamesOver(entries, { selection: [groupA, groupB] });
+    const { run, row, view, adapter } = renamesOver(entries);
+    typing('Renamed');
+    const [groupA, groupB] = [await row('Group A'), await row('Group B')];
+    view.selectRows([groupA, groupB]);
 
-    await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
+    await run('modbench.separator.rename', groupB, [groupA, groupB]);
 
-    expect(promptOptions()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
-    expect(renamed(fake.calls)).toEqual([renameLine]);
+    expect(seen.inputBoxes.at(-1)).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
+    expect(renamed(adapter.calls)).toEqual([renameLine]);
   });
 
   it('asks the command in the prompt whether the name is free of the other separators, the separator\'s own name being free', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
-    renamesOver(entries);
+    const { run, row } = renamesOver(entries);
 
-    await invoke('modbench.separator.rename', groupB);
+    await run('modbench.separator.rename', await row('Group B'));
     const validate = validatorOfThePrompt();
 
     expect([await validate('group a'), await validate('group b')]).toEqual(['A separator with this name already exists', undefined]);
   });
 
   it('reports the refusal of a name another separator took after the prompt closed', async () => {
-    showInputBox.mockResolvedValueOnce('Taken Meanwhile');
-    const { reporter } = renamesOver(entries);
+    const { run, row, reporter } = renamesOver(entries);
+    typing('Taken Meanwhile');
 
-    await invoke('modbench.separator.rename', groupB);
+    await run('modbench.separator.rename', await row('Group B'));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'A separator with this name already exists', detail: undefined }]);
   });
 
   it('ends on the Instance loader\'s read, with the view\'s progress bar open throughout', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    renamesOver(entries, { answers: { refusals: (call) => { progressSteps.push(call.verb); return undefined; } } });
+    const { run, row } = renamesOver(entries, { answers: { refusals: (call) => { progressSteps.push(call.verb); return undefined; } } });
+    typing('Renamed');
 
-    await invoke('modbench.separator.rename', groupB);
+    await run('modbench.separator.rename', await row('Group B'));
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.modList', 'changeModOrder', 'followFoldersInRepository', 'progress closes',
@@ -250,20 +221,22 @@ describe('rename separator', () => {
   });
 
   it('renames the one selected separator from F2', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake } = renamesOver(entries, { selection: [groupB] });
+    const { run, row, view, adapter } = renamesOver(entries);
+    typing('Renamed');
+    view.selectRows([await row('Group B')]);
 
-    await invoke('modbench.separator.rename', MODS_KEY_ARGS);
+    await run('modbench.separator.rename', MODS_KEY_ARGS);
 
-    expect(renamed(fake.calls)).toEqual([renameLine]);
+    expect(renamed(adapter.calls)).toEqual([renameLine]);
   });
 
   it('renames the separator given an agent, never the selection, and answers the outcome', async () => {
-    const { fake } = renamesOver(entries, { selection: [groupA] });
+    const { run, row, view, adapter } = renamesOver(entries);
+    view.selectRows([await row('Group A')]);
 
-    const answered = await invoke('modbench.separator.rename', new AgentCall([{ kind: 'separator', name: 'Group B' }], { name: 'Renamed' }));
+    const answered = await run('modbench.separator.rename', new AgentCall([{ kind: 'separator', name: 'Group B' }], { name: 'Renamed' }));
 
-    expect(renamed(fake.calls)).toEqual([renameLine]);
+    expect(renamed(adapter.calls)).toEqual([renameLine]);
     expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] } });
   });
 
@@ -271,17 +244,17 @@ describe('rename separator', () => {
     ['modbench.mod.rename', { kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod A' } }],
     ['modbench.separator.rename', { kind: 'mod', name: 'Mod A' }],
   ] as const)('%s refuses an agent\'s Argument of a kind it does not take, writing nothing', async (command, argument) => {
-    const { fake } = renamesOver(entries);
+    const { run, adapter } = renamesOver(entries);
 
-    await expect(invoke(command, new AgentCall([argument], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
-    expect(fake.calls).toEqual([]);
+    await expect(run(command, new AgentCall([argument], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+    expect(adapter.calls).toEqual([]);
   });
 
   it('refuses an agent\'s Argument of more than one separator, writing nothing', async () => {
-    const { fake } = renamesOver(entries);
+    const { run, adapter } = renamesOver(entries);
 
-    await expect(invoke('modbench.separator.rename', new AgentCall([{ kind: 'separator', name: 'Group A' }, { kind: 'separator', name: 'Group B' }], { name: 'X' })))
+    await expect(run('modbench.separator.rename', new AgentCall([{ kind: 'separator', name: 'Group A' }, { kind: 'separator', name: 'Group B' }], { name: 'X' })))
       .rejects.toBeInstanceOf(Refusal);
-    expect(fake.calls).toEqual([]);
+    expect(adapter.calls).toEqual([]);
   });
 });

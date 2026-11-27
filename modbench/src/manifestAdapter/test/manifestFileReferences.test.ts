@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import { heldTexts, NO_FILE_CHANGES, type RenamePlan } from '../../symbolNames/symbolNames';
 import { pluginCompanionRule } from '../../tables/gamePaths';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { manifestNameOf, writeManifestIn } from '../manifestAdapter';
-import { manifestFileReferences } from '../manifestFileReferences';
+import { manifestFileReferences, manifestNameOf, writeManifestIn } from '../manifestAdapter';
 
 let root: string;
 let folder: string;

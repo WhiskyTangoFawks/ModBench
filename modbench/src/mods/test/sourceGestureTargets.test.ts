@@ -1,42 +1,64 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri }));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { targetsOf, viewOf, type ModTargets } from '../sourceGestureTargets';
-import { ModNode } from '../ModListProvider';
-import { PluginRowStandIn } from './sourceGestureHarness';
-import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
+import { modsViewOn } from './modsViewOn';
+import { columnHeader, pluginRow, PLUGINS_VIEW } from './sourceGestureHarness';
+import { mod } from './indexedValue';
+import { progressSteps } from '../../test/recordedProgress';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
-const pluginRow = (name: string, origin: string) => new PluginRowStandIn({ name, origin });
-const columnHeader = (name: string, origin: string) =>
-  ({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: `000801:${name}`, plugin: { name, origin } } });
-const PLUGINS_VIEW = 'modbench.pluginListTree';
+type Shown = ReturnType<typeof viewSending>;
+
+function viewSending() {
+  const sent: (readonly string[])[] = [];
+  const listed = [{ kind: 'separator' as const, name: 'Separator', enabled: true }, mod('ModA'), mod('ModB')];
+  const shown = modsViewOn({
+    value: instanceValueFixture({ mods: [...listed, mod('Unlisted')] }),
+    sourceCommands: { build: (mods) => { sent.push(mods); return Promise.resolve({ landed: [], refused: [] }); } },
+  });
+  const unlistedRow = async () => {
+    const row = await shown.row('Unlisted');
+    shown.instance.publish({ ...shown.instance.value, mods: listed });
+    return row;
+  };
+  return { ...shown, sent, unlistedRow };
+}
+
+const a = { name: 'A.esp', origin: 'ModA' };
 
 describe('the mods a source gesture sends for the rows it was given', () => {
-  it.each<[string, unknown[], ModTargets]>([
-    ['a Mods row sends its mod, the mod order listing it or not', [modRow('Unlisted')], { mods: ['Unlisted'], refusedRows: [] }],
-    ['a plugin row sends its plugin\'s mod', [pluginRow('A.esp', 'ModA')], { mods: ['ModA'], refusedRows: [] }],
-    ['a record tab\'s column header sends its plugin\'s mod', [columnHeader('B.esp', 'ModB')], { mods: ['ModB'], refusedRows: [] }],
-    ['a selection sends each mod once, in the order first given', [pluginRow('A.esp', 'ModA'), modRow('ModB'), modRow('ModA'), pluginRow('Also.esp', 'ModA')],
-      { mods: ['ModA', 'ModB'], refusedRows: [] }],
-    ['a plugin no mod provides is refused as not in a mod', [pluginRow('Loose.esp', 'Overwrite')],
-      { mods: [], refusedRows: [{ item: 'Loose.esp (Overwrite)', reason: 'it is not in a mod' }] }],
-    ['a row that carries no mod or plugin is refused', [new TreeItem('Separator')],
-      { mods: [], refusedRows: [{ item: 'Separator', reason: 'it carries no mod or plugin' }] }],
-  ])('%s', (_case, rows, targets) => {
-    expect(targetsOf(rows, modOfOriginIn('ModA', 'ModB'))).toEqual(targets);
+  it.each<[string, (shown: Shown) => Promise<unknown[]>, { mods: string[]; refused: string[] }]>([
+    ['a Mods row sends its mod, the mod order listing it or not', async ({ unlistedRow }) => [await unlistedRow()], { mods: ['Unlisted'], refused: [] }],
+    ['a plugin row sends its plugin\'s mod', () => Promise.resolve([pluginRow(a)]), { mods: ['ModA'], refused: [] }],
+    ['a record tab\'s column header sends its plugin\'s mod', () => Promise.resolve([columnHeader({ name: 'B.esp', origin: 'ModB' })]), { mods: ['ModB'], refused: [] }],
+    ['a selection sends each mod once, in the order first given', async ({ row }) => [pluginRow(a), await row('ModB'), await row('ModA'), pluginRow({ name: 'Also.esp', origin: 'ModA' })],
+      { mods: ['ModA', 'ModB'], refused: [] }],
+    ['a plugin no mod provides is refused as not in a mod', () => Promise.resolve([pluginRow({ name: 'Loose.esp', origin: 'Overwrite' })]),
+      { mods: [], refused: ['"Loose.esp (Overwrite)" (it is not in a mod)'] }],
+    ['a row that carries no mod or plugin is refused', async ({ row }) => [await row('Separator')], { mods: [], refused: ['"Separator" (it carries no mod or plugin)'] }],
+  ])('%s', async (_case, rowsOf, expected) => {
+    const shown = viewSending();
+    const rows = await rowsOf(shown);
+
+    await shown.run('modbench.mod.build', rows[0], rows);
+
+    expect({ mods: shown.sent.flat(), refused: shown.reporter.reports.map(({ detail }) => detail) }).toEqual(expected);
   });
 });
 
 describe('the view whose bar a source gesture runs under', () => {
-  it.each<[string, unknown[], string]>([
-    ['the Mods view for a Mods row', [modRow('ModA')], 'modbench.modList'],
-    ['the Mods view for a selection holding a Mods row', [pluginRow('A.esp', 'ModA'), modRow('ModB')], 'modbench.modList'],
-    ['the Plugins view for a plugin row', [pluginRow('A.esp', 'ModA')], PLUGINS_VIEW],
-    ['the Plugins view for a column header', [columnHeader('B.esp', 'ModB')], PLUGINS_VIEW],
-  ])('is %s', (_case, rows, view) => {
-    expect(viewOf(rows, PLUGINS_VIEW)).toBe(view);
+  it.each<[string, (shown: Shown) => Promise<unknown[]>, string]>([
+    ['the Mods view for a Mods row', async ({ row }) => [await row('ModA')], 'modbench.modList'],
+    ['the Mods view for a selection holding a Mods row', async ({ row }) => [pluginRow(a), await row('ModB')], 'modbench.modList'],
+    ['the Plugins view for a plugin row', () => Promise.resolve([pluginRow(a)]), PLUGINS_VIEW],
+    ['the Plugins view for a column header', () => Promise.resolve([columnHeader({ name: 'B.esp', origin: 'ModB' })]), PLUGINS_VIEW],
+  ])('is %s', async (_case, rowsOf, view) => {
+    const shown = viewSending();
+    const rows = await rowsOf(shown);
+
+    await shown.run('modbench.mod.build', rows[0], rows);
+
+    expect(progressSteps[0]).toBe(`progress opens on ${view}`);
   });
 });

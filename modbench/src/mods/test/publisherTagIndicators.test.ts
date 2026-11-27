@@ -1,22 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
-} from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri,
-}));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
+import { modsViewOn } from './modsViewOn';
+import { answers, seen } from './modsVscode';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
 import type { ModlistEntry, PublisherConfiguration } from '../../instanceAdapter/instanceAdapter';
-import { modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { fileRowUri } from '../modFiles';
-import { indicatorSetting, modRowUri, overwriteRowUri, separatorRowUri } from '../modIndicators';
-import { PublisherTagDecorations } from '../publisherTagIndicators';
-import { OpenRows } from '../openRows';
+import { present } from '../../ports/present';
+import { FakeCancellationToken, ThemeColor, Uri } from '../../test/vscodeMock';
 import { file, folder, indexedValueOf, indexedValues, mod } from './indexedValue';
 
 const tag = (badge: string, marksPaths = true): PublisherTag => ({ name: `${badge} tag`, badge, marksPaths });
@@ -43,6 +35,9 @@ const READ: PublisherConfiguration = {
   unshippable: { file: '', reason: () => undefined },
 };
 
+const BADGE_SETTING = 'modbench.mods.indicators.publisherTag.badge';
+const COLOUR_SETTING = 'modbench.mods.indicators.publisherTag.colour';
+
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
 async function valueOf(publisherConfiguration: PublisherConfiguration = READ): Promise<InstanceValue> {
@@ -54,69 +49,75 @@ async function valueOf(publisherConfiguration: PublisherConfiguration = READ): P
   return { ...value, paths: { ...value.paths, modDirs }, publisherTags: DECLARED, publisherConfiguration };
 }
 
-const settingsOf = (on: Partial<Record<string, boolean>>) => {
-  const changed = new EventEmitter<{ affectsConfiguration: (key: string) => boolean }>();
-  return { changed, settings: { getConfiguration: () => ({ get: (key: string) => on[key] }), onDidChangeConfiguration: changed.event } };
-};
-const BADGES_ON = { [indicatorSetting('publisherTag', 'badge')]: true };
-
-const decorationsOver = (instance: FakeInstance, on: Partial<Record<string, boolean>> = BADGES_ON, open = new OpenRows(instance)) =>
-  Object.assign(new PublisherTagDecorations(instance, open, settingsOf(on).settings), { open });
-
-const badgesOn = (decorations: ReturnType<typeof decorationsOver>, uri: vscode.Uri): string[] =>
-  decorations.providers.flatMap((provider) => provider.provideFileDecoration(uri)?.badge ?? []);
-
-const expanded = (decorations: ReturnType<typeof decorationsOver>, ...uris: vscode.Uri[]): ReturnType<typeof decorationsOver> => {
-  for (const uri of uris) decorations.open.expandedRow(uri);
-  return decorations;
-};
-
-const A_TEXTURES = fileRowUri(modOrigin('A'), 'textures');
+async function shownOver(value: InstanceValue, badges = true) {
+  const shown = modsViewOn({ value });
+  answers.settings.set(BADGE_SETTING, badges);
+  const { row } = shown;
+  const s = await row('S');
+  const a = await row('A', s);
+  const b = await row('B');
+  const overwrite = await row('Overwrite');
+  const rows = {
+    s, a, b, c: await row('C'), overwrite, textures: await row('textures', a), xEsp: await row('x.esp', a), yEsp: await row('y.esp', b), oLog: await row('o.log', overwrite),
+  };
+  const uriOf = (name: keyof typeof rows) => present(rows[name].resourceUri, `the URI of ${name}`);
+  const badgesOn = async (uri: vscode.Uri): Promise<string[]> => (await shown.decorationsOf(uri)).flatMap(({ badge }) => badge ?? []);
+  return { ...shown, rows, uriOf, badgesOn, carried: async (name: keyof typeof rows) => badgesOn(uriOf(name)) };
+}
 
 describe('the publisher tags a row carries as a change reaches it, counted file by file (ADR-0029, Consequences, bullet 5)', () => {
-  it('carries a tag beneath a mod and its folder once the mod gains a file it covers, and drops it once the mod loses that file', () => {
+  it('carries a tag beneath a mod and its folder once the mod gains a file it covers, and drops it once the mod loses that file', async () => {
     const next = indexedValues([mod('A')]);
     const kept = [file('A', 'x.esp')];
     const folders = [folder('A', 'textures')];
     const first = next({ A: { files: kept, folders } });
     const paths = { ...first.paths, modDirs: new Map([['A', '/instance/A']]) };
     const valued = (value: InstanceValue): InstanceValue => ({ ...value, paths, publisherTags: DECLARED, publisherConfiguration: READ });
-    const instance = new FakeInstance(valued(first));
-    const decorations = decorationsOver(instance);
-    const carried = () => [badgesOn(decorations, modRowUri('A')), badgesOn(decorations, A_TEXTURES)];
-    const seen = [carried()];
+    const shown = modsViewOn({ value: valued(first) });
+    answers.settings.set(BADGE_SETTING, true);
+    const a = await shown.row('A');
+    const [modA, textures] = [present(a.resourceUri, 'A\'s URI'), present((await shown.row('textures', a)).resourceUri, 'its folder\'s URI')];
+    const badges = async (uri: vscode.Uri) => (await shown.decorationsOf(uri)).flatMap(({ badge }) => badge ?? []);
+    const carried = async () => [await badges(modA), await badges(textures)];
+    const before = await carried();
 
-    instance.publish(valued(next({ A: { files: [...kept, file('A', 'textures/a.dds')], folders } })));
-    seen.push(carried());
-    instance.publish(valued(next({ A: { files: kept, folders } })));
-    seen.push(carried());
+    shown.instance.publish(valued(next({ A: { files: [...kept, file('A', 'textures/a.dds')], folders } })));
+    const gained = await carried();
+    shown.instance.publish(valued(next({ A: { files: kept, folders } })));
 
-    expect(seen).toEqual([[['IN', 'AE'], ['IN']], [['IN', 'IG', 'AE'], ['IN', 'IG']], [['IN', 'AE'], ['IN']]]);
+    expect([before, gained, await carried()]).toEqual([[['IN', 'AE'], ['IN']], [['IN', 'IG', 'AE'], ['IN', 'IG']], [['IN', 'AE'], ['IN']]]);
   });
 });
 
 describe('the publisher tags a row carries (mods.md, Indicators; publishing.md, Publisher tags, story 1)', () => {
   it('an enabled mod carries each publisher tag that covers it, in the order its publisher declares them', async () => {
-    const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), modRowUri('A'));
+    const { view, rows, carried } = await shownOver(await valueOf());
 
-    expect(badgesOn(decorations, modRowUri('A'))).toEqual(['IN', 'AE']);
+    view.expand(rows.a);
+
+    expect(await carried('a')).toEqual(['IN', 'AE']);
   });
 
   it('a mod carries what its publisher answers for it, whichever profile the instance has selected', async () => {
-    const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), modRowUri('B'), modRowUri('C'));
+    const { view, rows, carried } = await shownOver(await valueOf());
 
-    expect([badgesOn(decorations, modRowUri('B')), badgesOn(decorations, modRowUri('C'))]).toEqual([['IN', 'AE'], []]);
+    view.expand(rows.b);
+    view.expand(rows.c);
+
+    expect([await carried('b'), await carried('c')]).toEqual([['IN', 'AE'], []]);
   });
 
   it('a file or folder carries each publisher tag that covers it and marks paths, in the Mods view and in the Explorer', async () => {
-    const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), A_TEXTURES);
+    const { view, rows, carried, badgesOn } = await shownOver(await valueOf());
+
+    view.expand(rows.textures);
 
     expect({
-      file: badgesOn(decorations, fileRowUri(modOrigin('A'), 'x.esp')),
-      inExplorer: badgesOn(decorations, vscode.Uri.file('/instance/A/textures/a.dds')),
-      folder: badgesOn(decorations, A_TEXTURES),
-      inDisabledMod: badgesOn(decorations, fileRowUri(modOrigin('B'), 'y.esp')),
-      inOverwrite: badgesOn(decorations, fileRowUri(RUNTIME_OUTPUT, 'o.log')),
+      file: await carried('xEsp'),
+      inExplorer: await badgesOn(Uri.file('/instance/A/textures/a.dds')),
+      folder: await carried('textures'),
+      inDisabledMod: await carried('yEsp'),
+      inOverwrite: await carried('oLog'),
     }).toEqual({ file: ['IN'], inExplorer: ['IN', 'IG'], folder: ['IN'], inDisabledMod: ['IG'], inOverwrite: ['IG'] });
   });
 
@@ -124,88 +125,107 @@ describe('the publisher tags a row carries (mods.md, Indicators; publishing.md, 
     ['holds no publisher\'s configuration', { kind: 'none' }],
     ['holds one Modbench cannot read', { kind: 'unreadable', reason: 'not JSON' }],
   ] as const)('no row carries one while the instance %s', async (_, configuration) => {
-    const decorations = decorationsOver(new FakeInstance(await valueOf(configuration)));
+    const { carried } = await shownOver(await valueOf(configuration));
 
-    expect([modRowUri('A'), fileRowUri(modOrigin('A'), 'x.esp'), separatorRowUri('S')].map((uri) => badgesOn(decorations, uri))).toEqual([[], [], []]);
+    expect([await carried('a'), await carried('xEsp'), await carried('s')]).toEqual([[], [], []]);
   });
 
   it('follows each new instance value, and asks VS Code to decorate again (ADR-0003)', async () => {
-    const instance = new FakeInstance(await valueOf({ kind: 'none' }));
-    const decorations = expanded(decorationsOver(instance), modRowUri('A'));
-    const fired = vi.fn();
-    decorations.providers[0]?.onDidChangeFileDecorations(fired);
-    const before = badgesOn(decorations, modRowUri('A'));
+    const { view, rows, carried, instance, uriOf } = await shownOver(await valueOf({ kind: 'none' }));
+    view.expand(rows.a);
+    const heard = seen.decorationProviders.map((provider) => {
+      const told: unknown[] = [];
+      provider.onDidChangeFileDecorations?.((uris) => { told.push(uris); });
+      return { provider, told };
+    });
+    const before = await carried('a');
 
     instance.publish(await valueOf());
 
-    expect({ before, after: badgesOn(decorations, modRowUri('A')), fired: fired.mock.calls.length }).toEqual({ before: [], after: ['IN', 'AE'], fired: 1 });
+    const answered = await Promise.all(heard.map(async ({ provider, told }) => ({ badge: (await provider.provideFileDecoration(uriOf('a'), new FakeCancellationToken()))?.badge, told })));
+    expect({ before, after: await carried('a'), fired: present(answered.find(({ badge }) => badge === 'IN'), 'IN\'s provider').told.length })
+      .toEqual({ before: [], after: ['IN', 'AE'], fired: 1 });
   });
 });
 
 describe('a collapsed row\'s publisher tags (common.md, A view, story 11)', () => {
   it('a collapsed folder, mod or separator carries the publisher tags of the rows beneath it, and an expanded one only its own', async () => {
-    const collapsed = decorationsOver(new FakeInstance(await valueOf()));
-    const open = expanded(decorationsOver(new FakeInstance(await valueOf())), A_TEXTURES, modRowUri('A'), separatorRowUri('S'));
-    const rows = [A_TEXTURES, modRowUri('A'), separatorRowUri('S')];
+    const { view, rows, carried } = await shownOver(await valueOf());
+    const collapsed = [await carried('textures'), await carried('a'), await carried('s')];
 
-    expect([rows.map((uri) => badgesOn(collapsed, uri)), rows.map((uri) => badgesOn(open, uri))]).toEqual([
+    view.expand(rows.textures);
+    view.expand(rows.a);
+    view.expand(rows.s);
+
+    expect([collapsed, [await carried('textures'), await carried('a'), await carried('s')]]).toEqual([
       [['IN', 'IG'], ['IN', 'IG', 'AE'], ['IN', 'IG', 'AE']],
       [['IN'], ['IN', 'AE'], []],
     ]);
   });
 
   it('a collapsed disabled mod carries its files\' publisher tags, as any collapsed row does', async () => {
-    const decorations = decorationsOver(new FakeInstance(await valueOf()));
+    const { carried } = await shownOver(await valueOf());
 
-    expect(badgesOn(decorations, modRowUri('B'))).toEqual(['IN', 'IG', 'AE']);
+    expect(await carried('b')).toEqual(['IN', 'IG', 'AE']);
   });
 
   it('a collapsed Overwrite carries the publisher tags of its files, and an expanded one none', async () => {
-    const collapsed = decorationsOver(new FakeInstance(await valueOf()));
-    const open = expanded(decorationsOver(new FakeInstance(await valueOf())), overwriteRowUri());
+    const { view, rows, carried } = await shownOver(await valueOf());
+    const collapsed = await carried('overwrite');
 
-    expect([badgesOn(collapsed, overwriteRowUri()), badgesOn(open, overwriteRowUri())]).toEqual([['IG'], []]);
+    view.expand(rows.overwrite);
+
+    expect([collapsed, await carried('overwrite')]).toEqual([['IG'], []]);
   });
 
   it('a row collapsed again carries the rows beneath it again', async () => {
-    const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), modRowUri('A'));
+    const { view, rows, carried } = await shownOver(await valueOf());
+    view.expand(rows.a);
 
-    decorations.open.collapsedRow(modRowUri('A'));
+    view.collapse(rows.a);
 
-    expect(badgesOn(decorations, modRowUri('A'))).toEqual(['IN', 'IG', 'AE']);
+    expect(await carried('a')).toEqual(['IN', 'IG', 'AE']);
   });
 
   it('forgets a row that left the instance, so one back under its name starts collapsed', async () => {
-    const instance = new FakeInstance(await valueOf());
-    const decorations = expanded(decorationsOver(instance), modRowUri('A'), A_TEXTURES);
+    const { view, rows, carried, instance } = await shownOver(await valueOf());
+    view.expand(rows.a);
+    view.expand(rows.textures);
 
     instance.publish({ ...await valueOf(), mods: [] });
     instance.publish(await valueOf());
 
-    expect([badgesOn(decorations, modRowUri('A')), badgesOn(decorations, A_TEXTURES)]).toEqual([['IN', 'IG', 'AE'], ['IN', 'IG']]);
+    expect([await carried('a'), await carried('textures')]).toEqual([['IN', 'IG', 'AE'], ['IN', 'IG']]);
   });
 });
 
 describe('a publisher tag\'s badge and colour, switched in settings (mods.md, Indicators)', () => {
-  const colourOn = { ...BADGES_ON, [indicatorSetting('publisherTag', 'colour')]: true };
+  const colourOn = async () => {
+    const shown = await shownOver(await valueOf());
+    answers.settings.set(COLOUR_SETTING, true);
+    return shown;
+  };
 
   it('a mod carries the publisher tag\'s badge and the publisher tag colour, its tooltip the publisher tag\'s name', async () => {
-    const decorations = expanded(decorationsOver(new FakeInstance(await valueOf()), colourOn), modRowUri('A'));
+    const { view, rows, decorationsOf, uriOf } = await colourOn();
 
-    expect(decorations.providers[1]?.provideFileDecoration(modRowUri('A')))
-      .toEqual({ badge: 'IN', color: new ThemeColor('modbench.modPublisherTag'), tooltip: 'IN tag' });
+    view.expand(rows.a);
+
+    expect(await decorationsOf(uriOf('a'))).toEqual([
+      { badge: 'IN', color: new ThemeColor('modbench.modPublisherTag'), tooltip: 'IN tag' },
+      { badge: 'AE', color: new ThemeColor('modbench.modPublisherTag'), tooltip: 'AE tag' },
+    ]);
   });
 
   it('a file carries the badge at the right edge alone, its colour the grey\'s', async () => {
-    const decorations = decorationsOver(new FakeInstance(await valueOf()), colourOn);
+    const { decorationsOf, uriOf } = await colourOn();
 
-    expect(decorations.providers[1]?.provideFileDecoration(fileRowUri(modOrigin('A'), 'x.esp')))
-      .toEqual({ badge: 'IN', color: undefined, tooltip: 'IN tag' });
+    expect(await decorationsOf(uriOf('xEsp'))).toEqual([{ badge: 'IN', color: undefined, tooltip: 'IN tag' }]);
   });
 
   it('carries nothing while both are off', async () => {
-    const decorations = decorationsOver(new FakeInstance(await valueOf()), {});
+    const { decorationsOf, uriOf } = await shownOver(await valueOf(), false);
 
-    expect(decorations.providers.map((provider) => provider.provideFileDecoration(modRowUri('A')))).toEqual([undefined, undefined, undefined, undefined]);
+    expect(await decorationsOf(uriOf('a'))).toEqual([]);
   });
 });

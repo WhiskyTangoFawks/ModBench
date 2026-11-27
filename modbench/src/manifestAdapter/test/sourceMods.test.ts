@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sourceModsOf, type Manifest, type ManifestPackage } from '../manifestAdapter';
-import { manifestText } from '../manifestText';
-import type { ModFolderAt } from '../sourceMods';
+import { manifestText, sourceModsOf, type Manifest, type ManifestPackage } from '../manifestAdapter';
 
 let root: string;
 
@@ -15,7 +13,7 @@ const naming = (pkg: ManifestPackage): Manifest => ({ packages: [pkg], exclude: 
 
 const repository = (name: string): ManifestPackage => ({ kind: 'repository', name });
 
-async function modFolder(name: string, manifest?: Manifest): Promise<ModFolderAt> {
+async function modFolder(name: string, manifest?: Manifest) {
   const folder = join(root, 'mods', name);
   await mkdir(folder, { recursive: true });
   if (manifest !== undefined) await writeFile(join(folder, `${name}.manifest.json`), manifestText(manifest));

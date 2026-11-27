@@ -1,164 +1,180 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri,
-}));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import { modsKeyContext } from '../gestureEntry';
-import { file, folder } from './indexedValue';
-import { ModNode, OverwriteNode, SeparatorGroupNode, SeparatorNode } from '../ModListProvider';
-import { groupSeparators } from '../separatorGroups';
-import { FileNode, FolderNode } from '../modFiles';
+import { modsViewOn } from './modsViewOn';
+import { seen } from './modsVscode';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
+import type { OriginFile } from '../../instanceLoader/instance';
+import { file, folder, indexedValueOf, mod } from './indexedValue';
+import { HeldModStatuses } from '../../test/heldModStatuses';
+import { status } from '../../test/modStatusFixture';
 
-const separatorGroupRow = () => {
-  const held = ['Pack - One', 'Pack - Two'].map((name) => ({ separator: { kind: 'separator', name, enabled: true } as const, mods: [] }));
-  const [entry] = groupSeparators(held);
-  if (entry?.kind !== 'group') throw new Error('expected a group');
-  return new SeparatorGroupNode(entry, []);
-};
+const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
+const hiddenUnderFolder = (relativePath: string, markedExcluded: boolean): OriginFile => ({ ...file('On', relativePath, true), markedExcluded });
 
-const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
+const ENTRIES = [
+  separator('Group'), separator('Other'), separator('Pack - One'), separator('Pack - Two'),
+  mod('On'), mod('Off', false), mod('Source'), mod('Settings'),
+];
+
+async function shownWithEveryRowKind() {
+  const value = await indexedValueOf(ENTRIES, {
+    On: {
+      files: [
+        file('On', 'On.esp'), file('On', 'textures/a.dds'), file('On', 'x/a.dds'), file('On', 'a.dds'), file('On', 'b.dds.mohidden', true),
+        hiddenUnderFolder('x.mohidden/c.dds', false), hiddenUnderFolder('x.mohidden/d.dds.mohidden', true),
+        file('On', 'readme.txt'), file('On', 'docs/r.txt'),
+      ],
+      folders: [folder('On', 'textures'), folder('On', 'x'), folder('On', 'x.mohidden', true), folder('On', 'docs')],
+    },
+    Settings: { files: [file('Settings', 'x/a.dds')], folders: [folder('Settings', 'x')] },
+  });
+  const statuses = new HeldModStatuses();
+  statuses.answer([status('On', { ignored: ['readme.txt', 'docs/r.txt'], ignoreEntries: ['readme.txt', 'docs'] })]);
+  const shown = modsViewOn({
+    value: {
+      ...value, holdsRepository: true, listedSourceMods: new Set(['Source']),
+      plugins: [{ name: 'On.esp', path: '/instance/On/On.esp', origin: 'On', line: 0, enabled: true, winning: true }],
+    },
+    statuses,
+  });
+  const { row } = shown;
+  const [on, settings, pack] = [await row('On'), await row('Settings'), await row('Pack')];
+  const [textures, x, hiding, docs, settingsX] = [await row('textures', on), await row('x', on), await row('x.mohidden', on), await row('docs', on), await row('x', settings)];
+  const rows = {
+    on, off: await row('Off'), source: await row('Source'), settings, group: await row('Group'), other: await row('Other'), pack,
+    overwrite: await row('Overwrite'), textures, texturesLeaf: await row('a.dds', textures),
+    winning: await row('a.dds', x), losing: await row('a.dds', settingsX), alone: await row('a.dds', on),
+    excluded: await row('b.dds.mohidden', on), plainInFolder: await row('c.dds', hiding), markedInFolder: await row('d.dds.mohidden', hiding),
+    entry: await row('readme.txt', on), under: await row('r.txt', docs),
+  };
+  type Name = keyof typeof rows;
+  const keysOver = (...names: Name[]): Record<string, unknown> => {
+    shown.view.selectRows(names.map((name) => rows[name]));
+    return Object.fromEntries([...seen.contextKeys].map(([key, held]) => [key.replace('modbench.mod.', ''), held]));
+  };
+  return { ...shown, rows, keysOver };
+}
 
 describe('what the Mods keys read off the selection', () => {
-  const enabledMod = new ModNode({ kind: 'mod', name: 'On', enabled: true });
-  const disabledMod = new ModNode({ kind: 'mod', name: 'Off', enabled: false });
-  const group = separatorRow('Group');
-  const byRow = (row: ModNode) => row.mod.enabled;
+  it('Space disables a selection of enabled mods, and enables a selection of disabled ones', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
 
-  it('Space disables a selection of enabled mods, and enables a selection of disabled ones', () => {
-    expect(modsKeyContext([enabledMod], byRow).selectionToggle).toBe('disable');
-    expect(modsKeyContext([disabledMod], byRow).selectionToggle).toBe('enable');
+    expect([keysOver('on').selectionToggle, keysOver('off').selectionToggle]).toEqual(['disable', 'enable']);
   });
 
-  it('Space takes the first selected mod\'s direction over a mixed selection', () => {
-    expect(modsKeyContext([group, disabledMod, enabledMod], byRow).selectionToggle).toBe('enable');
-    expect(modsKeyContext([enabledMod, disabledMod], byRow).selectionToggle).toBe('disable');
+  it('Space takes the first selected mod\'s direction over a mixed selection', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([keysOver('group', 'off', 'on').selectionToggle, keysOver('on', 'off').selectionToggle]).toEqual(['enable', 'disable']);
   });
 
-  it('Space reads the mod\'s state as it is now, not as the row was built', () => {
-    expect(modsKeyContext([enabledMod], () => false).selectionToggle).toBe('enable');
+  it('the palette\'s version in git sees a selection that holds a mod with no repository, whether or not it provides a plugin', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([
+      keysOver('source', 'on').holdsNonSourceMod, keysOver('source', 'settings').holdsNonSourceMod,
+      keysOver('source').holdsNonSourceMod, keysOver('source', 'group').holdsNonSourceMod, keysOver().holdsNonSourceMod,
+    ]).toEqual([true, true, false, false, false]);
   });
 
-  it('the palette\'s version in git sees a selection that holds a mod with no repository, whether or not it provides a plugin', () => {
-    const noPlugin = new ModNode({ kind: 'mod', name: 'Settings', enabled: true }, { holdsPlugin: false, sourceMod: false });
-    const sourceMod = new ModNode({ kind: 'mod', name: 'SourceMod', enabled: true }, { holdsPlugin: true, sourceMod: true });
-    expect(modsKeyContext([enabledMod, noPlugin], byRow).holdsNonSourceMod).toBe(true);
-    expect(modsKeyContext([enabledMod, sourceMod], byRow).holdsNonSourceMod).toBe(false);
-    expect(modsKeyContext([enabledMod, group], byRow).holdsNonSourceMod).toBe(false);
-    expect(modsKeyContext([], byRow).holdsNonSourceMod).toBe(false);
+  it('Space does nothing over a selection with no mod', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([keysOver('group').selectionToggle, keysOver().selectionToggle]).toEqual([undefined, undefined]);
   });
 
-  it('Space does nothing over a selection with no mod', () => {
-    expect(modsKeyContext([group], byRow).selectionToggle).toBeUndefined();
-    expect(modsKeyContext([], byRow).selectionToggle).toBeUndefined();
+  it('Delete and F2 see one kind: mods, or separators', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([keysOver('on', 'off').selectionKind, keysOver('group', 'other').selectionKind]).toEqual(['mod', 'separator']);
   });
 
-  it('Delete and F2 see one kind: mods, or separators', () => {
-    expect(modsKeyContext([enabledMod, disabledMod], byRow).selectionKind).toBe('mod');
-    expect(modsKeyContext([group, separatorRow('Other')], byRow).selectionKind).toBe('separator');
+  it('Delete and F2 see no kind over a selection mixing mods and separators, or over none', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([keysOver('on', 'group').selectionKind, keysOver().selectionKind]).toEqual([undefined, undefined]);
   });
 
-  it('Delete and F2 see no kind over a selection mixing mods and separators, or over none', () => {
-    expect(modsKeyContext([enabledMod, group], byRow).selectionKind).toBeUndefined();
-    expect(modsKeyContext([], byRow).selectionKind).toBeUndefined();
+  it.each<[string, ['on' | 'off' | 'group', 'texturesLeaf' | 'textures' | 'pack']]>([
+    ['an enabled mod and a file', ['on', 'texturesLeaf']],
+    ['a disabled mod and a folder', ['off', 'textures']],
+    ['a separator and a file', ['group', 'texturesLeaf']],
+    ['a disabled mod and a separator group', ['off', 'pack']],
+  ])('Space, Delete and F2 do nothing over %s, either of which may be the focused row', async (_case, selection) => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect(keysOver(...selection)).toMatchObject({ selectionToggle: undefined, selectionKind: undefined });
   });
 
-  const texturesFolder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, folder('mods/On', 'textures'), [file('mods/On', 'textures/a.dds')], [], 'textures');
-  const texturesLeaf = new FileNode(texturesFolder, texturesFolder.origin, file('mods/On', 'textures/a.dds'), 'a.dds');
+  it('F2 and a singular gesture see whether exactly one row is selected', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
 
-  it.each([
-    ['an enabled mod and a file', [enabledMod, texturesLeaf]],
-    ['a disabled mod and a folder', [disabledMod, texturesFolder]],
-    ['a separator and a file', [group, texturesLeaf]],
-    ['a disabled mod and a separator group', [disabledMod, separatorGroupRow()]],
-  ])('Space, Delete and F2 do nothing over %s, either of which may be the focused row', (_case, selection) => {
-    expect(modsKeyContext(selection, byRow)).toMatchObject({ selectionToggle: undefined, selectionKind: undefined });
+    expect([keysOver('group').singleRow, keysOver('group', 'other').singleRow, keysOver().singleRow]).toEqual([true, false, false]);
   });
 
-  it('F2 and a singular gesture see whether exactly one row is selected', () => {
-    expect(modsKeyContext([group], byRow).singleRow).toBe(true);
-    expect(modsKeyContext([group, separatorRow('Other')], byRow).singleRow).toBe(false);
-    expect(modsKeyContext([], byRow).singleRow).toBe(false);
+  it('go to mod sees exactly one selected file that is in a file order conflict', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([
+      keysOver('winning').singleGoToModRow, keysOver('losing').singleGoToModRow, keysOver('alone').singleGoToModRow,
+      keysOver('winning', 'alone').singleGoToModRow, keysOver('on').singleGoToModRow, keysOver().singleGoToModRow,
+    ]).toEqual([true, true, false, false, false, false]);
   });
 
-  it('go to mod sees exactly one selected file that is in a file order conflict', () => {
-    const copy = file('mods/On', 'x/a.dds');
-    const conflicting = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds', 'wins');
-    const alone = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds');
-    expect(modsKeyContext([conflicting], byRow).singleGoToModRow).toBe(true);
-    expect(modsKeyContext([alone], byRow).singleGoToModRow).toBe(false);
-    expect(modsKeyContext([conflicting, alone], byRow).singleGoToModRow).toBe(false);
-    expect(modsKeyContext([enabledMod], byRow).singleGoToModRow).toBe(false);
-    expect(modsKeyContext([], byRow).singleGoToModRow).toBe(false);
+  it('compare file sees exactly one selected file row that loses its file order conflict', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([
+      keysOver('losing').singleCompareFileRow, keysOver('winning').singleCompareFileRow,
+      keysOver('losing', 'winning').singleCompareFileRow, keysOver('on').singleCompareFileRow,
+    ]).toEqual([true, false, false, false]);
   });
 
-  it('compare file sees exactly one selected file row that loses its file order conflict', () => {
-    const copy = file('mods/On', 'x/a.dds');
-    const origin = { kind: 'mod' as const, name: 'On' };
-    const losing = new FileNode(enabledMod, origin, copy, 'a.dds', 'loses');
-    const winning = new FileNode(enabledMod, origin, copy, 'a.dds', 'wins');
-    expect(modsKeyContext([losing], byRow).singleCompareFileRow).toBe(true);
-    expect(modsKeyContext([winning], byRow).singleCompareFileRow).toBe(false);
-    expect(modsKeyContext([losing, losing], byRow).singleCompareFileRow).toBe(false);
-    expect(modsKeyContext([enabledMod], byRow).singleCompareFileRow).toBe(false);
+  it('open source sees exactly one selected mod that holds a repository', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([
+      keysOver('source').singleOpenSourceRow, keysOver('on').singleOpenSourceRow, keysOver('source', 'on').singleOpenSourceRow, keysOver('group').singleOpenSourceRow,
+    ]).toEqual([true, false, false, false]);
   });
 
-  it('open source sees exactly one selected mod that holds a repository', () => {
-    const facts = (sourceMod: boolean) => ({ holdsPlugin: false, sourceMod });
-    const source = new ModNode({ kind: 'mod', name: 'Source', enabled: true }, facts(true));
-    const plain = new ModNode({ kind: 'mod', name: 'Plain', enabled: true }, facts(false));
-    expect(modsKeyContext([source], byRow).singleOpenSourceRow).toBe(true);
-    expect(modsKeyContext([plain], byRow).singleOpenSourceRow).toBe(false);
-    expect(modsKeyContext([source, plain], byRow).singleOpenSourceRow).toBe(false);
-    expect(modsKeyContext([group], byRow).singleOpenSourceRow).toBe(false);
+  it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+
+    expect([
+      keysOver('textures').singleOpenFolderRow, keysOver('on').singleOpenFolderRow, keysOver('overwrite').singleOpenFolderRow, keysOver('texturesLeaf').singleOpenFolderRow,
+      keysOver('group').singleOpenFolderRow, keysOver('on', 'texturesLeaf').singleOpenFolderRow, keysOver().singleOpenFolderRow,
+    ]).toEqual([true, true, true, true, false, false, false]);
   });
 
-  it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
-    expect(modsKeyContext([texturesFolder], byRow).singleOpenFolderRow).toBe(true);
-    expect(modsKeyContext([enabledMod], byRow).singleOpenFolderRow).toBe(true);
-    expect(modsKeyContext([new OverwriteNode([], 'MO2')], byRow).singleOpenFolderRow).toBe(true);
-    expect(modsKeyContext([texturesLeaf], byRow).singleOpenFolderRow).toBe(true);
-    expect(modsKeyContext([group], byRow).singleOpenFolderRow).toBe(false);
-    expect(modsKeyContext([enabledMod, texturesLeaf], byRow).singleOpenFolderRow).toBe(false);
-    expect(modsKeyContext([], byRow).singleOpenFolderRow).toBe(false);
+  it('enable sees a selected disabled mod, and disable a selected enabled one, read as they are now', async () => {
+    const { keysOver, instance, view, rows } = await shownWithEveryRowKind();
+    const held = (keys: Record<string, unknown>) => [keys.holdsEnabledMod, keys.holdsDisabledMod];
+
+    expect([held(keysOver('on', 'group')), held(keysOver('off')), held(keysOver('on', 'off')), held(keysOver('group'))])
+      .toEqual([[true, false], [false, true], [true, true], [false, false]]);
+    view.selectRows([rows.on]);
+    instance.publish({ ...instance.value, mods: ENTRIES.map((entry) => (entry.name === 'On' ? mod('On', false) : entry)) });
+    expect([seen.contextKeys.get('modbench.mod.holdsEnabledMod'), seen.contextKeys.get('modbench.mod.holdsDisabledMod')]).toEqual([false, true]);
   });
 
-  it('enable sees a selected disabled mod, and disable a selected enabled one, read as they are now', () => {
-    expect(modsKeyContext([enabledMod, group], byRow)).toMatchObject({ holdsEnabledMod: true, holdsDisabledMod: false });
-    expect(modsKeyContext([disabledMod], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });
-    expect(modsKeyContext([enabledMod, disabledMod], byRow)).toMatchObject({ holdsEnabledMod: true, holdsDisabledMod: true });
-    expect(modsKeyContext([enabledMod], () => false)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });
-    expect(modsKeyContext([group], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: false });
+  it('exclude sees a selected file whose own name has no mark, and include one whose own name has, whatever its folder', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+    const held = (keys: Record<string, unknown>) => [keys.holdsIncludedFile, keys.holdsExcludedFile];
+
+    expect([
+      held(keysOver('alone', 'group')), held(keysOver('excluded')), held(keysOver('alone', 'excluded')),
+      held(keysOver('plainInFolder', 'on')), held(keysOver('markedInFolder')),
+    ]).toEqual([[true, false], [false, true], [true, true], [true, false], [false, true]]);
   });
 
-  it('exclude sees a selected file whose own name has no mark, and include one whose own name has, whatever its folder', () => {
-    const origin = { kind: 'mod', name: 'On' } as const;
-    const fileAt = (relativePath: string, excluded: boolean, markedExcluded: boolean) =>
-      ({ relativePath, path: `/instance/mods/On/${relativePath}`, sourcePath: `/instance/mods/On/${relativePath}`, excluded, markedExcluded, includedPath: relativePath });
-    const included = new FileNode(enabledMod, origin, fileAt('a.dds', false, false), 'a.dds');
-    const excluded = new FileNode(enabledMod, origin, fileAt('b.dds.mohidden', true, true), 'b.dds.mohidden');
-    const hidingFolder = new FolderNode(enabledMod, origin, { relativePath: 'x.mohidden', path: '/instance/mods/On/x.mohidden', includedPath: 'x', excluded: true }, [], [], 'x.mohidden');
-    const plainInFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/c.dds', true, false), 'c.dds');
-    const markedInFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/d.dds.mohidden', true, true), 'd.dds.mohidden');
+  it('unignore sees a selected file the manifest ignores by an entry of its own path, and ignore one it does not ignore', async () => {
+    const { keysOver } = await shownWithEveryRowKind();
+    const held = (keys: Record<string, unknown>) => [keys.holdsIgnoreEntryFile, keys.holdsUnignoredFile];
 
-    expect(modsKeyContext([included, group], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: false });
-    expect(modsKeyContext([excluded], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: true });
-    expect(modsKeyContext([included, excluded], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: true });
-    expect(modsKeyContext([plainInFolder, enabledMod], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: false });
-    expect(modsKeyContext([markedInFolder], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: true });
-  });
-
-  it('unignore sees a selected file the manifest ignores by an entry of its own path, and ignore one it does not ignore', () => {
-    const origin = { kind: 'mod', name: 'On' } as const;
-    const plain = { relativePath: 'a.dds', path: '/instance/mods/On/a.dds', sourcePath: '/instance/mods/On/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' };
-    const unignored = new FileNode(enabledMod, origin, plain, 'a.dds');
-    const entry = new FileNode(enabledMod, origin, plain, 'a.dds', 'none', false, 'entry');
-    const under = new FileNode(enabledMod, origin, plain, 'a.dds', 'none', false, 'under');
-
-    expect(modsKeyContext([unignored], byRow)).toMatchObject({ holdsIgnoreEntryFile: false, holdsUnignoredFile: true });
-    expect(modsKeyContext([entry], byRow)).toMatchObject({ holdsIgnoreEntryFile: true, holdsUnignoredFile: false });
-    expect(modsKeyContext([under], byRow)).toMatchObject({ holdsIgnoreEntryFile: false, holdsUnignoredFile: false });
-    expect(modsKeyContext([unignored, entry], byRow)).toMatchObject({ holdsIgnoreEntryFile: true, holdsUnignoredFile: true });
+    expect([held(keysOver('alone')), held(keysOver('entry')), held(keysOver('under')), held(keysOver('alone', 'entry'))])
+      .toEqual([[false, true], [true, false], [false, false], [true, true]]);
   });
 });
