@@ -15,7 +15,7 @@ export {
 
 type Handler = (...args: unknown[]) => unknown;
 type Decorations = { provideFileDecoration: (uri: unknown) => vscode.ProviderResult<vscode.FileDecoration> };
-type Lenses = { provideCodeLenses: (document: { getText: () => string }) => vscode.CodeLens[] };
+type Lenses = { provideCodeLenses: (document: { uri: unknown; getText: () => string }) => vscode.CodeLens[] };
 type Actions = { provideCodeActions: (document: { uri: unknown }, range: Range, context: { diagnostics: readonly unknown[] }) => vscode.ProviderResult<CodeAction[]> };
 
 export class Disposable {
@@ -155,7 +155,8 @@ export const host = {
   diagnostics: (name: string) => collections.get(name),
   /** What each decoration provider draws on the row at `uri`, in registration order. */
   decorate: (uri: unknown) => Promise.all(decorations.map((provider) => Promise.resolve(provider.provideFileDecoration(uri)))),
-  lenses: (text: string) => lenses.flatMap((provider) => provider.provideCodeLenses({ getText: () => text })),
+  /** The code lenses on a document of `text` at `path`. */
+  lenses: (text: string, path = '/scripts/filter.sql') => lenses.flatMap((provider) => provider.provideCodeLenses({ uri: Uri.file(path), getText: () => text })),
   /** The code actions offered on `line` of the file at `path`. */
   codeActions: async (path: string, line: number) => {
     const at = new Range(line, 0, line, 0);

@@ -19,9 +19,10 @@ import { host } from './vscodeHost';
 type Deps = Parameters<typeof createPlugins>[0];
 type InstanceDeps = Parameters<ReturnType<typeof createPlugins>['onInstance']>[0];
 
-/** An mEdit that holds no plugin, no diagnosis and no filter, until the test scripts more. */
+/** An mEdit that holds no plugin, no diagnosis, no filter and no change beneath a row, until the test scripts more. */
 export function clientHoldingNothing(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
   client.setQueryAnswer('getPlugins', []);
   client.setQueryAnswer('getDiagnoses', []);
   client.setQueryAnswer('getFilterCleared', null);
