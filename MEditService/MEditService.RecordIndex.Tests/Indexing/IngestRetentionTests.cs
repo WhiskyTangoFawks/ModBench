@@ -16,6 +16,8 @@ public sealed class IngestRetentionTests : IDisposable
     private const string Target = "000800:Streamed.esp";
     private const int MegabyteRecordCount = 160;
     private const int MegabyteEditorId = 1 << 20;
+    private const int ReferringRecordCount = 2_000;
+    private const string MemoryTheIngestsRowsOutgrow = "3MB";
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-ingest").WithPlugin(Plugin).Build();
 
@@ -32,18 +34,25 @@ public sealed class IngestRetentionTests : IDisposable
         Assert.False(documents.FirstHeldAtTheLast);
     }
 
-    [Fact, Kind(Kinds.Measured)]
-    public void APluginsIngest_LeavesNoIndexNodesInDuckDbsMemory()
+    [Fact]
+    public void AfterAPluginsIngest_AReadAnswersInAMemoryLimitTheIngestsRowsOutgrow()
     {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Plugin, ReferringRecords)));
+        IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryTheIngestsRowsOutgrow}'");
 
-        Waits.Reached(() => IndexNodeBytes() == "0", "the index nodes let go");
+        Waits.Reached(() => index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Holds(out _, out _), "a read in the memory limit");
+
+        Assert.Equal(ReferringRecordCount, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Value().Count);
     }
 
-    private string IndexNodeBytes() =>
-        Assert.Single(Assert.Single(IndexFiles.Rows(
-            _fixture.InstanceRoot,
-            "SELECT coalesce(sum(memory_usage_bytes), 0)::BIGINT FROM duckdb_memory() WHERE tag = 'ART_INDEX'")));
+    private static IEnumerable<PluginDocument> ReferringRecords()
+    {
+        for (var i = 1; i <= ReferringRecordCount; i++)
+        {
+            var formKey = $"{0x800 + i:X6}:{Plugin}";
+            yield return new PluginDocument("npc_", formKey, $$"""{"FormKey": "{{formKey}}", "Keywords": ["{{Target}}"]}""");
+        }
+    }
 
     private sealed class StreamedAdapter(IPluginDocuments documents) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
