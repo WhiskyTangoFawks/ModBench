@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Names each wait on real time in a test's source, and fails on any. A wait is on a value or on a fake clock;
 ALLOWED names each line that cannot be, with its reason: a check that something never happens where nothing
-later announces that it did not. A language is a Scan: the test files it reads and the waits it finds there.
-Run with the repository's root, it reads every tracked file; test-wait-write.py runs waits() over the text an
-edit writes."""
+later announces that it did not, and a delay a fake clock advances, which no line tells from real time. A
+language is a Scan: the test files it reads and the waits it finds there. Run with the repository's root, it
+reads every tracked file; test-wait-write.py runs waits() over the text an edit writes."""
 import re
 import subprocess
 import sys

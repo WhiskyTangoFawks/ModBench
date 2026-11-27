@@ -9,11 +9,15 @@ import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter, Subscription } from '../instanceAdapter';
 
-// Resolves last of the realpaths in flight beside it, whatever the disk's timing.
-let slowRealpath: string | undefined;
 let unresolvable: string | undefined;
 const opened = vi.hoisted((): { watchers: FSWatcher[] } => ({ watchers: [] }));
-const resolving = { count: 0, idle: [] as (() => void)[] };
+const realpaths = { inFlight: 0, resolved: new Set<string>(), heldBack: [] as (() => void)[] };
+let resolvesLast: { path: string; after: string } | undefined;
+
+const releaseWhenOthersResolved = (): void => {
+  if (resolvesLast === undefined || !realpaths.resolved.has(resolvesLast.after) || realpaths.inFlight > 0) return;
+  for (const release of realpaths.heldBack.splice(0)) release();
+};
 
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -22,12 +26,16 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     realpath: async (path: string) => {
       if (path === unresolvable) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
-      if (path === slowRealpath && resolving.count > 0) await new Promise<void>((resolve) => { resolving.idle.push(resolve); });
-      resolving.count++;
+      if (path === resolvesLast?.path) {
+        await new Promise<void>((release) => { realpaths.heldBack.push(release); releaseWhenOthersResolved(); });
+      }
+      realpaths.inFlight++;
       try {
         return await actual.realpath(path);
       } finally {
-        if (--resolving.count === 0) for (const resolve of resolving.idle.splice(0)) resolve();
+        realpaths.inFlight--;
+        realpaths.resolved.add(path);
+        releaseWhenOthersResolved();
       }
     },
   };
@@ -65,7 +73,8 @@ describe('(VS Code\'s recursive watcher misses them only on Linux) the watch of 
     root = cloneCorpusFixture();
     mods = join(root, 'mods');
     heard = [];
-    slowRealpath = undefined;
+    resolvesLast = undefined;
+    realpaths.resolved.clear();
     unresolvable = undefined;
     watchers.length = 0;
     opened.watchers.length = 0;
@@ -117,7 +126,7 @@ describe('(VS Code\'s recursive watcher misses them only on Linux) the watch of 
     await mkdir(join(folder, 'Held'), { recursive: true });
     await symlink(outside, join(folder, 'Linked'));
     await symlink(folder, join(folder, 'Held', 'Back'));
-    slowRealpath = join(folder, 'Linked');
+    resolvesLast = { path: join(folder, 'Linked'), after: join(folder, 'Held') };
 
     created(folder);
     const inHeld = join(folder, 'Held', 'Gun.json');
