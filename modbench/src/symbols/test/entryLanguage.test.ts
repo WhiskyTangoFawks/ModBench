@@ -241,7 +241,7 @@ describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or 
 describe('referenced by on a mod (commands.md, `referenced by` under Symbol)', () => {
   it.each<[string, object, string, string]>([
     ['a mod', { argument: mod('Base Mod') }, 'Base Mod', 'modbench.modReferencedBy'],
-    ['a separator', { kind: 'separator', separator: { name: 'Gear' } }, 'Gear', 'modbench.separatorReferencedBy'],
+    ['a separator', { argument: { kind: 'separator', name: 'Gear' } }, 'Gear', 'modbench.separatorReferencedBy'],
   ])('lists the places the owners report for %s, titled with its name', async (_what, row, name, contextValue) => {
     language(undefined);
 

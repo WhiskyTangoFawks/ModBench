@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import { modsViewOn } from './modsViewOn';
-import { separatorCarrier } from './sourceGestureHarness';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 import { progressSteps } from '../../test/recordedProgress';
 import { FakeTreeView } from '../../drivingLib/test/nameFilterViewHarness';
@@ -75,9 +74,8 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
     ['every mod for a clicked thing that is no row, whatever Mods has selected', async (shown) => { await selectingInMods('ModB')(shown); return [{ rootUri: undefined }]; },
       everyModUnder(TOOLBOX)],
     ['the selected mods for a clicked mod row', async ({ row, modA }) => [await row('ModB'), [await modA(), await row('ModB')]], named(['ModA', 'ModB'])],
-    ['a separator for the mods it holds alone, each name once', async ({ row, modA }) => [separatorCarrier('Weapons'), [separatorCarrier('Weapons'), await row('ModB'), await modA()]],
+    ['a separator for the mods it holds alone, each name once', async ({ row, modA }) => [await row('Weapons'), [await row('Weapons'), await row('ModB'), await modA()]],
       named(['ModA', 'ModB'])],
-    ['a separator named without its case as the mod manager names it', () => Promise.resolve([separatorCarrier('weapons'), [separatorCarrier('weapons')]]), named(['ModA'])],
     ['a selected row that is neither a mod nor a separator refused, naming it', async ({ row, modA }) => [await modA(), [await modA(), await row('meshes', await modA())]],
       named(['ModA'], ['"meshes" (it is not a mod or a separator)'])],
     ['a selected separator group refused, naming it, and no mod run for it', selectingInMods('Pack'),
@@ -116,7 +114,7 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
       shown.instance.publish({ ...shown.instance.value, paths: { ...shown.instance.value.paths, sourceDirs: new Map([[sourceMod, `/instance/source/${sourceMod}`]]) } });
       return shown;
     };
-    const rowOf: Record<string, (shown: Shown) => Promise<unknown>> = { Weapons: () => Promise.resolve(separatorCarrier('Weapons')), ModA: ({ modA }) => modA(), ModB: ({ row }) => row('ModB') };
+    const rowOf: Record<string, (shown: Shown) => Promise<unknown>> = { Weapons: ({ row }) => row('Weapons'), ModA: ({ modA }) => modA(), ModB: ({ row }) => row('ModB') };
 
     it.each(cases)('the view, with %s the source mod, selecting %j, runs %j', async (sourceMod, selection, expected) => {
       const shown = await withSourceMod(sourceMod);
@@ -144,6 +142,7 @@ describe('the mods an agent call runs over', () => {
   it.each<[string, Argument[], readonly string[]]>([
     ['every mod for a call naming none', [], EVERY_MOD],
     ['the mods given, a separator for the mods it holds alone, each once', [named('ModA'), separatorNamed('Weapons')], ['ModA']],
+    ['a separator named without its case as the mod manager names it', [separatorNamed('weapons')], ['ModA']],
   ])('are %s', async (_case, argument, expected) => {
     const shown = await viewOver();
 
