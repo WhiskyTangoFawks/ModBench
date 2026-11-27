@@ -45,6 +45,20 @@ export interface WatcherExclude {
   readonly changed: (listener: () => void) => Subscription;
 }
 
+/** What the adapter reads of the machine it runs on. It answers plainly: Steam, Wine and the mod manager are the adapter's. */
+export interface Machine {
+  readonly platform: NodeJS.Platform;
+  readonly homeFolder: string;
+  readonly userName: string;
+  /** The string value `name` of the registry key `key`, undefined when it is no string; rejects when the key holds no such value.
+   *  Windows only. */
+  registryValue(key: string, name: string): Promise<string | undefined>;
+  /** The user's Documents folder as Windows has it, wherever it was redirected to. Windows only. */
+  documentsFolder(): Promise<string>;
+  /** The name of each running process, as the platform names it. */
+  processes(): Promise<string[]>;
+}
+
 /** One place Modbench looked for the game folder, and what it found there. */
 export interface GameFolderLook {
   readonly place: string;

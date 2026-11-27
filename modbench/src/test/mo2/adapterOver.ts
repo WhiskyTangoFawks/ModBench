@@ -1,82 +1,60 @@
 import type {
-  InstallationFileReader, DownloadedFile, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
+  InstallationFileReader, DownloadedFile, InstanceAdapter, InstanceReading, Machine, ModlistEntry, OriginFiles, PluginEntry, Subscription, WatcherExclude,
 } from '../../instanceAdapter/instanceAdapter';
 import { fileProblemsFake } from '../fileProblemsFake';
 import type { FileProblems } from '../../ports/fileProblems';
-import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
-import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
-import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
-import { gameFolderResolver, steamInstallResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
 import { adapterForInstance } from '../../instanceAdapter/openInstance';
-import { mo2InstanceAdapter } from '../../instanceAdapter/mo2/mo2Instance';
-import type { ConfigurationFile, ManagerAdapter } from '../../instanceAdapter/publisher';
-import { mo2Watch } from '../../instanceAdapter/mo2/mo2Watch';
-import { repositoryReads } from '../../instanceAdapter/repositoryReads';
+import { mo2Context, type Mo2InstanceOptions } from '../../instanceAdapter/mo2/mo2Instance';
+import type { FomodEngine } from '../../instanceAdapter/fomodInstaller/fomodInstaller';
 import type { HostGit } from '../../ports/repository';
 import { hostWithoutGit } from '../hostGitDouble';
-import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
 import type { ReadingSource } from '../../instanceAdapter/instanceReading';
 import { readingSource } from '../../instanceAdapter/mo2/mo2Reads';
 import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
 import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
-import { NO_DETECTORS } from '../noDetectors';
+import { fakeMachine } from '../fakeMachine';
 import { fixedGameFolderSetting } from '../gameFolderSetting';
 import { watcherExcluding } from '../watcherExclusion';
 import { FOMOD_ENGINE } from '../fomodEngine';
 import { DEPLOYED_PATH } from '../deployedPath';
 import { expectKind } from '../expectKind';
 
-/** What a test fixes in place of asking the machine it runs on. */
+/** What a test fixes of the adapter the extension builds. */
 export interface AdapterAnswers {
   pythonEnvFile?: string;
-  /** Where the game is, for each read of the settings. */
-  gameFolder?: GameFolder | (() => Promise<GameFolder>);
-  downloadsFolder?: Awaited<ReturnType<DownloadsDirectoryResolver>>;
   /** What every installation file holds; none when the test fixes no reader. */
   installationFileReader?: InstallationFileReader;
-  /** The setting that names the game's folder. */
-  gameFolderSettingValue?: string;
+  /** The setting that names the game's folder, or what it holds at each read. */
+  gameFolderSettingValue?: string | (() => string | undefined);
   gameFolderSettingChanged?: (listener: () => void) => Subscription;
-  detectors?: GameDetectors;
-  mo2Running?: () => Promise<boolean>;
+  /** What the machine answers in place of `fakeMachine`'s. */
+  machine?: Partial<Machine>;
   fileProblems?: FileProblems;
   /** VS Code's git; none unless a test fixes one. */
   hostGit?: HostGit<string>;
+  watcherExclude?: WatcherExclude;
+  fomodEngine?: FomodEngine;
 }
 
-/** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
-export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
-  const {
-    gameFolder, downloadsFolder, gameFolderSettingValue, gameFolderSettingChanged, detectors = NO_DETECTORS, mo2Running = () => Promise.resolve(false),
-    hostGit = hostWithoutGit,
-  } = answers;
-  const setting = fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged);
-  const repository = repositoryReads(root, hostGit);
-  return {
-    instanceRoot: root,
-    resolveGameFolder: gameFolder !== undefined
-      ? (typeof gameFolder === 'function' ? gameFolder : () => Promise.resolve(gameFolder))
-      : gameFolderResolver(setting, detectors),
-    resolveSteamInstall: steamInstallResolver(detectors),
-    resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
-    resolveMyGames: myGamesResolver(root, detectors),
-    watch: mo2Watch(root, setting.changed, repository.changed, watcherExcluding()),
-    repository,
-    mo2Running,
-  };
-}
+const optionsOver = (root: string, answers: AdapterAnswers): Mo2InstanceOptions => ({
+  instanceRoot: root,
+  installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]),
+  fileProblems: answers.fileProblems ?? fileProblemsFake(),
+  fomodEngine: answers.fomodEngine ?? FOMOD_ENGINE,
+  deployedPath: DEPLOYED_PATH,
+  gameFolderSetting: fixedGameFolderSetting(answers.gameFolderSettingValue, answers.gameFolderSettingChanged),
+  watcherExclude: answers.watcherExclude ?? watcherExcluding(),
+  hostGit: answers.hostGit ?? hostWithoutGit,
+  machine: fakeMachine(answers.machine),
+});
 
 /** The parts of one reading, each asked on its own. */
-export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined, DEPLOYED_PATH);
+export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(mo2Context(optionsOver(root, answers)), undefined, DEPLOYED_PATH);
 
-export const managerOver = (root: string, answers: AdapterAnswers = {}, publisherFile?: ConfigurationFile): ManagerAdapter => mo2InstanceAdapter({
-  instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: answers.fileProblems ?? fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers),
-}, publisherFile);
-
-/** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
+/** The adapter the build composes over `root`, with what `answers` fix. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: answers.fileProblems ?? fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
+  adapterForInstance({ ...optionsOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */

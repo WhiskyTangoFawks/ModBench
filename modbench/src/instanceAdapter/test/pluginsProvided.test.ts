@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { filesWinningFirst, type GameFolder, type ModlistEntry, type OriginFile, type PluginsProvided } from '../instanceAdapter';
+import { filesWinningFirst, type ModlistEntry, type OriginFile, type PluginsProvided } from '../instanceAdapter';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { onPosix } from '../../test/platform';
@@ -48,9 +48,9 @@ describe('the plugins each origin provides', () => {
       await writeFile(join(instance, path), text);
     }));
   };
-  const providedOver = async (gameFolder: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') }): Promise<PluginsProvided | undefined> => {
+  const providedOver = async (gameFolderSettingValue: string | undefined = game): Promise<PluginsProvided | undefined> => {
     let provided: PluginsProvided | undefined;
-    await adapterOver(instance, { gameFolder }).changePluginOrderOverProvided('Default', (_order, handed) => { provided = handed; return []; });
+    await adapterOver(instance, { gameFolderSettingValue }).changePluginOrderOverProvided('Default', (_order, handed) => { provided = handed; return []; });
     return provided;
   };
   const pluginsOf = async (): Promise<unknown> => {
@@ -81,13 +81,15 @@ describe('the plugins each origin provides', () => {
   });
 
   it('answers why there are none when the Data folder is unresolved', async () => {
-    expect(await providedOver({ kind: 'notFound', looked: [], setting: 's' })).toEqual({ kind: 'unresolved' });
+    expect(await providedOver(join(game, 'no game'))).toEqual({ kind: 'unresolved' });
   });
 
-  it('answers why there are none when the Data folder is unreadable', async () => {
-    await writeFile(join(game, 'NotAFolder'), '');
+  onPosix.it('answers why there are none when the Data folder is unreadable', async () => {
+    await chmod(join(game, 'Data'), 0);
+    const provided = await providedOver();
+    await chmod(join(game, 'Data'), 0o755);
 
-    expect(await providedOver({ kind: 'found', root: game, dataFolder: join(game, 'NotAFolder') })).toMatchObject({ kind: 'unreadable', reason: expect.stringContaining('ENOTDIR') as unknown });
+    expect(provided).toMatchObject({ kind: 'unreadable', reason: expect.stringContaining('EACCES') as unknown });
   });
 
   it('answers the plugins the game loads with no line: the release\'s masters, then its Creation Club list', async () => {

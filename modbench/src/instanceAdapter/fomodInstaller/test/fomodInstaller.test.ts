@@ -12,7 +12,8 @@ import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { FOMOD_PAGE, refusingPage } from '../../../test/fomodDialogDouble';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { onPosix } from '../../../test/platform';
-import { adapterAsBuilt, mo2InstanceHolding } from '../../test/instanceOnDisk';
+import { mo2InstanceHolding } from '../../test/instanceOnDisk';
+import { adapterOver } from '../../../test/mo2/adapterOver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -82,7 +83,7 @@ describe('the FOMOD installer', () => {
   function installing(answer: FomodAnswer | undefined, engine: FomodEngine = FOMOD_ENGINE, files = WITH_PLUGINS): Promise<InstallOutcome> {
     const held = mo2InstanceHolding(files);
     instance = held.root;
-    return adapterAsBuilt(held.root, { gameFolderSettingValue: join(held.root, 'game'), fomodEngine: engine }).install({ kind: 'folder', path: root }, { kind: 'new', name: MOD }, trash, answer);
+    return adapterOver(held.root, { gameFolderSettingValue: join(held.root, 'game'), fomodEngine: engine }).install({ kind: 'folder', path: root }, { kind: 'new', name: MOD }, trash, answer);
   }
   async function install(choices: readonly FomodStepChoice[], engine: FomodEngine = FOMOD_ENGINE): Promise<FomodLanded> {
     const outcome = await installing({ kind: 'choices', steps: choices, installAnyway: true }, engine);

@@ -9,6 +9,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import type { InstanceAdapter } from '../../instanceAdapter';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
+import { downloadsUnresolvable } from '../../test/instanceOnDisk';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 
 const SEPARATOR_FOLDER = 'mods/Unassigned (Modlist Development)_separator';
@@ -75,14 +76,14 @@ describe('the MO2 Instance adapter, on a file or folder another program renames'
   });
 
   it('says why it cannot tell whether a file install can take is a downloaded file while the downloads folder cannot be resolved, and names a mod\'s folder still', async () => {
-    const unresolved = adapterOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
+    const unresolved = adapterOver(root, { machine: await downloadsUnresolvable(root) });
 
-    await expect(unresolved.renamedSymbol(at(`downloads/${UFO4P}`), at('downloads/UFO4P.7z'))).rejects.toThrow('download_directory names no folder');
+    await expect(unresolved.renamedSymbol(at(`downloads/${UFO4P}`), at('downloads/UFO4P.7z'))).rejects.toThrow('download_directory "D:\\downloads" could not be resolved');
     expect(await unresolved.renamedSymbol(at('mods/Patch Mod'), at('mods/Renamed Mod'))).toMatchObject({ entry: { kind: 'mod', name: 'Patch Mod' } });
   });
 
   it('names nothing for a file install can take in a mod while the downloads folder cannot be resolved', async () => {
-    const unresolved = adapterOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
+    const unresolved = adapterOver(root, { machine: await downloadsUnresolvable(root) });
 
     expect(await unresolved.renamedSymbol(at('mods/Patch Mod/Bundled.zip'), at('mods/Patch Mod/Renamed.zip'))).toBeUndefined();
   });

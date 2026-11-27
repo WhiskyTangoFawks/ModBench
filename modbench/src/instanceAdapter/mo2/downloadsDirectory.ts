@@ -5,7 +5,8 @@
 import { isAbsolute, join } from 'node:path';
 import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir } from './layout';
-import { normalizeGamePath, winePrefixDetectorFor, type GameDetectors } from '../gameFolder/gameFolderResolver';
+import { normalizeGamePath, winePrefixDetectorFor } from '../gameFolder/gameFolderResolver';
+import type { Machine } from '../instanceAdapter';
 import { gameOfSettings } from './mo2Game';
 import { errorMessage } from '../../ports/errorMessage';
 
@@ -22,14 +23,14 @@ export type DownloadsDirectoryResolver = (instanceRoot: string, iniText: string)
 /** MO2's `PathSettings::downloads()`: the setting, `%BASE_DIR%` substituted for the instance
  *  root, then joined against it when still relative — real MO2 instead resolves a relative value
  *  against its own process working directory (settings.cpp:1667-1686), undeterminable here. */
-export function downloadsDirectoryResolver(detectors?: GameDetectors): DownloadsDirectoryResolver {
+export function downloadsDirectoryResolver(machine: Machine): DownloadsDirectoryResolver {
   return async (instanceRoot, iniText) => {
     const raw = readDownloadDirectory(iniText);
     if (raw === undefined) return { kind: 'resolved', downloadsDir: defaultDownloadsDir(instanceRoot) };
     const substituted = raw.replaceAll(BASE_DIR_VARIABLE, instanceRoot);
     let normalized: string;
     try {
-      normalized = await normalizeGamePath(substituted, process.platform, winePrefixDetectorFor(gameOfSettings(iniText).gameRelease, detectors));
+      normalized = await normalizeGamePath(substituted, machine.platform, winePrefixDetectorFor(gameOfSettings(iniText).gameRelease, machine));
     } catch (err) {
       return { kind: 'unresolved', reason: `download_directory "${raw}" could not be resolved: ${errorMessage(err)}` };
     }

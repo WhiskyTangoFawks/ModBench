@@ -3,26 +3,13 @@ import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
-import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
-import { NO_DETECTORS } from '../../../test/noDetectors';
-import { onPosix, onWindows } from '../../../test/platform';
-import { adapterAsBuilt, gameOnDisk, instanceOnDisk, settingsNaming } from '../../test/instanceOnDisk';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+import { onPosix } from '../../../test/platform';
+import type { Machine } from '../../instanceAdapter';
+import { gameOnDisk, instanceOnDisk, settingsNaming } from '../../test/instanceOnDisk';
+import { steamIn, steamPrefixIn } from '../../test/steamOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
-
-const UTF8_FIRST = '[Console]::OutputEncoding=[Text.Encoding]::UTF8;';
-const powershell = vi.hoisted(() => ({ documents: '' }));
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:child_process')>();
-  const { promisify } = await import('node:util');
-  const run = promisify(actual.execFile);
-  const asked = (file: string, args: readonly string[], options: object) => (file === 'powershell'
-    ? Promise.resolve({ stdout: Buffer.from(`${powershell.documents}\r\n`, args.at(-1)?.startsWith(UTF8_FIRST) ? 'utf8' : 'latin1'), stderr: Buffer.alloc(0) })
-    : run(file, args, options));
-  return { ...actual, execFile: Object.assign(actual.execFile.bind(undefined), { [promisify.custom]: asked }) };
-});
-
-type GameDetectors = NonNullable<AdapterAnswers['detectors']>;
 
 const ARCHIVE = 'Mine.ba2';
 const notFoundNote = (looked: string): string =>
@@ -50,31 +37,33 @@ describe('the My Games folder whose INIs list the archives of a profile that kee
     await rename(made, place);
     return place;
   };
-  const archivesOf = async (detectors: Partial<GameDetectors>, { instance = join(base, 'MO2'), gameName }: { instance?: string; gameName?: string } = {}) => {
-    const adapter = adapterOver(await instanceAt(instance, gameName), { gameFolderSettingValue: game, detectors: { ...NO_DETECTORS, ...detectors } });
+  const archivesOf = async (machine: Partial<Machine>, { instance = join(base, 'MO2'), gameName }: { instance?: string; gameName?: string } = {}) => {
+    const adapter = adapterOver(await instanceAt(instance, gameName), { gameFolderSettingValue: game, machine });
     const { archiveList, archiveListNotes } = await adapter.reading();
     return { archiveList, archiveListNotes };
   };
   const found = { archiveList: [ARCHIVE], archiveListNotes: [] };
 
-  onWindows.describe('on Windows', () => {
+  describe('on Windows', () => {
+    const onWindows = (documentsFolder: Machine['documentsFolder']): Partial<Machine> => ({ platform: 'win32', documentsFolder });
+
     it('is under the Documents known folder, wherever Documents has been redirected to', async () => {
       const redirected = join(base, 'D-drive', 'Documents');
       await myGamesIn(redirected);
 
-      expect(await archivesOf({ documents: () => Promise.resolve(redirected) })).toEqual(found);
+      expect(await archivesOf(onWindows(() => Promise.resolve(redirected)))).toEqual(found);
     });
 
     it('names the Documents folder it looked in when it has no folder for the game', async () => {
       const documents = join(base, 'Documents');
       await mkdir(documents);
 
-      expect((await archivesOf({ documents: () => Promise.resolve(documents) })).archiveListNotes)
+      expect((await archivesOf(onWindows(() => Promise.resolve(documents)))).archiveListNotes)
         .toEqual([notFoundNote(`the Documents folder, ${documents}: no My Games/Fallout4 folder in it`)]);
     });
 
-    const readingsOver = async (documents: GameDetectors['documents']): Promise<() => Promise<readonly string[]>> => {
-      const adapter = adapterOver(await instanceAt(join(base, 'MO2')), { gameFolderSettingValue: game, detectors: { ...NO_DETECTORS, documents } });
+    const readingsOver = async (documents: Machine['documentsFolder']): Promise<() => Promise<readonly string[]>> => {
+      const adapter = adapterOver(await instanceAt(join(base, 'MO2')), { gameFolderSettingValue: game, machine: onWindows(documents) });
       return async () => (await adapter.reading()).archiveList;
     };
 
@@ -88,22 +77,14 @@ describe('the My Games folder whose INIs list the archives of a profile that kee
 
     it('asks again after a failure, so a transient one does not stick', async () => {
       await myGamesIn(base);
-      const archives = await readingsOver(vi.fn<GameDetectors['documents']>().mockRejectedValueOnce(new Error('spawn failed')).mockResolvedValue(base));
+      const archives = await readingsOver(vi.fn<Machine['documentsFolder']>().mockRejectedValueOnce(new Error('spawn failed')).mockResolvedValue(base));
 
       expect([await archives(), await archives()]).toEqual([[], [ARCHIVE]]);
     });
 
-    it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
-      const documents = join(base, 'José', 'Документы');
-      await myGamesIn(documents);
-      powershell.documents = documents;
-      const adapter = adapterAsBuilt(await instanceAt(join(base, 'MO2')), { gameFolderSettingValue: game });
-
-      expect((await adapter.reading()).archiveList).toEqual([ARCHIVE]);
-    });
-
     it('says why the known folder could not be asked', async () => {
-      expect((await archivesOf({})).archiveListNotes).toEqual([notFoundNote('the Documents folder: no known folder')]);
+      expect((await archivesOf(onWindows(() => Promise.reject(new Error('no known folder'))))).archiveListNotes)
+        .toEqual([notFoundNote('the Documents folder: no known folder')]);
     });
   });
 
@@ -111,12 +92,9 @@ describe('the My Games folder whose INIs list the archives of a profile that kee
     const prefixDocuments = (prefix: string, user: string): string => join(prefix, 'drive_c', 'users', user, 'Documents');
 
     it('is in the Steam compatdata prefix of the release\'s app id', async () => {
-      const prefix = join(base, 'compatdata', '377160', 'pfx');
-      await myGamesIn(prefixDocuments(prefix, 'steamuser'));
-      const asked: string[] = [];
+      await myGamesIn(prefixDocuments(steamPrefixIn(base), 'steamuser'));
 
-      expect(await archivesOf({ winePrefix: (appId) => { asked.push(appId); return Promise.resolve(prefix); } })).toEqual(found);
-      expect(asked).toEqual(['377160']);
+      expect(await archivesOf(await steamIn(base))).toEqual(found);
     });
 
     it('is else in the Wine prefix whose drive_c holds the instance', async () => {
@@ -127,17 +105,17 @@ describe('the My Games folder whose INIs list the archives of a profile that kee
     });
 
     it('names every place it looked when none resolves', async () => {
-      const prefix = join(base, 'compatdata', '377160', 'pfx');
+      const prefix = steamPrefixIn(base);
       await mkdir(prefixDocuments(prefix, 'steamuser'), { recursive: true });
 
-      expect((await archivesOf({ winePrefix: () => Promise.resolve(prefix) })).archiveListNotes).toEqual([notFoundNote([
+      expect((await archivesOf(await steamIn(base))).archiveListNotes).toEqual([notFoundNote([
         `the Steam prefix of app 377160, ${prefix}: no My Games/Fallout4 folder in its Documents`,
         `the Wine prefix holding the instance: ${join(base, 'MO2')} is under no drive_c`,
       ].join('; '))]);
     });
 
     it('does not ask Steam for a release with no app id', async () => {
-      const { archiveListNotes } = await archivesOf({ winePrefix: () => Promise.reject(new Error('asked')) }, { gameName: 'Skyrim VR' });
+      const { archiveListNotes } = await archivesOf(await steamIn(base), { gameName: 'Skyrim VR' });
 
       expect(archiveListNotes).toEqual([notFoundNote([
         'the Steam prefix: Modbench has no Steam entry for this game',

@@ -66,7 +66,7 @@ async function wiredInstance(): Promise<{
   await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
+  const adapter = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
   const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace() });
   instances.push(instance);
 
@@ -139,7 +139,7 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     await manifestedIn(join(root, 'mods', 'Unrestored'), ['Unrestored.esp']);
     const pluginFiles = () => Promise.all(['plugins.txt', 'loadorder.txt'].map((file) => readFile(join(profile, file), 'utf8')));
     const committed = await pluginFiles();
-    const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
+    const adapter = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace() });
     instances.push(instance);
     const { pluginSync } = pluginSyncOn({

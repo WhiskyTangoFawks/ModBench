@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
-import type { GameFolder, InstanceAdapter } from '../../instanceAdapter';
+import type { InstanceAdapter } from '../../instanceAdapter';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { instanceOnDisk } from '../../test/instanceOnDisk';
@@ -22,7 +22,7 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
     root = await mkdtemp(join(tmpdir(), 'data-file-reads-'));
     await mkdir(join(root, 'Data'));
     instance = await instanceOnDisk();
-    reads = adapterOver(instance, { gameFolder: { kind: 'found', root, dataFolder: join(root, 'Data') } });
+    reads = adapterOver(instance, { gameFolderSettingValue: root });
   });
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
@@ -112,7 +112,7 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
   });
 
   it('answers why for a file of a game folder that was not found, and reads the winner all the same', async () => {
-    const lost = adapterOver(instance, { gameFolder: { kind: 'notFound', looked: [], setting: 's' } satisfies GameFolder });
+    const lost = adapterOver(instance);
 
     expect(await lost.dataFileChecksum('a.swf', undefined)).toEqual({ kind: 'unreadable', why: 'the game folder was not found' });
     expect(await lost.dataFileChecksum('a.swf', '/mod/a.swf')).toEqual(read(undefined));

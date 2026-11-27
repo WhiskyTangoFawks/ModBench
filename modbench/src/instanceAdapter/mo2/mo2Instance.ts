@@ -5,9 +5,9 @@ import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { steamRootOn } from '../gameFolder/gamePathDetector';
 import { nonSteamPrefixRunning } from '../gameFolder/steamPrefix';
-import { gameFolderResolver, steamInstallResolver, STEAM } from '../gameFolder/gameFolderResolver';
+import { gameFolderResolver, steamInstallResolver } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
-import type { DeployedPath, GameFolder, InstallationFileReader, GameFolderSetting, WatcherExclude } from '../instanceAdapter';
+import type { DeployedPath, GameFolder, InstallationFileReader, GameFolderSetting, Machine, WatcherExclude } from '../instanceAdapter';
 import type { FomodEngine } from '../fomodInstaller/fomodInstaller';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { mo2Changes } from './mo2Changes';
@@ -43,7 +43,7 @@ import { textByStamp } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
 import { gamePlaceOf } from '../gameFolder/gamePlace';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
-import { repositoryReads, type RepositoryReads } from '../repositoryReads';
+import { repositoryReads } from '../repositoryReads';
 import type { HostGit } from '../../ports/repository';
 
 export { overwriteDir } from './layout';
@@ -54,13 +54,17 @@ export const enabledModsIn = (instanceRoot: string) => async (profile: string): 
 
 const MO2_PROGRAM = 'ModOrganizer.exe';
 
-export type Mo2InstanceOptions = {
+export interface Mo2InstanceOptions {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
   fileProblems: FileProblems;
   fomodEngine: FomodEngine;
   deployedPath: DeployedPath;
-} & ({ gameFolderSetting: GameFolderSetting; watcherExclude: WatcherExclude; hostGit: HostGit<unknown> } | { context: Mo2Context });
+  gameFolderSetting: GameFolderSetting;
+  watcherExclude: WatcherExclude;
+  hostGit: HostGit<unknown>;
+  machine: Machine;
+}
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here (common.md, States, story 2). Synchronous: the composition
@@ -69,20 +73,24 @@ export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
 }
 
-const mo2Context = (instanceRoot: string, gameFolderSetting: GameFolderSetting, watcherExclude: WatcherExclude, repository: RepositoryReads): Mo2Context => ({
-  instanceRoot,
-  resolveGameFolder: gameFolderResolver(gameFolderSetting),
-  resolveSteamInstall: steamInstallResolver(),
-  resolveDownloadsFolder: downloadsDirectoryResolver(),
-  resolveMyGames: myGamesResolver(instanceRoot, STEAM),
-  watch: mo2Watch(instanceRoot, gameFolderSetting.changed, repository.changed, watcherExclude),
-  repository,
-  mo2Running: () => programRunning(MO2_PROGRAM),
-});
+/** What every part of MO2's implementation over `instanceRoot` shares. */
+export function mo2Context({ instanceRoot, gameFolderSetting, watcherExclude, hostGit, machine }: Mo2InstanceOptions): Mo2Context {
+  const repository = repositoryReads(instanceRoot, hostGit);
+  return {
+    instanceRoot,
+    resolveGameFolder: gameFolderResolver(gameFolderSetting, machine),
+    resolveSteamInstall: steamInstallResolver(machine),
+    resolveDownloadsFolder: downloadsDirectoryResolver(machine),
+    resolveMyGames: myGamesResolver(instanceRoot, machine),
+    watch: mo2Watch(instanceRoot, gameFolderSetting.changed, repository.changed, watcherExclude),
+    repository,
+    mo2Running: () => programRunning(machine, MO2_PROGRAM),
+  };
+}
 
 export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {
-  const { instanceRoot, installationFileReader, fileProblems, fomodEngine, deployedPath } = options;
-  const context: Mo2Context = 'context' in options ? options.context : mo2Context(instanceRoot, options.gameFolderSetting, options.watcherExclude, repositoryReads(instanceRoot, options.hostGit));
+  const { instanceRoot, installationFileReader, fileProblems, fomodEngine, deployedPath, machine } = options;
+  const context = mo2Context(options);
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader, fileProblems);
   const source = readingSource(context, publisherFile, deployedPath);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
@@ -102,7 +110,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
-    nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
+    nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(machine), folder),
     gamePlace: async () => gamePlaceOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), originHoldsFile, ...mo2PluginReferences(context, planRename), ...mo2EntryReferences(context, source), ...mo2RenamedSymbol(context), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, publisherFile), ...mo2GameFiles(context, hashes, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
