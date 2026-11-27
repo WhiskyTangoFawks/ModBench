@@ -1,23 +1,28 @@
 import { describe, it, expect, vi } from 'vitest';
-import { enumCompletionsAt } from '../enumCompletion';
-import type { CompareResult } from '../../client';
-import { recordingReporter } from '../../test/surfacingDoubles';
+
+vi.mock('vscode', () => import('./vscodeHost'));
+
+import { host } from './vscodeHost';
+import { sourceLanguageOver } from './sourceLanguageOver';
 import { comparisonOf, fieldOf, type Field } from '../../test/comparison';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const OWNER = '000801:Mod.esp';
+const CHILD = '000802:Mod.esp';
+const SOURCE = '/source/ModA/plugin-source/Mod.esp/Npc.json';
 
-const asking = (fields: Field[]) => ({
-  getComparison: vi.fn((formKey: string): Promise<CompareResult | null> =>
-    Promise.resolve(formKey === OWNER ? comparisonOf(formKey, [{ plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, fields }]) : null)),
-});
+/** The box over an mEdit that answers every record's winning copy with `fields`. */
+function completing(fields: Field[]) {
+  const made = sourceLanguageOver({
+    arrange: (client) => { client.setQueryAnswer('getComparison', comparisonOf(OWNER, [{ plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, fields }])); },
+  });
+  const asked = () => made.client.calls.filter(({ method }) => method === 'getComparison').map(({ args }) => args[0]);
+  return { ...made, asked, at: (marked: string, path = SOURCE) => host.complete(path, marked) };
+}
 
-const completingAtBar = (client: Parameters<typeof enumCompletionsAt>[0]['client'], marked: string, reporter = recordingReporter()) =>
-  enumCompletionsAt({ client, reporter }, marked.replace('|', ''), marked.indexOf('|'));
+const documentOf = (members: string, formKey = OWNER) => `{ "FormKey": "${formKey}", ${members} }`;
 
-const documentOf = (members: string) => `{ "FormKey": "${OWNER}", ${members} }`;
-
-describe('enumCompletionsAt (source.md, Editing plugin source, story 2)', () => {
+describe('completing an enum or flags value in plugin source (source.md, Editing plugin source, story 2)', () => {
   const members = [{ value: 'Auto', label: 'Automatic' }, { value: 'Single' }];
   const enumField = fieldOf({ name: 'Mode', type: 'enum', enumMembers: members });
   const flagsField = fieldOf({
@@ -26,49 +31,52 @@ describe('enumCompletionsAt (source.md, Editing plugin source, story 2)', () => 
   });
 
   it('offers its values as the document spells them, before anything is typed', async () => {
-    const client = asking([enumField]);
-    const found = await completingAtBar(client, documentOf('"Mode": "|"'));
-
-    expect(found?.items).toEqual([
-      { label: 'Auto', detail: 'Automatic', insertText: 'Auto' },
-      { label: 'Single', detail: '', insertText: 'Single' },
+    expect(await completing([enumField]).at(documentOf('"Mode": "|"'))).toEqual([
+      { label: 'Auto', detail: 'Automatic', insertText: 'Auto', replaces: '' },
+      { label: 'Single', detail: '', insertText: 'Single', replaces: '' },
     ]);
   });
 
   it('replaces the string between its quotes', async () => {
-    const marked = documentOf('"Mode": "Si|ng"');
-    const found = await completingAtBar(asking([enumField]), marked);
+    const found = await completing([enumField]).at(documentOf('"Mode": "Si|ng"'));
 
-    expect(marked.replace('|', '').slice(found?.start, found?.end)).toBe('Sing');
+    expect(found.map(({ replaces }) => replaces)).toEqual(['Sing', 'Sing']);
   });
 
-  it('offers one flag as an element of the array the document writes', async () => {
-    const found = await completingAtBar(asking([flagsField]), documentOf('"Flags": ["Silent", "|"]'));
-
-    expect(found?.items.map((item) => item.insertText)).toEqual(['Silent', 'Loud']);
+  it.each([
+    ['one flag as an element of the array the document writes', [flagsField], documentOf('"Flags": ["Silent", "|"]'), ['Silent', 'Loud']],
+    ['the values of an enum nested in structs', [fieldOf({ name: 'Data', type: 'struct', fields: [enumField.metadata] })], documentOf('"Data": { "Mode": "|" }'), ['Auto', 'Single']],
+  ])('offers %s', async (_case, fields, marked, offered) => {
+    expect((await completing(fields).at(marked)).map(({ insertText }) => insertText)).toEqual(offered);
   });
 
-  it('offers the values of an enum nested in structs', async () => {
-    const data = fieldOf({ name: 'Data', type: 'struct', fields: [enumField.metadata] });
-    const found = await completingAtBar(asking([data]), documentOf('"Data": { "Mode": "|" }'));
+  it.each([
+    ['the child record enclosing the string, rather than its owner', documentOf(`"Placed": [{ "FormKey": "${CHILD}", "Mode": "|" }]`), CHILD],
+    ['the record whose FormKey is spelled as Mutagen reads it, by its canonical FormKey', documentOf('"Mode": "|"', '00080a_Mod.esp'), '00080A:Mod.esp'],
+  ])('offers the values of %s', async (_case, marked, record) => {
+    const { at, asked } = completing([enumField]);
 
-    expect(found?.items.map((item) => item.insertText)).toEqual(['Auto', 'Single']);
+    expect([(await at(marked)).map(({ insertText }) => insertText), asked()]).toEqual([['Auto', 'Single'], [record]]);
   });
 
-  it('offers nothing in a property name', async () => {
-    expect(await completingAtBar(asking([enumField]), documentOf('"Mo|": 1'))).toBeUndefined();
+  it.each([
+    ['in a property name', documentOf('"Mo|": 1'), SOURCE],
+    ['outside a record', '{ "Mode": "|" }', SOURCE],
+    ['in a JSON file outside plugin source', documentOf('"Mode": "|"'), '/mods/ModA/settings.json'],
+  ])('offers nothing %s', async (_case, marked, path) => {
+    expect(await completing([enumField]).at(marked, path)).toEqual([]);
   });
 
   it('offers nothing for a string field that has no members', async () => {
-    expect(await completingAtBar(asking([fieldOf({ name: 'Mode', type: 'string' })]), documentOf('"Mode": "|"'))).toBeUndefined();
+    expect(await completing([fieldOf({ name: 'Mode', type: 'string' })]).at(documentOf('"Mode": "|"'))).toEqual([]);
   });
 });
 
 it('writes why to the Output, and offers nothing, when mEdit cannot answer the record\'s comparison', async () => {
-  const reporter = recordingReporter();
+  const { reporter } = sourceLanguageOver({ arrange: (client) => { client.getComparison = () => Promise.reject(new Error('mEdit is down.')); } });
 
-  const found = await completingAtBar({ getComparison: () => Promise.reject(new Error('mEdit is down.')) }, documentOf('"Mode": "|"'), reporter);
+  const found = await host.complete(SOURCE, documentOf('"Mode": "|"'));
 
-  expect(found).toBeUndefined();
+  expect(found).toEqual([]);
   expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Completion cannot list what ${OWNER} offers here.`, detail: 'mEdit is down.' }]);
 });
