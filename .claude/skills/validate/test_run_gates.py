@@ -176,9 +176,11 @@ class DeletedTests(GateRepo):
 class FakeDotnet(GateRepo):
     DOTNET_RECORDING_ITS_ARGUMENTS = """#!/bin/sh
 echo "$*" >> {calls}
-if [ "$1" = test ] && [ -n "$FAKE_TRX" ]; then
+trx=$FAKE_TRX
+case " $* " in *" --filter "*) trx=${{FAKE_ALONE_TRX:-$FAKE_TRX}} ;; esac
+if [ "$1" = test ] && [ -n "$trx" ]; then
   while [ $# -gt 1 ]; do
-    [ "$1" = --results-directory ] && cp "$FAKE_TRX" "$2/fake.trx"
+    [ "$1" = --results-directory ] && mkdir -p "$2" && cp "$trx" "$2/fake.trx"
     shift
   done
 fi
@@ -189,6 +191,7 @@ fi
         shutil.copy(SCRIPT.parent / "select_backend_tests.py", self.validate)
         shutil.copy(SCRIPT.parent / "reports.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_times.py", self.validate)
+        shutil.copy(SCRIPT.parent / "run_alone.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_data.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_only_code.py", self.validate)
         shutil.copy(SCRIPT.parent / "skips.py", self.validate)
@@ -214,9 +217,9 @@ fi
         self.write(f"MEditService/MEditService.{name}/MEditService.{name}.csproj", test_sdk + "".join(
             f'<ProjectReference Include="..\\MEditService.{r}\\MEditService.{r}.csproj" />' for r in references))
 
-    def trx(self, outcome, slow_seconds=0):
-        name = pathlib.Path(self.repo, "fake.trx")
-        slow = (f'<UnitTestResult testId="s" testName="Fake.Slow" duration="00:00:{slow_seconds:02d}" '
+    def trx(self, outcome, slow_seconds: float = 0, file="fake.trx"):
+        name = pathlib.Path(self.repo, file)
+        slow = (f'<UnitTestResult testId="s" testName="Fake.Slow" duration="00:00:{slow_seconds:05.2f}" '
                 'endTime="2026-10-02T19:01:00+00:00" outcome="Passed" />') if slow_seconds else ""
         name.write_text(
             '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><TestDefinitions>'
@@ -265,6 +268,16 @@ class TimeReport(FakeDotnet):
         self.assertNotIn("Fake.ATest", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 300 s budget\n")
 
+    def test_a_test_over_1_s_under_load_runs_again_alone_by_its_name_and_the_ceiling_judges_its_time_there(self) -> None:
+        for alone, line in ((5, "   5.00 s  Fake.Slow: OVER THE 1 s CEILING ALONE, NOT APPROVED\n"),
+                            (0.5, "--- 1 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n")):
+            with self.subTest(alone=alone):
+                run, calls = self.run_after_changing(f"MEditService/MEditService.Http/{alone}.cs", "--backend", FAKE_TRX=self.trx("Passed", 5),
+                                                     FAKE_ALONE_TRX=self.trx("Passed", alone, "alone.trx"))
+                self.assertIn("test MEditService.Http.Tests --no-build -v quiet --logger trx --results-directory /tmp/medit-reports."
+                              f"{pathlib.Path(self.repo).name}.alone/backend --filter FullyQualifiedName=Fake.Slow --", calls[-1])
+                self.assertIn(line, run.stdout)
+
     def test_a_unittest_run_leaves_its_log_with_each_tests_time_for_the_report(self):
         self.write(".claude/hooks/test_probe.py",
                    "import unittest\nclass Probe(unittest.TestCase):\n    def test_probe(self):\n        pass\n")
@@ -297,7 +310,7 @@ class TimeReport(FakeDotnet):
     def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self) -> None:
         self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
+        self.assertIn("    5.1 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.1 s\n", run.stdout)
         self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
         self.assertEqual(run.returncode, 1)
 
@@ -308,7 +321,7 @@ class TimeReport(FakeDotnet):
         git(self.repo, "commit", "-q", "-m", "probe")
         run = self.gates("--comments")
         self.assertRegex(run.stdout, r"=== Test times and budget ===\n--- 0 TESTS OVER 100 ms ---\n"
-                                     r"--- 0 TESTS OVER THE 1 s CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n"
+                                     r"--- 0 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED, 0 APPROVALS LAPSED ---\n"
                                      r" +0\.0 s of +\d+ s  the tests of no box\n"
                                      r" +0\.0 s  hooks\n--- 0 BUDGETS OVERRUN OR MISSING ---\nWall time \d+ s of 300 s budget\n")
         log = pathlib.Path("/tmp", f"medit-reports.{pathlib.Path(self.repo).name}.comments", "logs", "hooks.unittest")
@@ -354,7 +367,7 @@ class MergeToMain(FakeDotnet):
     def test_a_box_over_its_budget_fails_the_run_once_the_switch_is_on_and_the_wall_time_reads_against_the_merge_budget(self):
         self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
         run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
+        self.assertIn("    5.1 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.1 s\n", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
         self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
         self.assertEqual(run.returncode, 1)

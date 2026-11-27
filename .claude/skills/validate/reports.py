@@ -29,26 +29,35 @@ class Result(NamedTuple):
 
 
 def in_trx(text: str) -> list[Result]:
-    """Time runs from the result's start or the assembly's first result, whichever is later: the
-    warm-up blocks every thread. So the first result is charged nothing, and fixture setup is in none."""
+    """Time runs from the result's start or the assembly's first result, whichever is later: the warm-up
+    blocks every thread, so fixture setup is in none. A run one test at a time blocks none, so each result
+    is charged its whole duration."""
     run = ET.fromstring(text)
     elements = list(run.iterfind('.//t:UnitTestResult', TRX))
     projects = {test.attrib['id']: PureWindowsPath(next(test.iterfind('t:TestMethod', TRX)).attrib['codeBase']).stem
                 for test in run.iterfind('.//t:UnitTest', TRX)}
-    ends = [datetime.fromisoformat(element.attrib['endTime']) if 'endTime' in element.attrib else None
-            for element in elements]
-    warmed = min((end for end in ends if end), default=None)
 
-    def seconds(result: ET.Element, end: datetime | None) -> float | None:
-        if end is None or warmed is None:
+    def span(result: ET.Element) -> tuple[datetime, datetime] | None:
+        if 'endTime' not in result.attrib:
             return None
+        end = datetime.fromisoformat(result.attrib['endTime'])
         hours, minutes, secs = result.get('duration', '0:0:0').split(':')
-        start = end - timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs))
-        return (end - max(start, warmed)).total_seconds()
+        return end - timedelta(hours=int(hours), minutes=int(minutes), seconds=float(secs)), end
+
+    spans = [span(element) for element in elements]
+    timed = [times for times in spans if times]
+    warmed = min((end for _, end in timed), default=None)
+    blocking = warmed is not None and sum(start < warmed for start, _ in timed) > 1
+
+    def seconds(times: tuple[datetime, datetime] | None) -> float | None:
+        if times is None:
+            return None
+        start, end = times
+        return (end - (max(start, warmed) if blocking and warmed else start)).total_seconds()
 
     return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
-                   seconds(result, end), projects[result.attrib['testId']])
-            for result, end in zip(elements, ends)]
+                   seconds(times), projects[result.attrib['testId']])
+            for result, times in zip(elements, spans)]
 
 
 def frontend_box(path: str) -> str:

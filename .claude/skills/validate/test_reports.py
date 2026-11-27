@@ -18,6 +18,10 @@ class Readers(unittest.TestCase):
             [Result('A.First', RAN, 0, 'A.Tests'), Result('A.Blocked', RAN, 0.1, 'A.Tests'), Result('A.Slow', RAN, 3, 'A.Tests'),
              Result('A.Skipped(x: 1)', SKIPPED, None, 'A.Tests')])
 
+    def test_a_trx_run_one_test_at_a_time_charges_each_result_its_whole_duration(self) -> None:
+        self.assertEqual([result.seconds for result in reports.in_trx(fx.trx(
+            fx.trx_result('A.First', 3, 3), fx.trx_result('A.Second', 5, 2), fx.trx_result('A.Third', 5.5, 0.5)))], [3, 2, 0.5])
+
     def test_a_trx_results_box_is_the_test_project_whose_assembly_ran_it(self) -> None:
         self.assertEqual(
             [result.box for result in reports.in_trx(fx.trx(

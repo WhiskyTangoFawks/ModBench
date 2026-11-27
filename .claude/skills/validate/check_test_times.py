@@ -32,24 +32,28 @@ def approval_of(name: str, approved: dict[str, str]) -> str | None:
 
 
 def lapsed(results: list[reports.Result], approved: dict[str, str]) -> list[tuple[str, float]]:
-    """Each approval whose tests ran, all under the ceiling, with its slowest test's time."""
+    """Each approval whose tests ran, all under the ceiling, with its slowest test's time, slowest first."""
     slowest: dict[str, float] = {}
     for result in results:
         if result.seconds is not None and (key := approval_of(result.name, approved)) is not None:
             slowest[key] = max(slowest.get(key, 0), result.seconds)
-    return [(key, seconds) for key, seconds in slowest.items() if seconds < CEILING_SECONDS]
+    return sorted(((key, seconds) for key, seconds in slowest.items() if seconds < CEILING_SECONDS), key=lambda lapse: -lapse[1])
 
 
-def report_ceiling(results: list[reports.Result], slow: list[tuple[str, float]], approved: dict[str, str]) -> int:
-    """The number of tests over the ceiling no approval names."""
-    unapproved = [(name, seconds) for name, seconds in slow
+def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> int:
+    """The number of tests over the ceiling no approval names. A test that ran again alone is judged on that run."""
+    again = {result.name for result in alone}
+    judged = [result for result in results if result.name not in again] + alone
+    unapproved = [(name, seconds) for name, seconds in slow_tests(judged)
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
-        print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING, NOT APPROVED')
-    lapses = lapsed(results, approved)
+        print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in again else ""}, NOT APPROVED')
+    lapses = lapsed(judged, approved)
     for name, seconds in lapses:
         print(f'{seconds:7.2f} s  {name}: APPROVAL LAPSED')
-    print(f'--- {len(unapproved)} TESTS OVER THE {CEILING_SECONDS:g} s CEILING NOT APPROVED, {len(lapses)} APPROVALS LAPSED ---')
+    ran_again = len({name for name, seconds in slow_tests(results) if seconds > CEILING_SECONDS and name in again})
+    print(f'--- {ran_again} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED, '
+          f'{len(lapses)} APPROVALS LAPSED ---')
     return len(unapproved)
 
 
@@ -94,7 +98,7 @@ def report_wall(elapsed: float, budget: float) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """The run is a budget file's key under [wall]: branch, merge or windows."""
-    directory, elapsed_argument, budgets_file, run = sys.argv[1:] if argv is None else argv
+    directory, elapsed_argument, budgets_file, run, *alone_directory = sys.argv[1:] if argv is None else argv
     elapsed = float(elapsed_argument)
     budgets = tomllib.loads(Path(budgets_file).read_text())
     results = reports.results(Path(directory))
@@ -107,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
         return int(report_wall(elapsed, budgets['wall'][run]) and WINDOWS_FAILS_THE_RUN)
-    failing = (report_ceiling(results, slow, budgets.get('approved', {}))
+    alone = [result for folder in alone_directory for result in reports.results(Path(folder))]
+    failing = (report_ceiling(results, alone, budgets.get('approved', {}))
                + report_budgets(times, budgets['boxes'], budgets['other']))
     report_wall(elapsed, budgets['wall'][run])
     return int(FAILS_THE_RUN and bool(failing))

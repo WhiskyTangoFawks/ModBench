@@ -84,8 +84,8 @@ fi
 # is not in it.
 REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
 $HOLDS_SLOT || REPORTS=$REPORTS.comments
-SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
-{ rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
+SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit ALONE=$REPORTS.alone
+{ rm -rf "$REPORTS" "$ALONE" && mkdir -p "$SKIP_LOGS"; } || exit 1
 RUN=branch
 ! $MERGE_TO_MAIN || RUN=merge
 SECONDS=0
@@ -230,9 +230,18 @@ if $MERGE_TO_MAIN; then
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
+# The ceiling holds a test slow on its own, so each test over it under the gates' load runs again alone.
+ALONE_ARGS=()
+if $HOLDS_SLOT; then
+  echo "=== Tests over 1 s, again alone ==="
+  python3 "$ROOT/.claude/skills/validate/run_alone.py" "$ROOT" "$REPORTS" "$ALONE" \
+  || { echo "--- ALONE RUN FAILED ---"; FAILED=true; }
+  ALONE_ARGS=("$ALONE")
+fi
+
 echo "=== Test times and budget ==="
 python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" \
-  "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" \
+  "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" "${ALONE_ARGS[@]}" \
   || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
 
 if $HOLDS_SLOT; then
