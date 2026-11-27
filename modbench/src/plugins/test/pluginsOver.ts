@@ -59,8 +59,10 @@ export function pluginsOver({
     return reporter;
   };
   const output: string[] = [];
+  let revealed = 0;
   const channel = {
-    error: (line: string) => { output.push(line); }, info: (line: string) => { output.push(line); }, warn: (line: string) => { output.push(line); }, show: () => undefined,
+    error: (line: string) => { output.push(line); }, info: (line: string) => { output.push(line); }, warn: (line: string) => { output.push(line); },
+    show: () => { revealed += 1; },
   };
   const plugins = createPlugins({
     client, facts: instance, channel, reporterFor, registerRepositories: () => Promise.resolve(), ask: scriptedDialog(),
@@ -77,7 +79,7 @@ export function pluginsOver({
     return (name: string, origin = 'ModA') => shown.get(pluginAddressKey({ name, origin }));
   };
   return {
-    client, instance, plugins, shown, reporters, reporter: reporterFor, output, view, rows, item, pluginRows,
+    client, instance, plugins, shown, reporters, reporter: reporterFor, output, revealed: () => revealed, view, rows, item, pluginRows,
     dispose: () => { shown.dispose(); plugins.dispose(); },
   };
 }
