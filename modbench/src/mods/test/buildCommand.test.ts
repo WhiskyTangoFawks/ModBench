@@ -112,7 +112,7 @@ describe('modbench.mod.build', () => {
   });
 
   it('names a plugin no mod provides before a mod source commands refuse', async () => {
-    const { handler, reporter, row: modRow, builds } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
+    const { handler, reporter, row: modRow } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
     const rows = [await modRow('ModA'), await modRow('ModC'), row(LOOSE)];
 
     await handler(rows[0], rows);

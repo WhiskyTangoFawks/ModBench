@@ -27,8 +27,7 @@ async function build(definition: vscode.TaskDefinition, answered: BuildAnswer) {
     sourceCommands: { build: (mods, everySource) => { builds.push(everySource === true ? 'every source' : mods); return Promise.resolve(answered); } },
   });
   const provider = present(seen.taskProviders.get(DEFINITION.type), 'the build task provider');
-  const task = present(await provider.resolveTask(new vscode.Task(definition, vscode.TaskScope.Workspace, 'Build', 'modbench'), new FakeCancellationToken()), 'the build task');
-  const { execution } = task;
+  const execution = (await provider.resolveTask(new vscode.Task(definition, vscode.TaskScope.Workspace, 'Build', 'modbench'), new FakeCancellationToken()))?.execution;
   if (!startsAPseudoterminal(execution)) throw new Error('the build task runs no pseudoterminal');
   const terminal = await execution.start();
   let written = '';
