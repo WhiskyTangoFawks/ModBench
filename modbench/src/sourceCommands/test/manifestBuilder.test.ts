@@ -1,254 +1,243 @@
-import { describe, expect, it } from 'vitest';
-import type { InstallationFile } from '../../instanceAdapter/instanceAdapter';
-import type { Manifest, NexusFile } from '../../manifestAdapter/manifestAdapter';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, describedBy, type GameHeld, type HashedModFile } from '../manifestBuilder';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { FileRead, FoundGameFolder, GameFileTaken, GamePlace, InstallationFile } from '../../instanceAdapter/instanceAdapter';
+import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
+import { updateManifest } from '../updateManifest';
 
-const NEXUS: NexusFile = { game: 'fallout4', mod: 1, file: 2 };
-const onNexus = (page: string): NexusFile | undefined => (page === 'nexus:1' ? NEXUS : undefined);
+const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
+const NEXUS_PAGE = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
+const NEXUS = { game: 'fallout4', mod: 1, file: 2 };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };
+
+const hashOf = (tag: string): string => `${tag.replace(/[^A-Za-z0-9]/g, '').padEnd(11, 'A')}=`;
+const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
 
 const download = (name: string, entries: Record<string, string>, over: Partial<InstallationFile> = {}): InstallationFile =>
-  ({ path: `/downloads/${name}`, size: 10, hash: `hash of ${name}`, entries: Object.entries(entries).map(([path, hash]) => ({ path, hash })), ...over });
+  ({ path: `/downloads/${name}`, size: 10, hash: hashOf(name), entries: Object.entries(entries).map(([path, hash]) => ({ path, hash: hashOf(hash) })), ...over });
 
-const mod = (files: Record<string, string>): HashedModFile[] => Object.entries(files).map(([path, hash]) => ({ path, hash }));
+interface Game { readonly place: GamePlace; readonly files: readonly GameFileTaken[] }
 
-const place = (files: Record<string, string>, over: Partial<GameHeld> = {}, pathsInFolder: Record<string, string> = {}): GameHeld =>
-  ({ files: Object.entries(files).map(([path, hash]) => ({ root: '/game', path, hash, pathInFolder: pathsInFolder[path] ?? path })), depots: [], ...over });
+const place = (files: Record<string, string>, over: Partial<GamePlace> = {}, pathsInFolder: Record<string, string> = {}): Game => ({
+  place: { root: '/game', depots: [], depotProblems: [], ...over },
+  files: Object.entries(files).map(([path, hash]) => ({ root: '/game', path, hash: hashOf(hash), pathInFolder: pathsInFolder[path] ?? path })),
+});
 
-const built = (
-  files: Record<string, string>, sources: { installationFile?: InstallationFile; game?: GameHeld; downloads?: InstallationFile[] } = {}, held?: Manifest, exclude: string[] = [],
-) => buildManifest(
-  {
-    downloadedFiles: downloadedFilesOf(sources.downloads ?? [], onNexus), ...sources.installationFile ? { installationFile: downloadedFileOf(sources.installationFile, onNexus) } : {},
-    ...sources.game ? { game: sources.game } : {},
-  },
-  mod(files), exclude, held);
+const holding = (files: Record<string, string>): Manifest['files'] => new Map(Object.entries(files).map(([path, hash]) => [path, hashOf(hash)]));
+
+let modsDir: string;
+beforeEach(async () => { modsDir = await mkdtemp(join(tmpdir(), 'manifestBuilder-')); });
+afterEach(() => rm(modsDir, { recursive: true, force: true }));
+
+async function built(
+  files: Record<string, string>, { installationFile, game, downloads = [] }: { installationFile?: InstallationFile; game?: Game; downloads?: InstallationFile[] } = {},
+  held?: Manifest, exclude: string[] = [],
+) {
+  const folder = join(modsDir, 'ModA');
+  await mkdir(folder, { recursive: true });
+  if (held !== undefined) await writeManifestIn(folder, held);
+  const onDisk = Object.entries(files).map(([path, hash]) => [exclude.includes(path) ? `${path}.mohidden` : path, hash] as const);
+  const fake = fakeInstanceAdapter(readingFixture({ gameFolder: FOUND, modFolders: modFoldersIn(modsDir, 'ModA') }), {
+    folderFiles: new Map([[folder, onDisk.map(([path]) => path)]]),
+    hashes: new Map(onDisk.map(([path, hash]) => [join(folder, path), { size: 1, hash: hashOf(hash) }])),
+    installations: new Map(installationFile === undefined ? [] : [['ModA', read(installationFile)]]),
+    downloadedFilesHashed: { files: [...downloads, ...installationFile === undefined ? [] : [installationFile]], notes: [] },
+    ...game === undefined ? {} : { place: game.place, gameFilesTaken: new Map([['ModA', read({ gameFiles: game.files, notes: [] })]]) },
+  });
+  const result = await updateManifest({ adapter: fake.adapter }, ['ModA'], {}, false, []);
+  const recorded = await manifestIn(folder);
+  if (recorded === undefined || 'refused' in recorded) throw new Error(`no manifest was recorded: ${JSON.stringify(result.refused)}`);
+  const [landed] = result.landed;
+  return { manifest: recorded.manifest, notInPackage: landed?.notInPackage, otherBytes: landed?.otherBytes };
+}
 
 const namesOf = (manifest: Manifest): string[] => manifest.packages.map((pkg) => ('name' in pkg ? pkg.name : pkg.kind));
 
 describe('a mod\'s manifest from its files', () => {
-  it('takes a new file from a package with a host before one without', () => {
-    const { sources } = built({ 'a.nif': 'HA' }, {
-      installationFile: download('Own.7z', { 'a.nif': 'HA' }), downloads: [download('Hosted.7z', { 'a.nif': 'HA' }, { page: 'nexus:1' })],
+  it('takes a new file from a package with a host before one without', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, {
+      installationFile: download('Own.7z', { 'a.nif': 'HA' }), downloads: [download('Hosted.7z', { 'a.nif': 'HA' }, { page: NEXUS_PAGE })],
     });
 
-    expect(sources.get('a.nif')?.installationFile).toBe('Hosted.7z');
+    expect(namesOf(manifest)).toEqual(['Hosted.7z', 'Own.7z']);
   });
 
-  it('keeps the held package of a file whose bytes are unchanged before one with a host', () => {
+  it('keeps the held package of a file whose bytes are unchanged before one with a host', async () => {
     const own = download('Own.7z', { 'a.nif': 'HA' });
-    const { sources } = built({ 'a.nif': 'HA' }, { installationFile: own, downloads: [download('Hosted.7z', { 'a.nif': 'HA' }, { page: 'nexus:1' })] },
-      { packages: [downloadedFileOf(own, onNexus).package], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'HA']]) });
+    const { manifest } = await built({ 'a.nif': 'HA' }, { installationFile: own, downloads: [download('Hosted.7z', { 'a.nif': 'HA' }, { page: NEXUS_PAGE })] },
+      { ...EMPTY, packages: [{ kind: 'installationFile', name: 'Own.7z', size: 10, hash: hashOf('Own.7z') }], files: holding({ 'a.nif': 'HA' }) });
 
-    expect(sources.get('a.nif')?.installationFile).toBe('Own.7z');
+    expect(namesOf(manifest)).toEqual(['Own.7z']);
   });
 
   describe('when the held package of an unchanged file is missing from this machine', () => {
-    const gone = download('Gone.7z', { 'a.nif': 'HA' });
-    const held: Manifest = { packages: [downloadedFileOf(gone, onNexus).package], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'HA']]) };
+    const held: Manifest = { ...EMPTY, packages: [{ kind: 'installationFile', name: 'Gone.7z', size: 10, hash: hashOf('Gone.7z') }], files: holding({ 'a.nif': 'HA' }) };
 
-    it('keeps the held package and takes no game folder though the game holds the bytes', () => {
-      const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game' }) }, held);
+    it('keeps the held package and takes no game folder though the game holds the bytes', async () => {
+      const { manifest } = await built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160 }) }, held);
 
       expect(manifest.packages).toEqual(held.packages);
     });
 
-    it('takes a changed file from a newly added download, with no game folder', () => {
-      const added = download('Added.7z', { 'a.nif': 'HB' });
-      const { manifest, sources } = built({ 'a.nif': 'HB' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game' }), downloads: [added] }, held);
+    it('takes a changed file from a newly added download, with no game folder', async () => {
+      const { manifest } = await built({ 'a.nif': 'HB' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160 }), downloads: [download('Added.7z', { 'a.nif': 'HB' })] }, held);
 
-      expect([namesOf(manifest), sources.get('a.nif')?.installationFile]).toEqual([['Added.7z'], 'Added.7z']);
+      expect(namesOf(manifest)).toEqual(['Added.7z']);
     });
   });
 
-  it('names nothing for a folder of metadata alone', () => {
-    expect(built({}).manifest).toEqual({ packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() });
+  it('names nothing for a folder of metadata alone', async () => {
+    expect((await built({})).manifest).toEqual(EMPTY);
   });
 
-  it('names each file with its hash, the installation file with its host on Nexus, and the paths the folder excludes', () => {
-    const { manifest } = built({ 'a.nif': 'HA' }, { installationFile: download('Mod-1.7z', { 'a.nif': 'HA' }, { size: 7, page: 'nexus:1' }) }, undefined, ['a.nif']);
+  it('names each file with its hash, the installation file with its host on Nexus, and the paths the folder excludes', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, { installationFile: download('Mod-1.7z', { 'a.nif': 'HA' }, { size: 7, page: NEXUS_PAGE }) }, undefined, ['a.nif']);
 
     expect(manifest).toEqual({
-      packages: [{ kind: 'installationFile', name: 'Mod-1.7z', size: 7, hash: 'hash of Mod-1.7z', host: { nexus: NEXUS } }],
-      exclude: ['a.nif'], ignore: [], flags: new Map(), files: new Map([['a.nif', 'HA']]),
+      packages: [{ kind: 'installationFile', name: 'Mod-1.7z', size: 7, hash: hashOf('Mod-1.7z'), host: { nexus: NEXUS } }],
+      exclude: ['a.nif'], ignore: [], flags: new Map(), files: holding({ 'a.nif': 'HA' }),
     });
   });
 
-  it('names an installation file whose page names no file on Nexus with no host', () => {
-    expect(built({}, { installationFile: download('M.7z', {}, { page: 'nexus:mod-only' }) }).manifest.packages).toEqual([
-      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
-    ]);
+  it.each<[string, Partial<InstallationFile>, object]>([
+    ['whose page names no file on Nexus with no host', { page: 'https://www.nexusmods.com/fallout4/mods/1' }, {}],
+    ['with its direct URL as its host when its page names no Nexus file', { directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' },
+      { host: { url: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' } }],
+    ['with the Nexus file as its host when its metadata names both a Nexus file and a direct URL', { page: NEXUS_PAGE, directUrl: 'https://example.com/M.7z' }, { host: { nexus: NEXUS } }],
+    ['with no host for a direct URL the schema refuses', { directUrl: 'not a url' }, {}],
+    ['with a direct URL of any scheme as its host, as the schema takes any URI', { directUrl: 'ftp://example.com/M.7z' }, { host: { url: 'ftp://example.com/M.7z' } }],
+    ['with the version the downloaded file\'s metadata gives', { version: '1.2' }, { packageVersion: '1.2' }],
+    ['with no version when the downloaded file\'s metadata gives none', {}, {}],
+    ['whose Nexus file has file ID 0 with no host', { page: 'https://www.nexusmods.com/fallout4/mods/4?tab=files&file_id=0' }, {}],
+    ['whose Nexus file has mod ID 0 with no host', { page: 'https://www.nexusmods.com/fallout4/mods/0?tab=files&file_id=2' }, {}],
+  ])('names an installation file %s', async (_case, metadata, named) => {
+    const { manifest } = await built({}, { installationFile: download('M.7z', {}, metadata) });
+
+    expect(manifest.packages).toEqual([{ kind: 'installationFile', name: 'M.7z', size: 10, hash: hashOf('M.7z'), ...named }]);
   });
 
-  it('names an installation file\'s direct URL as its host when its page names no Nexus file', () => {
-    expect(built({}, { installationFile: download('F4SE.7z', {}, { directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' }) }).manifest.packages).toEqual([
-      { kind: 'installationFile', name: 'F4SE.7z', size: 10, hash: 'hash of F4SE.7z', host: { url: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' } },
-    ]);
+  it.each<[string, Partial<InstallationFile>, object]>([
+    ['none', {}, {}],
+    ['its own', { version: '2.0' }, { packageVersion: '2.0' }],
+  ])('takes the version from the downloaded file alone, never the mod\'s, when the downloaded file gives %s', async (_case, downloaded, named) => {
+    const fake = fakeInstanceAdapter(readingFixture({ gameFolder: FOUND, modFolders: modFoldersIn(modsDir, 'ModA') }), {
+      installations: new Map([['ModA', read(download('F4SE.7z', {}, { version: '1.0' }))]]),
+      downloadedFilesHashed: { files: [download('F4SE.7z', {}, downloaded)], notes: [] },
+    });
+    await mkdir(join(modsDir, 'ModA'));
+
+    await updateManifest({ adapter: fake.adapter }, ['ModA'], {}, false, []);
+
+    expect(await manifestIn(join(modsDir, 'ModA'))).toEqual({
+      manifest: { ...EMPTY, packages: [{ kind: 'installationFile', name: 'F4SE.7z', size: 10, hash: hashOf('F4SE.7z'), ...named }] },
+    });
   });
 
-  it('names the Nexus file as the host of a file whose metadata names both a Nexus file and a direct URL', () => {
-    expect(built({}, { installationFile: download('M.7z', {}, { page: 'nexus:1', directUrl: 'https://example.com/M.7z' }) }).manifest.packages).toEqual([
-      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z', host: { nexus: NEXUS } },
-    ]);
+  it('names the installation file though it gives no file, as the mod was installed from it', async () => {
+    expect(namesOf((await built({ 'a.nif': 'HA' }, { installationFile: download('M.7z', {}) })).manifest)).toEqual(['M.7z']);
   });
 
-  it('names a direct URL the schema refuses with no host', () => {
-    expect(built({}, { installationFile: download('M.7z', {}, { directUrl: 'not a url' }) }).manifest.packages).toEqual([
-      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
-    ]);
+  it('takes a file from wherever its package holds its bytes, as a FOMOD install moves files', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, { installationFile: download('Own.7z', {}), downloads: [download('Other.7z', { 'Data/a.nif': 'HA' })] });
+
+    expect(namesOf(manifest)).toEqual(['Other.7z', 'Own.7z']);
   });
 
-  it('names a direct URL of any scheme as the host, as the schema takes any URI', () => {
-    expect(built({}, { installationFile: download('M.7z', {}, { directUrl: 'ftp://example.com/M.7z' }) }).manifest.packages).toEqual([
-      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z', host: { url: 'ftp://example.com/M.7z' } },
-    ]);
-  });
+  it('names each file no package holds the bytes of, apart from those a package holds a file of its name of (Status, story 5)', async () => {
+    const recorded = await built({ 'meshes/A.nif': 'HX', 'z.txt': 'HZ', 'b.nif': 'HB' }, { installationFile: download('M.7z', { 'Meshes/a.nif': 'HA', 'b.nif': 'HB' }) });
 
-  it('names the version the downloaded file\'s metadata gives, and none when it gives none', () => {
-    const versioned = downloadedFileOf(download('M.7z', {}, { version: '1.2' }), () => undefined).package;
-    const unversioned = downloadedFileOf(download('M.7z', {}, {}), () => undefined).package;
-    expect([versioned, unversioned]).toEqual([
-      { kind: 'installationFile', name: 'M.7z', packageVersion: '1.2', size: 10, hash: 'hash of M.7z' },
-      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
-    ]);
-  });
-
-  it('takes the version from the downloaded file alone, never the mod\'s', () => {
-    const modsFile = download('F4SE.7z', {}, { version: '1.0' });
-    expect(describedBy(modsFile, download('F4SE.7z', {}, {})).version).toBeUndefined();
-    expect(describedBy(modsFile, download('F4SE.7z', {}, { version: '2.0' })).version).toBe('2.0');
-  });
-
-  it('takes the host from the downloaded file alone, never the mod\'s page', () => {
-    const modsFile = download('F4SE.7z', {}, { page: 'nexus:1' });
-    const downloaded = download('F4SE.7z', {}, { directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' });
-    expect(describedBy(modsFile, downloaded)).toEqual({ ...modsFile, page: undefined, directUrl: downloaded.directUrl });
-  });
-
-  it.each([
-    ['file ID 0', { game: 'fallout4', mod: 4, file: 0 }],
-    ['mod ID 0', { game: 'fallout4', mod: 0, file: 2 }],
-    ['an ID that is no whole number', { game: 'fallout4', mod: 1, file: Number.NaN }],
-  ])('names an installation file whose Nexus file has %s with no host', (_, nexus) => {
-    expect(downloadedFileOf(download('M.7z', {}, { page: 'any' }), () => nexus).package).toEqual(
-      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
-    );
-  });
-
-  it('names the installation file though it gives no file, as the mod was installed from it', () => {
-    expect(namesOf(built({ 'a.nif': 'HA' }, { installationFile: download('M.7z', {}) }).manifest)).toEqual(['M.7z']);
-  });
-
-  it('takes a file from wherever its package holds its bytes, as a FOMOD install moves files', () => {
-    expect(built({ 'a.nif': 'HA' }, { installationFile: download('M.7z', { 'Data/a.nif': 'HA' }) }).sources.get('a.nif')).toEqual({ installationFile: 'M.7z', packagePath: 'Data/a.nif', hash: 'HA' });
-  });
-
-  it('takes a file at its own path before another path holding the same bytes', () => {
-    expect(built({ 'b.nif': 'HA' }, { installationFile: download('M.7z', { 'a.nif': 'HA', 'b.nif': 'HA' }) }).sources.get('b.nif')).toEqual({ installationFile: 'M.7z', packagePath: 'b.nif', hash: 'HA' });
-  });
-
-  it('names each file no package holds the bytes of, apart from those a package holds a file of its name of (Status, story 5)', () => {
-    const recorded = built({ 'meshes/A.nif': 'HX', 'z.txt': 'HZ', 'b.nif': 'HB' }, { installationFile: download('M.7z', { 'Meshes/a.nif': 'HA', 'b.nif': 'HB' }) });
-
-    expect([recorded.notInPackage, recorded.otherBytes, recorded.manifest.files.get('z.txt')]).toEqual([['z.txt'], ['meshes/A.nif'], 'HZ']);
+    expect([recorded.notInPackage, recorded.otherBytes, recorded.manifest.files.get('z.txt')]).toEqual([['z.txt'], ['meshes/A.nif'], hashOf('HZ')]);
   });
 });
 
 describe('a mod\'s files that the installation file lacks', () => {
-  it('are taken from another downloaded file holding their bytes, naming it as a package after the installation file', () => {
-    const { manifest } = built({ 'a.nif': 'HA', 'b.nif': 'HB' }, { installationFile: download('Own.7z', { 'a.nif': 'HA' }), downloads: [download('Other.7z', { 'b.nif': 'HB' })] });
+  it('are taken from a second download when the installation file holds their path with other bytes', async () => {
+    const recorded = await built({ 'a.nif': 'HA' }, { installationFile: download('Own.7z', { 'a.nif': 'HX' }), downloads: [download('Other.7z', { 'a.nif': 'HA' })] });
 
-    expect(namesOf(manifest)).toEqual(['Own.7z', 'Other.7z']);
+    expect([namesOf(recorded.manifest), recorded.otherBytes]).toEqual([['Other.7z', 'Own.7z'], []]);
   });
 
-  it('are taken from a second download when the installation file holds their path with other bytes', () => {
-    const recorded = built({ 'a.nif': 'HA' }, { installationFile: download('Own.7z', { 'a.nif': 'HX' }), downloads: [download('Other.7z', { 'a.nif': 'HA' })] });
-
-    expect([namesOf(recorded.manifest), recorded.otherBytes]).toEqual([['Own.7z', 'Other.7z'], []]);
-  });
-
-  it('are taken, with no installation file, from each downloaded file in the order they first serve, preferring one already a package', () => {
-    const { manifest } = built({ 'a.nif': 'H', 'b.nif': 'H2' }, { downloads: [download('Z.7z', { 'a.nif': 'H', 'b.nif': 'H2' }), download('A.7z', { 'a.nif': 'H' })] });
+  it('are taken, with no installation file, from each downloaded file in the order they first serve, preferring one already a package', async () => {
+    const { manifest } = await built({ 'a.nif': 'H', 'b.nif': 'H2' }, { downloads: [download('Z.7z', { 'a.nif': 'H', 'b.nif': 'H2' }), download('A.7z', { 'a.nif': 'H' })] });
 
     expect(namesOf(manifest)).toEqual(['A.7z', 'Z.7z']);
   });
 
-  it('are taken from the first by hash of two downloaded files of one name', () => {
-    const { manifest } = built({ 'a.nif': 'HA' }, { downloads: [download('M.7z', { 'a.nif': 'HX' }, { hash: 'zzz' }), download('M.7z', { 'a.nif': 'HA' }, { hash: 'aaa' })] });
+  it('are taken from the first by hash of two downloaded files of one name', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, {
+      downloads: [download('M.7z', { 'a.nif': 'HX' }, { hash: hashOf('zzz') }), download('M.7z', { 'a.nif': 'HA' }, { hash: hashOf('aaa') })],
+    });
 
-    expect(manifest.packages).toEqual([expect.objectContaining({ hash: 'aaa' })]);
+    expect(manifest.packages).toEqual([expect.objectContaining({ hash: hashOf('aaa') })]);
   });
 
-  it('are taken from the game folder before a downloaded file', () => {
-    expect(namesOf(built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }), downloads: [download('Other.7z', { 'a.nif': 'HA' })] }).manifest)).toEqual(['gameFolder']);
+  it('are taken from the game folder before a downloaded file', async () => {
+    expect(namesOf((await built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }), downloads: [download('Other.7z', { 'a.nif': 'HA' })] })).manifest)).toEqual(['gameFolder']);
   });
 });
 
 describe('a mod\'s files that the game folder holds', () => {
-  it('are named by the game folder, from the game file handed for their path though another holds the same bytes', () => {
-    const recorded = built({ 'a.nif': 'HA' }, { game: place({ 'Data/zz.nif': 'HA', 'Data/a.nif': 'HA' }, {}, { 'Data/zz.nif': 'zz.nif', 'Data/a.nif': 'a.nif' }) });
+  it('are named by the game folder though two game files hold their bytes', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, { game: place({ 'Data/zz.nif': 'HA', 'Data/a.nif': 'HA' }, {}, { 'Data/zz.nif': 'zz.nif', 'Data/a.nif': 'a.nif' }) });
 
-    expect([recorded.manifest.packages, recorded.sources.get('a.nif')]).toEqual([[{ kind: 'gameFolder' }], { packagePath: 'Data/a.nif', hash: 'HA' }]);
+    expect(manifest.packages).toEqual([{ kind: 'gameFolder' }]);
   });
 
-  it('name no package when the game holds none of the mod\'s files', () => {
-    expect(built({ 'a.nif': 'HA' }, { game: place({ 'x.nif': 'HX' }) }).manifest.packages).toEqual([]);
+  it('name no package when the game holds none of the mod\'s files', async () => {
+    expect((await built({ 'a.nif': 'HA' }, { game: place({ 'x.nif': 'HX' }) })).manifest.packages).toEqual([]);
   });
 
-  it('are with other bytes when the game file of their name has other bytes and another file is taken', () => {
-    expect(built({ 'a.nif': 'HX', 'c.nif': 'HC' }, { game: place({ 'a.nif': 'HA', 'c.nif': 'HC' }) }).otherBytes).toEqual(['a.nif']);
-  });
-
-  it('name Steam as the game folder\'s host, with its depots', () => {
-    const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game', depots: [{ id: '1', version: 'a' }] }) });
-
-    expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 1: 'a' } } } }]);
+  it('are with other bytes when the game file of their name has other bytes and another file is taken', async () => {
+    expect((await built({ 'a.nif': 'HX', 'c.nif': 'HC' }, { game: place({ 'a.nif': 'HA', 'c.nif': 'HC' }) })).otherBytes).toEqual(['a.nif']);
   });
 
   describe('when the Steam install is not the game folder', () => {
-    const heldAt = (root: string, files: Record<string, string>): GameHeld['files'] => Object.entries(files).map(([path, hash]) => ({ root, path, hash }));
-    const steam = { steamApp: 377160, steamAt: '/steam', depots: [{ id: '1', version: 'a' }] };
-    const named = { kind: 'gameFolder', host: { steam: { app: 377160, depots: { 1: 'a' } } } };
+    const heldAt = (root: string, files: Record<string, string>): GameFileTaken[] =>
+      Object.entries(files).map(([path, hash]) => ({ root, path, hash: hashOf(hash), pathInFolder: path }));
+    const steam: GamePlace = { root: '/game', steamRoot: '/steam', steamApp: 377160, depots: [{ id: '1', version: '11' }], depotProblems: [] };
+    const named = { kind: 'gameFolder', host: { steam: { app: 377160, depots: { 1: '11' } } } };
 
-    it('name Steam as the host of files the Steam install holds byte for byte, though the game folder holds the file too', () => {
-      const game: GameHeld = { ...steam, files: [...heldAt('/game', { 'a.nif': 'HA' }), ...heldAt('/steam', { 'a.nif': 'HA' })] };
+    it('name Steam as the host of files the Steam install holds byte for byte, though the game folder holds the file too', async () => {
+      const game: Game = { place: steam, files: [...heldAt('/game', { 'a.nif': 'HA' }), ...heldAt('/steam', { 'a.nif': 'HA' })] };
 
-      expect(built({ 'a.nif': 'HA' }, { game }).manifest.packages).toEqual([named]);
+      expect((await built({ 'a.nif': 'HA' }, { game })).manifest.packages).toEqual([named]);
     });
 
-    it('name no host when the game folder alone holds the bytes of a file taken', () => {
-      const game: GameHeld = { ...steam, files: [...heldAt('/game', { 'a.nif': 'HA', 'b.nif': 'HB' }), ...heldAt('/steam', { 'a.nif': 'HA', 'b.nif': 'HX' })] };
+    it('name no host when the game folder alone holds the bytes of a file taken', async () => {
+      const game: Game = { place: steam, files: [...heldAt('/game', { 'a.nif': 'HA', 'b.nif': 'HB' }), ...heldAt('/steam', { 'a.nif': 'HA', 'b.nif': 'HX' })] };
 
-      expect(built({ 'a.nif': 'HA', 'b.nif': 'HB' }, { game }).manifest.packages).toEqual([{ kind: 'gameFolder' }]);
+      expect((await built({ 'a.nif': 'HA', 'b.nif': 'HB' }, { game })).manifest.packages).toEqual([{ kind: 'gameFolder' }]);
     });
 
-    it('are with other bytes when the Steam install holds a file of their name with other bytes', () => {
-      const game: GameHeld = { ...steam, files: heldAt('/steam', { 'a.nif': 'HX', 'c.nif': 'HC' }) };
+    it('are with other bytes when the Steam install holds a file of their name with other bytes', async () => {
+      const game: Game = { place: steam, files: heldAt('/steam', { 'a.nif': 'HX', 'c.nif': 'HC' }) };
 
-      expect(built({ 'a.nif': 'HA', 'c.nif': 'HC' }, { game }).otherBytes).toEqual(['a.nif']);
+      expect((await built({ 'a.nif': 'HA', 'c.nif': 'HC' }, { game })).otherBytes).toEqual(['a.nif']);
     });
   });
 
   describe('when the held manifest names a host for the game folder', () => {
-    const heldHost = { steam: { app: 377160, depots: { 1: 'v' } } };
-    const heldGame = (files: Record<string, string>): Manifest => ({ packages: [{ kind: 'gameFolder', host: heldHost }], exclude: [], ignore: [], flags: new Map(), files: new Map(Object.entries(files)) });
+    const heldHost = { steam: { app: 377160, depots: { 1: '12' } } };
+    const heldGame = (files: Record<string, string>): Manifest => ({ ...EMPTY, packages: [{ kind: 'gameFolder', host: heldHost }], files: holding(files) });
 
-    it('keeps it while the files taken keep their bytes, though the Steam install records other depots', () => {
-      const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game', depots: [{ id: '1', version: 'w' }] }) }, heldGame({ 'a.nif': 'HA' }));
+    it('keeps it while the files taken keep their bytes, though the Steam install records other depots', async () => {
+      const { manifest } = await built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, depots: [{ id: '1', version: '13' }] }) }, heldGame({ 'a.nif': 'HA' }));
 
       expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: heldHost }]);
     });
 
-    it('drops it when the game folder is no Steam install, whether or not the files taken changed', () => {
-      const { manifest: unchanged } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }) }, heldGame({ 'a.nif': 'HA' }));
-      const { manifest: changed } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }) }, heldGame({ 'a.nif': 'HX' }));
+    it.each([['unchanged', 'HA'], ['changed', 'HX']])('drops it when the game folder is no Steam install, the files taken %s', async (_case, heldHash) => {
+      const { manifest } = await built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }) }, heldGame({ 'a.nif': heldHash }));
 
-      expect([unchanged.packages, changed.packages]).toEqual([[{ kind: 'gameFolder' }], [{ kind: 'gameFolder' }]]);
+      expect(manifest.packages).toEqual([{ kind: 'gameFolder' }]);
     });
 
-    it('takes the store of the Steam install when the files taken changed', () => {
-      const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game', depots: [{ id: '2', version: 'w' }] }) }, heldGame({ 'a.nif': 'HX' }));
+    it('takes the store of the Steam install when the files taken changed', async () => {
+      const { manifest } = await built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, depots: [{ id: '2', version: '13' }] }) }, heldGame({ 'a.nif': 'HX' }));
 
-      expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 2: 'w' } } } }]);
+      expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 2: '13' } } } }]);
     });
   });
 });

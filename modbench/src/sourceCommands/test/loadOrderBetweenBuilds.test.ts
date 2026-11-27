@@ -1,4 +1,3 @@
-import type { LoadOrderSnapshot } from '../whyNotIndexed';
 import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -12,6 +11,8 @@ import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client/MEditClient';
 import { holdsLoadOrder } from '../../client/test/says';
 import { settled } from '../../test/eventually';
+
+type LoadOrderSnapshot = Parameters<typeof sourceCommands>[0]['loadOrderSnapshot'];
 
 let root: string;
 let SOURCES: Record<string, string>;
