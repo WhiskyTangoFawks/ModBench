@@ -5,7 +5,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide ru
 ```bash
 # one box while iterating
 npx tsc -b src/<box>
-npx vitest run src/<box>   # skips the cross-cutting scans in src/test/; npm run test:unit runs them
+npx vitest run src/<box>   # skips the cross-cutting scans; npm run test:unit runs them
 ```
 
 - The instance value is the Instance loader's in-memory read of the instance and the game's Data/ folder.
