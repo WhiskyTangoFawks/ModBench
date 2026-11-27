@@ -82,6 +82,7 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   let owed: OwedSignal | undefined;
   let signalTimer: ReturnType<typeof setTimeout> | undefined;
   let signalling = false;
+  let closed = false;
 
   const drop = (outcome: LoadOrderOutcome): void => {
     const dropped = waiting;
@@ -134,7 +135,7 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
   // mEdit to run rather than being sent into a backend that is not there yet.
   const advance = (): void => {
-    if (wire.status() !== 'running') return;
+    if (closed || wire.status() !== 'running') return;
     if (!inFlight && waiting) {
       const next = waiting;
       waiting = undefined;
@@ -181,7 +182,8 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
       owed.sweepStarted(Promise.resolve());
       Object.assign(owed, awaitingSweep());
     },
-    holdsOne: () => waiting !== undefined,
+    /** Sends nothing more: the process is being taken down for good. */
+    close: (): void => { closed = true; },
     pending: () => waiting !== undefined || inFlight !== undefined || owed !== undefined || signalling,
     drop,
     pump,
@@ -254,6 +256,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     async stop() {
       launcher.stop();
       newestHanded = undefined;
+      slot.close();
       slot.abortInFlight();
       slot.drop(ABANDONED);
       slot.releaseSignalWaiters();

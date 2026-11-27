@@ -97,18 +97,19 @@ export function spawnedBackend(overrides: Partial<Backend> = {}, processes = bac
 type FakeMEditOptions = {
   routes?: readonly Route[];
   backend?: Partial<Backend>;
-  ignoresStdinClose?: boolean;
+  /** The processes the client spawns, which a test may wrap in a spawn of its own. */
+  processes?: ReturnType<typeof backendProcesses>;
   /** The attempts to open the notification stream, counted from 0, that are refused. */
   refusedOpens?: readonly number[];
 } & Partial<Omit<Deps, 'fetch' | 'backend'>>;
 
 /** A client over a spawned backend whose routes a test names, and whose notification streams it writes. */
-export function fakeMEdit({ routes = [], backend: overrides, ignoresStdinClose, refusedOpens = [], ...deps }: FakeMEditOptions = {}) {
+export function fakeMEdit({ routes = [], backend: overrides, processes = backendProcesses(), refusedOpens = [], ...deps }: FakeMEditOptions = {}) {
   const { streams, open } = notificationStreams();
   let attempts = 0;
   const openUnlessRefused = (request: Request): Promise<Response> =>
     (refusedOpens.includes(attempts++) ? Promise.reject(new Error('ECONNREFUSED')) : open(request));
-  const { backend, spawned } = spawnedBackend(overrides, backendProcesses({ ignoresStdinClose }));
+  const { backend, spawned } = spawnedBackend(overrides, processes);
   const fetch = routedFetch([...routes, ['/notifications/stream', openUnlessRefused], 
     ['/load-order/status', () => Promise.resolve(new Response(null, { status: 404 }))],
     ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
