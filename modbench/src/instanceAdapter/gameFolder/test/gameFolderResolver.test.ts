@@ -79,6 +79,12 @@ describe('the game folder', () => {
       expect(asked).toEqual([]);
     });
 
+    it('is the POSIX path of a Z:-drive game path though the machine answers as Windows, a path being spelled as the file system Modbench runs on spells it', async () => {
+      const root = await gameFolder();
+
+      expect(await resolved({ gamePath: `Z:${root.replaceAll('/', '\\')}`, machine: { platform: 'win32' } })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
+
     it("is in the Proton prefix's drive_c for a C:-drive game path", async () => {
       const base = await temp();
       const root = join(steamPrefixIn(base), 'drive_c', 'Games', 'Fallout4');

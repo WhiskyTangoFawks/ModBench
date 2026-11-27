@@ -48,6 +48,12 @@ describe('the downloads directory resolver', () => {
     expect(await downloadedFilesWith(winePath)).toEqual(resolved(real));
   });
 
+  onPosix.it('(Wine translates a drive letter only on Linux) normalizes a Z:-drive absolute path to its POSIX path though the machine answers as Windows, a path being spelled as the file system Modbench runs on spells it', async () => {
+    const real = join('/home', 'user', 'MyDownloads');
+
+    expect(await downloadedFilesWith(`Z:${real.replaceAll('/', '\\')}`, { machine: { platform: 'win32' } })).toEqual(resolved(real));
+  });
+
   onPosix.it("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
     const steam = await mkdtemp(join(tmpdir(), 'steam-'));
     onTestFinished(() => rm(steam, { recursive: true, force: true }));

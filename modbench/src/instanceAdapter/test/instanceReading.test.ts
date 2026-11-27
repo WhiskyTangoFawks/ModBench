@@ -37,6 +37,7 @@ import { adapterOver } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter, PluginsProvided } from '../instanceAdapter';
 import { settleWaitArmed } from '../../test/eventually';
 import { downloadsUnresolvable, gameOnDisk } from './instanceOnDisk';
+import { onPosix } from '../../test/platform';
 
 const INI = 'ModOrganizer.ini';
 
@@ -107,10 +108,11 @@ describe('the instance assembled from a manager\'s reading', () => {
     ].map((path) => join(path)));
   });
 
-  it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
+  onPosix.it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
     await mkdir(join(dir, 'mods', 'Unlisted', 'meta.ini'), { recursive: true });
+    await downloadsUnresolvable(dir);
 
-    await expect(adapterOver(dir, { machine: await downloadsUnresolvable(dir) }).reading()).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
+    await expect(adapterOver(dir).reading()).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
   });
 
   it.each<[string, (over: InstanceAdapter) => Promise<unknown>, unknown]>([
