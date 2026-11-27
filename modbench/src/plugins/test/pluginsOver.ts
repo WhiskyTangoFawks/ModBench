@@ -133,11 +133,11 @@ interface Reconcile extends Told { diagnoses?: PluginDiagnosisReport[] | ReadFai
 
 type IndexOfPlugin = Parameters<typeof loadFailuresOf>[0][number];
 
-/** Settles once every answer the fakes hold has landed. */
+/** Settles once the answers the fakes already hold have landed. */
 export const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 /** An answer the test lands when it chooses. */
-export function deferred<T>() {
+export function deferred<T = void>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
@@ -231,6 +231,12 @@ export function factsOver(shown: readonly Shown[], { masterlist, userlist, value
       if (item.contextValue === 'error') return { kind: 'error', message: typeof item.tooltip === 'string' ? item.tooltip : '' } as const;
       if (item.contextValue?.startsWith('recordType') === true) return { kind: 'records' } as const;
       throw new Error(`the row of ${name} expands into ${String(item.contextValue)}`);
+    },
+    /** Each row the view is asked to draw again from now on, or undefined for every row. */
+    redraws: () => {
+      const redrawn: unknown[] = [];
+      made.view().treeDataProvider.onDidChangeTreeData?.((row) => redrawn.push(row));
+      return redrawn;
     },
     /** The view's message line. */
     message: () => made.view().message,

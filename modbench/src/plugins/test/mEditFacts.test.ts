@@ -17,7 +17,6 @@ const REFUSED = { failed: 'refused', refusal: '503' } as const;
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
 const diagnosis = (text: string): PluginDiagnosisReport => ({ plugin: 'A.esp', origin: 'SomeMod', text });
 
-
 type Facts = ReturnType<typeof factsOver>;
 const compiled = async (facts: Facts, address = A) => (await facts.row(address.name, address.origin))?.context.includes('compiledPlugin');
 const factsAsked = (facts: Facts) => facts.client.calls.filter(({ method }) => method === 'getPlugins').map(({ args }) => args);
@@ -160,8 +159,7 @@ describe('the facts read again as mEdit\'s change event names plugins', () => {
     await facts.reconciled([held(), held(B)]);
     const answer = deferred<PluginMetadata[]>();
     facts.client.setQueryAnswerOnce('getPlugins', answer.promise);
-    const redrawn: unknown[] = [];
-    facts.view().treeDataProvider.onDidChangeTreeData?.((row) => redrawn.push(row));
+    const redrawn = facts.redraws();
 
     await facts.changed([held(), held(B)], [A]);
     await facts.changed([held(), held(B)], [B]);

@@ -16,7 +16,6 @@ const USERLIST = '/instance/userlist.yaml';
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
 const texts = (collection: string) => host.problems(collection).flatMap(([, shown]) => shown.map(({ message }) => message));
 
-
 function recordedReads(gates: Promise<void>[] = []) {
   const asked: { kind: string; path: string; trusted: boolean }[] = [];
   let trusted = false;
@@ -173,8 +172,7 @@ describe('judging again as the facts are re-read', () => {
     const facts = judging([A, B], { masterlist: READ_G });
     await facts.reconciled(reads(false));
     facts.asked.length = 0;
-    const redrawn: unknown[] = [];
-    facts.view().treeDataProvider.onDidChangeTreeData?.((row) => redrawn.push(row));
+    const redrawn = facts.redraws();
 
     await facts.changed([held({ isCompiledPlugin: true }), ...reads(false).slice(1)], [A]);
 
@@ -185,13 +183,23 @@ describe('judging again as the facts are re-read', () => {
   it('names the plugins asked about and the plugins whose judgement the re-read altered', async () => {
     const facts = judging([A, B]);
     await facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp', isMaster: true })]);
-    const redrawn: unknown[] = [];
-    facts.view().treeDataProvider.onDidChangeTreeData?.((row) => redrawn.push(row));
+    const redrawn = facts.redraws();
 
     await facts.changed([held({ isMaster: false })], [A]);
 
     const row = await facts.pluginRows();
     expect(new Set(redrawn)).toEqual(new Set([row('A.esp', 'SomeMod'), row('B.esp', 'SomeMod')]));
+  });
+
+  it('names only the plugins whose judgement the changed rules altered', async () => {
+    const facts = judging([A, B], { masterlist: READ_G });
+    await facts.reconciled(reads(false));
+    const redrawn = facts.redraws();
+
+    await facts.masterlistIs(READ_G.replace('    msg', '    req: [Missing.esp]\n    msg'));
+
+    const row = await facts.pluginRows();
+    expect(redrawn.filter((changed) => changed !== undefined)).toEqual([row('A.esp', 'SomeMod')]);
   });
 
   it('judges again from the reads it kept, trusting them, and checks each file at a reconcile', async () => {
@@ -238,29 +246,24 @@ describe('judging again as the rules change while a judgement is in flight', () 
   const SAYS_ON_G = "    msg: [{type: say, content: m, condition: 'readable(\"../G.exe\")'}]\n";
   const NO_RULES = `plugins:\n  - name: A.esp\n${SAYS_ON_G}`;
   const MISSING = `plugins:\n  - name: A.esp\n    req: [Missing.esp]\n${SAYS_ON_G}`;
-  const redrawsOf = (facts: ReturnType<typeof judging>) => {
-    const redrawn: unknown[] = [];
-    facts.view().treeDataProvider.onDidChangeTreeData?.((row) => redrawn.push(row));
-    return redrawn;
-  };
   const errors = () => texts('modbench-sorting-errors').length;
 
   it('publishes the newest judgement, never an older one that resolves after it', async () => {
-    const older = deferred<undefined>();
+    const older = deferred();
     const facts = judging([A], { masterlist: NO_RULES, gates: [Promise.resolve(), older.promise] });
     await facts.reconciled([held()]);
     await facts.masterlistIs(MISSING);
     await facts.masterlistIs(NO_RULES);
-    const redrawn = redrawsOf(facts);
+    const redrawn = facts.redraws();
 
-    older.resolve(undefined);
+    older.resolve();
     await settle();
 
     expect([errors(), redrawn]).toEqual([0, []]);
   });
 
   it('drops a judgement of the old order that resolves after a reconcile landed the new one', async () => {
-    const slow = deferred<undefined>();
+    const slow = deferred();
     const master = { name: 'M.esp', origin: 'SomeMod' };
     const facts = judging([{ ...master, enabled: false }, A], { masterlist: NO_RULES, gates: [Promise.resolve(), slow.promise] });
     const both = [held({ masters: ['M.esp'] }), held(master)];
@@ -269,21 +272,21 @@ describe('judging again as the rules change while a judgement is in flight', () 
     const { value } = facts.instance;
     facts.instance.publish({ ...value, plugins: value.plugins.map((plugin) => ({ ...plugin, enabled: true })) }, { named: [], disk: false });
     await facts.reconciled(both);
-    const redrawn = redrawsOf(facts);
+    const redrawn = facts.redraws();
 
-    slow.resolve(undefined);
+    slow.resolve();
     await settle();
 
     expect([errors(), redrawn]).toEqual([0, []]);
   });
 
   it('judges a reconcile by the rules that stand when its reads land', async () => {
-    const slow = deferred<undefined>();
+    const slow = deferred();
     const facts = judging([A], { masterlist: NO_RULES, gates: [slow.promise] });
     await facts.reconciled([held()]);
     await facts.masterlistIs(MISSING);
 
-    slow.resolve(undefined);
+    slow.resolve();
     await settle();
 
     expect(errors()).toBe(1);
