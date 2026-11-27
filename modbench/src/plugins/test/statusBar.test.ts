@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { clientHoldingNothing, pluginsOver } from './pluginsOver';
+import { clientHoldingNothing, pluginsOf, pluginsOver } from './pluginsOver';
 import { present } from '../../ports/present';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { holdsLoadOrder, holdsNoLoadOrder } from '../../client/test/says';
@@ -25,7 +25,7 @@ function statusBar(status: InMemoryMEditClient['status'] = 'running') {
   client.setQueryAnswer('getPlugins', PLUGINS.map((plugin) => pluginMetadataFixture(plugin)));
   client.setQueryAnswer('getPluginsIndexing', []);
   const made = pluginsOver({
-    client, value: instanceValueFixture({ plugins: PLUGINS.map((plugin, line) => ({ ...plugin, path: `/mods/ModA/${plugin.name}`, line, enabled: true, winning: true })) }),
+    client, value: instanceValueFixture({ plugins: pluginsOf(PLUGINS.map(({ name }) => name)) }),
   });
   const ready = async () => {
     holdsLoadOrder(client, { indexed: PLUGINS });

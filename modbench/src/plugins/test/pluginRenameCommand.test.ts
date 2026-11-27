@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { clientHoldingNothing, pluginsOver } from './pluginsOver';
+import { clientHoldingNothing, pluginsOf, pluginsOver } from './pluginsOver';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { oneAtATime } from '../../textDocuments/oneAtATime';
@@ -36,7 +36,7 @@ async function renaming() {
   const made = pluginsOver({
     client, commandsClient: client, adapter: fake.adapter,
     value: instanceValueFixture({
-      plugins: [{ name: 'Patch.esp', origin: 'ModA', path: '/m/Patch.esp', line: 0, enabled: true, winning: true }],
+      plugins: pluginsOf(['Patch.esp']),
       pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
     }),
     sourceEditing: { applyWorkspaceChanges: apply, oneAtATime: (job) => { queued(); return queue(job); }, refreshSourceControlFor },

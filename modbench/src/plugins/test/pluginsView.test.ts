@@ -183,7 +183,6 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
 });
 
 describe('the Plugins view follows mEdit\'s change event', () => {
-  const TEST = { name: 'Test.esp', origin: 'ModA' };
 
   async function changing() {
     const made = await indexedOver(['Test.esp', 'Other.esp']);
@@ -204,7 +203,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     await settle();
     expect(new Set(redrawn)).toEqual(new Set([row('Test.esp')]));
     expect(decorationChanges).toEqual([[uris[0]]]);
-    expect(client.calls.filter(({ method }) => method !== 'getPluginsIndexing').map(({ method, args }) => [method, args])).toEqual([['getPlugins', [[TEST]]]]);
+    expect(client.calls.filter(({ method }) => method !== 'getPluginsIndexing').map(({ method, args }) => [method, args])).toEqual([['getPlugins', [[TEST_PLUGIN]]]]);
   });
 
   it('redraws every row, and re-reads every plugin\'s records, when the change names none', async () => {
@@ -814,7 +813,8 @@ describe('the Plugins view\'s message line and name filter', () => {
   const NO_MATCH = 'No matches for "zzznomatch".';
   const messageIs = (expected: string | undefined, label: string) => waitForMessage(host.treeView(), (m) => m === expected, label);
 
-  async function applyFilter(client: InMemoryMEditClient, source = 'armor.sql') {
+  async function applyFilter(client: InMemoryMEditClient) {
+    const source = 'armor.sql';
     client.setQueryAnswer('setFilter', null);
     client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source });
     await host.run('modbench.record.filter', documentAt(source));
