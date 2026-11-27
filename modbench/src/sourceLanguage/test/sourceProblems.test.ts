@@ -97,16 +97,25 @@ describe('the links a plugin source holds to missing records, in the Problems pa
     ]);
   });
 
-  it.each([
-    ['a save re-derives its rows', 'rows-changed'],
-    ['mEdit re-reads its plugin', 'plugin-changed'],
-  ])('clears a problem when %s and mEdit answers none', async (_, kind) => {
+  it.each<[string, RecordIndexChange]>([
+    ['a save re-derives its rows', [{ plugin: { name: PLUGIN.name, origin: PLUGIN.origin }, keys: [REFERRER] }]],
+    ['mEdit re-reads its plugin', [{ plugin: { name: PLUGIN.name, origin: PLUGIN.origin } }]],
+  ])('clears a problem when %s and mEdit answers none', async (_, change) => {
     const { answered } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    const shown = await answered([{ plugin: PLUGIN, problems: [] }], [{ plugin: { name: PLUGIN.name, origin: PLUGIN.origin }, ...(kind === 'rows-changed' && { keys: [REFERRER] }) }]);
+    const shown = await answered([{ plugin: PLUGIN, problems: [] }], change);
 
     expect([...shown]).toEqual([]);
+  });
+
+  it('is settled when nothing was asked since its last answer was published', async () => {
+    const { language, problems } = feed();
+    await problems();
+
+    const caughtUp = language.problemsCaughtUp().then(() => true);
+
+    expect(await Promise.race([caughtUp, new Promise((resolve) => { setTimeout(() => { resolve(false); }, 0); })])).toBe(true);
   });
 
   it('is settled only once the answer to a change is published', async () => {
