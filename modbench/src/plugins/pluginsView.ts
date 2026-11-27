@@ -122,7 +122,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     publishSortingWarnings: (warnings) => publishPluginProblems(sortingWarningDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishSortingInfo: (info) => publishPluginProblems(sortingInfoDiagnostics, pluginFile, info, vscode.DiagnosticSeverity.Information),
     publishRuleFiles: (diagnostics) => publishRuleFileDiagnostics(ruleFileDiagnostics, diagnostics),
-    publishSourceUnreadable: (warnings, named) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning,
+    publishSourceUnreadable: (warnings, named) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Error,
       (plugin, { decompileRepairs }) => decompileLink(plugin, decompileRepairs), named),
   });
   const view = vscode.window.createTreeView(PLUGINS_KEY_ARGS.view, {
