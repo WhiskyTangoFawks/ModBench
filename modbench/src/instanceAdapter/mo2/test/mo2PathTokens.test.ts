@@ -832,12 +832,12 @@ describe('the MO2 adapter\'s path tokens', () => {
       });
 
       it.each([
-        ['with forward slashes', 'x={game folder:/}/tools', 'x=//nas/share/Games/Fallout 4/tools'],
-        ['with backslashes', 'x={game folder:\\}\\tools', 'x=\\\\nas\\share\\Games\\Fallout 4\\tools'],
-        ['with escaped backslashes', 'x={game folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Games\\\\Fallout 4\\\\tools'],
-        ['with the doubled separator\'s token', 'x={game folder:\\\\\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Games\\\\Fallout 4\\\\tools'],
+        ['with forward slashes', 'x={downloads folder:/}/tools', 'x=//nas/share/Downloads/tools'],
+        ['with backslashes', 'x={downloads folder:\\}\\tools', 'x=\\\\nas\\share\\Downloads\\tools'],
+        ['with escaped backslashes', 'x={downloads folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Downloads\\\\tools'],
+        ['with the doubled separator\'s token', 'x={downloads folder:\\\\\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Downloads\\\\tools'],
       ])('puts the path of a folder on a network share in place of its token, %s', async (_place, token, written) => {
-        expect(await readFile(join(await onShare([token]), 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([written]));
+        expect(await readFile(join(await onShare([token]), 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([written, '[Settings]', 'download_directory=//nas/share/Downloads']));
       });
     });
   });
