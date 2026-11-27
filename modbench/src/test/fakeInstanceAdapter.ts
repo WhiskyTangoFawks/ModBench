@@ -137,6 +137,8 @@ export interface InstanceAnswers {
   dataFiles?: ReadonlyMap<string, { checksum?: number; version?: string; readable?: boolean }>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
   folderFiles?: ReadonlyMap<string, readonly string[]>;
+  /** Why each folder's files cannot be listed, by the folder; it wins over `folderFiles`. */
+  unlistableFolders?: ReadonlyMap<string, string>;
   /** The files git holds in a folder, by the folder. */
   heldByGit?: ReadonlyMap<string, readonly string[]>;
   /** The mod folders whose whole git holds. */
@@ -226,7 +228,6 @@ export interface FakeInstanceAdapter {
 
 const EXCLUSION_MARK = '.mohidden';
 
-/** The fake's key of an entry: a separator by its folder's name, each name without case. */
 export const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
 
 type FolderEntry = string | (EntryRef & { modName?: string });
@@ -464,7 +465,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       hashed.push(path);
       return answer(answers.hashes?.get(path), path);
     },
-    filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
+    filesIn: (folder) => {
+      const reason = answers.unlistableFolders?.get(folder);
+      return reason === undefined ? Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))) : Promise.reject(new Error(reason));
+    },
     folderValue: (folder) => folderValueOver(adapter, folder),
     foldersHeldWhole: (folders) => Promise.resolve(new Set(
       folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),

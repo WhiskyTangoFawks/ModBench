@@ -6,13 +6,37 @@ import { boxesIn } from './boxes';
 import { importSpecifiers, isTestSupport, plantedTree, productionFiles, resolved, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
-const NEEDS_AN_INTERNAL: Readonly<Record<string, string>> = {
-  'test/agentGestures.test.ts': 'reads the agent\'s table of gestures against the gestures the spec catalogs',
-  'test/fakeInstanceAdapter.ts': 'the Instance adapter\'s second adapter: it answers by the adapter\'s own rules, never a copy of them (ADR-0014)',
-  'test/fomodEngines/repeatsStep.ts': 'a FOMOD engine process speaks the protocol the Instance adapter speaks to its own process',
-  'test/mo2/fakeInstance.ts': 'a fake Instance tells a subscriber what changed as the Instance does',
-  'test/packageJson.test.ts': 'reads the manifest against the setting keys and the indicators the Mods view reads',
-  'test/scaleGate.ts': 'the scale gate counts the work at each layer: the Mods view\'s tree, decorations and conflict table, and each change Symbols hears; it writes its modlist through MO2\'s codec, as no test spells a format',
+const NEEDS_AN_INTERNAL: Readonly<Record<string, { readonly why: string; readonly imports: readonly string[] }>> = {
+  'test/agentGestures.test.ts': {
+    why: 'reads the agent\'s table of gestures against the gestures the spec catalogs',
+    imports: ['agent/gestures.ts'],
+  },
+  'test/fakeInstanceAdapter.ts': {
+    why: 'the Instance adapter\'s second adapter: it answers by the adapter\'s own rules, never a copy of them (ADR-0014)',
+    imports: [
+      'instanceAdapter/excludedPaths.ts', 'instanceAdapter/fileContents/contentDigest.ts', 'instanceAdapter/gameFolder/pathWithin.ts', 'instanceAdapter/modGroups.ts',
+      'instanceAdapter/modValue.ts', 'instanceAdapter/nexusPage.ts', 'instanceAdapter/pluginsProvided.ts',
+    ],
+  },
+  'test/fomodEngines/repeatsStep.ts': {
+    why: 'a FOMOD engine process speaks the protocol the Instance adapter speaks to its own process',
+    imports: ['instanceAdapter/fomodInstaller/engineProtocol.ts'],
+  },
+  'test/mo2/fakeInstance.ts': {
+    why: 'a fake Instance tells a subscriber what changed as the Instance does',
+    imports: ['instanceLoader/told.ts'],
+  },
+  'test/packageJson.test.ts': {
+    why: 'reads the manifest against what the views hold: the setting keys they read, their rows\' contexts and their empty-list messages',
+    imports: ['mods/ModListProvider.ts', 'mods/conflictTableEditor.ts', 'mods/inactiveFiles.ts', 'mods/modIndicators.ts', 'mods/openRows.ts', 'plugins/PluginsTreeProvider.ts'],
+  },
+  'test/scaleGate.ts': {
+    why: 'the scale gate counts the work at each layer: the Mods view\'s tree, decorations and conflict table, and each change Symbols hears; it writes its modlist through MO2\'s codec, as no test spells a format',
+    imports: [
+      'instanceAdapter/mo2/codecs/modlistText.ts', 'mods/ModListProvider.ts', 'mods/conflictTableEditor.ts', 'mods/modDecorations.ts', 'mods/openRows.ts',
+      'symbols/heardChanges.ts', 'symbols/scriptLanguage.ts',
+    ],
+  },
 };
 
 const modulesNamed = (file: string, specifiers: readonly string[]): string[] =>
@@ -41,12 +65,14 @@ function pastTheSeam(src: string, webview: string): Map<string, string[]> {
 describe('a test file imports, of a box, only its seam: the files another box imports', () => {
   const past = pastTheSeam(SRC, WEBVIEW_SRC);
 
-  it('names each test file that imports past a box\'s seam, but one the allowed list names', () => {
-    expect([...past].filter(([file]) => !(file in NEEDS_AN_INTERNAL)).map(([file, inside]) => `${file}: ${inside.join(', ')}`)).toEqual([]);
+  it('names each test file that imports past a box\'s seam, and each file it imports there that the allowed list does not', () => {
+    expect([...past].flatMap(([file, inside]) => inside.filter((one) => NEEDS_AN_INTERNAL[file]?.imports.includes(one) !== true).map((one) => `${file}: ${one}`)))
+      .toEqual([]);
   });
 
-  it('allows no file that imports only seams', () => {
-    expect(Object.keys(NEEDS_AN_INTERNAL).filter((file) => !past.has(file))).toEqual([]);
+  it('allows no import a file no longer makes', () => {
+    expect(Object.entries(NEEDS_AN_INTERNAL).flatMap(([file, { imports }]) => imports.filter((one) => past.get(file)?.includes(one) !== true).map((one) => `${file}: ${one}`)))
+      .toEqual([]);
   });
 
   it('names a planted test-side file that imports a box\'s file no other box\'s production code imports', () => {

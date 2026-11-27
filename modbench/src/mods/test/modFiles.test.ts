@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import type * as vscode from 'vscode';
-import type { ArchiveRead, FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { TreeItemCollapsibleState, ThemeIcon, ThemeColor, FakeUri } from '../../test/vscodeMock';
 import { labelOf, modsViewOn } from './modsViewOn';
@@ -17,6 +17,8 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { settled } from '../../test/eventually';
 import { present } from '../../ports/present';
 import { mod, indexedValueOf } from './indexedValue';
+
+type ArchiveRead = InstanceValue['archiveContents'] extends ReadonlyMap<string, infer Read> ? Read : never;
 
 const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, markedExcluded: false, includedPath: relativePath });
 

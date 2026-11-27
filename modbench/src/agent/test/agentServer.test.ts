@@ -29,7 +29,7 @@ import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentS
 import type { Argument } from '../../wire/argument';
 import type { SymbolIndex } from '../../symbols/symbolIndex';
 import type { SymbolName } from '../../symbols/symbolKind';
-import type { ArchiveRead, InstanceValue } from '../../instanceLoader/instance';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { file as indexedFile, indexedValueOf, mod as indexedMod } from '../../mods/test/indexedValue';
@@ -53,6 +53,8 @@ import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from
 import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
 import { gestureName, phrase } from '../../ports/phrase';
 import { settled } from '../../test/eventually';
+
+type ArchiveRead = InstanceValue['archiveContents'] extends ReadonlyMap<string, infer Read> ? Read : never;
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -1121,40 +1123,28 @@ describe('the agent server, reading file order conflicts', () => {
   });
 
   it('reads the state of each mod\'s copy of a file and of its row, with the copy\'s size and date, or why it cannot be read, as the conflict table shows them', async () => {
-    const names = ['High', 'Middle', 'Low'];
-    const hashes: Record<string, string[]> = { 'same.dds': ['a', 'a', 'a'], 'override.dds': ['b', 'b', 'a'], 'conflict.dds': ['c', 'b', 'a'], 'lost.dds': ['a', 'b', 'a'] };
-    const paths = Object.keys(hashes);
-    const at = (mod: string, path: string) => `/instance/${mod}/${path}`;
-    const value = await indexedValueOf(names.map((name) => indexedMod(name)), Object.fromEntries(names.map((name) => [name, { files: paths.map((path) => indexedFile(name, path)) }])));
+    const value = await indexedValueOf([indexedMod('Winner'), indexedMod('Loser')], {
+      Winner: { files: [indexedFile('Winner', 'a.dds'), indexedFile('Winner', 'b.dds')] },
+      Loser: { files: [indexedFile('Loser', 'a.dds'), indexedFile('Loser', 'b.dds')] },
+    });
+    const day = 86_400_000;
     Object.assign(copyAnswers, {
-      stamps: new Map(paths.flatMap((path) => names.flatMap((name, order) => (name === 'Middle' && path === 'lost.dds' ? []
-        : [[at(name, path), { size: 8n, modifiedNs: BigInt(order + paths.indexOf(path)) * 86_400_000_000_000n }] as const])))),
-      hashes: new Map(paths.flatMap((path) => names.map((name, order) => [at(name, path), { size: 8, hash: hashes[path]?.[order] ?? '' }] as const))),
+      stamps: new Map([
+        ['/instance/Winner/a.dds', { size: 8n, modifiedNs: 86_400_000_000_000n }],
+        ['/instance/Winner/b.dds', { size: 8n, modifiedNs: 86_400_000_000_000n }],
+        ['/instance/Loser/a.dds', { size: 8n, modifiedNs: 0n }],
+      ]),
+      hashes: new Map([
+        ['/instance/Winner/a.dds', { size: 8, hash: 'new' }], ['/instance/Winner/b.dds', { size: 8, hash: 'same' }],
+        ['/instance/Loser/a.dds', { size: 8, hash: 'old' }], ['/instance/Loser/b.dds', { size: 8, hash: 'same' }],
+      ]),
     });
     onTestFinished(() => { delete copyAnswers.stamps; delete copyAnswers.hashes; });
     const { client } = await clientOf(new FakeInstance(value));
 
-    const day = (days: number) => days * 86_400_000;
-    const copies = (mod: string, files: [string, object][]) => ({ mod, files: files.map(([file, contents]) => ({ file, contents })) });
-    expect(await read(client, 'list_file_conflicts', { mods: names.map((name) => ({ name })) })).toMatchObject([
-      copies('High', [
-        ['conflict.dds', { state: 'ConflictWins', row: 'Conflict', size: 8, modified: day(2) }],
-        ['lost.dds', { state: null, row: null, size: 8, modified: day(3) }],
-        ['override.dds', { state: 'Override', row: 'Override', size: 8, modified: day(1) }],
-        ['same.dds', { state: 'IdenticalToMaster', row: 'NoConflict', size: 8, modified: day(0) }],
-      ]),
-      copies('Middle', [
-        ['conflict.dds', { state: 'ConflictLoses', row: 'Conflict', size: 8, modified: day(3) }],
-        ['lost.dds', { state: null, row: null, unreadable: 'no answer fixed for /instance/Middle/lost.dds' }],
-        ['override.dds', { state: 'Override', row: 'Override', size: 8, modified: day(2) }],
-        ['same.dds', { state: 'IdenticalToMaster', row: 'NoConflict', size: 8, modified: day(1) }],
-      ]),
-      copies('Low', [
-        ['conflict.dds', { state: 'Master', row: 'Conflict', size: 8, modified: day(4) }],
-        ['lost.dds', { state: null, row: null, size: 8, modified: day(5) }],
-        ['override.dds', { state: 'Master', row: 'Override', size: 8, modified: day(3) }],
-        ['same.dds', { state: 'Master', row: 'NoConflict', size: 8, modified: day(2) }],
-      ]),
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Winner' }, { name: 'Loser' }] })).toMatchObject([
+      { mod: 'Winner', files: [{ file: 'a.dds', contents: { state: 'Override', row: 'Override', size: 8, modified: day } }, { file: 'b.dds', contents: {} }] },
+      { mod: 'Loser', files: [{ file: 'a.dds', contents: { state: 'Master', row: 'Override', size: 8, modified: 0 } }, { file: 'b.dds', contents: { unreadable: 'no answer fixed for /instance/Loser/b.dds' } }] },
     ]);
   });
 

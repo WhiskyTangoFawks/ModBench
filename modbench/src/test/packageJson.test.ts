@@ -21,15 +21,19 @@ vi.mock('vscode', () => ({
   Uri,
 }));
 
+import { OpenRows } from '../mods/openRows';
+import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MANIFEST } from './scanSource';
+import { NO_MOD_STATUSES } from './noModStatuses';
+import { FakeInstance } from './mo2/fakeInstance';
+import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
 import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
+import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
 import { MOD_INDICATORS } from '../mods/modFileStates';
 import { indicatorSetting, PUBLISHER_TAG_INDICATOR } from '../mods/modIndicators';
-
-const NO_PLUGINS_MESSAGE = 'No plugins: plugins.txt lists none, and mEdit names none the game loads on its own. Create Plugin…, in the title bar, adds one.';
-const NO_MODS_MESSAGE = 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+import { recordingReporter } from './surfacingDoubles';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
@@ -178,6 +182,7 @@ const expectKeysFiring = (context: Context, expected: readonly Key[]): void => {
 };
 const offeredIn = (entries: readonly MenuEntry[], context: Context): string[] =>
   placed(entries.filter((e) => holds(e.when, context))).map(([command]) => command);
+const contextOf = (node: { contextValue?: string }): string => present(node.contextValue, 'the row\'s own contextValue');
 const without = (facts: Context, fact: string): Context => Object.fromEntries(Object.entries(facts).filter(([key]) => key !== fact));
 const eachMissingFact = (rows: readonly (readonly [string, Context])[]) =>
   rows.flatMap(([command, facts]) => Object.keys(facts).map((fact) => [command, fact, facts] as const));
@@ -685,7 +690,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   it('the empty list\'s message names the title bar\'s create plugin', () => {
     const create = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.create'), 'create plugin');
     expect(NO_PLUGINS_MESSAGE).toContain(create.title);
-    expect(inPluginsView('view/title').map(({ command }) => command)).toContain(create.command);
+    expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
   const REVEAL_ENTRY: [string, string] = ['modbench.plugin.reveal', '1_open'];
@@ -1243,15 +1248,15 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const modCreation = [ADD_SEPARATOR_ENTRY, CREATE_EMPTY_ENTRY, INSTALL_ENTRY];
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
-    ['mod enabled', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod hasNexus disabled', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod disabled sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['separator', [MOVE_ENTRY, ADD_SEPARATOR_ENTRY, ['modbench.separator.rename', '3_create'], COPY_VALUE_ENTRY, ['modbench.separator.delete', '6_destroy']]],
-    ['runtimeOutput', [OPEN_FOLDER_ENTRY]],
+    [contextOf(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, [])), [MOVE_ENTRY, ADD_SEPARATOR_ENTRY, ['modbench.separator.rename', '3_create'], COPY_VALUE_ENTRY, ['modbench.separator.delete', '6_destroy']]],
+    [contextOf(new OverwriteNode([], 'MO2')), [OPEN_FOLDER_ENTRY]],
     ['file', [OPEN_FOLDER_ENTRY, COPY_VALUE_ENTRY]],
     ['file conflict', [OPEN_FOLDER_ENTRY, GO_TO_MOD_ENTRY, COPY_VALUE_ENTRY]],
     ['file conflict losing', [OPEN_FOLDER_ENTRY, COMPARE_FILE_ENTRY, GO_TO_MOD_ENTRY, COPY_VALUE_ENTRY]],
@@ -1383,7 +1388,10 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) === '3_create')
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
-    expect(overflowTitles.filter((title) => !NO_MODS_MESSAGE.includes(title))).toEqual([]);
+    const instance = new FakeInstance(instanceValueFixture({ mods: [] }));
+    const shown = present(new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) }).viewMessage(), 'the empty list\'s message');
+    expect(overflowTitles.filter((title) => !shown.includes(title))).toEqual([]);
+    expect(shown).toContain('overflow');
   });
 });
 
