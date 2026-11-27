@@ -103,8 +103,7 @@ export function editorOver(registered: Registered = {}) {
   const { editor, focusedView, outputChannel } = register(registered);
   const provider = editorProviders.get('modbench.record');
   if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
-  const open = (formKey: string): FakePanel => {
-    const panel = fakePanel();
+  const open = (formKey: string, panel = fakePanel()): FakePanel => {
     void provider.resolveCustomTextEditor({ uri: renderedUri(formKey, `${formKey}.json`) }, panel);
     return panel;
   };
