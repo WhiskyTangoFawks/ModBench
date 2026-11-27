@@ -3,11 +3,9 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createEditor } from '..';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { Uri } from '../../test/vscodeMock';
-import { forgetVscode } from './editorVscode';
+import { commandHandlers, editorProviders, editorVscode, fakePanel, forgetVscode, type FakePanel } from './editorVscode';
 
 export type ModFacts = Parameters<typeof createEditor>[0]['modFacts'];
-
-export const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 
 export const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -30,9 +28,31 @@ export function fakeLoadOrder() {
 
 export function forgetEditor(): void {
   forgetVscode();
-  pickRecord.mockReset();
   reporter.report.mockClear();
+  reporter.shownOnSurface.mockClear();
 }
+
+interface RecordEditorProvider {
+  resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
+}
+
+const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
+  typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
+
+/** The URI of `fileName`, mEdit's rendering of the copy of `formKey` that A.esp in ModA holds. */
+export const renderedUri = (formKey: string, fileName: string) => editorVscode.Uri.from({
+  scheme: 'modbench-rendered', path: `/ModA/A.esp/${fileName}`, query: `formKey=${formKey.replace(':', '%3A')}&name=A.esp&origin=ModA`,
+});
+
+/** The value a record tab's page is handed as `window.<name>`. */
+export const pageGlobal = (panel: FakePanel, name: string): unknown => {
+  const html = panel.webview.html ?? '';
+  const at = html.indexOf(`window.${name} = `);
+  if (at < 0) return undefined;
+  const start = at + `window.${name} = `.length;
+  const nextAssignment = html.indexOf('; window.', start);
+  return JSON.parse(html.slice(start, nextAssignment >= 0 ? nextAssignment : html.indexOf(';</script>', start)));
+};
 
 interface Registered {
   selection?: () => readonly unknown[];
@@ -69,4 +89,36 @@ export function register({
     onDidChangeSelection: (listener: (event: { selection: readonly unknown[] }) => void) => { listener({ selection: selection() }); return { dispose: () => undefined }; },
   });
   return { editor, focusedView, outputChannel };
+}
+
+/** The Editor registered over `meditClient`, and the record tabs a test opens as VS Code does. */
+export function editorOver(registered: Registered = {}) {
+  const { editor, focusedView, outputChannel } = register(registered);
+  const provider = editorProviders.get('modbench.record');
+  if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
+  const open = (formKey: string): FakePanel => {
+    const panel = fakePanel();
+    void provider.resolveCustomTextEditor({ uri: renderedUri(formKey, `${formKey}.json`) }, panel);
+    return panel;
+  };
+  const openDocument = async (uri: unknown, document: object = {}): Promise<FakePanel> => {
+    const panel = fakePanel();
+    await provider.resolveCustomTextEditor(Object.assign(document, { uri }), panel);
+    return panel;
+  };
+  const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
+  const tabs = new Map<string, FakePanel>();
+  const vsCodeOpensTabs = ({ resolvesAfterOpenAnswers = false } = {}) => {
+    commandHandlers.set('vscode.openWith', async (uri: unknown) => {
+      if (tabs.has(String(uri))) return;
+      const panel = fakePanel();
+      tabs.set(String(uri), panel);
+      if (resolvesAfterOpenAnswers) setTimeout(() => { void provider.resolveCustomTextEditor({ uri }, panel); }, 0);
+      else await provider.resolveCustomTextEditor({ uri }, panel);
+    });
+    return (uri: unknown) => tabs.get(String(uri));
+  };
+  const askedFromThePalette = () => editor.focusedRecord();
+  const resolve = (document: object, panel: FakePanel): Promise<void> => provider.resolveCustomTextEditor(document, panel);
+  return { editor, askedFromThePalette, open, openFile, openDocument, resolve, focusedView, outputChannel, vsCodeOpensTabs };
 }

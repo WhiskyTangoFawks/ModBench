@@ -9,7 +9,7 @@ vi.mock('vscode', () => editorVscode);
 
 import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeLoadOrder, forgetEditor, NO_MODS, register, type ModFacts } from './editorHarness';
+import { editorOver, fakeLoadOrder, forgetEditor, NO_MODS, pageGlobal, renderedUri, type ModFacts } from './editorHarness';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
@@ -20,69 +20,21 @@ import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 import { settled } from '../../test/eventually';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
-const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
-  scheme: 'modbench-rendered', path: `/ModA/A.esp/${fileName}`, query: `formKey=${formKey.replace(':', '%3A')}&name=A.esp&origin=ModA`,
-});
 const isShowColumns = (message: unknown) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'showColumns';
 const aMacrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
 const readAnswered = (tab: FakePanel, requestId = 'r1') => settled(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(
   expect.objectContaining({ type: 'recordLoadAnswered', requestId })));
 
-interface RecordEditorProvider {
-  resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
-}
-
-const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
-  typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
-
 let loadOrder = fakeLoadOrder();
 
-function makeEditor(
-  client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
-) {
-  const { editor, focusedView, outputChannel } = register({ meditClient: client, recordViewIds, modFacts, loadOrder });
-  const provider = editorProviders.get('modbench.record');
-  if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
-  const open = (formKey: string): FakePanel => {
-    const panel = fakePanel();
-    void provider.resolveCustomTextEditor({ uri: renderedUri(formKey, `${formKey}.json`) }, panel);
-    return panel;
-  };
-  const openDocument = async (uri: unknown, document: object = {}): Promise<FakePanel> => {
-    const panel = fakePanel();
-    await provider.resolveCustomTextEditor(Object.assign(document, { uri }), panel);
-    return panel;
-  };
-  const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
-  const tabs = new Map<string, FakePanel>();
-  const vsCodeOpensTabs = ({ resolvesAfterOpenAnswers = false } = {}) => {
-    commandHandlers.set('vscode.openWith', async (uri: unknown) => {
-      if (tabs.has(String(uri))) return;
-      const panel = fakePanel();
-      tabs.set(String(uri), panel);
-      if (resolvesAfterOpenAnswers) setTimeout(() => { void provider.resolveCustomTextEditor({ uri }, panel); }, 0);
-      else await provider.resolveCustomTextEditor({ uri }, panel);
-    });
-    return (uri: unknown) => tabs.get(String(uri));
-  };
-  const askedFromThePalette = () => editor.focusedRecord();
-  return { editor, askedFromThePalette, open, openFile, openDocument, focusedView, outputChannel, vsCodeOpensTabs };
-}
+const makeEditor = (client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS) =>
+  editorOver({ meditClient: client, recordViewIds, modFacts, loadOrder });
 
 beforeEach(() => {
   forgetEditor();
   loadOrder = fakeLoadOrder();
 });
 
-
-const pageGlobal = (panel: FakePanel, name: string): unknown => {
-  const html = panel.webview.html ?? '';
-  const at = html.indexOf(`window.${name} = `);
-  if (at < 0) return undefined;
-  const start = at + `window.${name} = `.length;
-  const nextAssignment = html.indexOf('; window.', start);
-  return JSON.parse(html.slice(start, nextAssignment >= 0 ? nextAssignment : html.indexOf(';</script>', start)));
-};
 
 const comparisonsAsked = (client: InMemoryMEditClient) =>
   client.calls.filter(({ method }) => method === 'getComparison').map(({ args }) => args);
@@ -678,11 +630,9 @@ describe('a record tab closed', () => {
     const client = new InMemoryMEditClient();
     let land: (answer: typeof holding) => void = () => undefined;
     client.setQueryAnswerOnce('getRecordOfFile', new Promise<typeof holding>((resolve) => { land = resolve; }));
-    const { askedFromThePalette } = makeEditor(client);
-    const provider = editorProviders.get('modbench.record');
-    if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
+    const { askedFromThePalette, resolve } = makeEditor(client);
     const tab = fakePanel();
-    const resolving = provider.resolveCustomTextEditor({ uri: { scheme: 'file', fsPath: FILE } }, tab);
+    const resolving = resolve({ uri: { scheme: 'file', fsPath: FILE } }, tab);
 
     tab.close();
     land(holding);

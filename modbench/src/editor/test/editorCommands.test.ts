@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { commandHandlers, editorVscode, executeCommand, executed, showQuickPick } from './editorVscode';
-import { forgetEditor, pickRecord, register, reporter } from './editorHarness';
+import { commandHandlers, createQuickPick, editorVscode, executeCommand, executed, showQuickPick } from './editorVscode';
+import { forgetEditor, register, reporter } from './editorHarness';
 
-vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
 vi.mock('vscode', () => editorVscode);
 
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 
 beforeEach(forgetEditor);
 
@@ -30,11 +30,11 @@ describe('modbench.record.open from the palette, with no Argument', () => {
       'vscode.openWith', 'modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: true },
     ]]);
-    expect(pickRecord).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
   });
 
   it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
-    pickRecord.mockResolvedValue('000801:A.esp');
+    createQuickPick.mockReturnValue(quickPickChoosing(() => ({ label: 'Gun', formKey: '000801:A.esp' })));
     register({ selection: () => [{ kind: 'recordType' }], ...renderingTheWinner() });
 
     await open();
@@ -46,7 +46,6 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   });
 
   it('opens nothing when the picker is dismissed', async () => {
-    pickRecord.mockResolvedValue(null);
     register();
 
     await open();
@@ -60,7 +59,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     await commandHandlers.get('modbench.record.open')?.({ kind: 'recordType' });
 
     expect(reporter.report).toHaveBeenCalledWith('error', 'Could not open a record.', 'What was given names no record.');
-    expect(pickRecord).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
     expect(executed()).toEqual([]);
   });
 
@@ -235,7 +234,7 @@ describe('modbench.record.open for the agent', () => {
     ], refused: [] } });
     expect(executed().filter(([id]) => id === 'vscode.openWith').map(([, uri, , options]) => [String(uri), options]))
       .toEqual([['modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', { viewColumn: -1, preview: false }]]);
-    expect(pickRecord).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
     expect(reporter.report).not.toHaveBeenCalled();
   });
 
