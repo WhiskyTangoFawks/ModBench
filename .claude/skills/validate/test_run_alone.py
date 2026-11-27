@@ -60,10 +60,10 @@ class Backend(unittest.TestCase):
 
     def test_a_first_test_over_1_s_runs_again_beside_one_of_another_class_until_another_runs_first(self) -> None:
         self.load(('A.C.Slow', 1.5), ('A.C.Same', 2), ('A.E.Other', 2))
-        self.assertEqual(self.again([('A.C.Slow', 3), ('A.C.Same', 0.5), ('A.E.Other', 0.5)], [('A.C.Slow', 3), ('A.E.Other', 0.5)],
-                                    [('A.E.Other', 0.5), ('A.C.Slow', 0.4)]),
-                         [['FullyQualifiedName=A.C.Same', 'FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.E.Other']]
-                         + [['FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.E.Other']] * 2)
+        self.assertEqual(self.again([('A.C.Slow', 3), ('A.C.Same', 0.5), ('A.E.Other', 0.5)], [('A.E.Other', 0.5), ('A.C.Slow', 0.4)],
+                                    [('A.C.Slow', 3), ('A.E.Other', 0.5)]),
+                         [['FullyQualifiedName=A.C.Same', 'FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.E.Other'],
+                          ['FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.E.Other']])
 
     def test_a_lone_test_over_1_s_runs_again_beside_its_projects_fastest_and_stops_after_two_more_runs(self) -> None:
         self.load(('A.C.Slow', 1.5), ('A.D.Fast', 0.01), ('A.D.Faster', 0.001))

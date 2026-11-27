@@ -82,7 +82,8 @@ def class_of(method: str) -> str:
 def run_again(root: Path, directory: Path, alone: Path, execute: Callable[[Command], bool]) -> bool:
     """Whether every run passed. A backend project's tests run in one process; the first, if over the ceiling, runs
     again beside a test of another class, another of them or else the project's fastest, until another runs first.
-    xUnit orders a run's classes at random but a class's tests always alike."""
+    xUnit orders a run's collections at random but a collection's tests always alike, and a class is a collection
+    unless it names one."""
     kinds = reports.by_kind(directory)
     loaded = kinds.get(reports.TRX_REPORT, [])
     passed = True
@@ -95,8 +96,10 @@ def run_again(root: Path, directory: Path, alone: Path, execute: Callable[[Comma
         passed &= execute(backend(root, box, report, methods))
         for attempt in range(1, RETRIES + 1):
             first = first_over_ceiling(report)
-            beside = next((method for method in methods + fastest if first and class_of(method) != class_of(first)), None)
-            if first not in methods or beside is None:
+            if first not in methods:
+                break
+            beside = next((method for method in methods + fastest if class_of(method) != class_of(first)), None)
+            if beside is None:
                 break
             report = report.with_name(f'{attempt}.trx')
             passed &= execute(backend(root, box, report, [first, beside]))
