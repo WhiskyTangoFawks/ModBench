@@ -125,10 +125,10 @@ export async function indexedOver(names: readonly string[], { origin = 'ModA', .
  *  plugin the game loads with no line. */
 export interface Shown { name: string; origin?: string; enabled?: boolean; noLine?: boolean }
 
-/** What mEdit says with a status: the plugins it indexed, those whose read failed, and those whose bytes changed outside. */
+// What mEdit says with a status: the plugins it indexed, those whose read failed, and those whose bytes changed outside.
 interface Told { indexed?: readonly PluginAddress[]; failures?: readonly PluginLoadFailure[]; changedOutside?: readonly PluginAddress[] }
 
-/** What a reconcile mEdit hands over answers: each plugin's facts, and the malformed-plugin scan. */
+// What a reconcile mEdit hands over answers: each plugin's facts, and the malformed-plugin scan.
 interface Reconcile extends Told { diagnoses?: PluginDiagnosisReport[] | ReadFailed }
 
 type IndexOfPlugin = Parameters<typeof loadFailuresOf>[0][number];
