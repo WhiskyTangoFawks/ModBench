@@ -7,7 +7,7 @@ public enum Kinds
     /// <summary>A tool, not a test (spec/architecture/tests.md). No gate runs it.</summary>
     Tool,
 
-    /// <summary>The generator of a committed fixture. The developer runs it by name and approves what it writes.</summary>
+    /// <summary>The generator of a committed fixture. The developer runs it by name.</summary>
     Generator,
 
     /// <summary>The test needs a POSIX file system: a file mode that makes a read, write or delete fail, a FIFO, or two
