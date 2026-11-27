@@ -86,8 +86,12 @@ describe('the plugins each origin provides', () => {
 
   onPosix.it('answers why there are none when the Data folder is unreadable', async () => {
     await chmod(join(game, 'Data'), 0);
-    const provided = await providedOver();
-    await chmod(join(game, 'Data'), 0o755);
+    let provided: PluginsProvided | undefined;
+    try {
+      provided = await providedOver();
+    } finally {
+      await chmod(join(game, 'Data'), 0o755);
+    }
 
     expect(provided).toMatchObject({ kind: 'unreadable', reason: expect.stringContaining('EACCES') as unknown });
   });

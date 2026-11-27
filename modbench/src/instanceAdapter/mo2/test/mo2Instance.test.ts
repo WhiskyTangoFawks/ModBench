@@ -156,12 +156,11 @@ describe('the MO2 Instance adapter', () => {
       ])('answers %s, with its depots', async (_case, arrange) => {
         const base = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
         onTestFinished(() => rm(base, { recursive: true, force: true }));
-        const steam = steamGameIn(base);
-        await mkdir(join(steam, 'Data'), { recursive: true });
+        const machine = await steamIn(base);
         await writeAppManifestOfDepot(join(base, 'library'));
-        const { game, expected } = await arrange(base, steam);
+        const { game, expected } = await arrange(base, steamGameIn(base));
 
-        expect(await adapterOver(root, { gameFolderSettingValue: game, machine: await steamIn(base) }).gamePlace()).toEqual({
+        expect(await adapterOver(root, { gameFolderSettingValue: game, machine }).gamePlace()).toEqual({
           ...expected, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
         });
       });
@@ -717,8 +716,12 @@ describe('the MO2 Instance adapter', () => {
 
       onPosix.it('answers the Data folder\'s plugins, files and archives unreadable, with why, when the Data folder cannot be listed', async () => {
         await chmod(join(game, 'Data'), 0);
-        const reading = await readingOver();
-        await chmod(join(game, 'Data'), 0o755);
+        let reading: InstanceReading;
+        try {
+          reading = await readingOver();
+        } finally {
+          await chmod(join(game, 'Data'), 0o755);
+        }
 
         expect([reading.dataFolderPlugins, reading.dataFolderFiles, reading.dataFolderArchives].map((fact) => expectKind(fact, 'unreadable').reason))
           .toEqual([expect.stringMatching(/EACCES/), expect.stringMatching(/EACCES/), expect.stringMatching(/EACCES/)]);

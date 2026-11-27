@@ -12,14 +12,18 @@ export const libraryFolders = (...libraries: readonly { readonly path: string; r
   '}', '',
 ].join('\n');
 
-/** Steam in `base`, where the home folder holds it and the registry names it, with the one library `base/library` holding `apps`;
- *  what the machine answers of it. */
+/** Steam in `base`, where the home folder holds it and the registry names it, with the one library `base/library` holding `apps`
+ *  and the game's folder; what the machine answers of it. */
 export async function steamIn(base: string, apps: readonly string[] = [FO4_APP_ID]): Promise<Pick<Machine, 'homeFolder' | 'registryValue'>> {
   const homeFolder = join(base, 'home');
   const steam = join(homeFolder, '.steam', 'steam');
   await mkdir(join(steam, 'config'), { recursive: true });
   await writeFile(join(steam, 'config', 'libraryfolders.vdf'), libraryFolders({ path: join(base, 'library'), apps }));
-  return { homeFolder, registryValue: (key, name) => Promise.resolve(key === STEAM_KEY && name === 'SteamPath' ? steam : undefined) };
+  await mkdir(join(steamGameIn(base), 'Data'), { recursive: true });
+  return {
+    homeFolder,
+    registryValue: (key, name) => (key === STEAM_KEY && name === 'SteamPath' ? Promise.resolve(steam) : Promise.reject(new Error(`${key} holds no ${name}`))),
+  };
 }
 
 /** The folder the library of Steam in `base` installs a game in. */

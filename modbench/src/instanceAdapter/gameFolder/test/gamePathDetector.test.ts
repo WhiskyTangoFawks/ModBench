@@ -81,7 +81,7 @@ describe('the game folder Steam names', () => {
     });
 
     it.each<[string, Machine['registryValue']]>([
-      ['the registry names no SteamPath', () => Promise.resolve(undefined)],
+      ['the registry names no SteamPath', () => Promise.reject(new Error('ERROR: The system was unable to find the specified registry key or value.'))],
       ['the registry query itself fails (no reg.exe, no Steam)', () => Promise.reject(new Error('ENOENT: reg'))],
     ])('is not found when %s', async (_, registryValue) => {
       expect(await gameFolderNaming(registry(registryValue))).toMatchObject({ kind: 'notFound', looked: expect.arrayContaining([{ place: STEAM_PLACE, answer: 'the game is in no Steam library' }]) as unknown });

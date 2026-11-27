@@ -47,6 +47,7 @@ export interface WatcherExclude {
 
 /** What the adapter reads of the machine it runs on. It answers plainly: Steam, Wine and the mod manager are the adapter's. */
 export interface Machine {
+  /** Which of the platform's facilities the adapter asks; a path is spelled as the file system it runs on spells it. */
   readonly platform: NodeJS.Platform;
   readonly homeFolder: string;
   readonly userName: string;

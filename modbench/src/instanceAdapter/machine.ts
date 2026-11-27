@@ -1,5 +1,3 @@
-// The machine Modbench runs on, which the composition root hands the adapter.
-
 import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';

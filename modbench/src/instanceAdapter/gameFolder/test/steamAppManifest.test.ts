@@ -7,6 +7,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { instanceOnDisk } from '../../test/instanceOnDisk';
 import { steamGameIn, steamIn } from '../../test/steamOnDisk';
+import type { Machine } from '../../instanceAdapter';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -38,11 +39,12 @@ describe('the depots Steam records as installed of the game where it is', () => 
   let base: string;
   let steamapps: string;
   let instance: string;
+  let steam: Partial<Machine>;
 
   beforeEach(async () => {
     base = await mkdtemp(join(tmpdir(), 'steamapps-'));
     steamapps = join(base, 'library', 'steamapps');
-    await mkdir(join(steamGameIn(base), 'Data'), { recursive: true });
+    steam = await steamIn(base);
     instance = await instanceOnDisk();
   });
   afterEach(async () => {
@@ -51,7 +53,7 @@ describe('the depots Steam records as installed of the game where it is', () => 
   });
 
   const installedDepots = async () => {
-    const place = await adapterOver(instance, { gameFolderSettingValue: steamGameIn(base), machine: await steamIn(base) }).gamePlace();
+    const place = await adapterOver(instance, { gameFolderSettingValue: steamGameIn(base), machine: steam }).gamePlace();
     return { depots: place?.depots, problems: place?.depotProblems };
   };
 

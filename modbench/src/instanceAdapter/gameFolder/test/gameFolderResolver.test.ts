@@ -20,7 +20,7 @@ const STEAM_PLACE = 'the Steam install';
 /** A machine that notes each place it is asked where Steam is. */
 const notingSteamAsked = (asked: string[]): Partial<Machine> => ({
   get homeFolder() { asked.push('the home folder'); return '/nowhere'; },
-  registryValue: (key) => { asked.push(key); return Promise.resolve(undefined); },
+  registryValue: (key, name) => { asked.push(key); return Promise.reject(new Error(`${key} holds no ${name}`)); },
 });
 
 describe('the game folder', () => {
@@ -50,7 +50,6 @@ describe('the game folder', () => {
   /** Steam holding the game in its one library: what the machine answers of it, and the game's folder. */
   const steamHoldingGame = async (): Promise<{ machine: Partial<Machine>; root: string }> => {
     const base = await temp();
-    await mkdir(join(steamGameIn(base), 'Data'), { recursive: true });
     return { machine: await steamIn(base), root: steamGameIn(base) };
   };
 
@@ -191,10 +190,10 @@ describe('where the game is, beside the Steam install', () => {
   it('holds the Steam install Steam holds, whatever folder the setting names, with the depots Steam installed of the game from the app manifest of its library', async () => {
     const base = await mkdtemp(join(tmpdir(), 'medit-steamlib-'));
     dirs.push(base);
-    await mkdir(join(steamGameIn(base), 'Data'), { recursive: true });
+    const machine = await steamIn(base);
     await writeAppManifestOfDepot(join(base, 'library'));
 
-    const { game, place } = await placeOf(await steamIn(base));
+    const { game, place } = await placeOf(machine);
 
     expect(place).toEqual({ root: game, steamRoot: steamGameIn(base), steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [] });
   });

@@ -56,7 +56,6 @@ const PUBLISHER_FILE = 'compiler_settings.json';
 /** Steam holding the game in a fresh folder: the game's folder, and what the machine answers of it. */
 async function steamHolding(): Promise<{ steam: string; machine: Partial<Machine> }> {
   const base = await folder('steam');
-  await mkdir(join(steamGameIn(base), 'Data'), { recursive: true });
   return { steam: steamGameIn(base), machine: await steamIn(base) };
 }
 

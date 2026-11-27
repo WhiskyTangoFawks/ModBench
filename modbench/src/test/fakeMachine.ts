@@ -6,7 +6,7 @@ const NO_MACHINE: Machine = {
   platform: process.platform,
   homeFolder: join(tmpdir(), 'modbench-no-home'),
   userName: 'user',
-  registryValue: () => Promise.resolve(undefined),
+  registryValue: (key, name) => Promise.reject(new Error(`${key} holds no ${name}`)),
   documentsFolder: () => Promise.reject(new Error('no known folder')),
   processes: () => Promise.resolve([]),
 };
