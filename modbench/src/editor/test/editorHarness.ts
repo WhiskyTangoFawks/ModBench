@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { RecordEditChangesOutcome } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createEditor } from '..';
 import { createFocusedView } from '../../drivingLib/focusedView';
@@ -32,6 +33,11 @@ export function forgetEditor(): void {
   reporter.report.mockClear();
   reporter.shownOnSurface.mockClear();
 }
+
+/** mEdit's answer to an edit it made: no change unless `changes` say what it changed. */
+export const editAnswered = (changes: Partial<Extract<RecordEditChangesOutcome, { applied: true }>> = {}) => ({
+  applied: true as const, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [], ...changes,
+});
 
 interface RecordEditorProvider {
   resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;

@@ -32,7 +32,7 @@ const makeRecord = (i: number, editorId: string | null = `Record${i}`): RecordSu
 
 const makeFakeQuickPick = () => fakeQuickPick<vscode.QuickPickItem & { formKey?: string }>();
 
-describe('pickRecord', () => {
+describe('the record picker a tab opens for a reference field', () => {
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })) {
     const deps = new InMemoryMEditClient();
     deps.searchRecords = searchRecords;

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { UnsavedDocumentChange, WriteRefused } from '../MEditClient';
 import { settled } from '../../test/eventually';
 import { answered } from './healthAnswer';
-import { fakeMEdit, jsonResponse } from './fakeMEdit';
+import { fakeMEdit, jsonResponse, noContent } from './fakeMEdit';
 
 const GUN = '/mod/plugin-source/A.esp/Gun.json';
 const AXE = '/mod/plugin-source/A.esp/Axe.json';
@@ -13,12 +13,10 @@ const asChange = (text: string, version: number, path = GUN) => ({ path, text, v
 const asClose = (path = GUN) => ({ path, closed: true });
 const closed = (path = GUN): UnsavedDocumentChange => ({ path, closed: true });
 const refused: WriteRefused = { refused: true, message: 'mEdit could not take the unsaved plugin source — Not plugin source.' };
-/** Answers a hand-over from the path it closes, or the body it puts. */
 type Answer = (handed: string) => Promise<Response>;
 const refusing: Answer = () => Promise.resolve(jsonResponse(400, { title: 'Bad Request', status: 400, detail: 'Not plugin source.' }));
-const taking: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+const taking: Answer = noContent;
 
-/** mEdit as the hand-over meets it: each hand-over it answers as `answer` says, and how each was handed. */
 function handingOver(health: () => Promise<boolean> = () => Promise.resolve(true)) {
   const put: unknown[] = [];
   let answer = taking;
@@ -36,7 +34,6 @@ function handingOver(health: () => Promise<boolean> = () => Promise.resolve(true
   return {
     ...mEdit, put, told,
     answerWith: (next: Answer) => { answer = next; },
-    /** Hands each change, and settles once mEdit has answered as many hand-overs as are `answered` in all. */
     hand: async (answeredInAll: number, ...changes: UnsavedDocumentChange[]) => {
       for (const change of changes) mEdit.client.handUnsavedDocument(change);
       await settled(() => { expect(told).toHaveLength(answeredInAll); });

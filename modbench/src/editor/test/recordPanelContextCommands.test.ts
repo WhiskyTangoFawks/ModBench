@@ -3,22 +3,21 @@ import { clipboard, commandHandlers as handlers, editorVscode, executed, showInp
 
 vi.mock('vscode', () => editorVscode);
 
+import type { RecordEditChangesOutcome } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { WEBVIEW_TO_EXTENSION, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../../wire/messages';
 import { present } from '../../ports/present';
-import { editorOver, forgetEditor } from './editorHarness';
+import { editAnswered, editorOver, forgetEditor } from './editorHarness';
 
 beforeEach(forgetEditor);
 
-const NO_CHANGE = { applied: true as const, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [] };
-
-function makeDeps({ focusedCell, edits = NO_CHANGE }: { focusedCell?: unknown; edits?: Awaited<ReturnType<InMemoryMEditClient['getEditChanges']>> } = {}) {
+function focusedOn({ focusedCell = null, edits = editAnswered() }: { focusedCell?: unknown; edits?: RecordEditChangesOutcome } = {}) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/MyMod.esp/Npc.json' });
   client.setQueryAnswer('getEditChanges', edits);
   const { open } = editorOver({ meditClient: client });
-  if (focusedCell !== undefined) open('000801:A.esp').receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: focusedCell, entered: true });
-  return { edit: client };
+  open('000801:A.esp').receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: focusedCell, entered: true });
+  return { client };
 }
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
@@ -67,34 +66,34 @@ describe('right-click array ops write one envelope from the host', () => {
     ['Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for',
       'moveElementUp', elementContext([...FIRST_VALUE]), { op: 'move', path: FIRST_VALUE, value: -1 }],
   ])('%s', async (_, command, context, envelope) => {
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await present(handlers.get(`modbench.record.${command}`), command)(context);
 
-    expect(editsOf(edit)).toEqual([[ADDRESS, envelope]]);
+    expect(editsOf(client)).toEqual([[ADDRESS, envelope]]);
   });
 
   it('Add lands the value a drop supplies in its add envelope', async () => {
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
       parentContext([{ kind: 'member', name: 'Values' }]), 6);
 
-    expect(envelopesOf(edit)).toEqual([{ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 }]);
   });
 
   it('does nothing when a command fires with no context', async () => {
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(undefined);
 
-    expect(editsAsked(edit)).toEqual([]);
+    expect(editsAsked(client)).toEqual([]);
   });
 });
 
 describe('the extended editor opens from the host, from the context it is handed rather than asking the panel for anything', () => {
   it('opens the tab with the record label and the row\'s own label from the context', async () => {
-    makeDeps();
+    focusedOn();
 
     await present(handlers.get('modbench.record.openFieldValue'), "the handler registered for 'modbench.record.openFieldValue'")(stringContext({
       recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id', readOnly: true,
@@ -109,39 +108,39 @@ describe('the extended editor opens from the host, from the context it is handed
 describe('a field gesture from the palette, which hands it no cell', () => {
   it('acts on the focused cell of the record tab in focus', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }];
-    const { edit } = makeDeps({ focusedCell: elementContext(path) });
+    const { client } = focusedOn({ focusedCell: elementContext(path) });
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'remove', path }]);
   });
 
   it('removes the element a caller addresses by its copy and path, with no panel context', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')({ ...IDENTITY, path });
 
-    expect(editsOf(edit)).toEqual([[ADDRESS, { op: 'remove', path }]]);
+    expect(editsOf(client)).toEqual([[ADDRESS, { op: 'remove', path }]]);
   });
 
   it('does nothing with no focused cell', async () => {
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editsAsked(edit)).toEqual([]);
+    expect(editsAsked(client)).toEqual([]);
   });
 
   it('acts on a cell whose context carries its section beside another, as a string element of an array does', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Names' }, { kind: 'index', index: 0 }];
-    const { edit } = makeDeps({
+    const { client } = focusedOn({
       focusedCell: { ...elementContext(path), webviewSection: 'arrayElement stringValue' },
     });
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'remove', path }]);
   });
 });
 
@@ -151,55 +150,55 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
   const editField = () => present(handlers.get('modbench.record.editField'), 'the editField handler');
 
   it('writes the envelope to the plugin copy its Argument names', async () => {
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await editField()(IDENTITY, envelope);
 
-    expect(editsOf(edit)).toEqual([[ADDRESS, envelope]]);
+    expect(editsOf(client)).toEqual([[ADDRESS, envelope]]);
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
     showInputBox.mockResolvedValue('a new description');
-    const { edit } = makeDeps({ focusedCell: stringContext() });
+    const { client } = focusedOn({ focusedCell: stringContext() });
 
     await editField()();
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
-    expect(editsOf(edit)).toEqual([[
+    expect(editsOf(client)).toEqual([[
       ADDRESS, { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
     ]]);
   });
 
   it('from the palette, writes nothing when the prompt is dismissed', async () => {
     showInputBox.mockResolvedValue(undefined);
-    const { edit } = makeDeps({ focusedCell: stringContext() });
+    const { client } = focusedOn({ focusedCell: stringContext() });
 
     await editField()();
 
-    expect(editsAsked(edit)).toEqual([]);
+    expect(editsAsked(client)).toEqual([]);
   });
 
   it('from the palette, on a cell that is not a string value, writes nothing', async () => {
-    const { edit } = makeDeps({ focusedCell: parentContext(path) });
+    const { client } = focusedOn({ focusedCell: parentContext(path) });
 
     await editField()();
 
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(editsAsked(edit)).toEqual([]);
+    expect(editsAsked(client)).toEqual([]);
   });
 
   it('writes nothing for an Argument that is not a record\'s plugin copy', async () => {
-    const { edit } = makeDeps();
+    const { client } = focusedOn();
 
     await editField()({ formKey: IDENTITY.formKey }, envelope);
 
-    expect(editsAsked(edit)).toEqual([]);
+    expect(editsAsked(client)).toEqual([]);
   });
 });
 
 describe('modbench.record.openReference', () => {
   function reference() {
-    makeDeps();
+    focusedOn();
     handlers.set('modbench.record.open', () => undefined);
     return present(handlers.get('modbench.record.openReference'), "the handler registered for 'modbench.record.openReference'");
   }
@@ -224,30 +223,30 @@ describe('modbench.record.cut, the focused cell\'s value copied and removed in o
   const cut = () => present(handlers.get('modbench.record.cut'), 'the cut handler');
 
   it('copies a field\'s value and sets the field to nothing, in one edit', async () => {
-    const { edit } = makeDeps({ focusedCell: editableCell(true) });
+    const { client } = focusedOn({ focusedCell: editableCell(true) });
 
     await cut()();
 
     expect(clipboard.writeText.mock.calls).toEqual([['7']]);
-    expect(envelopesOf(edit)).toEqual([{ op: 'set', path: LEVEL, value: null }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'set', path: LEVEL, value: null }]);
   });
 
   it('copies an element and removes it, in one edit', async () => {
     const element = { ...editableCell(true), webviewSection: 'cell arrayElement editableCell', copyText: '4', path: ELEMENT };
-    const { edit } = makeDeps({ focusedCell: element });
+    const { client } = focusedOn({ focusedCell: element });
 
     await cut()();
 
     expect(clipboard.writeText.mock.calls).toEqual([['4']]);
-    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path: ELEMENT }]);
+    expect(envelopesOf(client)).toEqual([{ op: 'remove', path: ELEMENT }]);
   });
 
   it('leaves the clipboard as it was when the edit is refused', async () => {
-    const { edit } = makeDeps({ focusedCell: editableCell(true), edits: { applied: false, refusal: 'ReadOnly', message: 'Read-only.' } });
+    const { client } = focusedOn({ focusedCell: editableCell(true), edits: { applied: false, refusal: 'ReadOnly', message: 'Read-only.' } });
 
     await cut()();
 
-    expect(editsAsked(edit)).toHaveLength(1);
+    expect(editsAsked(client)).toHaveLength(1);
     expect(clipboard.writeText).not.toHaveBeenCalled();
   });
 
@@ -256,11 +255,11 @@ describe('modbench.record.cut, the focused cell\'s value copied and removed in o
     ['a cell that cannot be edited', { webviewSection: 'cell', copyText: '7' }],
     ['no focused cell', undefined],
   ])('copies nothing and edits nothing on %s', async (_what, cell) => {
-    const { edit } = makeDeps({ focusedCell: cell });
+    const { client } = focusedOn({ focusedCell: cell });
 
     await cut()();
 
     expect(clipboard.writeText).not.toHaveBeenCalled();
-    expect(editsAsked(edit)).toEqual([]);
+    expect(editsAsked(client)).toEqual([]);
   });
 });

@@ -106,7 +106,7 @@ describe('the destination pick', () => {
   });
 });
 
-describe('heldCopies', () => {
+describe('the copies an override would replace', () => {
   const own = { name: 'Source.esp', origin: 'SourceMod' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
 
@@ -122,20 +122,18 @@ describe('heldCopies', () => {
     return ask.asked.map(({ detail }) => detail);
   }
 
-  it('matches a destination by its origin as well as its name, since a plugin of the same name in another mod is another plugin', async () => {
-    expect(await replaceAsked([{ name: 'Patch.esp', origin: 'SomeOtherMod' }])).toEqual([]);
-  });
-
-  it('matches a destination by name and origin whatever their case, as mEdit compares them', async () => {
-    expect(await replaceAsked([own, { name: 'PATCH.ESP', origin: 'patchmod' }])).toEqual(['000801:Source.esp in Patch.esp (PatchMod)']);
-  });
-
-  it('leaves out a record\'s own plugin, which holds no copy to replace', async () => {
-    expect(await replaceAsked([own, patch])).toEqual(['000801:Source.esp in Patch.esp (PatchMod)']);
+  it.each([
+    ['matches a destination by its origin as well as its name, since a plugin of the same name in another mod is another plugin',
+      [{ name: 'Patch.esp', origin: 'SomeOtherMod' }], []],
+    ['matches a destination by name and origin whatever their case, as mEdit compares them',
+      [own, { name: 'PATCH.ESP', origin: 'patchmod' }], ['000801:Source.esp in Patch.esp (PatchMod)']],
+    ['leaves out a record\'s own plugin, which holds no copy to replace', [own, patch], ['000801:Source.esp in Patch.esp (PatchMod)']],
+  ])('%s, in the replace question', async (_, holders, asked) => {
+    expect(await replaceAsked(holders)).toEqual(asked);
   });
 });
 
-describe('copiesWritten, leaving out a copy that would write nothing', () => {
+describe('the copies said to be made, leaving out a copy that would write nothing', () => {
   it('keeps a copy as new into the record\'s own plugin, which is a duplicate beside it', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', [plugin('Source.esp', 'SourceMod', 3)]);

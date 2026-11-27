@@ -53,7 +53,7 @@ function editInFlight(source: { oneAtATime: OneAtATime }): () => void {
 }
 
 
-describe('registerRecordLifecycleCommands', () => {
+describe('deleting records', () => {
 
   describe('a view\'s Delete key, which passes its view as args', () => {
     afterEach(() => { selectionsOfViews.clear(); });

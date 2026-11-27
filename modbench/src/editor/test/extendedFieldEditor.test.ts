@@ -16,7 +16,7 @@ vi.mock('vscode', () => editorVscode);
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type CompareResult } from '../../client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
-import { forgetEditor, register } from './editorHarness';
+import { editAnswered, editorOver, forgetEditor } from './editorHarness';
 
 type Diff = CompareResult['diffs'][number];
 
@@ -50,16 +50,14 @@ const pluginChanged = (plugin: string, origin: string) => [{ plugin: { name: plu
 let client: InMemoryMEditClient;
 let reporter: RecordingReporter;
 
-const NO_CHANGE = { applied: true as const, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [] };
-
 function makeDocuments() {
-  const { editor } = register({ meditClient: client, reporterOf: reporter });
+  const { editor, open: openTab } = editorOver({ meditClient: client, reporterOf: reporter });
   const open = async (params: FieldParams): Promise<void> => {
     await commandHandlers.get('modbench.record.openFieldValue')?.({
       webviewSection: 'stringValue', value: '', preventDefaultContextMenuItems: true, ...params,
     });
   };
-  return { open, dispose: () => { editor.dispose(); } };
+  return { open, openTab, dispose: () => { editor.dispose(); } };
 }
 
 const commits = () => client.calls.filter(({ method }) => method === 'getEditChanges').map(({ args }) => args);
@@ -92,7 +90,7 @@ beforeEach(() => {
   client = new InMemoryMEditClient();
   client.setQueryAnswer('getComparison', descriptionOf('a long description'));
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/Data/plugin-source/Fallout4.esm/Deacon.json' });
-  client.setQueryAnswer('getEditChanges', NO_CHANGE);
+  client.setQueryAnswer('getEditChanges', editAnswered());
   reporter = recordingReporter();
   documents = makeDocuments();
 });
@@ -214,6 +212,19 @@ describe('the extended-field documents', () => {
       [deacon.formKey, plugin, { op: 'set', path: deacon.path, value: 'first' }],
       [deacon.formKey, plugin, { op: 'set', path: deacon.path, value: 'second' }],
     ]);
+  });
+
+  it('a save after an edit of the FormID moved the record lands at the FormKey the record is at now', async () => {
+    const moved = { ...deacon, formKey: '000800:A.esp', plugin: 'A.esp', origin: 'ModA' };
+    documents.openTab(moved.formKey);
+    client.setQueryAnswerOnce('getEditChanges', editAnswered({ newFormKey: '000900:A.esp' }));
+    await commandHandlers.get('modbench.record.editField')?.(
+      { formKey: moved.formKey, plugin: moved.plugin, origin: moved.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: '000900' });
+    await documents.open(moved);
+
+    await provider().writeFile(shownUri(), encode('saved'));
+
+    expect(commits().map(([formKey]) => formKey)).toEqual(['000800:A.esp', '000900:A.esp']);
   });
 
   it('closing without saving commits nothing', async () => {

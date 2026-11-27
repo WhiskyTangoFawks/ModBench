@@ -9,7 +9,7 @@ import { holdsLoadOrder } from '../../client/test/says';
 import { comparisonOf } from '../../test/comparison';
 import { settled } from '../../test/eventually';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
-import { editorOver, forgetEditor } from './editorHarness';
+import { editAnswered, editorOver, forgetEditor } from './editorHarness';
 
 const [OLD, NEW, ELSEWHERE] = ['000800:A.esp', '000900:A.esp', '000801:A.esp'];
 const MOD = { name: 'A.esp', origin: 'ModA' };
@@ -26,9 +26,7 @@ const settles = (client: InMemoryMEditClient) => {
 const loadsOf = (panel: FakePanel) => panel.webview.postMessage.mock.calls.map(([m]: unknown[]) => m)
   .filter((message) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'loadRecord');
 
-const applied = (newFormKey?: string) => ({
-  applied: true as const, newFormKey, plugins: [MOD], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [],
-});
+const applied = (newFormKey?: string) => editAnswered({ newFormKey, plugins: [MOD] });
 
 beforeEach(forgetEditor);
 

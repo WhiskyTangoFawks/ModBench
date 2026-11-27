@@ -3,7 +3,7 @@ import type { MEditClient } from '..';
 import { EMPTY_SNAPSHOT, notificationEventFixture, recordedThrows } from './fixtures';
 import { leveledLog } from '../../test/leveledLog';
 import { settled } from '../../test/eventually';
-import { fakeMEdit, runningMEdit } from './fakeMEdit';
+import { fakeMEdit, isMark, noContent, runningMEdit } from './fakeMEdit';
 
 type NotificationEvent = ReturnType<typeof notificationEventFixture>;
 
@@ -12,10 +12,9 @@ const malformed = encoder.encode('event: rows-changed\ndata: {"kind":"rows-chang
 const setAside = (folder: string, paths: string[] = ['.medit_tmp_aside_x/Patch.esp']): NotificationEvent =>
   notificationEventFixture({ kind: 'files-set-aside', folder, setAside: paths });
 
-/** What the client tells as set aside, past the fake's own marks. */
 function setAsidesHeard(client: MEditClient): { folder: string; paths: readonly string[] }[] {
   const heard: { folder: string; paths: readonly string[] }[] = [];
-  client.onFilesSetAside((told) => { if (!told.folder.startsWith('/heard/')) heard.push(told); });
+  client.onFilesSetAside((told) => { if (!isMark(told.folder)) heard.push(told); });
   return heard;
 }
 
@@ -27,9 +26,9 @@ const foldersHeard = (client: MEditClient): { readonly folders: readonly string[
 const npc = { path: '/m/plugin-source/A.esp/Npc.json', text: '{}', version: 1 };
 const handedOver = (mEdit: ReturnType<typeof fakeMEdit>) =>
   mEdit.fetch.mock.calls.filter(([request]) => request.url.includes('/unsaved-document')).length;
-const unsavedTaken = ['/unsaved-document', () => Promise.resolve(new Response(null, { status: 204 }))] as const;
+const unsavedTaken = ['/unsaved-document', noContent] as const;
 
-describe('SseNotificationSubscriber', () => {
+describe('mEdit\'s notification stream', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('dispatches an event frame and skips a comment-only one', async () => {
@@ -190,7 +189,7 @@ describe('SseNotificationSubscriber', () => {
   });
 });
 
-describe('SseNotificationSubscriber — typed listeners', () => {
+describe('what each kind of notification tells', () => {
   const progress = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
 
   async function versionInGit(...events: NotificationEvent[]) {

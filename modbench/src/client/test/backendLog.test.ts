@@ -6,7 +6,6 @@ type Channel = ReturnType<typeof fakeLogChannel>;
 const LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 const forwardedCount = (channel: Channel): number => LEVELS.reduce((count, level) => count + channel[level].mock.calls.length, 0);
 
-/** A spawned backend writing lines, and the log channel its output is filed in. */
 async function forwarding() {
   const channel = fakeLogChannel();
   const { spawned } = await runningMEdit({ backendLog: channel });
@@ -18,7 +17,7 @@ async function forwarding() {
   };
 }
 
-describe('makeBackendLogForwarder', () => {
+describe('the spawned backend\'s output, filed in the log channel', () => {
   it.each([
     ['DBG', 'debug'],
     ['INF', 'info'],
@@ -91,7 +90,7 @@ describe('makeBackendLogForwarder', () => {
   });
 });
 
-describe('backendLogLevelArgs, mapping the Output channel\'s vscode.LogLevel ordinal (Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a Serilog minimum-level override for the spawn argv', () => {
+describe('the level the backend is spawned at, the Output channel\'s vscode.LogLevel ordinal (Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) mapped to a Serilog minimum-level override for the spawn argv', () => {
   it.each([
     [0, []],
     [1, ['--Serilog:MinimumLevel:Default', 'Verbose']],

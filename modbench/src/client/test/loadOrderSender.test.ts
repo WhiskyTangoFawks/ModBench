@@ -99,7 +99,6 @@ function loadOrderMEdit({ health = () => Promise.resolve(true), startThrows, sto
   });
   return {
     ...mEdit, history, puts, signals, applies,
-    /** Each PUT takes the next answer, and the last answers every PUT after it. */
     answerPuts: (...next: PutAnswer[]) => { answers = next; },
     answerSignals: (answer: () => Promise<Response>) => { answerSignal = answer; },
     holdPuts: () => {

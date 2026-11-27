@@ -36,7 +36,7 @@ function opening(selection: readonly unknown[] = []) {
 const grid = (head: object, columns: object[], preview: boolean) => ({ head: [head], columns: [columns], options: [{ viewColumn: -1, preview }] });
 const NOTHING = { head: [], columns: [], options: [] };
 
-describe('recordOpenPlan', () => {
+describe('what modbench.record.open opens', () => {
   it.each([
     ['a click on one record opens its winning copy as a preview', ofRecord(A), [], grid(won(A), [], true)],
     ['pinned: true opens pinned', { ...ofRecord(A), pinned: true }, [], grid(won(A), [], false)],
@@ -62,7 +62,7 @@ describe('recordOpenPlan', () => {
   });
 });
 
-describe('pinnedArgument', () => {
+describe('modbench.record.openPinned', () => {
   const openAsked = () => executed().filter(([id]) => id === 'modbench.record.open').map(([, argument]) => argument);
 
   it.each([
@@ -71,7 +71,7 @@ describe('pinnedArgument', () => {
     ['falls back to the clicked row when the selection is empty', ofRecord(A), [], [{ argument: { kind: 'record', ...A }, pinned: true }]],
     ['reads a tree row by the Argument it carries and skips a row that carries none', ofRecord(A, COPY), [ofRecord(A, COPY), { label: 'Types' }],
       [{ argument: { kind: 'record', ...A, plugin: COPY }, pinned: true }]],
-  ])('%s', async (_, row, selection, asked) => {
+  ])('%s, through open', async (_, row, selection, asked) => {
     opening();
 
     await commandHandlers.get('modbench.record.openPinned')?.(row, selection);

@@ -8,7 +8,7 @@ import { changeNamesPlugin } from '../../client/test/says';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { oneAtATime } from '../../textDocuments/oneAtATime';
 import { WEBVIEW_TO_EXTENSION, type RecordEditEnvelope } from '../../wire/messages';
-import { editorOver, forgetEditor } from './editorHarness';
+import { editAnswered, editorOver, forgetEditor } from './editorHarness';
 
 const FILE = '/source/ModA/plugin-source/A.esp/Npcs/Npc.json';
 const MOVED = '/source/ModA/plugin-source/A.esp/Npcs/Renamed.json';
@@ -42,9 +42,7 @@ function makeDeps(answer: Awaited<ReturnType<InMemoryMEditClient['getEditChanges
   return { meditClient, reporter, refreshSourceControlFor, open, edit, cut, madeEdits };
 }
 
-const applied = (changes: object = {}) => ({
-  applied: true as const, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [], ...changes,
-});
+const applied = (changes: Parameters<typeof editAnswered>[0] = {}) => editAnswered({ plugins: [plugin], ...changes });
 
 describe('an edit of a record', () => {
   it('asks mEdit for the edit, which reads the documents it holds', async () => {

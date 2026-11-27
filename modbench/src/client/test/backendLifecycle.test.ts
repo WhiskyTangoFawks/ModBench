@@ -3,11 +3,10 @@ import { leveledLog, type LeveledLog } from '../../test/leveledLog';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 
-import { createMEditClient, type MEditClient } from '..';
+import type { createMEditClient, MEditClient } from '..';
 import { answered } from './healthAnswer';
-import { IGNORED_THROWS } from './fixtures';
 import { settled } from '../../test/eventually';
-import { backendProcesses, fakeLogChannel, neverFetch, spawnedBackend } from './fakeMEdit';
+import { backendProcesses, clientOver, fakeLogChannel, spawnedBackend } from './fakeMEdit';
 
 type Backend = NonNullable<Parameters<typeof createMEditClient>[0]['backend']>;
 type HealthAnswer = Awaited<ReturnType<NonNullable<Backend['checkHealth']>>>;
@@ -19,13 +18,10 @@ function addressInfo(address: ReturnType<Server['address']>): AddressInfo {
   return address;
 }
 
-const clientOver = (backend: Backend, log?: LeveledLog): MEditClient =>
-  createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(0), fetch: neverFetch(), log, backend });
 
-/** A client over a backend it spawns, as `spawnedBackend` makes it unless `overrides` say otherwise. */
 function spawning(overrides: Partial<Backend> = {}, { log, ignoresStdinClose = false }: { log?: LeveledLog; ignoresStdinClose?: boolean } = {}) {
   const { backend, spawned } = spawnedBackend(overrides, backendProcesses({ ignoresStdinClose }));
-  return { client: clientOver(backend, log), spawned };
+  return { client: clientOver(backend, { log }), spawned };
 }
 
 function record(client: MEditClient): string[] {
@@ -40,7 +36,7 @@ function portsHeard(client: MEditClient): number[] {
   return heard;
 }
 
-describe('BackendLifecycle', () => {
+describe('attaching to a backend', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('attaches when a backend is already running', async () => {
@@ -89,7 +85,7 @@ describe('BackendLifecycle', () => {
       const connected = new Promise<Socket>((resolve) => silent.on('connection', resolve));
       await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
       const logged = leveledLog();
-      const client = clientOver({ attachPort: addressInfo(silent.address()).port, pollIntervalMs: 1000, pollTimeoutMs: 1000 }, logged);
+      const client = clientOver({ attachPort: addressInfo(silent.address()).port, pollIntervalMs: 1000, pollTimeoutMs: 1000 }, { log: logged });
 
       const started = client.start();
       const socket = await connected;
@@ -109,7 +105,7 @@ describe('BackendLifecycle', () => {
       const { port } = addressInfo(closed.address());
       await new Promise((resolve) => closed.close(resolve));
       const logged = leveledLog();
-      const client = clientOver({ attachPort: port, pollIntervalMs: 1000, pollTimeoutMs: 1000 }, logged);
+      const client = clientOver({ attachPort: port, pollIntervalMs: 1000, pollTimeoutMs: 1000 }, { log: logged });
       const statuses = record(client);
 
       await client.start();
@@ -124,7 +120,7 @@ describe('BackendLifecycle', () => {
       const checkHealth = vi.fn().mockResolvedValueOnce(refused).mockImplementation(hangs);
       const logged = leveledLog();
 
-      const started = clientOver({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth }, logged).start();
+      const started = clientOver({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth }, { log: logged }).start();
       await vi.advanceTimersByTimeAsync(40);
       await started;
 
@@ -135,7 +131,7 @@ describe('BackendLifecycle', () => {
       useFakeTimers();
       let check: () => Promise<HealthAnswer> = () => Promise.resolve(refused);
       const logged = leveledLog();
-      const client = clientOver({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth: () => check() }, logged);
+      const client = clientOver({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth: () => check() }, { log: logged });
 
       const first = client.start();
       await vi.advanceTimersByTimeAsync(40);
@@ -150,7 +146,7 @@ describe('BackendLifecycle', () => {
   });
 });
 
-describe('BackendLifecycle.start', () => {
+describe('starting a backend', () => {
   it('spawns its own backend even when something already answers health, not adopting whatever answers on a shared port such as another window\'s backend', async () => {
     const { client, spawned } = spawning({ freePort: () => Promise.resolve(41000) });
 
@@ -233,11 +229,11 @@ describe('BackendLifecycle.start', () => {
   });
 });
 
-describe('BackendLifecycle output forwarding', () => {
+describe('the spawned backend\'s output', () => {
   it('reassembles a line split across chunks and strips the CRLF a Windows backend writes', async () => {
     const channel = fakeLogChannel();
     const { backend, spawned } = spawnedBackend();
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: channel, fetch: neverFetch(), backend });
+    const client = clientOver(backend, { backendLog: channel });
     await client.start();
 
     spawned[0]?.stdout.write('[08:30:45 INF] Indexed ');
@@ -255,7 +251,7 @@ describe('BackendLifecycle output forwarding', () => {
   });
 });
 
-describe('BackendLifecycle exit / stop', () => {
+describe('a backend exiting, and a stop', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('stays stopped when the backend exits after running, logging why and starting nothing', async () => {
@@ -297,7 +293,7 @@ describe('BackendLifecycle exit / stop', () => {
     const logged = leveledLog();
     const client = clientOver({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 0, executablePath: '/nonexistent/backend', checkHealth: () => Promise.resolve(answered(false)),
-    }, logged);
+    }, { log: logged });
 
     await client.start();
 
@@ -397,7 +393,7 @@ describe('BackendLifecycle exit / stop', () => {
   });
 });
 
-describe('BackendLifecycle with no health check injected, asking a real local server over GET /health as every other suite injects its check', () => {
+describe('a backend\'s health asked of a real local server over GET /health, where every other suite injects its check', () => {
   let server: Server | undefined;
 
   afterEach(async () => {

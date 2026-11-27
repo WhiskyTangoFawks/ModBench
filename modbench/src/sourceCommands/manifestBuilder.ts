@@ -60,7 +60,7 @@ export interface ManifestSources {
 /** A manifest as update manifest records it, the files a package it names holds, and the files none holds. */
 export interface Recorded {
   readonly manifest: Manifest;
-  readonly sources: ReadonlySet<string>;
+  readonly heldFiles: ReadonlySet<string>;
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
   /** The held packages this machine lacks, and the changed files no present package holds that one of them might. */
@@ -95,7 +95,7 @@ interface Holder {
 export function buildManifest(
   { installationFile, game, downloadedFiles }: ManifestSources, files: readonly HashedModFile[], exclude: readonly string[], held: Manifest | undefined,
 ): Recorded {
-  const sources = new Set<string>();
+  const heldFiles = new Set<string>();
   const used: DownloadedFile[] = installationFile === undefined ? [] : [installationFile];
   const others = downloadedFiles.filter((other) => other.package.name !== installationFile?.package.name);
   const present = new Set([...downloadedFiles, ...installationFile === undefined ? [] : [installationFile]].map(({ package: pkg }) => pkg.name));
@@ -123,7 +123,7 @@ export function buildManifest(
       else hiddenFiles.push(file.path);
       continue;
     }
-    sources.add(file.path);
+    heldFiles.add(file.path);
     if (holder.download === undefined) takenFromTheGame.push(file);
     else if (!used.includes(holder.download)) used.push(holder.download);
   }
@@ -147,7 +147,7 @@ export function buildManifest(
   ];
   const notes = used.flatMap(({ file }) => file.pageUnreadable === undefined ? [] : [`the page of ${basename(file.path)} could not be read, so its manifest names no host: ${file.pageUnreadable}`]);
   return {
-    manifest, sources, notes, hiddenFiles, missingPackages: missing.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
+    manifest, heldFiles, notes, hiddenFiles, missingPackages: missing.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
     ...filesNoPackageHolds(manifest, packageFiles),
   };
 }

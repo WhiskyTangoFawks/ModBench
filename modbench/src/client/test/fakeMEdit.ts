@@ -94,6 +94,15 @@ export function spawnedBackend(overrides: Partial<Backend> = {}, processes = bac
   return { backend, spawned: processes.spawned };
 }
 
+/** A client over `backend`, which talks to nothing unless `deps` say how it fetches. */
+export const clientOver = (backend: Backend, deps: Partial<Omit<Deps, 'backend'>> = {}) =>
+  createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(0), fetch: neverFetch(), backend, ...deps });
+
+const MARKS = '/heard/';
+
+/** Whether a folder told as set aside is one the fake's `fire` marks its frames with. */
+export const isMark = (folder: string): boolean => folder.startsWith(MARKS);
+
 type FakeMEditOptions = {
   routes?: readonly Route[];
   backend?: Partial<Backend>;
@@ -110,16 +119,16 @@ export function fakeMEdit({ routes = [], backend: overrides, processes = backend
   const openUnlessRefused = (request: Request): Promise<Response> =>
     (refusedOpens.includes(attempts++) ? Promise.reject(new Error('ECONNREFUSED')) : open(request));
   const { backend, spawned } = spawnedBackend(overrides, processes);
-  const fetch = routedFetch([...routes, ['/notifications/stream', openUnlessRefused], 
+  const fetch = routedFetch([...routes, ['/notifications/stream', openUnlessRefused],
     ['/load-order/status', () => Promise.resolve(new Response(null, { status: 404 }))],
     ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, 0))],
   ]);
-  const client = createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(), reconnectDelayMs: 0, backend, fetch, ...deps });
+  const client = clientOver(backend, { reconnectDelayMs: 0, fetch, ...deps });
   let marks = 0;
 
   /** Writes each event to the open stream, and settles once the client has dispatched them. */
   const fire = async (...events: NotificationEvent[]): Promise<void> => {
-    const folder = `/heard/${++marks}`;
+    const folder = `${MARKS}${++marks}`;
     const heard = new Promise<void>((resolve) => {
       const off = client.onFilesSetAside((setAside) => { if (setAside.folder === folder) { off(); resolve(); } });
     });

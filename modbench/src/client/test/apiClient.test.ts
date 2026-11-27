@@ -11,7 +11,7 @@ async function refusedHandOver(respond: () => Response): Promise<WriteRefused | 
   return told;
 }
 
-describe('errorText, the sentence written for the user rather than the RFC 7807 ProblemDetails envelope the backend answers every failure in', () => {
+describe('a refusal, as the sentence written for the user rather than the RFC 7807 ProblemDetails envelope the backend answers every failure in', () => {
   it.each([
     ['a string body, passed through', () => jsonResponse(400, 'bad dir'), 'bad dir'],
     ['no body, as empty', () => new Response(null, { status: 400 }), ''],
@@ -24,8 +24,8 @@ describe('errorText, the sentence written for the user rather than the RFC 7807 
   });
 });
 
-describe('isTerminalLoadOrderStatusFor', () => {
-  it('is not terminal while the record index validates a change, though its conflicts are computed', async () => {
+describe('a load order applied', () => {
+  it('settles a load order as applied only once the record index stops validating a change, though its conflicts are computed', async () => {
     const mEdit = await runningMEdit({ routes: [['/load-order', () => Promise.resolve(jsonResponse(200, { applied: true, version: 2 }))]] });
     let outcome: unknown;
     void mEdit.client.sendLoadOrder(EMPTY_SNAPSHOT).then((sent) => { outcome = sent; });
@@ -39,7 +39,7 @@ describe('isTerminalLoadOrderStatusFor', () => {
   });
 });
 
-describe('toLoadOrderStatus', () => {
+describe('the record index progress a load order status gives', () => {
   it('keeps each indexed plugin as (origin, filename), so two of one filename stay two, and carries conflictsComputed false through a Ready wire state, as the whole-set conflict sweep leaves a Ready load order with stale winners', async () => {
     const { client, fire } = await runningMEdit();
 

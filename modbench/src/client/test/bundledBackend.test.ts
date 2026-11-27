@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
-import { createMEditClient } from '..';
-import { IGNORED_THROWS } from './fixtures';
 import { answered } from './healthAnswer';
-import { backendProcesses, fakeLogChannel, neverFetch } from './fakeMEdit';
+import { backendProcesses, clientOver } from './fakeMEdit';
 
 const spawn = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal<typeof import('node:child_process')>(), spawn }));
@@ -11,10 +9,7 @@ vi.mock('node:child_process', async (importOriginal) => ({ ...await importOrigin
 const processes = backendProcesses();
 
 async function startedAndStopped(): Promise<void> {
-  const client = createMEditClient({
-    listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(0), fetch: neverFetch(),
-    backend: { freePort: () => Promise.resolve(5172), checkHealth: () => Promise.resolve(answered(true)) },
-  });
+  const client = clientOver({ freePort: () => Promise.resolve(5172), checkHealth: () => Promise.resolve(answered(true)) });
   await client.start();
   await client.stop();
 }
