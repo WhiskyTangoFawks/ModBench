@@ -72,7 +72,7 @@ describe('the game folder Steam names', () => {
   describe('on Windows, from the SteamPath the registry names', () => {
     const registry = (registryValue: Machine['registryValue']): Partial<Machine> => ({ platform: 'win32', registryValue });
     const steamPathIs = (steamPath: string): Partial<Machine> =>
-      registry((key, name) => Promise.resolve(key === 'HKCU\\Software\\Valve\\Steam' && name === 'SteamPath' ? steamPath : undefined));
+      registry((key, name) => (key === 'HKCU\\Software\\Valve\\Steam' && name === 'SteamPath' ? Promise.resolve(steamPath) : Promise.reject(new Error(`${key} holds no ${name}`))));
 
     it('is under the SteamPath the registry names', async () => {
       const root = await folderWithData('Steam', 'steamapps', 'common', 'Fallout 4');
@@ -82,6 +82,7 @@ describe('the game folder Steam names', () => {
 
     it.each<[string, Machine['registryValue']]>([
       ['the registry names no SteamPath', () => Promise.reject(new Error('ERROR: The system was unable to find the specified registry key or value.'))],
+      ['the registry holds SteamPath as no string', () => Promise.resolve(undefined)],
       ['the registry query itself fails (no reg.exe, no Steam)', () => Promise.reject(new Error('ENOENT: reg'))],
     ])('is not found when %s', async (_, registryValue) => {
       expect(await gameFolderNaming(registry(registryValue))).toMatchObject({ kind: 'notFound', looked: expect.arrayContaining([{ place: STEAM_PLACE, answer: 'the game is in no Steam library' }]) as unknown });
