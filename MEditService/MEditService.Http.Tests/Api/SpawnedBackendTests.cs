@@ -209,16 +209,8 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
         lock (lines) return [.. lines];
     }
 
-    private static async Task<bool> WaitForLineAsync(List<string> lines, Func<string, bool> predicate, TimeSpan timeout)
-    {
-        var elapsed = Stopwatch.StartNew();
-        while (elapsed.Elapsed < timeout)
-        {
-            if (Snapshot(lines).Any(predicate)) return true;
-            await Task.Delay(TimeSpan.FromMilliseconds(100));
-        }
-        return false;
-    }
+    private static Task<bool> WaitForLineAsync(List<string> lines, Func<string, bool> predicate, TimeSpan timeout) =>
+        Task.Run(() => Waits.ReachedWithin(() => Snapshot(lines).Any(predicate), timeout));
 
     private static int GetFreeTcpPort()
     {

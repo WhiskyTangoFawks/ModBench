@@ -143,7 +143,7 @@ public sealed class EditRecordTraceTests : HostedTests
             [(records[0], NonCompiledPlugin, "PluginNotCompiledPlugin"), (records[1], NonCompiledPlugin, "PluginNotCompiledPlugin")],
             answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
         await Client.NextCheck(fx);
-        await Wire.Eventually(
+        await Waits.ReachedAsync(
             async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Intersect(records).Count() == records.Length,
             "the compiled plugin destination to answer both copied records");
         Assert.Empty((await NpcFormKeys(NonCompiledPlugin, NonCompiledPluginOrigin)).Intersect(records));

@@ -25,7 +25,7 @@ public sealed class ClearFieldApiTests : HostedTests
         created.EnsureSuccessStatusCode();
         var formKey = JsonStrings.Of((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
         await Client.NextCheck(fx, Origin);
-        await Wire.Eventually(
+        await Waits.ReachedAsync(
             async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}/compare", UriKind.Relative))).IsSuccessStatusCode,
             "the created record reached the record index");
 
@@ -34,12 +34,12 @@ public sealed class ClearFieldApiTests : HostedTests
 
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
         await Client.NextCheck(fx, Origin);
-        await Wire.Eventually(HoldsHeight, "the set reached the record index");
+        await Waits.ReachedAsync(HoldsHeight, "the set reached the record index");
 
         var cleared = await Client.Edit(formKey, Plugin, Origin, "HeightMax", JsonDocument.Parse("null").RootElement);
         Assert.True(cleared.IsSuccessStatusCode, await cleared.Content.ReadAsStringAsync());
         await Client.NextCheck(fx, Origin);
 
-        await Wire.Eventually(async () => !await HoldsHeight(), "the clear reached the record index");
+        await Waits.ReachedAsync(async () => !await HoldsHeight(), "the clear reached the record index");
     }
 }

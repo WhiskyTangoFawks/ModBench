@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Names each wait on real time in a test's source, and fails on any. A wait is on a value or on a fake clock;
-ALLOWED names each line that cannot be, with its reason. A language is a Scan: the test files it reads and the
-waits it finds there. Run with the repository's root, it reads every tracked file; test-wait-write.py runs
-waits() over the text an edit writes."""
+ALLOWED names each line that cannot be, with its reason: a check that something never happens where nothing
+later announces that it did not. A language is a Scan: the test files it reads and the waits it finds there.
+Run with the repository's root, it reads every tracked file; test-wait-write.py runs waits() over the text an
+edit writes."""
 import re
 import subprocess
 import sys
@@ -28,9 +29,24 @@ SCANS = (
          re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\((?!\s*Timeout\.Infinite\b)')),
 )
 
+RECORD_INDEX_TESTS = 'MEditService/MEditService.RecordIndex.Tests/'
 ALLOWED = {
     ('MEditService/MEditService.TestSupport/Waits.cs', 'Thread.Sleep(PollInterval);'):
         'the pause between two reads of the value a wait is on',
+    ('MEditService/MEditService.TestSupport/Waits.cs', 'await Task.Delay(PollInterval);'):
+        'the pause between two reads of the value a wait is on',
+    (RECORD_INDEX_TESTS + 'Plugins/ReconcileDoorTests.cs', 'await Task.Delay(TimeSpan.FromMilliseconds(500));'):
+        'no third reconcile follows: nothing announces a turn the worker does not take',
+    (RECORD_INDEX_TESTS + 'Query/CommitLandingTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(500));'):
+        'no checkpoint of the first load follows: nothing announces that none is still owed',
+    (RECORD_INDEX_TESTS + 'Records/IndexWriteOrderTests.cs',
+     'Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(100))));'):
+        'the filter does not land while the re-derivation is parked: nothing announces a waiting write',
+    (RECORD_INDEX_TESTS + 'Records/RecordTypeViewsTests.cs',
+     'await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);'):
+        'the second SELECT does not answer while the views are created: nothing announces a waiting read',
+    (RECORD_INDEX_TESTS + 'RealSize/RealSizeSoakTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(10));'):
+        'a tool (Kind=Tool), not a test: a refused read retries as a user\'s script does',
 }
 
 

@@ -36,7 +36,7 @@ internal static class Wire
     {
         (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
         await client.SignalChange();
-        await Eventually(
+        await Waits.ReachedAsync(
             async () => !(await client.GetFromJsonAsync<JsonElement>("/load-order/status")).GetProperty("validating").GetBoolean(),
             "the check validated");
     }
@@ -47,18 +47,6 @@ internal static class Wire
     /// <summary>The signal of a change at <paramref name="paths"/>, as Modbench sends one once its watch names them.</summary>
     internal static async Task SignalChange(this HttpClient client, params string[] paths) =>
         (await client.PostAsJsonAsync("/signal-change", new { paths })).EnsureSuccessStatusCode();
-
-    /// <summary>Polls until <paramref name="holds"/>: validation runs on the service's own thread, and
-    /// a validation that finds nothing publishes nothing to wait on.</summary>
-    internal static async Task Eventually(Func<Task<bool>> holds, string what)
-    {
-        var elapsed = System.Diagnostics.Stopwatch.StartNew();
-        while (!await holds())
-        {
-            Assert.True(elapsed.Elapsed < Patience, $"never: {what}");
-            await Task.Delay(50);
-        }
-    }
 
     // The plugins loaded with no line load whatever mods a snapshot names.
     private static IEnumerable<LoadOrderEntry> Listed(ScatteredFixtureData fx, string[] origins) =>
@@ -291,7 +279,7 @@ internal static class Wire
     /// reports the plugin compiled before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsCompiledPlugin(this HttpClient client, string name)
     {
-        await Eventually(
+        await Waits.ReachedAsync(
             async () => (await client.Plugin(name)).GetProperty("isCompiledPlugin").GetBoolean(),
             $"{name} reported a compiled plugin after init");
         var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");

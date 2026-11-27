@@ -76,16 +76,12 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         }
     }
 
-    private static async Task UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(string pipe, Task until)
-    {
-        while (!until.IsCompleted)
+    private static Task UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(string pipe, Task until) =>
+        Waits.ReachedAsync(async () =>
         {
-            await using (new FileStream(pipe, FileMode.Open, FileAccess.ReadWrite))
-            {
-                await Task.WhenAny(until, Task.Delay(TimeSpan.FromMilliseconds(100)));
-            }
-        }
-    }
+            await using (new FileStream(pipe, FileMode.Open, FileAccess.ReadWrite)) { }
+            return until.IsCompleted;
+        }, "every reader of the pipe unblocked");
 
     private static void MakeFifo(string path)
     {

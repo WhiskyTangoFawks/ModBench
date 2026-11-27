@@ -25,7 +25,7 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
         (await Client.Edit(placedRef.ToString(), Plugin, Origin, "EditorID", "Renamed")).EnsureSuccessStatusCode();
         await Client.NextCheck(fx);
 
-        await Wire.Eventually(
+        await Waits.ReachedAsync(
             async () => JsonDocument.Parse(await Client.GetStringAsync($"/plugins/{Plugin}/working-tree-states-beneath?origin={Origin}"))
                 .RootElement.GetProperty("plugin").EnumerateArray().Any(state => state.GetString() == "Modified"),
             "the edited ref beneath its plugin");
