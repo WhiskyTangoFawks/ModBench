@@ -1141,7 +1141,7 @@ describe('the agent server, reading file order conflicts', () => {
     const { client } = await clientOf(new FakeInstance(value));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Winner' }, { name: 'Loser' }] })).toMatchObject([
-      { mod: 'Winner', files: [{ file: 'a.dds', contents: { state: 'Override', row: 'Override', size: 8, modified: day } }, { file: 'b.dds', contents: { state: null, row: null, size: 8 } }] },
+      { mod: 'Winner', files: [{ file: 'a.dds', contents: { state: 'Override', row: 'Override', size: 8, modified: day } }, { file: 'b.dds', contents: { state: null, row: null, size: 8, modified: day } }] },
       { mod: 'Loser', files: [{ file: 'a.dds', contents: { state: 'Master', row: 'Override', size: 8, modified: 0 } }, { file: 'b.dds', contents: { unreadable: 'no answer fixed for /instance/Loser/b.dds' } }] },
     ]);
   });

@@ -40,7 +40,7 @@ const onDisk = () => readdirSync(root, { recursive: true, withFileTypes: true })
 
 const answers: InstanceAnswers = {
   get folderFiles() {
-    const folders = [root, ...onDisk().filter((entry) => entry.isDirectory()).map((entry) => join(entry.parentPath, entry.name))];
+    const folders = onDisk().filter((entry) => entry.isDirectory()).map((entry) => join(entry.parentPath, entry.name));
     return new Map(folders.map((folder) => [folder, readdirSync(folder)]));
   },
   get hashes() {
