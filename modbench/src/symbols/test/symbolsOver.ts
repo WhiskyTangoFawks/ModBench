@@ -1,5 +1,5 @@
 import { createSymbols, type SymbolRows } from '..';
-import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
+import type { Concerns, InstanceSubscriber, InstanceValue, ReadsFile } from '../../instanceLoader/instance';
 import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
@@ -9,20 +9,26 @@ import { host } from './vscodeHost';
 
 type Deps = Parameters<typeof createSymbols>[0];
 
-/** An instance whose value the test lands, telling every subscriber that anything changed. */
+/** An instance whose value the test lands with the files it read again, telling each subscriber of a change to a fact
+ *  it reads or to a file it reads, as the Instance loader does. */
 export function instanceHolding(value: InstanceValue) {
-  const subscribers = new Set<InstanceSubscriber>();
+  const subscribers = new Set<{ told: InstanceSubscriber; reads: (before: InstanceValue, paths: readonly string[]) => boolean }>();
   const instance = {
     value,
-    subscribe: <K extends keyof InstanceValue>(subscriber: InstanceSubscriber<K>) => {
-      const told: InstanceSubscriber = (next, sequence, heard) => subscriber(next, sequence, heard);
-      subscribers.add(told);
-      return { dispose: () => { subscribers.delete(told); } };
+    subscribe: <K extends keyof InstanceValue>(subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>, readsFile?: ReadsFile<K>) => {
+      const held = {
+        told: (next: InstanceValue, sequence: number, heard: Parameters<InstanceSubscriber>[2]) => subscriber(next, sequence, heard),
+        reads: (before: InstanceValue, paths: readonly string[]) => concerns === undefined
+          || Object.keys(concerns).some((fact) => Reflect.get(before, fact) !== Reflect.get(instance.value, fact))
+          || paths.some((path) => readsFile?.(path, instance.value) ?? false),
+      };
+      subscribers.add(held);
+      return { dispose: () => { subscribers.delete(held); } };
     },
-    land: (next: InstanceValue) => {
+    land: (next: InstanceValue, paths: readonly string[] = []) => {
       const before = instance.value;
       instance.value = next;
-      for (const subscriber of [...subscribers]) void subscriber(next, 1, { ...CHECK_THE_DISK, before, changed: () => 'every' });
+      for (const { told, reads } of [...subscribers]) if (reads(before, paths)) void told(next, 1, { ...CHECK_THE_DISK, before, changed: () => 'every' });
     },
   };
   return instance;

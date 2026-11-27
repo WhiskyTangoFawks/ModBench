@@ -1,11 +1,12 @@
 // The VS Code the Symbols box registers with: a test file mocks `vscode` with this module, and reads through `host`
 // what the box registered and what it shows.
 
-import { ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri as BaseUri, uriParse, type FakeUri } from '../../test/vscodeMock';
+import {
+  Diagnostic, DiagnosticSeverity, FakeDiagnosticCollection, MarkdownString, ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri as BaseUri, uriParse, type FakeUri,
+} from '../../test/vscodeMock';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
-import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 
-export { ThemeIcon, TreeItem, TreeItemCollapsibleState };
+export { Diagnostic, DiagnosticSeverity, MarkdownString, ThemeIcon, TreeItem, TreeItemCollapsibleState };
 
 type Listener<T> = (event: T) => void;
 type Handler = (...args: unknown[]) => unknown;
@@ -44,10 +45,6 @@ export class Location {
   constructor(readonly uri: UriOf, at: Range | Position) { this.range = at instanceof Range ? at : new Range(at, at); }
 }
 
-export class MarkdownString {
-  constructor(readonly value = '') {}
-}
-
 export class Hover {
   constructor(readonly contents: MarkdownString, readonly range: Range) {}
 }
@@ -71,24 +68,6 @@ export class WorkspaceEdit {
   readonly size = 0;
 }
 
-export class Diagnostic {
-  source?: string;
-  code?: unknown;
-  constructor(readonly range: Range, readonly message: string, readonly severity: number) {}
-}
-
-class DiagnosticCollection {
-  readonly held = new Map<string, readonly unknown[]>();
-  set(uri: FakeUri, diagnostics: readonly unknown[] | undefined): void {
-    if (diagnostics === undefined) this.held.delete(uri.fsPath);
-    else this.held.set(uri.fsPath, diagnostics);
-  }
-  delete(uri: FakeUri): void { this.held.delete(uri.fsPath); }
-  clear(): void { this.held.clear(); }
-  dispose(): void { this.held.clear(); }
-}
-
-export const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 };
 export const SymbolKind = { File: 0, Module: 1, Namespace: 2, Package: 3, Class: 4, Object: 18 };
 export const CompletionItemKind = { File: 16, Folder: 18, Class: 6, Reference: 17 };
 export const Uri = { ...BaseUri, parse: uriParse };
@@ -100,6 +79,15 @@ export interface FakeDocument {
 }
 
 interface Token { isCancellationRequested: boolean }
+
+/** A list the References view shows: its title, its anchor, and its rows, read again at each resolve. */
+export interface ShownInput {
+  readonly title: string;
+  readonly location: Location;
+  readonly contextValue: string;
+  resolve: () => Promise<{ provider: { getChildren: (row?: unknown) => unknown }; message: string | undefined }>;
+  with: (location: Location) => ShownInput;
+}
 interface Providers {
   hover: { provideHover: (document: FakeDocument, at: Position, token: Token) => Promise<Hover | undefined> };
   completion: { provideCompletionItems: (document: FakeDocument, at: Position, token: Token) => Promise<CompletionList | undefined> };
@@ -124,12 +112,11 @@ const extensionsChanged = emitter<undefined>();
 const commandHandlers = new Map<string, Handler>();
 const executed: unknown[][] = [];
 const providers: { [K in keyof Providers]?: Providers[K] } = {};
-const collections = new Map<string, DiagnosticCollection>();
-const referencesShown: ReferencesViewInput[] = [];
+const collections = new Map<string, FakeDiagnosticCollection>();
+const referencesShown: ShownInput[] = [];
 const quickPicks: ReturnType<typeof fakeQuickPick<{ label: string }>>[] = [];
 const unopenable = new Set<string>();
 let documents: FakeDocument[] = [];
-let referencesViewEnabled = true;
 
 const register = <K extends keyof Providers>(kind: K) => (provider: Providers[K]) => {
   providers[kind] = provider;
@@ -149,7 +136,7 @@ export const languages = {
   registerRenameProvider: (_selector: unknown, provider: Providers['rename']) => register('rename')(provider),
   registerWorkspaceSymbolProvider: (provider: Providers['workspaceSymbols']) => register('workspaceSymbols')(provider),
   createDiagnosticCollection: (name: string) => {
-    const collection = new DiagnosticCollection();
+    const collection = new FakeDiagnosticCollection();
     collections.set(name, collection);
     return collection;
   },
@@ -195,8 +182,8 @@ export const window = {
 };
 
 export const extensions = {
-  getExtension: (id: string) => (id === 'vscode.references-view' && referencesViewEnabled
-    ? { activate: () => Promise.resolve({ setInput: (input: ReferencesViewInput) => { referencesShown.push(input); } }) }
+  getExtension: (id: string) => (id === 'vscode.references-view'
+    ? { activate: () => Promise.resolve({ setInput: (input: ShownInput) => { referencesShown.push(input); } }) }
     : undefined),
   onDidChange: extensionsChanged.event,
 };
@@ -225,7 +212,6 @@ export const host = {
   },
   /** Each command executed, with its arguments, setContext's included. */
   executed,
-  context: (key: string): unknown => executed.filter(([id, held]) => id === 'setContext' && held === key).at(-1)?.[2],
   hover: async (path: string, marked: string, token = NOT_CANCELLED) => {
     const { held, at } = marking(path, marked);
     const hover = await provider('hover').provideHover(held, at, token);
@@ -237,7 +223,7 @@ export const host = {
     return list && {
       isIncomplete: list.isIncomplete,
       items: list.items.map((item) => ({
-        label: item.label.label, detail: item.label.description, kind: item.kind, insertText: item.insertText,
+        label: item.label.label, detail: item.label.description, kind: item.kind, insertText: item.insertText, filterText: item.filterText,
         replaces: item.range && held.text.slice(held.offsetAt(item.range.start), held.offsetAt(item.range.end)),
       })),
     };
@@ -262,9 +248,7 @@ export const host = {
     return provider('rename').provideRenameEdits(held, at, newName);
   },
   /** The problems the Problems panel shows on each file of the collection, by path. */
-  problems: (name: string) => new Map([...collections.get(name)?.held ?? []].map(([path, shown]) => [path, shown
-    .filter((diagnostic) => diagnostic instanceof Diagnostic)
-    .map(({ range, message }) => ({ message, start: range.start, end: range.end }))])),
+  problems: (name: string) => new Map([...collections.get(name) ?? []].map(([uri, shown]) => [uri.fsPath, shown.map(({ range, message }) => ({ message, start: range.start, end: range.end }))])),
   /** Each list the References view was given. */
   referencesShown,
   /** Each quick pick the box showed, with the user's acts on it. */
@@ -273,15 +257,11 @@ export const host = {
   unopenable,
   /** Sets the documents VS Code holds, as at the start. */
   holds: (held: FakeDocument[]) => { documents = held; },
-  open: (held: FakeDocument) => { documents = [...documents, held]; opened.fire(held); },
   change: (held: FakeDocument) => { changed.fire({ document: held, contentChanges: [{}] }); },
-  close: (held: FakeDocument) => { documents = documents.filter((each) => each !== held); closed.fire(held); },
   willRenameFiles: willRename.fire,
   didRenameFiles: didRename.fire,
   /** How many listen for VS Code's renames as they land. */
   renameListeners: didRename.size,
-  /** Disables or enables VS Code's References view. */
-  referencesView: (enabled: boolean) => { referencesViewEnabled = enabled; extensionsChanged.fire(undefined); },
   /** Forgets everything registered and held, as a fresh window. */
   reset: () => {
     for (const each of [opened, changed, closed, willRename, didRename, extensionsChanged]) each.clear();
@@ -291,6 +271,5 @@ export const host = {
     referencesShown.length = 0;
     quickPicks.length = 0;
     documents = [];
-    referencesViewEnabled = true;
   },
 };

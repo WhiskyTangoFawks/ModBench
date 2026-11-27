@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('vscode', () => import('./vscodeHost'));
 
-import { document, host, Location, Range, TreeItem, Uri } from './vscodeHost';
+import { document, host, Location, Range, TreeItem, Uri, type ShownInput } from './vscodeHost';
+
+const moved = () => new Location(Uri.file('/source/ModA/plugin-source/A.esp/Gun.json'), new Range(9, 15, 9, 15));
 import { symbolsOver } from './symbolsOver';
 import { mEditNames, spelledName } from './mEditNames';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 import { comparisonOf } from '../../test/comparison';
 import { present } from '../../ports/present';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
@@ -33,7 +34,7 @@ function asking(arrange: (client: InMemoryMEditClient) => void = () => undefined
     },
   });
   const referencesAsked = () => made.client.calls.filter(({ method }) => method.startsWith('getReferences')).map(({ method, args }) => [method, ...args]);
-  const ask = async (): Promise<ReferencesViewInput | undefined> => {
+  const ask = async (): Promise<ShownInput | undefined> => {
     const shown = host.referencesShown.length;
     await host.run('modbench.symbol.referencedBy');
     return host.referencesShown.slice(shown).at(-1);
@@ -41,7 +42,7 @@ function asking(arrange: (client: InMemoryMEditClient) => void = () => undefined
   return { ...made, referencesAsked, ask };
 }
 
-const rowsOf = async (input: ReferencesViewInput | undefined) => {
+const rowsOf = async (input: ShownInput | undefined) => {
   const rows = (await present(input, 'the list shown').resolve()).provider.getChildren();
   return Array.isArray(rows) ? rows.filter((row): row is TreeItem => row instanceof TreeItem) : [];
 };
@@ -53,13 +54,13 @@ describe('Referenced By on a record, answered in VS Code\'s References view (edi
     expect([input?.title, input?.location, (await rowsOf(input)).map((row) => row.label)]).toEqual(['Referenced By: Gun', ANCHOR, ['Rifle']]);
   });
 
-  it('reads the list only when the view resolves it, and again on each refresh', async () => {
+  it('reads the list only when the view resolves it, and again on each refresh, wherever the view moves its anchor', async () => {
     const { ask, referencesAsked } = asking();
     const input = present(await ask(), 'the list shown');
     expect(referencesAsked()).toEqual([]);
 
     await input.resolve();
-    const refreshed = input.with(input.location);
+    const refreshed = input.with(moved());
     await refreshed.resolve();
 
     expect(referencesAsked()).toEqual([[IN_ACTIVE_OR_COMPILED, GUN], [IN_ACTIVE_OR_COMPILED, GUN]]);
@@ -70,8 +71,8 @@ describe('Referenced By on a record, answered in VS Code\'s References view (edi
     const { ask } = asking();
     const first = present(await ask(), 'the first list');
     const again = present(await ask(), 'the list asked for again');
-    const refreshed = first.with(first.location);
-    const idsOf = async (input: ReferencesViewInput): Promise<unknown[]> => (await rowsOf(input)).map((row): unknown => Reflect.get(row, 'id'));
+    const refreshed = first.with(moved());
+    const idsOf = async (input: ShownInput): Promise<unknown[]> => (await rowsOf(input)).map((row): unknown => Reflect.get(row, 'id'));
 
     expect(await idsOf(again)).not.toEqual(await idsOf(first));
     expect(await idsOf(refreshed)).toEqual(await idsOf(first));

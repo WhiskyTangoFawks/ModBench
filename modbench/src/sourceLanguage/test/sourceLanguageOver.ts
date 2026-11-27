@@ -1,5 +1,4 @@
 import { createSourceLanguage } from '..';
-import type { PathStanding } from '../pathProblems';
 import type { FilesChanged } from '../../instanceLoader/filesChanged';
 import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
 import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
@@ -9,6 +8,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { host } from './vscodeHost';
 
 type Deps = Parameters<typeof createSourceLanguage>[0];
+export type PathStanding = Deps['pathStanding'];
 
 export const RETRY_AFTER_MS = 1000;
 export const LINKS_STATUS = 'modbench.sourceProblems';

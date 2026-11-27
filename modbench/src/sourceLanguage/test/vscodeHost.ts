@@ -1,7 +1,9 @@
 // The VS Code the Source language box registers with: a test file mocks `vscode` with this module, and
 // reads through `host` what the box registered and what it shows.
 
-import { Uri as BaseUri, uriParse, type FakeUri } from '../../test/vscodeMock';
+import { Diagnostic, DiagnosticSeverity, FakeDiagnosticCollection, Uri as BaseUri, uriParse, type FakeUri } from '../../test/vscodeMock';
+
+export { Diagnostic, DiagnosticSeverity };
 
 interface Position { line: number; character: number }
 type Listener<T> = (event: T) => void;
@@ -40,21 +42,6 @@ export class FileSystemError extends Error {
   constructor(readonly code: string) { super(code); }
 }
 
-export class Diagnostic {
-  source?: string;
-  code?: { value: string; target: ReturnType<typeof uriParse> };
-  constructor(readonly range: Range, readonly message: string, readonly severity: number) {}
-}
-
-/** The problems VS Code shows on each file, by its path. */
-class DiagnosticCollection {
-  readonly held = new Map<string, readonly unknown[]>();
-  set(uri: FakeUri, diagnostics: readonly unknown[]): void { this.held.set(uri.fsPath, diagnostics); }
-  delete(uri: FakeUri): void { this.held.delete(uri.fsPath); }
-  dispose(): void { this.held.clear(); }
-}
-
-export const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 };
 export const CompletionItemKind = { EnumMember: 19 };
 export const LanguageStatusSeverity = { Information: 0, Warning: 1, Error: 2 };
 // As the real Uri, which writes a drive letter in lower case.
@@ -74,7 +61,7 @@ const closed = emitter<FakeDocument>();
 const commandHandlers = new Map<string, Handler>();
 const executed: unknown[][] = [];
 const completionProviders: { provideCompletionItems: (document: FakeDocument, at: Position) => Promise<CompletionItem[] | undefined> }[] = [];
-const collections = new Map<string, DiagnosticCollection>();
+const collections = new Map<string, FakeDiagnosticCollection>();
 const statuses = new Map<string, { text: string; severity?: number }>();
 const files = new Map<string, string | (() => Promise<string>)>();
 const reads: string[] = [];
@@ -91,7 +78,7 @@ export const languages = {
     return new Disposable(() => { completionProviders.splice(completionProviders.indexOf(provider), 1); });
   },
   createDiagnosticCollection: (name: string) => {
-    const collection = new DiagnosticCollection();
+    const collection = new FakeDiagnosticCollection();
     collections.set(name, collection);
     return collection;
   },
@@ -157,14 +144,10 @@ export const host = {
     }));
   },
   /** The problems the Problems panel shows on each file of the collection, by path. */
-  problems: (name: string) => new Map([...collections.get(name)?.held ?? []].map(([path, shown]) => [path, shown
-    .filter((diagnostic) => diagnostic instanceof Diagnostic)
-    .map(({ range, message, code }) => ({
-      message, start: range.start, end: range.end,
-      ...code && { clearing: { label: code.value, command: code.target.path, args: JSON.parse(code.target.query) as unknown } },
-    }))])),
-  /** The text of each language status item shown. */
-  statuses: (): string[] => [...statuses.values()].map(({ text }) => text),
+  problems: (name: string) => new Map([...collections.get(name) ?? []].map(([uri, shown]) => [uri.fsPath, shown.map(({ range, message, code }) => ({
+    message, start: range.start, end: range.end,
+    ...typeof code === 'object' && { clearing: { label: code.value, command: code.target.path, args: JSON.parse(code.target.query) as unknown } },
+  }))])),
   status: (id: string): string | undefined => statuses.get(id)?.text,
   /** The text VS Code reads off disk at a path, or the read that answers it. */
   files,

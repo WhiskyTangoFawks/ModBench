@@ -166,7 +166,7 @@ describe('Find All References lists the places the symbol\'s kind answers (symbo
 });
 
 describe('completion offers the symbols of the kind a file names at the place (symbols.md, The features, story 5)', () => {
-  it.each([[false], [true]])('tells each kind it asks the gesture, and whether VS Code has cancelled it (cancelled: %s)', async (cancelled) => {
+  it.each([[false, 1], [true, 0]])('asks mEdit to search only while VS Code has not cancelled the completion (cancelled: %s)', async (cancelled, searches) => {
     const field = '{ "Armor": "Rusty" }';
     const { client } = naming([{ kind: 'Reference', start: 12, end: 17, value: 'Rusty', validFormKeyTypes: ['ARMO'] }], {
       arrange: (held) => { held.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', path: '/mods/ModA/A.esp' })]); },
@@ -174,7 +174,7 @@ describe('completion offers the symbols of the kind a file names at the place (s
 
     await host.complete(FILE, `${field.slice(0, 17)}|${field.slice(17)}`, { isCancellationRequested: cancelled });
 
-    expect(client.calls.filter(({ method }) => method === 'searchRecords')).toHaveLength(cancelled ? 0 : 1);
+    expect(client.calls.filter(({ method }) => method === 'searchRecords')).toHaveLength(searches);
   });
 });
 

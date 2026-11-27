@@ -8,7 +8,6 @@ import { sourceLanguageOver } from './sourceLanguageOver';
 const FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 const OTHER = '/source/ModA/plugin-source/A.esp/Cells/Other.json';
 
-/** The box over the documents VS Code holds as it starts, and each hand-over from then on. */
 function handing(...held: FakeDocument[]) {
   const { client } = sourceLanguageOver({ arrange: () => { host.holds(held); } });
   return () => client.calls.filter(({ method }) => method === 'handUnsavedDocument').map(({ args }) => args[0]);

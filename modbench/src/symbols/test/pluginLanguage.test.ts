@@ -59,6 +59,7 @@ describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md,
     naming();
     await expect(host.prepareRename(PLUGINS_TXT, '*Go|ne.esp\r\n')).rejects.toThrow('Rename Symbol renames a plugin, a mod or a separator, or changes a record\'s FormKey or EditorID, and none is here.');
     await host.rename(PLUGINS_TXT, '*Go|ne.esp\r\n', 'New.esp');
+    expect(renamed()).toEqual([]);
     naming('Gone.esp');
 
     await expect(host.rename(PLUGINS_TXT, '*Go|ne.esp\r\n', 'New.esp')).rejects.toThrow('Mod order resolves Gone.esp to no plugin.');

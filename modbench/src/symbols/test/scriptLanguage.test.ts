@@ -12,6 +12,7 @@ import type { PlacedReferences } from '../../client/MEditClient';
 import type { ReadFailed } from '../../wire/readFailed';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { settled as until } from '../../test/eventually';
+import { present } from '../../ports/present';
 import { changeNamesPlugin, holdsLoadOrder } from '../../client/test/says';
 
 const QUEST = '000801:Mod.esp';
@@ -84,10 +85,10 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
   it('is found by Go to Symbol when only an archive holds its compiled script, at that archive', async () => {
     const { reveal } = language(NONE, ARCHIVE_ONLY);
 
-    const [found] = await host.workspaceSymbols('packed');
-    if (found) await host.resolveWorkspaceSymbol(found);
+    const found = present((await host.workspaceSymbols('packed'))[0], 'the archived script');
+    await host.resolveWorkspaceSymbol(found);
 
-    expect([found?.name, found?.location, reveal.mock.calls]).toEqual(['Packed', new Location(Uri.file(ARCHIVED_PEX.archive), new Range(0, 0, 0, 0)), [[ARCHIVED_PEX]]]);
+    expect([found.name, found.location, reveal.mock.calls]).toEqual(['Packed', new Location(Uri.file(ARCHIVED_PEX.archive), new Range(0, 0, 0, 0)), [[ARCHIVED_PEX]]]);
   });
 });
 
@@ -163,7 +164,8 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
   });
 
   it.each([
-    ['the instance changes', (made: ReturnType<typeof language>) => { made.instance.land({ ...made.instance.value }); }],
+    ['a fact a script resolves against changes', (made: ReturnType<typeof language>) => { made.instance.land({ ...made.instance.value, papyrusScripts: [...SCRIPTS] }); }],
+    ['a plugin source file changes', (made: ReturnType<typeof language>) => { made.instance.land(made.instance.value, ['/instance/source/Mod/plugin-source/Mod.esp/Npc.json']); }],
     ['the load order settles, which says everything changed', (made: ReturnType<typeof language>) => { holdsLoadOrder(made.client, { version: 1 }); }],
     ['a plugin changes', (made: ReturnType<typeof language>) => { changeNamesPlugin(made.client, { name: 'Mod.esp', origin: 'Mod' }); }],
   ])('judges again when %s, asking mEdit again', async (_when, change) => {
@@ -174,6 +176,33 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     change(made);
 
     await until(() => { expect(asked()).toHaveLength(2); });
+  });
+});
+
+describe('what judges a script\'s names again', () => {
+  const quiet = () => new Promise((resolve) => { setImmediate(resolve); });
+  const asked = (made: ReturnType<typeof language>) => made.client.calls.filter(({ method }) => method === 'getPluginFilePaths');
+
+  it('hears no change to a file that is no plugin source, nor to a fact no script resolves against', async () => {
+    const made = language();
+    await until(() => { expect(asked(made)).toHaveLength(1); });
+
+    made.instance.land({ ...made.instance.value, profiles: ['Default', 'Other'] }, ['/instance/mods/A/textures/a.dds']);
+    await quiet();
+
+    expect(asked(made)).toHaveLength(1);
+  });
+
+  it('hears nothing once stopped', async () => {
+    const made = language();
+    await until(() => { expect(asked(made)).toHaveLength(1); });
+
+    made.dispose();
+    made.instance.land({ ...made.instance.value, papyrusScripts: [...SCRIPTS] });
+    changeNamesPlugin(made.client, { name: 'Mod.esp', origin: 'Mod' });
+    await quiet();
+
+    expect(asked(made)).toHaveLength(1);
   });
 });
 

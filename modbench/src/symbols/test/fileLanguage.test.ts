@@ -174,8 +174,8 @@ describe('completion at a path (symbols.md, The features, story 5)', () => {
     expect(await offeredFor('').found).toEqual({
       isIncomplete: false,
       items: [
-        { label: 'Decals\\Stain_d.dds', detail: undefined, kind: CompletionItemKind.File, insertText: 'Decals\\\\Stain_d.dds', replaces: '' },
-        { label: 'decals\\other_d.dds', detail: undefined, kind: CompletionItemKind.File, insertText: 'decals\\\\other_d.dds', replaces: '' },
+        { label: 'Decals\\Stain_d.dds', detail: undefined, kind: CompletionItemKind.File, insertText: 'Decals\\\\Stain_d.dds', filterText: 'Decals\\Stain_d.dds Decals\\\\Stain_d.dds', replaces: '' },
+        { label: 'decals\\other_d.dds', detail: undefined, kind: CompletionItemKind.File, insertText: 'decals\\\\other_d.dds', filterText: 'decals\\other_d.dds decals\\\\other_d.dds', replaces: '' },
       ],
     });
   });

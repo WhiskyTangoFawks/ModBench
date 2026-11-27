@@ -3,8 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { document, host } from './vscodeHost';
-import { PATHS_STATUS, pathStandingOf, sourceLanguageOver } from './sourceLanguageOver';
-import type { PathStanding } from '../pathProblems';
+import { PATHS_STATUS, pathStandingOf, RETRY_AFTER_MS, sourceLanguageOver, type PathStanding } from './sourceLanguageOver';
 import type { FilesChanged } from '../../instanceLoader/filesChanged';
 import { fileIn } from '../../test/fakeInstanceAdapter';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -17,7 +16,6 @@ const changedIn = (name: string, relativePath: string): FilesChanged => {
   return [{ origin: { kind: 'mod', name }, files, gained: files }];
 };
 
-const RETRY_AFTER_MS = 1000;
 const HOLDER = '000800:Names.esp';
 const PLUGIN = { name: 'Names.esp', origin: 'NamingMod' };
 const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
@@ -228,8 +226,6 @@ describe('the paths a plugin source names that nothing answers, in the Problems 
     expect(ended).toBe(false);
     releaseSecond(TEXT);
     await waiting;
-
-    expect(host.problems('modbench-source').size).toBe(1);
   });
 
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {

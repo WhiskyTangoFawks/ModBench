@@ -11,7 +11,6 @@ const OWNER = '000801:Mod.esp';
 const CHILD = '000802:Mod.esp';
 const SOURCE = '/source/ModA/plugin-source/Mod.esp/Npc.json';
 
-/** The box over an mEdit that answers every record's winning copy with `fields`. */
 function completing(fields: Field[]) {
   const made = sourceLanguageOver({
     arrange: (client) => { client.setQueryAnswer('getComparison', comparisonOf(OWNER, [{ plugin: 'Mod.esp', origin: DATA_DIRECTORY_ORIGIN, isWinner: true, fields }])); },
@@ -73,7 +72,7 @@ describe('completing an enum or flags value in plugin source (source.md, Editing
 });
 
 it('writes why to the Output, and offers nothing, when mEdit cannot answer the record\'s comparison', async () => {
-  const { reporter } = sourceLanguageOver({ arrange: (client) => { client.getComparison = () => Promise.reject(new Error('mEdit is down.')); } });
+  const { reporter } = sourceLanguageOver({ arrange: (client) => { client.setQueryAnswerOnce('getComparison', Promise.reject(new Error('mEdit is down.'))); } });
 
   const found = await host.complete(SOURCE, documentOf('"Mode": "|"'));
 

@@ -3,14 +3,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 vi.mock('vscode', () => import('./vscodeHost'));
 
 import { host } from './vscodeHost';
-import { LINKS_STATUS, sourceFolders, sourceLanguageOver } from './sourceLanguageOver';
+import { LINKS_STATUS, RETRY_AFTER_MS, sourceFolders, sourceLanguageOver } from './sourceLanguageOver';
 import type { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { PluginProblems, RecordIndexChange } from '../../client';
 import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 import { settled as until } from '../../test/eventually';
 
-const RETRY_AFTER_MS = 1000;
 const MISSING = '000ABC:Absent.esp';
 const REFERRER = '000800:Refers.esp';
 const PLUGIN = { name: 'Refers.esp', origin: 'ReferringMod' };

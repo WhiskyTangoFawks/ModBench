@@ -143,8 +143,8 @@ describe('completion at a reference field (symbols.md, The features, story 5)', 
     expect(await offered).toEqual({
       isIncomplete: true,
       items: [
-        { label: 'Gun', detail: GUN, kind: CompletionItemKind.Reference, insertText: GUN, replaces: 'Gu' },
-        { label: '000901:A.esp', detail: '000901:A.esp', kind: CompletionItemKind.Reference, insertText: '000901:A.esp', replaces: 'Gu' },
+        { label: 'Gun', detail: GUN, kind: CompletionItemKind.Reference, insertText: GUN, filterText: `Gun ${GUN}`, replaces: 'Gu' },
+        { label: '000901:A.esp', detail: '000901:A.esp', kind: CompletionItemKind.Reference, insertText: '000901:A.esp', filterText: '000901:A.esp 000901:A.esp', replaces: 'Gu' },
       ],
     });
     expect(asked().filter(({ method }) => method === 'searchRecords').map(({ args }) => args.slice(0, 2))).toEqual([['Gu', ['ARMO', 'WEAP']]]);
@@ -220,7 +220,7 @@ describe('a record\'s hover (symbols.md, The symbols)', () => {
   });
 
   it('answers nothing, and writes why to the Output, when mEdit cannot answer', async () => {
-    const { reporter } = kind({ arrange: (client) => { client.getComparison = () => Promise.reject(new Error('mEdit is down.')); } });
+    const { reporter } = kind({ arrange: (client) => { client.setQueryAnswerOnce('getComparison', Promise.reject(new Error('mEdit is down.'))); } });
 
     expect((await host.hover(GUN_FILE, AT_GUN))?.text).toBe(GUN);
     expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Hover cannot describe ${GUN}.`, detail: 'mEdit is down.' }]);
