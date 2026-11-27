@@ -1,33 +1,12 @@
-import { vi } from 'vitest';
-import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, Diagnostic, DiagnosticSeverity, Range, Uri,
-} from '../../test/vscodeMock';
-import { recordedWithProgress } from '../../test/recordedProgress';
+import type { PluginAddress } from '../../client';
 
-export const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
+/** A Plugins row as VS Code hands it to a source gesture. */
+export const pluginRow = (plugin: PluginAddress) => ({ argument: { kind: 'plugin', plugin }, label: plugin.name });
 
-const registerCommand = vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
-  handlers.set(command, handler);
-  return { dispose: vi.fn() };
-});
+/** A record tab's column header as VS Code hands it to a source gesture. */
+export const columnHeader = (plugin: PluginAddress) => ({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: `000801:${plugin.name}`, plugin } });
 
-export const showQuickPick = vi.fn<(items: readonly unknown[], options?: unknown) => Promise<unknown>>();
+/** A separator's Argument as a carrier hands it to a gesture: the Mods view's separator row carries none. */
+export const separatorCarrier = (name: string) => ({ argument: { kind: 'separator', name }, name });
 
-export const createQuickPick = vi.fn();
-
-export const executeCommand = vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve());
-
-/** The `vscode` module the source gestures run against; mock it with `vi.mock('vscode', () => vscodeModule())`. */
-export const vscodeModule = () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range,
-  Uri,
-});
-
-export class PluginRowStandIn extends TreeItem {
-  readonly kind = 'plugin';
-  readonly argument: { kind: 'plugin'; plugin: { name: string; origin: string } };
-  constructor(plugin: { name: string; origin: string }) { super(plugin.name); this.argument = { kind: 'plugin', plugin }; }
-}
+export const PLUGINS_VIEW = 'modbench.pluginListTree';

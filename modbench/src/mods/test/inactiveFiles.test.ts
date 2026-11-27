@@ -1,41 +1,41 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
-} from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri,
-}));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-import * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue } from '../../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
+import type * as vscode from 'vscode';
+import { modsViewOn } from './modsViewOn';
+import { changeSetting, seen } from './modsVscode';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { present } from '../../ports/present';
-import { ModListProvider, ModNode, type ModlistNode } from '../ModListProvider';
-import { OpenRows } from '../openRows';
-import { NO_MOD_STATUSES } from '../../test/noModStatuses';
-import { fileRowUri } from '../modFiles';
-import { GREY_INACTIVE_FILES_SETTING, InactiveFileDecorationProvider } from '../inactiveFiles';
+import { FakeCancellationToken, ThemeColor, Uri } from '../../test/vscodeMock';
 import { file, folder, indexedValueOf, indexedValues, mod } from './indexedValue';
-import { recordingReporter } from '../../test/surfacingDoubles';
 
-const settingOn = (on: boolean | undefined) => ({
-  getConfiguration: () => ({ get: () => on }),
-  onDidChangeConfiguration: new EventEmitter<{ affectsConfiguration: (key: string) => boolean }>(),
-});
+const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
-function decorationsOver(instance: FakeInstance, configuration = settingOn(undefined)) {
-  return new InactiveFileDecorationProvider(instance, {
-    getConfiguration: configuration.getConfiguration, onDidChangeConfiguration: configuration.onDidChangeConfiguration.event,
+const isGrey = (decoration: vscode.FileDecoration | null | undefined): boolean =>
+  decoration?.badge === undefined && decoration?.color instanceof ThemeColor && decoration.color.id === 'disabledForeground';
+
+type Shown = ReturnType<typeof modsViewOn>;
+
+const greyed = async ({ decorationsOf }: Shown, uri: vscode.Uri): Promise<boolean> => (await decorationsOf(uri)).some(isGrey);
+
+const rowUri = async ({ row }: Shown, ...path: string[]): Promise<vscode.Uri> => {
+  const shown = await path.reduce<Promise<vscode.TreeItem | undefined>>(async (parent, name) => row(name, await parent), Promise.resolve(undefined));
+  return present(shown?.resourceUri, `the URI of ${path.join('/')}`);
+};
+
+const redrawsOfTheGrey = (uri: vscode.Uri): (() => Promise<unknown[]>) => {
+  const heard = seen.decorationProviders.map((provider) => {
+    const told: unknown[] = [];
+    provider.onDidChangeFileDecorations?.((uris) => { told.push(uris); });
+    return { provider, told };
   });
-}
-
-const GREY = { color: new ThemeColor('disabledForeground') };
-
-const greyOf = (value: InstanceValue, origin: FileOrigin, relativePath: string) =>
-  decorationsOver(new FakeInstance(value)).provideFileDecoration(fileRowUri(origin, relativePath));
+  return async () => {
+    const answered = await Promise.all(heard.map(async ({ provider, told }) => ({ grey: isGrey(await provider.provideFileDecoration(uri, new FakeCancellationToken())), told })));
+    return present(answered.find(({ grey }) => grey), 'the provider of the grey').told;
+  };
+};
 
 const winnerAndLoser = () => indexedValueOf([mod('Winner'), mod('Loser')], {
   Winner: { files: [file('Winner', 'x/a.dds')], folders: [folder('Winner', 'x')] },
@@ -71,136 +71,131 @@ const inGameFolder = async (value: Promise<InstanceValue>, ...relativePaths: str
 });
 
 describe('an archived file the game does not get (mods.md, The tree, story 8)', () => {
-  it.each<[string, () => Promise<InstanceValue>, string, typeof GREY | undefined]>([
-    ['a loose copy beats it', () => archivedCopies(['L'], ['A'], ['A']), 'A', GREY],
-    ['a later-loaded archive beats it', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'A', GREY],
-    ['it beats an earlier-loaded archive: it is the copy the game gets', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'B', undefined],
-    ['it alone is the copy the game gets', () => archivedCopies([], ['A'], ['A']), 'A', undefined],
-    ['a loose copy in the game folder beats it', () => inGameFolder(archivedCopies([], ['A'], ['A']), 'meshes/a.nif'), 'A', GREY],
-    ['a loose copy in the game folder at another path leaves it', () => inGameFolder(archivedCopies([], ['A'], ['A']), 'meshes/b.nif'), 'A', undefined],
+  it.each<[string, () => Promise<InstanceValue>, string, boolean]>([
+    ['a loose copy beats it', () => archivedCopies(['L'], ['A'], ['A']), 'A', true],
+    ['a later-loaded archive beats it', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'A', true],
+    ['it beats an earlier-loaded archive: it is the copy the game gets', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'B', false],
+    ['it alone is the copy the game gets', () => archivedCopies([], ['A'], ['A']), 'A', false],
+    ['a loose copy in the game folder beats it', () => inGameFolder(archivedCopies([], ['A'], ['A']), 'meshes/a.nif'), 'A', true],
+    ['a loose copy in the game folder at another path leaves it', () => inGameFolder(archivedCopies([], ['A'], ['A']), 'meshes/b.nif'), 'A', false],
   ])('%s', async (_case, value, owner, grey) => {
-    expect(greyOf(await value(), modOrigin(owner), `${owner}.ba2/meshes/a.nif`)).toEqual(grey);
+    const shown = modsViewOn({ value: await value() });
+
+    expect(await greyed(shown, await rowUri(shown, owner, `${owner}.ba2`, 'meshes', 'a.nif'))).toBe(grey);
   });
 });
 
 describe('each file of a mod or Overwrite, active or inactive (mods.md, The tree, story 8)', () => {
-  it.each<[string, () => Promise<InstanceValue>, FileOrigin, string, typeof GREY | undefined]>([
-    ['a file another copy wins is inactive', winnerAndLoser, modOrigin('Loser'), 'x/a.dds', GREY],
-    ['the copy that wins is active', winnerAndLoser, modOrigin('Winner'), 'x/a.dds', undefined],
-    ['a folder whose every file loses is still active: the game merges folders', winnerAndLoser, modOrigin('Loser'), 'x', undefined],
-    ['an excluded file is inactive', () => indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds', true)] } }), modOrigin('A'), 'a.dds', GREY],
-    ['a disabled mod\'s file is inactive', () => indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'x/a.dds')], folders: [folder('Off', 'x')] } }), modOrigin('Off'), 'x/a.dds', GREY],
-    ['a disabled mod\'s folder is inactive', () => indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'x/a.dds')], folders: [folder('Off', 'x')] } }), modOrigin('Off'), 'x', GREY],
-    ['an excluded folder is inactive', () => indexedValueOf([mod('A')], { A: { files: [], folders: [folder('A', 'x', true)] } }), modOrigin('A'), 'x', GREY],
-    ['an excluded file in Overwrite is inactive', () => indexedValueOf([], {}, { files: [file('overwrite', 'b.log', true)] }), RUNTIME_OUTPUT, 'b.log', GREY],
-    ['a file in an archive the game loads is active', () => archiveInEachMod(true), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', undefined],
-    ['a file in an archive the game does not load is inactive', () => archiveInEachMod(false), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
-    ['a folder in an archive the game does not load is inactive', () => archiveInEachMod(false), modOrigin('A'), 'A - Main.ba2/meshes', GREY],
-    ['a file in an archive the game loads from another mod is inactive', () => archiveInEachMod(true, [mod('B'), mod('A')]), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
-    ['a file in an archive of a disabled mod is inactive', () => archiveInEachMod(true, [mod('A', false)]), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
-  ])('%s', async (_case, value, origin, path, grey) => {
-    expect(greyOf(await value(), origin, path)).toEqual(grey);
+  const offWithAFolder = () => indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'x/a.dds')], folders: [folder('Off', 'x')] } });
+
+  it.each<[string, () => Promise<InstanceValue>, string[], boolean]>([
+    ['a file another copy wins is inactive', winnerAndLoser, ['Loser', 'x', 'a.dds'], true],
+    ['the copy that wins is active', winnerAndLoser, ['Winner', 'x', 'a.dds'], false],
+    ['a folder whose every file loses is still active: the game merges folders', winnerAndLoser, ['Loser', 'x'], false],
+    ['an excluded file is inactive', () => indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds', true)] } }), ['A', 'a.dds'], true],
+    ['a disabled mod\'s file is inactive', offWithAFolder, ['Off', 'x', 'a.dds'], true],
+    ['a disabled mod\'s folder is inactive', offWithAFolder, ['Off', 'x'], true],
+    ['an excluded folder is inactive', () => indexedValueOf([mod('A')], { A: { files: [], folders: [folder('A', 'x', true)] } }), ['A', 'x'], true],
+    ['an excluded file in Overwrite is inactive', () => indexedValueOf([], {}, { files: [file('overwrite', 'b.log', true)] }), ['Overwrite', 'b.log'], true],
+    ['a file in an archive the game loads is active', () => archiveInEachMod(true), ['A', 'A - Main.ba2', 'meshes', 'a.nif'], false],
+    ['a file in an archive the game does not load is inactive', () => archiveInEachMod(false), ['A', 'A - Main.ba2', 'meshes', 'a.nif'], true],
+    ['a folder in an archive the game does not load is inactive', () => archiveInEachMod(false), ['A', 'A - Main.ba2', 'meshes'], true],
+    ['a file in an archive the game loads from another mod is inactive', () => archiveInEachMod(true, [mod('B'), mod('A')]), ['A', 'A - Main.ba2', 'meshes', 'a.nif'], true],
+    ['a file in an archive of a disabled mod is inactive', () => archiveInEachMod(true, [mod('A', false)]), ['A', 'A - Main.ba2', 'meshes', 'a.nif'], true],
+  ])('%s', async (_case, value, path, grey) => {
+    const shown = modsViewOn({ value: await value() });
+
+    expect(await greyed(shown, await rowUri(shown, ...path))).toBe(grey);
   });
 });
 
 describe('the grey on a file the game does not get, in the Mods tree and the Explorer (mods.md, The tree, stories 8 and 10)', () => {
-  async function losingRowOf(provider: ModListProvider): Promise<ModlistNode> {
-    const loser = (await provider.getChildren()).find((row) => row instanceof ModNode && row.mod.name === 'Loser');
-    return present((await provider.getChildren(loser))[0], 'the losing file\'s row');
-  }
-
   it('greys the row of a file the game does not get, and the file itself where the Explorer shows it', async () => {
-    const instance = new FakeInstance(await indexedValueOf([mod('Winner'), mod('Loser')], {
+    const shown = modsViewOn({ value: await indexedValueOf([mod('Winner'), mod('Loser')], {
       Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds')] },
-    }));
-    const rows = new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
-    const decorations = decorationsOver(instance);
+    }) });
 
-    expect(decorations.provideFileDecoration(present((await losingRowOf(rows)).resourceUri, 'its row\'s URI'))).toEqual(GREY);
-    expect(decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds'))).toEqual(GREY);
-    expect(decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/a.dds'))).toBeUndefined();
+    expect([
+      await greyed(shown, await rowUri(shown, 'Loser', 'a.dds')), await greyed(shown, Uri.file('/instance/Loser/a.dds')), await greyed(shown, Uri.file('/instance/Winner/a.dds')),
+    ]).toEqual([true, true, false]);
   });
 
   it('greys an excluded folder where the Explorer shows it', async () => {
-    const instance = new FakeInstance(await indexedValueOf([mod('A')], { A: { files: [], folders: [folder('A', 'x', true)] } }));
+    const shown = modsViewOn({ value: await indexedValueOf([mod('A')], { A: { files: [], folders: [folder('A', 'x', true)] } }) });
 
-    expect(decorationsOver(instance).provideFileDecoration(vscode.Uri.file('/instance/A/x'))).toEqual(GREY);
+    expect(await greyed(shown, Uri.file('/instance/A/x'))).toBe(true);
   });
 
   it('greys nothing while the setting is off, and greys on by default', async () => {
-    const instance = new FakeInstance(await indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'a.dds')] } }));
-    const uri = vscode.Uri.file('/instance/Off/a.dds');
+    const shown = modsViewOn({ value: await indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'a.dds')] } }) });
+    const uri = Uri.file('/instance/Off/a.dds');
+    const byDefault = await greyed(shown, uri);
 
-    expect(decorationsOver(instance, settingOn(false)).provideFileDecoration(uri)).toBeUndefined();
-    expect(decorationsOver(instance, settingOn(true)).provideFileDecoration(uri)).toEqual(GREY);
-    expect(decorationsOver(instance, settingOn(undefined)).provideFileDecoration(uri)).toEqual(GREY);
+    changeSetting(GREY_INACTIVE_FILES_SETTING, false);
+    const off = await greyed(shown, uri);
+    changeSetting(GREY_INACTIVE_FILES_SETTING, true);
+
+    expect([byDefault, off, await greyed(shown, uri)]).toEqual([true, false, true]);
   });
 
   it('asks VS Code to decorate again on each new instance value, and answers from that value', async () => {
-    const instance = new FakeInstance(await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds')] } }));
-    const decorations = decorationsOver(instance);
-    const fired = vi.fn();
-    decorations.onDidChangeFileDecorations(fired);
-    const uri = vscode.Uri.file('/instance/A/a.dds');
-    expect(decorations.provideFileDecoration(uri)).toBeUndefined();
+    const shown = modsViewOn({ value: await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds')] } }) });
+    const uri = Uri.file('/instance/A/a.dds');
+    const redraws = redrawsOfTheGrey(uri);
+    const before = await greyed(shown, uri);
 
-    instance.publish(await indexedValueOf([mod('A', false)], { A: { files: [file('A', 'a.dds')] } }));
+    shown.instance.publish(await indexedValueOf([mod('A', false)], { A: { files: [file('A', 'a.dds')] } }));
 
-    expect(fired).toHaveBeenCalledWith(undefined);
-    expect(decorations.provideFileDecoration(uri)).toEqual(GREY);
+    expect([before, await greyed(shown, uri), await redraws()]).toEqual([false, true, [undefined]]);
   });
 
-  it('greys the file in a mod\'s archive once another mod gains a loose copy that wins over it, and not once that copy is lost', () => {
+  it('greys the file in a mod\'s archive once another mod gains a loose copy that wins over it, and not once that copy is lost', async () => {
     const archive = file('A', 'A - Main.ba2');
     const next = indexedValues([mod('A'), mod('B')], [{ origin: modOrigin('A'), archive: archive.sourcePath, files: ['textures/x.dds'] }]);
     const archiveFiles = { A: { files: [archive] } };
-    const instance = new FakeInstance(next({ ...archiveFiles, B: { files: [] } }));
-    const decorations = decorationsOver(instance);
-    const archived = () => decorations.provideFileDecoration(fileRowUri(modOrigin('A'), 'A - Main.ba2/textures/x.dds'));
-    const greyed = [archived()];
+    const shown = modsViewOn({ value: next({ ...archiveFiles, B: { files: [] } }) });
+    const uri = await rowUri(shown, 'A', 'A - Main.ba2', 'textures', 'x.dds');
+    const greyedBefore = await greyed(shown, uri);
 
-    instance.publish(next({ ...archiveFiles, B: { files: [file('B', 'textures/x.dds')] } }));
-    greyed.push(archived());
-    instance.publish(next({ ...archiveFiles, B: { files: [] } }));
-    greyed.push(archived());
+    shown.instance.publish(next({ ...archiveFiles, B: { files: [file('B', 'textures/x.dds')] } }));
+    const greyedWon = await greyed(shown, uri);
+    shown.instance.publish(next({ ...archiveFiles, B: { files: [] } }));
 
-    expect(greyed).toEqual([undefined, GREY, undefined]);
+    expect([greyedBefore, greyedWon, await greyed(shown, uri)]).toEqual([false, true, false]);
   });
 
-  it('greys, of two case variants of a path in another mod, the one the file conflict index takes, the first', () => {
+  it('greys, of two case variants of a path in another mod, the one the file conflict index takes, the first', async () => {
     const next = indexedValues([mod('Winner'), mod('Loser')]);
     const losing = [file('Loser', 'a.dds'), file('Loser', 'A.dds')];
-    const instance = new FakeInstance(next({ Winner: { files: [] }, Loser: { files: losing } }));
-    const decorations = decorationsOver(instance);
-    const before = decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds'));
+    const shown = modsViewOn({ value: next({ Winner: { files: [] }, Loser: { files: losing } }) });
+    const uri = Uri.file('/instance/Loser/a.dds');
+    const before = await greyed(shown, uri);
 
-    instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: losing } }));
+    shown.instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: losing } }));
 
-    expect([before, decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds'))]).toEqual([undefined, GREY]);
+    expect([before, await greyed(shown, uri)]).toEqual([false, true]);
   });
 
-  it('greys another mod\'s copy once a mod gains the file that wins over it, and an excluded folder a mod gains', () => {
+  it('greys another mod\'s copy once a mod gains the file that wins over it, and an excluded folder a mod gains', async () => {
     const next = indexedValues([mod('Winner'), mod('Loser')]);
     const losing = [file('Loser', 'a.dds')];
-    const instance = new FakeInstance(next({ Winner: { files: [] }, Loser: { files: losing } }));
-    const decorations = decorationsOver(instance);
-    const before = [decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds')), decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/x'))];
+    const shown = modsViewOn({ value: next({ Winner: { files: [] }, Loser: { files: losing } }) });
+    const [loser, folderGained] = [Uri.file('/instance/Loser/a.dds'), Uri.file('/instance/Winner/x')];
+    const before = [await greyed(shown, loser), await greyed(shown, folderGained)];
 
-    instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')], folders: [folder('Winner', 'x', true)] }, Loser: { files: losing } }));
+    shown.instance.publish(next({ Winner: { files: [file('Winner', 'a.dds')], folders: [folder('Winner', 'x', true)] }, Loser: { files: losing } }));
 
-    expect([...before, decorations.provideFileDecoration(vscode.Uri.file('/instance/Loser/a.dds')), decorations.provideFileDecoration(vscode.Uri.file('/instance/Winner/x'))])
-      .toEqual([undefined, undefined, GREY, GREY]);
+    expect([...before, await greyed(shown, loser), await greyed(shown, folderGained)]).toEqual([false, false, true, true]);
   });
 
   it('asks VS Code to decorate again when its setting changes, and only then', async () => {
-    const configuration = settingOn(true);
-    const decorations = decorationsOver(new FakeInstance(await indexedValueOf([], {})), configuration);
-    const fired = vi.fn();
-    decorations.onDidChangeFileDecorations(fired);
+    modsViewOn({ value: await indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'a.dds')] } }) });
+    const redraws = redrawsOfTheGrey(Uri.file('/instance/Off/a.dds'));
 
-    configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === 'modbench.something' });
-    expect(fired).not.toHaveBeenCalled();
-    configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === GREY_INACTIVE_FILES_SETTING });
-    expect(fired).toHaveBeenCalledWith(undefined);
+    changeSetting('modbench.something', true);
+    const unrelated = [...await redraws()];
+    changeSetting(GREY_INACTIVE_FILES_SETTING, true);
+
+    expect([unrelated, await redraws()]).toEqual([[], [undefined]]);
   });
 });
