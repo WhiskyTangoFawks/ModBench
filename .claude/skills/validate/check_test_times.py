@@ -41,18 +41,21 @@ def lapsed(results: list[reports.Result], approved: dict[str, str]) -> list[tupl
 
 
 def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> int:
-    """The number of tests over the ceiling no approval names. A test that ran again alone is judged on that run."""
+    """The number of tests over the ceiling no approval names. A test that ran again alone is judged on that run,
+    where the first to run has no time of its own: it neither fails nor lapses."""
     again = {result.name for result in alone}
+    ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in again}
     judged = [result for result in results if result.name not in again] + alone
     unapproved = [(name, seconds) for name, seconds in slow_tests(judged)
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
         print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in again else ""}, NOT APPROVED')
+    for name in sorted(ran_again & {result.name for result in alone if result.seconds is None and result.outcome == reports.RAN}):
+        print(f'{"":11}{name}: RAN FIRST ALONE, SO ITS TIME THERE IS THE WARM-UP')
     lapses = lapsed(judged, approved)
     for name, seconds in lapses:
         print(f'{seconds:7.2f} s  {name}: APPROVAL LAPSED')
-    ran_again = len({name for name, seconds in slow_tests(results) if seconds > CEILING_SECONDS and name in again})
-    print(f'--- {ran_again} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED, '
+    print(f'--- {len(ran_again)} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED, '
           f'{len(lapses)} APPROVALS LAPSED ---')
     return len(unapproved)
 
@@ -98,7 +101,8 @@ def report_wall(elapsed: float, budget: float) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """The run is a budget file's key under [wall]: branch, merge or windows."""
-    directory, elapsed_argument, budgets_file, run, *alone_directory = sys.argv[1:] if argv is None else argv
+    directory, elapsed_argument, budgets_file, run, *optional = sys.argv[1:] if argv is None else argv
+    (alone_folder,) = optional or [None]
     elapsed = float(elapsed_argument)
     budgets = tomllib.loads(Path(budgets_file).read_text())
     results = reports.results(Path(directory))
@@ -111,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
         return int(report_wall(elapsed, budgets['wall'][run]) and WINDOWS_FAILS_THE_RUN)
-    alone = [result for folder in alone_directory for result in reports.results(Path(folder))]
+    alone = reports.results(Path(alone_folder)) if alone_folder else []
     failing = (report_ceiling(results, alone, budgets.get('approved', {}))
                + report_budgets(times, budgets['boxes'], budgets['other']))
     report_wall(elapsed, budgets['wall'][run])

@@ -18,6 +18,7 @@ UNITTEST_DURATION = re.compile(r'^(\d+\.\d+)s +(\S.*)$')
 MOCHA_PENDING_SUMMARY = re.compile(r'^\s+\d+ pending$', re.MULTILINE)
 MOCHA_PENDING_TEST = re.compile(r'^\s+- (.+)$', re.MULTILINE)
 MOCHA_PASSED = re.compile(r'^\s+[✔√] (.+) \((\d+)ms\)$', re.MULTILINE)
+VITEST_SEPARATOR = ' > '
 FRONTEND_BOX = re.compile(r'.*/modbench/(?:src/([^/]+)/|([^/]+)/)')
 
 
@@ -30,7 +31,8 @@ class Result(NamedTuple):
 
 def in_trx(text: str) -> list[Result]:
     """Time runs from the result's start or the first result's end, whichever is later: the warm-up blocks
-    every thread. A run one test at a time blocks none, so each result is charged its whole duration."""
+    every thread, and the first result is charged nothing. In a run one test at a time the first result holds
+    the warm-up alone, so it has no time of its own."""
     run = ET.fromstring(text)
     elements = list(run.iterfind('.//t:UnitTestResult', TRX))
     projects = {test.attrib['id']: PureWindowsPath(next(test.iterfind('t:TestMethod', TRX)).attrib['codeBase']).stem
@@ -46,13 +48,13 @@ def in_trx(text: str) -> list[Result]:
     spans = [span(element) for element in elements]
     timed = [times for times in spans if times]
     warmed = min((end for _, end in timed), default=None)
-    blocking = warmed is not None and sum(start < warmed for start, _ in timed) > 1
+    one_at_a_time = sum(start < end for start, end in timed if warmed and start < warmed) <= 1
 
     def seconds(times: tuple[datetime, datetime] | None) -> float | None:
-        if times is None:
+        if times is None or warmed is None or (one_at_a_time and times[1] == warmed):
             return None
         start, end = times
-        return (end - (max(start, warmed) if blocking and warmed else start)).total_seconds()
+        return (end - max(start, warmed)).total_seconds()
 
     return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
                    seconds(times), projects[result.attrib['testId']])
@@ -68,7 +70,7 @@ def frontend_box(path: str) -> str:
 
 def in_vitest(text: str) -> list[Result]:
     """A skipped test has no duration. Vitest times a file's imports apart from its tests."""
-    return [Result(f'{Path(file["name"]).name} > {test["fullName"]}',
+    return [Result(f'{Path(file["name"]).name}{VITEST_SEPARATOR}{test["fullName"]}',
                    SKIPPED if test['status'] in VITEST_SKIPPED else RAN,
                    test['duration'] / 1000 if 'duration' in test else None, frontend_box(file['name']))
             for file in json.loads(text)['testResults'] for test in file['assertionResults']]
@@ -106,10 +108,17 @@ READERS = {'.trx': lambda text, _: in_trx(text), '.json': lambda text, _: in_vit
            '.unittest': in_unittest, '.mocha': in_mocha}
 
 
-def results(directory: Path) -> list[Result]:
-    """Every result of every report below the folder, which must exist. A log is UTF-8, with or
-    without the byte order mark that PowerShell's Add-Content writes."""
+def by_kind(directory: Path) -> dict[str, list[Result]]:
+    """Every result of every report below the folder, which must exist, by its report's suffix. A log is UTF-8,
+    with or without the byte order mark that PowerShell's Add-Content writes."""
     if not directory.is_dir():
         raise SystemExit(f'No reports folder {directory}.')
-    return [result for report in sorted(directory.rglob('*')) if report.is_file() and report.suffix in READERS
-            for result in READERS[report.suffix](report.read_text(encoding='utf-8-sig'), report.stem)]
+    kinds: dict[str, list[Result]] = {}
+    for report in sorted(directory.rglob('*')):
+        if report.is_file() and report.suffix in READERS:
+            kinds.setdefault(report.suffix, []).extend(READERS[report.suffix](report.read_text(encoding='utf-8-sig'), report.stem))
+    return kinds
+
+
+def results(directory: Path) -> list[Result]:
+    return [result for kind in by_kind(directory).values() for result in kind]

@@ -84,12 +84,12 @@ class Ceiling(Reports):
         self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0.05), fx.trx_result('A.Unapproved', 5, 2), fx.trx_result('A.SlowAlone', 5, 3),
                                     fx.trx_result('A.FastAlone', 5, 2), fx.trx_result('A.FastAloneApproved', 5, 2),
                                     fx.trx_result('A.Theory(case: 1)', 6, 2.5), fx.trx_result('A.Theory(case: 2)', 6, 1.5),
-                                    fx.trx_result('A.Lapsed', 6, 0.4)))
+                                    fx.trx_result('A.Lapsed', 6, 0.4), fx.trx_result('A.FirstAlone', 6, 2)))
         alone = tempfile.TemporaryDirectory()
         self.addCleanup(alone.cleanup)
         self.alone = pathlib.Path(alone.name)
         (self.alone / 'a.trx').write_text(fx.trx(
-            fx.trx_result('A.Unapproved', 3, 1.5), fx.trx_result('A.SlowAlone', 5, 2),
+            fx.trx_result('A.FirstAlone', 1, 1), fx.trx_result('A.Unapproved', 3, 1.5), fx.trx_result('A.SlowAlone', 5, 2),
             fx.trx_result('A.FastAlone', 6, 0.5), fx.trx_result('A.FastAloneApproved', 7, 0.5),
             fx.trx_result('A.Theory(case: 1)', 9, 1.5), fx.trx_result('A.Theory(case: 2)', 10, 0.5)))
 
@@ -99,9 +99,10 @@ class Ceiling(Reports):
     def test_it_names_each_test_over_the_ceiling_no_approval_names_by_its_own_or_its_theorys_and_each_approval_that_lapsed(self) -> None:
         """A.NotRun's approval did not run, so it did not lapse; A.Theory's lapses only once all its cases run under 1 s alone."""
         self.assertIn('   1.50 s  A.Unapproved: OVER THE 1 s CEILING ALONE, NOT APPROVED\n'
+                      '           A.FirstAlone: RAN FIRST ALONE, SO ITS TIME THERE IS THE WARM-UP\n'
                       '   0.50 s  A.FastAloneApproved: APPROVAL LAPSED\n'
                       '   0.40 s  A.Lapsed: APPROVAL LAPSED\n'
-                      '--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 1 OVER THE CEILING NOT APPROVED, 2 APPROVALS LAPSED ---\n',
+                      '--- 7 TESTS OVER 1 s RUN AGAIN ALONE, 1 OVER THE CEILING NOT APPROVED, 2 APPROVALS LAPSED ---\n',
                       self.judged(self.APPROVALS)[1])
 
     def test_an_unapproved_test_over_the_ceiling_fails_the_run_once_the_switch_is_on_and_a_lapse_never_does(self) -> None:
