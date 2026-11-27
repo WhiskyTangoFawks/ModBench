@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { before, describe, it } from 'mocha';
 import { IN_AN_INSTANCE, isRecord, requires } from '../../manifest';
+import { waitFor } from '../waitFor';
 
 let ext: vscode.Extension<unknown> | undefined;
 
@@ -20,10 +21,7 @@ const menu = (id: string) => (contributes: Record<string, unknown>) =>
 
 before(async () => {
   ext = vscode.extensions.all.find((e) => isRecord(e.packageJSON) && e.packageJSON.name === 'modbench');
-  const deadline = Date.now() + 5000;
-  while (ext && !ext.isActive && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await waitFor('Modbench to activate', () => ext?.isActive);
 });
 
 describe('a folder that is not an instance', () => {

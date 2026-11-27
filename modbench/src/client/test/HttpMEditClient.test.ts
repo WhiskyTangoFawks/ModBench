@@ -14,6 +14,8 @@ import { settled as until } from '../../test/eventually';
 import { fakeLogChannel, jsonResponse, neverFetch, noContent, routedFetch } from './fakeMEdit';
 
 const DEBUG_LEVEL = 2;
+// Every microtask a fake fetch's work queues runs before it.
+const turn = () => new Promise<void>((resolve) => { setImmediate(resolve); });
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
@@ -1169,7 +1171,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(handedOver).toHaveBeenCalled());
 
     const gesturing = gesture(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await turn();
     expect(requests).toEqual([]);
 
     answerHandOver();
@@ -1199,7 +1201,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(handedOver).toHaveBeenCalled());
 
     const asking = reading(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await turn();
     expect(requests).toEqual([]);
 
     answerHandOver();
@@ -1223,7 +1225,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(putLoadOrder).toBe(true));
 
     const gesturing = gesture(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await turn();
     expect(requests).toEqual([]);
 
     answerPut();
@@ -1265,7 +1267,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await until(() => expect(putLoadOrder).toBe(true));
 
     const asking = reading(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await turn();
     expect(requests).toEqual([]);
 
     answerPut();
@@ -1368,8 +1370,8 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     expect(await asking).toEqual(cancelled);
 
     answerHandOver();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(requests).toEqual([]);
+    await client.getPlugins();
+    expect(requests).toHaveLength(1);
   });
 
   it('is aborted when it is cancelled in flight, and logs no failure', async () => {
@@ -1439,7 +1441,6 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
 
     const asking = client.selectRows('SELECT 1', 1000, streaming);
     await until(() => expect(sentRow).toBe(true));
-    await new Promise((resolve) => setTimeout(resolve, 20));
     cancel();
 
     expect(await asking).toEqual(cancelled);
@@ -1482,7 +1483,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await turn();
     expect(client.recordIndexMayBeLate).toBe(true);
 
     push(readyTickThatSettlesPutLoadOrder());
@@ -1510,7 +1511,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
       const signalled = client.signalChange([]).then(() => { settled = true; });
       await until(() => { expect(client.recordIndexMayBeLate).toBe(true); });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await turn();
       expect(settled).toBe(false);
 
       push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));

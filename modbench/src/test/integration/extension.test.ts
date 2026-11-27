@@ -15,6 +15,7 @@ import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
+import { waitFor } from './waitFor';
 
 const MANIFEST: unknown = JSON.parse(readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
 
@@ -622,12 +623,7 @@ before(async function () {
   mockBackend = createMockBackend();
   await new Promise<void>(r => mockBackend.listen(TEST_PORT, '127.0.0.1', () => r()));
 
-  const ext = vscode.extensions.getExtension(EXTENSION_ID);
-  const deadline = Date.now() + 5000;
-  while (ext && !ext.isActive && Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 100));
-  }
-
+  await waitFor('Modbench to activate', () => vscode.extensions.getExtension(EXTENSION_ID)?.isActive);
   await waitFor('Modbench to launch mEdit and open its notification stream', () => sseClients.length > 0);
   await waitFor('the instance\'s first load order, put before the record tab below asks for plugins', () => requestLog.includes('PUT /load-order'));
   await openRecord({ formKey: 'Fallout4.esm:0000FF' });
@@ -1048,7 +1044,6 @@ describe('modbench.record.open', () => {
 });
 
 const PROBE_SPACING_MS = 1000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('a compiled plugin copy of a record', () => {
   const compiledPluginCopy = { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } };
@@ -1066,7 +1061,7 @@ describe('a compiled plugin copy of a record', () => {
     await waitFor('the file\'s tab', () => fileTabs().length > 0 && fileTabs());
     await waitFor('the record\'s read', () => askedToRead(COMPILED_PLUGIN_FORM_KEY, asked));
     await waitFor('the file\'s tab titled with its EditorID', () => fileTabs()[0]?.label === 'CompiledPluginGun');
-    await sleep(500);
+    await new Promise((r) => setTimeout(r, 500));
 
     assert.deepStrictEqual(fileTabs().map((t) => t.label), ['CompiledPluginGun']);
   });
@@ -1816,7 +1811,7 @@ describe('modbench.downloads tree', () => {
   }
 
   async function probeUntilListed(dir: string, prefix: string): Promise<void> {
-    await sleep(PROBE_SPACING_MS);
+    await new Promise((r) => setTimeout(r, PROBE_SPACING_MS));
     const written = new Set<string>();
     await waitFor(`a file written into ${dir}, once no read is in flight to pick it up, to reach the Downloads tree through the watcher`, async () => {
       const name = `${prefix}-${written.size}.zip`;
@@ -2684,13 +2679,3 @@ describe('The Problems panel on plugin source', () => {
     assert.deepStrictEqual(editsAsked.at(-1)?.edit, { op: 'remove', plugin: plugin.name, origin: plugin.origin, path: [{ kind: 'member', name: 'Armor' }, { kind: 'index', index: 1 }] });
   });
 });
-
-async function waitFor<T>(label: string, read: () => Promise<T | false | undefined> | T | false | undefined, timeoutMs = 10_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const value = await read();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
-    await new Promise((r) => setTimeout(r, 50));
-  }
-}

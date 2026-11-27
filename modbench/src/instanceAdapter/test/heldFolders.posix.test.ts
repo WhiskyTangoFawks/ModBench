@@ -9,9 +9,11 @@ import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter, Subscription } from '../instanceAdapter';
 
+// Resolves last of the realpaths in flight beside it, whatever the disk's timing.
 let slowRealpath: string | undefined;
 let unresolvable: string | undefined;
 const opened = vi.hoisted((): { watchers: FSWatcher[] } => ({ watchers: [] }));
+const resolving = { count: 0, idle: [] as (() => void)[] };
 
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -20,8 +22,13 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     realpath: async (path: string) => {
       if (path === unresolvable) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
-      if (path === slowRealpath) await new Promise((r) => setTimeout(r, 100));
-      return actual.realpath(path);
+      if (path === slowRealpath && resolving.count > 0) await new Promise<void>((resolve) => { resolving.idle.push(resolve); });
+      resolving.count++;
+      try {
+        return await actual.realpath(path);
+      } finally {
+        if (--resolving.count === 0) for (const resolve of resolving.idle.splice(0)) resolve();
+      }
     },
   };
 });

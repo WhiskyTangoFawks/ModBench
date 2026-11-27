@@ -17,6 +17,7 @@ import { fakeWorkspace } from '../../test/fakeWorkspace';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
 afterEach(disposeLoaded);
 
@@ -811,7 +812,7 @@ describe('Instance — a value that survives a bad read', () => {
     instance.subscribe(() => { finished.push('another subscriber'); });
 
     const refreshed = instance.refresh().then(() => finished.push('refresh'));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await settled(() => { expect(finish).toBeDefined(); });
     expect(finished).toEqual(['another subscriber']);
     finish();
     await refreshed;
@@ -909,7 +910,7 @@ describe('Instance — a value that survives a bad read', () => {
     });
 
     void instance.refresh();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await settled(() => { expect(heard).toEqual([1]); });
     await instance.refresh();
 
     expect(heard).toEqual([1, 2]);

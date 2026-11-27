@@ -22,11 +22,6 @@ afterEach(async () => {
   await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
 });
 
-const within = <T>(work: Promise<T>): Promise<T> => Promise.race([
-  work,
-  new Promise<never>((_, reject) => { setTimeout(() => { reject(new Error('still waiting after 3 s')); }, 3000); }),
-]);
-
 async function repositoryWithPathFilters() {
   const root = cloneCorpusFixture();
   made.push(root);
@@ -45,7 +40,7 @@ describe('a write the Instance adapter tells the loader of, in a repository that
   it('does not stop the loader\'s own reading from landing when the reading itself writes', async () => {
     const { instance: loader } = await repositoryWithPathFilters();
 
-    await within(loader.refresh());
+    await loader.refresh();
 
     expect(loader.readFailure).toBeUndefined();
     expect(loader.sequence).toBeGreaterThan(0);
@@ -53,8 +48,8 @@ describe('a write the Instance adapter tells the loader of, in a repository that
 
   it('does not wait on the loader reading while it holds the lock the reading takes', async () => {
     const { adapter, instance: loader } = await repositoryWithPathFilters();
-    await within(loader.refresh());
+    await loader.refresh();
 
-    await within(adapter.writePathTokens());
+    await adapter.writePathTokens();
   });
 });

@@ -33,12 +33,16 @@ SCANS = (
                     + r'|\bnew CancellationTokenSource\(' + DURATION
                     + r'|\.(?:CancelAfter|WaitForExit)\(' + DURATION
                     + r'|\.Wait(?:One)?\(' + NOT_A_TOKEN + DURATION)),
+    Scan(re.compile(r'(?:^|/)modbench/(?:src|webview)/(?:.+\.test\.tsx?|(?:.+/)?test/.+\.tsx?)$'),
+         re.compile(r'\bsetTimeout\((?!.*,\s*0\s*\))|\bsleep\((?!\s*0\s*\))'
+                    + r'|\bvi\.wait(?:For|Until)\(.*(?:\btimeout\s*:|,\s*\d[\d_]*\s*\))')),
 )
 
 FIX = ('A test waits on a value or on a fake clock, never on real time. A check that something never happens, '
        'where nothing later announces that it did not, is a line ALLOWED in check_test_waits.py names.')
 
 RECORD_INDEX_TESTS = 'MEditService/MEditService.RecordIndex.Tests/'
+FRONTEND = 'modbench/src/'
 WAITS = 'MEditService/MEditService.TestSupport/Waits.cs'
 POLL = 'the pause between two reads of the value a wait is on'
 NO_WAITING_READ = 'nothing announces a read that waits'
@@ -69,6 +73,20 @@ ALLOWED = {
         'no re-read starts while the rebuild holds the store closed: nothing announces a read that has not started',
     (RECORD_INDEX_TESTS + 'RealSize/RealSizeSoakTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(10));'):
         'a tool (Kind=Tool), not a test: a refused read retries as a user\'s script does',
+    (FRONTEND + 'test/eventually.ts', 'await new Promise((r) => setTimeout(r, 20));'): POLL,
+    (FRONTEND + 'test/integration/waitFor.ts', 'await new Promise((r) => setTimeout(r, 50));'): POLL,
+    (FRONTEND + 'instanceAdapter/mo2/test/mo2Instance.test.ts', 'await new Promise((resolve) => setTimeout(resolve, 50));'):
+        'the second change waits on the lock: nothing announces a change queued behind another',
+    (FRONTEND + 'instanceAdapter/mo2/test/mo2PathTokens.test.ts', 'await new Promise((resolve) => setTimeout(resolve, 500));'):
+        'the reading waits on the write\'s lock: ' + NO_WAITING_READ,
+    (FRONTEND + 'instanceLoader/test/instance.test.ts', 'await new Promise((resolve) => setTimeout(resolve, READ_MS));'):
+        'the read takes its time on the fake clock',
+    (FRONTEND + 'test/integration/extension.test.ts', 'await new Promise((r) => setTimeout(r, 500));'):
+        'no second tab opens on the file: nothing announces a tab VS Code does not open',
+    (FRONTEND + 'test/integration/extension.test.ts', 'await new Promise((r) => setTimeout(r, PROBE_SPACING_MS));'):
+        'no read is in flight to pick the probe up: nothing in the Extension Host announces a loader at rest',
+    (FRONTEND + 'test/pluginSyncLoop.test.ts', 'new Promise<typeof TIMED_OUT>((resolve) => setTimeout(() => resolve(TIMED_OUT), ms)),'):
+        'no recompute follows: nothing announces a read the loader does not start',
 }
 
 
