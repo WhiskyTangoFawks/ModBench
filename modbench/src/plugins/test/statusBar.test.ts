@@ -17,6 +17,7 @@ const PLUGINS = ['A.esp', 'B.esp'].map((name) => ({ name, origin: 'ModA' }));
 const READY = '$(check) mEdit: Ready (2 plugins)';
 
 const theItem = () => present(host.statusBarItems[0], 'the one status bar item');
+const reportsOf = (reporters: ReadonlyMap<string, { reports: readonly object[] }>) => [...reporters].flatMap(([tag, { reports }]) => reports.map((report) => ({ tag, ...report })));
 
 function statusBar(status: InMemoryMEditClient['status'] = 'running') {
   const client = clientHoldingNothing();
@@ -109,19 +110,17 @@ describe('the status bar, one item saying what mEdit is doing', () => {
 
 describe('mEdit stopping', () => {
   it.each([
-    ['a launch that left it stopped', () => Promise.resolve(), 'enterEditing', [{ severity: 'error', message: STOPPED, detail: undefined }]],
-    ['a launch that threw, with its reason', () => Promise.reject(new Error('no port')), 'launch', [{ severity: 'error', message: STOPPED, detail: 'no port' }]],
-    ['a launch that came up, not at all', (client: InMemoryMEditClient) => { client.setStatus('running'); return Promise.resolve(); }, 'enterEditing', []],
-  ] as const)('reports %s, once', async (_case, start, tag, expected) => {
-    const { client, reporter } = statusBar('stopped');
+    ['a launch that left it stopped', () => Promise.resolve(), [{ tag: 'enterEditing', severity: 'error', message: STOPPED, detail: undefined }]],
+    ['a launch that threw, with its reason', () => Promise.reject(new Error('no port')), [{ tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]],
+    ['a launch that came up, not at all', (client: InMemoryMEditClient) => { client.setStatus('running'); return Promise.resolve(); }, []],
+  ] as const)('reports %s, once', async (_case, start, expected) => {
+    const { client, reporters } = statusBar('stopped');
     client.answerStart(() => start(client));
-    const launched = new Promise((resolve) => { client.onLaunch(resolve); });
 
     await client.start();
-    await launched;
-    await Promise.resolve();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
 
-    expect(reporter(tag).reports).toEqual(expected);
+    expect(reportsOf(reporters)).toEqual(expected);
   });
 
   it('is reported as stopped under its own report when mEdit exits', async () => {

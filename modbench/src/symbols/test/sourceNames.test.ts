@@ -21,7 +21,7 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
     const hover = await host.hover(FILE, AT_SCRIPT, token);
 
     expect(hover).toEqual({ text: 'Gu', spans: 'Gu' });
-    expect(asked(made)).toEqual(asked(made).map(() => [TEXT, FILE, TEXT.indexOf('Gu') + 1, token]));
+    expect(new Set(asked(made).map(([text, path, at, given]) => [text, path, at, given === token]).map((args) => JSON.stringify(args)))).toEqual(new Set([JSON.stringify([TEXT, FILE, TEXT.indexOf('Gu') + 1, true])]));
   });
 
   it('names nothing where mEdit cannot answer, and the Output says why once, however many kinds ask of the place', async () => {

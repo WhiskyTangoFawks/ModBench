@@ -73,7 +73,7 @@ describe('modbench.plugin.move', () => {
 
   it('takes the view\'s selection when no plugin is named, leaving out a row that is not a plugin line', async () => {
     const { fake, own, move, row, view } = await moving();
-    view().selectRows([row('C.esp'), row('Fallout4.esm')]);
+    view().selectRows([row('C.esp'), row('Fallout4.esm', 'Data/')]);
 
     await move(undefined, undefined, LOSING_END);
 

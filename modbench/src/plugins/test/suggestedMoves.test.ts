@@ -77,12 +77,9 @@ describe('modbench.plugin.applySuggestedMove, called by the agent', () => {
   const call = (options: { rule?: string }) => new AgentCall([{ kind: 'plugin', plugin: A }], options);
 
   it('names the broken rule by its words, and answers the outcome', async () => {
-    const { fake, rowOfA, apply } = await suggesting(AFTER('B.esp', 'C.esp'));
-    host.picks(() => undefined);
-    await apply(rowOfA);
-    const [, rule] = offered()[0] ?? [];
+    const { fake, apply } = await suggesting(AFTER('B.esp', 'C.esp'));
 
-    const answered = await apply(call({ rule }));
+    const answered = await apply(call({ rule: '"A.esp" loads before "C.esp", and should load after it.' }));
 
     expect([fake.calls, answered]).toEqual([moved(2), { applied: true, outcome: { landed: [A], refused: [] } }]);
   });

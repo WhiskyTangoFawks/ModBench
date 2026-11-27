@@ -14,6 +14,7 @@ import { settled } from '../../test/eventually';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { pluginArgumentOf } from '../../drivingLib/argument';
+import { pluginAddressKey } from '../../wire/pluginAddress';
 import { host } from './vscodeHost';
 
 type Deps = Parameters<typeof createPlugins>[0];
@@ -43,8 +44,6 @@ interface Over extends Partial<Omit<Deps, 'client' | 'facts'>>, Partial<Omit<Ins
   commandsClient?: Parameters<typeof pluginCommandsWith>[1];
 }
 
-const labelText = (label: string | { label: string } | undefined) => (typeof label === 'object' ? label.label : label ?? '');
-
 const SYNCED: PluginSyncRun = () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] });
 
 /** The Plugins box in a fresh VS Code, over an instance holding `value` and an mEdit that holds nothing until scripted. */
@@ -72,12 +71,13 @@ export function pluginsOver({
   const view = () => host.treeView(PLUGINS_KEY_ARGS.view);
   const rows = async (parent?: unknown) => (await view().treeDataProvider.getChildren(parent)) ?? [];
   const item = async (row: unknown) => await view().treeDataProvider.getTreeItem(row);
-  /** The plugin rows, by plugin name. */
-  const pluginRows = async () => new Map((await rows()).flatMap((row) => { const plugin = pluginArgumentOf(row)?.plugin; return plugin === undefined ? [] : [[plugin.name, row] as const]; }));
-  /** The rows under `parent`, by the label each shows. */
-  const rowsNamed = async (parent?: unknown) => new Map(await Promise.all((await rows(parent)).map(async (row) => [labelText((await item(row)).label), row] as const)));
+  /** The plugin rows the tree shows now, each found by its plugin's name and origin. */
+  const pluginRows = async () => {
+    const shown = new Map((await rows()).flatMap((row) => { const plugin = pluginArgumentOf(row)?.plugin; return plugin === undefined ? [] : [[pluginAddressKey(plugin), row] as const]; }));
+    return (name: string, origin = 'ModA') => shown.get(pluginAddressKey({ name, origin }));
+  };
   return {
-    client, instance, plugins, shown, reporters, reporter: reporterFor, output, view, rows, item, rowsNamed, pluginRows,
+    client, instance, plugins, shown, reporters, reporter: reporterFor, output, view, rows, item, pluginRows,
     dispose: () => { shown.dispose(); plugins.dispose(); },
   };
 }
@@ -99,6 +99,5 @@ export async function indexedOver(names: readonly string[], { value = {}, ...ove
   });
   holdsLoadOrder(client, { indexed: names.map((name) => ({ name, origin: 'ModA' })) });
   await settled(() => { if (made.plugins.standing.mEdit().length > 0) throw new Error('mEdit is not Ready'); });
-  const rows = await made.pluginRows();
-  return { ...made, fake, row: (name: string) => rows.get(name) };
+  return { ...made, fake, row: await made.pluginRows() };
 }

@@ -230,6 +230,18 @@ describe('the links a plugin source holds to missing records, in the Problems pa
     expect([[...shown.keys()], asked().map((args) => args.slice(0, 1)).at(-1)]).toEqual([['/source/OtherMod/Other.esp/Npc.json'], [PLUGIN]]);
   });
 
+  it('publishes only the files whose problems changed, and nothing again when mEdit answers a plugin as it was', async () => {
+    const other = { name: 'Other.esp', origin: 'OtherMod' };
+    const { answered } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [problem({ sourceRelativePath: 'Other.esp/Npc.json' })] }]);
+    host.published.length = 0;
+
+    await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [] }]);
+    await answered([{ plugin: PLUGIN, problems: [problem()] }], [{ plugin: PLUGIN }]);
+
+    expect(host.published).toEqual(['/source/OtherMod/Other.esp/Npc.json']);
+  });
+
   it('drops the problems of a plugin that a notification names and mEdit answers no entry for', async () => {
     const { answered } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);

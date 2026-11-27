@@ -1,6 +1,7 @@
 // The VS Code the Source language box registers with: a test file mocks `vscode` with this module, and
 // reads through `host` what the box registered and what it shows.
 
+import type * as vscode from 'vscode';
 import { Diagnostic, DiagnosticSeverity, FakeDiagnosticCollection, Uri as BaseUri, uriParse, type FakeUri } from '../../test/vscodeMock';
 
 export { Diagnostic, DiagnosticSeverity };
@@ -62,6 +63,7 @@ const commandHandlers = new Map<string, Handler>();
 const executed: unknown[][] = [];
 const completionProviders: { provideCompletionItems: (document: FakeDocument, at: Position) => Promise<CompletionItem[] | undefined> }[] = [];
 const collections = new Map<string, FakeDiagnosticCollection>();
+const published: string[] = [];
 const statuses = new Map<string, { text: string; severity?: number }>();
 const files = new Map<string, string | (() => Promise<string>)>();
 const reads: string[] = [];
@@ -80,7 +82,11 @@ export const languages = {
   createDiagnosticCollection: (name: string) => {
     const collection = new FakeDiagnosticCollection();
     collections.set(name, collection);
-    return collection;
+    const [set, remove] = [collection.set.bind(collection), collection.delete.bind(collection)];
+    return Object.assign(collection, {
+      set: (uri: FakeUri, shown: readonly vscode.Diagnostic[]) => { published.push(uri.fsPath); set(uri, shown); },
+      delete: (uri: FakeUri) => { published.push(uri.fsPath); remove(uri); },
+    });
   },
   createLanguageStatusItem: (id: string) => {
     const item = { text: '', severity: undefined as number | undefined, dispose: () => { statuses.delete(id); } };
@@ -123,6 +129,8 @@ export function document(path: string, text: string, { scheme = 'file', isDirty 
 
 /** What the box registered with VS Code and what it shows, and the user's acts on them. */
 export const host = {
+  /** The file of each set of problems published or cleared, in turn. */
+  published,
   /** Runs the command as VS Code does for a menu or a key. */
   run: (id: string, ...args: unknown[]): Promise<unknown> => {
     const handler = commandHandlers.get(id);
@@ -164,6 +172,7 @@ export const host = {
     for (const each of [opened, changed, saved, closed]) each.clear();
     for (const held of [commandHandlers, collections, statuses, files]) held.clear();
     executed.length = 0;
+    published.length = 0;
     reads.length = 0;
     completionProviders.length = 0;
     documents = [];

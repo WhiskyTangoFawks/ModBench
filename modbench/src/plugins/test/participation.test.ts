@@ -40,7 +40,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('drops a locked row from the selection it writes, and says nothing when the rest lands', async () => {
     const { fake, own, row } = await participating();
 
-    await host.run('modbench.plugin.enable', row('Alpha.esp'), [row('Fallout4.esm'), row('Alpha.esp')]);
+    await host.run('modbench.plugin.enable', row('Alpha.esp'), [row('Fallout4.esm', 'Data/'), row('Alpha.esp')]);
 
     expect([fake.calls, own('enableDisable')]).toEqual([enabling(['Alpha.esp', true]), []]);
   });

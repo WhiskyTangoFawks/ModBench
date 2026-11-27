@@ -23,9 +23,11 @@ async function relating(plugins: LoadOrderPlugin[], masters: Record<string, stri
   const made = pluginsOver({ client, value: instanceValueFixture({ mods: [mod('Alpha'), mod('Beta')], plugins, pluginsLoadedWithNoLine }) });
   holdsLoadOrder(client, { indexed: plugins });
   await until(() => { expect(made.plugins.standing.mEdit()).toEqual([]); });
-  const rows = await made.pluginRows();
-  const related = (...names: string[]) => made.shown.relatesRows.related(names.length === 0 ? OTHER_ROWS : names.map((name) => rows.get(name)));
-  return { related };
+  const row = await made.pluginRows();
+  return {
+    relatedTo: (...selected: readonly LoadOrderPlugin[]) => made.shown.relatesRows.related(selected.map(({ name, origin }) => row(name, origin))),
+    relatedToOtherRows: () => made.shown.relatesRows.related(OTHER_ROWS),
+  };
 }
 
 describe('the mods and Overwrite a Plugins selection comes from', () => {
@@ -35,34 +37,35 @@ describe('the mods and Overwrite a Plugins selection comes from', () => {
     ['Overwrite for a plugin Overwrite holds', [entry('A.esp', OVERWRITE_ORIGIN)], [{ kind: 'runtimeOutput' }]],
     ['nothing for a plugin from the game folder, or from no listed mod', [entry('A.esp', DATA_DIRECTORY_ORIGIN), entry('B.esp', 'Gone')], []],
   ])('is %s', async (_case, plugins, origins) => {
-    const { related } = await relating(plugins);
+    const { relatedTo } = await relating(plugins);
 
-    expect(related('A.esp', 'B.esp').origins).toEqual(origins);
+    expect(relatedTo(...plugins).origins).toEqual(origins);
   });
 
   it('is nothing for rows of any other kind', async () => {
-    const { related } = await relating([entry('A.esp', 'Alpha')]);
+    const { relatedToOtherRows } = await relating([entry('A.esp', 'Alpha')]);
 
-    expect(related()).toEqual({ plugins: [], origins: [] });
+    expect(relatedToOtherRows()).toEqual({ plugins: [], origins: [] });
   });
 });
 
 describe('the plugin rows a Plugins selection\'s masters are', () => {
-  const PLUGINS = [entry('Dep.esp', 'Alpha'), entry('Base.esm', 'Gamma', false), entry('Base.esm', 'Beta')];
+  const DEP = entry('Dep.esp', 'Alpha');
+  const PLUGINS = [DEP, entry('Base.esm', 'Gamma', false), entry('Base.esm', 'Beta')];
 
   it.each([
     ['the row the game loads for each master\'s file name, whatever its case', ['base.ESM'], [{ name: 'Base.esm', origin: 'Beta' }]],
     ['nothing for a master no row holds', ['Ghost.esm'], []],
     ['nothing for a plugin with no masters', [] as string[], []],
   ])('is %s', async (_case, masters, expected) => {
-    const { related } = await relating(PLUGINS, { 'Dep.esp': masters });
+    const { relatedTo } = await relating(PLUGINS, { 'Dep.esp': masters });
 
-    expect(related('Dep.esp').plugins).toEqual(expected);
+    expect(relatedTo(DEP).plugins).toEqual(expected);
   });
 
   it('includes a master the game loads with no line', async () => {
-    const { related } = await relating([entry('Dep.esp', 'Alpha')], { 'Dep.esp': ['Fallout4.esm'] }, [{ name: 'Fallout4.esm', origin: 'Data/', path: '/data/Fallout4.esm' }]);
+    const { relatedTo } = await relating([DEP], { 'Dep.esp': ['Fallout4.esm'] }, [{ name: 'Fallout4.esm', origin: 'Data/', path: '/data/Fallout4.esm' }]);
 
-    expect(related('Dep.esp').plugins).toEqual([{ name: 'Fallout4.esm', origin: 'Data/' }]);
+    expect(relatedTo(DEP).plugins).toEqual([{ name: 'Fallout4.esm', origin: 'Data/' }]);
   });
 });
