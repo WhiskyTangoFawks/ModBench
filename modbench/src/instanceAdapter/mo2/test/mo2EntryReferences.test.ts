@@ -5,9 +5,9 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import type { ManagerAdapter } from '../../publisher';
+import type { InstanceAdapter } from '../../instanceAdapter';
 import { heldTexts, type EntrySymbol } from '../../../symbolNames/symbolNames';
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { adapterOver } from '../../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
 
 const MODLIST = '# comment\r\n+Patch Mod\r\n-Base Mod\r\n+Patch Mod_separator\r\n';
@@ -23,7 +23,7 @@ const HARDER_META = '[General]\ninstallationFile=patch-1.7z\n';
 
 describe('the MO2 Instance adapter saying where its files name a mod or a separator (ADR-0028)', () => {
   let root: string;
-  let adapter: ManagerAdapter;
+  let adapter: InstanceAdapter;
 
   async function put(relative: string, contents: string): Promise<void> {
     await mkdir(join(root, relative, '..'), { recursive: true });
@@ -33,7 +33,7 @@ describe('the MO2 Instance adapter saying where its files name a mod or a separa
 
   beforeEach(async () => {
     root = cloneCorpusFixture();
-    adapter = managerOver(root);
+    adapter = adapterOver(root);
     await put('profiles/Default/modlist.txt', MODLIST);
     await put('profiles/Secondary/modlist.txt', '-patch mod\r\n');
   });

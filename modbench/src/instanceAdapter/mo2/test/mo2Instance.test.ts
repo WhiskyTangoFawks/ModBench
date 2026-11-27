@@ -1,14 +1,11 @@
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
-import { fileProblemsFake } from '../../../test/fileProblemsFake';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
-import { ignoreSkippedLink, readTrustingKept, trustingKept } from '../../files';
-import { ignoreLink } from '../../gameFolder/ownEntries';
 import {
-  access, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
+  access, appendFile, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
-import { appendFileSync, type PathLike } from 'node:fs';
+import { appendFileSync, writeFileSync, type PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { eventually, writtenAndHeard } from '../../../test/eventually';
@@ -21,62 +18,64 @@ const real = vi.hoisted(() => ({
   rename: undefined as typeof import('node:fs/promises').rename | undefined,
   stat: undefined as typeof import('node:fs/promises').stat | undefined,
   readdir: undefined as typeof import('node:fs/promises').readdir | undefined,
+  readFile: undefined as typeof import('node:fs/promises').readFile | undefined,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
   real.stat = actual.stat;
   real.readdir = actual.readdir;
-  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat), readdir: vi.fn(actual.readdir) };
+  real.readFile = actual.readFile;
+  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat), readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile) };
 });
 
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 const actualStat = present(real.stat, 'the real stat');
 const actualReaddir = present(real.readdir, 'the real readdir');
+const actualReadFile = present(real.readFile, 'the real readFile');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { basename, dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
-import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
-import { FIRST_LEVEL, PROFILE_WATCH_PATTERN } from '../layout';
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
-import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
-import { DEPLOYED_PATH } from '../../../test/deployedPath';
-import type { ManagerAdapter, ManagerReading } from '../../publisher';
-import { CHECK_THE_DISK, type ModFolders, type OriginFiles, type Reread, type WatcherExclude } from '../../instanceAdapter';
-import { mo2Watch } from '../mo2Watch';
+import { isInstance } from '../../openInstance';
+import {
+  CHECK_THE_DISK, type InstanceAdapter, type InstanceReading, type OriginFiles, type Reread,
+} from '../../instanceAdapter';
 import { watcherExcluding } from '../../../test/watcherExclusion';
-import type { Mo2Context } from '../mo2Context';
-import type { ReadingSource } from '../../instanceReading';
-import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  EntryRef, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
+  EntryRef, FileOrigin, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
-import { setIniValue } from '../codecs/qSettingsIni';
+import { adapterAsBuilt, installationFileMeta } from '../../test/instanceOnDisk';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
-import { hostWithoutGit } from '../../../test/hostGitDouble';
 import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
-import { adapterOver, contextOver, managerOver, sourceOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
+import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, modFolderNames, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
 import { onPosix } from '../../../test/platform';
 
+type GameDetectors = NonNullable<AdapterAnswers['detectors']>;
+
 const INI = 'ModOrganizer.ini';
 const TRASH: MoveToTrash = (file) => rm(file);
 const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 'subscribe'> =>
-  ({ ...readingSource(context, undefined, DEPLOYED_PATH), subscribe: (listener) => context.watch.subscribe(listener) });
-
 const text = (root: string, relative: string): Promise<string> => readFile(join(root, relative), 'utf8');
 
 const modNames = (order: readonly ModlistEntry[]): string[] => order.map((e) => `${e.kind}:${e.name}:${e.enabled}`);
+
+async function modOrderOf(adapter: InstanceAdapter, profile: string): Promise<readonly ModlistEntry[]> {
+  let order: readonly ModlistEntry[] = [];
+  await adapter.changeModOrder(profile, (stands) => {
+    order = stands;
+    return [];
+  });
+  return order;
+}
 
 async function isThere(path: string): Promise<boolean> {
   try {
@@ -89,18 +88,17 @@ async function isThere(path: string): Promise<boolean> {
 
 describe('the MO2 Instance adapter', () => {
   let root: string;
-  let adapter: ManagerAdapter;
-  let source: ReadingSource;
+  let adapter: InstanceAdapter;
 
   beforeEach(() => {
     root = cloneCorpusFixture();
-    adapter = managerOver(root);
-    source = sourceOver(root);
+    adapter = adapterOver(root);
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
     vi.mocked(stat).mockImplementation(actualStat);
     vi.mocked(readdir).mockImplementation(actualReaddir);
+    vi.mocked(readFile).mockImplementation(actualReadFile);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -129,7 +127,7 @@ describe('the MO2 Instance adapter', () => {
         try {
           await mkdir(join(game, 'Data'));
 
-          expect(await managerOver(root, { gameFolderSettingValue: game }).gameFolder()).toEqual({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+          expect(await adapterOver(root, { gameFolderSettingValue: game }).gameFolder()).toEqual({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
         } finally {
           await rm(game, { recursive: true, force: true });
         }
@@ -140,7 +138,7 @@ describe('the MO2 Instance adapter', () => {
         try {
           await mkdir(join(game, 'Data'));
 
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors: NO_DETECTORS }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
+          expect(await adapterOver(root, { gameFolderSettingValue: game, detectors: NO_DETECTORS }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
         } finally {
           await rm(game, { recursive: true, force: true });
         }
@@ -166,7 +164,7 @@ describe('the MO2 Instance adapter', () => {
           const { game, reached, expected } = await arrange(library, steam);
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(reached, 'Data') }) };
 
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
+          expect(await adapterOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
             ...expected, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
           });
         } finally {
@@ -177,7 +175,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers none when the game folder is not found', async () => {
-        expect(await managerOver(root, {}).gamePlace()).toBeUndefined();
+        expect(await adapterOver(root, {}).gamePlace()).toBeUndefined();
       });
 
       it('answers the active profile\'s mod order, and the folders the mods are in with the separators\'', async () => {
@@ -202,7 +200,7 @@ describe('the MO2 Instance adapter', () => {
 
       describe('the downloaded file a path names', () => {
         const listed = join('downloads', DOWNLOADED_FILE);
-        const nameAt = async (path: string, over: ManagerAdapter = adapter): Promise<string | undefined> => {
+        const nameAt = async (path: string, over: InstanceAdapter = adapter): Promise<string | undefined> => {
           const at = await over.downloadedFileAt(path);
           return expectKind(at, 'read').answer?.name;
         };
@@ -247,15 +245,15 @@ describe('the MO2 Instance adapter', () => {
 
     describe('the plugins provided, as a change to the plugin order over them reads them', () => {
       let game: string;
-      let withGame: ManagerAdapter;
+      let withGame: InstanceAdapter;
       beforeEach(async () => {
         game = await mkdtemp(join(tmpdir(), 'mo2-instance-provided-'));
         await mkdir(join(game, 'Data'));
-        withGame = managerOver(root, { gameFolderSettingValue: game });
+        withGame = adapterOver(root, { gameFolderSettingValue: game });
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
 
-      const providedOver = async (over: ManagerAdapter, profile = 'Default'): Promise<PluginsProvided> => {
+      const providedOver = async (over: InstanceAdapter, profile = 'Default'): Promise<PluginsProvided> => {
         let answer: PluginsProvided | undefined;
         await over.changePluginOrderOverProvided(profile, (_order, provided) => {
           answer = provided;
@@ -263,7 +261,7 @@ describe('the MO2 Instance adapter', () => {
         });
         return present(answer, 'the plugins provided');
       };
-      const pluginsOver = async (over: ManagerAdapter, profile?: string): Promise<ReadonlyMap<string, string>> => {
+      const pluginsOver = async (over: InstanceAdapter, profile?: string): Promise<ReadonlyMap<string, string>> => {
         const provided = await providedOver(over, profile);
         return expectKind(provided, 'listed').plugins;
       };
@@ -287,6 +285,20 @@ describe('the MO2 Instance adapter', () => {
       it('answers no plugins while the game folder is not found', async () => {
         expect(await providedOver(adapter)).toEqual({ kind: 'unresolved' });
       });
+
+      it.each([
+        ['a mod', join('mods', 'Patch Mod')],
+        ['Overwrite', 'overwrite'],
+      ])('lists the files at the root of %s alone when asked for its root', async (_, folder) => {
+        await mkdir(join(root, folder, 'Optional'), { recursive: true });
+        await writeFile(join(root, folder, 'Optional', 'Nested.esp'), '');
+        await symlink(join(root, folder, 'Optional'), join(root, folder, 'Linked'));
+        await writeFile(join(root, folder, 'Root.esp'), '');
+
+        const plugins = await pluginsOver(withGame);
+
+        expect(['root.esp', 'nested.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
+      });
     });
 
     describe('the reading', () => {
@@ -299,7 +311,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\n');
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\r\nsResourceIndexFileList=Fallout4 - Textures1.ba2\r\n');
 
-          const reading = await managerOver(root, { gameFolderSettingValue: game }).reading();
+          const reading = await adapterOver(root, { gameFolderSettingValue: game }).reading();
 
           expect(reading).toMatchObject({
             profile: 'Default',
@@ -327,7 +339,7 @@ describe('the MO2 Instance adapter', () => {
           await mkdir(join(game, 'Data'));
           await writeFile(join(game, 'Fallout4.exe'), windowsProgram({ version: versionInfo([1, 10, 163, 0]) }));
 
-          const { programVersions } = await managerOver(root, { gameFolderSettingValue: game }).reading();
+          const { programVersions } = await adapterOver(root, { gameFolderSettingValue: game }).reading();
 
           expect(programVersions).toEqual({
             kind: 'found', game: { kind: 'read', version: '1.10.163.0' }, extender: { kind: 'notFound', program: 'f4se_loader.exe' },
@@ -377,12 +389,10 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
-        const onThisMachine = mo2InstanceAdapter({
-          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), watcherExclude: watcherExcluding(), hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
-        }, undefined);
+        const onThisMachine = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game') });
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
-          expect((await onThisMachine.reading()).managerRunning).toEqual({ kind: 'running' });
+          expect(await onThisMachine.managerRunning()).toEqual({ kind: 'running' });
         } finally {
           await mo2.stop();
         }
@@ -401,7 +411,7 @@ describe('the MO2 Instance adapter', () => {
         let running = false;
         const adapter = adapterOver(root, { mo2Running: () => Promise.resolve(running) });
 
-        const asked = await trustingKept(async () => {
+        const asked = await (await adapter.reading()).trustingKept(async () => {
           const before = await adapter.managerRunning();
           running = true;
           return [before, await adapter.managerRunning()];
@@ -461,8 +471,8 @@ describe('the MO2 Instance adapter', () => {
 
         expect(reading.gameFolder.kind).toBe('notFound');
         expect(reading.programVersions).toEqual({ kind: 'unresolved' });
-        expect(reading.dataFolderPlugins).toEqual({ kind: 'unresolved' });
-        expect(reading.creationClubList).toEqual([]);
+        expect([reading.dataFolderPlugins, reading.dataFolderFiles, reading.dataFolderArchives]).toEqual([{ kind: 'unresolved' }, { kind: 'unresolved' }, { kind: 'unresolved' }]);
+        expect([reading.creationClubList, reading.archiveList]).toEqual([[], []]);
       });
 
     });
@@ -474,7 +484,7 @@ describe('the MO2 Instance adapter', () => {
     it('refuses an instance of Skyrim, which Modbench does not support, naming it', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Skyrim\r\nselected_profile=@ByteArray(Default)\r\n');
 
-      await expect(source.settings()).rejects.toThrow('Modbench does not support Skyrim');
+      await expect(adapter.activeProfile()).rejects.toThrow('Modbench does not support Skyrim');
     });
 
     it('writes no file of an instance it refuses', async () => {
@@ -490,7 +500,7 @@ describe('the MO2 Instance adapter', () => {
     it("answers the settings' own gamePath as a place it looked, not set, when the settings hold none", async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
 
-      const folder = await (await source.settings()).gameFolder();
+      const folder = await adapter.gameFolder();
 
       expect(folder).toMatchObject({
         kind: 'notFound',
@@ -506,7 +516,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'big.rar.unfinished'), 'half');
       await writeFile(join(root, 'downloads', 'gone.zip.meta'), '[General]\r\n');
 
-      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const downloadedFiles = (await adapter.reading()).downloadedFiles;
 
       const { downloadsDir, files } = expectKind(downloadedFiles, 'listed');
       expect(downloadsDir).toBe(join(root, 'downloads'));
@@ -524,7 +534,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'Named Mod-4321-1-0-1700000000.7z'), '7z');
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
 
-      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const downloadedFiles = (await adapter.reading()).downloadedFiles;
 
       const idsByName = new Map((expectKind(downloadedFiles, 'listed').files ?? []).map((file) => [file.name, file.modID]));
       expect(idsByName.get('Named Mod-4321-1-0-1700000000.7z')).toBe('4321');
@@ -535,7 +545,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');
 
-      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const downloadedFiles = (await adapter.reading()).downloadedFiles;
 
       expect(expectKind(downloadedFiles, 'listed').files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({ status: 'Downloaded' });
     });
@@ -543,24 +553,30 @@ describe('the MO2 Instance adapter', () => {
     it('answers no files, rather than none, when the downloads folder is not there', async () => {
       await rm(join(root, 'downloads'), { recursive: true });
 
-      expect(await (await source.settings()).downloadedFiles(ignoreSkippedLink))
+      expect((await adapter.reading()).downloadedFiles)
         .toEqual({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: undefined });
     });
 
     it('answers where the downloads are from the same read the profile came from, so a rewrite between two answers does not land two generations in one value', async () => {
-      const settings = await source.settings();
-      await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n'
-        + '[Settings]\r\ndownload_directory=@ByteArray(elsewhere)\r\n');
+      const rewrite = vi.fn(() => {
+        writeFileSync(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Secondary)\r\n[Settings]\r\ndownload_directory=@ByteArray(elsewhere)\r\n');
+      });
+      vi.mocked(readFile).mockImplementation(async (...args: Parameters<typeof actualReadFile>) => {
+        const read = await actualReadFile(...args);
+        if (args[0] === join(root, INI) && rewrite.mock.calls.length === 0) rewrite();
+        return read;
+      });
 
-      const downloadedFiles = await settings.downloadedFiles(ignoreSkippedLink);
+      const { profile, downloadedFiles } = await adapter.reading();
 
-      expect(downloadedFiles).toMatchObject({ kind: 'listed', downloadsDir: join(root, 'downloads') });
+      expect(rewrite).toHaveBeenCalledOnce();
+      expect([['Default', join(root, 'downloads')], ['Secondary', join(root, 'elsewhere')]]).toContainEqual([profile, expectKind(downloadedFiles, 'listed').downloadsDir]);
     });
 
     it('answers every profile, and no stray file beside them', async () => {
       await writeFile(join(root, 'profiles', 'stray.txt'), '');
 
-      expect((await source.profiles(ignoreSkippedLink)).sort()).toEqual(['Default', 'Secondary']);
+      expect((await adapter.reading()).profiles).toEqual(['Default', 'Secondary']);
     });
 
     it('answers a profile folder that is a link to a folder, and no link to a file or to nothing', async () => {
@@ -570,55 +586,61 @@ describe('the MO2 Instance adapter', () => {
       await symlink(join(root, 'elsewhere', 'file'), join(root, 'profiles', 'FileLink'));
       await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Broken'));
 
-      const skipped: string[] = [];
+      const { profiles, linkNotes } = await adapter.reading();
 
-      expect((await source.profiles((link) => skipped.push(link))).sort()).toEqual(['Default', 'Linked', 'Secondary']);
-      expect(skipped).toEqual([join(root, 'profiles', 'Broken')]);
+      expect([...profiles].sort()).toEqual(['Default', 'Linked', 'Secondary']);
+      expect(linkNotes).toEqual([expect.stringContaining(join(root, 'profiles', 'Broken'))]);
     });
 
     it('answers a downloaded file that is a link to a file, and hands over one that links to nothing', async () => {
       await writeFile(join(root, 'elsewhere.7z'), '');
       await symlink(join(root, 'elsewhere.7z'), join(root, 'downloads', 'Linked-1-0.7z'));
       await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Broken-1-0.7z'));
-      const skipped: string[] = [];
 
-      const downloadedFiles = await (await source.settings()).downloadedFiles((link) => skipped.push(link));
+      const { downloadedFiles, linkNotes } = await adapter.reading();
 
       expect(expectKind(downloadedFiles, 'listed').files?.map(({ name }) => name)).toContain('Linked-1-0.7z');
-      expect(skipped).toEqual([join(root, 'downloads', 'Broken-1-0.7z')]);
+      expect(linkNotes).toEqual([expect.stringContaining(join(root, 'downloads', 'Broken-1-0.7z'))]);
     });
 
     it('answers no profiles when the instance has none', async () => {
       await rm(join(root, 'profiles'), { recursive: true });
 
-      expect(await source.profiles(ignoreSkippedLink)).toEqual([]);
+      expect(await adapter.profiles()).toEqual([]);
     });
 
     it('rejects a profile with no mod order to read', async () => {
-      await expect(source.modOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
+      await expect(adapter.changeModOrder('No Such Profile', () => [])).rejects.toThrow(/ENOENT/);
     });
 
     it('answers the meta and the files of a mod whose folder differs from its name only in case', async () => {
       await mkdir(join(root, 'mods', 'FOO'));
       await writeFile(join(root, 'mods', 'FOO', 'meta.ini'), '[General]\r\nversion=3.0\r\n');
       await writeFile(join(root, 'mods', 'FOO', 'Foo.esp'), '');
+      await appendFile(join(root, DEFAULT_MODLIST), '+foo\n');
 
-      expect(await source.modMeta('foo', 'list')).toMatchObject({ version: '3.0' });
-      expect((await source.originFiles({ kind: 'mod', name: 'foo' }, 'list')).files.map((f) => f.relativePath)).toEqual(['Foo.esp']);
+      const { mods, modFiles } = await adapter.reading();
+
+      expect(mods.find((entry) => entry.name === 'foo')).toMatchObject({ version: '3.0' });
+      expect(modFiles.get('foo')?.files.map((f) => f.relativePath)).toEqual(['Foo.esp']);
     });
 
     it('answers an empty meta for a mod with none', async () => {
-      expect(await source.modMeta('DragIn Manual Extract', 'list')).toEqual({ updateAvailable: false });
+      await appendFile(join(root, DEFAULT_MODLIST), '+DragIn Manual Extract\n');
+
+      expect((await adapter.reading()).mods.find((entry) => entry.name === 'DragIn Manual Extract'))
+        .toEqual({ kind: 'mod', name: 'DragIn Manual Extract', enabled: true, updateAvailable: false });
     });
 
     it('rejects a meta that is there but cannot be read, not publishing an unreadable meta as an empty one', async () => {
-      await mkdir(join(root, 'mods', 'DragIn Manual Extract', 'meta.ini'));
+      await rm(join(root, 'mods', 'Harder VATS', 'meta.ini'));
+      await mkdir(join(root, 'mods', 'Harder VATS', 'meta.ini'));
 
-      await expect(source.modMeta('DragIn Manual Extract', 'list')).rejects.toThrow(/EISDIR/);
+      await expect(adapter.reading()).rejects.toThrow(/EISDIR/);
     });
 
     it('answers every mod folder as the entry it holds, with its path and the name MO2 knows its mod by', async () => {
-      const folders = (await source.modFolders(ignoreSkippedLink))?.all;
+      const folders = (await adapter.reading()).modFolders?.all;
 
       expect(folders).toContainEqual({
         kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'), modName: 'Unofficial Fallout 4 Patch',
@@ -634,11 +656,11 @@ describe('the MO2 Instance adapter', () => {
     it('answers no entry for a folder named as the reserved overwrite folder, which mod sync would otherwise list as a mod', async () => {
       await mkdir(join(root, 'mods', 'Overwrite'));
 
-      expect((await source.modFolders(ignoreSkippedLink))?.all.map((f) => f.name)).not.toContain('Overwrite');
+      expect((await adapter.reading()).modFolders?.all.map((f) => f.name)).not.toContain('Overwrite');
     });
 
     describe('a folder an install is extracting into', () => {
-      const listed = async (): Promise<string[]> => present(await source.modFolders(ignoreSkippedLink), 'the mod folders').all.map((f) => f.name);
+      const listed = async (): Promise<string[]> => present((await adapter.reading()).modFolders, 'the mod folders').all.map((f) => f.name);
 
       it('is listed when an interrupted install left only its extraction', async () => {
         await mkdir(join(root, 'mods', 'Left Over', '.medit_tmp_2147483646_new-abc123'), { recursive: true });
@@ -650,40 +672,39 @@ describe('the MO2 Instance adapter', () => {
     onPosix.it('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
       await mkdir(join(root, 'mods', 'ModA'));
       await mkdir(join(root, 'mods', 'moda'));
-      const folders = present(await source.modFolders(ignoreSkippedLink), 'the mod folders');
+      const folders = present((await adapter.reading()).modFolders, 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'moda' })?.path).toBe(join(root, 'mods', 'moda'));
       expect(folders.holding({ kind: 'mod', name: 'ModA' })?.path).toBe(join(root, 'mods', 'ModA'));
-          });
+    });
 
     it('hands over a link it cannot follow rather than answering it as a folder', async () => {
       await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
-      const skipped: string[] = [];
 
-      const folders = await source.modFolders((name) => skipped.push(name));
+      const { modFolders, linkNotes } = await adapter.reading();
 
-      expect(folders?.all.map((f) => f.name)).not.toContain('Loop');
-      expect(skipped).toEqual([join(root, 'mods', 'Loop')]);
+      expect(modFolders?.all.map((f) => f.name)).not.toContain('Loop');
+      expect(linkNotes).toEqual([expect.stringContaining(join(root, 'mods', 'Loop'))]);
     });
 
     it('answers undefined when there is no folder for mods at all', async () => {
       await rm(join(root, 'mods'), { recursive: true });
 
-      expect(await source.modFolders(ignoreSkippedLink)).toBeUndefined();
+      expect((await adapter.reading()).modFolders).toBeUndefined();
     });
 
     it('rejects when mods/ is there but cannot be listed, only its absence meaning there is no folder for mods', async () => {
       await rm(join(root, 'mods'), { recursive: true });
       await writeFile(join(root, 'mods'), 'not a directory');
 
-      await expect(source.modFolders(ignoreSkippedLink)).rejects.toThrow();
+      await expect(adapter.reading()).rejects.toThrow(/ENOTDIR/);
     });
 
     it('rejects a profile with no plugin order to read', async () => {
-      await expect(source.pluginOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
+      await expect(adapter.changePluginOrder('No Such Profile', () => [])).rejects.toThrow(/ENOENT/);
     });
 
-    describe('the game folder\'s plugins', () => {
+    describe('the game folder\'s facts', () => {
       let game: string;
 
       beforeEach(async () => {
@@ -691,109 +712,295 @@ describe('the MO2 Instance adapter', () => {
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
 
-      const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: game, dataFolder });
+      const found = (dataFolder = join(game, 'Data')): GameFolder => ({ kind: 'found', root: game, dataFolder });
+      const readingOver = (gameFolder: GameFolder, answers: AdapterAnswers = {}): Promise<InstanceReading> => adapterOver(root, { ...answers, gameFolder }).reading();
 
-      it('answers the plugin files at the Data folder\'s root, as the folder spells them', async () => {
-        const data = join(game, 'Data');
-        await mkdir(join(data, 'Nested.esp'), { recursive: true });
-        await writeFile(join(data, 'Fallout4.ESM'), '');
-        await writeFile(join(data, 'Patch.esp'), '');
-        await writeFile(join(data, 'readme.txt'), '');
+      it('answers the Data folder\'s plugins, files and archives unreadable, with why, when the Data folder cannot be listed', async () => {
+        const reading = await readingOver(found(join(game, 'Missing')));
 
-        const plugins = await source.gameFolderPlugins(found(data), ignoreLink);
-
-        expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
+        expect([reading.dataFolderPlugins, reading.dataFolderFiles, reading.dataFolderArchives].map((fact) => expectKind(fact, 'unreadable').reason))
+          .toEqual([expect.stringMatching(/ENOENT/), expect.stringMatching(/ENOENT/), expect.stringMatching(/ENOENT/)]);
       });
 
-      onPosix.it('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
-        const data = join(game, 'Data');
-        await mkdir(data, { recursive: true });
-        await writeFile(join(data, 'Foo.esp'), '');
-        await writeFile(join(data, 'foo.esp'), '');
+      describe('the game folder\'s plugins', () => {
+        it('answers the plugin files at the Data folder\'s root, as the folder spells them', async () => {
+          const data = join(game, 'Data');
+          await mkdir(join(data, 'Nested.esp'), { recursive: true });
+          await writeFile(join(data, 'Fallout4.ESM'), '');
+          await writeFile(join(data, 'Patch.esp'), '');
+          await writeFile(join(data, 'readme.txt'), '');
 
-        expect(await source.gameFolderPlugins(found(data), ignoreLink)).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+          expect((await readingOver(found())).dataFolderPlugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
+        });
+
+        onPosix.it('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
+          const data = join(game, 'Data');
+          await mkdir(data, { recursive: true });
+          await writeFile(join(data, 'Foo.esp'), '');
+          await writeFile(join(data, 'foo.esp'), '');
+
+          expect((await readingOver(found())).dataFolderPlugins).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+        });
+
+        it('answers no plugin that is a hard link, and hands over the link, a link being a deployed file', async () => {
+          const data = join(game, 'Data');
+          await mkdir(data, { recursive: true });
+          await writeFile(join(root, 'Real.esp'), '');
+          await writeFile(join(data, 'Own.esp'), '');
+          await link(join(root, 'Real.esp'), join(data, 'Hard.esp'));
+
+          const { dataFolderPlugins, gameFolderLinks } = await readingOver(found());
+
+          expect([dataFolderPlugins, gameFolderLinks]).toEqual([{ kind: 'listed', names: new Set(['Own.esp']) }, 1]);
+        });
+
+        onPosix.it('(a link needs no privilege on POSIX) answers no plugin that is a symlink, broken or not, and hands over each', async () => {
+          const data = join(game, 'Data');
+          await mkdir(data, { recursive: true });
+          await writeFile(join(game, 'Real.esp'), '');
+          await symlink(join(game, 'Real.esp'), join(data, 'Soft.esp'));
+          await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
+
+          const { dataFolderPlugins, gameFolderLinks } = await readingOver(found());
+
+          expect([dataFolderPlugins, gameFolderLinks]).toEqual([{ kind: 'listed', names: new Set() }, 2]);
+        });
       });
 
-      it('answers no plugin that is a hard link, and hands over the link, a link being a deployed file', async () => {
-        const data = join(game, 'Data');
-        await mkdir(data, { recursive: true });
-        await writeFile(join(game, 'Real.esp'), '');
-        await writeFile(join(data, 'Own.esp'), '');
-        await link(join(game, 'Real.esp'), join(data, 'Hard.esp'));
-        const ignored: string[] = [];
+      describe('the game folder\'s files', () => {
+        it('answers every file at any depth of the Data folder, as the folder spells it and at its own path, by its path in it in lower case', async () => {
+          const data = join(game, 'Data');
+          await mkdir(join(data, 'F4SE', 'Plugins'), { recursive: true });
+          await writeFile(join(data, 'Fallout4 - Main.ba2'), '');
+          await writeFile(join(data, 'F4SE', 'Plugins', 'X.dll'), '');
 
-        expect(await source.gameFolderPlugins(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', names: new Set(['Own.esp']) });
-        expect(ignored).toEqual([join(data, 'Hard.esp')]);
+          expect((await readingOver(found())).dataFolderFiles).toEqual({ kind: 'listed', files: new Map([
+            ['fallout4 - main.ba2', { relativePath: 'Fallout4 - Main.ba2', path: join(data, 'Fallout4 - Main.ba2') }],
+            ['f4se/plugins/x.dll', { relativePath: 'F4SE/Plugins/X.dll', path: join(data, 'F4SE/Plugins/X.dll') }],
+          ]) });
+        });
+
+        it('answers no file that is a hard link, and hands over the link', async () => {
+          const data = join(game, 'Data');
+          await mkdir(join(data, 'F4SE'), { recursive: true });
+          await writeFile(join(root, 'Real.dll'), '');
+          await link(join(root, 'Real.dll'), join(data, 'F4SE', 'Hard.dll'));
+
+          const { dataFolderFiles, gameFolderLinks } = await readingOver(found());
+
+          expect([dataFolderFiles, gameFolderLinks]).toEqual([{ kind: 'listed', files: new Map() }, 1]);
+        });
       });
 
-      onPosix.it('(a link needs no privilege on POSIX) answers no plugin that is a symlink, broken or not, and hands over each', async () => {
-        const data = join(game, 'Data');
-        await mkdir(data, { recursive: true });
-        await writeFile(join(game, 'Real.esp'), '');
-        await symlink(join(game, 'Real.esp'), join(data, 'Soft.esp'));
-        await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
-        const ignored: string[] = [];
+      describe('the game folder\'s Creation Club list, where Mod Management takes the Creation Club plugins from', () => {
+        it('answers the plugins the release\'s list names, in its order', async () => {
+          await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
 
-        expect(await source.gameFolderPlugins(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', names: new Set() });
-        expect(ignored.sort()).toEqual([join(data, 'Broken.esp'), join(data, 'Soft.esp')]);
+          expect((await readingOver(found())).creationClubList)
+            .toEqual(['ccBGSFO4044-HellfirePowerArmor.esl', 'ccBGSFO4001-PipBoy(Black).esl']);
+        });
+
+        it('answers none when the game folder holds no list', async () => {
+          expect((await readingOver(found())).creationClubList).toEqual([]);
+        });
+
+        describe('the list the game gets when it runs', () => {
+          const gameRead = async (): Promise<InstanceReading> => {
+            await mkdir(join(game, 'Data'), { recursive: true });
+            return adapterOver(root, { gameFolderSettingValue: game }).reading();
+          };
+          const listRead = async (): Promise<readonly string[]> => (await gameRead()).creationClubList;
+
+          it('is the list an enabled mod deploys at the game folder\'s root, over the game folder\'s own', async () => {
+            await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+            await deploys('Patch Mod', 'ccDeployed.esl\r\n');
+
+            expect(await listRead()).toEqual(['ccDeployed.esl']);
+          });
+
+          it('is a deployed copy spelled in any case, as the game reads it', async () => {
+            await deploys('Patch Mod', 'ccDeployed.esl\r\n', 'Root/fallout4.CCC');
+
+            expect(await listRead()).toEqual(['ccDeployed.esl']);
+          });
+
+          it('is the game folder\'s own spelled in any case, as the game reads it', async () => {
+            await writeFile(join(game, 'fallout4.CCC'), 'ccOwn.esl\r\n');
+
+            expect(await listRead()).toEqual(['ccOwn.esl']);
+          });
+
+          it('notes a link it cannot follow where a mod deploys the list', async () => {
+            const broken = join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc');
+            await mkdir(dirname(broken), { recursive: true });
+            await symlink(join(root, 'nowhere.ccc'), broken);
+
+            expect((await gameRead()).linkNotes.join('\n')).toContain(broken);
+          });
+
+          it('is never a folder a mod deploys under the list\'s name', async () => {
+            await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+            await mkdir(join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc'), { recursive: true });
+
+            expect(await listRead()).toEqual(['ccOwn.esl']);
+          });
+
+          it('is the copy of the mod that wins the mod order', async () => {
+            await deploys('Patch Mod', 'ccLosing.esl\r\n');
+            await deploys('Ñoño\'s Retexture', 'ccWinning.esl\r\n');
+
+            expect(await listRead()).toEqual(['ccWinning.esl']);
+          });
+
+          it('is never the copy of a disabled mod', async () => {
+            await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+            await deploys('Harder VATS', 'ccDisabled.esl\r\n');
+
+            expect(await listRead()).toEqual(['ccOwn.esl']);
+          });
+
+          it('is never a copy that deploy puts in the Data folder', async () => {
+            await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+            await deploys('Patch Mod', 'ccInData.esl\r\n', 'Textures/Fallout4.ccc');
+
+            expect(await listRead()).toEqual(['ccOwn.esl']);
+          });
+
+          it.each([['a hard link', link], ['a symlink', symlink]])('skips the game folder\'s own when it is %s, as a deploy leaves it, and counts the link once', async (_, linked) => {
+            await linked(await deploys('Harder VATS', 'ccDisabled.esl\r\n'), join(game, 'Fallout4.ccc'));
+
+            const { creationClubList, gameFolderLinks } = await gameRead();
+
+            expect([creationClubList, gameFolderLinks]).toEqual([[], 1]);
+          });
+        });
       });
 
-      it('answers unresolved when the game folder was not found', async () => {
-        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
+      describe('the archives the game\'s INIs list, where Mod Management takes the archives the game loads from', () => {
+        const profileFile = (name: string): string => join(root, 'profiles', 'Default', name);
+        const localSettings = (on: boolean): Promise<void> => writeFile(profileFile('settings.ini'), `[General]\nLocalSettings=${on}\n`);
+        const archiveListOf = async (answers: AdapterAnswers = {}): Promise<{ archives: readonly string[]; notes: readonly string[] }> => {
+          const { archiveList, archiveListNotes } = await readingOver(found(), answers);
+          return { archives: archiveList, notes: archiveListNotes };
+        };
 
-        expect(await source.gameFolderPlugins(notFound, ignoreLink)).toEqual({ kind: 'unresolved' });
+        it('lists the default INI\'s archives key by key, in the order the release loads its keys, whatever the case of section, key or file', async () => {
+          await writeFile(join(game, 'fallout4_default.ini'), [
+            '[Display]', 'sResourceArchiveList=Not An Archive.ba2',
+            '[archive]', 'SResourceArchiveList=Fallout4 - Voices.ba2, Fallout4 - Meshes.ba2',
+            '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
+          ].join('\r\n'));
+
+          expect((await archiveListOf()).archives)
+            .toEqual(['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2']);
+        });
+
+        it('reads no default INI that is a link, and hands the link over, a link being a deployed file', async () => {
+          await writeFile(join(root, 'Deployed.ini'), '[Archive]\nsResourceArchiveList=Deployed.ba2\n');
+          await link(join(root, 'Deployed.ini'), join(game, 'Fallout4_Default.ini'));
+
+          const { archiveList, gameFolderLinks } = await readingOver(found());
+
+          expect([archiveList, gameFolderLinks]).toEqual([[], 1]);
+        });
+
+        it('lists the default INI\'s archives and notes the profile by name, when it keeps no game INIs and the My Games folder is nowhere', async () => {
+          await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
+          await localSettings(false);
+
+          const { archives, notes } = await archiveListOf();
+
+          expect(archives).toEqual(['Default.ba2']);
+          expect(notes).toEqual([expect.stringMatching(/^The profile Default keeps no game INIs of its own/)]);
+        });
+
+        describe('while the profile keeps no game INIs of its own', () => {
+          let myGames: string;
+          let detectors: GameDetectors;
+
+          beforeEach(async () => {
+            const prefix = join(game, 'pfx');
+            const documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
+            myGames = join(documents, 'My Games', 'Fallout4');
+            await mkdir(myGames, { recursive: true });
+            detectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) };
+            await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
+            await localSettings(false);
+          });
+
+          it('takes a key the My Games INIs give over the default INI\'s, the custom INI\'s over the main one\'s, with no warning', async () => {
+            await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
+            await writeFile(join(myGames, 'Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
+
+            expect(await archiveListOf({ detectors })).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+          });
+
+          it('reads a My Games INI that is a link, which is the user\'s own file and not the game folder\'s', async () => {
+            await writeFile(join(root, 'Shared.ini'), '[Archive]\nsResourceArchiveList=Shared.ba2\n');
+            await link(join(root, 'Shared.ini'), join(myGames, 'Fallout4.ini'));
+
+            const { archiveList, gameFolderLinks } = await readingOver(found(), { detectors });
+
+            expect([archiveList, gameFolderLinks]).toEqual([['Shared.ba2', 'Default2.ba2'], 0]);
+          });
+
+          it('reads none of the profile\'s INIs', async () => {
+            await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
+
+            expect((await archiveListOf({ detectors })).archives).toEqual(['Default.ba2', 'Default2.ba2']);
+          });
+        });
+
+        it('takes a key the profile\'s own INIs give over the default INI\'s, the custom INI\'s over the main one\'s, when the profile keeps its own', async () => {
+          await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
+          await writeFile(profileFile('fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
+          await writeFile(profileFile('Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
+          await localSettings(true);
+
+          expect(await archiveListOf()).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+        });
       });
 
-      it('answers unreadable, with why, when the Data folder cannot be listed', async () => {
-        const plugins = await source.gameFolderPlugins(found(join(game, 'Missing')), ignoreLink);
+      describe('the game folder\'s archives and strings files', () => {
+        it('answers the release\'s archives at the Data folder\'s root and the strings files in its strings folder, by their paths in it', async () => {
+          const data = join(game, 'Data');
+          await mkdir(join(data, 'STRINGS'), { recursive: true });
+          await mkdir(join(data, 'Nested.ba2'), { recursive: true });
+          await writeFile(join(data, 'Fallout4 - Interface.BA2'), '');
+          await writeFile(join(data, 'Skyrim - Interface.bsa'), '');
+          await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
+          await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
 
-        expect(expectKind(plugins, 'unreadable').reason).toMatch(/ENOENT/);
-      });
-    });
+          expect((await readingOver(found())).dataFolderArchives).toEqual({
+            kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
+          });
+        });
 
-    describe('the game folder\'s files', () => {
-      let game: string;
+        onPosix.it('(a link needs no privilege on POSIX) answers no archive that is a symlink, and hands it over', async () => {
+          const data = join(game, 'Data');
+          await mkdir(data, { recursive: true });
+          await writeFile(join(game, 'Real.ba2'), '');
+          await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Soft.ba2'));
 
-      beforeEach(async () => {
-        game = await mkdtemp(join(tmpdir(), 'mo2-instance-data-files-'));
-      });
-      afterEach(() => rm(game, { recursive: true, force: true }));
+          const { dataFolderArchives, gameFolderLinks } = await readingOver(found());
 
-      const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: game, dataFolder });
+          expect([dataFolderArchives, gameFolderLinks]).toEqual([{ kind: 'listed', archives: [], stringsFiles: [] }, 1]);
+        });
 
-      it('answers every file at any depth of the Data folder, as the folder spells it and at its own path, by its path in it in lower case', async () => {
-        const data = join(game, 'Data');
-        await mkdir(join(data, 'F4SE', 'Plugins'), { recursive: true });
-        await writeFile(join(data, 'Fallout4 - Main.ba2'), '');
-        await writeFile(join(data, 'F4SE', 'Plugins', 'X.dll'), '');
+        it('answers no archive or strings file that is a hard link, and hands over each link, a link being a deployed file', async () => {
+          const data = join(game, 'Data');
+          await mkdir(join(data, 'Strings'), { recursive: true });
+          await writeFile(join(root, 'Real.ba2'), '');
+          await writeFile(join(data, 'Fallout4 - Own.ba2'), '');
+          await writeFile(join(data, 'Strings', 'Fallout4_en.STRINGS'), '');
+          await writeFile(join(root, 'Fallout4_fr.STRINGS'), '');
+          await link(join(root, 'Real.ba2'), join(data, 'Fallout4 - Hard.ba2'));
+          await link(join(root, 'Fallout4_fr.STRINGS'), join(data, 'Strings', 'Fallout4_fr.STRINGS'));
 
-        expect(await source.gameFolderFiles(found(data), ignoreLink)).toEqual({ kind: 'listed', files: new Map([
-          ['fallout4 - main.ba2', { relativePath: 'Fallout4 - Main.ba2', path: join(data, 'Fallout4 - Main.ba2') }],
-          ['f4se/plugins/x.dll', { relativePath: 'F4SE/Plugins/X.dll', path: join(data, 'F4SE/Plugins/X.dll') }],
-        ]) });
-      });
+          const { dataFolderArchives, gameFolderLinks } = await readingOver(found());
 
-      it('answers no file that is a hard link, and hands over the link', async () => {
-        const data = join(game, 'Data');
-        await mkdir(join(data, 'F4SE'), { recursive: true });
-        await writeFile(join(game, 'Real.dll'), '');
-        await link(join(game, 'Real.dll'), join(data, 'F4SE', 'Hard.dll'));
-        const ignored: string[] = [];
-
-        expect(await source.gameFolderFiles(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', files: new Map() });
-        expect(ignored).toEqual([join(data, 'F4SE', 'Hard.dll')]);
-      });
-
-      it('answers unresolved when the game folder was not found', async () => {
-        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
-
-        expect(await source.gameFolderFiles(notFound, ignoreLink)).toEqual({ kind: 'unresolved' });
-      });
-
-      it('answers unreadable, with why, when the Data folder cannot be listed', async () => {
-        const files = await source.gameFolderFiles(found(join(game, 'Missing')), ignoreLink);
-
-        expect(expectKind(files, 'unreadable').reason).toMatch(/ENOENT/);
+          expect([dataFolderArchives, gameFolderLinks]).toEqual([{ kind: 'listed', archives: ['Fallout4 - Own.ba2'], stringsFiles: ['Strings/Fallout4_en.STRINGS'] }, 2]);
+        });
       });
     });
 
@@ -802,9 +1009,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'masterlist.yaml'), 'plugins: []\n');
         await writeFile(join(root, 'userlist.yaml'), 'plugins: []\n');
 
-        const files = await source.sortingRuleFiles();
-
-        expect(files).toEqual({
+        expect((await adapter.reading()).sortingRuleFiles).toEqual({
           masterlist: { path: join(root, 'masterlist.yaml'), kind: 'text', text: 'plugins: []\n' },
           prelude: { path: join(root, 'prelude.yaml'), kind: 'absent' },
           userlist: { path: join(root, 'userlist.yaml'), kind: 'text', text: 'plugins: []\n' },
@@ -814,282 +1019,9 @@ describe('the MO2 Instance adapter', () => {
       it('answers unreadable, with why, for a file that cannot be read as a file', async () => {
         await mkdir(join(root, 'userlist.yaml'));
 
-        const { userlist } = await source.sortingRuleFiles();
+        const { userlist } = (await adapter.reading()).sortingRuleFiles;
 
         expect(expectKind(userlist, 'unreadable').reason).toMatch(/EISDIR/);
-      });
-    });
-
-    describe('the game folder\'s Creation Club list, where Mod Management takes the Creation Club plugins from', () => {
-      let game: string;
-
-      beforeEach(async () => {
-        game = await mkdtemp(join(tmpdir(), 'mo2-instance-ccc-'));
-      });
-      afterEach(() => rm(game, { recursive: true, force: true }));
-
-      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
-      const ownListIn = (gameFolder: GameFolder, release: string): Promise<string[]> => source.creationClubList(gameFolder, release, [], undefined, ignoreLink, ignoreSkippedLink);
-
-      it('answers the plugins the release\'s list names, in its order', async () => {
-        await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
-
-        expect(await ownListIn(found(), 'Fallout4'))
-          .toEqual(['ccBGSFO4044-HellfirePowerArmor.esl', 'ccBGSFO4001-PipBoy(Black).esl']);
-      });
-
-      it('answers none when the game folder holds no list', async () => {
-        expect(await ownListIn(found(), 'Fallout4')).toEqual([]);
-      });
-
-      it('answers none for a release with no Creation Club', async () => {
-        await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\n');
-
-        expect(await ownListIn(found(), 'Oblivion')).toEqual([]);
-      });
-
-      it('answers none when the game folder was not found', async () => {
-        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
-
-        expect(await ownListIn(notFound, 'Fallout4')).toEqual([]);
-      });
-
-      describe('the list the game gets when it runs', () => {
-        const gameRead = async (): Promise<ManagerReading> => {
-          await mkdir(join(game, 'Data'), { recursive: true });
-          return managerOver(root, { gameFolderSettingValue: game }).reading();
-        };
-        const listRead = async (): Promise<readonly string[]> => (await gameRead()).creationClubList;
-
-        it('is the list an enabled mod deploys at the game folder\'s root, over the game folder\'s own', async () => {
-          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
-          await deploys('Patch Mod', 'ccDeployed.esl\r\n');
-
-          expect(await listRead()).toEqual(['ccDeployed.esl']);
-        });
-
-        it('is a deployed copy spelled in any case, as the game reads it', async () => {
-          await deploys('Patch Mod', 'ccDeployed.esl\r\n', 'Root/fallout4.CCC');
-
-          expect(await listRead()).toEqual(['ccDeployed.esl']);
-        });
-
-        it('is the game folder\'s own spelled in any case, as the game reads it', async () => {
-          await writeFile(join(game, 'fallout4.CCC'), 'ccOwn.esl\r\n');
-
-          expect(await listRead()).toEqual(['ccOwn.esl']);
-        });
-
-        it('notes a link it cannot follow where a mod deploys the list', async () => {
-          const broken = join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc');
-          await mkdir(dirname(broken), { recursive: true });
-          await symlink(join(root, 'nowhere.ccc'), broken);
-
-          expect((await gameRead()).linkNotes.join('\n')).toContain(broken);
-        });
-
-        it('is never a folder a mod deploys under the list\'s name', async () => {
-          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
-          await mkdir(join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc'), { recursive: true });
-
-          expect(await listRead()).toEqual(['ccOwn.esl']);
-        });
-
-        it('is the copy of the mod that wins the mod order', async () => {
-          await deploys('Patch Mod', 'ccLosing.esl\r\n');
-          await deploys('Ñoño\'s Retexture', 'ccWinning.esl\r\n');
-
-          expect(await listRead()).toEqual(['ccWinning.esl']);
-        });
-
-        it('is never the copy of a disabled mod', async () => {
-          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
-          await deploys('Harder VATS', 'ccDisabled.esl\r\n');
-
-          expect(await listRead()).toEqual(['ccOwn.esl']);
-        });
-
-        it('is never a copy that deploy puts in the Data folder', async () => {
-          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
-          await deploys('Patch Mod', 'ccInData.esl\r\n', 'Textures/Fallout4.ccc');
-
-          expect(await listRead()).toEqual(['ccOwn.esl']);
-        });
-
-        it.each([['a hard link', link], ['a symlink', symlink]])('skips the game folder\'s own when it is %s, as a deploy leaves it, and counts the link once', async (_, linked) => {
-          await linked(await deploys('Harder VATS', 'ccDisabled.esl\r\n'), join(game, 'Fallout4.ccc'));
-
-          const { creationClubList, gameFolderLinks } = await gameRead();
-
-          expect([creationClubList, gameFolderLinks]).toEqual([[], 1]);
-        });
-      });
-    });
-
-    describe('the archives the game\'s INIs list, where Mod Management takes the archives the game loads from', () => {
-      let game: string;
-
-      beforeEach(async () => {
-        game = await mkdtemp(join(tmpdir(), 'mo2-instance-ini-'));
-      });
-      afterEach(() => rm(game, { recursive: true, force: true }));
-
-      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
-      const profileFile = (name: string): string => join(root, 'profiles', 'Default', name);
-      const localSettings = (on: boolean): Promise<void> => writeFile(profileFile('settings.ini'), `[General]\nLocalSettings=${on}\n`);
-
-      it('lists the default INI\'s archives key by key, in the order the release loads its keys, whatever the case of section, key or file', async () => {
-        await writeFile(join(game, 'fallout4_default.ini'), [
-          '[Display]', 'sResourceArchiveList=Not An Archive.ba2',
-          '[archive]', 'SResourceArchiveList=Fallout4 - Voices.ba2, Fallout4 - Meshes.ba2',
-          '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
-        ].join('\r\n'));
-
-        expect((await source.archiveList('Default', found(), 'Fallout4', ignoreLink)).archives)
-          .toEqual(['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2']);
-      });
-
-      it('reads no default INI that is a link, and hands the link over, a link being a deployed file', async () => {
-        await writeFile(join(root, 'Deployed.ini'), '[Archive]\nsResourceArchiveList=Deployed.ba2\n');
-        await link(join(root, 'Deployed.ini'), join(game, 'Fallout4_Default.ini'));
-        const ignored: string[] = [];
-
-        expect((await source.archiveList('Default', found(), 'Fallout4', (path) => ignored.push(path))).archives).toEqual([]);
-        expect(ignored).toEqual([join(game, 'Fallout4_Default.ini')]);
-      });
-
-      it('lists the default INI\'s archives and notes the profile by name, when it keeps no game INIs and the My Games folder is nowhere', async () => {
-        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
-        await localSettings(false);
-
-        const { archives, notes } = await source.archiveList('Default', found(), 'Fallout4', ignoreLink);
-
-        expect(archives).toEqual(['Default.ba2']);
-        expect(notes).toEqual([expect.stringMatching(/^The profile Default keeps no game INIs of its own/)]);
-      });
-
-      describe('while the profile keeps no game INIs of its own', () => {
-        let documents: string;
-        let myGames: string;
-        let myGamesSource: ReadingSource;
-
-        beforeEach(async () => {
-          const prefix = join(game, 'pfx');
-          documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
-          myGames = join(documents, 'My Games', 'Fallout4');
-          await mkdir(myGames, { recursive: true });
-          myGamesSource = readingSource(contextOver(root, {
-            detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-          }), undefined, DEPLOYED_PATH);
-          await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
-          await localSettings(false);
-        });
-
-        it('takes a key the My Games INIs give over the default INI\'s, the custom INI\'s over the main one\'s, with no warning', async () => {
-          await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
-          await writeFile(join(myGames, 'Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
-
-          expect(await myGamesSource.archiveList('Default', found(), 'Fallout4', ignoreLink)).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
-        });
-
-        it('reads a My Games INI that is a link, which is the user\'s own file and not the game folder\'s', async () => {
-          await writeFile(join(root, 'Shared.ini'), '[Archive]\nsResourceArchiveList=Shared.ba2\n');
-          await link(join(root, 'Shared.ini'), join(myGames, 'Fallout4.ini'));
-          const ignored: string[] = [];
-
-          expect((await myGamesSource.archiveList('Default', found(), 'Fallout4', (path) => ignored.push(path))).archives).toEqual(['Shared.ba2', 'Default2.ba2']);
-          expect(ignored).toEqual([]);
-        });
-
-        it('reads none of the profile\'s INIs', async () => {
-          await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
-
-          expect((await myGamesSource.archiveList('Default', found(), 'Fallout4', ignoreLink)).archives).toEqual(['Default.ba2', 'Default2.ba2']);
-        });
-      });
-
-      it('takes a key the profile\'s own INIs give over the default INI\'s, the custom INI\'s over the main one\'s, when the profile keeps its own', async () => {
-        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
-        await writeFile(profileFile('fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
-        await writeFile(profileFile('Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
-        await localSettings(true);
-
-        expect(await source.archiveList('Default', found(), 'Fallout4', ignoreLink)).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
-      });
-
-      it.each([
-        ['the game folder was not found', (): GameFolder => ({ kind: 'notFound', looked: [], setting: 'setting' }), 'Fallout4'],
-        ['the release has no row', found, undefined],
-      ])('lists none when %s', async (_why, gameFolder, release) => {
-        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
-
-        expect((await source.archiveList('Default', gameFolder(), release, ignoreLink)).archives).toEqual([]);
-      });
-
-    });
-
-    describe('the game folder\'s archives and strings files', () => {
-      let game: string;
-
-      beforeEach(async () => {
-        game = await mkdtemp(join(tmpdir(), 'mo2-instance-archives-'));
-      });
-      afterEach(() => rm(game, { recursive: true, force: true }));
-
-      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
-
-      it('answers the release\'s archives at the Data folder\'s root and the strings files in its strings folder, by their paths in it', async () => {
-        const data = join(game, 'Data');
-        await mkdir(join(data, 'STRINGS'), { recursive: true });
-        await mkdir(join(data, 'Nested.ba2'), { recursive: true });
-        await writeFile(join(data, 'Fallout4 - Interface.BA2'), '');
-        await writeFile(join(data, 'Skyrim - Interface.bsa'), '');
-        await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
-        await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
-
-        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreLink)).toEqual({
-          kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
-        });
-      });
-
-      onPosix.it('(a link needs no privilege on POSIX) answers no archive that is a symlink, and hands it over', async () => {
-        const data = join(game, 'Data');
-        await mkdir(data, { recursive: true });
-        await writeFile(join(game, 'Real.ba2'), '');
-        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Soft.ba2'));
-        const ignored: string[] = [];
-
-        expect(await source.gameFolderArchives(found(), 'Fallout4', (path) => ignored.push(path))).toEqual({ kind: 'listed', archives: [], stringsFiles: [] });
-        expect(ignored).toEqual([join(data, 'Fallout4 - Soft.ba2')]);
-      });
-
-      it('answers no archive or strings file that is a hard link, and hands over each link, a link being a deployed file', async () => {
-        const data = join(game, 'Data');
-        await mkdir(join(data, 'Strings'), { recursive: true });
-        await mkdir(join(game, 'Real', 'strings'), { recursive: true });
-        await writeFile(join(game, 'Real.ba2'), '');
-        await writeFile(join(data, 'Fallout4 - Own.ba2'), '');
-        await writeFile(join(data, 'Strings', 'Fallout4_en.STRINGS'), '');
-        await writeFile(join(game, 'Real', 'strings', 'Fallout4_fr.STRINGS'), '');
-        await link(join(game, 'Real.ba2'), join(data, 'Fallout4 - Hard.ba2'));
-        await link(join(game, 'Real', 'strings', 'Fallout4_fr.STRINGS'), join(data, 'Strings', 'Fallout4_fr.STRINGS'));
-        const ignored: string[] = [];
-
-        expect(await source.gameFolderArchives(found(), 'Fallout4', (path) => ignored.push(path))).toEqual({
-          kind: 'listed', archives: ['Fallout4 - Own.ba2'], stringsFiles: ['Strings/Fallout4_en.STRINGS'],
-        });
-        expect(ignored.sort()).toEqual([
-          join(data, 'Fallout4 - Hard.ba2'), join(data, 'Strings', 'Fallout4_fr.STRINGS'),
-        ]);
-      });
-
-      it('answers unresolved when the game folder was not found', async () => {
-        expect(await source.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4', ignoreLink)).toEqual({ kind: 'unresolved' });
-      });
-
-      it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
-        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreLink))
-          .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
       });
     });
   });
@@ -1113,7 +1045,7 @@ describe('the MO2 Instance adapter', () => {
     const recursive = (pattern: string): boolean => pattern.includes('**') || pattern.includes('/');
 
     it('watches the whole of nothing in the instance but the mods, Overwrite and the source folders, and each profile for its files', async () => {
-      const watched = managerOver(root);
+      const watched = adapterOver(root);
       watched.subscribe(() => undefined);
       await watched.reading();
 
@@ -1122,121 +1054,131 @@ describe('the MO2 Instance adapter', () => {
 
       expect(wholeBelow.sort()).toEqual(['mods', 'overwrite', 'source']);
       expect(patternsUnder('mods')).toEqual([]);
-      expect(patternsUnder('profiles')).toEqual([PROFILE_WATCH_PATTERN, PROFILE_WATCH_PATTERN]);
+      expect(patternsUnder('profiles')).toEqual(['{modlist.txt,plugins.txt,*.[iI][nN][iI]}', '{modlist.txt,plugins.txt,*.[iI][nN][iI]}']);
     });
 
     describe('where the user excludes folders from VS Code\'s watch (files.watcherExclude)', () => {
-      const excludingOver = (exclude: WatcherExclude, answers: AdapterAnswers = {}): ReturnType<typeof watchedOver> => {
-        const context = contextOver(root, answers);
-        return watchedOver({ ...context, watch: mo2Watch(root, () => ({ dispose: () => {} }), context.repository.changed, exclude) });
-      };
-      const wholeBelow = (): string[] => live().filter((w) => recursive(w.pattern)).map((w) => relativeFrom(root, w.base).split(sep).join('/')).sort();
-      const firstLevelOf = (folder: string): number => live().filter((w) => w.base === join(root, folder) && w.pattern === FIRST_LEVEL).length;
-      const harderVats = { kind: 'mod' as const, name: 'Harder VATS' };
-      const listedWith = async (patterns: Record<string, boolean>): Promise<ReturnType<typeof watchedOver>> => {
+      beforeEach(() => writeFile(join(root, 'profiles', 'Default', 'settings.ini'), '[General]\nLocalSettings=true\n'));
+
+      const wholeBelow = (): string[] => live().filter((w) => recursive(w.pattern) && !relativeFrom(root, w.base).startsWith('..'))
+        .map((w) => relativeFrom(root, w.base).split(sep).join('/')).sort();
+      const firstLevelOf = (folder: string): number => live().filter((w) => w.base === join(root, folder) && w.pattern === '?*').length;
+      const listedWith = async (patterns: Record<string, boolean>): Promise<InstanceAdapter> => {
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures', 'actors'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'actors', 'a.dds'), '');
-        const watched = excludingOver(watcherExcluding(patterns));
+        const watched = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: watcherExcluding(patterns) });
         watched.subscribe(() => undefined);
-        await watched.originFiles(harderVats, 'list');
         return watched;
       };
-      const named = (watched: ReturnType<typeof watchedOver>): { folder: string; reason: string }[] =>
-        watched.unwatchedFolders().map(({ folder, reason }) => ({ folder: relativeFrom(root, folder).split(sep).join('/'), reason }));
+      const named = async (watched: InstanceAdapter): Promise<{ folder: string; reason: string }[]> =>
+        (await watched.reading()).unwatchedFolders.map(({ folder, reason }) => ({ folder: relativeFrom(root, folder).split(sep).join('/'), reason }));
       const EXCLUDED = 'excluded in files.watcherExclude';
 
       it('watches the mods to their first level and names them where the mods are excluded', async () => {
         const watched = await listedWith({ '**/mods/**': true });
 
+        expect(await named(watched)).toEqual([{ folder: 'mods', reason: EXCLUDED }]);
         expect(wholeBelow()).toEqual(['overwrite', 'source']);
-        expect(named(watched)).toEqual([{ folder: 'mods', reason: EXCLUDED }]);
       });
 
       it('names the topmost excluded folder below a mod and watches it to its first level, the mods held whole', async () => {
         const watched = await listedWith({ '**/textures/**': true });
 
+        expect(await named(watched)).toEqual([{ folder: 'mods/Harder VATS/textures', reason: EXCLUDED }]);
         expect(wholeBelow()).toEqual(['mods', 'overwrite', 'source']);
         expect(firstLevelOf('mods/Harder VATS/textures')).toBe(1);
-        expect(named(watched)).toEqual([{ folder: 'mods/Harder VATS/textures', reason: EXCLUDED }]);
       });
 
-      it('names a mod the user excluded alone, and Overwrite where Overwrite is excluded', async () => {
+      it('names a mod the user excluded alone, and Overwrite where Overwrite is excluded, once each, watching Overwrite\'s first level once', async () => {
         const watched = await listedWith({ '**/mods/Harder VATS/**': true, '**/overwrite/**': true });
 
-        expect(wholeBelow()).toEqual(['mods', 'source']);
-        expect(named(watched).sort((a, b) => a.folder.localeCompare(b.folder))).toEqual([
+        expect((await named(watched)).sort((a, b) => a.folder.localeCompare(b.folder))).toEqual([
           { folder: 'mods/Harder VATS', reason: EXCLUDED }, { folder: 'overwrite', reason: EXCLUDED },
         ]);
+        expect([wholeBelow(), firstLevelOf('overwrite')]).toEqual([['mods', 'source'], 1]);
       });
 
       it('names the game folder\'s Data folder where it is excluded, and watches its first level', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-data-'));
         try {
           await mkdir(join(game, 'Data'));
-          const watched = excludingOver(watcherExcluding({ '**/Data/**': true }), { gameFolderSettingValue: game });
+          const watched = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
           watched.subscribe(() => undefined);
-          await (await watched.settings()).gameFolder();
 
-          expect(watched.unwatchedFolders()).toEqual([{ folder: join(game, 'Data'), reason: EXCLUDED }]);
-          expect(live().filter((w) => w.base === join(game, 'Data')).map((w) => w.pattern)).toEqual([FIRST_LEVEL]);
+          expect((await watched.reading()).unwatchedFolders).toEqual([{ folder: join(game, 'Data'), reason: EXCLUDED }]);
+          const patterns = live().filter((w) => w.base === join(game, 'Data')).map((w) => w.pattern);
+          expect([patterns.includes('?*'), patterns.filter((pattern) => pattern.includes('**'))]).toEqual([true, []]);
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
+      it.each([
+        ['Strings/Fallout4_en.STRINGS', true],
+        ['Textures/a.dds', false],
+      ])('follows the strings files of a Data folder the user excluded, in any case, once read: %s heard %s', async (name, heard) => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-strings-'));
+        try {
+          await mkdir(join(game, 'Data', 'Strings'), { recursive: true });
+          const watched = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
+          watched.subscribe(() => undefined);
+
+          await watched.reading();
+
+          expect(fire(join(game, 'Data'), name)).toBe(heard);
         } finally {
           await rm(game, { recursive: true, force: true });
         }
       });
 
       it('names the folder holding files the user excluded, with the pattern, once for each pattern however many mods hold them', async () => {
-        const watched = await listedWith({ '**/*.dds': true });
         await writeFile(join(root, 'mods', 'Patch Mod', 'b.dds'), '');
-        await watched.originFiles({ kind: 'mod', name: 'Patch Mod' }, 'list');
+        const watched = await listedWith({ '**/*.dds': true });
 
+        expect(await named(watched)).toEqual([{ folder: 'mods', reason: `files matching **/*.dds are ${EXCLUDED}` }]);
         expect(wholeBelow()).toEqual(['mods', 'overwrite', 'source']);
-        expect(named(watched)).toEqual([{ folder: 'mods', reason: `files matching **/*.dds are ${EXCLUDED}` }]);
-      });
-
-      it('names Overwrite once and watches its first level once, though its listing names it as well', async () => {
-        const watched = await listedWith({ '**/overwrite/**': true });
-        await watched.originFiles({ kind: 'runtimeOutput' }, 'list');
-
-        expect([named(watched), firstLevelOf('overwrite')]).toEqual([[{ folder: 'overwrite', reason: EXCLUDED }], 1]);
       });
 
       it('names an excluded mod once, though both its root-only and its full listing name it', async () => {
+        await writeFile(join(root, DEFAULT_MODLIST), (await text(root, DEFAULT_MODLIST)).replace('-Harder VATS', '+Harder VATS'));
         const watched = await listedWith({ '**/mods/Harder VATS/**': true });
-        await watched.originRootFiles(harderVats, 'list');
 
-        expect(named(watched)).toEqual([{ folder: 'mods/Harder VATS', reason: EXCLUDED }]);
+        await watched.changePluginOrderOverProvided('Default', () => []);
+
+        expect(await named(watched)).toEqual([{ folder: 'mods/Harder VATS', reason: EXCLUDED }]);
       });
 
       it('watches everything whole, and names no folder, once the user stops excluding them', async () => {
         let excluded: Record<string, boolean> = { '**/textures/**': true, '**/*.dds': true };
         let settingChanged = (): void => undefined;
-        const watched = excludingOver({ value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } });
+        const watched = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: { value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } } });
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'a.dds'), '');
         watched.subscribe(() => undefined);
-        await watched.originFiles(harderVats, 'list');
+        await watched.reading();
 
         excluded = {};
         settingChanged();
+        const watching = [wholeBelow(), firstLevelOf('mods/Harder VATS/textures')];
 
-        expect([wholeBelow(), watched.unwatchedFolders(), firstLevelOf('mods/Harder VATS/textures')]).toEqual([['mods', 'overwrite', 'source'], [], 0]);
+        expect([...watching, await named(watched)]).toEqual([['mods', 'overwrite', 'source'], 0, []]);
       });
 
       it('stops watching an excluded folder a later listing does not hold', async () => {
         const watched = await listedWith({ '**/textures/**': true });
+        await watched.reading();
         const textures = join(root, 'mods', 'Harder VATS', 'textures');
         const watching = live().find((w) => w.base === textures);
 
         await rm(textures, { recursive: true });
-        await watched.originFiles(harderVats, 'list');
 
-        expect([watching?.disposed, named(watched)]).toEqual([true, []]);
+        expect([await named(watched), watching?.disposed]).toEqual([[], true]);
       });
     });
 
     it('hears a file created, changed or deleted alike, each by its path, so a deleted mod folder is heard', async () => {
       const heard: (string | undefined)[] = [];
-      const watched = managerOver(root);
+      const watched = adapterOver(root);
       watched.subscribe((path) => { heard.push(path); });
       await watched.reading();
       heard.length = 0;
@@ -1251,7 +1193,7 @@ describe('the MO2 Instance adapter', () => {
 
     it('hears a repository appear at, or vanish from, the instance root', () => {
       let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+      adapterOver(root).subscribe(() => { signals++; });
       const entry = watcherOf(join(root, '.git'));
 
       entry?.fireCreate(join(root, '.git'));
@@ -1262,14 +1204,14 @@ describe('the MO2 Instance adapter', () => {
 
     it('hears a repository made again at the instance root, which VS Code reports as a change of its .git', () => {
       const heard: (string | undefined)[] = [];
-      managerOver(root).subscribe((path) => { heard.push(path); });
+      adapterOver(root).subscribe((path) => { heard.push(path); });
 
       expect(fire(root, '.git')).toBe(true);
       expect(heard).toEqual([join(root, '.git')]);
     });
 
     it('arms nothing until someone listens, and disarms when the last listener leaves', () => {
-      const watched = managerOver(root);
+      const watched = adapterOver(root);
       expect(live()).toEqual([]);
 
       const first = watched.subscribe(() => undefined);
@@ -1284,7 +1226,7 @@ describe('the MO2 Instance adapter', () => {
 
     it('signals a change to the game-folder setting as a change with no path, while anyone listens', () => {
       let setting: (() => void) | undefined;
-      const adapter = managerOver(root, { gameFolderSettingChanged: (listener) => {
+      const adapter = adapterOver(root, { gameFolderSettingChanged: (listener) => {
         setting = listener;
         return { dispose: () => { setting = undefined; } };
       } });
@@ -1322,7 +1264,7 @@ describe('the MO2 Instance adapter', () => {
       ['LOOT\'s prelude', 'prelude.yaml', 1],
       ['the userlist', 'userlist.yaml', 1],
     ])('signals a change to %s', async (_what, relativePath, signalled) => {
-      const watched = managerOver(root);
+      const watched = adapterOver(root);
       let signals = 0;
       watched.subscribe(() => { signals++; });
       await watched.reading();
@@ -1336,7 +1278,7 @@ describe('the MO2 Instance adapter', () => {
     it.each(['HEAD', 'packed-refs', 'refs/heads/main', ''])(
       'hears .git/%s in a mod\'s repository', (inside) => {
         let signals = 0;
-        managerOver(root).subscribe(() => { signals++; });
+        adapterOver(root).subscribe(() => { signals++; });
 
         expect(fire(root, join('source/Harder VATS/.git', inside), join('source/Harder VATS/git', inside))).toBe(true);
         expect(signals).toBe(1);
@@ -1348,7 +1290,7 @@ describe('the MO2 Instance adapter', () => {
     ])('signals a change to the push check where %s, once a reading found the repository', async (_where, hooks, configure) => {
       execFileSync('git', ['init', '-q', root]);
       configure(root);
-      const watched = managerOver(root);
+      const watched = adapterOver(root);
       let signals = 0;
       watched.subscribe(() => { signals++; });
       await watched.reading();
@@ -1360,7 +1302,7 @@ describe('the MO2 Instance adapter', () => {
 
     it('tells a ref from git\'s bookkeeping in a Windows path', () => {
       let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+      adapterOver(root).subscribe(() => { signals++; });
       const source = watcherOf(join(root, 'source', 'A', 'x.json'));
 
       source?.fireChange('C:\\MO2\\source\\Harder VATS\\.git\\index');
@@ -1371,14 +1313,14 @@ describe('the MO2 Instance adapter', () => {
 
     it('hears nothing of .git/index in a mod\'s repository, git\'s own bookkeeping not reading as a change', () => {
       let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+      adapterOver(root).subscribe(() => { signals++; });
 
       expect(fire(root, 'source/Harder VATS/.git/index', 'source/Harder VATS/git/index')).toBe(true);
       expect(signals).toBe(0);
     });
 
     it('hears a .git a mod\'s folder holds at its first level, which is the mod\'s content', async () => {
-      const watched = managerOver(root);
+      const watched = adapterOver(root);
       let signals = 0;
       watched.subscribe(() => { signals++; });
       await watched.reading();
@@ -1396,7 +1338,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('signals a change inside one', async () => {
         let signals = 0;
-        const subscription = managerOver(root).subscribe(() => { signals++; });
+        const subscription = adapterOver(root).subscribe(() => { signals++; });
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Weapons', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
         fireCreated(mod());
@@ -1410,7 +1352,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('signals a change inside a folder heard changed, as VS Code reports one deleted and made again in one burst', async () => {
         let signals = 0;
-        const subscription = managerOver(root).subscribe(() => { signals++; });
+        const subscription = adapterOver(root).subscribe(() => { signals++; });
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
         watcherOf(mod())?.fireChange(mod());
@@ -1423,7 +1365,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('signals a change inside one once armed again after a disarm', async () => {
-        const watched = managerOver(root);
+        const watched = adapterOver(root);
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
         let signals = 0;
@@ -1443,7 +1385,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('forgets a folder heard deleted, so armed again it watches nothing that folder held', async () => {
-        const watched = managerOver(root);
+        const watched = adapterOver(root);
         const kept = join(root, 'source', 'Kept Mod');
         const gone = join(root, 'source', 'Gone Mod');
         const inKept = join(kept, 'plugin-source');
@@ -1480,7 +1422,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(refs, { recursive: true });
         await mkdir(objects, { recursive: true });
         let signals = 0;
-        const subscription = managerOver(root).subscribe(() => { signals++; });
+        const subscription = adapterOver(root).subscribe(() => { signals++; });
         fireCreated(repository);
         signals = 0;
 
@@ -1499,7 +1441,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(folder, { recursive: true });
         await writeFile(join(repository, '.git'), 'gitdir: ../../.git/modules/Submodule Mod\n');
         let signals = 0;
-        const watched = managerOver(root);
+        const watched = adapterOver(root);
         const subscription = watched.subscribe(() => { signals++; });
         fireCreated(repository);
         fireCreated(join(repository, '.git'));
@@ -1518,7 +1460,7 @@ describe('the MO2 Instance adapter', () => {
         const refs = join(repository, '.git', 'refs', 'heads');
         await mkdir(refs, { recursive: true });
         let signals = 0;
-        const subscription = managerOver(root).subscribe(() => { signals++; });
+        const subscription = adapterOver(root).subscribe(() => { signals++; });
         fireCreated(repository);
         signals = 0;
 
@@ -1535,7 +1477,7 @@ describe('the MO2 Instance adapter', () => {
         const unreadable = join(mod(), 'Unreadable');
         await mkdir(unreadable, { recursive: true });
         await chmod(unreadable, 0o000);
-        const watched = managerOver(root);
+        const watched = adapterOver(root);
         let signals = 0;
         const subscription = watched.subscribe(() => { signals++; });
 
@@ -1553,16 +1495,16 @@ describe('the MO2 Instance adapter', () => {
 
     it('follows the downloads folder the last read of the settings resolved, signalling once with no path when it moves, not the one where the instance began, so a downloaded file landing in the folder the settings name now is heard', async () => {
       let heard: (string | undefined)[] = [];
-      const watched = watchedOver(contextOver(root));
+      const watched = adapterOver(root);
       watched.subscribe((path) => { heard.push(path); });
-      await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
+      await watched.reading();
       expect(fire(join(root, 'downloads'), 'new.7z')).toBe(true);
       heard = [];
 
       await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
-      await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
+      await watched.reading();
       expect(heard).toEqual([undefined]);
-      await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
+      await watched.reading();
       expect(heard).toEqual([undefined]);
 
       expect(fire(join(root, 'downloads'), 'old.7z')).toBe(false);
@@ -1573,10 +1515,10 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameFolderSettingValue: game }));
+        const watched = adapterOver(root, { gameFolderSettingValue: game });
         watched.subscribe(() => undefined);
 
-        await (await watched.settings()).gameFolder();
+        await watched.gameFolder();
 
         expect(fire(join(game, 'Data'), 'F4SE/Plugins/x.dll')).toBe(true);
       } finally {
@@ -1592,10 +1534,10 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-programs-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameFolderSettingValue: game }));
+        const watched = adapterOver(root, { gameFolderSettingValue: game });
         watched.subscribe(() => undefined);
 
-        await (await watched.settings()).gameFolder();
+        await watched.gameFolder();
 
         expect(fire(game, name)).toBe(heard);
       } finally {
@@ -1611,9 +1553,9 @@ describe('the MO2 Instance adapter', () => {
       afterEach(() => rm(game, { recursive: true, force: true }));
 
       const watchedFromPatchMod = async (): Promise<void> => {
-        const watched = watchedOver(contextOver(root));
+        const watched = adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } });
         watched.subscribe(() => undefined);
-        await watched.creationClubList({ kind: 'found', root: game, dataFolder: join(game, 'Data') }, 'Fallout4', [{ kind: 'mod', name: 'Patch Mod' }], undefined, ignoreLink, ignoreSkippedLink);
+        await watched.reading();
       };
 
       it('follows the game folder\'s own while no origin deploys one', async () => {
@@ -1634,22 +1576,18 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it.each([
-      ['', 'fallout4_default.INI', true],
-      ['', 'Fallout4Prefs.ini', false],
-      ['Data', 'Fallout4 - Interface.BA2', true],
-      ['Data', 'Strings/Fallout4_en.STRINGS', true],
-      ['Data', 'Skyrim - Interface.bsa', false],
-    ])('follows the release\'s default INI, and the archives and strings files of the Data folder, in any case, once read: %s/%s heard %s', async (folder, name, heard) => {
+      ['fallout4_default.INI', true],
+      ['Fallout4Prefs.ini', false],
+    ])('follows the release\'s default INI at the game folder\'s root, in any case, once read: %s heard %s', async (name, heard) => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-archives-'));
       try {
         const found: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
-        const watched = watchedOver(contextOver(root));
+        const watched = adapterOver(root, { gameFolder: found });
         watched.subscribe(() => undefined);
 
-        await watched.archiveList('Default', found, 'Fallout4', ignoreLink);
-        await watched.gameFolderArchives(found, 'Fallout4', ignoreLink);
+        await watched.reading();
 
-        expect(fire(join(game, folder), name)).toBe(heard);
+        expect(fire(game, name)).toBe(heard);
       } finally {
         await rm(game, { recursive: true, force: true });
       }
@@ -1662,12 +1600,12 @@ describe('the MO2 Instance adapter', () => {
         const myGames = join(documents, 'My Games', 'Fallout4');
         await mkdir(myGames, { recursive: true });
         const found: GameFolder = { kind: 'found', root: prefix, dataFolder: join(prefix, 'Data') };
-        const watched = watchedOver(contextOver(root, {
-          detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-        }));
+        const watched = adapterOver(root, {
+          gameFolder: found, detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
+        });
         watched.subscribe(() => undefined);
 
-        await watched.archiveList('Default', found, 'Fallout4', ignoreLink);
+        await watched.reading();
 
         expect(fire(myGames, 'FALLOUT4CUSTOM.ini')).toBe(true);
         expect(fire(myGames, 'Fallout4Prefs.ini')).toBe(false);
@@ -1677,11 +1615,11 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('follows no game folder when none is found', async () => {
-      const watched = watchedOver(contextOver(root));
+      const watched = adapterOver(root);
       watched.subscribe(() => undefined);
       const before = live().length;
 
-      await (await watched.settings()).gameFolder();
+      await watched.gameFolder();
 
       expect(live()).toHaveLength(before);
     });
@@ -1696,6 +1634,14 @@ describe('the MO2 Instance adapter', () => {
       expect(folders.holding({ kind: 'mod', name: 'harder vats' })).toEqual(harderVats);
       expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
       expect(folders.holding({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
+    });
+
+    it('answers the folder of the entry\'s own kind where a separator\'s folder and a mod\'s share a name', async () => {
+      await mkdir(join(root, 'mods', 'Harder VATS_separator'));
+      const folders = present((await adapter.reading()).modFolders, 'the mod folders');
+
+      expect([folders.holding({ kind: 'mod', name: 'harder vats' })?.path, folders.holding({ kind: 'separator', name: 'Harder VATS' })?.path])
+        .toEqual([join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Harder VATS_separator')]);
     });
 
     it('answers the folder a mod builds into as the one that holds it, matched without case', async () => {
@@ -1744,6 +1690,10 @@ describe('the MO2 Instance adapter', () => {
 
     describe('an origin\'s files', () => {
       const mod = (name: string) => ({ kind: 'mod' as const, name });
+      const listing = (line: string): Promise<void> => appendFile(join(root, DEFAULT_MODLIST), `${line}\n`);
+      const filesIn = (reading: InstanceReading, origin: FileOrigin): OriginFiles =>
+        (origin.kind === 'mod' ? present(reading.modFiles.get(origin.name), `the files of ${origin.name}`) : reading.runtimeOutput);
+      const filesOf = async (origin: FileOrigin): Promise<OriginFiles> => filesIn(await adapter.reading(), origin);
       const relativePaths = (files: readonly { relativePath: string }[]): string[] => files.map((f) => f.relativePath).sort();
 
       it('walks a mod\'s folder, leaving out its metadata and writes in flight', async () => {
@@ -1753,7 +1703,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
         await writeFile(`${ownTempPrefix(join(folder, 'Textures'), '')}b.tmp`, '');
 
-        const files = await source.originFiles(mod('Harder VATS'), 'list');
+        const files = await filesOf(mod('Harder VATS'));
 
         expect(files.origin).toBe('Harder VATS');
         expect(files.folder).toBe(folder);
@@ -1775,52 +1725,42 @@ describe('the MO2 Instance adapter', () => {
           await fileSystemClockMovedOn();
           vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
         };
+        const told = (...named: string[]): Promise<InstanceReading> => adapter.reading({ named, disk: false });
         afterEach(() => vi.useRealTimers());
 
         it.each([
-          ['a mod', mod('Harder VATS')],
-          ['Overwrite', { kind: 'runtimeOutput' as const }],
-        ])('answers the same files for %s while no folder it walked has changed', async (_, origin) => {
+          ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
+          ['Overwrite', { kind: 'runtimeOutput' as const }, 'overwrite'],
+        ])('answers the same files for %s while no folder it walked has changed', async (_, origin, below) => {
           await mkdir(join(root, 'overwrite', 'Textures'), { recursive: true });
           await writeFile(join(root, 'overwrite', 'Textures', 'a.dds'), '');
           await settled();
+          const first = await filesOf(origin);
+          const walked = callsOn(readdir, join(root, below, 'Textures'));
 
-          const first = await source.originFiles(origin, 'list');
-          const second = await source.originFiles(origin, 'list');
+          const second = filesIn(await told(), origin);
 
-          expect(second).toBe(first);
-        });
-
-        it('answers new files for a mod once a folder it walked has changed', async () => {
-          await settled();
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
-          await writeFile(join(folder(), 'Textures', 'b.dds'), '');
-
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
-
-          expect(relativePaths(second.files)).toEqual(['Textures/a.dds', 'Textures/b.dds']);
-          expect(second).not.toBe(first);
+          expect([second, callsOn(readdir, join(root, below, 'Textures'))]).toEqual([first, walked]);
         });
 
         it('answers new files once a folder below the mod\'s root has changed', async () => {
           await mkdir(join(folder(), 'Textures', 'Source'), { recursive: true });
           await settled();
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          await filesOf(mod('Harder VATS'));
           await writeFile(join(folder(), 'Textures', 'Source', 'deep.psc'), '');
 
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
+          const second = filesIn(await told(join(folder(), 'Textures', 'Source', 'deep.psc')), mod('Harder VATS'));
 
           expect(relativePaths(second.files)).toContain('Textures/Source/deep.psc');
-          expect(second).not.toBe(first);
         });
 
         it('walks again a folder changed within the settle window, as its stamp may not change for a write that follows', async () => {
           await mkdir(join(folder(), 'Textures'), { recursive: true });
           await writeFile(join(folder(), 'Textures', 'a.dds'), '');
 
-          await source.originFiles(mod('Harder VATS'), 'list');
+          await filesOf(mod('Harder VATS'));
           const walked = callsOn(readdir, join(folder(), 'Textures'));
-          await source.originFiles(mod('Harder VATS'), 'list');
+          await told();
 
           expect(callsOn(readdir, join(folder(), 'Textures'))).toBeGreaterThan(walked);
         });
@@ -1840,46 +1780,22 @@ describe('the MO2 Instance adapter', () => {
             return actualReaddir(path, options);
           });
 
-          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const first = await filesOf(mod('Harder VATS'));
           const walked = callsOn(stat, join(folder(), 'Gone'));
-          const second = await source.originFiles(mod('Harder VATS'), 'list');
+          const second = filesIn(await told(), mod('Harder VATS'));
 
           expect(first.notes).toEqual([expect.stringMatching(/Gone/)]);
           expect(callsOn(stat, join(folder(), 'Gone'))).toBeGreaterThan(walked);
           expect(second.notes).toEqual([expect.stringMatching(/Gone/)]);
         });
 
-        it('keeps the walk of a mod\'s root through readings of whole mods, which never ask for it', async () => {
-          await settled();
-          const folders = (): Promise<ModFolders | undefined> => source.modFolders(ignoreSkippedLink);
-          const first = await source.originRootFiles(mod('Harder VATS'), await folders());
-          await source.originFiles(mod('Harder VATS'), await folders());
-          await source.originFiles(mod('Harder VATS'), await folders());
-
-          const again = await source.originRootFiles(mod('Harder VATS'), await folders());
-
-          expect(again).toBe(first);
-        });
-
-        it('forgets, as a reading starts, the walk of a mod the reading before it did not use, its folder still there', async () => {
-          await settled();
-          const reading = async (name: string): Promise<OriginFiles> => source.originFiles(mod(name), await source.modFolders(ignoreSkippedLink));
-          const first = await reading('Harder VATS');
-
-          await reading('Other');
-          await reading('Other');
-          const again = await source.originFiles(mod('Harder VATS'), 'list');
-
-          expect(again).not.toBe(first);
-        });
-
         it('walks a mod that links to a file again each time, as a link\'s target is not stamped', async () => {
           await settled();
           await symlink(join(folder(), 'Textures', 'a.dds'), join(folder(), 'Linked.dds'));
 
-          await source.originFiles(mod('Harder VATS'), 'list');
+          await filesOf(mod('Harder VATS'));
           const followed = callsOn(stat, join(folder(), 'Linked.dds'));
-          await source.originFiles(mod('Harder VATS'), 'list');
+          await told();
 
           expect(callsOn(stat, join(folder(), 'Linked.dds'))).toBeGreaterThan(followed);
         });
@@ -1891,7 +1807,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Old Name.manifest.json'), '{}');
         await writeFile(join(folder, 'docs', 'Harder VATS.manifest.json'), '{}');
 
-        const files = await source.originFiles(mod('Harder VATS'), 'list');
+        const files = await filesOf(mod('Harder VATS'));
 
         expect(relativePaths(files.files)).toEqual(['docs/Harder VATS.manifest.json']);
       });
@@ -1904,24 +1820,10 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Meshes', 'kept.nif'), '');
         await writeFile(join(folder, temp), '');
 
-        const { files, folders } = await source.originFiles(mod('Harder VATS'), 'list');
+        const { files, folders } = await filesOf(mod('Harder VATS'));
 
         expect([...relativePaths(files), ...folders.map((f) => f.relativePath)].filter((path) => path.includes(temp))).toEqual([]);
         expect(relativePaths(files)).toContain('Meshes/kept.nif');
-      });
-
-      it.each([
-        ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
-        ['Overwrite', { kind: 'runtimeOutput' as const }, 'overwrite'],
-      ])('lists the files at the root of %s alone when asked for its root', async (_, origin, folder) => {
-        await mkdir(join(root, folder, 'Optional'), { recursive: true });
-        await writeFile(join(root, folder, 'Optional', 'Nested.esp'), '');
-        await symlink(join(root, folder, 'Optional'), join(root, folder, 'Linked'));
-        await writeFile(join(root, folder, 'Root.esp'), '');
-
-        const { files, folders } = await source.originRootFiles(origin, 'list');
-
-        expect([relativePaths(files), folders]).toEqual([['Root.esp'], []]);
       });
 
       it('reads a linked file from where the link points, and places it where the link sits, and notes a broken link rather than failing', async () => {
@@ -1931,7 +1833,7 @@ describe('the MO2 Instance adapter', () => {
         await symlink(target, join(folder, 'Linked.esp'));
         await symlink(join(root, 'nowhere.esp'), join(folder, 'Broken.esp'));
 
-        const files = await source.originFiles(mod('Harder VATS'), 'list');
+        const files = await filesOf(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
           .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false, markedExcluded: false, includedPath: 'Linked.esp' });
@@ -1947,7 +1849,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(folder, 'plugin-source'), { recursive: true });
         await writeFile(join(folder, 'plugin-source', 'shipped.json'), '');
 
-        const paths = relativePaths((await source.originFiles(mod('Harder VATS'), 'list')).files);
+        const paths = relativePaths((await filesOf(mod('Harder VATS'))).files);
 
         expect(paths).toEqual(expect.arrayContaining(['.git/HEAD', '.gitignore', 'plugin-source/shipped.json']));
       });
@@ -1961,7 +1863,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, folder, 'Hidden.esp.MOHIDDEN'), '');
         await writeFile(join(root, folder, 'Kept.esp'), '');
 
-        const files = await source.originFiles(origin, 'list');
+        const files = await filesOf(origin);
         const excludedOf = (entries: readonly { relativePath: string; excluded: boolean }[], relativePath: string) =>
           entries.find((entry) => entry.relativePath === relativePath)?.excluded;
 
@@ -1979,7 +1881,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'mods', 'Harder VATS', 'Hidden.esp.MOHIDDEN'), '');
         await writeFile(join(root, 'mods', 'Harder VATS', 'Kept.esp'), '');
 
-        const { files } = await source.originFiles(mod('Harder VATS'), 'list');
+        const { files } = await filesOf(mod('Harder VATS'));
         const named = (relativePath: string) => files.find((file) => file.relativePath === relativePath);
         const paths = ['Textures.mohidden/a.dds', 'Textures.mohidden/b.dds.mohidden', 'Hidden.esp.MOHIDDEN', 'Kept.esp'];
 
@@ -1993,7 +1895,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(shared, 'foo.dds'), '');
         await symlink(shared, join(root, 'mods', 'Harder VATS', 'linked'));
 
-        const files = await source.originFiles(mod('Harder VATS'), 'list');
+        const files = await filesOf(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
         expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked'), includedPath: 'linked', excluded: false });
@@ -2005,7 +1907,9 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'sibling.dds'), '');
         await symlink(folder, join(folder, 'loop'));
 
-        const files = await source.originFiles(mod('Cycle'), 'list');
+        await listing('+Cycle');
+
+        const files = await filesOf(mod('Cycle'));
 
         expect(relativePaths(files.files)).toEqual(['sibling.dds']);
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
@@ -2023,10 +1927,10 @@ describe('the MO2 Instance adapter', () => {
           return actualReaddir(path, options);
         });
 
-        const first = await source.originFiles(origin, 'list');
+        const first = await filesOf(origin);
         const listings = (): number => vi.mocked(readdir).mock.calls.filter(([path]) => String(path) === held).length;
         const walked = listings();
-        await source.originFiles(origin, 'list');
+        await filesOf(origin);
 
         expect(relativePaths(first.files)).toContain('Textures/a.dds');
         expect(first.notes).toEqual([expect.stringMatching(/Locked.*EACCES/)]);
@@ -2048,7 +1952,7 @@ describe('the MO2 Instance adapter', () => {
           const filesFirst = async (path: PathLike, options: Parameters<typeof actualReaddir>[1]) =>
             [...await actualReaddir(path, options)].sort((a, b) => Number(a.isDirectory()) - Number(b.isDirectory()));
           vi.mocked(readdir).mockImplementation(filesFirst);
-          await source.originFiles(origin, 'list');
+          await filesOf(origin);
           vi.mocked(readdir).mockImplementation(async (path: PathLike, options: Parameters<typeof actualReaddir>[1]) => {
             if (String(path) === locked || String(path).startsWith(locked + sep)) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
             return filesFirst(path, options);
@@ -2057,7 +1961,7 @@ describe('the MO2 Instance adapter', () => {
             if (String(path).startsWith(locked + sep)) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
             return actualStat(path, ...rest);
           });
-          const { answer } = await readTrustingKept([], false, () => source.originFiles(origin, 'list'));
+          const answer = filesIn(await adapter.reading({ named: [], disk: false }), origin);
 
           expect(relativePaths(answer.files).filter((path) => path.startsWith('Textures/'))).toEqual(['Textures/a.dds']);
           expect(relativePaths(answer.folders).filter((path) => path.startsWith('Textures'))).toEqual(['Textures', 'Textures/Locked']);
@@ -2073,7 +1977,7 @@ describe('the MO2 Instance adapter', () => {
           return actualStat(path, ...rest);
         });
 
-        await expect(source.originFiles(mod('Harder VATS'), 'list')).rejects.toThrow(/permission denied/);
+        await expect(adapter.reading()).rejects.toThrow(/permission denied/);
       });
 
       onPosix.it('notes a FIFO and a link to one, and answers neither as a file, built with the POSIX mkfifo that Windows lacks', async () => {
@@ -2083,7 +1987,9 @@ describe('the MO2 Instance adapter', () => {
         execFileSync('mkfifo', [join(root, 'real-pipe')]);
         await symlink(join(root, 'real-pipe'), join(folder, 'linked-pipe'));
 
-        const files = await source.originFiles(mod('Pipes'), 'list');
+        await listing('+Pipes');
+
+        const files = await filesOf(mod('Pipes'));
 
         expect(files.files).toEqual([]);
         expect(files.notes.join('\n')).toMatch(/pipe/);
@@ -2092,8 +1998,13 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers no files for a mod with no folder, or a name that gives it none', async () => {
-        expect((await source.originFiles(mod('No Such Mod'), 'list')).files).toEqual([]);
-        expect(await source.originFiles(mod('../profiles'), 'list')).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
+        await listing('+No Such Mod');
+        await listing('+../profiles');
+
+        const reading = await adapter.reading();
+
+        expect(filesIn(reading, mod('No Such Mod')).files).toEqual([]);
+        expect(filesIn(reading, mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
       });
 
       it('lists everything the game wrote at run time, under the reserved origin, without writes in flight', async () => {
@@ -2101,7 +2012,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Stray.esp'), '');
         await writeFile(`${ownTempPrefix(folder, '')}stray.tmp`, '');
 
-        const files = await source.originFiles({ kind: 'runtimeOutput' }, 'list');
+        const files = await filesOf({ kind: 'runtimeOutput' });
 
         expect(files.origin).toBe(OVERWRITE_ORIGIN);
         expect(files.folder).toBe(folder);
@@ -2123,7 +2034,7 @@ describe('the MO2 Instance adapter', () => {
           return actualReaddir(path, options);
         });
 
-        const files = await source.originFiles(origin, 'list');
+        const files = await filesOf(origin);
 
         expect(relativePaths(files.files)).toContain(kept);
         expect(relativePaths(files.files)).not.toContain('Gone/Lost.esp');
@@ -2135,7 +2046,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(target, '');
         await symlink(target, join(root, 'overwrite', 'Linked.esp'));
 
-        const files = await source.originFiles({ kind: 'runtimeOutput' }, 'list');
+        const files = await filesOf({ kind: 'runtimeOutput' });
 
         expect(relativePaths(files.files)).not.toContain('Linked.esp');
         expect(files.notes).toEqual([expect.stringMatching(/Linked\.esp/)]);
@@ -2144,7 +2055,7 @@ describe('the MO2 Instance adapter', () => {
       it('answers no files when there is no overwrite folder', async () => {
         await rm(join(root, 'overwrite'), { recursive: true });
 
-        expect((await source.originFiles({ kind: 'runtimeOutput' }, 'list')).files).toEqual([]);
+        expect((await filesOf({ kind: 'runtimeOutput' })).files).toEqual([]);
       });
     });
 
@@ -2181,7 +2092,7 @@ describe('the MO2 Instance adapter', () => {
       const ENTRY = 'textures/a.dds';
 
       it('answers the downloaded file its meta names, in the downloads folder, with its size and hash and each entry\'s', async () => {
-        const answer = await managerOver(root, { installationFileReader: fakeInstallationFileReader([ENTRY]) }).installationFile('Unofficial Fallout 4 Patch');
+        const answer = await adapterOver(root, { installationFileReader: fakeInstallationFileReader([ENTRY]) }).installationFile('Unofficial Fallout 4 Patch');
 
         expect(answer).toEqual({
           kind: 'read',
@@ -2500,7 +2411,7 @@ describe('the MO2 Instance adapter', () => {
 
       describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {
         const recordingInstalledFrom = (path: string): Promise<void> =>
-          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), setIniValue('[General]\r\n', 'General', 'installationFile', path));
+          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), installationFileMeta(path));
 
         it('answers that file while it is there', async () => {
           const elsewhere = join(root, 'elsewhere', 'Patch.7z');
@@ -2543,7 +2454,7 @@ describe('the MO2 Instance adapter', () => {
 
     describe('a downloaded file by its name', () => {
       it('answers the file of that name in the downloads folder, with its page, size and hash and each entry\'s', async () => {
-        const answer = await managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) }).downloadedFile(DOWNLOADED_FILE);
+        const answer = await adapterOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) }).downloadedFile(DOWNLOADED_FILE);
 
         expect(answer).toEqual({
           kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
@@ -2562,7 +2473,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a downloaded file by its bytes', () => {
-      const holding = () => managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+      const holding = () => adapterOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
       const renamed = (): string => join(root, 'downloads', 'Renamed-copy.7z');
 
       it('answers the file with that size and hash, whatever its name', async () => {
@@ -2590,7 +2501,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('every downloaded file', () => {
-      const hashing = () => managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+      const hashing = () => adapterOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
 
       it('answers each file of the downloads folder, never hashed before, with its page, its size and hash and each entry\'s', async () => {
         expect(await hashing().downloadedFilesHashed()).toEqual({
@@ -3079,8 +2990,8 @@ describe('the MO2 Instance adapter', () => {
         return [];
       });
 
-      expect(seen).toEqual([modNames(await source.modOrder('Default'))]);
-      expect(folders).toEqual((await source.modFolders(ignoreSkippedLink))?.all);
+      expect(seen).toEqual([modNames((await adapter.reading()).mods)]);
+      expect(folders).toEqual((await adapter.reading()).modFolders?.all);
       expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 
@@ -3109,7 +3020,7 @@ describe('the MO2 Instance adapter', () => {
 
       expect(written).toMatchObject({ wrote: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
-      expect(modNames(await source.modOrder('Default'))).toEqual([
+      expect(modNames((await adapter.reading()).mods)).toEqual([
         'separator:Orphan:false',
         'mod:New Mod:false',
         "mod:Ñoño's Retexture:true",
@@ -3130,31 +3041,31 @@ describe('the MO2 Instance adapter', () => {
         appendFileSync(file, '-Outside Mod\n');
         return [{ kind: 'enable', mod: 'Harder VATS', enabled: true }];
       });
-      const before = modNames(await source.modOrder('Default'));
+      const before = modNames((await adapter.reading()).mods);
 
       await adapter.changeModOrder('Default', decide);
 
-      expect(modNames(await source.modOrder('Default'))).toEqual([...before.map((name) => (name === 'mod:Harder VATS:false' ? 'mod:Harder VATS:true' : name)), 'mod:Outside Mod:false']);
+      expect(modNames((await adapter.reading()).mods)).toEqual([...before.map((name) => (name === 'mod:Harder VATS:false' ? 'mod:Harder VATS:true' : name)), 'mod:Outside Mod:false']);
       expect(decide).toHaveBeenCalledTimes(2);
     });
 
     it('adds a separator with its folder', async () => {
       await change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
-      expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:New Separator:true');
+      expect(modNames((await adapter.reading()).mods)[0]).toBe('separator:New Separator:true');
       expect(await isThere(separatorFolder('New Separator'))).toBe(true);
     });
 
     it('adds a separator beside an anchor named in another case', async () => {
       await change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'mod', name: 'skk fast start NEW GAME (fallout 4)' } }]);
 
-      expect(modNames(await source.modOrder('Default'))[3]).toBe('separator:New Separator:true');
+      expect(modNames((await adapter.reading()).mods)[3]).toBe('separator:New Separator:true');
     });
 
     it('renames a separator\'s line and its folder as one change', async () => {
       await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
 
-      expect(modNames(await source.modOrder('Default'))).toContain('separator:Core Mods:false');
+      expect(modNames((await adapter.reading()).mods)).toContain('separator:Core Mods:false');
       expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
       expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
     });
@@ -3165,17 +3076,17 @@ describe('the MO2 Instance adapter', () => {
 
       await adapter.changeModOrder('Secondary', () => [{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
 
-      expect(modNames(await source.modOrder('Secondary'))).toContain('separator:Core Mods:false');
+      expect(modNames(await modOrderOf(adapter, 'Secondary'))).toContain('separator:Core Mods:false');
       expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
     });
 
     it('renames a mod\'s line in place, keeping its state, and nothing else', async () => {
       const before = await snapshotTree(root);
-      const order = modNames(await source.modOrder('Default'));
+      const order = modNames((await adapter.reading()).mods);
 
       expect(await change([{ kind: 'renameMod', from: 'harder vats', to: 'Harder VATS 2' }])).toMatchObject({ wrote: true });
 
-      expect(modNames(await source.modOrder('Default'))).toEqual(order.map((n) => n.replace('mod:Harder VATS:', 'mod:Harder VATS 2:')));
+      expect(modNames((await adapter.reading()).mods)).toEqual(order.map((n) => n.replace('mod:Harder VATS:', 'mod:Harder VATS 2:')));
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
     });
 
@@ -3344,7 +3255,7 @@ describe('the MO2 Instance adapter', () => {
       it('names a separator as MO2 names its folder, and refuses a name with nothing of it left', async () => {
         await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
-        expect(modNames(await source.modOrder('Default'))[0]).toBe('separator:Core Mods:true');
+        expect(modNames((await adapter.reading()).mods)[0]).toBe('separator:Core Mods:true');
         expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
         await expect(change([{ kind: 'addSeparator', separator: 'CON', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }])).rejects.toThrow(/Not a valid separator name/);
       });
@@ -3353,7 +3264,7 @@ describe('the MO2 Instance adapter', () => {
         await change([{ kind: 'addSeparator', separator: '../Escape', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
         await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'A/B' }]);
 
-        const names = modNames(await source.modOrder('Default'));
+        const names = modNames((await adapter.reading()).mods);
         expect(names).toContain('separator:..Escape:true');
         expect(names).toContain('separator:AB:false');
         expect(await isThere(separatorFolder('..Escape'))).toBe(true);
@@ -3365,7 +3276,7 @@ describe('the MO2 Instance adapter', () => {
         await change([{ kind: 'addSeparator', separator: 'Harder VATS', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
         await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'ENBoost - 12k' }]);
 
-        const names = modNames(await source.modOrder('Default'));
+        const names = modNames((await adapter.reading()).mods);
         expect(names).toContain('separator:Harder VATS:true');
         expect(names).toContain('separator:ENBoost - 12k:false');
       });
@@ -3407,7 +3318,7 @@ describe('the MO2 Instance adapter', () => {
 
       expect(written).toEqual({ wrote: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
-      expect(await source.pluginOrder('Default')).toEqual([
+      expect((await adapter.reading()).pluginOrder).toEqual([
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
         { name: 'Patch Mod.esp', enabled: false },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
@@ -3454,7 +3365,7 @@ describe('the MO2 Instance adapter', () => {
         return [];
       });
 
-      expect(seen).toEqual([(await source.pluginOrder('Default')).map((p) => p.name)]);
+      expect(seen).toEqual([((await adapter.reading()).pluginOrder).map((p) => p.name)]);
     });
   });
 
@@ -3467,7 +3378,7 @@ describe('the MO2 Instance adapter', () => {
     it('marks a downloaded file installed, creating its metadata when it has none', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Installed')).toEqual({ gone: false, wrote: true });
 
-      const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const listed = (await adapter.reading()).downloadedFiles;
       expect(expectKind(listed, 'listed').files?.find((file) => file.name === 'manual.zip')?.meta?.status).toBe('Installed');
     });
 
@@ -3493,11 +3404,25 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('rewrites nothing for a mark already set, whether excluded or included over a removed=false key', async () => {
-      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Excluded');
-      expect(await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Excluded')).toEqual({ gone: false, wrote: false });
+      const longAgo = new Date(2001, 1, 1);
+      const markedAgain = async (mark: 'Excluded' | 'Included'): Promise<unknown[]> => {
+        await adapter.markDownloadedFile(DOWNLOADED_FILE, mark);
+        await utimes(join(downloadsFolder(), `${DOWNLOADED_FILE}.meta`), longAgo, longAgo);
+        return [await adapter.markDownloadedFile(DOWNLOADED_FILE, mark), (await stat(join(downloadsFolder(), `${DOWNLOADED_FILE}.meta`))).mtime];
+      };
 
-      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included');
-      expect(await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included')).toEqual({ gone: false, wrote: false });
+      expect([await markedAgain('Excluded'), await markedAgain('Included')]).toEqual([[{ gone: false, wrote: false }, longAgo], [{ gone: false, wrote: false }, longAgo]]);
+    });
+
+    it('lands two edits of one downloaded file\'s metadata at once, each over the other\'s', async () => {
+      await Promise.all([
+        adapter.markDownloadedFile(DOWNLOADED_FILE, 'Excluded'),
+        adapter.writeNexusFileInfo(DOWNLOADED_FILE, { game: 'fallout4', modID: '4598', fileID: '78', name: 'Both Landed' }),
+      ]);
+
+      const meta = await metaOf(DOWNLOADED_FILE);
+
+      expect([/^removed=true\r$/m.test(meta), /^name=Both Landed\r$/m.test(meta)]).toEqual([true, true]);
     });
 
     it('writes no metadata for a file already included, so a file at rest does not gain metadata', async () => {
@@ -3548,7 +3473,7 @@ describe('the MO2 Instance adapter', () => {
       it('writes what Nexus names into a metadata made for the file, which the downloaded file then reads', async () => {
         expect(await adapter.writeNexusFileInfo('manual.zip', info)).toEqual({ gone: false, wrote: true });
 
-        const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+        const listed = (await adapter.reading()).downloadedFiles;
         expect(expectKind(listed, 'listed').files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({
           modID: '4598', fileID: '78', gameName: 'Fallout4', name: 'Main', version: '2.1.5.0', modName: 'Unofficial Fallout 4 Patch', fileCategory: 1, author: 'Unofficial Patch Team',
         });
@@ -3841,14 +3766,14 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.selectProfile('Secondary')).toEqual({ wrote: true });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set([INI]));
-      expect((await source.settings()).profile).toBe('Secondary');
+      expect(await adapter.activeProfile()).toBe('Secondary');
     });
 
     it('serializes concurrent selections, so the last one issued is the selected one', async () => {
       const [first, second] = await Promise.all([adapter.selectProfile('Secondary'), adapter.selectProfile('Default')]);
 
       expect([first, second]).toEqual([{ wrote: true }, { wrote: true }]);
-      expect((await source.settings()).profile).toBe('Default');
+      expect(await adapter.activeProfile()).toBe('Default');
     });
 
     it('rejects when the settings cannot be read', async () => {
@@ -3895,11 +3820,11 @@ describe('a folder is an MO2 instance by what it holds', () => {
   ])('%s', async (_case, lay, instance) => {
     await lay(root);
 
-    expect(isMo2Instance(root)).toBe(instance);
+    expect(isInstance(root)).toBe(instance);
   });
 
   it('is none for a path where nothing is, without throwing', () => {
-    expect(isMo2Instance(join(root, 'does-not-exist'))).toBe(false);
+    expect(isInstance(join(root, 'does-not-exist'))).toBe(false);
   });
 
   it('is one with a modlist.txt that is not text, its contents unread', async () => {
@@ -3907,6 +3832,6 @@ describe('a folder is an MO2 instance by what it holds', () => {
     await mkdir(join(root, 'profiles', 'Default'));
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '\x00not valid text\xff');
 
-    expect(isMo2Instance(root)).toBe(true);
+    expect(isInstance(root)).toBe(true);
   });
 });

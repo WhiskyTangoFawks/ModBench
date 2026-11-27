@@ -1,8 +1,14 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { installedDepots, type Depot } from '../steamAppManifest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Depot } from '../../instanceAdapter';
+import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+import { NO_DETECTORS } from '../../../test/noDetectors';
+import { instanceOnDisk } from '../../test/instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
 
 const APP_MANIFEST = `"AppState"
 {
@@ -28,18 +34,32 @@ const APP_MANIFEST = `"AppState"
 }
 `;
 
-describe('the depots Steam records as installed', () => {
+describe('the depots Steam records as installed of the game where it is', () => {
+  let library: string;
   let steamapps: string;
+  let instance: string;
 
   beforeEach(async () => {
-    steamapps = await mkdtemp(join(tmpdir(), 'steamapps-'));
+    library = await mkdtemp(join(tmpdir(), 'steamapps-'));
+    steamapps = join(library, 'steamapps');
+    await mkdir(join(steamapps, 'common', 'Fallout 4', 'Data'), { recursive: true });
+    instance = await instanceOnDisk();
   });
-  afterEach(() => rm(steamapps, { recursive: true, force: true }));
+  afterEach(async () => {
+    await rm(library, { recursive: true, force: true });
+    await rm(instance, { recursive: true, force: true });
+  });
+
+  const installedDepots = async () => {
+    const root = join(steamapps, 'common', 'Fallout 4');
+    const place = await adapterOver(instance, { gameFolderSettingValue: root, detectors: { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(root, 'Data') }) } }).gamePlace();
+    return { depots: place?.depots, problems: place?.depotProblems };
+  };
 
   it('are each installed depot with the ID Steam gives its version, in the order of the depot IDs', async () => {
     await writeFile(join(steamapps, 'appmanifest_377160.acf'), APP_MANIFEST);
 
-    expect(await installedDepots(steamapps, '377160')).toEqual({
+    expect(await installedDepots()).toEqual({
       depots: [{ id: '377161', version: '1111' }, { id: '377162', version: '2222' }], problems: [],
     });
   });
@@ -56,6 +76,6 @@ describe('the depots Steam records as installed', () => {
   ])('%s', async (_says, setUp, depots, problems) => {
     await setUp(steamapps);
 
-    expect(await installedDepots(steamapps, '377160')).toEqual({ depots, problems });
+    expect(await installedDepots()).toEqual({ depots, problems });
   });
 });

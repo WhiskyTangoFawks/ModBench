@@ -44,10 +44,10 @@ export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMet
   return { meta, hidden: values.get('removed') === 'true' };
 }
 
-// Writes the value verbatim, so `false` clears rather than deleting the key,
-// matching MO2's `QSettings::setValue`. Empty text yields a minimal `.meta`, in MO2's CRLF.
-const setMetaValue = (text: string, key: string, value: string): string =>
-  setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, value);
+// Empty text yields a minimal `.meta`, in MO2's CRLF.
+const headedIfEmpty = (text: string): string => (text === '' ? `[${GENERAL_SECTION}]\r\n` : text);
+// Writes the value verbatim, so `false` clears rather than deleting the key, matching MO2's `QSettings::setValue`.
+const setMetaValue = (text: string, key: string, value: string): string => setIniValue(headedIfEmpty(text), GENERAL_SECTION, key, value);
 const setMetaFlag = (text: string, key: string, value: boolean): string => setMetaValue(text, key, String(value));
 
 /** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
@@ -82,6 +82,6 @@ export function setNexusFileInfoInText(text: string, info: NexusFileInfo, gameNa
   ];
   return written.reduceRight((edited, [key, value]) => {
     if (value === undefined) return edited;
-    return Buffer.isBuffer(value) ? setIniDateTime(edited, GENERAL_SECTION, key, value) : setMetaValue(edited, key, String(value));
+    return Buffer.isBuffer(value) ? setIniDateTime(headedIfEmpty(edited), GENERAL_SECTION, key, value) : setMetaValue(edited, key, String(value));
   }, text);
 }

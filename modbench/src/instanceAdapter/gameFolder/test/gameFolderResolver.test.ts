@@ -1,253 +1,149 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, posix } from 'node:path';
-import {
-  gameFolderResolver, normalizeGamePath, steamInstallResolver, type GameDetectors, type ManagerGamePath,
-} from '../gameFolderResolver';
+import { join } from 'node:path';
+import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
+import { adapterOver, type AdapterAnswers } from '../../../test/mo2/adapterOver';
 import { NO_DETECTORS } from '../../../test/noDetectors';
-import { documentsFolder } from '../documentsFolder';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
-import { fixedGameFolderSetting, GAME_FOLDER_SETTING_ID } from '../../../test/gameFolderSetting';
-import { onPosix } from '../../../test/platform';
+import { GAME_FOLDER_SETTING_ID } from '../../../test/gameFolderSetting';
+import { onPosix, onWindows } from '../../../test/platform';
+import { instanceOnDisk, qSettingsPath, settingsNaming } from '../../test/instanceOnDisk';
 
-const noDetectPrefix = () => Promise.resolve(null);
+vi.mock('vscode', () => fakeVscodeModule());
 
-const RELEASE_WITH_STEAM_FACTS = 'Fallout4';
-const GAME_PATH_PLACE = "the manager's game path";
+type GameDetectors = NonNullable<AdapterAnswers['detectors']>;
 
-const managerNaming = (path?: string, ...release: [] | [string | undefined]): ManagerGamePath =>
-  ({ path, place: GAME_PATH_PLACE, release: release.length === 0 ? RELEASE_WITH_STEAM_FACTS : release[0] });
-
+const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
 const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING_ID}`;
 const STEAM_PLACE = 'the Steam install';
+const STEAM_DATA = '/steam/Fallout 4/Data';
+const steamHolding = (dataFolder: string): GameDetectors => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder }) });
 
-const resolverWith = (
-  settingValue?: string, detectors: GameDetectors = NO_DETECTORS,
-) => gameFolderResolver(fixedGameFolderSetting(settingValue), detectors);
-
-describe('the Documents folder Windows names', () => {
-  it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
-    const commands: string[] = [];
-
-    const documents = await documentsFolder((command) => {
-      commands.push(command);
-      return Promise.resolve(Buffer.from('C:\\Users\\José\\Документы\r\n', 'utf8'));
-    });
-
-    expect(documents).toBe('C:\\Users\\José\\Документы');
-    expect(commands[0]).toMatch(/^\[Console\]::OutputEncoding=\[Text\.Encoding\]::UTF8;/);
-  });
-});
-
-describe('a game path in the platform\'s own form', () => {
-  it('leaves a native Windows path untouched', async () => {
-    expect(await normalizeGamePath('C:\\Games\\Fallout4', 'win32', noDetectPrefix)).toBe('C:\\Games\\Fallout4');
-  });
-
-  it('spells a Windows path MO2 wrote with forward slashes in its native form, as %BASE_DIR%/downloads reads once substituted', async () => {
-    expect(await normalizeGamePath('C:\\MO2/downloads', 'win32', noDetectPrefix)).toBe('C:\\MO2\\downloads');
-  });
-
-  it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped), a colon elsewhere in a path being legal on Linux — a folder named literally "A:B" — and an unanchored strip corrupting it', async () => {
-    const path = '/home/user/mods/A:B/Fallout4';
-    expect(await normalizeGamePath(path, 'linux', noDetectPrefix)).toBe(path);
-  });
-
-  it('maps a Z: drive path straight to the filesystem root, without consulting the prefix', async () => {
-    let calledPrefix = false;
-    const detectPrefix = () => {
-      calledPrefix = true;
-      return Promise.resolve(null);
-    };
-
-    const result = await normalizeGamePath('Z:\\home\\user\\Games\\Fallout4', 'linux', detectPrefix);
-
-    expect(result).toBe('/home/user/Games/Fallout4');
-    expect(calledPrefix).toBe(false);
-  });
-
-  it("maps a C: drive path inside the Proton prefix's drive_c", async () => {
-    const prefix = '/home/user/.steam/steam/steamapps/compatdata/377160/pfx';
-    const detectPrefix = () => Promise.resolve(prefix);
-
-    const result = await normalizeGamePath('C:\\Games\\Fallout4', 'linux', detectPrefix);
-
-    expect(result).toBe(posix.join(prefix, 'drive_c', 'Games/Fallout4'));
-  });
-
-  it('surfaces (throws), rather than guesses, when a C: path\'s prefix cannot be determined', async () => {
-    await expect(
-      normalizeGamePath('C:\\Games\\Fallout4', 'linux', () => Promise.resolve(null)),
-    ).rejects.toThrow(/prefix/i);
-  });
-
-  it('surfaces (throws) for a drive letter that is neither Z nor C, rather than silently stripping it to root', async () => {
-    await expect(
-      normalizeGamePath('D:\\Games\\Fallout4', 'linux', () => Promise.resolve('/some/prefix')),
-    ).rejects.toThrow(/drive/i);
-  });
-});
-
-describe('the game folder resolver', () => {
+describe('the game folder', () => {
   const dirs: string[] = [];
-
   afterEach(async () => {
     for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
   });
 
-  async function gameFolder(name = 'Stock Game Folder'): Promise<string> {
+  const temp = async (): Promise<string> => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamefolder-'));
     dirs.push(dir);
-    const root = join(dir, name);
+    return dir;
+  };
+  async function gameFolder(name = 'Stock Game Folder'): Promise<string> {
+    const root = join(await temp(), name);
     await mkdir(join(root, 'Data'), { recursive: true });
     return root;
   }
+  const instanceNaming = async (gamePath?: string, gameName?: string): Promise<string> => {
+    const root = await instanceOnDisk({ 'ModOrganizer.ini': settingsNaming(gameName, ...(gamePath === undefined ? [] : [`gamePath=${qSettingsPath(gamePath)}`])) });
+    dirs.push(root);
+    return root;
+  };
+  const resolved = async (
+    { setting, gamePath, gameName, detectors = NO_DETECTORS }: { setting?: string; gamePath?: string; gameName?: string; detectors?: GameDetectors },
+  ) => adapterOver(await instanceNaming(gamePath, gameName), { gameFolderSettingValue: setting, detectors }).gameFolder();
 
-  it('resolves an explicit game folder setting directly', async () => {
-    const gameRoot = await gameFolder();
+  it.each<[string, (root: string) => { setting?: string; gamePath?: string }]>([
+    ['the game folder setting names', (root) => ({ setting: root })],
+    ['the setting names, the whitespace pasted around it trimmed', (root) => ({ setting: `  ${root}  ` })],
+    ['the manager names, the setting left at its empty default being unset and not an empty path', (root) => ({ setting: '   ', gamePath: root })],
+    ['the manager names when the setting is unset', (root) => ({ gamePath: root })],
+  ])('is the folder %s, with its Data folder', async (_, naming) => {
+    const root = await gameFolder();
 
-    const resolved = await resolverWith(gameRoot)(managerNaming());
-
-    expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+    expect(await resolved(naming(root))).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
   });
 
-  it('trims whitespace accidentally pasted around an explicit setting value', async () => {
-    const gameRoot = await gameFolder();
+  onPosix.describe('(a colon is legal in a Linux folder name)', () => {
+    it('is a folder the manager names with a colon inside it, only a leading drive letter being Wine\'s', async () => {
+      const root = await gameFolder('A:B');
 
-    const resolved = await resolverWith(`  ${gameRoot}  `)(managerNaming());
-
-    expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+      expect(await resolved({ gamePath: root })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
   });
 
-  it('reads a setting left at its empty default as unset, not as an empty path', async () => {
-    const gameRoot = await gameFolder();
+  onPosix.describe('(Wine translates a drive letter only on Linux)', () => {
+    it('is the POSIX path of a Z:-drive game path, as a Windows manager under Proton writes it, without asking Steam for the prefix', async () => {
+      const root = await gameFolder();
+      const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.reject(new Error('the prefix was asked')) };
 
-    const resolved = await resolverWith('   ')(managerNaming(gameRoot));
+      expect(await resolved({ gamePath: `Z:${root.replaceAll('/', '\\')}`, detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
 
-    expect(resolved).toMatchObject({ root: gameRoot });
+    it("is in the Proton prefix's drive_c for a C:-drive game path", async () => {
+      const prefix = await temp();
+      const root = join(prefix, 'drive_c', 'Games', 'Fallout4');
+      await mkdir(join(root, 'Data'), { recursive: true });
+      const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) };
+
+      expect(await resolved({ gamePath: 'C:\\Games\\Fallout4', detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
   });
 
-  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder, not falling through to the game path the manager names, which would resolve a folder the user did not name', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-gamefolder-'));
-    dirs.push(dir);
-    const gameRoot = join(dir, 'Stock Game Folder');
-    await mkdir(gameRoot, { recursive: true });
-    const iniGameRoot = await gameFolder();
+  onWindows.describe('on Windows', () => {
+    it.each([
+      ['as it is when native', (root: string) => root],
+      ['in its native form when MO2 wrote it with forward slashes', (root: string) => root.replaceAll('\\', '/')],
+    ])('is the Windows folder the manager names, %s', async (_, spelled) => {
+      const root = await gameFolder();
 
-    const resolved = await resolverWith(gameRoot)(managerNaming(iniGameRoot));
+      expect(await resolved({ gamePath: spelled(root) })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    });
+  });
 
-    expect(resolved).toEqual({
+  onPosix.describe('(Wine translates a drive letter only on Linux)', () => {
+    it.each([
+      ['a C: game path whose prefix cannot be determined', 'C:\\Games\\Fallout4', /prefix could not be determined/],
+      ['a game path on a drive that is neither Z: nor C:, rather than stripped to the root', 'D:\\Games\\Fallout4', /only Z: and C: are translated/],
+    ])('is not found, saying why and never asking Steam, for %s', async (_, gamePath, why) => {
+      const detectors: GameDetectors = { ...steamHolding(STEAM_DATA), winePrefix: () => Promise.resolve(null) };
+
+      expect(await resolved({ gamePath, detectors })).toEqual({
+        kind: 'notFound',
+        setting: GAME_FOLDER_SETTING_ID,
+        looked: [{ place: SETTING_PLACE, answer: 'not set' }, { place: GAME_PATH_PLACE, answer: expect.stringMatching(why) as unknown }],
+      });
+    });
+  });
+
+  it('is the one Steam holds when neither the setting nor the manager names one', async () => {
+    expect(await resolved({ detectors: steamHolding(STEAM_DATA) })).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: STEAM_DATA });
+  });
+
+  it('is not found, naming each place looked, when nothing resolves', async () => {
+    expect(await resolved({})).toEqual({
       kind: 'notFound',
       setting: GAME_FOLDER_SETTING_ID,
-      looked: [{ place: SETTING_PLACE, answer: `${gameRoot} has no Data folder` }],
+      looked: [{ place: SETTING_PLACE, answer: 'not set' }, { place: GAME_PATH_PLACE, answer: 'not set' }, { place: STEAM_PLACE, answer: 'the game is in no Steam library' }],
     });
   });
 
-  it('falls back to the game path the manager names when the setting is unset', async () => {
-    const gameRoot = await gameFolder();
+  it('is not found, naming only the setting, when the setting names a folder with no Data folder, not falling through to the folder the manager names, which the user did not name', async () => {
+    const named = join(await temp(), 'Stock Game Folder');
+    await mkdir(named);
 
-    const resolved = await resolverWith()(managerNaming(gameRoot));
-
-    expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
-  });
-
-  onPosix.it('(Wine translates a drive letter only on Linux) normalizes a Z:-drive game path, as a Windows manager under Proton writes it, to its POSIX path', async () => {
-    const gameRoot = await gameFolder();
-    const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
-
-    const resolved = await resolverWith()(managerNaming(winePath));
-
-    expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
-  });
-
-  onPosix.it("(Wine translates a drive letter only on Linux) normalizes a C: drive-mapped game path into the Proton prefix's drive_c", async () => {
-    const prefixDir = await mkdtemp(join(tmpdir(), 'medit-prefix-'));
-    dirs.push(prefixDir);
-    const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');
-    await mkdir(join(gameRoot, 'Data'), { recursive: true });
-    const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefixDir) };
-
-    const resolved = await resolverWith(undefined, detectors)(managerNaming('C:\\Games\\Fallout4'));
-
-    expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
-  });
-
-  onPosix.it('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: game path has no determinable prefix', async () => {
-    const detectors: GameDetectors = {
-      ...NO_DETECTORS,
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
-      winePrefix: () => Promise.resolve(null),
-    };
-
-    const resolved = await resolverWith(undefined, detectors)(managerNaming('C:\\Games\\Fallout4'));
-
-    expect(resolved).toMatchObject({
-      kind: 'notFound',
-      looked: [
-        { place: SETTING_PLACE, answer: 'not set' },
-        { place: GAME_PATH_PLACE, answer: expect.stringMatching(/prefix could not be determined/) as unknown },
-      ],
+    expect(await resolved({ setting: named, gamePath: await gameFolder() })).toEqual({
+      kind: 'notFound', setting: GAME_FOLDER_SETTING_ID, looked: [{ place: SETTING_PLACE, answer: `${named} has no Data folder` }],
     });
   });
 
-  it('falls back to Steam autodetection when the setting and the game path the manager names are both absent', async () => {
-    const detectors: GameDetectors = {
-      ...NO_DETECTORS,
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
-      winePrefix: noDetectPrefix,
-    };
+  it('is not found, naming the folder, when the manager names a folder with no Data folder, rather than falling through to a Steam install', async () => {
+    const stale = join(await temp(), 'Stale Game Folder');
+    await mkdir(stale);
 
-    const resolved = await resolverWith(undefined, detectors)(managerNaming());
-
-    expect(resolved).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
-  });
-
-  it('answers not found, naming each place looked, when nothing resolves — setting unset, no gamePath, autodetect finds nothing', async () => {
-    expect(await resolverWith()(managerNaming())).toEqual({
+    expect(await resolved({ gamePath: stale, detectors: steamHolding(STEAM_DATA) })).toEqual({
       kind: 'notFound',
       setting: GAME_FOLDER_SETTING_ID,
-      looked: [
-        { place: SETTING_PLACE, answer: 'not set' },
-        { place: GAME_PATH_PLACE, answer: 'not set' },
-        { place: STEAM_PLACE, answer: 'the game is in no Steam library' },
-      ],
+      looked: [{ place: SETTING_PLACE, answer: 'not set' }, { place: GAME_PATH_PLACE, answer: `${stale} has no Data folder` }],
     });
   });
 
-  it('refuses, naming the folder, when the manager names a game folder with no Data/, rather than falling through to a Steam install', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-gamefolder-'));
-    dirs.push(dir);
-    const staleGameRoot = join(dir, 'Stale Game Folder');
-    await mkdir(staleGameRoot, { recursive: true });
-    const detectors: GameDetectors = {
-      ...NO_DETECTORS,
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
-      winePrefix: noDetectPrefix,
-    };
+  it('is not found, asking Steam nothing, for a game the tables hold no Steam facts for, rather than guessing a folder', async () => {
+    const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.reject(new Error('Steam was asked')) };
 
-    const resolved = await resolverWith(undefined, detectors)(managerNaming(staleGameRoot));
-
-    expect(resolved).toEqual({
-      kind: 'notFound',
-      setting: GAME_FOLDER_SETTING_ID,
-      looked: [
-        { place: SETTING_PLACE, answer: 'not set' },
-        { place: GAME_PATH_PLACE, answer: `${staleGameRoot} has no Data folder` },
-      ],
-    });
-  });
-
-  it('answers not found for a game the tables hold no Steam facts for, rather than guessing a folder', async () => {
-    const unknownGame = managerNaming(undefined, undefined);
-    let asked = false;
-    const detectors: GameDetectors = {
-      ...NO_DETECTORS,
-      paths: () => { asked = true; return Promise.resolve(null); },
-      winePrefix: noDetectPrefix,
-    };
-
-    expect(await resolverWith(undefined, detectors)(unknownGame)).toMatchObject({
+    expect(await resolved({ gameName: 'Skyrim VR', detectors })).toMatchObject({
       kind: 'notFound',
       looked: [
         { place: SETTING_PLACE, answer: 'not set' },
@@ -255,63 +151,50 @@ describe('the game folder resolver', () => {
         { place: STEAM_PLACE, answer: 'not asked: Modbench has no Steam entry for this game' },
       ],
     });
-    expect(asked).toBe(false);
   });
 
   it.each([
-    ['the setting', (root: string) => [root, undefined]],
-    ['the game path the manager names', (root: string) => [undefined, root]],
-  ] as const)('asks Steam nothing when %s answers the root, not detecting up front on every branch, which reads Steam\'s library file (and spawns `reg query` on Windows) on every recompute', async (_, sources) => {
-    const gameRoot = await gameFolder();
-    const [setting, managerPath] = sources(gameRoot);
-    let asked = 0;
-    const detectors: GameDetectors = {
-      ...NO_DETECTORS,
-      paths: () => { asked += 1; return Promise.resolve(null); },
-      winePrefix: noDetectPrefix,
-    };
+    ['the setting', (root: string) => ({ setting: root })],
+    ['the game path the manager names', (root: string) => ({ gamePath: root })],
+  ])('asks Steam nothing when %s answers the root, a detection reading Steam\'s library file (and spawning `reg query` on Windows) on every recompute', async (_, naming) => {
+    const root = await gameFolder();
+    const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.reject(new Error('Steam was asked')) };
 
-    const resolved = await resolverWith(setting, detectors)(managerNaming(managerPath));
-
-    expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
-    expect(asked).toBe(0);
+    expect(await resolved({ ...naming(root), detectors })).toEqual({ kind: 'found', root, dataFolder: join(root, 'Data') });
   });
 });
 
-describe('the Steam install', () => {
-  it('is the game Steam holds, whatever folder the setting names', async () => {
-    const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
-
-    const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
-
-    expect(install).toEqual({ kind: 'found', root: dirname('/steam/Fallout 4/Data'), dataFolder: '/steam/Fallout 4/Data', steamApp: 377160, depots: [], depotProblems: [] });
+describe('where the game is, beside the Steam install', () => {
+  const dirs: string[] = [];
+  afterEach(async () => {
+    for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
   });
+  const placeOf = async (detectors: GameDetectors, gameName?: string) => {
+    const root = await instanceOnDisk({ 'ModOrganizer.ini': settingsNaming(gameName) });
+    const game = await mkdtemp(join(tmpdir(), 'medit-game-'));
+    dirs.push(root, game);
+    await mkdir(join(game, 'Data'));
+    return { game, place: await adapterOver(root, { gameFolderSettingValue: game, detectors }).gamePlace() };
+  };
 
-  it('records the depots Steam installed of the game, from the app manifest of its library', async () => {
+  it('holds the Steam install Steam holds, whatever folder the setting names, with the depots Steam installed of the game from the app manifest of its library', async () => {
     const library = await mkdtemp(join(tmpdir(), 'medit-steamlib-'));
-    try {
-      const dataFolder = join(library, 'steamapps', 'common', 'Fallout 4', 'Data');
-      await mkdir(dataFolder, { recursive: true });
-      await writeAppManifestOfDepot(library);
-      const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder }) };
+    dirs.push(library);
+    const dataFolder = join(library, 'steamapps', 'common', 'Fallout 4', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeAppManifestOfDepot(library);
 
-      const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
+    const { game, place } = await placeOf(steamHolding(dataFolder));
 
-      expect(install?.depots).toEqual([INSTALLED_DEPOT]);
-    } finally {
-      await rm(library, { recursive: true, force: true });
-    }
+    expect(place).toEqual({ root: game, steamRoot: join(library, 'steamapps', 'common', 'Fallout 4'), steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [] });
   });
 
-  it('is none when Steam holds no such game', async () => {
-    expect(await steamInstallResolver(NO_DETECTORS)(RELEASE_WITH_STEAM_FACTS)).toBeUndefined();
-  });
+  it.each([
+    ['Steam holds no such game', 'Fallout 4', NO_DETECTORS],
+    ['Modbench has no Steam entry for the game, asking Steam nothing', 'Skyrim VR', { ...NO_DETECTORS, paths: () => Promise.reject(new Error('Steam was asked')) }],
+  ])('holds no Steam install when %s', async (_, gameName, detectors) => {
+    const { game, place } = await placeOf(detectors, gameName);
 
-  it('is none, asking Steam nothing, for a game Modbench has no Steam entry for', async () => {
-    let asked = false;
-    const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => { asked = true; return Promise.resolve(null); } };
-
-    expect(await steamInstallResolver(detectors)('NoSuchRelease')).toBeUndefined();
-    expect(asked).toBe(false);
+    expect(place).toEqual({ root: game, depots: [], depotProblems: [] });
   });
 });
