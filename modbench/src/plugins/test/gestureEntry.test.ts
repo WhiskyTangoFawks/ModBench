@@ -42,7 +42,7 @@ beforeAll(async () => {
       pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
       sortingRuleFiles: {
         ...READ_SORTING_RULE_FILES,
-        userlist: { path: '/instance/loot/userlist.yaml', kind: 'text', text: "plugins:\n  - name: 'Mv.esp'\n    after: ['Last.esp']\n" },
+        userlist: { path: '/instance/loot/userlist.yaml', kind: 'text', text: "plugins:\n  - name: 'Mv.esp'\n    after: ['Last.esp']\n  - name: 'Zeta.esp'\n    after: ['Last.esp']\n" },
       },
     },
   });
@@ -146,7 +146,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     it.each<Case>([
       ['a plugin a broken rule moves', ['moving'], { singleSuggestedMove: true }],
       ['a plugin no broken rule moves', ['compilable'], { singleSuggestedMove: false }],
-      ['two plugins', ['moving', 'alpha'], { singleSuggestedMove: false }],
+      ['two plugins a broken rule moves', ['moving', 'alsoNonCompiledPlugin'], { singleSuggestedMove: false }],
     ])('%s', reads);
   });
 

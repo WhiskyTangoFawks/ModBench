@@ -13,7 +13,7 @@ import { settled as until } from '../../test/eventually';
 
 const STOPPED = 'mEdit stopped. Reload the window to start it again.';
 const FILLING = { done: 1, total: 3, version: 1, settled: false };
-const PLUGINS = ['A.esp', 'B.esp'].map((name) => ({ name, origin: 'ModA' }));
+const PLUGINS = ['A.esp', 'B.esp', 'Disabled.esp'].map((name) => ({ name, origin: 'ModA' }));
 const READY = '$(check) mEdit: Ready (2 plugins)';
 
 const theItem = () => present(host.statusBarItems[0], 'the one status bar item');
@@ -25,7 +25,7 @@ function statusBar(status: InMemoryMEditClient['status'] = 'running') {
   client.setQueryAnswer('getPlugins', PLUGINS.map((plugin) => pluginMetadataFixture(plugin)));
   client.setQueryAnswer('getPluginsIndexing', []);
   const made = pluginsOver({
-    client, value: instanceValueFixture({ plugins: pluginsOf(PLUGINS.map(({ name }) => name)) }),
+    client, value: instanceValueFixture({ plugins: [...pluginsOf(['A.esp', 'B.esp']), { ...PLUGINS[2], path: '/mods/ModA/Disabled.esp', line: 2, enabled: false, winning: true }] }),
   });
   const ready = async () => {
     holdsLoadOrder(client, { indexed: PLUGINS });
@@ -54,7 +54,7 @@ describe('the status bar, one item saying what mEdit is doing', () => {
     expect(theItem().text).toBe(text);
   });
 
-  it('says Ready once the snapshot is indexed, counting the active plugins', async () => {
+  it('says Ready once the snapshot is indexed, counting the active plugins, not every plugin indexed', async () => {
     await statusBar().ready();
   });
 

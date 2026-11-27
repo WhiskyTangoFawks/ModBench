@@ -204,15 +204,15 @@ describe('modbench.record.create', () => {
     expect(host.executed).toEqual([]);
   });
 
-  it('asks nothing of mEdit\'s create before the type is picked', async () => {
+  it('runs the create inside the write, and asks nothing of it before the type is picked', async () => {
     const { client, run, rows } = await creating();
     const order: string[] = [];
     host.picks((labels) => { order.push('picked'); return labels[1]; });
-    client.setCommandHandler('getCreateChanges', () => { order.push('create'); return Promise.resolve(NEW_NPC); });
+    client.setCommandHandler('getCreateChanges', () => { order.push(`create under ${host.progress.join(', ')}`); return Promise.resolve(NEW_NPC); });
 
     await run(rows.plugin);
 
-    expect(order).toEqual(['picked', 'create']);
+    expect(order).toEqual(['picked', 'create under opens on modbench.pluginListTree']);
   });
 });
 
