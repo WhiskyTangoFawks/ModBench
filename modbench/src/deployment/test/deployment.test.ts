@@ -4,14 +4,29 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
-const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined, inodes: new Map<string, bigint>(), recordWritesLeft: Infinity }));
+const busy = vi.hoisted(() => ({
+  links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined, inodes: new Map<string, bigint>(), recordWritesLeft: Infinity,
+  killBeforeLinking: undefined as string | undefined, killAfterLinking: undefined as string | undefined, killed: false,
+}));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   const ebusy = (call: string, path: string) => Object.assign(new Error(`EBUSY: resource busy or locked, ${call} '${path}'`), { code: 'EBUSY' });
+  const alive = <Args extends unknown[], Answer>(write: (...args: Args) => Promise<Answer>) => (...args: Args): Promise<Answer> =>
+    (busy.killed ? Promise.reject(new Error('the process was killed')) : write(...args));
   return {
     ...actual,
-    link: (from: string, to: string) => (busy.onLink?.(to), busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
+    mkdir: alive(actual.mkdir),
+    rename: alive(actual.rename),
+    rmdir: alive(actual.rmdir),
+    link: alive(async (from: string, to: string) => {
+      busy.onLink?.(to);
+      if (busy.killBeforeLinking === to) busy.killed = true;
+      if (busy.killed) throw new Error('the process was killed');
+      if (busy.links.includes(to)) throw ebusy('link', to);
+      await actual.link(from, to);
+      if (busy.killAfterLinking === to) busy.killed = true;
+    }),
     readdir: (...args: Parameters<typeof actual.readdir>) =>
       (typeof args[0] === 'string' && busy.readdirs.includes(args[0]) ? Promise.reject(ebusy('scandir', args[0])) : actual.readdir(...args)),
     lstat: async (path: string, options: { bigint: true }) => {
@@ -21,16 +36,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         ? stats
         : new Proxy(stats, { get: (target, key) => (key === 'ino' ? reused : key === 'birthtimeNs' ? target.birthtimeNs + 1n : Reflect.get(target, key) as unknown) });
     },
-    writeFile: (...args: Parameters<typeof actual.writeFile>) =>
+    writeFile: alive((...args: Parameters<typeof actual.writeFile>) =>
       (typeof args[0] === 'string' && args[0].endsWith('deployment.json.tmp') && --busy.recordWritesLeft < 0
         ? Promise.reject(ebusy('open', args[0]))
-        : actual.writeFile(...args)),
-    unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
+        : actual.writeFile(...args))),
+    unlink: alive((path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path))),
   };
 });
 import { hardlinkDeployment, overwritePathOf, type FileTheGameGets, type PluginOrder } from '../deployment';
 import type { PluginsTxtPlace } from '../pluginsTxtPlace';
-import { recordIn } from '../record';
 import { onPosix, onWindows } from '../../test/platform';
 
 let root: string;
@@ -39,6 +53,9 @@ let folder: string;
 let storage: string;
 
 beforeEach(async () => {
+  busy.killBeforeLinking = undefined;
+  busy.killAfterLinking = undefined;
+  busy.killed = false;
   root = await mkdtemp(join(tmpdir(), 'deployment-'));
   mods = join(root, 'mods');
   folder = join(root, 'deployed');
@@ -398,31 +415,26 @@ describe('a file a killed deploy set aside', () => {
 describe('a deploy killed part way through its changes', () => {
   const at = () => join(folder, 'Data', 'a.esp');
   const listing = async () => (await readdir(join(folder, 'Data'))).sort();
-  const fileIdOf = async (file: FileTheGameGets): Promise<string> => {
-    const probe = await mkdtemp(join(root, 'probe-'));
-    await deploy([file], probe);
-    return (await recordIn(join(storage, 'deployment.json')).of(probe)).files.map(({ fileId }) => fileId).join();
-  };
-  const recording = async (...files: FileTheGameGets[]) => {
-    const written = [];
-    for (const file of files) written.push({ path: 'Data/a.esp', fileId: await fileIdOf(file) });
-    await recordIn(join(storage, 'deployment.json')).write(folder, { files: written, folders: [] });
+  const killed = async (run: Promise<unknown>): Promise<void> => {
+    await run.catch(() => undefined);
+    busy.killBeforeLinking = undefined;
+    busy.killAfterLinking = undefined;
+    busy.killed = false;
   };
 
   async function killedAfterLinkingANewPath() {
     const file = await modFile('Mod', 'a.esp');
-    await recording(file);
-    await mkdir(dirname(at()), { recursive: true });
-    await link(file.winner, at());
+    busy.killAfterLinking = at();
+    await killed(deploy([file]));
     return file;
   }
 
-  async function killedAfterRelinking() {
+  async function killedRelinking(when: 'before' | 'after') {
     const old = await modFile('Old', 'a.esp', 'old');
     await deploy([old]);
     const next = await modFile('New', 'a.esp', 'new');
-    await recording(next, old);
-    await rename(at(), join(folder, 'Data', 'a.esp.modbench_aside_99999'));
+    if (when === 'before') busy.killBeforeLinking = at(); else busy.killAfterLinking = at();
+    await killed(deploy([next]));
     return { old, next };
   }
 
@@ -444,7 +456,8 @@ describe('a deploy killed part way through its changes', () => {
 
   it('links a new path it was killed before linking', async () => {
     const file = await modFile('Mod', 'a.esp');
-    await recording(file);
+    busy.killBeforeLinking = at();
+    await killed(deploy([file]));
 
     const deployed = await deploy([file]);
 
@@ -452,8 +465,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('keeps a relinked file managed when the load order still holds it', async () => {
-    const { next } = await killedAfterRelinking();
-    await link(next.winner, at());
+    const { next } = await killedRelinking('after');
 
     const deployed = await deploy([next]);
 
@@ -461,8 +473,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('relinks to another winner and leaves nothing set aside when a relink was killed after linking', async () => {
-    const { next } = await killedAfterRelinking();
-    await link(next.winner, at());
+    await killedRelinking('after');
     const other = await modFile('Other', 'a.esp', 'other');
 
     const deployed = await deploy([other]);
@@ -471,8 +482,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('removes a relinked file when the mod is disabled', async () => {
-    const { next } = await killedAfterRelinking();
-    await link(next.winner, at());
+    await killedRelinking('after');
 
     const deployed = await deploy([]);
 
@@ -480,7 +490,7 @@ describe('a deploy killed part way through its changes', () => {
   });
 
   it('puts the old file back when a relink was killed before linking', async () => {
-    const { old } = await killedAfterRelinking();
+    const { old } = await killedRelinking('before');
 
     const deployed = await deploy([old]);
 
@@ -489,23 +499,14 @@ describe('a deploy killed part way through its changes', () => {
 
   it('leaves a link to another file at the path the user\'s', async () => {
     const file = await modFile('Mod', 'a.esp');
-    await recording(file);
+    busy.killBeforeLinking = at();
+    await killed(deploy([file]));
     const other = await modFile('Other', 'a.esp', 'other');
-    await mkdir(dirname(at()), { recursive: true });
     await link(other.winner, at());
 
     const deployed = await deploy([file]);
 
     expect([deployed.leftOut, await readFile(at(), 'utf8')]).toEqual([[{ path: 'Data/a.esp', winner: file.winner }], 'other']);
-  });
-
-  it('records a file before it links it', async () => {
-    let recordedAtLink = '';
-    busy.onLink = () => { recordedAtLink = readFileSync(join(storage, 'deployment.json'), 'utf8'); };
-
-    await deploy([await modFile('Mod', 'a.esp')]);
-
-    expect(recordedAtLink).toContain('Data/a.esp');
   });
 
   it('names why the deploy failed when it could not restore its record either', async () => {
@@ -518,26 +519,30 @@ describe('a deploy killed part way through its changes', () => {
   it('keeps the record it had when a deploy fails', async () => {
     const kept = await modFile('Mod', 'a.esp');
     await deploy([kept]);
-    const before = await recordIn(join(storage, 'deployment.json')).of(folder);
+    const failed = await modFile('Mod', 'b.esp');
     busy.links = [join(folder, 'Data', 'b.esp')];
+    await expect(deploy([kept, failed])).rejects.toThrow();
+    busy.links = [];
+    await link(failed.winner, join(folder, 'Data', 'b.esp'));
 
-    await expect(deploy([kept, await modFile('Mod', 'b.esp')])).rejects.toThrow();
-
-    expect(await recordIn(join(storage, 'deployment.json')).of(folder)).toEqual(before);
+    expect(await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)).toEqual([join('Data', 'b.esp')]);
   });
 });
 
 describe('a deploy that landed', () => {
   it('names why it could not trim its record, which still names the file it removed', async () => {
     const kept = await modFile('Mod', 'a.esp');
-    await deploy([kept, await modFile('Mod', 'b.esp')]);
+    const removed = await modFile('Mod', 'b.esp');
+    await deploy([kept, removed]);
     busy.recordWritesLeft = 2;
 
     const deployed = await deploy([kept]);
+    const left = await readdir(join(folder, 'Data'));
+    busy.recordWritesLeft = Infinity;
+    await link(removed.winner, join(folder, 'Data', 'b.esp'));
 
-    const recorded = (await recordIn(join(storage, 'deployment.json')).of(folder)).files.map(({ path }) => path).sort();
-    expect([deployed.wrote, deployed.leftAside, deployed.staleRecord?.includes('EBUSY'), recorded, await readdir(join(folder, 'Data'))])
-      .toEqual([true, [], true, ['Data/a.esp', 'Data/b.esp'], ['a.esp']]);
+    expect([deployed.wrote, deployed.leftAside, deployed.staleRecord?.includes('EBUSY'), left, await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)])
+      .toEqual([true, [], true, ['a.esp'], []]);
   });
 });
 
@@ -729,7 +734,6 @@ describe('plugins.txt', () => {
 
   describe('with a renamed file the record does not name', () => {
     const orphan = (): string => `${plugins}.modbench_renamed`;
-    const recordedRenamed = async (): Promise<readonly string[] | undefined> => (await recordIn(join(storage, 'deployment.json')).of(folder)).pluginsTxt?.renamed;
 
     it('names and records it, and writes nothing, when the file in place holds the text', async () => {
       await mkdir(game, { recursive: true });
@@ -738,8 +742,7 @@ describe('plugins.txt', () => {
 
       const deployed = await deploy([]);
 
-      expect([deployed.pluginsTxt, await siblings(), await recordedRenamed()]).toEqual([
-        { kind: 'unchanged', renamed: [orphan()] }, ['plugins.txt', 'plugins.txt.modbench_renamed'], [orphan()]]);
+      expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'unchanged', renamed: [orphan()] }, ['plugins.txt', 'plugins.txt.modbench_renamed']]);
     });
 
     it('names and records it, and renames the file in place as one deploy did not write, when the text differs', async () => {
@@ -749,8 +752,8 @@ describe('plugins.txt', () => {
 
       const deployed = await deploy([]);
 
-      expect([deployed.pluginsTxt, await readFile(orphan(), 'utf8'), await readFile(`${orphan()}_2`, 'utf8'), await recordedRenamed()]).toEqual([
-        { kind: 'written', renamed: [orphan(), `${orphan()}_2`] }, 'an earlier folder\'s', 'edited since', [orphan(), `${orphan()}_2`]]);
+      expect([deployed.pluginsTxt, await readFile(orphan(), 'utf8'), await readFile(`${orphan()}_2`, 'utf8')]).toEqual([
+        { kind: 'written', renamed: [orphan(), `${orphan()}_2`] }, 'an earlier folder\'s', 'edited since']);
     });
 
     it('is replaced, nothing else renamed, when a file deploy set aside holds the recorded file ID', async () => {
@@ -776,8 +779,7 @@ describe('plugins.txt', () => {
 
     const deployed = await deploy([]);
 
-    expect([deployed.pluginsTxt, (await recordIn(join(storage, 'deployment.json')).of(folder)).pluginsTxt?.renamed])
-      .toEqual([{ kind: 'written', renamed: [`${plugins}.modbench_renamed`] }, [`${plugins}.modbench_renamed`]]);
+    expect(deployed.pluginsTxt).toEqual({ kind: 'written', renamed: [`${plugins}.modbench_renamed`] });
   });
 
   it('keeps both names, each holding the user\'s file, when a deploy killed before it placed ours left a second link to it', async () => {
@@ -808,10 +810,9 @@ describe('plugins.txt', () => {
     order = { release: 'Fallout4', entries: [] };
     await deploy([]);
 
-    const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
+    const purged = await purge();
 
-    expect(recorded.pluginsTxt).toMatchObject({ path: plugins, renamed: [`${plugins}.modbench_renamed`] });
-    expect(recorded.pluginsTxt?.fileId).toMatch(new RegExp(`^${await inode(plugins)}:\\d+$`));
+    expect([purged.restored, await siblings(), await readFile(plugins, 'utf8')]).toEqual([`${plugins}.modbench_renamed`, ['plugins.txt'], 'mine']);
   });
 });
 
@@ -822,12 +823,13 @@ describe('the files in the deployment folder deploy does not manage', () => {
     await deploy([changed, gone]);
     await rm(changed.winner);
     await writeFile(changed.winner, 'new');
-    const files = async (): Promise<string[]> => (await recordIn(join(storage, 'deployment.json')).of(folder)).files.map(({ path }) => path).sort();
 
     const relinked = await deploy([changed]);
-    const afterwards = [relinked.unmanaged, await files(), (await deploy([changed])).unmanaged];
+    const again = await deploy([changed]);
+    await link(gone.winner, join(folder, 'Data', 'Meshes', 'Gone.nif'));
 
-    expect(afterwards).toEqual([[], ['Data/Meshes/Changed.nif'], []]);
+    expect([relinked.unmanaged, again.unmanaged, await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)])
+      .toEqual([[], [], [join('Data', 'Meshes', 'Gone.nif')]]);
   });
 
   it('names each, below any folder, and none that deploy wrote or has set aside', async () => {
@@ -1067,12 +1069,14 @@ describe('purge', () => {
     it('leaves the deployment folder and what deploy wrote as they were', async () => {
       await deploy([await modFile('Mod', 'a.esp'), await modFile('Mod', 'b.esp')]);
       const before = await listing();
-      const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
       busy.unlinks.push(join(folder, 'Data', 'b.esp'));
 
       await expect(purge()).rejects.toThrow('EBUSY');
+      const after = await listing();
+      busy.unlinks = [];
+      await purge();
 
-      expect([await listing(), await recordIn(join(storage, 'deployment.json')).of(folder)]).toEqual([before, recorded]);
+      expect([after, await listing()]).toEqual([before, []]);
     });
 
     it('puts plugins.txt back as it was when a file cannot be removed', async () => {
@@ -1082,13 +1086,14 @@ describe('purge', () => {
       await writeFile(join(game, 'plugins.txt'), 'mine');
       await deploy([await modFile('Mod', 'a.esp')]);
       const written = await readFile(join(game, 'plugins.txt'), 'utf8');
-      const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
       busy.unlinks.push(join(folder, 'Data', 'a.esp'));
 
       await expect(purge()).rejects.toThrow();
+      const after = [(await readdir(game)).sort(), await readFile(join(game, 'plugins.txt'), 'utf8')];
+      busy.unlinks = [];
+      await purge();
 
-      expect([(await readdir(game)).sort(), await readFile(join(game, 'plugins.txt'), 'utf8'), await recordIn(join(storage, 'deployment.json')).of(folder)])
-        .toEqual([['plugins.txt', 'plugins.txt.modbench_renamed'], written, recorded]);
+      expect([after, await readFile(join(game, 'plugins.txt'), 'utf8')]).toEqual([[['plugins.txt', 'plugins.txt.modbench_renamed'], written], 'mine']);
     });
   });
 
