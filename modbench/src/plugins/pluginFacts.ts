@@ -18,7 +18,7 @@ export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 't
 
 export type SourceUnreadableProblem = PluginProblem & { decompileRepairs: boolean };
 
-type StatusKind = 'notRestored' | 'failedToRead' | 'sortingErrors' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed' | 'sortingWarnings';
+export type StatusKind = 'notRestored' | 'failedToRead' | 'sortingErrors' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed' | 'sortingWarnings';
 
 export interface PluginStatus {
   kind: StatusKind;
@@ -37,7 +37,7 @@ const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () =
 /** LOOT's rules, and what the instance says of the files their conditions name. */
 export type LootInput = Omit<LootRules, 'facts'> & { files: FileFacts };
 
-export type StatusIcon = 'error' | 'warning';
+export type StatusSeverity = 'error' | 'warning';
 
 export type PluginPlace = 'inSourceMod' | 'inNonSourceMod' | 'inOverwrite';
 
@@ -61,7 +61,12 @@ export type Expansion = { kind: 'records' } | { kind: 'error'; message: string }
 // snapshot's index failed.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'changedOutside', 'malformed', 'sortingWarnings']);
+/** How every surface shows each status: the row's icon and its problem in the Problems panel. A malformed plugin and one
+ *  changed outside Modbench still load and play; one that failed to read does not. */
+export const STATUS_SEVERITY: Readonly<Record<StatusKind, StatusSeverity>> = {
+  notRestored: 'warning', failedToRead: 'error', sortingErrors: 'error', unreadableRecords: 'error', sourceUnreadable: 'error',
+  changedOutside: 'warning', malformed: 'warning', sortingWarnings: 'warning',
+};
 
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -500,10 +505,9 @@ export class PluginFacts {
   }
 
   /** The red or yellow icon of the first status; none when the plugin has none. */
-  icon(address: PluginAddress): StatusIcon | undefined {
+  icon(address: PluginAddress): StatusSeverity | undefined {
     const [first] = this.statuses(address);
-    if (first === undefined) return undefined;
-    return WARNING_KINDS.has(first.kind) ? 'warning' : 'error';
+    return first && STATUS_SEVERITY[first.kind];
   }
 
   /** The status words, left out when the plugin has none. */

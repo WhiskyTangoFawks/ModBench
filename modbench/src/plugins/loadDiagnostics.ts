@@ -4,8 +4,12 @@ import { commandLink } from '../drivingLib/quickFixes';
 import type { PluginAddress } from '../client';
 import type { NamedPlugins } from './pluginAddress';
 import { exactPluginAddressKey } from '../wire/pluginAddress';
-import type { PluginPlace, PluginProblem } from './pluginFacts';
+import { STATUS_SEVERITY, type PluginPlace, type PluginProblem, type StatusKind } from './pluginFacts';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
+
+/** A status's problem, at the severity its row shows. */
+export const problemSeverity = (kind: StatusKind): vscode.DiagnosticSeverity =>
+  (STATUS_SEVERITY[kind] === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error);
 
 /** Targets the plugin binary itself, which is where a malformed plugin's diagnoses, a change
  *  outside Modbench and a failed read's diagnosis all live. One call answers for the plugins `named`,
