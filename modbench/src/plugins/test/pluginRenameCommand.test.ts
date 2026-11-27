@@ -1,44 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-const { handlers, registerCommand, showInputBox } = vi.hoisted(() => {
-  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
-  return {
-    handlers,
-    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
-      handlers.set(command, handler);
-      return { dispose: vi.fn() };
-    }),
-    showInputBox: vi.fn(),
-  };
-});
+vi.mock('vscode', () => import('./vscodeHost'));
 
-import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, Uri,
-} from '../../test/vscodeMock';
-
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand: vi.fn() },
-    window: { showInputBox, withProgress: recordedWithProgress },
-    workspace: { textDocuments: [] },
-    TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, Uri,
-  };
-});
-
+import { host } from './vscodeHost';
+import { clientHoldingNothing, pluginsOver } from './pluginsOver';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { oneAtATime } from '../../textDocuments/oneAtATime';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
-import { progressSteps } from '../../test/recordedProgress';
-import { registerRenamePluginCommand } from '../pluginRenameCommand';
-import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { present } from '../../ports/present';
 
 const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', name: origin } }) as const;
 
@@ -46,9 +17,10 @@ const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 const CHANGES = { treeName: 'Patch.esp', moves: [{ from: '/m/plugin-source/Patch.esp', to: '/m/plugin-source/Renamed.esp' }], deletions: [], documents: [], leftBehind: [] };
 const NO_CHANGES = { moves: [], deletions: [], documents: [] };
 const MOVED = '/m/plugin-source/Patch.esp moved to /m/plugin-source/Renamed.esp.';
+const RENAMED = [{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }];
 
-function setup(selection: readonly PluginsTreeNode[] = []) {
-  const client = new InMemoryMEditClient();
+async function renaming() {
+  const client = clientHoldingNothing();
   client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
   client.setCommandResult('getRenameSourceChanges', CHANGES);
   client.setCommandResult('moveLastWritten', { moved: true });
@@ -57,143 +29,135 @@ function setup(selection: readonly PluginsTreeNode[] = []) {
   const fake = fakeInstanceAdapter(readingFixture({
     ...pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA')), mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
   }), instanceAnswers);
-  const instance = {
-    value: instanceValueFixture(),
-    refresh: () => Promise.resolve(),
-  };
-  const reporter = recordingReporter();
   const apply = vi.fn<SourceEditing['applyWorkspaceChanges']>().mockResolvedValue();
   const queue = oneAtATime();
   const queued = vi.fn();
-  const source: SourceEditing = {
-    applyWorkspaceChanges: apply,
-    oneAtATime: (job) => { queued(); return queue(job); },
-    refreshSourceControlFor: vi.fn(),
-  };
-  registerRenamePluginCommand({ client, commands: pluginCommandsWith(fake.adapter, client), instance, reporter, source }, () => selection);
-  const run = present(handlers.get('modbench.plugin.rename'), 'the rename plugin command');
+  const refreshSourceControlFor = vi.fn();
+  const made = pluginsOver({
+    client, commandsClient: client, adapter: fake.adapter,
+    value: instanceValueFixture({
+      plugins: [{ name: 'Patch.esp', origin: 'ModA', path: '/m/Patch.esp', line: 0, enabled: true, winning: true }],
+      pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
+    }),
+    sourceEditing: { applyWorkspaceChanges: apply, oneAtATime: (job) => { queued(); return queue(job); }, refreshSourceControlFor },
+  });
+  const row = await made.pluginRows();
+  const run = (...args: unknown[]) => host.run('modbench.plugin.rename', ...args);
   const validate = async (value: string): Promise<string | undefined> => {
     let validated: string | undefined;
-    showInputBox.mockImplementationOnce(async (options: { validateInput: (v: string) => Promise<string | undefined> | undefined }) => {
-      validated = await options.validateInput(value);
-      return undefined;
-    });
-    await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
+    host.types(async (options) => { validated = await options.validateInput?.(value) ?? undefined; return undefined; });
+    await run(row('Patch.esp'));
     return validated;
   };
-  return { client, fake, instanceAnswers, reporter, source, apply, queued, run, validate };
+  const asked = (method: string) => client.calls.filter((call) => call.method === method);
+  return {
+    client, fake, instanceAnswers, apply, queued, refreshSourceControlFor, run, validate, asked, row,
+    reporter: made.reporter('plugin.rename'), select: (rows: readonly unknown[]) => { made.view().selectRows(rows); },
+  };
 }
-
-const row = () => new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin);
-
-beforeEach(() => {
-  handlers.clear();
-  progressSteps.length = 0;
-  vi.clearAllMocks();
-});
 
 describe('modbench.plugin.rename', () => {
   it('asks with the current name filled in, then renames the source and the file, under the Plugins bar', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, reporter, run } = setup();
+    const { fake, reporter, run, asked, row } = await renaming();
+    host.types(() => 'Renamed.esp');
 
-    await run(row());
+    await run(row('Patch.esp'));
 
-    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Patch.esp' }));
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
-    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'progress closes']);
+    expect(host.inputsAsked.map(({ value }) => value)).toEqual(['Patch.esp']);
+    expect(asked('getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
+    expect(fake.calls).toEqual(RENAMED);
+    expect(host.progress).toEqual(['opens on modbench.pluginListTree', 'closes']);
     expect(reporter.reports).toEqual([]);
   });
 
   it('renames the plugin to the name an entry point supplies, as Rename Symbol does, prompting nothing', async () => {
-    const { fake, run } = setup();
+    const { fake, run } = await renaming();
 
     await run(undefined, undefined, { plugin: PLUGIN, name: 'Renamed.esp' });
 
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
+    expect(host.inputsAsked).toEqual([]);
+    expect(fake.calls).toEqual(RENAMED);
   });
 
   it.each([['Esc', undefined], ['an empty name', ''], ['the same name', 'Patch.esp']])('renames nothing on %s', async (_, answer) => {
-    showInputBox.mockResolvedValueOnce(answer);
-    const { client, fake, run } = setup();
+    const { fake, run, asked, row } = await renaming();
+    host.types(() => answer);
 
-    await run(row());
+    await run(row('Patch.esp'));
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(asked('getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);
-    expect(progressSteps).toEqual([]);
+    expect(host.progress).toEqual([]);
   });
 
   it('takes nothing from a row that is no plugin line', async () => {
-    const { client, run } = setup();
+    const { run, asked, row } = await renaming();
 
-    await run(new ImplicitMasterNode('Fallout4.esm', 'Data/'));
+    await run(row('Fallout4.esm', 'Data/'));
 
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([]);
+    expect(host.inputsAsked).toEqual([]);
+    expect([asked('getCreatablePluginExtensions'), asked('getRenameSourceChanges')]).toEqual([[], []]);
   });
 
   describe('the prompt refuses what Create plugin refuses, compared without case', () => {
     it('lets the empty name and the same name through to renaming nothing', async () => {
-      const { validate } = setup();
+      const { validate } = await renaming();
       expect(await validate('')).toBeUndefined();
       expect(await validate('Patch.esp')).toBeUndefined();
     });
 
     it('refuses a name the plugin\'s own place holds', async () => {
-      const { validate } = setup();
+      const { validate } = await renaming();
       expect(await validate('Taken.esp')).toBe('"ModA" already holds "Taken.esp".');
     });
 
     it('refuses by the extensions mEdit allows now', async () => {
-      const { validate, client } = setup();
+      const { validate, client } = await renaming();
       client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
       expect(await validate('Patch.esl')).toBe('Extension must be .esm or .esp');
     });
 
     it('shows why when the name cannot be checked, rather than rejecting', async () => {
-      const { validate, fake } = setup();
+      const { validate, fake } = await renaming();
       vi.spyOn(fake.adapter, 'originHoldsFile').mockRejectedValue(new Error('EACCES'));
       expect(await validate('Other.esp')).toBe('Could not check "Other.esp": EACCES');
     });
   });
 
   it('applies the changes as one workspace edit one at a time, and refreshes Source Control for the plugin', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { source, apply, queued, run } = setup();
+    const { apply, queued, refreshSourceControlFor, run, row } = await renaming();
+    host.types(() => 'Renamed.esp');
 
-    await run(row());
+    await run(row('Patch.esp'));
 
     expect(queued).toHaveBeenCalledOnce();
     expect(apply).toHaveBeenCalledWith([{ moves: CHANGES.moves, deletions: [], documents: [] }, NO_CHANGES, NO_CHANGES]);
-    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
   });
 
   it('names the rename and the plugin when VS Code cannot apply the changes, writing no file', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, reporter, apply, run } = setup();
+    const { fake, reporter, apply, run, asked, row } = await renaming();
+    host.types(() => 'Renamed.esp');
     apply.mockRejectedValueOnce(new Error('EEXIST'));
 
-    await run(row());
+    await run(row('Patch.esp'));
 
     expect(reporter.reports).toMatchObject([{
       severity: 'error',
       message: 'Could not rename "Patch.esp" (ModA): its references may be partly changed, and its files and folders partly moved.',
     }]);
-    expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
+    expect(asked('moveLastWritten')).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
 
   it('lands, warning with each reference that could not follow', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, reporter, run } = setup();
+    const { client, fake, reporter, run, row } = await renaming();
+    host.types(() => 'Renamed.esp');
     client.setQueryAnswer('getPluginNameReferences', [{ formKey: '000000:Other.esp', plugin: { name: 'Other.esp', origin: 'ModB' }, inPluginSource: false }]);
 
-    await run(row());
+    await run(row('Patch.esp'));
 
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
+    expect(fake.calls).toEqual(RENAMED);
     expect(reporter.reports).toEqual([{
       severity: 'warning',
       message: 'Renamed "Patch.esp" (ModA) to "Renamed.esp". 1 references to it could not follow.',
@@ -202,11 +166,11 @@ describe('modbench.plugin.rename', () => {
   });
 
   it('tells a refused source, writing no file', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, reporter, run } = setup();
+    const { client, fake, reporter, run, row } = await renaming();
+    host.types(() => 'Renamed.esp');
     client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename "Patch.esp" — NotCompiledPlugin' });
 
-    await run(row());
+    await run(row('Patch.esp'));
 
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([
@@ -215,22 +179,22 @@ describe('modbench.plugin.rename', () => {
   });
 
   it('names the plugin when the file and lines of a plugin with no plugin source failed', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, instanceAnswers, reporter, run } = setup();
+    const { client, instanceAnswers, reporter, run, row } = await renaming();
+    host.types(() => 'Renamed.esp');
     client.setCommandResult('getRenameSourceChanges', { ...CHANGES, moves: [] });
     instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
 
-    await run(row());
+    await run(row('Patch.esp'));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not rename "Patch.esp" (ModA): its file and lines were not renamed.', detail: 'disk full' }]);
   });
 
   it('names the plugin and says its source was renamed when the file and lines failed after it', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { instanceAnswers, reporter, run } = setup();
+    const { instanceAnswers, reporter, run, row } = await renaming();
+    host.types(() => 'Renamed.esp');
     instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
 
-    await run(row());
+    await run(row('Patch.esp'));
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
@@ -244,19 +208,20 @@ describe('modbench.plugin.rename, called by the agent', () => {
   const calling = (name: string, plugins = [PLUGIN]) => new AgentCall(plugins.map((plugin) => ({ kind: 'plugin' as const, plugin })), { name });
 
   it('renames the plugin given, never the selection, prompting nothing and reporting nothing, and answers the outcome', async () => {
-    const { client, fake, reporter, run } = setup([row()]);
+    const { fake, reporter, run, asked, row, select } = await renaming();
+    select([row('Patch.esp')]);
 
     const answered = await run(calling('Renamed.esp'));
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
+    expect(asked('getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
+    expect(fake.calls).toEqual(RENAMED);
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Renamed.esp', origin: 'ModA' }], refused: [] } });
-    expect(showInputBox).not.toHaveBeenCalled();
+    expect(host.inputsAsked).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
   it('answers a refused source, reporting nothing', async () => {
-    const { client, reporter, run } = setup();
+    const { client, reporter, run } = await renaming();
     client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename "Patch.esp" — NotCompiledPlugin' });
 
     expect(await run(calling('Renamed.esp'))).toMatchObject({ applied: false, refusal: 'Could not rename "Patch.esp" — NotCompiledPlugin' });
@@ -264,7 +229,7 @@ describe('modbench.plugin.rename, called by the agent', () => {
   });
 
   it('answers the point where the file and lines failed, reporting nothing', async () => {
-    const { instanceAnswers, reporter, run } = setup();
+    const { instanceAnswers, reporter, run } = await renaming();
     instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
 
     expect(await run(calling('Renamed.esp'))).toMatchObject({
@@ -276,36 +241,36 @@ describe('modbench.plugin.rename, called by the agent', () => {
   });
 
   it('refuses a name its place holds as a refusal result, renaming nothing', async () => {
-    const { client, fake, run } = setup();
+    const { fake, run, asked } = await renaming();
 
     expect(await run(calling('Taken.esp'))).toMatchObject({ applied: false, refusal: '"ModA" already holds "Taken.esp".' });
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(asked('getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
 
   it('refuses by the extensions mEdit allows now', async () => {
-    const { client, run } = setup();
+    const { client, run } = await renaming();
     client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
 
     expect(await run(calling('Renamed.esl'))).toMatchObject({ applied: false, refusal: 'Extension must be .esm or .esp' });
   });
 
   it('refuses more than one plugin, renaming nothing', async () => {
-    const { client, fake, run } = setup();
+    const { fake, run, asked } = await renaming();
 
     await expect(run(calling('Renamed.esp', [PLUGIN, PLUGIN]))).rejects.toThrow('carries one plugin');
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(asked('getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
 
   it('refuses an Argument that is not a plugin, renaming nothing', async () => {
-    const { client, fake, run } = setup();
+    const { fake, run, asked } = await renaming();
 
     await expect(run(new AgentCall([{ kind: 'mod', name: 'ModA' }], { name: 'Renamed.esp' }))).rejects.toBeInstanceOf(Refusal);
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(asked('getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
 });
