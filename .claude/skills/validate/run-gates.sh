@@ -241,7 +241,7 @@ if $HOLDS_SLOT; then
   || { echo "--- TEST DATA REPORT FAILED ---"; FAILED=true; }
   echo "=== Backend code only tests reach ==="
   python3 "$ROOT/.claude/skills/validate/check_test_only_code.py" "$ROOT/MEditService" \
-  || { echo "--- BACKEND TEST-ONLY CODE REPORT FAILED ---"; FAILED=true; }
+  || { echo "--- BACKEND TEST-ONLY CODE GATE FAILED ---"; FAILED=true; }
 fi
 
 if $FAILED; then

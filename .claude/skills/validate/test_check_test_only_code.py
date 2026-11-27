@@ -1,5 +1,5 @@
 """Pins check_test_only_code.py: a production member named by a test project and by no other production
-code is reported, and nothing fails."""
+code is reported, and fails the run."""
 import contextlib
 import io
 import pathlib
@@ -71,10 +71,26 @@ class Members(Solution):
         self.project('Box.Tests', 'class T { string s = new Box().ToString(); }')
         self.assertEqual(self.reported(), [])
 
-    def test_a_type_with_a_base_list_is_not_reported_for_an_interface_or_reflection_may_reach_it(self):
-        self.project('Box', 'public interface IRule { }\ninternal sealed class FoundByReflection : IRule\n{\n}\n'
-                            'internal sealed class FromBase(int a) : Base(a)\n{\n}', uses='IRule, Base')
-        self.project('Box.Tests', 'class T { object[] all = [typeof(FoundByReflection), typeof(FromBase)]; }')
+    def test_a_type_whose_base_production_tests_assignability_to_is_not_reported_and_one_with_another_base_is(self) -> None:
+        self.project('Box', 'internal sealed class FoundAssignableTo : IRule\n{\n}\n'
+                            'internal sealed class FoundAssignableFrom : IOther, IDisposable\n{\n}\n'
+                            'internal sealed class FromBase(int a) : Base(a)\n{\n}\n'
+                            'class Finder { bool[] all = [t.IsAssignableTo(typeof(IRule)), typeof(IOther).IsAssignableFrom(t)];'
+                            ' Type b = typeof(Base); }', uses='Finder')
+        self.project('Box.Tests', 'class T { object[] all = [typeof(FoundAssignableTo), typeof(FoundAssignableFrom), typeof(FromBase)]; }')
+        self.assertEqual(self.reported(), ['FromBase'])
+
+    def test_a_static_class_is_reached_through_its_members_so_only_they_are_reported(self) -> None:
+        self.project('Box', 'public static class Registration {\n'
+                            '    public static int AddBox(this object services) => 1;\n'
+                            '    public static int OnlyTests(this object services) => 2;\n}\n'
+                            'class Host { int n = new object().AddBox(); }', uses='Host')
+        self.project('Box.Tests', 'class T { object[] all = [typeof(Registration), new object().OnlyTests()]; }')
+        self.assertEqual(self.reported(), ['OnlyTests'])
+
+    def test_a_test_side_declaration_of_the_same_name_is_not_a_reach(self) -> None:
+        self.project('Box', 'public class Box {\n    public int Stop() => 1;\n}', uses='Box')
+        self.project('Box.Tests', 'class Fake {\n    public int Stop() => 2;\n}')
         self.assertEqual(self.reported(), [])
 
     def test_a_parameter_named_record_does_not_hide_its_method(self):
@@ -112,13 +128,18 @@ class Main(Solution):
             status = ctoc.main([str(self.root)])
         return status, printed.getvalue()
 
-    def test_it_names_each_member_with_its_file_and_counts_them_and_fails_nothing(self):
+    def test_it_names_each_member_with_its_file_and_counts_them_and_fails_the_run(self) -> None:
         self.project('Box', 'public class Box {\n    public int OnlyTests() => 1;\n}', uses='Box')
         self.project('Box.Tests', 'class T { int n = new Box().OnlyTests(); }')
         status, printed = self.main()
         self.assertIn('OnlyTests  Box/Source.cs', printed)
         self.assertIn('--- 1 MEMBERS ONLY TESTS REACH ---', printed)
-        self.assertEqual(status, 0)
+        self.assertEqual(status, 1)
+
+    def test_nothing_only_tests_reach_passes_the_run(self) -> None:
+        self.project('Box', 'public class Box {\n    public int Used() => 1;\n}', uses='Box')
+        self.project('Box.Tests', 'class T { }')
+        self.assertEqual(self.main()[0], 0)
 
 
 if __name__ == '__main__':

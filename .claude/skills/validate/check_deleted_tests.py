@@ -2,8 +2,8 @@
 """Names each test deleted since the base that no trailer accounts for, each trailer of a deleted test that
 resolves to nothing, and each trailer without its arrow (CODING_STANDARDS.md § Tests, "A diff deletes a test").
 A deleted test is a name the merge base holds more often than HEAD, so a moved test is not one. The trailers of
-the commits since the base account for it when one of them names a test at HEAD, or a mark of § Tests by its
-words before the first colon, full stop or arrow:
+the commits since the base account for it when one of them names a test at HEAD, or, by its words before the
+first colon, full stop or arrow, a mark of § Tests at HEAD or at the merge base:
 
     Deleted-test: <deleted> => <survivor>
     Deleted-test: <deleted> => mark: <mark>
@@ -86,6 +86,11 @@ def test_names(repo: Path, rev: str) -> Counter[str]:
     return names
 
 
+def marks_at(repo: Path, rev: str) -> set[str]:
+    tests_section = TESTS_SECTION.search(git(repo, 'show', f'{rev}:{STANDARDS}'))
+    return {words.strip() for words in MARK_WORDS.findall(tests_section[1] if tests_section else '')}
+
+
 def stands(survivor: str, at_tip: Counter[str], marks: set[str]) -> bool:
     return survivor.removeprefix(MARK) in marks if survivor.startswith(MARK) else at_tip[survivor] > 0
 
@@ -94,8 +99,7 @@ def problems(repo: Path, base: str) -> list[str]:
     merge_base = git(repo, 'merge-base', base, 'HEAD').strip()
     at_tip = test_names(repo, 'HEAD')
     deleted = test_names(repo, merge_base) - at_tip
-    tests_section = TESTS_SECTION.search(git(repo, 'show', f'HEAD:{STANDARDS}'))
-    marks = {words.strip() for words in MARK_WORDS.findall(tests_section[1] if tests_section else '')}
+    marks = marks_at(repo, 'HEAD') | marks_at(repo, merge_base)
     trailers = git(repo, 'log', f'--format=%(trailers:key={KEY},valueonly,unfold)', f'{merge_base}..HEAD').splitlines()
     found: list[str] = []
     accounted: set[str] = set()
