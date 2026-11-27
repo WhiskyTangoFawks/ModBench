@@ -48,7 +48,7 @@ async function aModFromADownloadedFileAndTheGameFolder() {
   await put('Game/Data/c.nif', 'c');
   const gameRoot = join(root, 'Game');
   const adapter = adapterOver(root, {
-    gameFolder: { kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') }, installationFileReader: fakeInstallationFileReader(['a.nif', 'textures/b.dds']),
+    gameFolderSettingValue: gameRoot, installationFileReader: fakeInstallationFileReader(['a.nif', 'textures/b.dds']),
   });
   const inTrash: Record<string, string> = {};
   const trash = async (path: string): Promise<void> => { inTrash[relative(join(root, 'mods'), path).replaceAll('\\', '/')] = await readFile(path, 'utf8'); await rm(path); };

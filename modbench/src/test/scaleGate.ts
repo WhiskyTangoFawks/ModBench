@@ -337,7 +337,7 @@ export async function costOf(mods: number, gesture: Gesture): Promise<Cost & {
   readonly told: { readonly symbols: number; readonly deployProblems: number };
 }> {
   const root = await syntheticInstance(mods, gesture.userlist, gesture.writtenModFiles);
-  const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
+  const adapter = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
   client.setQueryAnswer('getDiagnoses', []);

@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Depot } from '../../instanceAdapter';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../../test/mo2/adapterOver';
-import { NO_DETECTORS } from '../../../test/noDetectors';
 import { instanceOnDisk } from '../../test/instanceOnDisk';
+import { steamGameIn, steamIn } from '../../test/steamOnDisk';
+import type { Machine } from '../../instanceAdapter';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -35,24 +36,24 @@ const APP_MANIFEST = `"AppState"
 `;
 
 describe('the depots Steam records as installed of the game where it is', () => {
-  let library: string;
+  let base: string;
   let steamapps: string;
   let instance: string;
+  let steam: Partial<Machine>;
 
   beforeEach(async () => {
-    library = await mkdtemp(join(tmpdir(), 'steamapps-'));
-    steamapps = join(library, 'steamapps');
-    await mkdir(join(steamapps, 'common', 'Fallout 4', 'Data'), { recursive: true });
+    base = await mkdtemp(join(tmpdir(), 'steamapps-'));
+    steamapps = join(base, 'library', 'steamapps');
+    steam = await steamIn(base);
     instance = await instanceOnDisk();
   });
   afterEach(async () => {
-    await rm(library, { recursive: true, force: true });
+    await rm(base, { recursive: true, force: true });
     await rm(instance, { recursive: true, force: true });
   });
 
   const installedDepots = async () => {
-    const root = join(steamapps, 'common', 'Fallout 4');
-    const place = await adapterOver(instance, { gameFolderSettingValue: root, detectors: { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(root, 'Data') }) } }).gamePlace();
+    const place = await adapterOver(instance, { gameFolderSettingValue: steamGameIn(base), machine: steam }).gamePlace();
     return { depots: place?.depots, problems: place?.depotProblems };
   };
 

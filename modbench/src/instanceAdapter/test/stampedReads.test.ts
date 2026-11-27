@@ -9,7 +9,7 @@ import { adapterOver } from '../../test/mo2/adapterOver';
 import { instanceOnDisk } from './instanceOnDisk';
 import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
-import { CHECK_THE_DISK, type GameFolder, type InstanceAdapter, type InstanceReading, type Mod, type OriginFile, type Reread } from '../instanceAdapter';
+import { CHECK_THE_DISK, type InstanceAdapter, type InstanceReading, type Mod, type OriginFile, type Reread } from '../instanceAdapter';
 import { onWindows } from '../../test/platform';
 const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
@@ -415,12 +415,10 @@ describe('the MO2 reading of an instance nothing changed in', () => {
 
   describe('with a game folder', () => {
     let game: string;
-    let gameFolder: GameFolder;
     const IO = [vi.mocked(readdir), vi.mocked(readFile), vi.mocked(stat), vi.mocked(lstat), vi.mocked(access), programReads];
 
     beforeEach(async () => {
       game = await mkdtemp(join(tmpdir(), 'medit-kept-game-'));
-      gameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
       const programs = programsOf('Fallout4');
       await mkdir(join(game, 'Data', 'Strings'), { recursive: true });
       await mkdir(join(game, 'Data', 'Textures'));
@@ -434,7 +432,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     afterEach(() => rm(game, { recursive: true, force: true }));
 
     const pathsThereTakenBesideTheNamedFile = async (named: string): Promise<string[]> => {
-      const adapter = adapterOver(instance, { gameFolder });
+      const adapter = adapterOver(instance, { gameFolderSettingValue: game });
       await adapter.reading(CHECK_THE_DISK);
       await adapter.reading(CHECK_THE_DISK);
       for (const io of IO) io.mockClear();
@@ -463,7 +461,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     ])('hands the publisher\'s configuration, %s, as the landed reading holds it once its settings are back as they were, whatever a reading between found', async (_kind, text, between) => {
       const settings = join(instance, 'compiler_settings.json');
       await writeFile(settings, text);
-      const adapter = adapterOver(instance, { gameFolder });
+      const adapter = adapterOver(instance, { gameFolderSettingValue: game });
       const landed = await adapter.reading(CHECK_THE_DISK);
       await writeFile(settings, between);
       await modifiedLater(settings);
@@ -476,7 +474,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
 
     it('shows a publisher tag\'s path made at the instance root, which no watch hears, at a re-read named another file', async () => {
       await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Include: ['tools/x.txt'] }));
-      const adapter = adapterOver(instance, { gameFolder });
+      const adapter = adapterOver(instance, { gameFolderSettingValue: game });
       const pathProblems = async (reread: Reread): Promise<number> =>
         expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.filter(({ tag }) => tag.name === 'Include').length;
       const before = await pathProblems(CHECK_THE_DISK);
@@ -493,7 +491,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       const deployedFrom = join(instance, 'mods', 'Patch Mod', 'Root');
       await writeFile(join(game, 'Fallout4.ccc'), 'a.esl\r\n');
       await mkdir(deployedFrom);
-      const adapter = adapterOver(instance, { gameFolder });
+      const adapter = adapterOver(instance, { gameFolderSettingValue: game });
       const listed = async (reread: Reread): Promise<readonly string[]> => (await adapter.reading(reread)).creationClubList;
       const before = await listed(CHECK_THE_DISK);
       await writeFile(join(deployedFrom, 'Fallout4.ccc'), 'b.esl\r\n');
@@ -505,7 +503,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     });
 
     it('finds at a check of the disk a Data folder file a link elsewhere made a deployed one, which no stamp shows', async () => {
-      const adapter = adapterOver(instance, { gameFolder });
+      const adapter = adapterOver(instance, { gameFolderSettingValue: game });
       const plugins = async (reread: Reread): Promise<ReadonlySet<string>> => expectKind((await adapter.reading(reread)).dataFolderPlugins, 'listed').names;
       await plugins(CHECK_THE_DISK);
       await link(join(game, 'Data', 'Fallout4.esm'), join(game, 'Fallout4.esm'));

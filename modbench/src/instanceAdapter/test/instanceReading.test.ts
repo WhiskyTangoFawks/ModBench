@@ -36,7 +36,7 @@ import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test
 import { adapterOver } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter, PluginsProvided } from '../instanceAdapter';
 import { settleWaitArmed } from '../../test/eventually';
-import { gameOnDisk } from './instanceOnDisk';
+import { downloadsUnresolvable, gameOnDisk } from './instanceOnDisk';
 
 const INI = 'ModOrganizer.ini';
 
@@ -110,7 +110,7 @@ describe('the instance assembled from a manager\'s reading', () => {
   it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
     await mkdir(join(dir, 'mods', 'Unlisted', 'meta.ini'), { recursive: true });
 
-    await expect(adapterOver(dir, { downloadsFolder: { kind: 'unresolved', reason: 'no downloads' } }).reading()).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
+    await expect(adapterOver(dir, { machine: await downloadsUnresolvable(dir) }).reading()).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
   });
 
   it.each<[string, (over: InstanceAdapter) => Promise<unknown>, unknown]>([

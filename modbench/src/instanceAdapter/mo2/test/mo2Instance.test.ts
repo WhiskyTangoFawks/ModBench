@@ -1,5 +1,5 @@
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
 import {
@@ -7,7 +7,6 @@ import {
 } from 'node:fs/promises';
 import { appendFileSync, writeFileSync, type PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
-import { NO_DETECTORS } from '../../../test/noDetectors';
 import { eventually, writtenAndHeard } from '../../../test/eventually';
 import { present } from '../../../ports/present';
 import { expectKind } from '../../../test/expectKind';
@@ -37,16 +36,17 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { basename, dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
-import { isInstance } from '../../openInstance';
+import { isInstance, thisMachine } from '../../openInstance';
 import {
   CHECK_THE_DISK, type InstanceAdapter, type InstanceReading, type OriginFiles, type Reread,
 } from '../../instanceAdapter';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  EntryRef, FileOrigin, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
+  EntryRef, FileOrigin, Machine, ManagerRunning, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
-import { adapterAsBuilt, installationFileMeta } from '../../test/instanceOnDisk';
+import { downloadsUnresolvable, installationFileMeta } from '../../test/instanceOnDisk';
+import { steamGameIn, steamIn, steamPrefixIn } from '../../test/steamOnDisk';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
@@ -57,8 +57,6 @@ import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, modFolderNames, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
 import { onPosix } from '../../../test/platform';
-
-type GameDetectors = NonNullable<AdapterAnswers['detectors']>;
 
 const INI = 'ModOrganizer.ini';
 const TRASH: MoveToTrash = (file) => rm(file);
@@ -138,40 +136,33 @@ describe('the MO2 Instance adapter', () => {
         try {
           await mkdir(join(game, 'Data'));
 
-          expect(await adapterOver(root, { gameFolderSettingValue: game, detectors: NO_DETECTORS }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
+          expect(await adapterOver(root, { gameFolderSettingValue: game }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
         } finally {
           await rm(game, { recursive: true, force: true });
         }
       });
 
-      it.each<[string, (library: string, steam: string) => Promise<{ game: string; reached: string; expected: object }>]>([
-        ['a Steam install that is not the game folder, beside it', async (library, steam) => {
-          const game = `${library}-stock`;
+      it.each<[string, (base: string, steam: string) => Promise<{ game: string; expected: object }>]>([
+        ['a Steam install that is not the game folder, beside it', async (base, steam) => {
+          const game = join(base, 'stock');
           await mkdir(join(game, 'Data'), { recursive: true });
-          return { game, reached: steam, expected: { root: game, steamRoot: steam } };
+          return { game, expected: { root: game, steamRoot: steam } };
         }],
-        ['a Steam install reached through a link to the game folder, as the game folder', async (library, steam) => {
-          const linked = `${library}-link`;
-          await symlink(library, linked);
-          return { game: steam, reached: join(linked, 'steamapps', 'common', 'Fallout 4'), expected: { root: steam } };
+        ['a Steam install the game folder reaches through a link, as the game folder', async (base) => {
+          const linked = join(base, 'link');
+          await symlink(join(base, 'library'), linked);
+          return { game: join(linked, 'steamapps', 'common', 'Fallout 4'), expected: { root: join(linked, 'steamapps', 'common', 'Fallout 4') } };
         }],
       ])('answers %s, with its depots', async (_case, arrange) => {
-        const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
-        try {
-          const steam = join(library, 'steamapps', 'common', 'Fallout 4');
-          await mkdir(join(steam, 'Data'), { recursive: true });
-          await writeAppManifestOfDepot(library);
-          const { game, reached, expected } = await arrange(library, steam);
-          const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(reached, 'Data') }) };
+        const base = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
+        onTestFinished(() => rm(base, { recursive: true, force: true }));
+        const machine = await steamIn(base);
+        await writeAppManifestOfDepot(join(base, 'library'));
+        const { game, expected } = await arrange(base, steamGameIn(base));
 
-          expect(await adapterOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
-            ...expected, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
-          });
-        } finally {
-          await rm(`${library}-link`, { force: true });
-          await rm(`${library}-stock`, { recursive: true, force: true });
-          await rm(library, { recursive: true, force: true });
-        }
+        expect(await adapterOver(root, { gameFolderSettingValue: game, machine }).gamePlace()).toEqual({
+          ...expected, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
+        });
       });
 
       it('answers none when the game folder is not found', async () => {
@@ -236,9 +227,9 @@ describe('the MO2 Instance adapter', () => {
         });
 
         it('answers why the downloaded files could not be read when the downloads folder is unresolved', async () => {
-          const unresolved = adapterOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'no such variable' } });
+          const unresolved = adapterOver(root, { machine: await downloadsUnresolvable(root) });
 
-          expect(await unresolved.downloadedFileAt(join(root, listed))).toEqual({ kind: 'unreadable', reason: 'no such variable' });
+          expect(await unresolved.downloadedFileAt(join(root, listed))).toEqual({ kind: 'unreadable', reason: expect.stringMatching(/^download_directory "D:\\downloads" could not be resolved/) as unknown });
         });
       });
     });
@@ -389,7 +380,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
-        const onThisMachine = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game') });
+        const onThisMachine = adapterOver(root, { machine: thisMachine });
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
           expect(await onThisMachine.managerRunning()).toEqual({ kind: 'running' });
@@ -398,22 +389,23 @@ describe('the MO2 Instance adapter', () => {
         }
       });
 
-      it('answers whether MO2 is running, or why Modbench cannot tell', async () => {
-        const runningOf = async (mo2Running: () => Promise<boolean>) => (await adapterOver(root, { mo2Running }).reading()).managerRunning;
-
-        expect([
-          await runningOf(() => Promise.resolve(false)),
-          await runningOf(() => Promise.reject(new Error('tasklist exited with code 1'))),
-        ]).toEqual([{ kind: 'notRunning' }, { kind: 'unknown', reason: 'tasklist exited with code 1' }]);
+      it.each<[string, Partial<Machine>, ManagerRunning]>([
+        ['not running on Linux, where no process runs it', { platform: 'linux', processes: () => Promise.resolve(['bash']) }, { kind: 'notRunning' }],
+        ['running on Linux, which keeps 15 characters of a process\'s name', { platform: 'linux', processes: () => Promise.resolve(['bash', 'ModOrganizer.ex']) }, { kind: 'running' }],
+        ['not running on Windows, where no process runs it', { platform: 'win32', processes: () => Promise.resolve(['explorer.exe']) }, { kind: 'notRunning' }],
+        ['running on Windows, its program named in any case', { platform: 'win32', processes: () => Promise.resolve(['explorer.exe', 'MODORGANIZER.EXE']) }, { kind: 'running' }],
+        ['unknown, with why, when the processes cannot be listed', { processes: () => Promise.reject(new Error('tasklist exited with code 1')) }, { kind: 'unknown', reason: 'tasklist exited with code 1' }],
+      ])('answers MO2 %s', async (_case, machine, running) => {
+        expect(await adapterOver(root, { machine }).managerRunning()).toEqual(running);
       });
 
       it('asks the platform whether MO2 is running on each call, even inside a read that trusts what is kept', async () => {
-        let running = false;
-        const adapter = adapterOver(root, { mo2Running: () => Promise.resolve(running) });
+        let processes: string[] = [];
+        const adapter = adapterOver(root, { machine: { platform: 'win32', processes: () => Promise.resolve(processes) } });
 
         const asked = await (await adapter.reading()).trustingKept(async () => {
           const before = await adapter.managerRunning();
-          running = true;
+          processes = ['ModOrganizer.exe'];
           return [before, await adapter.managerRunning()];
         });
 
@@ -422,10 +414,11 @@ describe('the MO2 Instance adapter', () => {
 
       it('asks again where the game is when the game path the settings hold or the Data folder changes, and whether MO2 is running only at a check of the disk', async () => {
         const game = join(root, 'game');
+        await mkdir(join(game, 'Data'), { recursive: true });
         const asked: string[] = [];
         const adapter = adapterOver(root, {
-          mo2Running: () => { asked.push('running'); return Promise.resolve(false); },
-          gameFolder: () => { asked.push('game'); return Promise.resolve({ kind: 'found', root: game, dataFolder: join(game, 'Data') }); },
+          machine: { processes: () => { asked.push('running'); return Promise.resolve([]); } },
+          gameFolderSettingValue: () => { asked.push('game'); return game; },
         });
         const askedBy = async (reread: Reread): Promise<string[]> => {
           asked.length = 0;
@@ -704,22 +697,34 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.changePluginOrder('No Such Profile', () => [])).rejects.toThrow(/ENOENT/);
     });
 
+    it('refuses a reading of a profile with no plugins.txt, as Mutagen refuses its load order, naming the file', async () => {
+      await rm(join(root, 'profiles', 'Default', 'plugins.txt'));
+
+      await expect(adapter.reading()).rejects.toThrow(join(root, 'profiles', 'Default', 'plugins.txt'));
+    });
+
     describe('the game folder\'s facts', () => {
       let game: string;
 
       beforeEach(async () => {
         game = await mkdtemp(join(tmpdir(), 'mo2-instance-data-'));
+        await mkdir(join(game, 'Data'));
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
 
-      const found = (dataFolder = join(game, 'Data')): GameFolder => ({ kind: 'found', root: game, dataFolder });
-      const readingOver = (gameFolder: GameFolder, answers: AdapterAnswers = {}): Promise<InstanceReading> => adapterOver(root, { ...answers, gameFolder }).reading();
+      const readingOver = (answers: AdapterAnswers = {}): Promise<InstanceReading> => adapterOver(root, { ...answers, gameFolderSettingValue: game }).reading();
 
-      it('answers the Data folder\'s plugins, files and archives unreadable, with why, when the Data folder cannot be listed', async () => {
-        const reading = await readingOver(found(join(game, 'Missing')));
+      onPosix.it('answers the Data folder\'s plugins, files and archives unreadable, with why, when the Data folder cannot be listed', async () => {
+        await chmod(join(game, 'Data'), 0);
+        let reading: InstanceReading;
+        try {
+          reading = await readingOver();
+        } finally {
+          await chmod(join(game, 'Data'), 0o755);
+        }
 
         expect([reading.dataFolderPlugins, reading.dataFolderFiles, reading.dataFolderArchives].map((fact) => expectKind(fact, 'unreadable').reason))
-          .toEqual([expect.stringMatching(/ENOENT/), expect.stringMatching(/ENOENT/), expect.stringMatching(/ENOENT/)]);
+          .toEqual([expect.stringMatching(/EACCES/), expect.stringMatching(/EACCES/), expect.stringMatching(/EACCES/)]);
       });
 
       describe('the game folder\'s plugins', () => {
@@ -730,7 +735,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(data, 'Patch.esp'), '');
           await writeFile(join(data, 'readme.txt'), '');
 
-          expect((await readingOver(found())).dataFolderPlugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
+          expect((await readingOver()).dataFolderPlugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
         });
 
         onPosix.it('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
@@ -739,7 +744,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(data, 'Foo.esp'), '');
           await writeFile(join(data, 'foo.esp'), '');
 
-          expect((await readingOver(found())).dataFolderPlugins).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+          expect((await readingOver()).dataFolderPlugins).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
         });
 
         it('answers no plugin that is a hard link, and hands over the link, a link being a deployed file', async () => {
@@ -749,7 +754,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(data, 'Own.esp'), '');
           await link(join(root, 'Real.esp'), join(data, 'Hard.esp'));
 
-          const { dataFolderPlugins, gameFolderLinks } = await readingOver(found());
+          const { dataFolderPlugins, gameFolderLinks } = await readingOver();
 
           expect([dataFolderPlugins, gameFolderLinks]).toEqual([{ kind: 'listed', names: new Set(['Own.esp']) }, 1]);
         });
@@ -761,7 +766,7 @@ describe('the MO2 Instance adapter', () => {
           await symlink(join(game, 'Real.esp'), join(data, 'Soft.esp'));
           await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
 
-          const { dataFolderPlugins, gameFolderLinks } = await readingOver(found());
+          const { dataFolderPlugins, gameFolderLinks } = await readingOver();
 
           expect([dataFolderPlugins, gameFolderLinks]).toEqual([{ kind: 'listed', names: new Set() }, 2]);
         });
@@ -774,7 +779,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(data, 'Fallout4 - Main.ba2'), '');
           await writeFile(join(data, 'F4SE', 'Plugins', 'X.dll'), '');
 
-          expect((await readingOver(found())).dataFolderFiles).toEqual({ kind: 'listed', files: new Map([
+          expect((await readingOver()).dataFolderFiles).toEqual({ kind: 'listed', files: new Map([
             ['fallout4 - main.ba2', { relativePath: 'Fallout4 - Main.ba2', path: join(data, 'Fallout4 - Main.ba2') }],
             ['f4se/plugins/x.dll', { relativePath: 'F4SE/Plugins/X.dll', path: join(data, 'F4SE/Plugins/X.dll') }],
           ]) });
@@ -786,7 +791,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(root, 'Real.dll'), '');
           await link(join(root, 'Real.dll'), join(data, 'F4SE', 'Hard.dll'));
 
-          const { dataFolderFiles, gameFolderLinks } = await readingOver(found());
+          const { dataFolderFiles, gameFolderLinks } = await readingOver();
 
           expect([dataFolderFiles, gameFolderLinks]).toEqual([{ kind: 'listed', files: new Map() }, 1]);
         });
@@ -796,12 +801,12 @@ describe('the MO2 Instance adapter', () => {
         it('answers the plugins the release\'s list names, in its order', async () => {
           await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
 
-          expect((await readingOver(found())).creationClubList)
+          expect((await readingOver()).creationClubList)
             .toEqual(['ccBGSFO4044-HellfirePowerArmor.esl', 'ccBGSFO4001-PipBoy(Black).esl']);
         });
 
         it('answers none when the game folder holds no list', async () => {
-          expect((await readingOver(found())).creationClubList).toEqual([]);
+          expect((await readingOver()).creationClubList).toEqual([]);
         });
 
         describe('the list the game gets when it runs', () => {
@@ -880,7 +885,7 @@ describe('the MO2 Instance adapter', () => {
         const profileFile = (name: string): string => join(root, 'profiles', 'Default', name);
         const localSettings = (on: boolean): Promise<void> => writeFile(profileFile('settings.ini'), `[General]\nLocalSettings=${on}\n`);
         const archiveListOf = async (answers: AdapterAnswers = {}): Promise<{ archives: readonly string[]; notes: readonly string[] }> => {
-          const { archiveList, archiveListNotes } = await readingOver(found(), answers);
+          const { archiveList, archiveListNotes } = await readingOver(answers);
           return { archives: archiveList, notes: archiveListNotes };
         };
 
@@ -899,7 +904,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(root, 'Deployed.ini'), '[Archive]\nsResourceArchiveList=Deployed.ba2\n');
           await link(join(root, 'Deployed.ini'), join(game, 'Fallout4_Default.ini'));
 
-          const { archiveList, gameFolderLinks } = await readingOver(found());
+          const { archiveList, gameFolderLinks } = await readingOver();
 
           expect([archiveList, gameFolderLinks]).toEqual([[], 1]);
         });
@@ -916,14 +921,13 @@ describe('the MO2 Instance adapter', () => {
 
         describe('while the profile keeps no game INIs of its own', () => {
           let myGames: string;
-          let detectors: GameDetectors;
+          let machine: Partial<Machine>;
 
           beforeEach(async () => {
-            const prefix = join(game, 'pfx');
-            const documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
+            const documents = join(steamPrefixIn(game), 'drive_c', 'users', 'steamuser', 'Documents');
             myGames = join(documents, 'My Games', 'Fallout4');
             await mkdir(myGames, { recursive: true });
-            detectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) };
+            machine = { ...await steamIn(game), documentsFolder: () => Promise.resolve(documents) };
             await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
             await localSettings(false);
           });
@@ -932,14 +936,14 @@ describe('the MO2 Instance adapter', () => {
             await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
             await writeFile(join(myGames, 'Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
 
-            expect(await archiveListOf({ detectors })).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+            expect(await archiveListOf({ machine })).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
           });
 
           it('reads a My Games INI that is a link, which is the user\'s own file and not the game folder\'s', async () => {
             await writeFile(join(root, 'Shared.ini'), '[Archive]\nsResourceArchiveList=Shared.ba2\n');
             await link(join(root, 'Shared.ini'), join(myGames, 'Fallout4.ini'));
 
-            const { archiveList, gameFolderLinks } = await readingOver(found(), { detectors });
+            const { archiveList, gameFolderLinks } = await readingOver({ machine });
 
             expect([archiveList, gameFolderLinks]).toEqual([['Shared.ba2', 'Default2.ba2'], 0]);
           });
@@ -947,7 +951,7 @@ describe('the MO2 Instance adapter', () => {
           it('reads none of the profile\'s INIs', async () => {
             await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
 
-            expect((await archiveListOf({ detectors })).archives).toEqual(['Default.ba2', 'Default2.ba2']);
+            expect((await archiveListOf({ machine })).archives).toEqual(['Default.ba2', 'Default2.ba2']);
           });
         });
 
@@ -971,7 +975,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
           await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
 
-          expect((await readingOver(found())).dataFolderArchives).toEqual({
+          expect((await readingOver()).dataFolderArchives).toEqual({
             kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
           });
         });
@@ -982,7 +986,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(game, 'Real.ba2'), '');
           await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Soft.ba2'));
 
-          const { dataFolderArchives, gameFolderLinks } = await readingOver(found());
+          const { dataFolderArchives, gameFolderLinks } = await readingOver();
 
           expect([dataFolderArchives, gameFolderLinks]).toEqual([{ kind: 'listed', archives: [], stringsFiles: [] }, 1]);
         });
@@ -997,7 +1001,7 @@ describe('the MO2 Instance adapter', () => {
           await link(join(root, 'Real.ba2'), join(data, 'Fallout4 - Hard.ba2'));
           await link(join(root, 'Fallout4_fr.STRINGS'), join(data, 'Strings', 'Fallout4_fr.STRINGS'));
 
-          const { dataFolderArchives, gameFolderLinks } = await readingOver(found());
+          const { dataFolderArchives, gameFolderLinks } = await readingOver();
 
           expect([dataFolderArchives, gameFolderLinks]).toEqual([{ kind: 'listed', archives: ['Fallout4 - Own.ba2'], stringsFiles: ['Strings/Fallout4_en.STRINGS'] }, 2]);
         });
@@ -1066,7 +1070,7 @@ describe('the MO2 Instance adapter', () => {
       const listedWith = async (patterns: Record<string, boolean>): Promise<InstanceAdapter> => {
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures', 'actors'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'actors', 'a.dds'), '');
-        const watched = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: watcherExcluding(patterns) });
+        const watched = adapterOver(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: watcherExcluding(patterns) });
         watched.subscribe(() => undefined);
         return watched;
       };
@@ -1102,7 +1106,7 @@ describe('the MO2 Instance adapter', () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-data-'));
         try {
           await mkdir(join(game, 'Data'));
-          const watched = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
+          const watched = adapterOver(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
           watched.subscribe(() => undefined);
 
           expect((await watched.reading()).unwatchedFolders).toEqual([{ folder: join(game, 'Data'), reason: EXCLUDED }]);
@@ -1120,7 +1124,7 @@ describe('the MO2 Instance adapter', () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-excluded-strings-'));
         try {
           await mkdir(join(game, 'Data', 'Strings'), { recursive: true });
-          const watched = adapterAsBuilt(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
+          const watched = adapterOver(root, { gameFolderSettingValue: game, watcherExclude: watcherExcluding({ '**/Data/**': true }) });
           watched.subscribe(() => undefined);
 
           await watched.reading();
@@ -1151,7 +1155,7 @@ describe('the MO2 Instance adapter', () => {
       it('watches everything whole, and names no folder, once the user stops excluding them', async () => {
         let excluded: Record<string, boolean> = { '**/textures/**': true, '**/*.dds': true };
         let settingChanged = (): void => undefined;
-        const watched = adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: { value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } } });
+        const watched = adapterOver(root, { gameFolderSettingValue: join(root, 'no game'), watcherExclude: { value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } } });
         await mkdir(join(root, 'mods', 'Harder VATS', 'textures'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'a.dds'), '');
         watched.subscribe(() => undefined);
@@ -1549,11 +1553,12 @@ describe('the MO2 Instance adapter', () => {
       let game: string;
       beforeEach(async () => {
         game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
+        await mkdir(join(game, 'Data'));
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
 
       const watchedFromPatchMod = async (): Promise<void> => {
-        const watched = adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } });
+        const watched = adapterOver(root, { gameFolderSettingValue: game });
         watched.subscribe(() => undefined);
         await watched.reading();
       };
@@ -1581,8 +1586,8 @@ describe('the MO2 Instance adapter', () => {
     ])('follows the release\'s default INI at the game folder\'s root, in any case, once read: %s heard %s', async (name, heard) => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-archives-'));
       try {
-        const found: GameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
-        const watched = adapterOver(root, { gameFolder: found });
+        await mkdir(join(game, 'Data'));
+        const watched = adapterOver(root, { gameFolderSettingValue: game });
         watched.subscribe(() => undefined);
 
         await watched.reading();
@@ -1594,14 +1599,14 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('follows the game\'s INIs in the My Games folder, in any case, while the profile keeps none of its own', async () => {
-      const prefix = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-my-games-'));
+      const base = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-my-games-'));
       try {
-        const documents = join(prefix, 'drive_c', 'users', 'steamuser', 'Documents');
+        const documents = join(steamPrefixIn(base), 'drive_c', 'users', 'steamuser', 'Documents');
         const myGames = join(documents, 'My Games', 'Fallout4');
         await mkdir(myGames, { recursive: true });
-        const found: GameFolder = { kind: 'found', root: prefix, dataFolder: join(prefix, 'Data') };
+        await mkdir(join(base, 'game', 'Data'), { recursive: true });
         const watched = adapterOver(root, {
-          gameFolder: found, detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
+          gameFolderSettingValue: join(base, 'game'), machine: { ...await steamIn(base), documentsFolder: () => Promise.resolve(documents) },
         });
         watched.subscribe(() => undefined);
 
@@ -1610,7 +1615,7 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(myGames, 'FALLOUT4CUSTOM.ini')).toBe(true);
         expect(fire(myGames, 'Fallout4Prefs.ini')).toBe(false);
       } finally {
-        await rm(prefix, { recursive: true, force: true });
+        await rm(base, { recursive: true, force: true });
       }
     });
 

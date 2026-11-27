@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { InstanceAdapter } from '../../instanceAdapter';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../../test/mo2/adapterOver';
-import { onPosix, onWindows } from '../../../test/platform';
+import { onPosix } from '../../../test/platform';
 import { instanceOnDisk } from '../../test/instanceOnDisk';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -33,21 +33,20 @@ const shortcutsFile = (entries: readonly Entry[]): Buffer => Buffer.concat([
 const APP_ID = 3_000_000_001;
 
 let instance: string;
-let adapter: InstanceAdapter;
 beforeAll(async () => {
   instance = await instanceOnDisk();
-  adapter = adapterOver(instance);
 });
 afterAll(() => rm(instance, { recursive: true, force: true }));
 
-onWindows.it('is none, and says so, as Modbench looks for no Steam on Windows', async () => {
-  expect(await adapter.nonSteamPrefix(instance)).toEqual({ why: 'Modbench looks for no Steam on this platform' });
+it('is none, and says so, as Modbench looks for no Steam on Windows', async () => {
+  expect(await adapterOver(instance, { machine: { platform: 'win32' } }).nonSteamPrefix(instance)).toEqual({ why: 'Modbench looks for no Steam on this platform' });
 });
 
 onPosix.describe('the prefix of the non-Steam game that runs a program in a folder, in the Steam of the home folder', () => {
   let root: string;
   let steam: string;
   let deployment: string;
+  let adapter: InstanceAdapter;
   const prefixIn = (library: string) => join(library, 'steamapps', 'compatdata', String(APP_ID), 'pfx');
   const shortcutsOf = async (user: string, entries: readonly Entry[]) => {
     await mkdir(join(steam, 'userdata', user, 'config'), { recursive: true });
@@ -56,15 +55,12 @@ onPosix.describe('the prefix of the non-Steam game that runs a program in a fold
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'prefix-'));
-    vi.stubEnv('HOME', join(root, 'home'));
+    adapter = adapterOver(instance, { machine: { platform: 'linux', homeFolder: join(root, 'home') } });
     steam = join(root, 'home', '.steam', 'steam');
     deployment = join(root, 'deployments', 'survival');
     await mkdir(deployment, { recursive: true });
   });
-  afterEach(async () => {
-    vi.unstubAllEnvs();
-    await rm(root, { recursive: true, force: true });
-  });
+  afterEach(() => rm(root, { recursive: true, force: true }));
 
   it('is the prefix in Steam\'s root, found by a program in the folder, quoted as Steam writes it', async () => {
     await shortcutsOf('1', [{ appid: 7, exe: '"/elsewhere/f4se_loader.exe"' }, { appid: APP_ID, exe: `"${join(deployment, 'f4se_loader.exe')}"` }]);

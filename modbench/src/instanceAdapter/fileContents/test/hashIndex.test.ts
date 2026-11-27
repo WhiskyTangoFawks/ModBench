@@ -15,7 +15,7 @@ import { adapterOver } from '../../../test/mo2/adapterOver';
 import type { GamePlace, InstallationFileReader, InstanceAdapter } from '../../instanceAdapter';
 import type { FileProblems } from '../../../ports/fileProblems';
 import { expectKind } from '../../../test/expectKind';
-import { adapterAsBuilt, mo2InstanceHolding } from '../../test/instanceOnDisk';
+import { mo2InstanceHolding } from '../../test/instanceOnDisk';
 
 const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
 const HASH_OF_BBBB = 'M5WSec/sW34=';
@@ -31,7 +31,7 @@ const reopened = (root: string, reader: InstallationFileReader = fakeInstallatio
   adapterOver(root, { installationFileReader: reader });
 
 const withProblems = (root: string, installationFileReader: InstallationFileReader, fileProblems: FileProblems): InstanceAdapter =>
-  adapterAsBuilt(root, { gameFolderSettingValue: join(root, 'game'), installationFileReader, fileProblems });
+  adapterOver(root, { gameFolderSettingValue: join(root, 'game'), installationFileReader, fileProblems });
 
 async function placed(path: string, body: string, at: Date = LONG_AGO): Promise<string> {
   await mkdir(dirname(path), { recursive: true });

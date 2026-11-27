@@ -59,9 +59,8 @@ describe('a rename while a recompute is reading', () => {
   it('keeps the renamed plugin\'s line, its place and its enabled state, and adds no line for the old name', async () => {
     root = cloneCorpusFixture();
     await mkdir(join(root, 'Game', 'Data'), { recursive: true });
-    const gameFolder = { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } as const;
-    const writer = adapterOver(root, { gameFolder });
-    const reader = sourceOver(root, { gameFolder });
+    const writer = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
+    const reader = sourceOver(root, { gameFolderSettingValue: join(root, 'Game') });
 
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });

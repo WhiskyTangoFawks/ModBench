@@ -1,18 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { onTestFinished } from 'vitest';
-import type { InstanceAdapter, WatcherExclude } from '../instanceAdapter';
-import { adapterForInstance } from '../openInstance';
+import type { InstanceAdapter, Machine } from '../instanceAdapter';
 import { adapterOver, type AdapterAnswers } from '../../test/mo2/adapterOver';
-import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
-import { watcherExcluding } from '../../test/watcherExclusion';
-import { hostWithoutGit } from '../../test/hostGitDouble';
-import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
-import { FOMOD_ENGINE } from '../../test/fomodEngine';
-import { DEPLOYED_PATH } from '../../test/deployedPath';
 
 /** MO2's settings naming `gameName`, the Default profile selected, and `general` lines added to [General]. */
 export const settingsNaming = (gameName = 'Fallout 4', ...general: string[]): string =>
@@ -64,20 +56,12 @@ export async function gameOnDisk(files: Readonly<Record<string, string | Buffer>
   return game;
 }
 
-type Options = Parameters<typeof adapterForInstance>[0];
-
-/** What a test fixes of the adapter the extension builds. Without `gameFolderSettingValue`, Steam is asked where the game is. */
-export type BuiltParts = Partial<Pick<Options, 'installationFileReader' | 'fileProblems' | 'fomodEngine'>> & {
-  readonly gameFolderSettingValue?: string;
-  readonly watcherExclude?: WatcherExclude;
-};
-
-/** The adapter as the extension builds it over `root`, asking this machine where Steam and the user's folders are and whether MO2 runs. */
-export const adapterAsBuilt = (root: string, { gameFolderSettingValue, watcherExclude = watcherExcluding(), ...parts }: BuiltParts = {}): InstanceAdapter => adapterForInstance({
-  instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue), watcherExclude, hostGit: hostWithoutGit,
-  installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
-  scriptEnvironmentFileSetting: () => undefined, ...parts,
-});
+/** Points the downloads folder of the instance at `root`, whose settings end in their [Settings] section, at a drive letter
+ *  Wine has no translation for; the machine on which it resolves to no folder. */
+export async function downloadsUnresolvable(root: string): Promise<Partial<Machine>> {
+  await appendFile(join(root, 'ModOrganizer.ini'), `download_directory=${qSettingsPath('D:\\downloads')}\r\n`);
+  return { platform: 'linux' };
+}
 
 /** A meta.ini that records the file a mod was installed from, as MO2 writes the path: a QSettings string, its backslashes escaped. */
 export const installationFileMeta = (path: string): string => `[General]\r\ninstallationFile=${path.replaceAll('\\', '\\\\')}\r\n`;
