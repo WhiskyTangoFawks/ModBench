@@ -132,7 +132,6 @@ class Ceiling(Reports):
 class Boxes(Reports):
     APPROVED = '[approved]\n"A.Two" = "r"\n"src/plugins/a.test.ts > one" = "r"\n"test_a (m.C.test_a)" = "r"\n'
     BUDGETS = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\nwebview = 1\n'
-    NO_WEBVIEW_BUDGET = 'other = 3\n[boxes]\n"B.Tests" = 4\nplugins = 2\n'
 
     def setUp(self) -> None:
         super().setUp()

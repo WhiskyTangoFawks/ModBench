@@ -249,7 +249,7 @@ if $HOLDS_SLOT; then
   || { echo "--- BACKEND TEST-ONLY CODE GATE FAILED ---"; FAILED=true; }
 fi
 
-# Last, so the wall time is the whole run's and its yellow flags end the verdict.
+# Last, so the wall time is the whole run's and its yellow flags fall in the verdict's last lines.
 echo "=== Test times and budget ==="
 python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" \
   "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" "${ALONE_ARGS[@]}" \

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Reads the test reports under a directory (see reports.py), names each test over 100 ms, and prints each
 box's summed test time and the run's wall time against its budget in the budget file. Once FAILS_THE_RUN is on,
-a Linux run fails on a test over the 1 s ceiling the file does not approve. The budgets fail nothing: each box over
-its budget or without one, each run over its wall budget and each approval that lapsed ends the report with a
-yellow flag for the developer."""
+a Linux run fails on a test over the 1 s ceiling the file does not approve. Nothing else fails: each approval that
+lapsed, each box over its budget or without one, and a run over its wall budget ends the report with a yellow flag
+for the developer."""
 import sys
 import tomllib
 from pathlib import Path
@@ -73,7 +73,7 @@ def box_times(results: list[reports.Result]) -> list[tuple[str, float]]:
     return sorted(times.items(), key=lambda box: -box[1])
 
 
-def over_budget(name: str, seconds: float, budget: float | None, digits: int) -> list[str]:
+def budget_flags(name: str, seconds: float, budget: float | None, digits: int) -> list[str]:
     took = f'{name} took {seconds:.{digits}f} s'
     if budget is None:
         return [f'{took}, and has no budget']
@@ -89,12 +89,12 @@ def report_budgets(times: list[tuple[str, float]], boxes: dict[str, float], othe
         print(f'{seconds:7.1f} s  {name}' if budget is None else f'{seconds:7.1f} s of {budget:4g} s  {name}')
     for box, seconds in no_box:
         print(f'  {seconds:7.1f} s  {box}')
-    return [flag for name, seconds, budget in judged for flag in over_budget(name, seconds, budget, 1)]
+    return [flag for name, seconds, budget in judged for flag in budget_flags(name, seconds, budget, 1)]
 
 
 def report_wall(elapsed: float, budget: float, run: str) -> list[str]:
     print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget')
-    return over_budget(f'the {run} run', elapsed, budget, 0)
+    return budget_flags(f'the {run} run', elapsed, budget, 0)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,7 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f'{seconds:7.2f} s  {name}')
     print(f'--- {len(slow)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
     times = box_times(results)
-    unapproved, flags = 0, []
+    unapproved = 0
+    flags: list[str] = []
     if run == WINDOWS:
         for box, seconds in times:
             print(f'{seconds:7.1f} s  {box}')
