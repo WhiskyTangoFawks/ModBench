@@ -3,12 +3,12 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, FileRead, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
-import { modValueOver } from '../../instanceAdapter/modValue';
 import type { FlaggedRead, Manifest, ManifestPackage, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type HashEntries, type StatusSource } from '../modStatuses';
 import { settled as until } from '../../test/eventually';
+import { modValueOf } from '../../test/fakeInstanceAdapter';
 
 type ArchiveEntries = StatusSource['archiveContents'] extends ReadonlyMap<string, infer Entries> ? Entries : never;
 
@@ -37,7 +37,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const reads: Parameters<typeof modValueOver>[0] = {
+const reads: Parameters<typeof modValueOf>[0] = {
   filesIn: async (folder) => (await readdir(folder).catch(() => [])).filter((name) => !name.endsWith('.manifest.json')),
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: async (path): ReturnType<typeof reads.originFileHash> => {
@@ -97,7 +97,7 @@ const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'folders
     : Promise.resolve(installationFiles.get(mod) ?? { kind: 'read', answer: undefined })),
   modValue: (folder, wanted, held) => {
     asked.push(basename(folder));
-    return modValueOver(reads, folder, wanted, held);
+    return modValueOf(reads)(folder, wanted, held);
   },
 };
 

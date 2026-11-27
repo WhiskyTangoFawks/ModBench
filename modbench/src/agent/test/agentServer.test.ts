@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held, reads: 0 }));
@@ -29,10 +29,10 @@ import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentS
 import type { Argument } from '../../wire/argument';
 import type { SymbolIndex } from '../../symbols/symbolIndex';
 import type { SymbolName } from '../../symbols/symbolKind';
-import type { InstanceValue } from '../../instanceLoader/instance';
-import type { ArchiveRead } from '../../instanceLoader/archiveContents';
+import type { ArchiveRead, InstanceValue } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { file as indexedFile, indexedValueOf, mod as indexedMod } from '../../mods/test/indexedValue';
 import { Refusal } from '../../drivingLib/refusal';
 import {
   buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackReusing, type ConflictEntry,
@@ -1118,6 +1118,44 @@ describe('the agent server, reading file order conflicts', () => {
         { file: 'skip.txt', excluded: true, gotten: false, publisherTags: [] },
       ],
     }]);
+  });
+
+  it('reads the state of each mod\'s copy of a file and of its row, with the copy\'s size and date, or why it cannot be read, as the conflict table shows them', async () => {
+    const names = ['High', 'Middle', 'Low'];
+    const hashes: Record<string, string[]> = { 'same.dds': ['a', 'a', 'a'], 'override.dds': ['b', 'b', 'a'], 'conflict.dds': ['c', 'b', 'a'], 'lost.dds': ['a', 'b', 'a'] };
+    const paths = Object.keys(hashes);
+    const at = (mod: string, path: string) => `/instance/${mod}/${path}`;
+    const value = await indexedValueOf(names.map((name) => indexedMod(name)), Object.fromEntries(names.map((name) => [name, { files: paths.map((path) => indexedFile(name, path)) }])));
+    Object.assign(copyAnswers, {
+      stamps: new Map(paths.flatMap((path) => names.flatMap((name, order) => (name === 'Middle' && path === 'lost.dds' ? []
+        : [[at(name, path), { size: 8n, modifiedNs: BigInt(order + paths.indexOf(path)) * 86_400_000_000_000n }] as const])))),
+      hashes: new Map(paths.flatMap((path) => names.map((name, order) => [at(name, path), { size: 8, hash: hashes[path]?.[order] ?? '' }] as const))),
+    });
+    onTestFinished(() => { delete copyAnswers.stamps; delete copyAnswers.hashes; });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    const day = (days: number) => days * 86_400_000;
+    const copies = (mod: string, files: [string, object][]) => ({ mod, files: files.map(([file, contents]) => ({ file, contents })) });
+    expect(await read(client, 'list_file_conflicts', { mods: names.map((name) => ({ name })) })).toMatchObject([
+      copies('High', [
+        ['conflict.dds', { state: 'ConflictWins', row: 'Conflict', size: 8, modified: day(2) }],
+        ['lost.dds', { state: null, row: null, size: 8, modified: day(3) }],
+        ['override.dds', { state: 'Override', row: 'Override', size: 8, modified: day(1) }],
+        ['same.dds', { state: 'IdenticalToMaster', row: 'NoConflict', size: 8, modified: day(0) }],
+      ]),
+      copies('Middle', [
+        ['conflict.dds', { state: 'ConflictLoses', row: 'Conflict', size: 8, modified: day(3) }],
+        ['lost.dds', { state: null, row: null, unreadable: 'no answer fixed for /instance/Middle/lost.dds' }],
+        ['override.dds', { state: 'Override', row: 'Override', size: 8, modified: day(2) }],
+        ['same.dds', { state: 'IdenticalToMaster', row: 'NoConflict', size: 8, modified: day(1) }],
+      ]),
+      copies('Low', [
+        ['conflict.dds', { state: 'Master', row: 'Conflict', size: 8, modified: day(4) }],
+        ['lost.dds', { state: null, row: null, size: 8, modified: day(5) }],
+        ['override.dds', { state: 'Master', row: 'Override', size: 8, modified: day(3) }],
+        ['same.dds', { state: 'Master', row: 'NoConflict', size: 8, modified: day(2) }],
+      ]),
+    ]);
   });
 
   it('refuses a name that means a mod and a separator, listing each as the agent can name it, and picks neither', async () => {

@@ -4,16 +4,19 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
+import { watchers } from './mo2/fakeVscodeWatcher';
 import { adapterOver } from './mo2/adapterOver';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 
-vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
+vi.mock('vscode', async () => {
+  const host = await import('../plugins/test/vscodeHost');
+  const watching = (await import('./mo2/fakeVscodeWatcher')).fakeVscodeModule();
+  return { ...host, RelativePattern: watching.RelativePattern, workspace: { ...host.workspace, createFileSystemWatcher: watching.workspace.createFileSystemWatcher } };
+});
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
-import { pluginSyncOn } from '../plugins/pluginSync';
+import { pluginsOver } from '../plugins/test/pluginsOver';
 import { pastSequence, watcherOver } from './mo2/instanceLoop';
 import { pluginSyncOver, type PluginSyncRun } from '../pluginCommands/plugins';
 import { present } from '../ports/present';
@@ -33,8 +36,10 @@ const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallo
 const roots: string[] = [];
 const instances: Instance[] = [];
 const toolboxes: ToolboxProvider[] = [];
+const views: { dispose(): void }[] = [];
 
 afterEach(async () => {
+  for (const view of views.splice(0)) view.dispose();
   for (const toolbox of toolboxes.splice(0)) toolbox.dispose();
   for (const instance of instances.splice(0)) instance.dispose();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
@@ -71,14 +76,14 @@ async function wiredInstance(): Promise<{
   instances.push(instance);
 
   const syncs: ReturnType<PluginSyncRun>[] = [];
-  pluginSyncOn({
-    instance, channel: { error: () => {}, info: () => {} },
+  views.push(pluginsOver({
+    instance, adapter,
     syncPlugins: () => {
       const run = pluginSyncOver(adapter, NOT_INDEXED)();
       syncs.push(run);
       return run;
     },
-  });
+  }));
   await instance.refresh();
   await syncs[syncs.length - 1];
 
@@ -142,14 +147,12 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     const adapter = adapterOver(root, { gameFolderSettingValue: join(root, 'Game') });
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace() });
     instances.push(instance);
-    const { pluginSync } = pluginSyncOn({
-      instance, channel: { error: () => {}, info: () => {} }, syncPlugins: pluginSyncOver(adapter, NOT_INDEXED),
-    });
+    const plugins = pluginsOver({ instance, adapter, syncPlugins: pluginSyncOver(adapter, NOT_INDEXED) });
+    views.push(plugins);
 
     await instance.refresh();
-    await pluginSync.settled();
 
-    expect([await pluginFiles(), pluginSync.message()]).toEqual([committed, undefined]);
+    expect([await pluginFiles(), plugins.output]).toEqual([committed, []]);
   });
 });
 
@@ -176,19 +179,18 @@ describe('the game folder not found, across the whole instance', () => {
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) }));
     const { modSync } = modSyncOn({ instance, channel, syncMods: modSyncOver(fake.adapter) });
-    const { pluginSync } = pluginSyncOn({ instance, channel, syncPlugins: pluginSyncOver(fake.adapter, NOT_INDEXED) });
+    const plugins = pluginsOver({ instance, adapter: fake.adapter, syncPlugins: pluginSyncOver(fake.adapter, NOT_INDEXED) });
+    views.push(plugins);
 
     await instance.refresh();
     await instance.refresh();
     await instance.refresh();
-    await pluginSync.settled();
     await modSync.settled();
 
-    expect(output).toEqual([
+    expect([output, plugins.output]).toEqual([[
       '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameFolder: not set; ' +
         "ModOrganizer.ini's gamePath: not set; the Steam install: the game is in no Steam library. " +
         'Set modbench.mods.gameFolder to the game folder to fix it.',
-    ]);
-    expect(pluginSync.message()).toBeUndefined();
+    ], []]);
   });
 });

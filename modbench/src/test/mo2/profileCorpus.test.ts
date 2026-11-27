@@ -28,7 +28,7 @@ describe('profile corpus', () => {
     assertOnlyChanged(before, after, new Set([INI]));
 
     expect(await readActiveProfile(dir)).toBe('Secondary');
-    expect((await readModlistEntries(dir, 'Secondary')).map((e) => e.name)).toEqual([
+    expect((await readModlistEntries(dir)).map((e) => e.name)).toEqual([
       'Unofficial Fallout 4 Patch',
       'Harder VATS',
     ]);

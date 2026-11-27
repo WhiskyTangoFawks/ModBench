@@ -12,6 +12,7 @@ import {
 import { DOWNLOADS_KEY_ARGS } from '../keyContext';
 import type { DownloadedFileRow, InstanceValue, LocatedDownloadedFileRow } from '../../instanceLoader/instance';
 import { ErrorNode } from '../../drivingLib/errorNode';
+import { downloadedFileArgumentOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -45,6 +46,12 @@ describe('a downloaded file row', () => {
 
     expect(shown).toMatchObject({ label: 'Sleep or Save', id: 'foo_1_2_3.zip', collapsibleState: TreeItemCollapsibleState.None });
     expect(await downloadsTree().treeDataProvider.getChildren(shown)).toEqual([]);
+  });
+
+  it('carries its downloaded file as the argument a gesture on the row takes, install from Downloads among them', async () => {
+    const shown = row('foo.7z');
+
+    expect(downloadedFileArgumentOf(await drawn(shown))).toEqual({ kind: 'downloadedFile', row: expect.objectContaining(shown) as unknown });
   });
 
   it.each<[DownloadedFileRow['status'], ThemeIcon]>([

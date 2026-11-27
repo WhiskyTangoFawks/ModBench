@@ -3,8 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import type * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../../instanceLoader/instance';
-import type { ArchiveRead } from '../../instanceLoader/archiveContents';
+import type { ArchiveRead, FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { TreeItemCollapsibleState, ThemeIcon, ThemeColor, FakeUri } from '../../test/vscodeMock';
 import { labelOf, modsViewOn } from './modsViewOn';

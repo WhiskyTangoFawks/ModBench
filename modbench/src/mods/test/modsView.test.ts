@@ -10,7 +10,6 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
 import { ModStatuses } from '../../modStatus/modStatuses';
-import { modValueOver } from '../../instanceAdapter/modValue';
 import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,6 +21,7 @@ import { AgentCall } from '../../drivingLib/agentGesture';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { modValueOf } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { settled } from '../../test/eventually';
 
@@ -29,7 +29,7 @@ const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () =>
   foldersHeldWhole: () => Promise.resolve(new Set()),
   filesHeldByGit: () => Promise.resolve(new Map()),
   installationFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  modValue: (folder, asked, heldByGit) => modValueOver({
+  modValue: modValueOf({
   filesIn: listing,
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
@@ -39,7 +39,7 @@ const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () =>
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
   sourceFolderTracked: () => Promise.resolve(false),
-  }, folder, asked, heldByGit),
+  }),
 });
 
 const currentBox = currentBoxOf(seen);

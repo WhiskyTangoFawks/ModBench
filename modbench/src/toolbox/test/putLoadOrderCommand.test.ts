@@ -16,7 +16,6 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { toldOf } from '../../instanceLoader/told';
 import { registerPutLoadOrder } from '../putLoadOrderCommand';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -81,7 +80,7 @@ describe('the instance read that signalled', () => {
     const signalling = subscribers.at(-1);
     let settled = false;
 
-    void Promise.resolve(signalling?.(instanceValueFixture(), 1, toldOf(instanceValueFixture(), instanceValueFixture(), { named: [], disk: true }, undefined))).then(() => { settled = true; });
+    void Promise.resolve(signalling?.(instanceValueFixture(), 1, { named: [], disk: true, before: instanceValueFixture(), changed: () => 'every' })).then(() => { settled = true; });
     await Promise.resolve();
     expect(settled).toBe(false);
 

@@ -71,6 +71,10 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
   };
 }
 
+/** An adapter's mod value, over the reads a test answers itself. */
+export const modValueOf = (reads: Parameters<typeof modValueOver>[0]): InstanceAdapter['modValue'] =>
+  (folder, asked, heldByGit) => modValueOver(reads, folder, asked, heldByGit);
+
 /** The MD5 the fake gives a downloaded file. */
 export const md5Of = (name: string): string => `md5-of-${name}`;
 
@@ -222,7 +226,8 @@ export interface FakeInstanceAdapter {
 
 const EXCLUSION_MARK = '.mohidden';
 
-const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
+/** The fake's key of an entry: a separator by its folder's name, each name without case. */
+export const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
 
 type FolderEntry = string | (EntryRef & { modName?: string });
 

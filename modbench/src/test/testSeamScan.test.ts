@@ -6,7 +6,14 @@ import { boxesIn } from './boxes';
 import { importSpecifiers, isTestSupport, plantedTree, productionFiles, resolved, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
-type PastTheSeamByBox = Map<string, string[]>;
+const NEEDS_AN_INTERNAL: Readonly<Record<string, string>> = {
+  'test/agentGestures.test.ts': 'reads the agent\'s table of gestures against the gestures the spec catalogs',
+  'test/fakeInstanceAdapter.ts': 'the Instance adapter\'s second adapter: it answers by the adapter\'s own rules, never a copy of them (ADR-0014)',
+  'test/fomodEngines/repeatsStep.ts': 'a FOMOD engine process speaks the protocol the Instance adapter speaks to its own process',
+  'test/mo2/fakeInstance.ts': 'a fake Instance tells a subscriber what changed as the Instance does',
+  'test/packageJson.test.ts': 'reads the manifest against the setting keys and the indicators the Mods view reads',
+  'test/scaleGate.ts': 'the scale gate counts the work at each layer: the Mods view\'s tree, decorations and conflict table, and each change Symbols hears; it writes its modlist through MO2\'s codec, as no test spells a format',
+};
 
 const modulesNamed = (file: string, specifiers: readonly string[]): string[] =>
   specifiers.flatMap((specifier) => resolved(file, specifier) ?? []);
@@ -14,38 +21,35 @@ const modulesNamed = (file: string, specifiers: readonly string[]): string[] =>
 const productionImports = (file: string): string[] =>
   modulesNamed(file, ts.preProcessFile(readFileSync(file, 'utf8'), true, true).importedFiles.map((imported) => imported.fileName));
 
-function pastTheSeam(src: string, webview: string): PastTheSeamByBox {
+function pastTheSeam(src: string, webview: string): Map<string, string[]> {
   const boxes = new Set(boxesIn(src).map((box) => box.name));
   const boxOf = (file: string): string | undefined => {
     const [top] = relative(src, file).split(sep);
     return top !== undefined && boxes.has(top) ? top : undefined;
   };
   const isTestSide = (file: string): boolean => isTestSupport(relative(src, file));
+  const name = (path: string): string => relative(src, path).split(sep).join('/');
   const seam = new Set([src, webview].flatMap(productionFiles)
     .flatMap((file) => productionImports(file).filter((target) => boxOf(target) !== boxOf(file))));
-  const past: PastTheSeamByBox = new Map();
-  for (const file of tsFiles(src).filter(isTestSide)) {
-    const box = boxOf(file);
-    if (box === undefined) continue;
+  return new Map(tsFiles(src).filter(isTestSide).sort().flatMap((file) => {
     const inside = modulesNamed(file, importSpecifiers(readFileSync(file, 'utf8'), file))
-      .filter((target) => boxOf(target) === box && !isTestSide(target) && !seam.has(target));
-    if (inside.length === 0) continue;
-    const name = (path: string): string => relative(src, path).split(sep).join('/');
-    past.set(box, [...(past.get(box) ?? []), `${name(file)}: ${[...new Set(inside.map(name))].sort().join(', ')}`].sort());
-  }
-  return new Map([...past].sort(([a], [b]) => a.localeCompare(b)));
+      .filter((target) => boxOf(target) !== undefined && !isTestSide(target) && !seam.has(target));
+    return inside.length === 0 ? [] : [[name(file), [...new Set(inside.map(name))].sort()] as const];
+  }));
 }
 
-const report = (past: PastTheSeamByBox): string => [...past]
-  .map(([box, files]) => [`${box}: ${files.length}`, ...files.map((file) => `  ${file}`), ''].join('\n'))
-  .join('');
+describe('a test file imports, of a box, only its seam: the files another box imports', () => {
+  const past = pastTheSeam(SRC, WEBVIEW_SRC);
 
-describe('a test file of a box imports, of its own box, only its seam: the files another box imports', () => {
-  it('reports each box\'s test files that import past its seam', () => {
-    process.stdout.write(report(pastTheSeam(SRC, WEBVIEW_SRC)));
+  it('names each test file that imports past a box\'s seam, but one the allowed list names', () => {
+    expect([...past].filter(([file]) => !(file in NEEDS_AN_INTERNAL)).map(([file, inside]) => `${file}: ${inside.join(', ')}`)).toEqual([]);
   });
 
-  it('names a planted test-side file that imports a file of its own box no other box\'s production code imports', () => {
+  it('allows no file that imports only seams', () => {
+    expect(Object.keys(NEEDS_AN_INTERNAL).filter((file) => !past.has(file))).toEqual([]);
+  });
+
+  it('names a planted test-side file that imports a box\'s file no other box\'s production code imports', () => {
     const root = plantedTree({
       'src/kernel/tsconfig.json': '{}',
       'src/kernel/codec.ts': "import { i } from './inner';\nexport const c = i;\n",
@@ -57,7 +61,7 @@ describe('a test file of a box imports, of its own box, only its seam: the files
       'src/view/test/view.test.ts': "import { i } from '../../kernel/inner';\n",
       'src/wiring.ts': "import { c } from './kernel/codec';\nexport const w = c;\n",
       'webview/src/Panel.tsx': "import { s } from '../../src/kernel/shown';\nexport const P = () => <div>{s}</div>;\n",
-      'src/test/shared.ts': "import { i } from '../kernel/inner';\nimport { w } from '../wiring';\nexport const d = i + w;\n",
+      'src/test/shared.ts': "import { i } from '../kernel/inner';\nimport { w } from '../wiring';\nimport { c } from '../kernel';\nexport const d = i + w + c;\n",
       'src/kernel/test/fakeInner.ts': 'export const f = 1;\n',
       'src/kernel/test/harness.ts': "import { i } from '../inner';\nexport const h = i;\n",
       'src/kernel/test/atTheSeam.test.ts': [
@@ -71,18 +75,12 @@ describe('a test file of a box imports, of its own box, only its seam: the files
       'src/kernel/test/inner.test.ts': "vi.mock('../inner', () => ({}));\n",
       'src/kernel/inner.test.ts': "import { i } from './inner';\n",
     });
-    const past = pastTheSeam(join(root, 'src'), join(root, 'webview', 'src'));
-    expect(past).toEqual(new Map([['kernel', [
-      'kernel/inner.test.ts: kernel/inner.ts',
-      'kernel/test/harness.ts: kernel/inner.ts',
-      'kernel/test/inner.test.ts: kernel/inner.ts',
-    ]]]));
-    expect(report(past)).toBe([
-      'kernel: 3',
-      '  kernel/inner.test.ts: kernel/inner.ts',
-      '  kernel/test/harness.ts: kernel/inner.ts',
-      '  kernel/test/inner.test.ts: kernel/inner.ts',
-      '',
-    ].join('\n'));
+    expect(pastTheSeam(join(root, 'src'), join(root, 'webview', 'src'))).toEqual(new Map([
+      ['kernel/inner.test.ts', ['kernel/inner.ts']],
+      ['kernel/test/harness.ts', ['kernel/inner.ts']],
+      ['kernel/test/inner.test.ts', ['kernel/inner.ts']],
+      ['test/shared.ts', ['kernel/inner.ts']],
+      ['view/test/view.test.ts', ['kernel/inner.ts']],
+    ]));
   });
 });

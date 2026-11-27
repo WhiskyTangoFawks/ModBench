@@ -26,6 +26,7 @@ import { FactsOfReading } from './factsOfReading';
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
+export type { ArchiveRead } from './archiveContents';
 export type { PapyrusScript } from './papyrusScripts';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
