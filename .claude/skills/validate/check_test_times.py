@@ -41,17 +41,20 @@ def lapsed(results: list[reports.Result], approved: dict[str, str]) -> list[tupl
 
 
 def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> int:
-    """The number of tests over the ceiling no approval names. A test that ran again alone is judged on that run,
-    where the first to run has no time of its own: it neither fails nor lapses."""
-    again = {result.name for result in alone}
+    """The number of tests over the ceiling no approval names. A test that ran again alone is judged on its fastest run
+    there."""
+    fastest: dict[str, reports.Result] = {}
+    for result in alone:
+        kept = fastest.get(result.name)
+        if kept is None or (result.seconds is not None and (kept.seconds is None or result.seconds < kept.seconds)):
+            fastest[result.name] = result
+    again = set(fastest)
     ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in again}
-    judged = [result for result in results if result.name not in again] + alone
+    judged = [result for result in results if result.name not in again] + list(fastest.values())
     unapproved = [(name, seconds) for name, seconds in slow_tests(judged)
                   if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
     for name, seconds in unapproved:
         print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in again else ""}, NOT APPROVED')
-    for name in sorted(ran_again & {result.name for result in alone if result.seconds is None and result.outcome == reports.RAN}):
-        print(f'{"":11}{name}: RAN FIRST ALONE, SO ITS TIME THERE IS THE WARM-UP')
     lapses = lapsed(judged, approved)
     for name, seconds in lapses:
         print(f'{seconds:7.2f} s  {name}: APPROVAL LAPSED')

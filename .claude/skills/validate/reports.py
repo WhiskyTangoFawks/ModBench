@@ -31,8 +31,7 @@ class Result(NamedTuple):
 
 def in_trx(text: str) -> list[Result]:
     """Time runs from the result's start or the first result's end, whichever is later: the warm-up blocks
-    every thread, and the first result is charged nothing. In a run one test at a time the first result holds
-    the warm-up alone, so it has no time of its own."""
+    every thread. A run one test at a time blocks none, so each result is charged its whole duration."""
     run = ET.fromstring(text)
     elements = list(run.iterfind('.//t:UnitTestResult', TRX))
     projects = {test.attrib['id']: PureWindowsPath(next(test.iterfind('t:TestMethod', TRX)).attrib['codeBase']).stem
@@ -48,17 +47,23 @@ def in_trx(text: str) -> list[Result]:
     spans = [span(element) for element in elements]
     timed = [times for times in spans if times]
     warmed = min((end for _, end in timed), default=None)
-    one_at_a_time = sum(start < end for start, end in timed if warmed and start < warmed) <= 1
+    blocked = warmed if warmed and sum(start < warmed for start, _ in timed) > 1 else None
 
     def seconds(times: tuple[datetime, datetime] | None) -> float | None:
-        if times is None or warmed is None or (one_at_a_time and times[1] == warmed):
+        if times is None:
             return None
         start, end = times
-        return (end - max(start, warmed)).total_seconds()
+        return (end - (max(start, blocked) if blocked else start)).total_seconds()
 
     return [Result(result.attrib['testName'], SKIPPED if result.get('outcome') == 'NotExecuted' else RAN,
                    seconds(times), projects[result.attrib['testId']])
             for result, times in zip(elements, spans)]
+
+
+def ran_first(text: str) -> str | None:
+    """The name of a TRX run's first result to end: in a run one test at a time, the one that paid the warm-up."""
+    ended = [result for result in ET.fromstring(text).iterfind('.//t:UnitTestResult', TRX) if 'endTime' in result.attrib]
+    return min(ended, key=lambda result: datetime.fromisoformat(result.attrib['endTime'])).attrib['testName'] if ended else None
 
 
 def frontend_box(path: str) -> str:
@@ -104,8 +109,9 @@ def in_mocha(text: str, box: str) -> list[Result]:
             + [Result(name, RAN, int(ms) / 1000, box) for name, ms in MOCHA_PASSED.findall(text)])
 
 
-READERS = {'.trx': lambda text, _: in_trx(text), '.json': lambda text, _: in_vitest(text),
-           '.unittest': in_unittest, '.mocha': in_mocha}
+TRX_REPORT, VITEST_REPORT, UNITTEST_REPORT, MOCHA_REPORT = '.trx', '.json', '.unittest', '.mocha'
+READERS = {TRX_REPORT: lambda text, _: in_trx(text), VITEST_REPORT: lambda text, _: in_vitest(text),
+           UNITTEST_REPORT: in_unittest, MOCHA_REPORT: in_mocha}
 
 
 def by_kind(directory: Path) -> dict[str, list[Result]]:

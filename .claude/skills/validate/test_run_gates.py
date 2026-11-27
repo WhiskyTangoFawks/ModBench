@@ -308,7 +308,7 @@ class TimeReport(FakeDotnet):
     def test_the_switch_of_the_time_budgets_fails_a_run_with_a_box_over_its_budget(self) -> None:
         self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
         run, _ = self.run_after_changing("MEditService/MEditService.Http/a.cs", "--backend", FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
+        self.assertIn("    5.1 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.1 s\n", run.stdout)
         self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
         self.assertEqual(run.returncode, 1)
 
@@ -365,7 +365,7 @@ class MergeToMain(FakeDotnet):
     def test_a_box_over_its_budget_fails_the_run_once_the_switch_is_on_and_the_wall_time_reads_against_the_merge_budget(self):
         self.plant_an_http_tests_budget_of_4_s_and_switch_it_on()
         run, _ = self.run_after_changing("spec/a.d2", self.MODE, FAKE_TRX=self.trx("Passed", 5))
-        self.assertIn("    5.0 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.0 s\n", run.stdout)
+        self.assertIn("    5.1 s of    4 s  MEditService.Http.Tests: OVER BUDGET by 1.1 s\n", run.stdout)
         self.assertRegex(run.stdout, r"Wall time \d+ s of 600 s budget\n")
         self.assertIn("--- TEST TIME REPORT FAILED ---", run.stdout)
         self.assertEqual(run.returncode, 1)

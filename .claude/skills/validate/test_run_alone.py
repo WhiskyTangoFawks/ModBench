@@ -20,38 +20,79 @@ def ran(name: str, seconds: float, box: str) -> Result:
     return Result(name, RAN, seconds, box)
 
 
-class Commands(unittest.TestCase):
-    def test_a_backend_test_over_1_s_runs_again_by_its_method_in_its_own_project_one_at_a_time(self) -> None:
-        results = [ran('A.C.Slow', 1.5, 'MEditService.A.Tests'), ran('A.C.Theory(case: 1)', 2, 'MEditService.A.Tests'),
-                   ran('A.C.Theory(case: 2)', 3, 'MEditService.A.Tests'), ran('A.C.Quick', 0.9, 'MEditService.A.Tests'),
-                   ran('B.C.Slow', 2, 'MEditService.B.Tests')]
-        self.assertEqual(run_alone.commands(ROOT, ALONE, {'.trx': results}), [
-            run_alone.Command(ROOT / 'MEditService', [
-                'dotnet', 'test', box, '--no-build', '-v', 'quiet', '--logger', 'trx', '--results-directory', '/alone/backend',
-                '--filter', methods, '--', 'xUnit.ParallelizeTestCollections=false'])
-            for box, methods in (('MEditService.A.Tests', 'FullyQualifiedName=A.C.Slow|FullyQualifiedName=A.C.Theory'),
-                                 ('MEditService.B.Tests', 'FullyQualifiedName=B.C.Slow'))])
+class Backend(unittest.TestCase):
+    """A planted backend run under load, and a fake dotnet test that writes each run's TRX in the order given."""
 
+    def setUp(self) -> None:
+        self.dir = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (self.dir / 'reports').mkdir()
+        self.runs: list[list[str]] = []
+
+    @staticmethod
+    def one_at_a_time(*tests: tuple[str, float]) -> str:
+        """A TRX of the tests run one after another, first first, each with its seconds."""
+        ends = [sum(seconds for _, seconds in tests[:index + 1]) for index in range(len(tests))]
+        return fx.trx(*(fx.trx_result(name, end, seconds, project='MEditService.A.Tests') for (name, seconds), end in zip(tests, ends)))
+
+    def load(self, *tests: tuple[str, float]) -> None:
+        (self.dir / 'reports' / 'load.trx').write_text(self.one_at_a_time(*tests))
+
+    def again(self, *orders: list[tuple[str, float]]) -> list[list[str]]:
+        """Each order is a run's tests, first first, with its seconds alone."""
+        def execute(command: run_alone.Command) -> bool:
+            self.runs.append(command.argv)
+            results = pathlib.Path(command.argv[command.argv.index('--results-directory') + 1])
+            results.mkdir(parents=True, exist_ok=True)
+            report = results / f'{len(self.runs)}.trx'
+            report.write_text(self.one_at_a_time(*orders[len(self.runs) - 1]))
+            os.utime(report, (len(self.runs), len(self.runs)))
+            return True
+        run_alone.again(ROOT, self.dir / 'reports', self.dir / 'alone', execute)
+        return [argv[argv.index('--filter') + 1].split('|') for argv in self.runs]
+
+    def test_each_backend_test_over_1_s_runs_again_by_its_method_in_one_process_of_its_project_one_at_a_time(self) -> None:
+        self.load(('A.C.Slow', 1.5), ('A.C.Theory(case: 1)', 2), ('A.C.Quick', 0.9))
+        self.again([('A.C.Quick', 0.5), ('A.C.Slow', 0.5)])
+        self.assertEqual(self.runs, [['dotnet', 'test', 'MEditService.A.Tests', '--no-build', '-v', 'quiet', '--logger', 'trx',
+                                      '--results-directory', str(self.dir / 'alone/backend/MEditService.A.Tests'), '--filter',
+                                      'FullyQualifiedName=A.C.Slow|FullyQualifiedName=A.C.Theory', '--',
+                                      'xUnit.ParallelizeTestCollections=false']])
+
+    def test_a_first_test_over_1_s_runs_again_beside_another_until_another_runs_first(self) -> None:
+        self.load(('A.C.Slow', 1.5), ('A.C.Other', 2))
+        self.assertEqual(self.again([('A.C.Slow', 3), ('A.C.Other', 0.5)], [('A.C.Slow', 3), ('A.C.Other', 0.5)],
+                                    [('A.C.Other', 0.5), ('A.C.Slow', 0.4)]),
+                         [['FullyQualifiedName=A.C.Other', 'FullyQualifiedName=A.C.Slow']]
+                         + [['FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.C.Other']] * 2)
+
+    def test_a_lone_test_over_1_s_runs_again_beside_its_projects_fastest_and_stops_after_two_more_runs(self) -> None:
+        self.load(('A.C.Slow', 1.5), ('A.D.Fast', 0.01), ('A.D.Faster', 0.001))
+        self.assertEqual(self.again(*[[('A.C.Slow', 3)]] * 3),
+                         [['FullyQualifiedName=A.C.Slow']] + [['FullyQualifiedName=A.C.Slow', 'FullyQualifiedName=A.D.Faster']] * 2)
+
+
+class Others(unittest.TestCase):
     def test_a_unittest_over_1_s_runs_again_by_its_id_in_its_folder_leaving_its_log(self) -> None:
         results = [ran('test_a (test_m.C.test_a)', 1.5, 'validate'), ran('test_b (test_m.C.test_b)', 0.5, 'validate')]
-        self.assertEqual(run_alone.commands(ROOT, ALONE, {'.unittest': results}), [run_alone.Command(
+        self.assertEqual(run_alone.others({'.unittest': results}, ROOT, ALONE), [run_alone.Command(
             ROOT / '.claude/skills/validate', ['python3', '-m', 'unittest', '-v', '--durations', '0', 'test_m.C.test_a'],
             ALONE / 'validate.unittest')])
 
     def test_the_vitest_tests_over_1_s_run_again_in_one_run_of_their_files_one_file_at_a_time_matching_each_whole_name(self) -> None:
         results = [ran('a.test.ts > the box (one) works', 1.5, 'plugins'), ran('b.test.tsx > two', 2, 'webview'),
                    ran('a.test.ts > quick', 0.5, 'plugins')]
-        self.assertEqual(run_alone.commands(ROOT, ALONE, {'.json': results}), [run_alone.Command(ROOT / 'modbench', [
+        self.assertEqual(run_alone.others({'.json': results}, ROOT, ALONE), [run_alone.Command(ROOT / 'modbench', [
             'npx', 'vitest', 'run', '--no-file-parallelism', '--reporter=json', '--outputFile.json=/alone/unit.json',
             '-t', r'^(the\ box\ \(one\)\ works|two)$', '/a.test.ts', '/b.test.tsx'])])
 
     def test_an_integration_test_does_not_run_again(self) -> None:
-        self.assertEqual(run_alone.commands(ROOT, ALONE, {'.mocha': [ran('watches a folder', 7, 'integration')]}), [])
+        self.assertEqual(run_alone.others({'.mocha': [ran('watches a folder', 7, 'integration')]}, ROOT, ALONE), [])
 
 
 class Main(unittest.TestCase):
     """A planted gate runner test over 1 s that fails when the merge-to-main mode reaches it, or always."""
-    TEST = 'import os, unittest\nclass C(unittest.TestCase):\n    def test_a(self):\n        self.assertNotIn("MEDIT_MERGE_TO_MAIN", os.environ){}\n'
+    TEST = ('import os, unittest\nclass C(unittest.TestCase):\n    def test_a(self):\n'
+            '        self.assertNotIn("MEDIT_MERGE_TO_MAIN", os.environ){}\n')
 
     def run_alone(self, also: str) -> tuple[int, str, pathlib.Path]:
         root = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))

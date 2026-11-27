@@ -38,7 +38,7 @@ class Reports(unittest.TestCase):
 
 class SlowTests(Reports):
     def test_a_test_over_100_ms_is_named_with_its_time_and_one_under_it_is_not(self) -> None:
-        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0.05), fx.trx_result('A.Under', 5, 0.09), fx.trx_result('A.Over', 9, 0.11)))
+        self.report('a.trx', fx.trx(fx.trx_result('A.Under', 5, 0.09), fx.trx_result('A.Over', 9, 0.11)))
         self.assertEqual(ctt.slow_tests(reports.results(self.dir)), [('A.Over', 0.11)])
 
     def test_a_test_with_no_time_is_not_named(self):
@@ -53,7 +53,7 @@ class SlowTests(Reports):
 
 class Main(Reports):
     def test_it_names_each_test_over_100_ms_with_its_time_and_not_the_others(self) -> None:
-        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0.05), fx.trx_result('A.Quick', 5, 0.05), fx.trx_result('A.Slow', 100, 0.25)))
+        self.report('a.trx', fx.trx(fx.trx_result('A.Quick', 5, 0.05), fx.trx_result('A.Slow', 100, 0.25)))
         _, printed = self.main(100)
         self.assertIn('   0.25 s  A.Slow\n--- 1 TESTS OVER 100 ms ---\n', printed)
         self.assertNotIn('A.Quick', printed)
@@ -81,15 +81,15 @@ class Ceiling(Reports):
 
     def setUp(self) -> None:
         super().setUp()
-        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0.05), fx.trx_result('A.Unapproved', 5, 2), fx.trx_result('A.SlowAlone', 5, 3),
-                                    fx.trx_result('A.FastAlone', 5, 2), fx.trx_result('A.FastAloneApproved', 5, 2),
+        self.report('a.trx', fx.trx(fx.trx_result('A.First', 1, 0.05), fx.trx_result('A.Unapproved', 5, 2),
+                                    fx.trx_result('A.SlowAlone', 5, 3), fx.trx_result('A.FastAlone', 5, 2), fx.trx_result('A.FastAloneApproved', 5, 2),
                                     fx.trx_result('A.Theory(case: 1)', 6, 2.5), fx.trx_result('A.Theory(case: 2)', 6, 1.5),
-                                    fx.trx_result('A.Lapsed', 6, 0.4), fx.trx_result('A.FirstAlone', 6, 2)))
+                                    fx.trx_result('A.Lapsed', 6, 0.4)))
         alone = tempfile.TemporaryDirectory()
         self.addCleanup(alone.cleanup)
         self.alone = pathlib.Path(alone.name)
         (self.alone / 'a.trx').write_text(fx.trx(
-            fx.trx_result('A.FirstAlone', 1, 1), fx.trx_result('A.Unapproved', 3, 1.5), fx.trx_result('A.SlowAlone', 5, 2),
+            fx.trx_result('A.Unapproved', 3, 1.5), fx.trx_result('A.SlowAlone', 5, 2),
             fx.trx_result('A.FastAlone', 6, 0.5), fx.trx_result('A.FastAloneApproved', 7, 0.5),
             fx.trx_result('A.Theory(case: 1)', 9, 1.5), fx.trx_result('A.Theory(case: 2)', 10, 0.5)))
 
@@ -99,10 +99,9 @@ class Ceiling(Reports):
     def test_it_names_each_test_over_the_ceiling_no_approval_names_by_its_own_or_its_theorys_and_each_approval_that_lapsed(self) -> None:
         """A.NotRun's approval did not run, so it did not lapse; A.Theory's lapses only once all its cases run under 1 s alone."""
         self.assertIn('   1.50 s  A.Unapproved: OVER THE 1 s CEILING ALONE, NOT APPROVED\n'
-                      '           A.FirstAlone: RAN FIRST ALONE, SO ITS TIME THERE IS THE WARM-UP\n'
                       '   0.50 s  A.FastAloneApproved: APPROVAL LAPSED\n'
                       '   0.40 s  A.Lapsed: APPROVAL LAPSED\n'
-                      '--- 7 TESTS OVER 1 s RUN AGAIN ALONE, 1 OVER THE CEILING NOT APPROVED, 2 APPROVALS LAPSED ---\n',
+                      '--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 1 OVER THE CEILING NOT APPROVED, 2 APPROVALS LAPSED ---\n',
                       self.judged(self.APPROVALS)[1])
 
     def test_an_unapproved_test_over_the_ceiling_fails_the_run_once_the_switch_is_on_and_a_lapse_never_does(self) -> None:
@@ -110,6 +109,14 @@ class Ceiling(Reports):
         for budgets, switch, status in ((self.APPROVALS, False, 0), (self.APPROVALS, True, 1), (all_approved, True, 0)):
             with self.subTest(budgets=budgets, switch=switch), mock.patch.object(ctt, 'FAILS_THE_RUN', switch):
                 self.assertEqual(self.judged(budgets)[0], status)
+
+    def test_a_test_that_ran_alone_twice_is_judged_on_its_faster_run(self) -> None:
+        (self.alone / 'b.trx').write_text(fx.trx(fx.trx_result('A.Unapproved', 3, 0.5)))
+        self.assertIn('--- 6 TESTS OVER 1 s RUN AGAIN ALONE, 0 OVER THE CEILING NOT APPROVED', self.judged(self.APPROVALS)[1])
+
+    def test_a_test_slow_alone_that_ran_again_by_itself_fails(self) -> None:
+        (self.alone / 'a.trx').write_text(fx.trx(fx.trx_result('A.Unapproved', 3, 1.5)))
+        self.assertIn('   1.50 s  A.Unapproved: OVER THE 1 s CEILING ALONE, NOT APPROVED\n', self.judged(self.APPROVALS)[1])
 
     def test_a_test_over_the_ceiling_under_load_that_did_not_run_again_alone_is_judged_on_its_time_under_load(self) -> None:
         (self.alone / 'a.trx').unlink()
