@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -36,16 +35,15 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const onDisk = () => readdirSync(root, { recursive: true, withFileTypes: true });
+let written: Map<string, Record<string, string>>;
 
 const answers: InstanceAnswers = {
   get folderFiles() {
-    const folders = onDisk().filter((entry) => entry.isDirectory()).map((entry) => join(entry.parentPath, entry.name));
-    return new Map(folders.map((folder) => [folder, readdirSync(folder)]));
+    return new Map([...written].map(([folder, files]) => [folder, Object.keys(files)]));
   },
   get hashes() {
-    const files = onDisk().filter((entry) => entry.isFile()).map((entry) => join(entry.parentPath, entry.name));
-    return hashingContents ? new Map(files.map((path) => [path, { hash: readFileSync(path, 'utf8'), size: 0 }])) : undefined;
+    const files = [...written].flatMap(([folder, held]) => Object.entries(held).map(([file, text]) => [join(folder, file), { hash: text, size: 0 }] as const));
+    return hashingContents ? new Map(files) : undefined;
   },
   get downloadedFiles() {
     return new Map([...downloads].map(([name, download]) => [name, { kind: 'read', answer: { ...download, path: name, size: 1 } }] as const));
@@ -53,7 +51,10 @@ const answers: InstanceAnswers = {
 };
 
 let fake: FakeInstanceAdapter;
-beforeEach(() => { fake = fakeInstanceAdapter(readingFixture(), answers); });
+beforeEach(() => {
+  written = new Map();
+  fake = fakeInstanceAdapter(readingFixture(), answers);
+});
 
 const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };
 
@@ -61,6 +62,7 @@ async function folderOf(name: string, files: Record<string, string> = {}): Promi
   const folder = join(root, 'mods', name);
   await mkdir(folder, { recursive: true });
   await Promise.all(Object.entries(files).map(([file, text]) => writeFile(join(folder, file), text)));
+  written.set(folder, files);
   return folder;
 }
 
