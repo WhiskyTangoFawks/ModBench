@@ -14,7 +14,10 @@ export {
 };
 
 type Handler = (...args: unknown[]) => unknown;
-type Decorations = { provideFileDecoration: (uri: unknown) => vscode.ProviderResult<vscode.FileDecoration> };
+type Decorations = {
+  provideFileDecoration: (uri: unknown) => vscode.ProviderResult<vscode.FileDecoration>;
+  onDidChangeFileDecorations?: (listener: (changed: unknown) => void) => unknown;
+};
 type Lenses = { provideCodeLenses: (document: { uri: unknown; getText: () => string }) => vscode.CodeLens[] };
 type Actions = { provideCodeActions: (document: { uri: unknown }, range: Range, context: { diagnostics: readonly unknown[] }) => vscode.ProviderResult<CodeAction[]> };
 
@@ -52,6 +55,11 @@ const statusBarItems: StatusBarItem[] = [];
 const quickPicks: { items: string[]; placeHolder: string | undefined; canPickMany: boolean }[] = [];
 const files = new Map<string, string>();
 const progress: string[] = [];
+const collections = new Map<string, FakeDiagnosticCollection>();
+const contexts: [string, unknown][] = [];
+const opened: unknown[] = [];
+const shown: unknown[] = [];
+const inputBoxes: FakeInputBox[] = [];
 const checkboxListeners: ((event: { items: readonly [unknown, number][] }) => unknown)[] = [];
 let pick: (labels: readonly string[]) => string | readonly string[] | undefined = () => undefined;
 
@@ -60,7 +68,10 @@ const labelOf = (item: string | vscode.QuickPickItem) => (typeof item === 'strin
 
 export const commands = {
   registerCommand: (id: string, handler: Handler) => { commandHandlers.set(id, handler); return new Disposable(() => { commandHandlers.delete(id); }); },
-  executeCommand: () => Promise.resolve(),
+  executeCommand: (id: string, ...args: unknown[]) => {
+    if (id === 'setContext') contexts.push([String(args[0]), args[1]]);
+    return Promise.resolve();
+  },
 };
 
 export const window = {
@@ -92,21 +103,28 @@ export const window = {
     return offered.find((item) => labelOf(item) === picked);
   },
   showInputBox: () => Promise.resolve(undefined),
-  showTextDocument: () => Promise.resolve(),
-  createInputBox: () => new FakeInputBox(),
+  showTextDocument: (document: unknown) => { shown.push(document); return Promise.resolve(); },
+  createInputBox: () => { const box = new FakeInputBox(); inputBoxes.push(box); return box; },
   setStatusBarMessage: () => new Disposable(() => undefined),
 };
 
 export const workspace = {
   findFiles: (glob: string) => Promise.resolve([...files.keys()].filter((name) => glob !== '**/*.sql' || name.endsWith('.sql')).map((name) => Uri.file(`/workspace/${name}`))),
-  openTextDocument: (target: { path: string } | { language: string }): Promise<{ uri: unknown; getText: () => string }> => Promise.resolve('language' in target
-    ? { uri: uriParse('untitled:Untitled-1'), getText: () => '' }
-    : { uri: target, getText: () => files.get(workspacePath(target.path)) ?? '' }),
+  openTextDocument: (target: { path: string } | { language: string }): Promise<{ uri: unknown; getText: () => string }> => {
+    opened.push(target);
+    return Promise.resolve('language' in target
+      ? { uri: uriParse('untitled:Untitled-1'), getText: () => '' }
+      : { uri: target, getText: () => files.get(workspacePath(target.path)) ?? '' });
+  },
   asRelativePath: (uri: { path: string }) => workspacePath(uri.path),
 };
 
 export const languages = {
-  createDiagnosticCollection: () => new FakeDiagnosticCollection(),
+  createDiagnosticCollection: (name: string) => {
+    const collection = new FakeDiagnosticCollection();
+    collections.set(name, collection);
+    return collection;
+  },
   registerCodeLensProvider: (_selector: unknown, provider: Lenses) => { lenses.push(provider); return new Disposable(() => undefined); },
   registerCodeActionsProvider: (_selector: unknown, provider: Actions) => { actions.push(provider); return new Disposable(() => undefined); },
 };
@@ -122,6 +140,12 @@ export const host = {
   treeView: (id?: string) => treeViews.view(id),
   /** What each decoration provider draws on the row at `uri`, in registration order. */
   decorate: (uri: unknown) => Promise.all(decorations.map((provider) => Promise.resolve(provider.provideFileDecoration(uri)))),
+  /** Each redraw of decorations a provider asks of VS Code: the URIs it names, or undefined for every row. */
+  decorationChanges: () => {
+    const changes: unknown[] = [];
+    for (const provider of decorations) provider.onDidChangeFileDecorations?.((changed) => { changes.push(changed); });
+    return changes;
+  },
   /** The code lenses on a document of `text` at `path`. */
   lenses: (text: string, path = '/scripts/filter.sql') => lenses.flatMap((provider) => provider.provideCodeLenses({ uri: Uri.file(path), getText: () => text })),
   /** The code actions offered on `line` of the file at `path`. */
@@ -140,11 +164,20 @@ export const host = {
   check: (items: readonly [unknown, number][]) => Promise.all(checkboxListeners.map((listener) => listener({ items }))),
   /** Each progress opened and closed, in turn. */
   progress,
+  /** The problems the Problems panel shows on each file of the collection, by path. */
+  problems: (name: string) => [...collections.get(name) ?? []].map(([uri, each]) => [uri.fsPath, each.map(({ message, severity, code }) => ({ message, severity, code }))] as const),
+  /** Each value a context key was set to, in turn. */
+  context: (key: string) => contexts.filter(([name]) => name === key).map(([, value]) => value),
+  /** Each document opened, and each shown, in turn. */
+  opened,
+  shown,
+  /** The input box opened last, as the name filter's. */
+  inputBox: () => inputBoxes.at(-1),
   /** Forgets everything registered and held, as a fresh window. */
   reset: () => {
     treeViews.clear();
-    for (const held of [commandHandlers, files]) held.clear();
-    for (const held of [decorations, lenses, actions, statusBarItems, quickPicks, progress, checkboxListeners]) held.length = 0;
+    for (const held of [commandHandlers, files, collections]) held.clear();
+    for (const held of [decorations, lenses, actions, statusBarItems, quickPicks, progress, checkboxListeners, contexts, opened, shown, inputBoxes]) held.length = 0;
     pick = () => undefined;
   },
 };
