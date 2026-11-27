@@ -191,8 +191,16 @@ export class PluginFactsFeed implements vscode.Disposable {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
-    const { loot, reads } = await this.lootRules(judged, true);
+    const read = await this.lootRules(judged, true).catch((err: unknown) => ({ threw: errorMessage(err) }));
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
+    // ADR-0019; common.md, Reporting: a later read behind the view that failed.
+    if ('threw' in read) {
+      this.deps.log(`judging the sorting rules again threw: ${read.threw}`);
+      this.facts.judgingFailed(read.threw);
+      this.changed.fire(undefined);
+      return;
+    }
+    const { loot, reads } = read;
     const altered = this.facts.rejudged(loot);
     this.landedReads = reads;
     this.publishSorting();

@@ -178,6 +178,7 @@ export class PluginFacts {
   private laterFailures = new ByPluginAddress<string>();
   private readonly factsRead: FactsRead = { what: "mEdit's facts about each plugin", answered: false };
   private readonly scanRead: FactsRead = { what: 'the malformed-plugin scan', answered: false };
+  private readonly judgingRead: FactsRead = { what: 'the files the sorting rules judge', answered: false };
 
   /** A progressive reconcile's tick. */
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
@@ -316,6 +317,7 @@ export class PluginFacts {
 
   // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
   private judgeSorting(treeOrder: readonly PluginAddress[], loot: LootInput): void {
+    answered(this.judgingRead);
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
     const names = treeOrder.map(({ name }) => name);
@@ -400,6 +402,11 @@ export class PluginFacts {
     this.factsRead.failure = reason;
   }
 
+  /** The files the sorting rules judge could not be read; the last judgement stays. */
+  judgingFailed(reason: string): void {
+    this.judgingRead.failure = reason;
+  }
+
   /** The malformed-plugin scan's answer, replacing the last. */
   diagnosed(reports: readonly PluginDiagnosisReport[]): void {
     answered(this.scanRead);
@@ -446,7 +453,7 @@ export class PluginFacts {
   /** The message line's part for every read that failed, the instance's own among them
    *  (common.md, States, stories 2 and 6). */
   readFailureMessage(instanceReadFailure?: string): string | undefined {
-    const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
+    const failed = [this.factsRead, this.scanRead, this.judgingRead].filter((read) => read.failure !== undefined);
     const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
     const failedWithRows = this.loadFailures.values().filter((f) => this.rowsStand(f)).map((f) => pluginReason(f, f.reason));
     const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failedWithRows, ...failed.filter((read) => read.answered).map(said)]
