@@ -29,22 +29,38 @@ SCANS = (
          re.compile(r'\b(?:Task\.Delay|Thread\.Sleep)\((?!\s*Timeout\.Infinite\b)')),
 )
 
+FIX = ('A test waits on a value or on a fake clock, never on real time. A check that something never happens, '
+       'where nothing later announces that it did not, is a line ALLOWED in check_test_waits.py names.')
+
 RECORD_INDEX_TESTS = 'MEditService/MEditService.RecordIndex.Tests/'
+WAITS = 'MEditService/MEditService.TestSupport/Waits.cs'
+POLL = 'the pause between two reads of the value a wait is on'
+NO_WAITING_READ = 'nothing announces a read that waits'
 ALLOWED = {
-    ('MEditService/MEditService.TestSupport/Waits.cs', 'Thread.Sleep(PollInterval);'):
-        'the pause between two reads of the value a wait is on',
-    ('MEditService/MEditService.TestSupport/Waits.cs', 'await Task.Delay(PollInterval);'):
-        'the pause between two reads of the value a wait is on',
+    (WAITS, 'Thread.Sleep(PollInterval);'): POLL,
+    (WAITS, 'await Task.Delay(PollInterval);'): POLL,
+    ('MEditService/MEditService.Http.Tests/Api/SpawnedBackendTests.cs', 'await Task.Delay(StillRunningWindow);'):
+        'the backend keeps running: nothing announces a process that does not exit',
+    (RECORD_INDEX_TESTS + 'Indexing/PluginReadInterruptionTests.cs', 'await Task.Delay(TimeSpan.FromMilliseconds(300));'):
+        'the close waits for the read until its limit: nothing announces a waiting close',
+    (RECORD_INDEX_TESTS + 'Plugins/ReconcileDoorTests.cs', 'await Task.Delay(TimeSpan.FromMilliseconds(300));'):
+        'the status read waits for the publish in flight: ' + NO_WAITING_READ,
     (RECORD_INDEX_TESTS + 'Plugins/ReconcileDoorTests.cs', 'await Task.Delay(TimeSpan.FromMilliseconds(500));'):
         'no third reconcile follows: nothing announces a turn the worker does not take',
     (RECORD_INDEX_TESTS + 'Query/CommitLandingTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(500));'):
         'no checkpoint of the first load follows: nothing announces that none is still owed',
+    (RECORD_INDEX_TESTS + 'Query/WholeSetRefusalTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(200));'):
+        'the owners read waits for the parked re-derivation: ' + NO_WAITING_READ,
     (RECORD_INDEX_TESTS + 'Records/IndexWriteOrderTests.cs',
      'Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(100))));'):
-        'the filter does not land while the re-derivation is parked: nothing announces a waiting write',
+        'the filter waits for the parked re-derivation: nothing announces a waiting write',
     (RECORD_INDEX_TESTS + 'Records/RecordTypeViewsTests.cs',
      'await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);'):
-        'the second SELECT does not answer while the views are created: nothing announces a waiting read',
+        'the second SELECT waits while the views are created: ' + NO_WAITING_READ,
+    (RECORD_INDEX_TESTS + 'Records/SequenceTrailsAnnouncementTests.cs', 'await Task.Delay(TimeSpan.FromMilliseconds(300));'):
+        'the sequence read waits for the held announcement: ' + NO_WAITING_READ,
+    (RECORD_INDEX_TESTS + 'Records/StoreRebuildTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(200));'):
+        'no re-read starts while the rebuild holds the store closed: nothing announces a read that has not started',
     (RECORD_INDEX_TESTS + 'RealSize/RealSizeSoakTests.cs', 'Thread.Sleep(TimeSpan.FromMilliseconds(10));'):
         'a tool (Kind=Tool), not a test: a refused read retries as a user\'s script does',
 }
@@ -64,7 +80,7 @@ def main(argv: list[str]) -> int:
              for wait in waits(path, (root / path).read_text(errors='replace'))]
     for wait in found:
         print(f'{wait.path}:{wait.line}  {wait.text}')
-    print(f'--- {len(found)} TEST WAITS ON REAL TIME: wait on a value (Waits) or a fake clock ---')
+    print(f'--- {len(found)} TEST WAITS ON REAL TIME ---\n{FIX}')
     return int(bool(found))
 
 

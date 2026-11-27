@@ -62,9 +62,10 @@ public class PluginReadInterruptionTests
 
             var disposing = Task.Run(index.Dispose);
 
-            Assert.False(await Waits.CompletesWithin(disposing, TimeSpan.FromMilliseconds(300)), "the close waiting for the read");
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(disposing.IsCompleted, "the close waiting for the read");
             clock.Advance(TimeSpan.FromSeconds(10));
-            Assert.True(await Waits.CompletesWithin(disposing, TimeSpan.FromSeconds(5)), "the close returning once its limit passed");
+            await disposing.WaitAsync(Waits.Patience);
         }
         finally
         {

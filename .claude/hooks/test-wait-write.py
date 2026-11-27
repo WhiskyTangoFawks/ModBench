@@ -16,8 +16,7 @@ tool_input = data.get("tool_input", {})
 text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool_input.get("content")
 found = check_test_waits.waits(tool_input.get("file_path", ""), text or "")
 if found:
-    print("A test waits on a value (Waits in MEditService.TestSupport) or on a fake clock, never on real time.",
-          file=sys.stderr)
+    print(check_test_waits.FIX, file=sys.stderr)
     for wait in found:
         print(f"  line {wait.line}: {wait.text}", file=sys.stderr)
     sys.exit(2)

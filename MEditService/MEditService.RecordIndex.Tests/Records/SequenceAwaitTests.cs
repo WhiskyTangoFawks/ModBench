@@ -37,7 +37,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         var pending = _index.Queries.AwaitSequence(landed, TimeSpan.FromDays(1));
 
-        Assert.True(await Waits.CompletesWithin(pending, Generous));
+        await pending.WaitAsync(Generous);
         Assert.True((await pending).Reached);
     }
 
@@ -50,7 +50,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         _clock.SetUtcNow(Start + TimeSpan.FromDays(2));
 
-        Assert.True(await Waits.CompletesWithin(pending, Generous));
+        await pending.WaitAsync(Generous);
         Assert.False((await pending).Reached);
     }
 
@@ -65,7 +65,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         _clock.Advance(TimeSpan.FromMilliseconds(50));
 
-        Assert.True(await Waits.CompletesWithin(pending, Generous));
+        await pending.WaitAsync(Generous);
         Assert.True((await pending).Reached);
     }
 }

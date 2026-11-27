@@ -146,9 +146,7 @@ public sealed class ProgressiveIndexingTests
         await gate.WaitUntilParkedAsync();
 
         var second = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
-        Assert.True(
-            await Waits.Until(() => holder.Current.Plugins.Count == 5),
-            "the arriving snapshot never reached the holder");
+        Waits.Reached(() => holder.Current.Plugins.Count == 5, "the arriving snapshot reaching the holder");
         Assert.Equal(LoadOrderState.Reconciling, index.Status.State);
         Assert.Equal(0, index.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
 

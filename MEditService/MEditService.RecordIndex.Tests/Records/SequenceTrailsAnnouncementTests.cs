@@ -55,7 +55,8 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
         Waits.Reached(() => _holding, "the re-derive's announcement being published");
         var read = Task.Run(() => _index.Sequence);
 
-        Assert.False(await Waits.CompletesWithin(read, TimeSpan.FromMilliseconds(300)));
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        Assert.False(read.IsCompleted);
         _released.TrySetResult();
         Assert.True(await read > before);
     }

@@ -9,6 +9,8 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : IClassFixture<SpawnedBackendTests.Spawned>
 {
+    private static readonly TimeSpan StillRunningWindow = TimeSpan.FromMilliseconds(500);
+
     private const string EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost = "http://127.0.0.1:0";
 
     private static readonly string[] AskedToExitWithItsStdin =
@@ -31,13 +33,12 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
 
         public List<string> Lines => Snapshot(_lines);
 
-        public Task<bool> LogsAsync(Func<string, bool> line) => WaitForLineAsync(_lines, line, TimeSpan.FromSeconds(10));
+        public Task LogsAsync(Func<string, bool> line, string what) => AwaitLineAsync(_lines, line, what, TimeSpan.FromSeconds(10));
 
         public async Task InitializeAsync()
         {
             _process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{Port}"], _workingDirectory, _lines, pipeStdin: true);
-            Assert.True(await WaitForLineAsync(_lines, l => l.Contains("Application started", StringComparison.Ordinal), TimeSpan.FromSeconds(15)),
-                $"backend never reported starting; captured output:\n{string.Join('\n', Lines)}");
+            await AwaitLineAsync(_lines, l => l.Contains("Application started", StringComparison.Ordinal), "the backend reporting it started", TimeSpan.FromSeconds(15));
             _process.StandardInput.Close();
         }
 
@@ -56,10 +57,9 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
     {
         var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
 
-        Assert.True(
-            await spawned.LogsAsync(l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
-                Path.TrimEndingDirectorySeparator(l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..]) == expectedContentRoot),
-            $"expected the content root {expectedContentRoot}; captured output:\n{string.Join('\n', spawned.Lines)}");
+        await spawned.LogsAsync(l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
+            Path.TrimEndingDirectorySeparator(l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..]) == expectedContentRoot,
+            $"the content root {expectedContentRoot}");
     }
 
     [Fact]
@@ -73,9 +73,8 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
         await client.GetAsync(new Uri($"http://localhost:{spawned.Port}/health"));
         await client.GetAsync(new Uri($"http://localhost:{spawned.Port}/definitely-not-a-route"));
 
-        Assert.True(
-            await spawned.LogsAsync(l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal)),
-            $"expected a genuine 4xx to produce a visible line; captured output:\n{string.Join('\n', spawned.Lines)}");
+        await spawned.LogsAsync(l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
+            "a visible line for a genuine 4xx");
         Assert.DoesNotContain(spawned.Lines, l =>
             l.Contains("responded 200", StringComparison.Ordinal) ||
             l.Contains("Request starting", StringComparison.Ordinal) ||
@@ -98,8 +97,11 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
     }
 
     [Fact]
-    public async Task NotAskedToExitWithItsStdin_KeepsRunningOnceItCloses() =>
-        Assert.False(await ExitsWithinAsync(spawned.Process, TimeSpan.FromMilliseconds(500)));
+    public async Task NotAskedToExitWithItsStdin_KeepsRunningOnceItCloses()
+    {
+        await Task.Delay(StillRunningWindow);
+        Assert.False(spawned.Process.HasExited);
+    }
 
     [Fact]
     public async Task AskedToExitWithItsStdin_KeepsRunningWhileItIsOpen_AndExitsOnceItCloses()
@@ -108,11 +110,12 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
         using var process = await StartedWithPipedStdinAsync(AskedToExitWithItsStdin, workingDirectory);
         try
         {
-            Assert.False(await ExitsWithinAsync(process, TimeSpan.FromMilliseconds(500)));
+            await Task.Delay(StillRunningWindow);
+            Assert.False(process.HasExited);
 
             process.StandardInput.Close();
 
-            Assert.True(await ExitsWithinAsync(process, TimeSpan.FromSeconds(15)));
+            Assert.True(process.WaitForExit(TimeSpan.FromSeconds(15)));
         }
         finally
         {
@@ -137,12 +140,11 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
         using var process = SpawnThroughTheDotnetMuxer(AskedToExitWithItsStdin, workingDirectory, lines, pipeStdin: true, stallStartup: true);
         try
         {
-            var stalled = await WaitForLineAsync(lines, l => l.Contains(StalledStartup.Marker, StringComparison.Ordinal), TimeSpan.FromSeconds(15));
-            Assert.True(stalled, $"backend never reached its stalled start; captured output:\n{string.Join('\n', Snapshot(lines))}");
+            await AwaitLineAsync(lines, l => l.Contains(StalledStartup.Marker, StringComparison.Ordinal), "the backend's stalled start", TimeSpan.FromSeconds(15));
 
             process.StandardInput.Close();
 
-            Assert.True(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)),
+            Assert.True(process.WaitForExit(TimeSpan.FromSeconds(3)),
                 $"captured output:\n{string.Join('\n', Snapshot(lines))}");
             Assert.DoesNotContain(Snapshot(lines), l => l.Contains("FTL", StringComparison.Ordinal));
         }
@@ -156,15 +158,8 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
     {
         var lines = new List<string>();
         var process = SpawnThroughTheDotnetMuxer(args, workingDirectory, lines, pipeStdin: true);
-        var started = await WaitForLineAsync(lines, l => l.Contains("Application started", StringComparison.Ordinal), TimeSpan.FromSeconds(15));
-        Assert.True(started, $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+        await AwaitLineAsync(lines, l => l.Contains("Application started", StringComparison.Ordinal), "the backend reporting it started", TimeSpan.FromSeconds(15));
         return process;
-    }
-
-    private static async Task<bool> ExitsWithinAsync(Process process, TimeSpan timeout)
-    {
-        using var deadline = new CancellationTokenSource(timeout);
-        return await process.WaitForExitAsync(deadline.Token).ContinueWith(t => t.IsCompletedSuccessfully, TaskScheduler.Default);
     }
 
     private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines, bool pipeStdin = false, bool stallStartup = false)
@@ -209,8 +204,17 @@ public sealed class SpawnedBackendTests(SpawnedBackendTests.Spawned spawned) : I
         lock (lines) return [.. lines];
     }
 
-    private static Task<bool> WaitForLineAsync(List<string> lines, Func<string, bool> predicate, TimeSpan timeout) =>
-        Task.Run(() => Waits.ReachedWithin(() => Snapshot(lines).Any(predicate), timeout));
+    private static async Task AwaitLineAsync(List<string> lines, Func<string, bool> predicate, string what, TimeSpan patience)
+    {
+        try
+        {
+            await Waits.ReachedAsync(() => Task.FromResult(Snapshot(lines).Any(predicate)), what, patience);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"Never reached {what}; captured output:\n{string.Join('\n', Snapshot(lines))}");
+        }
+    }
 
     private static int GetFreeTcpPort()
     {
