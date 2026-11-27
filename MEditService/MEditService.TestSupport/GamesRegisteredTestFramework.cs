@@ -14,9 +14,8 @@ using Xunit.Sdk;
 
 namespace MEditService.TestSupport;
 
-/// <summary>The game projects registered before any test runs, as the composition root registers them before the
-/// service starts. A cost paid once per process runs in <see cref="Warm"/> before the first test starts, so the
-/// ceiling judges each test on its own cost.</summary>
+/// <summary>The game projects registered before any test runs, as the composition root registers them. A cost paid
+/// once per process runs in <see cref="Warm"/> before the first test, so the ceiling judges each test on its own.</summary>
 public class GamesRegisteredTestFramework : XunitTestFramework
 {
     public GamesRegisteredTestFramework(IMessageSink messageSink) : base(messageSink) =>
