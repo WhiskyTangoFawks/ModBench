@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import { modsViewOn } from './modsViewOn';
-import { separatorCarrier } from './sourceGestureHarness';
 import { file, folder, indexedValueOf } from './indexedValue';
 import { progressSteps } from '../../test/recordedProgress';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -85,9 +84,9 @@ describe('check for updates, from a view', () => {
 
 describe('check for updates, on a separator', () => {
   it('checks the mods the separator holds, and not the separator', async () => {
-    const { fake, run } = await register();
+    const { fake, run, row } = await register();
 
-    await run(CHECK, separatorCarrier('Weapons'), [separatorCarrier('Weapons')]);
+    await run(CHECK, await row('Weapons'), [await row('Weapons')]);
 
     expect(fake.calls).toEqual(checked('ModA'));
   });

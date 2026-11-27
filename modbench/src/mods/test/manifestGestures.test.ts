@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
 import { modsViewOn } from './modsViewOn';
-import { separatorCarrier } from './sourceGestureHarness';
 import { cancelNotification, seen } from './modsVscode';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 import { TreeItem } from '../../test/vscodeMock';
@@ -275,9 +274,9 @@ describe('Restore from manifest', () => {
   });
 
   it('restores the mods a selected separator holds, and not the separator, which has no manifest', async () => {
-    const { run } = await register();
+    const { run, row } = await register();
 
-    await run(RESTORE, separatorCarrier('Weapons'), [separatorCarrier('Weapons')]);
+    await run(RESTORE, await row('Weapons'), [await row('Weapons')]);
 
     expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
   });

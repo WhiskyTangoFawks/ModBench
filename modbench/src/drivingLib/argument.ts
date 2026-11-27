@@ -6,6 +6,7 @@ import { isPluginAddress, isString } from '../wire/messages';
 
 export type PluginArgument = ArgumentOf<'plugin'>;
 export type ModArgument = ArgumentOf<'mod'>;
+export type SeparatorArgument = ArgumentOf<'separator'>;
 
 /** What a row or webview context carries as its `argument`, read by shape so a gesture imports
  *  no box that builds one (ADR-0014). */
@@ -31,10 +32,10 @@ export function modArgumentOf(carrier: unknown): ModArgument | undefined {
   return argument && Reflect.get(argument, 'kind') === 'mod' && isString(name) ? { kind: 'mod', name } : undefined;
 }
 
-export function separatorArgumentOf(carrier: unknown): ArgumentOf<'separator'> | undefined {
-  const separator: unknown = typeof carrier === 'object' && carrier !== null && Reflect.get(carrier, 'kind') === 'separator' && Reflect.get(carrier, 'separator');
-  const name: unknown = typeof separator === 'object' && separator !== null && Reflect.get(separator, 'name');
-  return isString(name) ? { kind: 'separator', name } : undefined;
+export function separatorArgumentOf(carrier: unknown): SeparatorArgument | undefined {
+  const argument = carriedArgument(carrier);
+  const name: unknown = argument && Reflect.get(argument, 'name');
+  return argument && Reflect.get(argument, 'kind') === 'separator' && isString(name) ? { kind: 'separator', name } : undefined;
 }
 
 /** What names the object a row stands for: its `name` when it has one, else the label it shows. */
