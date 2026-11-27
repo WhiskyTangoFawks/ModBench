@@ -64,15 +64,18 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
 const NEXUS_PAGE = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
 const NEXUS = { game: 'fallout4', mod: 1, file: 2 };
 
-const hashOf = (tag: string): string => `${tag.replace(/[^A-Za-z0-9]/g, '').padEnd(10, '+')}A=`;
+const hashOf = (tag: string): string => {
+  const letters = tag.replace(/[^A-Za-z0-9]/g, '');
+  return `${`${letters.length}${letters}`.padEnd(10, 'A')}A=`;
+};
 
-const download = (name: string, entries: Record<string, string>, over: Partial<InstallationFile> = {}): InstallationFile =>
-  ({ path: `/downloads/${name}`, size: 10, hash: hashOf(name), entries: Object.entries(entries).map(([path, hash]) => ({ path, hash: hashOf(hash) })), ...over });
+const download = (name: string, entries: Record<string, string>, metadata: Partial<InstallationFile> = {}): InstallationFile =>
+  ({ path: `/downloads/${name}`, size: 10, hash: hashOf(name), entries: Object.entries(entries).map(([path, hash]) => ({ path, hash: hashOf(hash) })), ...metadata });
 
 interface Game { readonly place: GamePlace; readonly files: readonly GameFileTaken[] }
 
-const place = (files: Record<string, string>, over: Partial<GamePlace> = {}, pathsInFolder: Record<string, string> = {}): Game => ({
-  place: { root: '/game', depots: [], depotProblems: [], ...over },
+const place = (files: Record<string, string>, installed: Partial<GamePlace> = {}, pathsInFolder: Record<string, string> = {}): Game => ({
+  place: { root: '/game', depots: [], depotProblems: [], ...installed },
   files: Object.entries(files).map(([path, hash]) => ({ root: '/game', path, hash: hashOf(hash), pathInFolder: pathsInFolder[path] ?? path })),
 });
 
@@ -954,7 +957,7 @@ describe('a mod\'s manifest from its files', () => {
     ['with no version when the downloaded file\'s metadata gives none', {}, {}],
     ['whose Nexus file has file ID 0 with no host', { page: 'https://www.nexusmods.com/fallout4/mods/4?tab=files&file_id=0' }, {}],
     ['whose Nexus file has mod ID 0 with no host', { page: 'https://www.nexusmods.com/fallout4/mods/0?tab=files&file_id=2' }, {}],
-    ['whose Nexus file has an ID that is no whole number with no host', { page: `https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=${'9'.repeat(400)}` }, {}],
+    ['whose Nexus file has an ID past what a number holds with no host', { page: `https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=${'9'.repeat(400)}` }, {}],
   ])('names an installation file %s', async (_case, metadata, named) => {
     const { manifest } = await built({}, { installationFile: download('M.7z', {}, metadata) });
 
