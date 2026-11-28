@@ -2,10 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import type { ManifestAt } from '../manifestFiles';
 import type { HashedPath, StatusValues } from '../../repositoriesLib/statusValues';
-import { manifestText } from '../manifestText';
-import { filesAPackageHolds, manifestAt, packageFilesOf, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { filesAPackageHolds, manifestAt, manifestText, packageFilesOf, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 const HELLO = 'AAAAAAAAAAA=';
 const EDITED = 'BBBBBBBBBBA=';
@@ -44,7 +42,7 @@ async function filesBelow(at: string): Promise<string[]> {
 
 type ReadValues = Extract<StatusValues, { kind: 'read' }>;
 
-async function valuesHashingEachFileAsItsText(manifest: ManifestAt, ignoresCase: boolean): Promise<ReadValues> {
+async function valuesHashingEachFileAsItsText(manifest: Parameters<typeof packagesAskedAt>[0], ignoresCase: boolean): Promise<ReadValues> {
   const asked = packagesAskedAt(manifest) ?? { installationFiles: [] };
   const files = new Map(await Promise.all((await filesBelow(folder)).filter((path) => path !== 'meta.ini').map(
     async (path) => [path, { path, excluded: false, read: { kind: 'read' as const, answer: { hash: await readFile(join(folder, path), 'utf8') } } }] as const,

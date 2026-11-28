@@ -12,8 +12,8 @@ import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
-import { restoreFromManifest } from '../restoreFromManifest';
-import { updateManifest } from '../updateManifest';
+import { instanceRepositoryCommands } from '../instanceRepositoryCommands';
+import { hostWithoutGit } from '../../test/hostGitDouble';
 
 let root: string;
 
@@ -48,14 +48,16 @@ async function aModFromADownloadedFileAndTheGameFolder() {
   await put('Game/Data/c.nif', 'c');
   const gameRoot = join(root, 'Game');
   const adapter = adapterOver(root, {
-    gameFolder: { kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') }, installationFileReader: fakeInstallationFileReader(['a.nif', 'textures/b.dds']),
+    gameFolderSettingValue: gameRoot, installationFileReader: fakeInstallationFileReader(['a.nif', 'textures/b.dds']),
   });
   const inTrash: Record<string, string> = {};
   const trash = async (path: string): Promise<void> => { inTrash[relative(join(root, 'mods'), path).replaceAll('\\', '/')] = await readFile(path, 'utf8'); await rm(path); };
-  const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks() };
+  const commands = instanceRepositoryCommands({
+    client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), instanceRoot: root, hostGit: hostWithoutGit,
+  });
   return {
-    update: () => updateManifest({ adapter }, ['Mod'], {}, false, []),
-    restore: () => restoreFromManifest(deps, ['Mod'], {}, false),
+    update: () => commands.updateManifest(['Mod'], {}, false, []),
+    restore: () => commands.restoreFromManifest(['Mod'], {}, false),
     inTrash,
   };
 }

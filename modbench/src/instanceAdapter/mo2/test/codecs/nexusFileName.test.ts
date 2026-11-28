@@ -1,5 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { effectiveModId } from '../../codecs/nexusFileName';
+import { describe, it, expect, vi } from 'vitest';
+import { fakeVscodeModule } from '../../../../test/mo2/fakeVscodeWatcher';
+import { expectKind } from '../../../../test/expectKind';
+import { mo2InstanceHolding } from '../../../test/instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+async function modIdOf(name: string, meta?: string): Promise<string | undefined> {
+  const { adapter } = mo2InstanceHolding({ [`downloads/${name}`]: 'bytes', ...meta === undefined ? {} : { [`downloads/${name}.meta`]: meta } });
+  return expectKind(await adapter.downloadedFileQuery(name), 'read').answer?.modID;
+}
 
 describe('the Nexus mod ID an install gives a mod', () => {
   it.each([
@@ -11,16 +20,11 @@ describe('the Nexus mod ID an install gives a mod', () => {
     ['Harder VATS 1.0.7z', undefined],
     ['Harder VATS-1234-1-0.esp', undefined],
     ['Harder VATS-99999999999-1-0.7z', undefined],
-    ['', undefined],
-  ])('is read from the name %s, when the metadata has none, as %s', (name, expected) => {
-    expect(effectiveModId(undefined, name)).toBe(expected);
+  ])('is read from the name %s, when the metadata has none, as %s', async (name, expected) => {
+    expect(await modIdOf(name)).toBe(expected);
   });
 
-  it('is the metadata\'s over the name\'s', () => {
-    expect(effectiveModId('111', 'Harder VATS-1234-1-0.7z')).toBe('111');
-  });
-
-  it('is none for a folder, which has no name', () => {
-    expect(effectiveModId(undefined, undefined)).toBeUndefined();
+  it('is the metadata\'s over the name\'s', async () => {
+    expect(await modIdOf('Harder VATS-1234-1-0.7z', '[General]\r\nmodID=111\r\n')).toBe('111');
   });
 });

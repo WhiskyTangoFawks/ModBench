@@ -7,7 +7,6 @@ import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableP
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
 import { judgingReads } from '../sortingRules/lootJudge';
-import type { LootEntry } from '../sortingRules/lootMetadata';
 
 type JudgingReads = ReturnType<typeof judgingReads>;
 import type { ReadRules } from '../sortingRules/lootMetadata';
@@ -36,9 +35,9 @@ export interface PluginFactsFeedDeps {
   publishChangedOutside: (warnings: readonly PluginProblem[], named?: NamedPlugins) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
-  /** The Plugin source unreadable status's other surface, the Problems panel. */
-  /** The warnings of the plugins `named`, replacing theirs, or of every plugin. */
-  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
+  /** The Plugin source unreadable status's other surface, the Problems panel: the errors of the plugins `named`,
+   *  replacing theirs, or of every plugin. */
+  publishSourceUnreadable: (errors: readonly SourceUnreadableProblem[], named?: NamedPlugins) => void;
   /** The Sorting errors status's other surface, the Problems panel. */
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
@@ -47,6 +46,8 @@ export interface PluginFactsFeedDeps {
   publishSortingInfo: (info: readonly PluginProblem[]) => void;
   /** The sorting rule files' own lines in the Problems panel. */
   publishRuleFiles: (diagnostics: readonly RuleFileDiagnostic[]) => void;
+  /** The Output, where a re-read that threw is told. */
+  log: (message: string) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -68,8 +69,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private refreshing: Promise<unknown> = Promise.resolve();
   // What the last judgement of the sorting rules to land read of files.
   private landedReads: JudgingReads = { reads: [], judges: () => false };
-  // The reads of the last order and rules judged, kept while both are the same objects: the reads depend on nothing else.
-  private judging?: { readonly order: readonly PluginAddress[]; readonly entries: readonly LootEntry[]; readonly reads: JudgingReads };
   // The last `rejudge` asked.
   private rejudging: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
@@ -157,15 +156,10 @@ export class PluginFactsFeed implements vscode.Disposable {
   private async lootRules(active: readonly PluginAddress[], trusted: boolean): Promise<{ loot: LootInput; reads: JudgingReads }> {
     for (;;) {
       const read = this.deps.rules();
-      const reads = this.readsOf(active, read.entries);
+      const reads = judgingReads(refsOf(active), read.entries);
       const files = await this.deps.fileFacts(reads.reads, trusted);
       if (read === this.deps.rules()) return { loot: { entries: read.entries, groups: read.groups, files }, reads };
     }
-  }
-
-  private readsOf(order: readonly PluginAddress[], entries: readonly LootEntry[]): JudgingReads {
-    if (this.judging?.order !== order || this.judging.entries !== entries) this.judging = { order, entries, reads: judgingReads(refsOf(order), entries) };
-    return this.judging.reads;
   }
 
   /** Whether the last judgement of the sorting rules to land read a file, relative to the Data folder: its presence, bytes or version. */
@@ -189,21 +183,39 @@ export class PluginFactsFeed implements vscode.Disposable {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
-    const { loot, reads } = await this.lootRules(judged, true);
+    const read = await this.lootRules(judged, true).catch((err: unknown) => ({ threw: errorMessage(err) }));
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
+    // ADR-0019; common.md, Reporting: a later read behind the view that failed.
+    if ('threw' in read) {
+      this.deps.log(`judging the sorting rules again threw: ${read.threw}`);
+      this.facts.judgingFailed(read.threw);
+      this.changed.fire(undefined);
+      return;
+    }
+    const { loot, reads } = read;
+    const recovered = this.facts.judgingReadFailed();
     const altered = this.facts.rejudged(loot);
     this.landedReads = reads;
     this.publishSorting();
-    this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
+    // The message line is redrawn with every row, so a judgement that clears its read's failure redraws them all.
+    if (recovered) this.changed.fire(undefined);
+    else this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }
 
   /** Re-reads the facts of the plugins named and judges again, leaving the held load order as it is.
    *  After a failed read it reads every plugin, as any may be stale. Never supersedes a hand-off. */
   refresh(named?: NamedPlugins): Promise<void> {
     const generation = this.generation;
-    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation));
-    this.refreshing = refreshed.catch(() => undefined);
+    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation))
+      .catch((err: unknown) => { this.refreshThrew(errorMessage(err), generation); });
+    this.refreshing = refreshed;
     return refreshed;
+  }
+
+  // ADR-0019; common.md, Reporting: a later read behind the view that failed.
+  private refreshThrew(reason: string, generation: number): void {
+    this.deps.log(`re-reading mEdit's facts about each plugin threw: ${reason}`);
+    if (generation === this.generation) this.factsFailed(reason);
   }
 
   private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {

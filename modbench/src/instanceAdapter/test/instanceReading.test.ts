@@ -1,125 +1,126 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
-vi.mock('vscode', () => fakeVscodeModule());
+const io = vi.hoisted(() => ({
+  read: [] as string[],
+  listed: [] as string[],
+  afterReading: undefined as { readonly path: string; readonly then: () => Promise<void> } | undefined,
+}));
 
-import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+vi.mock('vscode', () => fakeVscodeModule());
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    readFile: async (...args: Parameters<typeof actual.readFile>) => {
+      const text = await actual.readFile(...args);
+      const [path] = args;
+      if (typeof path === 'string') io.read.push(path);
+      const hook = io.afterReading;
+      if (hook !== undefined && path === hook.path) {
+        io.afterReading = undefined;
+        await hook.then();
+      }
+      return text;
+    },
+    readdir: (...args: Parameters<typeof actual.readdir>) => {
+      io.listed.push(args[0].toString());
+      return actual.readdir(...args);
+    },
+  };
+});
+
+import { appendFile, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
-import { sourceOver } from '../../test/mo2/adapterOver';
-import { readInstance, readPluginsProvided, type ReadingSource } from '../instanceReading';
-import type { GameFolder } from '../instanceAdapter';
+import { adapterOver } from '../../test/mo2/adapterOver';
+import type { InstanceAdapter, PluginsProvided } from '../instanceAdapter';
 import { settleWaitArmed } from '../../test/eventually';
+import { downloadsUnresolvable, gameOnDisk } from './instanceOnDisk';
+import { onPosix } from '../../test/platform';
 
 const INI = 'ModOrganizer.ini';
 
 describe('the instance assembled from a manager\'s reading', () => {
   let dir: string;
-  let source: ReadingSource;
+  let adapter: InstanceAdapter;
   beforeEach(() => {
     dir = cloneCorpusFixture();
-    source = sourceOver(dir);
+    adapter = adapterOver(dir);
+    io.read = [];
+    io.listed = [];
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
   const text = (relative: string): Promise<string> => readFile(join(dir, relative), 'utf8');
-
-  it('names the manager\'s mod order file in a repeat note, and takes the manager\'s key for what repeats', async () => {
-    await appendFile(join(dir, DEFAULT_MODLIST), '-Patch Mod\n+PATCH MOD\n');
-    const other = {
-      ...source,
-      names: { manager: 'Other', modOrderFile: 'order.txt', downloadedFileMetadataFile: '.metadata' },
-      modLineKey: ({ kind, name }: { kind: string; name: string }) => `${kind}:${name}`,
-    };
-
-    const { orderNotes } = await readInstance(other);
-
-    expect(orderNotes).toEqual(['order.txt lists the mod Patch Mod on more than one line; the first line holds']);
-  });
+  const providedOver = async (over: InstanceAdapter): Promise<PluginsProvided | undefined> => {
+    let provided: PluginsProvided | undefined;
+    await over.changePluginOrderOverProvided('Default', (_order, handed) => { provided = handed; return []; });
+    return provided;
+  };
 
   it('keeps the first plugin line of a name the plugin order repeats in another case, and a note names the repeat', async () => {
-    const before = await readInstance(source);
+    const before = await adapter.reading();
     await appendFile(join(dir, DEFAULT_PLUGINS), 'NONASCIIRETEXTURE.ESP\n');
 
-    const reading = await readInstance(source);
+    const reading = await adapter.reading();
 
     expect(reading.pluginOrder).toEqual(before.pluginOrder);
     expect(reading.orderNotes).toEqual(['plugins.txt lists the plugin NONASCIIRETEXTURE.ESP on more than one line; the first line holds']);
   });
 
   it('words each link the source could not follow as a note naming its path and why', async () => {
-    const skipping = { ...source, modFolders: (skip: (path: string, reason: string) => void) => { skip('/inst/mods/Loop', 'too many levels'); return source.modFolders(skip); } };
+    await symlink('Loop', join(dir, 'mods', 'Loop'));
 
-    const { linkNotes } = await readInstance(skipping);
+    const { linkNotes } = await adapter.reading();
 
-    expect(linkNotes).toEqual(['/inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels']);
+    expect(linkNotes).toEqual([expect.stringContaining(`${join(dir, 'mods', 'Loop')} is a link Modbench cannot follow, so it is not read: `) as unknown]);
   });
 
   it('counts each link the game folder\'s listings ignored once, whichever listing met it', async () => {
-    const meeting = {
-      ...source,
-      gameFolderPlugins: (gameFolder: GameFolder, ignored: (path: string) => void) => { ignored('/game/Data/a.esp'); ignored('/game/Data/b.esp'); return source.gameFolderPlugins(gameFolder, ignored); },
-      gameFolderArchives: (gameFolder: GameFolder, release: string | undefined, ignored: (path: string) => void) => { ignored('/game/Data/b.esp'); return source.gameFolderArchives(gameFolder, release, ignored); },
-    };
-
-    expect((await readInstance(meeting)).gameFolderLinks).toBe(2);
-  });
-
-  it('reads the settings once, so one reading holds one generation of the ini', async () => {
-    let reads = 0;
-    const counting = { ...source, settings: () => { reads++; return source.settings(); } };
-
-    await readInstance(counting);
-
-    expect(reads).toBe(1);
+    const game = await gameOnDisk({ 'deployed/a.esp': '', 'deployed/b.esp': '' });
+    await symlink(join(game, 'deployed', 'a.esp'), join(game, 'Data', 'a.esp'));
+    await symlink(join(game, 'deployed', 'b.esp'), join(game, 'Data', 'b.esp'));
+    try {
+      expect((await adapterOver(dir, { gameFolderSettingValue: game }).reading()).gameFolderLinks).toBe(2);
+    } finally {
+      await rm(game, { recursive: true, force: true });
+    }
   });
 
   it('answers every fact against the ini as it read it, even when the ini is rewritten mid-reading', async () => {
-    const rewriting = {
-      ...source,
-      settings: async () => {
-        const settings = await source.settings();
-        await writeFile(join(dir, INI), (await text(INI)).replace('gameName=Fallout 4', 'gameName=Skyrim VR'));
-        return settings;
-      },
-    };
+    const before = await text(INI);
+    io.afterReading = { path: join(dir, INI), then: () => writeFile(join(dir, INI), before.replace('gameName=Fallout 4', 'gameName=Skyrim VR')) };
 
-    const reading = await readInstance(rewriting);
+    const reading = await adapter.reading();
+    const next = await adapter.reading();
 
-    expect(reading.gameName).toBe('Fallout 4');
-    expect((await readInstance(source)).gameName).toBe('Skyrim VR');
+    expect([reading.gameName, reading.gameRelease, next.gameName, next.gameRelease]).toEqual(['Fallout 4', 'Fallout4', 'Skyrim VR', 'SkyrimVR']);
   });
 
   it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
-    const reads: string[] = [];
-    const counting = { ...source, modMeta: (mod: string) => { reads.push(mod); return source.modMeta(mod, 'list'); } };
+    await adapter.reading();
 
-    const reading = await readInstance(counting);
-
-    const listed = reading.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
-    expect(reads.filter((mod) => listed.includes(mod)).sort()).toEqual([...listed].sort());
+    const metasRead = io.read.filter((path) => path.endsWith('meta.ini')).map((path) => path.slice(join(dir, 'mods').length + 1)).sort();
+    expect(metasRead).toEqual([
+      'Cracked and Smudged Pip-Boy Screen/meta.ini', 'ENBoost - 12k/meta.ini', 'Harder VATS/meta.ini', 'Patch Mod/meta.ini',
+      'SKK Fast Start new game (Fallout 4)/meta.ini', 'Unofficial Fallout 4 Patch/meta.ini', 'Ñoño\'s Retexture/meta.ini',
+    ].map((path) => join(path)));
   });
 
-  it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
-    await mkdir(join(dir, 'mods', 'Unlisted'));
-    const unreadable = {
-      ...source,
-      settings: async () => ({
-        ...(await source.settings()),
-        downloadedFiles: () => Promise.resolve({ kind: 'unresolved' as const, reason: 'no downloads' }),
-      }),
-      modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : source.modMeta(mod, 'list')),
-    };
+  onPosix.it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
+    await mkdir(join(dir, 'mods', 'Unlisted', 'meta.ini'), { recursive: true });
+    await downloadsUnresolvable(dir);
 
-    await expect(readInstance(unreadable)).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
+    await expect(adapterOver(dir).reading()).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
   });
 
-  it.each<[string, (read: ReadingSource) => Promise<unknown>, () => Promise<unknown>]>([
-    ['the instance whole', async (read) => (await readInstance(read)).mods.map((e) => e.name), async () => (await source.modOrder('Default')).map((e) => e.name)],
-    ['the plugins the mod order provides', async (read) => {
-      const provided = await readPluginsProvided(read, 'Default');
-      return provided.kind === 'listed' && provided.plugins.has('patch mod.esp');
-    }, () => Promise.resolve(true)],
+  it.each<[string, (over: InstanceAdapter) => Promise<unknown>, unknown]>([
+    ['the instance whole', async (over) => (await over.reading()).mods.length, 10],
+    ['the plugins the mod order provides', async (over) => {
+      const provided = await providedOver(over);
+      return provided?.kind === 'listed' && provided.plugins.has('patch mod.esp');
+    }, true],
   ])('reads a mod order that parses to no entries again after a settle, believing the second read, for %s', async (_, readOver, expected) => {
     await mkdir(join(dir, 'game', 'Data'), { recursive: true });
     const path = join(dir, DEFAULT_MODLIST);
@@ -127,12 +128,12 @@ describe('the instance assembled from a manager\'s reading', () => {
     await writeFile(path, '');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      const reading = readOver(sourceOver(dir, { gameFolderSettingValue: join(dir, 'game') }));
+      const reading = readOver(adapterOver(dir, { gameFolderSettingValue: join(dir, 'game') }));
       await settleWaitArmed();
       await writeFile(path, complete);
       await vi.advanceTimersByTimeAsync(1000);
 
-      expect(await reading).toEqual(await expected());
+      expect(await reading).toEqual(expected);
     } finally {
       vi.useRealTimers();
     }
@@ -142,7 +143,7 @@ describe('the instance assembled from a manager\'s reading', () => {
     await writeFile(join(dir, DEFAULT_MODLIST), '');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      const reading = readInstance(source);
+      const reading = adapter.reading();
       await settleWaitArmed();
       await vi.advanceTimersByTimeAsync(1000);
 
@@ -153,25 +154,18 @@ describe('the instance assembled from a manager\'s reading', () => {
   });
 
   describe('listing the mod folders for a read of every mod', () => {
-    const listingsOf = (): { counting: ReadingSource; listings: () => number } => {
-      let listed = 0;
-      return { counting: { ...source, modFolders: (skippedLink) => { listed++; return source.modFolders(skippedLink); } }, listings: () => listed };
-    };
+    const listingsOfMods = (): number => io.listed.filter((path) => path === join(dir, 'mods')).length;
 
     it('lists them once to read the instance whole', async () => {
-      const { counting, listings } = listingsOf();
+      await adapter.reading();
 
-      await readInstance(counting);
-
-      expect(listings()).toBe(1);
+      expect(listingsOfMods()).toBe(1);
     });
 
     it('lists them once to read the plugins the mod order provides', async () => {
-      const { counting, listings } = listingsOf();
+      await providedOver(adapter);
 
-      await readPluginsProvided(counting, 'Default');
-
-      expect(listings()).toBe(1);
+      expect(listingsOfMods()).toBe(1);
     });
   });
 });

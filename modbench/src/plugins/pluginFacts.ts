@@ -18,7 +18,7 @@ export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 't
 
 export type SourceUnreadableProblem = PluginProblem & { decompileRepairs: boolean };
 
-type StatusKind = 'notRestored' | 'failedToRead' | 'sortingErrors' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed' | 'sortingWarnings';
+export type StatusKind = 'notRestored' | 'failedToRead' | 'sortingErrors' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed' | 'sortingWarnings';
 
 export interface PluginStatus {
   kind: StatusKind;
@@ -37,7 +37,7 @@ const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () =
 /** LOOT's rules, and what the instance says of the files their conditions name. */
 export type LootInput = Omit<LootRules, 'facts'> & { files: FileFacts };
 
-export type StatusIcon = 'error' | 'warning';
+export type StatusSeverity = 'error' | 'warning';
 
 export type PluginPlace = 'inSourceMod' | 'inNonSourceMod' | 'inOverwrite';
 
@@ -61,7 +61,12 @@ export type Expansion = { kind: 'records' } | { kind: 'error'; message: string }
 // snapshot's index failed.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'sourceUnreadable', 'changedOutside', 'malformed', 'sortingWarnings']);
+/** How every surface shows each status: the row's icon and its problem in the Problems panel. A malformed plugin and one
+ *  changed outside Modbench still load and play; one that failed to read does not. */
+export const STATUS_SEVERITY: Readonly<Record<StatusKind, StatusSeverity>> = {
+  notRestored: 'warning', failedToRead: 'error', sortingErrors: 'error', unreadableRecords: 'error', sourceUnreadable: 'error',
+  changedOutside: 'warning', malformed: 'warning', sortingWarnings: 'warning',
+};
 
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -173,6 +178,7 @@ export class PluginFacts {
   private laterFailures = new ByPluginAddress<string>();
   private readonly factsRead: FactsRead = { what: "mEdit's facts about each plugin", answered: false };
   private readonly scanRead: FactsRead = { what: 'the malformed-plugin scan', answered: false };
+  private readonly judgingRead: FactsRead = { what: 'the files the sorting rules judge', answered: false };
 
   /** A progressive reconcile's tick. */
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
@@ -311,6 +317,7 @@ export class PluginFacts {
 
   // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
   private judgeSorting(treeOrder: readonly PluginAddress[], loot: LootInput): void {
+    answered(this.judgingRead);
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
     const names = treeOrder.map(({ name }) => name);
@@ -395,6 +402,16 @@ export class PluginFacts {
     this.factsRead.failure = reason;
   }
 
+  /** Whether the last read of the files the sorting rules judge failed. */
+  judgingReadFailed(): boolean {
+    return this.judgingRead.failure !== undefined;
+  }
+
+  /** The files the sorting rules judge could not be read; the last judgement stays. */
+  judgingFailed(reason: string): void {
+    this.judgingRead.failure = reason;
+  }
+
   /** The malformed-plugin scan's answer, replacing the last. */
   diagnosed(reports: readonly PluginDiagnosisReport[]): void {
     answered(this.scanRead);
@@ -441,7 +458,7 @@ export class PluginFacts {
   /** The message line's part for every read that failed, the instance's own among them
    *  (common.md, States, stories 2 and 6). */
   readFailureMessage(instanceReadFailure?: string): string | undefined {
-    const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
+    const failed = [this.factsRead, this.scanRead, this.judgingRead].filter((read) => read.failure !== undefined);
     const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
     const failedWithRows = this.loadFailures.values().filter((f) => this.rowsStand(f)).map((f) => pluginReason(f, f.reason));
     const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failedWithRows, ...failed.filter((read) => read.answered).map(said)]
@@ -500,10 +517,9 @@ export class PluginFacts {
   }
 
   /** The red or yellow icon of the first status; none when the plugin has none. */
-  icon(address: PluginAddress): StatusIcon | undefined {
+  icon(address: PluginAddress): StatusSeverity | undefined {
     const [first] = this.statuses(address);
-    if (first === undefined) return undefined;
-    return WARNING_KINDS.has(first.kind) ? 'warning' : 'error';
+    return first && STATUS_SEVERITY[first.kind];
   }
 
   /** The status words, left out when the plugin has none. */

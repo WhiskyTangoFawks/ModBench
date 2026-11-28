@@ -1,12 +1,13 @@
 import { vi } from 'vitest';
+import type { RecordEditChangesOutcome } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createEditor } from '..';
-import type { ModFacts } from '../modsByOrigin';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { Uri } from '../../test/vscodeMock';
-import { forgetVscode } from './editorVscode';
+import { commandHandlers, editorProviders, editorVscode, fakePanel, forgetVscode, type FakePanel } from './editorVscode';
 
-export const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
+type EditorDeps = Parameters<typeof createEditor>[0];
+export type ModFacts = EditorDeps['modFacts'];
 
 export const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -29,16 +30,47 @@ export function fakeLoadOrder() {
 
 export function forgetEditor(): void {
   forgetVscode();
-  pickRecord.mockReset();
   reporter.report.mockClear();
+  reporter.shownOnSurface.mockClear();
 }
+
+/** mEdit's answer to an edit it made: no change unless `changes` say what it changed. */
+export const editAnswered = (changes: Partial<Extract<RecordEditChangesOutcome, { applied: true }>> = {}) => ({
+  applied: true as const, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [], ...changes,
+});
+
+interface RecordEditorProvider {
+  resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
+}
+
+const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
+  typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
+
+/** The URI of `fileName`, mEdit's rendering of the copy of `formKey` that A.esp in ModA holds. */
+export const renderedUri = (formKey: string, fileName: string) => editorVscode.Uri.from({
+  scheme: 'modbench-rendered', path: `/ModA/A.esp/${fileName}`, query: `formKey=${formKey.replace(':', '%3A')}&name=A.esp&origin=ModA`,
+});
+
+/** The value a record tab's page is handed as `window.<name>`. */
+export const pageGlobal = (panel: FakePanel, name: string): unknown => {
+  const html = panel.webview.html ?? '';
+  const at = html.indexOf(`window.${name} = `);
+  if (at < 0) return undefined;
+  const start = at + `window.${name} = `.length;
+  const nextAssignment = html.indexOf('; window.', start);
+  return JSON.parse(html.slice(start, nextAssignment >= 0 ? nextAssignment : html.indexOf(';</script>', start)));
+};
 
 interface Registered {
   selection?: () => readonly unknown[];
   meditClient?: InMemoryMEditClient;
   recordViewIds?: readonly string[];
   modFacts?: ModFacts;
-  loadOrder?: Parameters<typeof createEditor>[0]['loadOrderComing'];
+  loadOrder?: EditorDeps['loadOrderComing'];
+  reporterOf?: ReturnType<EditorDeps['reporterFor']>;
+  ask?: EditorDeps['ask'];
+  sourceEditing?: EditorDeps['sourceEditing'];
+  instance?: EditorDeps['instance'];
 }
 
 /** Creates the Editor with the view `test.view` selecting `selection`. */
@@ -46,6 +78,8 @@ export function register({
   selection = () => [], meditClient = new InMemoryMEditClient(),
   recordViewIds = ['test.view'], modFacts = NO_MODS,
   loadOrder = { now: () => true, onChanged: () => ({ dispose: () => undefined }) },
+  reporterOf = reporter, ask = vi.fn(), instance = { refresh: () => Promise.resolve(undefined) },
+  sourceEditing = { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
 }: Registered = {}) {
   const focusedView = createFocusedView();
   const outputChannel = outputChannelDouble();
@@ -54,18 +88,49 @@ export function register({
     meditClient,
     loadOrderComing: loadOrder,
     outputChannel,
-    reporterFor: () => reporter,
-    ask: vi.fn(),
+    reporterFor: () => reporterOf,
+    ask,
     focusedView,
     recordViewIds,
     modFacts,
     recordWriteProgressView: 'test.view',
-    instance: { refresh: () => Promise.resolve(undefined) },
-    sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+    instance,
+    sourceEditing,
   });
   focusedView.follow('test.view', {
     get selection() { return selection(); },
     onDidChangeSelection: (listener: (event: { selection: readonly unknown[] }) => void) => { listener({ selection: selection() }); return { dispose: () => undefined }; },
   });
   return { editor, focusedView, outputChannel };
+}
+
+/** The Editor registered over `meditClient`, and the record tabs a test opens as VS Code does. */
+export function editorOver(registered: Registered = {}) {
+  const { editor, focusedView, outputChannel } = register(registered);
+  const provider = editorProviders.get('modbench.record');
+  if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
+  const open = (formKey: string, panel = fakePanel()): FakePanel => {
+    void provider.resolveCustomTextEditor({ uri: renderedUri(formKey, `${formKey}.json`) }, panel);
+    return panel;
+  };
+  const openDocument = async (uri: unknown, document: object = {}): Promise<FakePanel> => {
+    const panel = fakePanel();
+    await provider.resolveCustomTextEditor(Object.assign(document, { uri }), panel);
+    return panel;
+  };
+  const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
+  const tabs = new Map<string, FakePanel>();
+  const vsCodeOpensTabs = ({ resolvesAfterOpenAnswers = false } = {}) => {
+    commandHandlers.set('vscode.openWith', async (uri: unknown) => {
+      if (tabs.has(String(uri))) return;
+      const panel = fakePanel();
+      tabs.set(String(uri), panel);
+      if (resolvesAfterOpenAnswers) setTimeout(() => { void provider.resolveCustomTextEditor({ uri }, panel); }, 0);
+      else await provider.resolveCustomTextEditor({ uri }, panel);
+    });
+    return (uri: unknown) => tabs.get(String(uri));
+  };
+  const askedFromThePalette = () => editor.focusedRecord();
+  const resolve = (document: object, panel: FakePanel): Promise<void> => provider.resolveCustomTextEditor(document, panel);
+  return { editor, askedFromThePalette, open, openFile, openDocument, resolve, focusedView, outputChannel, vsCodeOpensTabs };
 }

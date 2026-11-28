@@ -120,7 +120,8 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
   };
   const hearCurrent = (): void => { void hearNow(); };
   const progressSubscription = client.onDidChangeRecordIndexProgress(hearCurrent);
-  const changeSubscription = client.onDidChange(hearCurrent);
+  // A change naming plugins leaves the index status as it was; one naming none may follow a reconcile that settled.
+  const changeSubscription = client.onDidChange((change) => { if (change === undefined) hearCurrent(); });
   const unsubscribes = [
     () => { progressSubscription.dispose(); changeSubscription.dispose(); },
     client.onStatusChanged((status) => {

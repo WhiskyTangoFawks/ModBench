@@ -8,7 +8,7 @@ interface SelectionView<T> {
 export function survivingSelection<T>(
   view: SelectionView<T>, shown: (row: T) => T | undefined,
 ): { rows: () => readonly T[]; dispose: () => void } {
-  let held: readonly T[] = view.selection;
+  let held: readonly T[] = [];
   const subscription = view.onDidChangeSelection((e) => { held = e.selection; });
   return {
     rows: () => {

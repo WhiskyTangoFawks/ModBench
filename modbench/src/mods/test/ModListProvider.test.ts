@@ -1,143 +1,136 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mod, Separator } from '../../instanceLoader/instance';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
+
+import type * as vscode from 'vscode';
+import type { Mod, Separator, InstanceValue, EntryRef } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
-import type { InstanceValue } from '../../instanceLoader/instance';
-import { present } from '../../ports/present';
-import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
-} from '../../test/vscodeMock';
-import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-
-const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
-
-vi.mock('vscode', () => ({
-  ...fakeVscodeModule(),
-  commands: { executeCommand },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri, DataTransferItem, DataTransfer,
-}));
-
-import { ModListProvider, SeparatorGroupNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
-import { OpenRows } from '../openRows';
-import { separatorRowUri } from '../modIndicators';
-import { NO_MOD_STATUSES } from '../../test/noModStatuses';
-import { modArgumentOf } from '../../drivingLib/argument';
-import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
+import { labelOf, modsViewOn } from './modsViewOn';
+import { seen } from './modsVscode';
 import { MODS_KEY_ARGS } from '../gestureEntry';
-import { ErrorNode } from '../../drivingLib/errorNode';
-import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { file, folder, indexedValueOf } from './indexedValue';
+import { holdRedraws, releaseRedraws } from '../../drivingLib/heldRedraw';
+import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
+import { currentBoxOf } from '../../drivingLib/test/nameFilterViewHarness';
+import { present } from '../../ports/present';
+import { DataTransfer, DataTransferItem, FakeCancellationToken, ThemeColor, ThemeIcon, TreeItem, TreeItemCheckboxState, TreeItemCollapsibleState } from '../../test/vscodeMock';
+import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { HeldModStatuses } from '../../test/heldModStatuses';
+import { status } from '../../test/modStatusFixture';
+import { settled } from '../../test/eventually';
+import { file, folder, indexedValueOf } from './indexedValue';
 
-beforeEach(() => {
-  executeCommand.mockClear();
-});
-
-const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
-  kind: 'mod', name, enabled, ...extra,
-});
+const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({ kind: 'mod', name, enabled, ...extra });
 const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', name, enabled });
 
-const valueOf = (mods: ModlistEntry[], extra: Partial<Pick<InstanceValue, 'overwriteFiles' | 'managerNames'>> = {}): InstanceValue =>
-  instanceValueFixture({ mods, ...extra });
+const valueOf = (mods: ModlistEntry[], extra: Partial<InstanceValue> = {}): InstanceValue => instanceValueFixture({ mods, ...extra });
+const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] => Array.from({ length: count }, (_, at) => file('overwrite', `F4SE/${at}.log`));
 
-const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] =>
-  Array.from({ length: count }, (_, at) => file('overwrite', `F4SE/${at}.log`));
-
-const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;
 
-const makeProvider = (
-  mods: ModlistEntry[],
-  extra: Partial<{ instance: FakeInstance; reporter: RecordingReporter }> = {},
-) => {
-  const instance = extra.instance ?? new FakeInstance(valueOf(mods));
-  return new ModListProvider({ reporter: extra.reporter ?? recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
-};
-
-const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = ():ModlistEntry[] => [
-  mod('Late Tweak'),
-  mod('Early Fix', false),
-  sep('Late Section'),
-  mod('Base Patch'),
-  sep('Early Section'),
-  mod('Old Mod'),
-  mod('Oldest Mod'),
+const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = (): ModlistEntry[] => [
+  mod('Late Tweak'), mod('Early Fix', false), sep('Late Section'), mod('Base Patch'), sep('Early Section'), mod('Old Mod'), mod('Oldest Mod'),
 ];
 
-const labelOf = (n: ModlistNode): string => (typeof n.label === 'string' ? n.label : n.label?.label ?? '');
-const rowsOf = (nodes: readonly ModlistNode[]) => nodes.map((n) => `${n.kind} ${labelOf(n)}`);
+type Shown = ReturnType<typeof modsViewOn>;
+type Row = vscode.TreeItem;
+type Origin = { kind: 'mod'; name: string } | { kind: 'runtimeOutput' };
+
+const MODLIST_MIME = 'application/vnd.medit.modlist-node';
+
+const over = (mods: ModlistEntry[], extra: Partial<InstanceValue> = {}) => modsViewOn({ value: valueOf(mods, extra) });
+const ordered = () => over(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+
+const currentBox = currentBoxOf(seen);
+const filtered = (shown: Shown, term: string): Shown => {
+  shown.mods.nameFilter.open();
+  currentBox().type(term);
+  return shown;
+};
+const flattened = (shown: Shown, term: string): Shown => {
+  filtered(shown, term);
+  currentBox().pressButton();
+  return shown;
+};
+const winningAtTop = async (shown: Shown): Promise<Shown> => {
+  await shown.run('modbench.mod.sortWinningAtTop');
+  return shown;
+};
+
+const redraws = ({ view }: Shown): (Row | undefined)[] => {
+  const fired: (Row | undefined)[] = [];
+  view.treeDataProvider.onDidChangeTreeData?.((row) => { fired.push(Array.isArray(row) ? undefined : row ?? undefined); });
+  return fired;
+};
+const separatorsOf = async ({ rows }: Shown) => Object.fromEntries((await rows()).filter(({ contextValue }) => contextValue === 'separator').map((row) => [String(labelOf(row)), row.collapsibleState]));
+const nameOf = (row: unknown) => modArgumentOf(row)?.name ?? separatorArgumentOf(row)?.name;
+
+async function parentOfShown({ mods, view, parentOf }: Shown, entry: EntryRef): Promise<string | undefined> {
+  const reveal = vi.spyOn(view, 'reveal');
+  await present(mods.symbolRows.show(entry), `a row for ${entry.name}`)();
+  return nameOf(parentOf(expectInstanceOf(present(reveal.mock.calls[0], 'a reveal')[0], TreeItem)));
+}
 
 describe('the tree reads as mod order', () => {
-  it('losing at the top: the ungrouped mods, then the separators, then Overwrite last', async () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+  it.each([
+    ['losing at the top: the ungrouped mods, then the separators, then Overwrite last', 'modbench.mod.sortLosingAtTop', ['0 Oldest Mod', '1 Old Mod', 'Early Section', 'Late Section', 'Overwrite']],
+    ['winning at the top: Overwrite first, then the separators, then the ungrouped mods', 'modbench.mod.sortWinningAtTop', ['Overwrite', 'Late Section', 'Early Section', '1 Old Mod', '0 Oldest Mod']],
+  ])('in each direction: %s', async (_case, direction, expected) => {
+    const { run, labels } = ordered();
 
-    expect(rowsOf(await provider.getChildren())).toEqual([
-      'mod Oldest Mod', 'mod Old Mod', 'separator Early Section', 'separator Late Section', 'runtimeOutput Overwrite',
-    ]);
+    await run(direction);
+
+    expect(await labels()).toEqual(expected);
   });
 
-  it('winning at the top: Overwrite first, then the separators, then the ungrouped mods', async () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    provider.setViewDirection('winningAtTop');
+  it('draws the whole tree again when the direction flips', async () => {
+    const shown = over([mod('Winning'), mod('Losing')]);
+    const fired = redraws(shown);
 
-    expect(rowsOf(await provider.getChildren())).toEqual([
-      'runtimeOutput Overwrite', 'separator Late Section', 'separator Early Section', 'mod Old Mod', 'mod Oldest Mod',
-    ]);
+    await winningAtTop(shown);
+
+    expect(fired).toEqual([undefined]);
   });
 });
 
 describe('a mod\'s label leads with its position in mod order (mods.md, A row, Mod)', () => {
-  const shown = (provider: ModListProvider, rows: readonly ModlistNode[]) => rows.filter((row) => row instanceof ModNode).map((row) => {
-    const { label } = provider.getTreeItem(row);
-    return typeof label === 'string' ? label : label?.label;
-  });
-
   it('counts from the losing end at 0, a separator taking a place as MO2 gives it a priority', async () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    const roots = await provider.getChildren();
-    const held = await provider.getChildren(roots.find((row) => row instanceof SeparatorNode && row.separator.name === 'Early Section'));
+    const { labels, row } = ordered();
 
-    expect([...shown(provider, roots), ...shown(provider, held)]).toEqual(['0 Oldest Mod', '1 Old Mod', '3 Base Patch']);
+    expect([await labels(), await labels(await row('Early Section'))]).toEqual([['0 Oldest Mod', '1 Old Mod', 'Early Section', 'Late Section', 'Overwrite'], ['3 Base Patch']]);
   });
 
   it('zero-pads to the width of the last position, so the numbers align', async () => {
-    const provider = makeProvider(Array.from({ length: 11 }, (_, at) => mod(`M${10 - at}`)));
+    const { labels } = over(Array.from({ length: 11 }, (_, at) => mod(`M${10 - at}`)));
 
-    expect(shown(provider, await provider.getChildren()).slice(0, 2)).toEqual(['00 M0', '01 M1']);
+    expect((await labels()).slice(0, 2)).toEqual(['00 M0', '01 M1']);
   });
 
   it('does not renumber when the view flips', async () => {
-    const provider = makeProvider([mod('Winner'), mod('Loser')]);
-    provider.setViewDirection('winningAtTop');
+    const { labels } = await winningAtTop(over([mod('Winner'), mod('Loser')]));
 
-    expect(shown(provider, await provider.getChildren())).toEqual(['1 Winner', '0 Loser']);
+    expect(await labels()).toEqual(['Overwrite', '1 Winner', '0 Loser']);
   });
 
   it('does not renumber when a filter hides rows', async () => {
-    const provider = makeProvider([mod('Winner'), mod('Loser')]);
-    provider.setFilter('Winner', false);
+    const { labels } = filtered(over([mod('Winner'), mod('Loser')]), 'Winner');
 
-    expect(shown(provider, await provider.getChildren())).toEqual(['1 Winner']);
+    expect(await labels()).toEqual(['1 Winner', 'Overwrite']);
   });
 });
 
 describe('a row\'s identity is its kind and its name', () => {
   it('a mod and a separator that share a name are two rows', async () => {
-    const provider = makeProvider([mod('Armor'), sep('Armor')]);
-    const roots = await provider.getChildren();
-    const separator = expectInstanceOf(roots.find((n) => n.kind === 'separator'), SeparatorNode);
-    const [modRow] = await provider.getChildren(separator);
+    const { row } = over([mod('Armor'), sep('Armor')]);
+    const separator = await row('Armor');
 
-    expect(present(modRow, 'the Armor mod').id).not.toBe(separator.id);
+    expect((await row('Armor', separator)).id).not.toBe(separator.id);
   });
 
   it('a new instance value leaves every row\'s identity as it was', async () => {
-    const instance = new FakeInstance(valueOf(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt()));
-    const provider = makeProvider([], { instance });
-    const idsOf = async () => (await provider.getChildren()).map((n) => n.id);
+    const { rows, instance } = ordered();
+    const idsOf = async () => (await rows()).map(({ id }) => id);
     const before = await idsOf();
 
     instance.publish(valueOf(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt(), { overwriteFiles: overwriteHolding(4) }));
@@ -148,69 +141,26 @@ describe('a row\'s identity is its kind and its name', () => {
 });
 
 describe('a separator\'s expander', () => {
-  const separatorRows = async (provider: ModListProvider) =>
-    new Map((await provider.getChildren())
-      .filter((n): n is SeparatorNode => n instanceof SeparatorNode)
-      .map((n) => [labelOf(n), n.collapsibleState]));
-
-  it('starts collapsed on a fresh view, and a separator with no mods has none', async () => {
-    const provider = makeProvider([mod('Held'), sep('Full'), sep('Empty')]);
-
-    expect(await separatorRows(provider)).toEqual(new Map([
-      ['Empty', TreeItemCollapsibleState.None], ['Full', TreeItemCollapsibleState.Collapsed],
-    ]));
-  });
-
-  it('is expanded while a filter shows only the separator\'s matching mods', async () => {
-    const provider = makeProvider([mod('Armor Fix'), mod('Weapons'), sep('Gear'), mod('Armor Pack'), sep('Armory')]);
-    provider.setFilter('armo', true);
-
-    expect(await separatorRows(provider)).toEqual(new Map([
-      ['Armory', TreeItemCollapsibleState.Collapsed], ['Gear', TreeItemCollapsibleState.Expanded],
-    ]));
-  });
-
-  it('a separator whose name matches but holds no mods has none while filtering', async () => {
-    const provider = makeProvider([sep('Armory')]);
-    provider.setFilter('armo', true);
-
-    expect(await separatorRows(provider)).toEqual(new Map([['Armory', TreeItemCollapsibleState.None]]));
+  it.each<[string, ModlistEntry[], string, Record<string, vscode.TreeItemCollapsibleState>]>([
+    ['starts collapsed on a fresh view, and a separator with no mods has none', [mod('Held'), sep('Full'), sep('Empty')], '', { Empty: TreeItemCollapsibleState.None, Full: TreeItemCollapsibleState.Collapsed }],
+    ['is expanded while a filter shows only the separator\'s matching mods', [mod('Armor Fix'), mod('Weapons'), sep('Gear'), mod('Armor Pack'), sep('Armory')], 'armo', { Armory: TreeItemCollapsibleState.Collapsed, Gear: TreeItemCollapsibleState.Expanded }],
+    ['a separator whose name matches but holds no mods has none while filtering', [sep('Armory')], 'armo', { Armory: TreeItemCollapsibleState.None }],
+  ])('follows its mods and the filter: %s', async (_case, mods, term, expected) => {
+    expect(await separatorsOf(filtered(over(mods), term))).toEqual(expected);
   });
 });
 
 describe('what the view says of itself', () => {
-  const NO_MODS = 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
-
-  it('describes the enabled mods over the listed mods, counting the whole list while a filter narrows it', () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    provider.setFilter('late', true);
-
-    expect(provider.description()).toBe('4 / 5');
-  });
-
-  it('says there are no mods or separators, and how to add one', () => {
-    expect(makeProvider([]).viewMessage()).toBe(NO_MODS);
-  });
-
   it('says nothing of an empty list while a separator alone is listed', () => {
-    expect(makeProvider([sep('Only')]).viewMessage()).toBeUndefined();
-  });
-
-  it('says nothing before the first read lands, the value then being the empty sentinel', () => {
-    const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET) });
-
-    expect(provider.description()).toBeUndefined();
-    expect(provider.viewMessage()).toBeUndefined();
+    expect(over([sep('Only')]).view.message).toBeUndefined();
   });
 
   it('holds its redraw while a gesture writes from it, and draws once the gesture ends (common.md, A gesture that writes, story 1)', () => {
-    const instance = new FakeInstance(valueOf([mod('A')]));
-    const provider = makeProvider([], { instance });
-    const fired: unknown[] = [];
-    provider.onDidChangeTreeData((e) => fired.push(e));
+    const shown = over([mod('A')]);
+    const fired = redraws(shown);
 
     holdRedraws(MODS_KEY_ARGS.view);
-    instance.publish(valueOf([mod('A'), mod('B')]));
+    shown.instance.publish(valueOf([mod('A'), mod('B')]));
     const firedWhileWriting = fired.length;
     releaseRedraws(MODS_KEY_ARGS.view);
 
@@ -218,562 +168,367 @@ describe('what the view says of itself', () => {
   });
 
   it('draws a clicked row again with the box its mod\'s value sets (common.md, A gesture that writes, story 2)', async () => {
-    const provider = makeProvider([], { instance: new FakeInstance(valueOf([mod('A')])) });
-    const clicked = expectInstanceOf((await provider.getChildren())[0], ModNode);
-    const fired: (ModlistNode | undefined)[] = [];
-    provider.onDidChangeTreeData((e) => fired.push(e));
+    const shown = over([mod('A')]);
+    const clicked = await shown.row('A');
+    const fired = redraws(shown);
     clicked.checkboxState = TreeItemCheckboxState.Unchecked;
 
-    provider.restoreRows([clicked]);
+    shown.view.check([[clicked, TreeItemCheckboxState.Unchecked]]);
 
-    expect([fired, provider.getTreeItem(clicked).checkboxState]).toEqual([[clicked], TreeItemCheckboxState.Checked]);
+    await settled(() => { expect(fired).toEqual([clicked]); });
+    expect((await shown.view.treeDataProvider.getTreeItem(clicked)).checkboxState).toBe(TreeItemCheckboxState.Checked);
   });
 
-  it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {
-    const instance = new FakeInstance(valueOf([mod('A')]));
-    const provider = makeProvider([], { instance });
-    const fired: unknown[] = [];
-    provider.onDidChangeTreeData((e) => fired.push(e));
+  it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
+    const { view, instance } = over([mod('A')]);
+    const redrawn = vi.fn();
+    view.treeDataProvider.onDidChangeTreeData?.(redrawn);
 
     instance.fail('EACCES modlist.txt');
+    await settled(() => { expect(view.message).toBe('Showing the last good read: EACCES modlist.txt'); });
+    expect(redrawn).toHaveBeenCalledTimes(1);
 
-    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt');
-    expect(fired).toHaveLength(1);
     instance.publish(valueOf([mod('A')]));
-    expect(provider.viewMessage()).toBeUndefined();
+    await settled(() => { expect(view.message).toBeUndefined(); });
   });
 });
 
 describe('the Mods view\'s message line (common.md, States, story 6)', () => {
-  it('says the last good read once, naming the instance\'s failed read and each mod status that could not be read', () => {
-    const instance = new FakeInstance(instanceValueFixture({ mods: [mod('A')], holdsRepository: true }));
-    const statuses = { ...NO_MOD_STATUSES, lastGoodReasons: () => ['the status of "A" could not be read: bad JSON.'] };
-    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
+  it('says the last good read once, naming the instance\'s failed read and each mod status that could not be read', async () => {
+    const statuses = new HeldModStatuses();
+    statuses.answer([status('A', { unreadable: 'bad JSON' })]);
+    const { view, instance } = modsViewOn({ value: valueOf([mod('A')], { holdsRepository: true }), statuses });
 
     instance.fail('EACCES modlist.txt');
 
-    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt; the status of "A" could not be read: bad JSON.');
+    await settled(() => { expect(view.message).toBe('Showing the last good read: EACCES modlist.txt; the status of "A" could not be read: bad JSON.'); });
   });
 });
 
 describe('a row\'s parent, which VS Code\'s reveal walks up through getParent and a filter\'s expansion is', () => {
   it('is the separator that holds a mod, and nothing for a root', async () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    const roots = await provider.getChildren();
-    const lateSection = expectInstanceOf(roots.find((n) => labelOf(n) === 'Late Section'), SeparatorNode);
-    const [earlyFix] = await provider.getChildren(lateSection);
+    const { rows, row, parentOf } = ordered();
+    const roots = await rows();
 
-    expect(provider.getParent(present(earlyFix, 'Early Fix'))?.id).toBe(lateSection.id);
-    expect(roots.map((n) => provider.getParent(n))).toEqual(roots.map(() => undefined));
+    expect(nameOf(parentOf(await row('Early Fix', await row('Late Section'))))).toBe('Late Section');
+    expect(roots.map(parentOf)).toEqual(roots.map(() => undefined));
   });
 });
 
 describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, story 11)', () => {
-  const marked = (row: ModlistNode, provider: ModListProvider): boolean => {
-    const item = provider.getTreeItem(row);
-    return typeof item.label === 'object' && item.label.highlights?.[0]?.[1] === labelOf(row).length;
-  };
-  const allMarked = async (provider: ModListProvider) => {
-    const roots = await provider.getChildren();
-    const separators = roots.filter((row): row is SeparatorNode => row instanceof SeparatorNode);
-    const held = (await Promise.all(separators.map((row) => provider.getChildren(row)))).flat();
-    return [...roots, ...held].filter((row) => marked(row, provider)).map(labelOf);
-  };
-  const entries = (): ModlistEntry[] => [mod('Held'), mod('Other'), sep('Section'), mod('Loose')];
-  const openScene = () => {
-    const instance = new FakeInstance(valueOf(entries()));
-    const open = new OpenRows(instance);
-    return { instance, open, provider: new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open }) };
-  };
-  const scene = () => openScene().provider;
+  const scene = () => over([mod('Held'), mod('Other'), sep('Section'), mod('Loose')]);
+  const highlight = ({ mods }: Shown, ...origins: Origin[]) => { mods.drawsHighlight.highlight({ plugins: [], origins }); };
+  const allMarked = async ({ rows, row }: Shown) =>
+    [...await rows(), ...await rows(await row('Section'))].filter(({ label }) => typeof label === 'object').map(labelOf);
 
-  it('marks the whole label of each mod it is handed and of Overwrite, and no other', async () => {
-    const provider = scene();
+  it.each<[string, Origin[], string[]]>([
+    ['marks the whole label of each mod it is handed and of Overwrite, and no other', [{ kind: 'mod', name: 'Loose' }, { kind: 'runtimeOutput' }], ['0 Loose', 'Overwrite']],
+    ['marks a collapsed separator that holds a marked mod', [{ kind: 'mod', name: 'Held' }], ['Section', '3 Held']],
+  ])('marks by the origins it is handed: %s', async (_case, origins, expected) => {
+    const shown = scene();
 
-    provider.highlight([{ kind: 'mod', name: 'Loose' }, { kind: 'runtimeOutput' }]);
+    highlight(shown, ...origins);
 
-    expect(await allMarked(provider)).toEqual(['0 Loose', 'Overwrite']);
+    expect(await allMarked(shown)).toEqual(expected);
   });
 
   it('clears the mark when handed none', async () => {
-    const provider = scene();
-    provider.highlight([{ kind: 'mod', name: 'Loose' }]);
+    const shown = scene();
+    highlight(shown, { kind: 'mod', name: 'Loose' });
 
-    provider.highlight([]);
+    highlight(shown);
 
-    expect(await allMarked(provider)).toEqual([]);
-  });
-
-  it('marks a collapsed separator that holds a marked mod', async () => {
-    const provider = scene();
-
-    provider.highlight([{ kind: 'mod', name: 'Held' }]);
-
-    expect(await allMarked(provider)).toEqual(['Section', '3 Held']);
+    expect(await allMarked(shown)).toEqual([]);
   });
 
   it('leaves an open separator unmarked, and marks it again once it closes', async () => {
-    const { provider, open } = openScene();
-    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+    const shown = scene();
+    highlight(shown, { kind: 'mod', name: 'Held' });
 
-    open.expandedRow(separatorRowUri('Section'));
-    expect(await allMarked(provider)).toEqual(['3 Held']);
-    open.collapsedRow(separatorRowUri('Section'));
-    expect(await allMarked(provider)).toEqual(['Section', '3 Held']);
+    shown.view.expand(await shown.row('Section'));
+    const whileOpen = await allMarked(shown);
+    shown.view.collapse(await shown.row('Section'));
+
+    expect([whileOpen, await allMarked(shown)]).toEqual([['3 Held'], ['Section', '3 Held']]);
   });
 
   it('marks a separator made again under the name of one that was open and removed', async () => {
-    const { provider, open, instance } = openScene();
-    provider.highlight([{ kind: 'mod', name: 'Held' }]);
-    open.expandedRow(separatorRowUri('Section'));
+    const shown = scene();
+    highlight(shown, { kind: 'mod', name: 'Held' });
+    shown.view.expand(await shown.row('Section'));
 
-    instance.publish(valueOf([mod('Held'), mod('Other'), mod('Loose')]));
-    instance.publish(valueOf(entries()));
+    shown.instance.publish(valueOf([mod('Held'), mod('Other'), mod('Loose')]));
+    shown.instance.publish(valueOf([mod('Held'), mod('Other'), sep('Section'), mod('Loose')]));
 
-    expect(await allMarked(provider)).toEqual(['Section', '3 Held']);
+    expect(await allMarked(shown)).toEqual(['Section', '3 Held']);
   });
 
   it('refreshes only the rows whose mark changed', () => {
-    const provider = scene();
-    const fired: ModlistNode[] = [];
-    provider.onDidChangeTreeData((row) => { if (row) fired.push(row); });
+    const shown = scene();
+    const fired = redraws(shown);
 
-    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+    highlight(shown, { kind: 'mod', name: 'Held' });
 
-    expect(fired.map(labelOf).sort()).toEqual(['Held', 'Section']);
+    expect(fired.map(nameOf).sort()).toEqual(['Held', 'Section']);
   });
 
   it('keeps the resourceUri the row\'s colour decoration hangs on', async () => {
-    const provider = scene();
-    const before = (await provider.getChildren())[0]?.resourceUri?.toString();
+    const shown = scene();
+    const before = (await shown.rows())[0]?.resourceUri?.toString();
 
-    provider.highlight([{ kind: 'mod', name: 'Loose' }]);
+    highlight(shown, { kind: 'mod', name: 'Loose' });
 
-    expect((await provider.getChildren())[0]?.resourceUri?.toString()).toBe(before);
+    expect((await shown.rows())[0]?.resourceUri?.toString()).toBe(before);
   });
 });
 
 describe('the row for an origin, which Go to mod reveals', () => {
-  const modOf = (name: string) => ({ kind: 'mod', name }) as const;
+  const unfiltered = (shown: Shown) => shown;
+  const modOf = (name: string): EntryRef => ({ kind: 'mod', name });
 
-  it('is a mod whose separator was never rendered, with that separator as its parent', () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    const row = expectInstanceOf(provider.rowFor(modOf('Base Patch')), ModNode);
-
-    expect(row.mod.name).toBe('Base Patch');
-    expect(provider.getParent(row)).toMatchObject({ kind: 'separator', id: 'separator:Early Section' });
+  it.each<[string, (shown: Shown) => Shown, string, string | undefined]>([
+    ['is a mod whose separator was never rendered, with that separator as its parent', unfiltered, 'Base Patch', 'Early Section'],
+    ['is a root mod with no parent', unfiltered, 'Old Mod', undefined],
+    ['is a root mod when grouping is off', (shown) => flattened(shown, 'old mod'), 'Old Mod', undefined],
+    ['is a mod a matching separator shows whole, though the mod\'s own name does not match', (shown) => filtered(shown, 'early section'), 'Base Patch', 'Early Section'],
+    ['under a grouping filter has the separator its filter shows for it as its parent', (shown) => filtered(shown, 'base'), 'Base Patch', 'Early Section'],
+  ])('reveals a mod\'s row under its parent: %s', async (_case, filter, name, parent) => {
+    expect(await parentOfShown(filter(ordered()), modOf(name))).toBe(parent);
   });
 
-  it('is a root mod with no parent', () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-
-    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Old Mod')), ModNode))).toBeUndefined();
+  it.each<[string, (shown: Shown) => Shown, string]>([
+    ['the filter hides with grouping off', (shown) => flattened(shown, 'old mod'), 'Base Patch'],
+    ['a matching separator does not show', (shown) => filtered(shown, 'early section'), 'Old Mod'],
+    ['a grouping filter hides', (shown) => filtered(shown, 'base'), 'Old Mod'],
+  ])('is nothing for a mod %s', (_case, filter, name) => {
+    expect(filter(ordered()).mods.symbolRows.show(modOf(name))).toBeUndefined();
   });
 
-  it('is the Overwrite row for the run-time output', () => {
-    const provider = makeProvider([mod('A')]);
+  it('is the Overwrite row for the run-time output', async () => {
+    const value = await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.esp')] } }, { files: [file('overwrite', 'a.esp')] });
+    const { view, row, run } = modsViewOn({ value });
+    const reveal = vi.spyOn(view, 'reveal');
 
-    expect(provider.rowFor({ kind: 'runtimeOutput' })).toBeInstanceOf(OverwriteNode);
-  });
+    await run('modbench.mod.goToMod', await row('a.esp', await row('A')), undefined, { kind: 'runtimeOutput' });
 
-  it('is nothing for a mod the list does not hold', () => {
-    expect(makeProvider([mod('A')]).rowFor(modOf('Gone'))).toBeUndefined();
-  });
-
-  it('is nothing for a mod the filter hides, and a root mod when grouping is off', () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    provider.setFilter('old mod', false);
-
-    expect(provider.rowFor(modOf('Base Patch'))).toBeUndefined();
-    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Old Mod')), ModNode))).toBeUndefined();
-  });
-
-  it('is a mod a matching separator shows whole, though the mod\'s own name does not match', () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    provider.setFilter('early section', true);
-
-    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Base Patch')), ModNode)))
-      .toMatchObject({ id: 'separator:Early Section' });
-    expect(provider.rowFor(modOf('Old Mod'))).toBeUndefined();
-  });
-
-  it('under a grouping filter has the separator its filter shows for it as its parent', () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    provider.setFilter('base', true);
-
-    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Base Patch')), ModNode)))
-      .toMatchObject({ id: 'separator:Early Section' });
-    expect(provider.rowFor(modOf('Old Mod'))).toBeUndefined();
+    expect(present(reveal.mock.calls[0], 'a reveal')[0]).toMatchObject({ contextValue: 'runtimeOutput' });
   });
 });
 
 describe('a click on a separator, a mod, Overwrite or a folder only selects', () => {
   it('none of those rows carries a command', async () => {
-    const entries = [mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')];
-    const provider = makeProvider([], { instance: new FakeInstance(instanceValueFixture({
-      ...valueOf(entries, { overwriteFiles: overwriteHolding(5) }),
-      overwriteFolders: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', includedPath: 'F4SE', excluded: false }],
-    })) });
-    const roots = await provider.getChildren();
-    const children = await Promise.all(roots.map((n) => provider.getChildren(n)));
-    const rows = [...roots, ...children.flat()];
+    const { rows } = over([mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')], {
+      overwriteFiles: overwriteHolding(5), overwriteFolders: [folder('overwrite', 'F4SE')],
+    });
+    const roots = await rows();
+    const shown = [...roots, ...(await Promise.all(roots.map(async (root) => await rows(root)))).flat()];
 
-    expect(rows.map((n) => n.kind).sort()).toEqual(['folder', 'mod', 'mod', 'runtimeOutput', 'separator']);
-    expect(rows.filter((n) => n.command !== undefined)).toEqual([]);
+    expect(shown.map(({ contextValue }) => contextValue?.split(' ')[0]).sort()).toEqual(['folder', 'mod', 'mod', 'runtimeOutput', 'separator']);
+    expect(shown.filter(({ command }) => command !== undefined)).toEqual([]);
   });
 });
 
 describe('the Mods tree\'s rows', () => {
   it('renders no row for a folder in mods/ with no modlist line, since mod sync is what adds a line', async () => {
-    const value = instanceValueFixture({ mods: [mod('Listed')], modFolders: [
+    const { labels } = over([mod('Listed')], { modFolders: [
       { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed', modName: 'Listed' },
       { kind: 'mod', name: 'Dropped In', path: '/instance/mods/Dropped In', modName: 'Dropped In' },
     ] });
-    const provider = makeProvider([], { instance: new FakeInstance(value) });
 
-    const labels = (await provider.getChildren()).map((n) => n.label);
-
-    expect(labels).toContain('Listed');
-    expect(labels).not.toContain('Dropped In');
+    expect(await labels()).toEqual(['0 Listed', 'Overwrite']);
   });
 
   it('returns a separator’s mods, the entries preceding it, as mod rows with their check boxes, the later file entry first in the default losing-at-top view', async () => {
-    const provider = makeProvider([
-      mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', installationFileName: 'UFO4P.7z' }),
-      mod('Disabled Mod', false),
-      sep('Section'),
-    ]);
-    const roots = await provider.getChildren();
-    const separator = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
-    const children = await provider.getChildren(separator);
+    const { rows, row } = over([mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', installationFileName: 'UFO4P.7z' }), mod('Disabled Mod', false), sep('Section')]);
 
-    expect(children).toHaveLength(2);
-    const modNodes = expectInstancesOf(children, ModNode);
-    const disabled = present(modNodes[0], 'the disabled mod row');
-    const enabled = present(modNodes[1], 'the enabled mod row');
-    expect([[disabled.label, disabled.checkboxState], [enabled.label, enabled.checkboxState]]).toEqual([
-      ['Disabled Mod', TreeItemCheckboxState.Unchecked], ['UFO4P', TreeItemCheckboxState.Checked],
+    expect((await rows(await row('Section'))).map((shown) => [labelOf(shown), shown.checkboxState])).toEqual([
+      ['1 Disabled Mod', TreeItemCheckboxState.Unchecked], ['2 UFO4P', TreeItemCheckboxState.Checked],
     ]);
   });
 
   it('a mod row states its enabled state and whether it has a Nexus id in its contextValue, which the mod-menu when clauses read to offer enable or disable and view on Nexus', async () => {
-    const provider = makeProvider([
-      mod('UFO4P', true, { nexusId: '4598' }),
-      mod('Disabled Mod', false),
-    ]);
-    const rows = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode);
-    const enabled = present(rows.find((n) => n.mod.name === 'UFO4P'), 'the enabled row');
-    const disabled = present(rows.find((n) => n.mod.name === 'Disabled Mod'), 'the disabled row');
+    const { row } = over([mod('UFO4P', true, { nexusId: '4598' }), mod('Disabled Mod', false)]);
 
-    expect(enabled.contextValue).toBe('mod hasNexus enabled nonSourceMod');
-    expect(disabled.contextValue).toBe('mod disabled nonSourceMod');
+    expect([(await row('UFO4P')).contextValue, (await row('Disabled Mod')).contextValue]).toEqual(['mod hasNexus enabled nonSourceMod', 'mod disabled nonSourceMod']);
   });
 
   it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which version in git reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
-    const value = instanceValueFixture({
-      mods: [mod('Patch'), mod('Textures'), mod('SourceMod')],
+    const { rows } = over([mod('Patch'), mod('Textures'), mod('SourceMod')], {
       listedSourceMods: new Set(['SourceMod']),
       plugins: [
         { name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', line: 0, enabled: true, winning: true },
         { name: 'SourceMod.esp', origin: 'SourceMod', path: '/instance/mods/SourceMod/SourceMod.esp', line: 1, enabled: true, winning: true },
       ],
     });
-    const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())
-      .filter((n): n is ModNode => n instanceof ModNode);
 
-    expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
+    expect((await rows()).map((shown) => [nameOf(shown), shown.contextValue])).toEqual([
       ['SourceMod', 'mod enabled holdsPlugin sourceMod'],
       ['Textures', 'mod enabled nonSourceMod'],
       ['Patch', 'mod enabled holdsPlugin nonSourceMod'],
+      [undefined, 'runtimeOutput'],
     ]);
   });
 
   it('hands the driving lib its mod from a mod row, and none from a separator or the Overwrite row', async () => {
-    const provider = makeProvider([mod('Patch'), sep('Tools')]);
-    const roots = await provider.getChildren();
-    const separator = present(roots.find((n) => n instanceof SeparatorNode), 'the separator row');
-    const patch = present((await provider.getChildren(separator)).concat(roots).find((n) => n instanceof ModNode), 'the mod row');
-    const overwrite = present(roots.find((n) => n instanceof OverwriteNode), 'the Overwrite row');
+    const { row } = over([mod('Patch'), sep('Tools')]);
+    const separator = await row('Tools');
 
-    expect(modArgumentOf(patch)).toEqual({ kind: 'mod', name: 'Patch' });
-    expect(modArgumentOf(separator)).toBeUndefined();
-    expect(modArgumentOf(overwrite)).toBeUndefined();
+    expect([modArgumentOf(await row('Patch', separator)), modArgumentOf(separator), modArgumentOf(await row('Overwrite'))])
+      .toEqual([{ kind: 'mod', name: 'Patch' }, undefined, undefined]);
   });
 
   it('re-renders on a second, later value published after construction, not only the value handed to the constructor', async () => {
-    const instance = new FakeInstance(valueOf([mod('A')]));
-    const provider = makeProvider([], { instance });
-    const first = await provider.getChildren();
-    expect(first.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label)).toEqual(['A']);
+    const shown = over([mod('A')]);
+    const first = await shown.labels();
+    const fired = redraws(shown);
 
-    let fired = false;
-    provider.onDidChangeTreeData(() => { fired = true; });
-    instance.publish(valueOf([mod('A'), mod('B')]));
+    shown.instance.publish(valueOf([mod('A'), mod('B')]));
 
-    expect(fired).toBe(true);
-    const second = await provider.getChildren();
-    expect(second.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label)).toEqual(['B', 'A']);
+    expect([first, fired, await shown.labels()]).toEqual([['0 A', 'Overwrite'], [undefined], ['0 B', '1 A', 'Overwrite']]);
   });
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
-    const provider = new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+    const { labels } = modsViewOn({ instance });
 
-    const pending = provider.getChildren();
+    const pending = labels();
     instance.publish(valueOf([mod('A'), mod('B')]));
-    const rendered = (await pending).map((n) => n.label);
 
-    expect(rendered).toEqual(['B', 'A', 'Overwrite']);
-    expect(rendered).toEqual((await provider.getChildren()).map((n) => n.label));
-    provider.dispose();
+    expect(await pending).toEqual(['0 B', '1 A', 'Overwrite']);
   });
 
   it('settles a failed first read, rather than spinning forever, on the one error row naming the reason, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
-    const provider = makeProvider([], { instance });
+    const { labels } = modsViewOn({ instance });
 
-    const pending = provider.getChildren();
+    const pending = labels();
     instance.fail('EACCES: permission denied, open modlist.txt');
-    const rows = await pending;
-
-    expect(rows).toHaveLength(1);
-    expect(expectInstanceOf(rows[0], ErrorNode).label).toBe('Failed to load: EACCES: permission denied, open modlist.txt');
-
+    const failed = await pending;
     instance.publish(valueOf([mod('A')]));
-    const after = await provider.getChildren();
 
-    expect(after.some((n) => n instanceof ModNode)).toBe(true);
-    expect(after.some((n) => n instanceof ErrorNode)).toBe(false);
+    expect([failed, await labels()]).toEqual([['Failed to load: EACCES: permission denied, open modlist.txt'], ['0 A', 'Overwrite']]);
   });
 
   it('renders a genuinely empty modlist immediately, as the Overwrite row alone, when the first landed value already carries none', async () => {
-    const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), SEQUENCE_ALREADY_LOADED) });
-    expect(rowsOf(await provider.getChildren())).toEqual(['runtimeOutput Overwrite']);
+    expect(await over([]).labels()).toEqual(['Overwrite']);
   });
 
   describe('a filter narrows the roots', () => {
-    const entries = (): ModlistEntry[] => [
-      mod('Zeta'),
-      mod('Alpha Child'),
-      sep('Group A'),
-      mod('Gamma'),
-      sep('Group B'),
-      mod('Alpha'),
-      mod('Beta'),
-    ];
+    const entries = (): ModlistEntry[] => [mod('Zeta'), mod('Alpha Child'), sep('Group A'), mod('Gamma'), sep('Group B'), mod('Alpha'), mod('Beta')];
 
     it.each([
-      { term: 'alpha', roots: ['mod Alpha', 'separator Group A', 'runtimeOutput Overwrite'], children: ['Alpha Child'] },
-      { term: 'group a', roots: ['separator Group A', 'runtimeOutput Overwrite'], children: ['Alpha Child', 'Zeta'] },
+      { term: 'alpha', roots: ['1 Alpha', 'Group A', 'Overwrite'], children: ['5 Alpha Child'] },
+      { term: 'group a', roots: ['Group A', 'Overwrite'], children: ['5 Alpha Child', '6 Zeta'] },
     ])('"$term" with grouping on shows $roots, Group A holding $children', async ({ term, roots, children }) => {
-      const provider = makeProvider(entries());
-      provider.setFilter(term, true);
+      const { labels, row } = filtered(over(entries()), term);
 
-      const shownRoots = await provider.getChildren();
-
-      expect(rowsOf(shownRoots)).toEqual(roots);
-      const group = expectInstanceOf(shownRoots.find((n) => n.label === 'Group A'), SeparatorNode);
-      expect((await provider.getChildren(group)).map((n) => n.label)).toEqual(children);
+      expect([await labels(), await labels(await row('Group A'))]).toEqual([roots, children]);
     });
 
     it('with grouping off shows the matching mods flat, with no separators', async () => {
-      const provider = makeProvider(entries());
-      provider.setFilter('alpha', false);
-
-      expect(rowsOf(await provider.getChildren())).toEqual(['mod Alpha', 'mod Alpha Child', 'runtimeOutput Overwrite']);
+      expect(await flattened(over(entries()), 'alpha').labels()).toEqual(['1 Alpha', '5 Alpha Child', 'Overwrite']);
     });
   });
 
   describe('drag-and-drop', () => {
-    const token = new FakeCancellationToken();
-    const MIME = 'application/vnd.medit.modlist-node';
-
-    const dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt: ModlistEntry[] = [
-      mod('Alpha'), sep('Group A'), mod('Beta'), mod('Gamma'), sep('Group B'), mod('Delta'),
-    ];
-
-    async function shownRows(provider: ModListProvider): Promise<ModlistNode[]> {
-      const rows: ModlistNode[] = [];
-      for (const root of await provider.getChildren()) {
-        rows.push(root);
-        if (root instanceof SeparatorNode) rows.push(...await provider.getChildren(root));
-      }
-      return rows;
-    }
-    const rowLabelled = (rows: readonly ModlistNode[], label: string): ModlistNode =>
-      present(rows.find((row) => labelOf(row) === label), `the '${label}' row`);
-
-    async function dragAndDrop(provider: ModListProvider, dragged: readonly string[], target: string | undefined): Promise<void> {
-      const rows = await shownRows(provider);
-      const dataTransfer = new DataTransfer();
-      provider.handleDrag(dragged.map((label) => rowLabelled(rows, label)), dataTransfer, token);
-      await provider.handleDrop(target === undefined ? undefined : rowLabelled(rows, target), dataTransfer, token);
-    }
-
-    const movesFired = () => executeCommand.mock.calls.filter(([id]) => id === 'modbench.mod.move');
-    const argumentLabels = (call: readonly unknown[]): string[] => (Array.isArray(call[2]) ? call[2] : [])
-      .filter((row): row is ModNode | SeparatorNode => row instanceof ModNode || row instanceof SeparatorNode).map(labelOf);
+    const dnd = () => over([mod('Alpha'), sep('Group A'), mod('Beta'), mod('Gamma'), sep('Group B'), mod('Delta')]);
+    const movesFired = () => seen.executed.filter(([id]) => id === 'modbench.mod.move');
+    const movedNames = () => movesFired().map(([, , argument]) => (Array.isArray(argument) ? argument.map(nameOf) : []));
 
     it('a drop fires move with every dragged row as its Argument, and the place the view shows it landing', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
+      const { row, drop } = dnd();
+      const [alpha, delta, gamma] = [await row('Alpha', await row('Group A')), await row('Delta'), await row('Gamma', await row('Group B'))];
 
-      await dragAndDrop(provider, ['Alpha', 'Delta'], 'Gamma');
+      await drop([alpha, delta], gamma);
 
-      const rows = await shownRows(provider);
-      const argument = [rowLabelled(rows, 'Alpha'), rowLabelled(rows, 'Delta')];
-      expect(movesFired()).toEqual([[
-        'modbench.mod.move', argument[0], argument, { place: { kind: 'mod', name: 'Gamma' }, end: 'losing' },
-      ]]);
+      expect(movesFired()).toEqual([['modbench.mod.move', alpha, [alpha, delta], { place: { kind: 'mod', name: 'Gamma' }, end: 'losing' }]]);
     });
 
     it('a drop follows the view\'s sort direction', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-      provider.setViewDirection('winningAtTop');
+      const { row, drop } = await winningAtTop(dnd());
 
-      await dragAndDrop(provider, ['Group B'], undefined);
+      await drop([await row('Group B')], undefined);
 
       expect(movesFired().map((call) => call[3])).toEqual([{ place: { kind: 'modOrder' }, end: 'losing' }]);
     });
 
     it('a refused drop reports why and moves nothing', async () => {
-      const reporter = recordingReporter();
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt, { reporter });
+      const { row, drop, reporter } = dnd();
+      const delta = await row('Delta');
 
-      await dragAndDrop(provider, ['Delta'], 'Delta');
+      await drop([delta], delta);
 
-      expect(movesFired()).toEqual([]);
-      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move mods.', detail: 'Delta is being dragged, so nothing goes onto it.' }]);
-    });
-
-    it('a payload that carries no focused row among its rows drops nothing', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-      const rows = await shownRows(provider);
-      const dataTransfer = new DataTransfer();
-      dataTransfer.set(MIME, new DataTransferItem({ rows: [] }));
-
-      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
-
-      expect(executeCommand).not.toHaveBeenCalled();
+      expect([movesFired(), reporter.reports]).toEqual([[], [{ severity: 'error', message: 'Could not move mods.', detail: 'Delta is being dragged, so nothing goes onto it.' }]]);
     });
 
     it('a drag that mixes kinds takes the kind of the row VS Code last added to the selection', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
+      const { row, drop } = dnd();
+      const [groupB, delta, groupA] = [await row('Group B'), await row('Delta'), await row('Group A')];
 
-      await dragAndDrop(provider, ['Group B', 'Delta'], 'Group A');
-      await dragAndDrop(provider, ['Delta', 'Group B'], 'Group A');
+      await drop([groupB, delta], groupA);
+      await drop([delta, groupB], groupA);
 
-      expect(movesFired().map(argumentLabels)).toEqual([['Delta'], ['Group B']]);
+      expect(movedNames()).toEqual([['Delta'], ['Group B']]);
     });
 
-    async function dragRows() {
-      const value = await indexedValueOf([mod('Armour')], { Armour: { files: [file('Armour', 'x/a.dds')], folders: [folder('Armour', 'x')] } });
-      const provider = makeProvider([], { instance: new FakeInstance(value) });
-      const roots = await provider.getChildren();
-      const armour = rowLabelled(roots, 'Armour');
-      const x = rowLabelled(await provider.getChildren(armour), 'x');
-      return { provider, armour, overwrite: rowLabelled(roots, 'Overwrite'), folder: x, leaf: rowLabelled(await provider.getChildren(x), 'a.dds') };
-    }
-    type DragRows = Awaited<ReturnType<typeof dragRows>>;
-    const theMod = ({ armour }: DragRows) => ({ rows: [armour], focused: armour });
+    it.each<[string, (rows: Record<'armour' | 'overwrite' | 'folder' | 'leaf', Row>) => Row[], string[][]]>([
+      ['Overwrite alone moves nothing', ({ overwrite }) => [overwrite], []],
+      ['a mod beside Overwrite moves the mod alone', ({ armour, overwrite }) => [armour, overwrite], [['Armour']]],
+      ['files and folders moves nothing', ({ folder, leaf }) => [folder, leaf], []],
+      ['a mod beside a file moves the mod alone', ({ armour, leaf }) => [armour, leaf], [['Armour']]],
+    ])('a drag of %s', async (_case, dragged, moved) => {
+      const value = await indexedValueOf([mod('Armour'), mod('Other')], { Armour: { files: [file('Armour', 'x/a.dds')], folders: [folder('Armour', 'x')] } });
+      const { row, drop } = modsViewOn({ value });
+      const armour = await row('Armour');
+      const x = await row('x', armour);
 
-    it.each<[string, (rows: DragRows) => ModlistNode[], (rows: DragRows) => unknown]>([
-      ['Overwrite alone carries nothing', ({ overwrite }) => [overwrite], () => undefined],
-      ['a mod beside Overwrite carries the mod alone', ({ armour, overwrite }) => [armour, overwrite], theMod],
-      ['files and folders carries nothing', ({ folder, leaf }) => [folder, leaf], () => undefined],
-      ['a mod beside a file carries the mod alone', ({ armour, leaf }) => [armour, leaf], theMod],
-    ])('a drag of %s', async (_case, dragged, carried) => {
-      const rows = await dragRows();
-      const dataTransfer = new DataTransfer();
+      await drop(dragged({ armour, overwrite: await row('Overwrite'), folder: x, leaf: await row('a.dds', x) }), await row('Other'));
 
-      rows.provider.handleDrag(dragged(rows), dataTransfer, token);
-
-      expect(dataTransfer.get(MIME)?.value).toEqual(carried(rows));
+      expect(movedNames()).toEqual(moved);
     });
 
-    it('nothing from outside the view drops here', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-      const rows = await shownRows(provider);
-      const dataTransfer = new DataTransfer();
-      dataTransfer.set(MIME, new DataTransferItem({ kind: 'mod', name: 'Delta' }));
-      dataTransfer.set('text/uri-list', new DataTransferItem('file:///downloads/SomeMod.7z'));
+    it.each([
+      ['a payload that carries no focused row among its rows', { rows: [] }],
+      ['an entry from outside the view', { kind: 'mod', name: 'Delta' }],
+    ])('drops nothing of %s, taking only what its own drag carries', async (_case, payload) => {
+      const { row, view } = dnd();
+      const controller = present(view.options.dragAndDropController, 'the drag and drop controller');
+      const transfer = new DataTransfer();
+      transfer.set(MODLIST_MIME, new DataTransferItem(payload));
 
-      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
+      await controller.handleDrop?.(await row('Delta'), transfer, new FakeCancellationToken());
 
-      expect(provider.dropMimeTypes).toEqual([MIME]);
-      expect(executeCommand).not.toHaveBeenCalled();
+      expect([controller.dragMimeTypes, controller.dropMimeTypes, movesFired()]).toEqual([[MODLIST_MIME], [MODLIST_MIME], []]);
     });
 
     it('a drop asks for no refresh, since a drop moves no row on screen', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-      await shownRows(provider);
-      let fired = false;
-      provider.onDidChangeTreeData(() => { fired = true; });
+      const shown = dnd();
+      const target = await shown.row('Group A');
+      const fired = redraws(shown);
 
-      await dragAndDrop(provider, ['Delta'], 'Group A');
+      await shown.drop([await shown.row('Delta')], target);
 
-      expect(movesFired()).toHaveLength(1);
-      expect(fired).toBe(false);
+      expect([movesFired().length, fired]).toEqual([1, []]);
     });
   });
 
   describe('sort order toggle', () => {
-    it('flipping the direction of a rendered tree asks it to render again, and its rows come back reordered', async () => {
-      const provider = makeProvider([mod('Winning'), mod('Losing')]);
-      const modLabels = async () => (await provider.getChildren()).filter((n) => n instanceof ModNode).map((n) => n.label);
-      expect(await modLabels()).toEqual(['Losing', 'Winning']);
-
-      let askedToRerender = false;
-      provider.onDidChangeTreeData(() => { askedToRerender = true; });
-      provider.setViewDirection('winningAtTop');
-
-      expect(askedToRerender).toBe(true);
-      expect(await modLabels()).toEqual(['Winning', 'Losing']);
-    });
-
     it('toggled to winning-at-top: the mods within a separator, the entries preceding it, are in mod order', async () => {
-      const provider = makeProvider([
-        mod('First'),
-        mod('Second'),
-        mod('Third'),
-        sep('Section'),
-      ]);
-      provider.setViewDirection('winningAtTop');
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
-      const children = await provider.getChildren(sepNode);
+      const { labels, row } = await winningAtTop(over([mod('First'), mod('Second'), mod('Third'), sep('Section')]));
 
-      expect(children.map((n) => n.label)).toEqual(['First', 'Second', 'Third']);
+      expect(await labels(await row('Section'))).toEqual(['3 First', '2 Second', '1 Third']);
     });
 
     it('the direction applies to the flat list', async () => {
-      const provider = makeProvider([
-        mod('Alpha'),
-        sep('Group A'),
-        mod('Alpha Child'),
-        mod('Alpha Other'),
-      ]);
-      provider.setViewDirection('winningAtTop');
-      provider.setFilter('alpha', false);
-      const roots = await provider.getChildren();
+      const shown = flattened(await winningAtTop(over([mod('Alpha'), sep('Group A'), mod('Alpha Child'), mod('Alpha Other')])), 'alpha');
 
-      expect(rowsOf(roots)).toEqual(['runtimeOutput Overwrite', 'mod Alpha', 'mod Alpha Child', 'mod Alpha Other']);
+      expect(await shown.labels()).toEqual(['Overwrite', '3 Alpha', '1 Alpha Child', '0 Alpha Other']);
     });
 
     it('the direction applies to the grouped, filtered list', async () => {
-      const provider = makeProvider([
-        mod('Alpha Child'),
-        mod('Alpha Other'),
-        sep('Group A'),
-        mod('Alpha'),
-      ]);
-      provider.setViewDirection('winningAtTop');
-      provider.setFilter('alpha', true);
-      const roots = await provider.getChildren();
+      const { labels, row } = filtered(await winningAtTop(over([mod('Alpha Child'), mod('Alpha Other'), sep('Group A'), mod('Alpha')])), 'alpha');
 
-      expect(rowsOf(roots)).toEqual(['runtimeOutput Overwrite', 'separator Group A', 'mod Alpha']);
-      const sepNode = expectInstanceOf(roots[1], SeparatorNode);
-      const children = await provider.getChildren(sepNode);
-      expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha Other']);
+      expect([await labels(), await labels(await row('Group A'))]).toEqual([['Overwrite', 'Group A', '0 Alpha'], ['3 Alpha Child', '2 Alpha Other']]);
     });
   });
 
@@ -782,192 +537,132 @@ describe('the Mods tree\'s rows', () => {
       [mod('Winner'), mod('Loser', true, { version: '1.2', nexusId: '42', installationFileName: 'loser.7z' })],
       { Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'b.dds')] } },
     );
-    const rowOf = async (name: string) => {
-      const provider = makeProvider([], { instance: new FakeInstance(await contested()) });
-      return present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.mod.name === name), `the '${name}' row`);
-    };
 
     it('shows $(package), the version as its description, and a tooltip of name, version, Nexus mod ID and installation file', async () => {
-      const loser = await rowOf('Loser');
+      const loser = await modsViewOn({ value: await contested() }).row('Loser');
 
       expect([loser.iconPath, loser.description, loser.tooltip]).toEqual([{ id: 'package' }, '1.2', 'Loser · 1.2 · 42 · loser.7z']);
     });
 
     it('shows $(repo) for a source mod, and its source folder in the tooltip as what the folder is built from', async () => {
       const value = { ...(await contested()), listedSourceMods: new Set(['Loser']), paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Loser', '/instance/source/Loser']]) } };
-      const provider = makeProvider([], { instance: new FakeInstance(value) });
-      const rows = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode);
-      const [winner, loser] = [rows.find((n) => n.mod.name === 'Winner'), rows.find((n) => n.mod.name === 'Loser')];
+      const { row } = modsViewOn({ value });
+      const [winner, loser] = [await row('Winner'), await row('Loser')];
 
-      expect([winner?.iconPath, loser?.iconPath]).toEqual([{ id: 'package' }, { id: 'repo' }]);
-      expect(winner?.tooltip).toBe('Winner');
-      expect(loser?.tooltip).toBe('Loser · 1.2 · 42 · loser.7z · built from /instance/source/Loser');
+      expect([winner.iconPath, loser.iconPath, winner.tooltip, loser.tooltip]).toEqual([
+        { id: 'package' }, { id: 'repo' }, 'Winner', 'Loser · 1.2 · 42 · loser.7z · built from /instance/source/Loser',
+      ]);
     });
   });
 
   describe('Overwrite row, pinned outside separator grouping, over the value\'s own files', () => {
-    const entries = (): ModlistEntry[] => [mod('Alpha'), sep('Group A'), mod('Beta')];
-    const overwriteRow = async (fileCount: number) => {
-      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { overwriteFiles: overwriteHolding(fileCount) })) });
-      return expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
-    };
+    const overwriteRow = (extra: Partial<InstanceValue>) => over([mod('Alpha'), sep('Group A'), mod('Beta')], extra).row('Overwrite');
 
-    it('holding files: its count as the description and a tinted folder icon', async () => {
-      const row = await overwriteRow(3);
+    it.each([
+      ['holding files: its count as the description and a tinted folder icon', 3, '3', new ThemeIcon('folder', new ThemeColor('charts.red'))],
+      ['holding nothing: still a row, with no description and an untinted folder icon', 0, undefined, new ThemeIcon('folder')],
+    ])('counts its files: %s', async (_case, count, description, icon) => {
+      const row = await overwriteRow({ overwriteFiles: overwriteHolding(count) });
 
-      expect(row.label).toBe('Overwrite');
-      expect(row.description).toBe('3');
-      expect(row.iconPath).toEqual(new ThemeIcon('folder', new ThemeColor('charts.red')));
-    });
-
-    it('holding nothing: still a row, with no description and an untinted folder icon', async () => {
-      const row = await overwriteRow(0);
-
-      expect(row.label).toBe('Overwrite');
-      expect(row.description).toBeUndefined();
-      expect(row.iconPath).toEqual(new ThemeIcon('folder'));
+      expect([labelOf(row), row.description, row.iconPath]).toEqual(['Overwrite', description, icon]);
     });
 
     it('says what Overwrite is, and nothing of deploy', async () => {
-      const row = await overwriteRow(2);
-
-      expect(row.tooltip).toBe('The files tools wrote while MO2 ran them, which win over every mod.');
+      expect((await overwriteRow({ overwriteFiles: overwriteHolding(2) })).tooltip).toBe('The files tools wrote while MO2 ran them, which win over every mod.');
     });
 
     it('names the mod manager the value names, not MO2 over another manager\'s instance', async () => {
-      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' } })) });
-      const row = expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
+      const row = await overwriteRow({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' } });
 
       expect(row.tooltip).toBe('The files tools wrote while Another Manager ran them, which win over every mod.');
     });
 
     it('is not a mod: no check box, no click, a resourceUri no file shares, so only the Mods view\'s own decorations reach its label, and its own menu', async () => {
-      const row = await overwriteRow(2);
+      const row = await overwriteRow({ overwriteFiles: overwriteHolding(2) });
 
-      expect(row.checkboxState).toBeUndefined();
-      expect(row.command).toBeUndefined();
-      expect([row.resourceUri?.scheme, row.resourceUri?.path]).toEqual(['modbench-overwrite', '/']);
-      expect(row.contextValue).toBe('runtimeOutput');
+      expect([row.checkboxState, row.command, row.resourceUri?.scheme, row.resourceUri?.path, row.contextValue]).toEqual([undefined, undefined, 'modbench-overwrite', '/', 'runtimeOutput']);
     });
   });
 });
 
 describe('separators that share a prefix', () => {
-  const grouped = (): ModlistEntry[] => [
-    mod('Rock'), sep('textures - Retextures'), mod('Fix'), sep('textures - Fixes'), mod('Lone'), sep('Plain'), mod('Base'),
-  ];
-
-  it('sit under a group of the prefix, labelled less it', async () => {
-    const provider = makeProvider(grouped());
-    const roots = await provider.getChildren();
-    const group = expectInstanceOf(roots.find((n) => n.kind === 'separatorGroup'), SeparatorGroupNode);
-
-    expect(rowsOf(roots)).toEqual(['mod Base', 'separator Plain', 'separatorGroup textures', 'runtimeOutput Overwrite']);
-    expect(rowsOf(await provider.getChildren(group))).toEqual(['separator Fixes', 'separator Retextures']);
-  });
+  const grouped = () => over([mod('Rock'), sep('textures - Retextures'), mod('Fix'), sep('textures - Fixes'), mod('Lone'), sep('Plain'), mod('Base')]);
 
   it('are reversed with the view, group and children alike', async () => {
-    const provider = makeProvider(grouped());
-    provider.setViewDirection('winningAtTop');
-    const roots = await provider.getChildren();
-    const group = expectInstanceOf(roots.find((n) => n.kind === 'separatorGroup'), SeparatorGroupNode);
+    const { labels, row } = await winningAtTop(grouped());
 
-    expect(rowsOf(roots)).toEqual(['runtimeOutput Overwrite', 'separatorGroup textures', 'separator Plain', 'mod Base']);
-    expect(rowsOf(await provider.getChildren(group))).toEqual(['separator Retextures', 'separator Fixes']);
+    expect([await labels(), await labels(await row('textures'))]).toEqual([['Overwrite', 'textures', 'Plain', '0 Base'], ['Retextures', 'Fixes']]);
   });
 
   it('give a separator the group as its parent, and a mod the separator', async () => {
-    const provider = makeProvider(grouped());
-    const group = expectInstanceOf((await provider.getChildren()).find((n) => n.kind === 'separatorGroup'), SeparatorGroupNode);
-    const [fixes] = await provider.getChildren(group);
+    const shown = grouped();
+    const group = await shown.row('textures');
 
-    expect(provider.getParent(present(fixes, 'Fixes'))).toMatchObject({ kind: 'separatorGroup', label: 'textures' });
-    expect(provider.getParent(group)).toBeUndefined();
-    expect(provider.getParent(expectInstanceOf(provider.rowFor({ kind: 'mod', name: 'Fix' }), ModNode))).toMatchObject({ id: 'separator:textures - Fixes' });
+    expect([labelOf(expectInstanceOf(shown.parentOf(await shown.row('textures - Fixes', group)), TreeItem)), shown.parentOf(group), await parentOfShown(shown, { kind: 'mod', name: 'Fix' })])
+      .toEqual(['textures', undefined, 'textures - Fixes']);
   });
 
   it('show their group under a filter while a mod under it shows, and expand it', async () => {
-    const provider = makeProvider(grouped());
-    provider.setFilter('rock', true);
-    const roots = await provider.getChildren();
+    const { rows, labels } = filtered(grouped(), 'rock');
+    const [group] = await rows();
 
-    expect(rowsOf(roots)).toEqual(['separatorGroup textures', 'runtimeOutput Overwrite']);
-    expect(roots[0]?.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
-    expect(rowsOf(await provider.getChildren(roots[0]))).toEqual(['separator Retextures']);
+    expect([await labels(), group?.collapsibleState, await labels(group)]).toEqual([['textures', 'Overwrite'], TreeItemCollapsibleState.Expanded, ['Retextures']]);
   });
 
   it('give each run of a prefix an id of its own, though a prefix spells a run', async () => {
-    const provider = makeProvider([
-      sep('a - x'), sep('a - y'), sep('Plain'), sep('a - z'), sep('a - w'), sep('a#2 - m'), sep('a#2 - n'),
-    ]);
-    provider.setViewDirection('winningAtTop');
+    const { rows } = await winningAtTop(over([sep('a - x'), sep('a - y'), sep('Plain'), sep('a - z'), sep('a - w'), sep('a#2 - m'), sep('a#2 - n')]));
 
-    const ids = (await provider.getChildren()).flatMap((row) => (row instanceof SeparatorGroupNode ? [row.id] : []));
+    const groups = (await rows()).filter(({ contextValue }) => contextValue === 'separatorGroup');
 
-    expect(ids).toEqual(['separatorGroup:["a",1]', 'separatorGroup:["a",2]', 'separatorGroup:["a#2",1]']);
+    expect([groups.map(labelOf), new Set(groups.map(({ id }) => id)).size]).toEqual([['a', 'a', 'a#2'], 3]);
   });
 
   it('leave a nested group closed that the filter matches by its label, and open the groups above it', async () => {
-    const provider = makeProvider([mod('M1'), sep('Pack - Core - Alpha'), mod('M2'), sep('Pack - Core - Beta')]);
-    provider.setFilter('core', true);
-    const pack = present((await provider.getChildren())[0], 'the Pack group');
-    const core = present((await provider.getChildren(pack))[0], 'the Core group');
+    const { rows, labels } = filtered(over([mod('M1'), sep('Pack - Core - Alpha'), mod('M2'), sep('Pack - Core - Beta')]), 'core');
+    const pack = present((await rows())[0], 'the Pack group');
+    const core = present((await rows(pack))[0], 'the Core group');
 
-    expect([pack.collapsibleState, core.collapsibleState]).toEqual([TreeItemCollapsibleState.Expanded, TreeItemCollapsibleState.Collapsed]);
-    expect(rowsOf(await provider.getChildren(core))).toEqual(['separator Beta', 'separator Alpha']);
+    expect([pack.collapsibleState, core.collapsibleState, await labels(core)]).toEqual([TreeItemCollapsibleState.Expanded, TreeItemCollapsibleState.Collapsed, ['Beta', 'Alpha']]);
   });
 
   it('show no group while a filter flattens the view', async () => {
-    const provider = makeProvider(grouped());
-    provider.setFilter('lone', false);
-
-    expect(rowsOf(await provider.getChildren())).toEqual(['mod Lone', 'runtimeOutput Overwrite']);
+    expect(await flattened(grouped(), 'lone').labels()).toEqual(['2 Lone', 'Overwrite']);
   });
 });
 
 describe('what a change asks the Mods view for again (common.md, A view, story 13)', () => {
-  const idsOf = (fired: readonly (ModlistNode | undefined)[]) => fired.map((row) => row?.id);
   const listed = { A: { files: [file('A', 'a.dds')] }, B: { files: [file('B', 'b.dds')] } };
 
   it('asks again for the row of the mod whose files changed alone', async () => {
     const before = await indexedValueOf([mod('A'), mod('B')], listed);
     const { files, filesByMod, foldersByMod, stackedCopies } = await indexedValueOf([mod('A'), mod('B')], { ...listed, A: { files: [...listed.A.files, file('A', 'new.dds')] } });
-    const instance = new FakeInstance(before);
-    const provider = makeProvider([], { instance });
-    await provider.getChildren();
-    const fired: (ModlistNode | undefined)[] = [];
-    provider.onDidChangeTreeData((row) => fired.push(row));
+    const shown = modsViewOn({ value: before });
+    await shown.rows();
+    const fired = redraws(shown);
 
-    instance.publish({ ...before, files, filesByMod, foldersByMod, stackedCopies });
+    shown.instance.publish({ ...before, files, filesByMod, foldersByMod, stackedCopies });
 
-    expect(idsOf(fired)).toEqual(['mod:A']);
+    expect(fired.map(nameOf)).toEqual(['A']);
   });
 
   it('asks again for the row of the mod whose status changed alone', async () => {
-    let changed: ((mods: 'every' | ReadonlySet<string>) => void) | undefined;
-    const statuses = { ...NO_MOD_STATUSES, onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = listener; return { dispose: () => undefined }; } };
-    const instance = new FakeInstance(await indexedValueOf([mod('A'), mod('B')], listed));
-    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
-    await provider.getChildren();
-    const fired: (ModlistNode | undefined)[] = [];
-    provider.onDidChangeTreeData((row) => fired.push(row));
+    const statuses = new HeldModStatuses();
+    const shown = modsViewOn({ value: await indexedValueOf([mod('A'), mod('B')], listed), statuses });
+    await shown.rows();
+    const fired = redraws(shown);
 
-    changed?.(new Set(['B']));
+    statuses.answer([], { changed: new Set(['B']) });
 
-    expect(idsOf(fired)).toEqual(['mod:B']);
+    expect(fired.map(nameOf)).toEqual(['B']);
   });
 
   it('draws the tree again when the status of a mod the filter hides changes, so its badge counts it', async () => {
-    let changed: ((mods: 'every' | ReadonlySet<string>) => void) | undefined;
-    const statuses = { ...NO_MOD_STATUSES, onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = listener; return { dispose: () => undefined }; } };
-    const instance = new FakeInstance(await indexedValueOf([mod('A'), mod('B')], listed));
-    const provider = new ModListProvider({ reporter: recordingReporter(), statuses, instance, open: new OpenRows(instance) });
-    provider.setFilter('a.dds', true);
-    await provider.getChildren();
-    const fired: (ModlistNode | undefined)[] = [];
-    provider.onDidChangeTreeData((row) => fired.push(row));
+    const statuses = new HeldModStatuses();
+    const shown = filtered(modsViewOn({ value: await indexedValueOf([mod('A'), mod('B')], listed), statuses }), 'a.dds');
+    await shown.rows();
+    const fired = redraws(shown);
 
-    changed?.(new Set(['B']));
+    statuses.answer([], { changed: new Set(['B']) });
 
     expect(fired).toEqual([undefined]);
   });

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { dataFolderFile } from '../dataFolder';
-import type { GameFolder } from '../../instanceAdapter';
+import { dataFolderFile, type GameFolder } from '../../instanceAdapter';
 
 const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: '/game', dataFolder });
 const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameFolder' };

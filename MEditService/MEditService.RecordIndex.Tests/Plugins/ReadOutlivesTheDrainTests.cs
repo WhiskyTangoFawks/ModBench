@@ -57,7 +57,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         index.Queries.Selected("SELECT 1 AS n");
         IndexFiles.LogQueries(instanceRoot);
         var read = Task.Run(() => AnswersEveryRow(index, SecondsLongReadOnOneCore));
-        Assert.True(await Waits.Until(() => read.IsCompleted || IndexFiles.Started(instanceRoot, SlowReadsOwnText)), "The slow read never started.");
+        await Waits.ReachedAsync(() => Task.FromResult(read.IsCompleted || IndexFiles.Started(instanceRoot, SlowReadsOwnText)), "the slow read starting");
         Assert.False(read.IsCompleted, "The slow read ended before the drain it is meant to outlive.");
         _clock.StartLeaping();
         return read;

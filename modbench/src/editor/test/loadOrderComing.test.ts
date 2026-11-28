@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { loadOrderComing } from '../loadOrderComing';
+import { describe, it, expect, vi } from 'vitest';
+import { editorVscode } from './editorVscode';
+
+vi.mock('vscode', () => editorVscode);
+
+import { loadOrderComing } from '..';
 import type { RecordIndexProgress } from '../../client';
 
 const status = (overrides: Partial<RecordIndexProgress>): RecordIndexProgress => ({ done: 0, total: 0, version: 1, settled: false, ...overrides });

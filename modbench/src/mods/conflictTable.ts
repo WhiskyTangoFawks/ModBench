@@ -6,6 +6,7 @@ import { copyInConflict, modOrigin, originLabel, sameOrigin, type StackedFile } 
 import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
 import { fileStates, worstCell, worstRow } from './conflictStates';
+import { present } from '../ports/present';
 
 /** The facts a conflict table reads. */
 export const CONFLICT_TABLE_READS = { mods: true, stackedCopies: true } as const;
@@ -111,8 +112,7 @@ export function conflictTable(view: TableView, name: string, copies: readonly Fi
       if (!file.copies.some((copy) => sameOrigin(copy.origin, origin))) return null;
       const winning = winner !== undefined && sameOrigin(winner, origin) ? { winning: true as const } : {};
       const index = fileCopies.findIndex((copy) => sameOrigin(copy.origin, origin));
-      const copy = fileCopies[index];
-      if (copy === undefined) return { state: null, ...winning };
+      const copy = present(fileCopies[index], `the read of ${originLabel(origin)}'s copy of ${file.relativePath}`);
       return copy.kind === 'unreadable'
         ? { state: null, unreadable: copy.reason, ...winning }
         : { state: states.cells[index] ?? null, ...stampOf(copy, cellValue, letters), ...winning };

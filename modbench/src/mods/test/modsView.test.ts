@@ -1,145 +1,33 @@
-import { ORDER_SENT } from '../../test/orderSent';
-import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
-import type * as vscode from 'vscode';
-import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri,
-} from '../../test/vscodeMock';
-import {
-  filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeTreeView,
-} from '../../drivingLib/test/nameFilterViewHarness';
+import { describe, it, expect, vi, onTestFinished } from 'vitest';
 
-const diagnosticCollections = new Map<string, FakeDiagnosticCollection>();
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-const h = vi.hoisted(() => ({
-  state: {
-    commands: new Map<string, (...args: unknown[]) => unknown>(),
-    contextKeys: new Map<string, unknown>(),
-    boxes: [],
-  },
-  decorationProviders: [] as vscode.FileDecorationProvider[],
-  picked: [] as string[][],
-  taskTypes: [] as string[],
-}));
-
-vi.mock('vscode', () => ({
-  ...fakeVscodeModule(),
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range,
-  languages: { createDiagnosticCollection: (name: string) => { const collection = new FakeDiagnosticCollection(); diagnosticCollections.set(name, collection); return collection; } },
-  tasks: { registerTaskProvider: (type: string) => { h.taskTypes.push(type); return { dispose: () => undefined }; } },
-  workspace: {
-    ...fakeVscodeModule().workspace,
-    getConfiguration: () => ({ get: () => undefined }),
-    registerFileSystemProvider: () => ({ dispose: () => undefined }),
-    onDidChangeConfiguration: () => ({ dispose: () => undefined }),
-  },
-  Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
-  window: {
-    ...filterBoxWindowMock(h.state),
-    createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => treeViews.create(id, options),
-    showQuickPick: (items: { label: string }[]) => {
-      h.picked.push(items.map((item) => item.label));
-      return Promise.resolve(undefined);
-    },
-    registerCustomEditorProvider: () => ({ dispose: () => undefined }),
-    withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
-    registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
-      h.decorationProviders.push(provider);
-      return { dispose: () => undefined };
-    },
-  },
-  commands: {
-    ...filterBoxCommandsMock(h.state),
-    executeCommand: (command: string, ...args: unknown[]) => {
-      if (command === 'setContext' && typeof args[0] === 'string') h.state.contextKeys.set(args[0], args[1]);
-      return Promise.resolve();
-    },
-  },
-}));
-
+import { everyChainedPromiseSettled, modsViewOn } from './modsViewOn';
+import { seen } from './modsVscode';
+import { currentBoxOf } from '../../drivingLib/test/nameFilterViewHarness';
+import { Uri } from '../../test/vscodeMock';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
-import { file, folder, mod } from './indexedValue';
-import { ModNode, SeparatorNode } from '../ModListProvider';
-import { createModsView } from '../modsView';
+import { file, folder, indexedValueOf, mod } from './indexedValue';
 import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
-import { ArchivedFileNode, FileNode } from '../modFiles';
-import { createFocusedView } from '../../drivingLib/focusedView';
 import { ModStatuses } from '../../modStatus/modStatuses';
-import { modValueOver } from '../../instanceAdapter/modValue';
+import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestedIn } from '../../test/modStatusFixture';
-import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import type { ModSyncRun } from '../../modCommands/modCommands';
-import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
-import { modCommands } from '../../modCommands/modCommands';
-import { entryRenameCommands } from '../../modCommands/renameEntry';
-import { oneAtATime } from '../../textDocuments/oneAtATime';
-import { sourceCommands } from '../../sourceCommands/sourceCommands';
-import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
-import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordingTasks } from '../../test/recordingTasks';
-import { ArchivedCopies } from '../archivedCopies';
 import { settled } from '../../test/eventually';
 
-
-const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> => ({
-  foldersHeldWhole: () => Promise.resolve(new Set()),
-  filesHeldByGit: () => Promise.resolve(new Map()),
-  installationFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  modValue: (folder, asked, heldByGit) => modValueOver({
-  filesIn: listing,
-  fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  exclusionMark: '.mohidden',
-  downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gamePlace: () => Promise.resolve(undefined),
-  gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
-  submodule: () => Promise.resolve({ lacks: 'no submodule' }),
-  sourceFolderTracked: () => Promise.resolve(false),
-  }, folder, asked, heldByGit),
-});
-
-const treeViews = new FakeTreeViews();
-const currentBox = currentBoxOf(h.state);
-
-const shownRows = async () => (await treeViews.view('modbench.modList').treeDataProvider.getChildren()) ?? [];
-const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
-
-const otherDeps = () => ({
-  commands: modCommands(fakeInstanceAdapter().adapter),
-  renames: entryRenameCommands({ adapter: fakeInstanceAdapter().adapter, client: new InMemoryMEditClient() }),
-  source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: oneAtATime(), refreshSourceControlFor: () => undefined },
-  copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
-  extensionUri: Uri.file('/extension'), downloadsView: 'modbench.downloads', channel: { warn: () => undefined },
-  focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
-  statuses: new ModStatuses(foldersHoldingNothing(), () => undefined, () => Promise.resolve([])),
-  archivedCopies: new ArchivedCopies({ getArchiveCopies: () => Promise.resolve([]) }, () => Promise.resolve({ kind: 'unreadable', reason: 'no stamp' })),
-  archives: new InMemoryMEditClient(),
-  sourceGestures: {
-    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }),
-    pluginsView: 'modbench.pluginListTree', say: () => undefined,
-    registerRepositories: () => Promise.resolve(),
-  },
-  checkForUpdates: vi.fn(),
-  manifestGestures: {
-    toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), ignoreFiles: vi.fn() }, say: () => undefined,
-  },
-});
+const currentBox = currentBoxOf(seen);
 
 const silentChannel = { error: () => undefined, info: () => undefined };
-const modSyncAnswering = (sync: ModSyncRun) => ({
-  modSync: createModSync(sync, silentChannel, 'modlist.txt'),
-});
-const noSync = () => modSyncAnswering(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
+const modSyncAnswering = (sync: ModSyncRun) => createModSync(sync, silentChannel, 'modlist.txt');
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
@@ -154,76 +42,61 @@ const LISTED_MODS: ModlistEntry[] = [
 const listing = (mods: ModlistEntry[]) => instanceValueFixture({ mods });
 const SEQUENCE_NOT_READ_YET = 0;
 
-beforeEach(() => {
-  h.state.boxes.length = 0;
-  h.state.commands.clear();
-  treeViews.clear();
-  h.state.contextKeys.clear();
-  h.decorationProviders.length = 0;
-  h.picked.length = 0;
-});
+const listed = () => modsViewOn({ value: listing(LISTED_MODS) });
 
 describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', () => {
   it('publishes a publisher tag that names no path to the Problems panel', () => {
     const file = '/instance/compiler_settings.json';
     const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], pathProblems: [{ kind: 'namesNoPath', file, line: 2, tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, entry: 'gone' }], unshippable: { file: '', reason: () => undefined } } as const;
-    const instance = new FakeInstance(instanceValueFixture({ publisherConfiguration }));
 
-    createModsView({ ...otherDeps(), instance, ...noSync() });
+    const { diagnostics } = modsViewOn({ value: instanceValueFixture({ publisherConfiguration }) });
 
-    expect(diagnosticCollections.get('modbench-publisher')?.has(Uri.file(file))).toBe(true);
+    expect(diagnostics('modbench-publisher').has(Uri.file(file))).toBe(true);
   });
 });
 
 describe('the Mods view is a tree whose rows select several at once (common.md, story 6; mods.md)', () => {
   it('selects several rows and has Collapse All', () => {
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const { view } = listed();
 
-    const { canSelectMany, showCollapseAll } = treeViews.view('modbench.modList').options;
+    const { canSelectMany, showCollapseAll } = view.options;
     expect({ canSelectMany, showCollapseAll }).toEqual({ canSelectMany: true, showCollapseAll: true });
   });
 });
 
 describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
-    const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ ...otherDeps(), instance, ...noSync() });
-    await shownRows();
+    const { mods, view, instance, rows } = listed();
+    await rows();
 
-    modListFilter.open();
+    mods.nameFilter.open();
     currentBox().type('zzznomatch');
-    await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
-    expect(modListView.message).toBe('No matches for "zzznomatch".');
+    await settled(() => { expect(view.message).toBe('No matches for "zzznomatch".'); });
 
     instance.publish(listing([...LISTED_MODS, mod('zzznomatchMod')]));
-    await waitForMessage(modListView, (m) => m === undefined, 'the message clearing once a matching mod lands');
-    expect(modListView.message).toBeUndefined();
+    await settled(() => { expect(view.message).toBeUndefined(); });
 
     instance.publish(listing(LISTED_MODS));
-    await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the mod is gone');
-    expect(modListView.message).toBe('No matches for "zzznomatch".');
+    await settled(() => { expect(view.message).toBe('No matches for "zzznomatch".'); });
   });
 });
 
 describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', () => {
-    const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, ...noSync() });
-    expect(modListView.description).toBe('7 / 8');
+    const { mods, view } = listed();
+    expect(view.description).toBe('7 / 8');
 
-    modListFilter.open();
+    mods.nameFilter.open();
     currentBox().type('radfall');
-    expect(modListView.description).toBe('7 / 8 · "radfall"');
+    expect(view.description).toBe('7 / 8 · "radfall"');
   });
 
   it('follows a new instance value, with nothing pushed', () => {
-    const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ ...otherDeps(), instance, ...noSync() });
+    const { view, instance } = listed();
 
     instance.publish(listing([...LISTED_MODS, mod('Parked Mod', false)]));
 
-    expect(modListView.description).toBe('7 / 9');
+    expect(view.description).toBe('7 / 9');
   });
 });
 
@@ -232,128 +105,122 @@ describe('the Mods view registers its own gestures', () => {
     const value = instanceValueFixture({
       paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Cloned And Unlisted', '/source/Cloned And Unlisted']]) },
     });
-    createModsView({ ...otherDeps(), instance: new FakeInstance(value), ...noSync() });
+    const { run } = modsViewOn({ value });
 
-    await present(h.state.commands.get('modbench.mod.build'), 'the modbench.mod.build handler')();
+    await run('modbench.mod.build');
 
-    expect(h.picked).toEqual([['Cloned And Unlisted']]);
+    expect(seen.quickPicks.map(({ labels }) => labels)).toEqual([['Cloned And Unlisted']]);
   });
 
   it('says whether any mod is a source mod, for the palette to offer build', () => {
-    const value = instanceValueFixture({ sourceMods: new Set(['Source']) });
-    createModsView({ ...otherDeps(), instance: new FakeInstance(value), ...noSync() });
-    expect(h.state.contextKeys.get('modbench.mod.anySource')).toBe(true);
+    modsViewOn({ value: instanceValueFixture({ sourceMods: new Set(['Source']) }) });
+    expect(seen.contextKeys.get('modbench.mod.anySource')).toBe(true);
   });
 
   it('offers build as a task, for a chain', () => {
-    h.taskTypes.length = 0;
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    expect(h.taskTypes).toEqual(['modbench.mod.build']);
+    listed();
+    expect([...seen.taskProviders.keys()]).toEqual(['modbench.mod.build']);
   });
 
   it('says the tooltip of a mod\'s row, and none for a separator or a mod it lists no row for', () => {
-    const { tooltipOf } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const { mods } = listed();
 
     expect([
-      tooltipOf({ kind: 'mod', name: 'Harder VATS' }), tooltipOf({ kind: 'separator', name: 'Unassigned (Modlist Development)' }), tooltipOf({ kind: 'mod', name: 'Gone' }),
+      mods.tooltipOf({ kind: 'mod', name: 'Harder VATS' }), mods.tooltipOf({ kind: 'separator', name: 'Unassigned (Modlist Development)' }), mods.tooltipOf({ kind: 'mod', name: 'Gone' }),
     ]).toEqual(['Harder VATS', undefined, undefined]);
   });
 
-  it('names the separator a separator row stands for', () => {
-    expect(separatorArgumentOf(new SeparatorNode({ kind: 'separator', name: 'Gear', enabled: true }, []))).toEqual({ kind: 'separator', name: 'Gear' });
+  it('names the separator a separator row stands for', async () => {
+    const { row } = modsViewOn({ value: listing([mod('A'), separator('Gear')]) });
+
+    expect(separatorArgumentOf(await row('Gear'))).toEqual({ kind: 'separator', name: 'Gear' });
   });
 
-  it('says the one selected mod row to Symbols, and none over several rows or a separator', () => {
-    const { symbolRows } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: true });
-    const gear = new SeparatorNode({ kind: 'separator', name: 'Gear', enabled: true }, []);
+  it('says the one selected mod row to Symbols, and none over several rows or a separator', async () => {
+    const { mods, view, row } = listed();
+    const [harderVats, enboost, radfall] = [await row('Harder VATS'), await row('ENBoost - 12k'), await row('Radfall - All-In-One Survival Overhaul')];
 
-    treeViews.view().selectRows([harderVats]);
-    const one = modArgumentOf(symbolRows.selected());
-    treeViews.view().selectRows([harderVats, harderVats]);
-    const several = symbolRows.selected();
-    treeViews.view().selectRows([gear]);
+    view.selectRows([harderVats]);
+    const one = modArgumentOf(mods.symbolRows.selected());
+    view.selectRows([harderVats, enboost]);
+    const several = mods.symbolRows.selected();
+    view.selectRows([radfall]);
 
-    expect([one, several, symbolRows.selected()]).toEqual([{ kind: 'mod', name: 'Harder VATS' }, undefined, undefined]);
+    expect([one, several, mods.symbolRows.selected()]).toEqual([{ kind: 'mod', name: 'Harder VATS' }, undefined, undefined]);
   });
 
-  it('says the Data folder path a file row stands for, and none for any other argument', () => {
-    const { symbolRows } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    const owner = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: true });
-    const loose = new FileNode(owner, { kind: 'mod', name: 'Harder VATS' }, file('mods/Harder VATS', 'meshes/a.nif'), 'a.nif');
-    const archive = new FileNode(owner, { kind: 'mod', name: 'Harder VATS' }, file('mods/Harder VATS', 'Main.ba2'), 'Main.ba2');
+  it('says the Data folder path a file row stands for, and none for any other argument', async () => {
+    const value = await indexedValueOf(
+      [mod('Harder VATS')], { 'Harder VATS': { files: [file('Harder VATS', 'meshes/a.nif'), file('Harder VATS', 'Main.ba2')], folders: [folder('Harder VATS', 'meshes')] } },
+      { files: [] }, [{ origin: modOrigin('Harder VATS'), archive: '/instance/Harder VATS/Main.ba2', files: ['meshes/b.nif'] }],
+    );
+    const { mods, row } = modsViewOn({ value });
+    const owner = await row('Harder VATS');
+    const archived = await row('meshes', await row('Main.ba2', owner));
 
     expect([
-      symbolRows.dataPathOf(loose), symbolRows.dataPathOf(new ArchivedFileNode(archive, archive, 'meshes/b.nif', 'b.nif', undefined)), symbolRows.dataPathOf(owner),
+      mods.symbolRows.dataPathOf(await row('a.nif', await row('meshes', owner))), mods.symbolRows.dataPathOf(await row('b.nif', archived)), mods.symbolRows.dataPathOf(owner),
     ]).toEqual(['meshes/a.nif', 'meshes/b.nif', undefined]);
   });
 
   it('hears its copy value in the Mods view\'s key', () => {
-    const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    expect([copyValue.reporterTag, copyValue.text({ view: 'modbench.modList' }, undefined)]).toEqual(['mod.copyValue', '']);
+    const { mods } = listed();
+    expect([mods.copyValue.reporterTag, mods.copyValue.text({ view: 'modbench.modList' }, undefined)]).toEqual(['mod.copyValue', '']);
   });
 });
 
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction', async () => {
-    const instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, ...noSync() });
-    const losingAtTop = await shownLabels();
+    const { labels, run } = listed();
+    const losingAtTop = await labels();
 
-    await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
-    expect(await shownLabels()).toEqual([...losingAtTop].reverse());
-    await h.state.commands.get('modbench.mod.sortLosingAtTop')?.();
-    expect(await shownLabels()).toEqual(losingAtTop);
+    await run('modbench.mod.sortWinningAtTop');
+    expect(await labels()).toEqual([...losingAtTop].reverse());
+    await run('modbench.mod.sortLosingAtTop');
+    expect(await labels()).toEqual(losingAtTop);
   });
 });
 
 describe('the Mods view tells its keys, which are handed no row, what the selection holds', () => {
-  it('sets the Space direction and the Delete and F2 kind off the selection', () => {
-    const instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, ...noSync() });
+  const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod'].map((name) => `modbench.mod.${name}`);
+  const keys = () => Object.fromEntries(SELECTION_KEYS.map((key) => [key, seen.contextKeys.get(key)]));
 
-    const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
-      .map((name) => `modbench.mod.${name}`);
-    const keys = () => Object.fromEntries(SELECTION_KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
-    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false });
-    const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
+  it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
+    const { view, row } = listed();
 
-    treeViews.view().selectRows([harderVats]);
+    view.selectRows([await row('Harder VATS')]);
     expect(keys()).toEqual({
       'modbench.mod.selectionToggle': 'enable', 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true,
       'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': true,
     });
 
-    treeViews.view().selectRows([separatorRow('Radfall - All-In-One Survival Overhaul'), separatorRow('Unassigned (Modlist Development)')]);
+    view.selectRows([await row('Radfall - All-In-One Survival Overhaul'), await row('Unassigned (Modlist Development)')]);
     expect(keys()).toEqual({
       'modbench.mod.selectionToggle': undefined, 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': false,
       'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': false,
     });
   });
 
-  it('follows a mod enabled in a new instance value while the selection still holds the row built before', () => {
-    const instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, ...noSync() });
-    treeViews.view().selectRows([new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
+  it('follows a mod enabled in a new instance value while the selection still holds the row built before', async () => {
+    const { view, row, instance } = listed();
+    view.selectRows([await row('Harder VATS')]);
 
     instance.publish(listing(LISTED_MODS.map((m) => (m.name === 'Harder VATS' ? mod('Harder VATS') : m))));
 
-    expect(h.state.contextKeys.get('modbench.mod.selectionToggle')).toBe('disable');
+    expect(seen.contextKeys.get('modbench.mod.selectionToggle')).toBe('disable');
   });
 });
 
 describe('the Mods view names its own tags and palette context keys', () => {
   it('reports a downloaded file install under the downloadedFiles tag', () => {
-    const tags: string[] = [];
-    createModsView({ ...otherDeps(), reporterFor: (tag) => { tags.push(tag); return recordingReporter(); }, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const { tags } = listed();
 
     expect(tags).toContain('downloadedFiles');
   });
 
   it('sets modbench.mod.sourceGestureRowsIn to the focused view while it is the Mods or Plugins view, and clears it otherwise', () => {
-    const focusedView = createFocusedView();
-    createModsView({ ...otherDeps(), focusedView, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    const held = () => h.state.contextKeys.get('modbench.mod.sourceGestureRowsIn');
+    const { focusedView } = listed();
+    const held = () => seen.contextKeys.get('modbench.mod.sourceGestureRowsIn');
 
     focusedView.enter('modbench.pluginListTree');
     const inPlugins = held();
@@ -363,8 +230,7 @@ describe('the Mods view names its own tags and palette context keys', () => {
   });
 
   it('sets modbench.mod.nexusRowIn to the focused Downloads view while one row with a Nexus id is selected in it', () => {
-    const focusedView = createFocusedView();
-    createModsView({ ...otherDeps(), focusedView, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const { focusedView } = listed();
     let selected: () => void = () => undefined;
     const downloads: Parameters<typeof focusedView.follow>[1] = {
       selection: [{ nexusModId: '1' }],
@@ -374,46 +240,44 @@ describe('the Mods view names its own tags and palette context keys', () => {
 
     selected();
 
-    expect(h.state.contextKeys.get('modbench.mod.nexusRowIn')).toBe('modbench.downloads');
+    expect(seen.contextKeys.get('modbench.mod.nexusRowIn')).toBe('modbench.downloads');
   });
 });
 
+type ShownView = ReturnType<typeof modsViewOn>['view'];
+
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
-  let instance: FakeInstance;
-  const mountFiltered = (
-    term: string, log: (line: string) => void = () => undefined, prepare: (view: FakeTreeView) => void = () => undefined,
-  ) => {
-    instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, channel: { warn: log }, ...noSync() }).nameFilter.open();
-    prepare(treeViews.view());
+  const mountFiltered = (term: string, prepare: (view: ShownView) => void = () => undefined) => {
+    const shown = listed();
+    shown.mods.nameFilter.open();
+    prepare(shown.view);
     currentBox().type(term);
+    return shown;
   };
-  const windowForARevealThatMustNotCome = () => new Promise((resolve) => setTimeout(resolve, 20));
 
   it('reveals it expanded, neither selecting nor focusing it', async () => {
-    mountFiltered('source');
-    await settled(() => expect(treeViews.view().reveals).not.toEqual([]));
+    const { view } = mountFiltered('source');
+    await settled(() => expect(view.reveals).not.toEqual([]));
 
-    expect(treeViews.view().reveals).toEqual([
+    expect(view.reveals).toEqual([
       { label: 'Unassigned (Modlist Development)', options: { select: false, focus: false, expand: true } },
     ]);
   });
 
   it('leaves a separator shown for its own name as the user left it', async () => {
-    mountFiltered('radfall - all');
-    await windowForARevealThatMustNotCome();
+    const { view } = mountFiltered('radfall - all');
+    await everyChainedPromiseSettled();
 
-    expect(treeViews.view().reveals).toEqual([]);
+    expect(view.reveals).toEqual([]);
   });
 
   it('writes a reveal VS Code refuses once, by the walk of the tree as it is, when the tree changed under the first', async () => {
-    const lines: string[] = [];
     let release = (): void => undefined;
-    mountFiltered('source', (line) => lines.push(line), (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
-    await settled(() => expect(treeViews.view().revealsHeld).toEqual(['Unassigned (Modlist Development)']));
+    const { view, instance, lines } = mountFiltered('source', (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
+    await settled(() => expect(view.revealsHeld).toEqual(['Unassigned (Modlist Development)']));
     instance.publish(instance.value);
-    await settled(() => expect(treeViews.view().revealsHeld).toHaveLength(2));
-    treeViews.view().revealRefusal = new Error('Cannot resolve tree item');
+    await settled(() => expect(view.revealsHeld).toHaveLength(2));
+    view.revealRefusal = new Error('Cannot resolve tree item');
     release();
     await settled(() => expect(lines).not.toEqual([]));
 
@@ -423,8 +287,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   });
 
   it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
-    const lines: string[] = [];
-    mountFiltered('source', (line) => lines.push(line), (view) => { view.revealRefusal = new Error('Cannot resolve tree item'); });
+    const { lines } = mountFiltered('source', (view) => { view.revealRefusal = new Error('Cannot resolve tree item'); });
     await settled(() => expect(lines).not.toEqual([]));
 
     expect(lines).toEqual([
@@ -433,14 +296,14 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   });
 
   it('reveals nothing while the view is hidden, and reveals it once the view is shown', async () => {
-    mountFiltered('source', undefined, (view) => { view.visible = false; });
-    await windowForARevealThatMustNotCome();
-    const whileHidden = [...treeViews.view().reveals];
+    const { view } = mountFiltered('source', (view) => { view.visible = false; });
+    await everyChainedPromiseSettled();
+    const whileHidden = [...view.reveals];
 
-    treeViews.view().setVisible(true);
-    await settled(() => expect(treeViews.view().reveals).not.toEqual([]));
+    view.setVisible(true);
+    await settled(() => expect(view.reveals).not.toEqual([]));
 
-    expect([whileHidden, treeViews.view().reveals.map((r) => r.label)]).toEqual([[], ['Unassigned (Modlist Development)']]);
+    expect([whileHidden, view.reveals.map((r) => r.label)]).toEqual([[], ['Unassigned (Modlist Development)']]);
   });
 });
 
@@ -448,19 +311,15 @@ describe('the Mods view says the phase of a version in git fired from it', () =>
   it('says the mod and the phase on its own message line while it runs, gives the agent no phase line, and takes the line back when it lands', async () => {
     let release = () => undefined;
     const running = new Promise<{ landed: []; refused: [] }>((resolve) => { release = () => { resolve({ landed: [], refused: [] }); }; });
-    const deps = otherDeps();
-    const sourceGestures = { ...deps.sourceGestures, commands: { ...deps.sourceGestures.commands, versionInGit: () => running } };
-    const mods = createModsView({ ...deps, sourceGestures, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    const { view } = mods;
-    const handler = present(h.state.commands.get('modbench.mod.versionInGit'), 'the version in git command createModsView registers');
+    const { mods, view, run } = modsViewOn({ value: listing(LISTED_MODS), sourceCommands: { versionInGit: () => running } });
 
-    const fired = handler(new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true, where: 'NewRepository' }));
+    const fired = run('modbench.mod.versionInGit', new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true, where: 'NewRepository' }));
 
-    await waitForMessage(view, (m) => m === 'Version in git "Source mod Patch Mod"…', 'the phase line');
+    await settled(() => { expect(view.message).toBe('Version in git "Source mod Patch Mod"…'); });
     expect(mods.standingLines()).toEqual([]);
     release();
     await fired;
-    await waitForMessage(view, (m) => m === undefined, 'the line given back');
+    await settled(() => { expect(view.message).toBeUndefined(); });
   });
 });
 
@@ -469,19 +328,19 @@ describe('the Mods view says when the list is empty', () => {
 
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, ...noSync() });
-    expect(modListView.message).toBeUndefined();
-    expect(modListView.description).toBeUndefined();
+    const { mods, view } = modsViewOn({ instance });
+    expect(view.message).toBeUndefined();
+    expect(view.description).toBeUndefined();
 
     instance.publish(listing([]));
-    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
+    await settled(() => { expect(view.message).toBe(NO_MODS); });
 
-    modListFilter.open();
+    mods.nameFilter.open();
     currentBox().type('zzz');
-    await waitForMessage(modListView, (m) => m === 'No matches for "zzz".', 'the no-match message');
+    await settled(() => { expect(view.message).toBe('No matches for "zzz".'); });
 
     currentBox().type('');
-    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message back');
+    await settled(() => { expect(view.message).toBe(NO_MODS); });
   });
 
   it('says mod sync\'s refusal beside it, and drops only that once the sync lands', async () => {
@@ -491,39 +350,36 @@ describe('the Mods view says when the list is empty', () => {
       { applied: true as const, added: [], dropped: [] },
     ];
     let run = 0;
-    const { modSync } = modSyncAnswering(() => Promise.resolve(present(outcomes[run++], 'an outcome for this run')));
-    const { view: modListView } = createModsView({ ...otherDeps(), instance, modSync });
+    const modSync = modSyncAnswering(() => Promise.resolve(present(outcomes[run++], 'an outcome for this run')));
+    const { view } = modsViewOn({ instance, modSync });
     instance.publish(listing([]));
-    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
+    await settled(() => { expect(view.message).toBe(NO_MODS); });
 
     await modSync.run();
-    await waitForMessage(modListView, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
+    await settled(() => { expect(view.message).toBe(`${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`); });
 
     await modSync.run();
-    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
+    await settled(() => { expect(view.message).toBe(NO_MODS); });
   });
 
   it('gives the agent sync\'s refusal, without the empty-list line the view shows beside it', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
-    const { modSync } = modSyncAnswering(() => Promise.resolve({ applied: false as const, refusal: '/instance/mods does not exist' }));
-    const mods = createModsView({ ...otherDeps(), instance, modSync });
-    const { view } = mods;
+    const modSync = modSyncAnswering(() => Promise.resolve({ applied: false as const, refusal: '/instance/mods does not exist' }));
+    const { mods, view } = modsViewOn({ instance, modSync });
     instance.publish(listing([]));
-    await waitForMessage(view, (m) => m === NO_MODS, 'the empty-list message');
+    await settled(() => { expect(view.message).toBe(NO_MODS); });
 
     await modSync.run();
-    await waitForMessage(view, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
+    await settled(() => { expect(view.message).toBe(`${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`); });
 
     expect(mods.standingLines()).toEqual(['modlist.txt is not synced: /instance/mods does not exist.']);
   });
 });
 
 describe('the Mods view finds a file the filter matches, however deep', () => {
-  const revealed = () => treeViews.view().reveals.map((r) => r.label);
   const open = { select: false, focus: false, expand: true };
 
-  let instance: FakeInstance;
-  const mountFiltered = (term: string, overwrite = false, prepare: (view: FakeTreeView) => void = () => undefined) => {
+  const mountFiltered = (term: string, overwrite = false, prepare: (view: ShownView) => void = () => undefined) => {
     const value = instanceValueFixture({
       mods: [mod('Armour'), separator('Gear'), mod('Boots'), separator('Other')],
       filesByMod: new Map([['Armour', [file('Armour', 'textures/armour/b.dds')]], ['Boots', [file('Boots', 'gear.esp')]]]),
@@ -531,25 +387,24 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFiles: overwrite ? [file('overwrite', 'F4SE/a.log')] : [],
       overwriteFolders: overwrite ? [folder('overwrite', 'F4SE')] : [],
     });
-    instance = new FakeInstance(value);
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, ...noSync() });
-    modListFilter.open();
-    prepare(treeViews.view());
+    const shown = modsViewOn({ value });
+    shown.mods.nameFilter.open();
+    prepare(shown.view);
     currentBox().type(term);
-    return modListView;
+    return { ...shown, revealed: () => shown.view.reveals.map((r) => r.label) };
   };
 
   it('reveals, expanded, each row it shows for its matches: the separator, the mod and each folder', async () => {
-    mountFiltered('b.dds');
+    const { view, revealed } = mountFiltered('b.dds');
     await settled(() => expect(revealed()).toContain('armour'));
 
-    expect(treeViews.view().reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
+    expect(view.reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
   });
 
   it('ends a walk the tree changed under after the reveal in hand, so only the walk of the tree as it is goes deeper', async () => {
     let release = (): void => undefined;
-    mountFiltered('b.dds', false, (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
-    await settled(() => expect(treeViews.view().revealsHeld).toEqual(['Gear']));
+    const { view, instance, revealed } = mountFiltered('b.dds', false, (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
+    await settled(() => expect(view.revealsHeld).toEqual(['Gear']));
     instance.publish(instance.value);
     release();
     await settled(() => expect(revealed()).toContain('armour'));
@@ -558,7 +413,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   });
 
   it('does not reveal a row shown for its own name, nor the rows under it, while it reveals one shown for a match', async () => {
-    const view = mountFiltered('gear');
+    const { view, revealed } = mountFiltered('gear');
     await settled(() => expect(revealed()).toContain('Boots'));
 
     expect(view.description).toContain('"gear"');
@@ -566,7 +421,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   });
 
   it('is not told no match by a term that only an Overwrite file matches, and reveals Overwrite open', async () => {
-    const view = mountFiltered('a.log', true);
+    const { view, revealed } = mountFiltered('a.log', true);
     await settled(() => expect(revealed()).toContain('F4SE'));
 
     expect(view.message).toBeUndefined();
@@ -574,15 +429,15 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   });
 
   it('is told no match by a term that only the name Overwrite matches', async () => {
-    const view = mountFiltered('overwrite', true);
-    await waitForMessage(view, (m) => m === 'No matches for "overwrite".', 'the no-match message');
+    const { view, revealed } = mountFiltered('overwrite', true);
+    await settled(() => { expect(view.message).toBe('No matches for "overwrite".'); });
 
     expect(revealed()).toEqual([]);
   });
 });
 
 const listenToEachDecorationProvider = () => {
-  const listeners = h.decorationProviders.map((provider) => {
+  const listeners = seen.decorationProviders.map((provider) => {
     const listener = vi.fn();
     provider.onDidChangeFileDecorations?.(listener);
     return listener;
@@ -593,15 +448,13 @@ const listenToEachDecorationProvider = () => {
 describe('the Mods view tells the indicator and publisher tag decorations when a separator opens or closes', () => {
   it('asks VS Code to decorate again, for each indicator and each publisher tag the publisher declares, on the separator\'s expand and on its collapse', async () => {
     const publisherTags = [{ name: 'Include', badge: 'IN', marksPaths: true }] as const;
-    createModsView({
-      ...otherDeps(), instance: new FakeInstance(instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags })), ...noSync(),
-    });
+    const { view, row } = modsViewOn({ value: instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags }) });
     const fired = listenToEachDecorationProvider();
-    const row = present((await shownRows()).find((node) => node instanceof SeparatorNode), 'the separator row');
+    const section = await row('Section');
 
-    treeViews.view().expand(row);
+    view.expand(section);
     const afterExpand = fired();
-    treeViews.view().collapse(row);
+    view.collapse(section);
 
     expect([afterExpand, fired()]).toEqual([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]]);
   });
@@ -613,8 +466,8 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
   });
 
   it('counts each mod Mod status derives with no manifest', async () => {
-    const statuses = new ModStatuses(foldersHoldingNothing(), () => undefined, () => Promise.resolve([]));
-    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), ...noSync(), statuses });
+    const statuses = new ModStatuses(fakeInstanceAdapter().adapter, () => undefined, () => Promise.resolve([]));
+    const { view } = modsViewOn({ value: holdingModA, statuses });
 
     statuses.derive(holdingModA);
 
@@ -627,13 +480,12 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     const folder = join(root, 'ModA');
     await manifestedIn(folder);
     const holdingManifested = instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')], modFolders: [{ kind: 'mod', name: 'ModA', path: folder, modName: 'ModA' }] });
-    const statuses = new ModStatuses(foldersHoldingNothing(() => Promise.reject(new Error('EACCES'))), () => undefined, () => Promise.resolve([]));
-    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingManifested), ...noSync(), statuses });
+    const statuses = new ModStatuses(fakeInstanceAdapter(readingFixture(), { unlistableFolders: new Map([[folder, 'EACCES']]) }).adapter, () => undefined, () => Promise.resolve([]));
+    const { view } = modsViewOn({ value: holdingManifested, statuses });
 
     statuses.derive(holdingManifested);
 
-    await waitForMessage(view, (message) => message === 'Showing the last good read: the status of "ModA" could not be read: a file could not be read: EACCES.',
-      'the unreadable status');
+    await settled(() => { expect(view.message).toBe('Showing the last good read: the status of "ModA" could not be read: a file could not be read: EACCES.'); });
   });
 });
 
@@ -643,25 +495,18 @@ describe('the Mods view\'s selection and the highlight (plugins.md, The highligh
     plugins: [{ name: 'A.esp', path: '/Alpha/A.esp', origin: 'Alpha', line: 0, enabled: true, winning: true }],
     filesByMod: new Map([['Alpha', [file('Alpha', 'A.esp')]]]),
   });
-  const view = () => createModsView({ ...otherDeps(), instance: new FakeInstance(held), ...noSync() });
 
   it('relates a selected mod to the plugin rows it holds, and to no mod row', async () => {
-    const { relatesRows } = view();
-    const alpha = (await shownRows()).find((row) => rowLabelOf(row) === 'Alpha');
+    const { mods, row } = modsViewOn({ value: held });
 
-    expect(relatesRows.related([present(alpha, 'the Alpha row')])).toEqual({ plugins: [{ name: 'A.esp', origin: 'Alpha' }], origins: [] });
+    expect(mods.relatesRows.related([await row('Alpha')])).toEqual({ plugins: [{ name: 'A.esp', origin: 'Alpha' }], origins: [] });
   });
 
   it('marks the label of the mod rows it is handed the origins of', async () => {
-    const { drawsHighlight } = view();
+    const { mods, rows } = modsViewOn({ value: held });
 
-    drawsHighlight.highlight({ plugins: [], origins: [{ kind: 'mod', name: 'Beta' }] });
+    mods.drawsHighlight.highlight({ plugins: [], origins: [{ kind: 'mod', name: 'Beta' }] });
 
-    const marked: string[] = [];
-    for (const row of await shownRows()) {
-      const { label } = await treeViews.view('modbench.modList').treeDataProvider.getTreeItem(row);
-      if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
-    }
-    expect(marked).toEqual(['0 Beta']);
+    expect((await rows()).map(({ label }) => label)).toEqual([{ label: '0 Beta', highlights: [[0, 6]] }, '1 Alpha', 'Overwrite']);
   });
 });

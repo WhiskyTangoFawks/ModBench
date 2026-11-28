@@ -31,10 +31,7 @@ internal sealed class GatedPluginAdapter(string? gateBefore = null, string? pois
         if (ShouldParkBefore(pluginName))
         {
             _arrived.Release();
-            // Bounded so a regression that stops releasing the gate fails the test rather than
-            // hanging the whole suite.
-            if (!_released.Wait(TimeSpan.FromSeconds(30)))
-                throw new TimeoutException($"gate on {gateBefore} was never released");
+            Waits.Signalled(_released.Wait, $"the release of the gate on {gateBefore}", TimeSpan.FromSeconds(30));
         }
 
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))

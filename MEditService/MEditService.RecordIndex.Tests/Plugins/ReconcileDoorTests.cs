@@ -214,8 +214,7 @@ public sealed class ReconcileDoorTests
 
         var second = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, []));
 
-        Assert.True(
-            Waits.ReachedWithin(() => index.Status.Version >= second && index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(30)),
+        Waits.Reached(() => index.Status.Version >= second && index.Status.State == LoadOrderState.Ready,
             "the next reconcile answering after a status failed to publish");
     }
 
@@ -236,8 +235,7 @@ public sealed class ReconcileDoorTests
 
         holder.Apply(holder.Current);
 
-        Assert.True(
-            Waits.ReachedWithin(() => StatusesPublished(notifications).LastOrDefault()?.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)),
+        Waits.Reached(() => StatusesPublished(notifications).LastOrDefault()?.Status.State == LoadOrderState.Ready,
             "the ready status being published once the fault lifted");
     }
 
@@ -311,7 +309,8 @@ public sealed class ReconcileDoorTests
             Waits.Reached(() => Volatile.Read(ref publishing), "the arrival's status being published");
             var read = Task.Run(() => index.Status.Version);
 
-            Assert.False(await Waits.CompletesWithin(read, TimeSpan.FromMilliseconds(300)));
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(read.IsCompleted);
             release.TrySetResult();
             Assert.Equal(version, await read);
         }

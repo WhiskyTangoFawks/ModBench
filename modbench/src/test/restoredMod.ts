@@ -1,4 +1,4 @@
-import type { RestoreResult } from '../sourceCommands/restoreFromManifest';
+import type { RestoreResult } from '../sourceCommands/instanceRepositoryCommands';
 
 type ModRestored = RestoreResult['landed'][number];
 

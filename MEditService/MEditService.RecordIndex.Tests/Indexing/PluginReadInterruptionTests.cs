@@ -2,6 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
@@ -9,11 +10,13 @@ namespace MEditService.RecordIndex.Tests.Indexing;
 
 public class PluginReadInterruptionTests
 {
+    private const int LongPluginRecords = 400;
+
     private static PluginFixtureData LongPlugin(string name) =>
         new PluginFixtureBuilder(name)
             .WithPlugin("Long.esp", mod =>
             {
-                for (var i = 0; i < 400; i++) mod.Npcs.AddNew($"LongNPC{i}");
+                for (var i = 0; i < LongPluginRecords; i++) mod.Npcs.AddNew($"LongNPC{i}");
             })
             .Build();
 
@@ -21,16 +24,22 @@ public class PluginReadInterruptionTests
     public async Task DisposingTheIndexWhileItReadsAPlugin_StopsTheReadPartway()
     {
         using var fixture = LongPlugin("read-disposal");
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
         var holder = new LoadOrderHolder();
         var reading = new TaskCompletionSource();
-        using var index = Indexes.Open(holder, new PartwayAdapter(
-            afterRecords: 2, () => reading.TrySetResult(), thenEachRecordTakes: TimeSpan.FromMilliseconds(50)));
+        var askedOnward = 0;
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 2, () =>
+        {
+            reading.TrySetResult();
+            Waits.Reached(() => { lock (log) return log.Exists(e => e.Message == "Asked the reconcile in flight to stop"); }, "the disposal asking the read to stop");
+        }, thenEachRecord: () => askedOnward++), loggerFactory: loggers);
         holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
         await reading.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
-        var disposing = Task.Run(index.Dispose);
+        await Task.Run(index.Dispose).WaitAsync(Waits.Patience);
 
-        Assert.Same(disposing, await Task.WhenAny(disposing, Task.Delay(TimeSpan.FromSeconds(5))));
+        Assert.True(askedOnward < LongPluginRecords - 2, $"The read asked for {askedOnward} records after the disposal began.");
     }
 
     [Fact]
@@ -44,7 +53,7 @@ public class PluginReadInterruptionTests
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 2, () =>
         {
             reading.TrySetResult();
-            stuck.Wait(TimeSpan.FromMinutes(1));
+            Waits.Signalled(stuck.Wait, "the stuck read's release");
         }), timeProvider: clock);
         try
         {
@@ -53,9 +62,10 @@ public class PluginReadInterruptionTests
 
             var disposing = Task.Run(index.Dispose);
 
-            Assert.False(await Waits.CompletesWithin(disposing, TimeSpan.FromMilliseconds(300)), "the close waiting for the read");
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(disposing.IsCompleted, "the close waiting for the read");
             clock.Advance(TimeSpan.FromSeconds(10));
-            Assert.True(await Waits.CompletesWithin(disposing, TimeSpan.FromSeconds(5)), "the close returning once its limit passed");
+            await disposing.WaitAsync(Waits.Patience);
         }
         finally
         {
@@ -76,8 +86,7 @@ public class PluginReadInterruptionTests
             {
                 Interlocked.Increment(ref reads);
                 aNewerSnapshotOnTheFirstRead();
-            },
-            thenEachRecordTakes: TimeSpan.FromMilliseconds(2)));
+            }));
 
         holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
         Waits.Reached(

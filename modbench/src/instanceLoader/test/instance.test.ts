@@ -1,29 +1,25 @@
-import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
-  DataFolderArchives, DataFolderPlugins, GameFolder, InstanceAdapter, InstanceReading, Mod,
+  DataFolderArchives, DataFolderPlugins, GameFolder, InstanceReading, Mod,
   OriginFile, OriginFiles, Separator, PublisherTag, ProgramVersions, Reread,
 } from '../../instanceAdapter/instanceAdapter';
-import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
-import { leveledLog } from '../../test/leveledLog';
+import { downloadedFilesOf, fileIn, modFoldersIn, modFoldersOf, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { Instance, instanceMessages, type InstanceValue } from '../instance';
+import { instanceMessages, type Instance, type InstanceValue } from '../instance';
+import { disposeLoaded, loader, type Fixture } from './loader';
 import { factsOf } from '../instanceFacts';
 import { modOrigin } from '../fileConflictIndex';
 import { fakeWorkspace } from '../../test/fakeWorkspace';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { holdsLoadOrder } from '../../client/test/says';
+import { settled } from '../../test/eventually';
 
-const instances: Instance[] = [];
-
-afterEach(() => {
-  for (const instance of instances.splice(0)) instance.dispose();
-});
+afterEach(disposeLoaded);
 
 const mod = (name: string, enabled = true, meta: Partial<Mod> = {}): Mod => ({ kind: 'mod', name, enabled, ...meta });
 const separator = (name: string): Separator => ({ kind: 'separator', name, enabled: false });
@@ -32,8 +28,8 @@ const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
   ({ origin: name, folder: `/instance/mods/${name}`, files: relativePaths.map((path) => fileIn(`/instance/mods/${name}`, path)), folders: [], notes: [] });
 
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
+const FOUND_VERSIONS: ProgramVersions = { kind: 'found', game: { kind: 'read', version: '1.10.163.0' }, extender: { kind: 'notFound', program: 'f4se_loader.exe' } };
 const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
-type Fixture = Partial<InstanceReading> & Partial<Pick<InstanceAdapter, 'fileStamp'>>;
 
 const STAMPED: Fixture = { fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) };
 const GAME_FOUND: Fixture = {
@@ -41,23 +37,6 @@ const GAME_FOUND: Fixture = {
   dataFolderPlugins: inDataFolder(),
   dataFolderArchives: { kind: 'listed', archives: [], stringsFiles: [] } satisfies DataFolderArchives,
 };
-
-function loader({ fileStamp, ...overrides }: Fixture = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter, workspace = fakeWorkspace()) {
-  const fake = fakeInstanceAdapter(readingFixture(overrides));
-  const medit = new InMemoryMEditClient();
-  const log = leveledLog();
-  const instance = new Instance({
-    adapter: wrap(fileStamp === undefined ? fake.adapter : { ...fake.adapter, fileStamp }),
-    gameFolderSettingId: GAME_FOLDER_SETTING_ID,
-    log,
-    medit,
-    workspace,
-  });
-  instances.push(instance);
-  return {
-    instance, fake, medit, workspace, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error,
-  };
-}
 
 function handedStringsFiles(snapshot: InstanceValue['loadOrderSnapshot']): { path: string; stamp: string }[] {
   return snapshot !== undefined && 'plugins' in snapshot ? snapshot.plugins.flatMap((plugin) => plugin.stringsFiles) : [];
@@ -115,7 +94,7 @@ describe('Instance — the value', () => {
     const mods = [mod(NONO), separator('Section'), mod('Harder VATS', false)];
     const { instance } = loader({
       mods, modFolders: modFoldersOf(NONO, 'Hand Extracted Mod'), profile: 'Secondary', profiles: ['Default', 'Secondary'],
-      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER, programVersions: { kind: 'unknownGame' }, gameFolderLinks: 4,
+      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER, programVersions: FOUND_VERSIONS, gameFolderLinks: 4,
     });
 
     await instance.refresh();
@@ -127,7 +106,7 @@ describe('Instance — the value', () => {
     expect(value.profiles).toEqual(['Default', 'Secondary']);
     expect(value.gameName).toBe('Fallout 4');
     expect(value.gameFolder).toEqual(GAME_FOLDER);
-    expect(value.programVersions).toEqual({ kind: 'unknownGame' });
+    expect(value.programVersions).toEqual(FOUND_VERSIONS);
     expect(value.gameFolderLinks).toBe(4);
   });
 
@@ -833,7 +812,7 @@ describe('Instance — a value that survives a bad read', () => {
     instance.subscribe(() => { finished.push('another subscriber'); });
 
     const refreshed = instance.refresh().then(() => finished.push('refresh'));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await settled(() => { expect(finish).toBeDefined(); });
     expect(finished).toEqual(['another subscriber']);
     finish();
     await refreshed;
@@ -931,7 +910,7 @@ describe('Instance — a value that survives a bad read', () => {
     });
 
     void instance.refresh();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await settled(() => { expect(heard).toEqual([1]); });
     await instance.refresh();
 
     expect(heard).toEqual([1, 2]);

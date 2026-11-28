@@ -1,70 +1,35 @@
-import { FOMOD_PAGE, VIEW_ANSWER } from '../../test/fomodDialogDouble';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type * as vscode from 'vscode';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri } from '../../test/vscodeMock';
+import { describe, it, expect, vi } from 'vitest';
 
-const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
-  registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
-  executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
-  showOpenDialog: vi.fn(),
-  showInputBox: vi.fn<(options?: vscode.InputBoxOptions) => Promise<string | undefined>>(),
-  showQuickPick: vi.fn(),
-  openExternal: vi.fn(),
-}));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand },
-    window: { showOpenDialog, showInputBox, showQuickPick, withProgress: recordedWithProgress },
-    env: { openExternal },
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-    Uri: { ...Uri, parse: (s: string) => ({ toString: () => s }) },
-  };
-});
-
-import { registerModInstallCommands } from '../installCommands';
+import { installs, modsViewOn } from './modsViewOn';
+import { answers, seen } from './modsVscode';
+import { Uri } from '../../test/vscodeMock';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
-import { modCommands } from '../../modCommands/modCommands';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import {
-  downloadedFilesOf, fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
-} from '../../test/fakeInstanceAdapter';
+import { downloadedFilesOf, fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
-import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
-import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
+import { progressSteps } from '../../test/recordedProgress';
+import { mod } from './indexedValue';
 
-function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
-  const [, handler] = present(registerCommand.mock.calls.find((c) => c[0] === commandId), `the ${commandId} handler`);
-  return Promise.resolve(handler(...args));
+const installing = (answered: InstanceAnswers = {}) => modsViewOn({
+  value: instanceValueFixture({ mods: [mod('Harder VATS')], downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }),
+  adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('Harder VATS'), downloadedFiles: downloadedFilesOf('foo.7z') }), answered),
+});
+
+type View = ReturnType<typeof installing>;
+
+const PICKED = { archive: 'Archive…', folder: 'Folder…' } as const;
+
+function answering(packageKind: keyof typeof PICKED | undefined, picked?: string, name?: string): void {
+  answers.quickPick = (items) => items.find(({ label }) => label === (packageKind && PICKED[packageKind]));
+  answers.openDialog = () => (picked === undefined ? undefined : [Uri.file(picked)]);
+  answers.inputBox = () => name;
 }
 
-
-let fake: FakeInstanceAdapter;
-
-type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
-
-function register(
-  over: Partial<ModInstallDeps> = {}, answers: InstanceAnswers = {}, modFolders = modFoldersOf('Harder VATS'),
-): void {
-  fake = fakeInstanceAdapter(readingFixture({ modFolders, downloadedFiles: downloadedFilesOf('foo.7z') }), answers);
-  registerModInstallCommands({
-    commands: modCommands(fake.adapter),
-    instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
-    reporterFor: () => recordingReporter(),
-    trash: vi.fn(),
-    fomodDialog: () => FOMOD_PAGE,
-    downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
-    ...over,
-  });
-}
-
-const installs = () => fake.calls.flatMap((call) => (call.verb === 'install' ? [{ package: call.package, target: call.target, fomod: call.fomod }] : []));
-
-const reportingTo = (reporter: RecordingReporter): Partial<ModInstallDeps> =>
-  ({ reporterFor: () => reporter, downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' } });
+const ON_THE_PAGE = { kind: 'dialog', dialog: expect.anything() as unknown, steps: [] };
 
 const NEW_MOD = { kind: 'new', name: 'New Mod' } as const;
 
@@ -73,59 +38,44 @@ const stepOnInstall: InstanceAnswers['refusals'] = (call) => {
   return undefined;
 };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  showQuickPick.mockReset();
-  showOpenDialog.mockReset();
-  showInputBox.mockReset();
-});
-
 describe('modbench.mod.install: installation file or folder, asked first', () => {
-  it.each<[string, unknown, unknown, string | undefined]>([
-    ['Esc at the installation-file-or-folder pick', undefined, undefined, undefined],
-    ['Esc at the OS picker for an installation file', { packageKind: 'archive' }, undefined, undefined],
-    ['Esc at the OS picker for a folder', { packageKind: 'folder' }, undefined, undefined],
-    ['a cancelled name prompt', { packageKind: 'archive' }, [Uri.file('/archive/foo.7z')], undefined],
-  ])('%s installs nothing', async (_case, pick, picked, name) => {
-    showQuickPick.mockResolvedValueOnce(pick);
-    showOpenDialog.mockResolvedValueOnce(picked);
-    showInputBox.mockResolvedValueOnce(name);
+  it.each<[string, keyof typeof PICKED | undefined, string | undefined]>([
+    ['Esc at the installation-file-or-folder pick', undefined, undefined],
+    ['Esc at the OS picker for an installation file', 'archive', undefined],
+    ['Esc at the OS picker for a folder', 'folder', undefined],
+    ['a cancelled name prompt', 'archive', '/archive/foo.7z'],
+  ])('%s installs nothing', async (_case, pick, picked) => {
+    const view = installing();
+    answering(pick, picked);
 
-    register();
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(fake.calls).toEqual([]);
+    expect(view.adapter.calls).toEqual([]);
   });
 
   it('asks installation file or folder before either OS picker opens', async () => {
-    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce(undefined);
+    const view = installing();
+    const asked: string[] = [];
+    answers.quickPick = (items) => { asked.push('pick'); return items[0]; };
+    answers.openDialog = () => { asked.push('OS picker'); return undefined; };
 
-    register();
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(showQuickPick).toHaveBeenCalledWith(
-      [expect.objectContaining({ packageKind: 'archive' }), expect.objectContaining({ packageKind: 'folder' })],
-      expect.anything(),
-    );
-    const quickPickOrder = present(showQuickPick.mock.invocationCallOrder[0], 'the showQuickPick call order');
-    const openDialogOrder = present(showOpenDialog.mock.invocationCallOrder[0], 'the showOpenDialog call order');
-    expect(quickPickOrder).toBeLessThan(openDialogOrder);
+    expect(seen.quickPicks.map(({ labels }) => labels)).toEqual([['Archive…', 'Folder…']]);
+    expect(asked).toEqual(['pick', 'OS picker']);
   });
 
   it.each([
     ['installation file', 'archive', '/archive/foo.7z', { filters: { 'Mod archives': ['zip', '7z', 'rar'] } }],
     ['folder', 'folder', '/somewhere/Loose Files', { canSelectFiles: false, canSelectFolders: true, canSelectMany: false }],
   ] as const)('%s: the OS picker offers what install takes, and installs the pick as a new mod under the name prompted', async (_case, packageKind, path, dialog) => {
-    showQuickPick.mockResolvedValueOnce({ packageKind });
-    showOpenDialog.mockResolvedValueOnce([Uri.file(path)]);
-    showInputBox.mockResolvedValueOnce('New Mod');
+    const view = installing();
+    answering(packageKind, path, 'New Mod');
 
-    register();
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining(dialog));
-    expect(installs()).toEqual([{ package: { kind: packageKind, path }, target: NEW_MOD, fomod: VIEW_ANSWER }]);
+    expect(seen.openDialogs).toEqual([expect.objectContaining(dialog)]);
+    expect(installs(view)).toEqual([{ package: { kind: packageKind, path }, target: NEW_MOD, fomod: ON_THE_PAGE }]);
   });
 });
 
@@ -136,71 +86,74 @@ describe('modbench.mod.install: the name prompt', () => {
     ['folder', '/somewhere/Loose Files', 'Loose Files'],
     ['folder', 'C:\\somewhere\\Loose v1.2', 'Loose v1.2'],
   ] as const)('%s picked at %s: the prompt holds %s', async (packageKind, picked, name) => {
-    showQuickPick.mockResolvedValueOnce({ packageKind });
-    showOpenDialog.mockResolvedValueOnce([Uri.file(picked)]);
-    showInputBox.mockResolvedValueOnce(undefined);
+    const view = installing();
+    answering(packageKind, picked);
 
-    register();
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: name }));
+    expect(seen.inputBoxes).toEqual([expect.objectContaining({ prompt: 'Mod name', value: name })]);
+  });
+
+  it.each<[string, InstanceAnswers, string, string | undefined]>([
+    ['the command\'s refusal of a name a folder holds', {}, 'harder vats',
+      'A mod named "harder vats" already exists. Install its next release from Downloads, or uninstall it to install anew.'],
+    ['nothing for a free name', {}, 'Free Name', undefined],
+    ['why the command could not tell', { unreadReads: { modOrder: 'modlist.txt is locked' } }, 'Free Name', 'modlist.txt is locked'],
+  ])('shows %s', async (_case, answered, typed, shown) => {
+    const view = installing(answered);
+    answering('folder', '/somewhere/Loose Files');
+
+    await view.run('modbench.mod.install');
+    const prompt = present(seen.inputBoxes[0], 'the name prompt');
+
+    expect(await prompt.validateInput?.(typed)).toBe(shown);
   });
 });
 
 describe('modbench.mod.install from the view: what reaches the user', () => {
-  beforeEach(() => {
-    showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
-    showOpenDialog.mockResolvedValueOnce([Uri.file('/somewhere/foo')]);
-    showInputBox.mockResolvedValueOnce('New Mod');
-  });
-
   it('reports nothing for an install the user cancelled on the FOMOD installer\'s page', async () => {
-    const reporter = recordingReporter();
+    const view = installing({ installed: { landed: false, cancelled: true } });
+    answering('folder', '/somewhere/foo', 'New Mod');
 
-    register(reportingTo(reporter), { installed: { landed: false, cancelled: true } });
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(reporter.reports).toEqual([]);
+    expect(view.reporter.reports).toEqual([]);
   });
 
   it('warns of what a FOMOD installed from the page said, and not of the missing files the user confirmed', async () => {
-    const reporter = recordingReporter();
+    const view = installing({ installed: { landed: true, fomod: { kind: 'installer', missing: ['gone.esp'], notes: ['Installer failed'] } } });
+    answering('folder', '/somewhere/foo', 'New Mod');
 
-    register(reportingTo(reporter), { installed: { landed: true, fomod: { kind: 'installer', missing: ['gone.esp'], notes: ['Installer failed'] } } });
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: '"New Mod": its FOMOD\'s installer says', detail: 'Installer failed' }]);
+    expect(view.reporter.reports).toEqual([{ severity: 'warning', message: '"New Mod": its FOMOD\'s installer says', detail: 'Installer failed' }]);
   });
 });
 
 describe('modbench.mod.install: a failed install', () => {
   it.each([
-    ['archive', Uri.file('/somewhere/foo.zip'), 'installFromInstallationFile'],
-    ['folder', Uri.file('/somewhere/foo'), 'installFromFolder'],
+    ['archive', '/somewhere/foo.zip', 'installFromInstallationFile'],
+    ['folder', '/somewhere/foo', 'installFromFolder'],
   ] as const)('from a %s is reported under the gesture, naming the mod', async (packageKind, picked, tag) => {
-    const reporter = recordingReporter();
-    const tags: string[] = [];
-    showQuickPick.mockResolvedValueOnce({ packageKind });
-    showOpenDialog.mockResolvedValueOnce([picked]);
-    showInputBox.mockResolvedValueOnce('New Mod');
+    const view = installing({ refusals: refusing('install', 'disk full') });
+    answering(packageKind, picked, 'New Mod');
+    const built = view.tags.length;
 
-    register({ reporterFor: (t) => { tags.push(t); return reporter; } }, { refusals: refusing('install', 'disk full') });
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
-    expect(tags).toEqual([tag]);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "New Mod".', detail: 'disk full' }]);
+    expect(view.tags.slice(built)).toEqual([tag]);
+    expect(view.reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "New Mod".', detail: 'disk full' }]);
   });
 });
 
 describe('modbench.mod.install: a downloaded file is its package', () => {
   it('a mod row as Argument is no package, so it asks installation file or folder', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
+    const view = installing();
 
-    register();
-    await invoke('modbench.mod.install', { kind: 'mod', mod: { name: 'Some Mod' } });
+    await view.run('modbench.mod.install', await view.row('Harder VATS'));
 
-    expect(showQuickPick).toHaveBeenCalled();
-    expect(fake.calls).toEqual([]);
+    expect(seen.quickPicks).toHaveLength(1);
+    expect(view.adapter.calls).toEqual([]);
   });
 });
 
@@ -208,23 +161,20 @@ const NO_CHOICES = { kind: 'choices', steps: [], installAnyway: false };
 
 describe('modbench.mod.install called by the agent', () => {
   const outsideInstallationFile = { kind: 'archive' as const, path: '/elsewhere/bar.zip' };
-  const install = (argument: AgentCall['argument'], options: object) => invoke('modbench.mod.install', new AgentCall(argument, options));
-  const refusalOf = (argument: AgentCall['argument'], options: object) => install(argument, options).then(() => undefined, (error: unknown) => error);
+  const install = (view: View, argument: AgentCall['argument'], options: object) => view.run('modbench.mod.install', new AgentCall(argument, options));
+  const refusalOf = (view: View, argument: AgentCall['argument'], options: object) => install(view, argument, options).then(() => undefined, (error: unknown) => error);
   const nothingAsked = () => {
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(showOpenDialog).not.toHaveBeenCalled();
-    expect(showInputBox).not.toHaveBeenCalled();
+    expect([seen.quickPicks, seen.openDialogs, seen.inputBoxes]).toEqual([[], [], []]);
   };
 
   it('installs the downloaded file named as a new mod under the name given, asking nothing, and answers the mod written', async () => {
-    const reporter = recordingReporter();
+    const view = installing();
 
-    register(reportingTo(reporter));
-    const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
+    const answered = await install(view, [{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
 
-    expect(installs()).toEqual([{ package: { kind: 'archive', path: '/downloads/foo.7z' }, target: { kind: 'new', name: 'Foo' }, fomod: NO_CHOICES }]);
+    expect(installs(view)).toEqual([{ package: { kind: 'archive', path: '/downloads/foo.7z' }, target: { kind: 'new', name: 'Foo' }, fomod: NO_CHOICES }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Foo' }], refused: [] }, partial: [] });
-    expect(reporter.reports).toEqual([]);
+    expect(view.reporter.reports).toEqual([]);
     nothingAsked();
   });
 
@@ -232,18 +182,20 @@ describe('modbench.mod.install called by the agent', () => {
     ['an installation file outside the downloads as an installation file', outsideInstallationFile, 'Bar'],
     ['a folder as a folder', { kind: 'folder', path: '/elsewhere/Loose' }, 'Loose'],
   ] as const)('installs %s, asking nothing', async (_case, given, name) => {
-    register();
-    await install([given], { name });
+    const view = installing();
 
-    expect(installs()).toEqual([{ package: given, target: { kind: 'new', name }, fomod: NO_CHOICES }]);
+    await install(view, [given], { name });
+
+    expect(installs(view)).toEqual([{ package: given, target: { kind: 'new', name }, fomod: NO_CHOICES }]);
     nothingAsked();
   });
 
   it('installs over the target mod named, as an upgrade', async () => {
-    register();
-    const answered = await install([outsideInstallationFile], { target: 'Harder VATS' });
+    const view = installing();
 
-    expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
+    const answered = await install(view, [outsideInstallationFile], { target: 'Harder VATS' });
+
+    expect(installs(view)).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
   });
 
@@ -261,23 +213,33 @@ describe('modbench.mod.install called by the agent', () => {
     ['both choices and Manual', [outsideInstallationFile], { name: 'Bar', manual: true, choices: [] }, MANUAL_ALONE],
     ['both the installer and Manual', [outsideInstallationFile], { name: 'Bar', manual: true, installer: true }, MANUAL_ALONE],
   ])('refuses a call that carries %s, installing nothing', async (_case, argument, options, refusal) => {
-    register();
+    const view = installing();
 
-    expect(await refusalOf(argument, options)).toEqual(refusal);
-    expect(fake.calls).toEqual([]);
+    expect(await refusalOf(view, argument, options)).toEqual(refusal);
+    expect(view.adapter.calls).toEqual([]);
+  });
+
+  it.each<[string, InstanceAnswers, string, Refusal]>([
+    ['the command\'s refusal of a name a folder holds', {}, 'harder vats',
+      new Refusal('A mod named "harder vats" already exists. Install its next release from Downloads, or uninstall it to install anew.')],
+    ['why the command could not tell', { unreadReads: { modOrder: 'modlist.txt is locked' } }, 'Bar', new Refusal('modlist.txt is locked')],
+  ])('refuses a new mod\'s name with %s, installing nothing', async (_case, answered, name, refusal) => {
+    const view = installing(answered);
+
+    expect(await refusalOf(view, [outsideInstallationFile], { name })).toEqual(refusal);
+    expect(view.adapter.calls).toEqual([]);
   });
 
   it.each<[string, object, InstanceAnswers, string, string]>([
     ['refused by install', { name: 'Bar' }, { refusals: refusing('install', 'folder taken') }, 'Failed to install "Bar".', 'folder taken'],
     ['that throws', { target: 'Harder VATS' }, { unreadReads: { modOrder: 'modlist.txt is locked' } }, 'Failed to install "Harder VATS".', 'modlist.txt is locked'],
-  ])('answers an install %s as the failure the view reports, reporting nothing itself', async (_case, options, answers, refusal, detail) => {
-    const reporter = recordingReporter();
+  ])('answers an install %s as the failure the view reports, reporting nothing itself', async (_case, options, answered, refusal, detail) => {
+    const view = installing(answered);
 
-    register(reportingTo(reporter), answers);
-    const answered = await install([outsideInstallationFile], options);
+    const outcome = await install(view, [outsideInstallationFile], options);
 
-    expect(answered).toEqual({ applied: false, refusal, detail });
-    expect(reporter.reports).toEqual([]);
+    expect(outcome).toEqual({ applied: false, refusal, detail });
+    expect(view.reporter.reports).toEqual([]);
   });
 
   it.each([
@@ -297,13 +259,12 @@ describe('modbench.mod.install called by the agent', () => {
       { message: '"Bar" was installed without the choices for steps the user did not reach:', detail: 'Only for B, Extras', severity: 'warning' },
     ]],
   ])('answers a FOMOD that landed %s, each a partial failure the agent reads with its Output line', async (_, fomod, partial) => {
-    const reporter = recordingReporter();
+    const view = installing({ installed: { landed: true, fomod } });
 
-    register(reportingTo(reporter), { installed: { landed: true, fomod } });
-    const answered = await install([outsideInstallationFile], { name: 'Bar' });
+    const answered = await install(view, [outsideInstallationFile], { name: 'Bar' });
 
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Bar', fomod }], refused: [] }, partial });
-    expect(reporter.reports).toEqual([]);
+    expect(view.reporter.reports).toEqual([]);
   });
 
   it.each([
@@ -312,28 +273,29 @@ describe('modbench.mod.install called by the agent', () => {
     ['its choices, with install anyway', { installAnyway: true, choices: [] }, { kind: 'choices', steps: [], installAnyway: true }],
     ['Manual', { manual: true }, { kind: 'manual' }],
     ['the installer\'s page, opened on its choices', { installer: true, choices: [{ step: 'Main', groups: [] }] },
-      { kind: 'dialog', dialog: FOMOD_PAGE, steps: [{ step: 'Main', groups: [] }] }],
-    ['the installer\'s page, on no choices', { installer: true }, VIEW_ANSWER],
+      { ...ON_THE_PAGE, steps: [{ step: 'Main', groups: [] }] }],
+    ['the installer\'s page, on no choices', { installer: true }, ON_THE_PAGE],
   ])('hands the install %s, for a FOMOD', async (_, options, answer) => {
-    register();
-    await install([outsideInstallationFile], { name: 'Bar', ...options });
+    const view = installing();
 
-    expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'new', name: 'Bar' }, fomod: answer }]);
+    await install(view, [outsideInstallationFile], { name: 'Bar', ...options });
+
+    expect(installs(view)).toEqual([{ package: outsideInstallationFile, target: { kind: 'new', name: 'Bar' }, fomod: answer }]);
   });
 
   it('answers that the user cancelled the installer, reporting nothing', async () => {
-    const reporter = recordingReporter();
+    const view = installing({ installed: { landed: false, cancelled: true } });
 
-    register(reportingTo(reporter), { installed: { landed: false, cancelled: true } });
-    const answered = await install([outsideInstallationFile], { name: 'Bar', installer: true });
+    const answered = await install(view, [outsideInstallationFile], { name: 'Bar', installer: true });
 
     expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'Bar' }, reason: 'The user cancelled the installer.' }] } });
-    expect(reporter.reports).toEqual([]);
+    expect(view.reporter.reports).toEqual([]);
   });
 
   it('answers a new mod whose mod order line could not be written as a warning partial', async () => {
-    register({}, { refusals: refusing('changeModOrder', 'locked') });
-    const answered = await install([outsideInstallationFile], { name: 'Bar' });
+    const view = installing({ refusals: refusing('changeModOrder', 'locked') });
+
+    const answered = await install(view, [outsideInstallationFile], { name: 'Bar' });
 
     expect(answered).toMatchObject({
       applied: true,
@@ -342,31 +304,24 @@ describe('modbench.mod.install called by the agent', () => {
   });
 
   it('answers a downloaded file it could not mark installed as a log partial, writing no line itself', async () => {
-    const log = vi.fn();
+    const view = installing({ refusals: refusing('markDownloadedFile', 'locked') });
 
-    register({ downloadedFileInstallReporting: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' } }, { refusals: refusing('markDownloadedFile', 'locked') });
-    const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
+    const answered = await install(view, [{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
 
     expect(answered).toMatchObject({
       applied: true,
       partial: [{ message: '"foo.7z" was installed, but its Downloads status could not be updated', detail: 'locked', severity: 'log' }],
     });
-    expect(log).not.toHaveBeenCalled();
+    expect(view.lines).toEqual([]);
   });
 });
 
 describe('an install ends on the Instance loader\'s read, with the Mods progress bar open throughout', () => {
-  beforeEach(() => { progressSteps.length = 0; });
-
   it('opens the bar, installs, reads, then closes the bar', async () => {
-    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([Uri.file('/somewhere/foo.zip')]);
-    showInputBox.mockResolvedValueOnce('New Mod');
+    const view = installing({ refusals: stepOnInstall });
+    answering('archive', '/somewhere/foo.zip', 'New Mod');
 
-    register({
-      instance: { value: instanceValueFixture(), ...instanceThatReads },
-    }, { refusals: stepOnInstall });
-    await invoke('modbench.mod.install');
+    await view.run('modbench.mod.install');
 
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'install', 'progress closes']);
   });

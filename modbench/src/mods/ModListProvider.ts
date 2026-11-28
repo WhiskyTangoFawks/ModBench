@@ -17,7 +17,7 @@ import {
   anyNamed, archivedIn, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
   type ArchivedEntry, type ChildrenShown, type FileIgnore,
 } from './modFiles';
-import type { ModArgument } from '../drivingLib/argument';
+import type { ModArgument, SeparatorArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 import type { OpenRows } from './openRows';
 import { groupSeparators, type SeparatorEntry, type SeparatorGroup, type SeparatorLeaf } from './separatorGroups';
@@ -88,6 +88,7 @@ interface ModFacts {
  *  shows it for them, and then it opens on its own. */
 export class SeparatorNode extends vscode.TreeItem {
   readonly kind = 'separator' as const;
+  readonly argument: SeparatorArgument;
   constructor(
     public readonly separator: Separator,
     public readonly mods: Mod[],
@@ -95,6 +96,7 @@ export class SeparatorNode extends vscode.TreeItem {
     public readonly text: string = separator.name,
   ) {
     super(text, expanderOver(mods, shown));
+    this.argument = { kind: 'separator', name: separator.name };
     this.id = rowIdentity(this.kind, separator.name);
     this.resourceUri = separatorRowUri(separator.name);
     this.iconPath = blankIcon();

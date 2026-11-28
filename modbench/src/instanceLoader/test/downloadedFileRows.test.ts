@@ -1,25 +1,26 @@
-import { describe, it, expect } from 'vitest';
-import type { DownloadedFile, DownloadedFileMeta } from '../../instanceAdapter/instanceAdapter';
-import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from '../downloadedFileRows';
+import { describe, it, expect, afterEach } from 'vitest';
+import type { DownloadedFile, DownloadedFileMeta, ModMeta } from '../../instanceAdapter/instanceAdapter';
+import type { DownloadedFileRow, InstanceValue } from '../instance';
+import { disposeLoaded, loader } from './loader';
+
+afterEach(disposeLoaded);
 
 const metaOf = (fields: Partial<DownloadedFileMeta> = {}): DownloadedFileMeta => ({ status: 'Downloaded', ...fields });
 
-const file = (name: string, mtimeMs: number, meta?: DownloadedFileMeta, excluded = false): DownloadedFile => ({
-  name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 123, mtimeMs, excluded, meta,
+const file = (name: string, meta?: DownloadedFileMeta, excluded = false): DownloadedFile => ({
+  name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 123, mtimeMs: 100, excluded, meta,
 });
 
-function soleRow(rows: readonly LocatedDownloadedFileRow[]): LocatedDownloadedFileRow {
-  expect(rows).toHaveLength(1);
-  const [row] = rows;
-  if (row === undefined) throw new Error('no row was built');
-  return row;
+async function rowsOf(files: DownloadedFile[], folderMeta: ReadonlyMap<string, ModMeta> = new Map()): Promise<readonly DownloadedFileRow[]> {
+  const { instance } = loader({ downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files }, folderMeta });
+  await instance.refresh();
+  const { downloadedFiles }: InstanceValue = instance.value;
+  return downloadedFiles.kind === 'listed' ? downloadedFiles.rows : [];
 }
 
 describe('the rows of the downloaded files', () => {
-  const rowsClaimedByNoMod = (files: DownloadedFile[]) => buildDownloadedFileRows(files, new Map(), [], new Set());
-
-  it('maps a file with no metadata to a Downloaded row carrying its two paths', () => {
-    expect(rowsClaimedByNoMod([file('foo.zip', 100)])).toEqual([{
+  it('are a Downloaded row carrying its two paths for a file with no metadata', async () => {
+    expect(await rowsOf([file('foo.zip')])).toEqual([{
       name: 'foo.zip',
       displayName: 'foo.zip',
       status: 'Downloaded',
@@ -33,65 +34,36 @@ describe('the rows of the downloaded files', () => {
     }]);
   });
 
-  it('flags hasMeta and carries the metadata\'s fields', () => {
-    const row = soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf({
-      modID: '12345', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
-    }))]));
+  it('flag hasMeta and carry the metadata\'s fields', async () => {
+    const meta = metaOf({ modID: '12345', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone' });
 
-    expect(row).toMatchObject({
+    expect(await rowsOf([file('foo.zip', meta)])).toMatchObject([{
       hasMeta: true, modID: '12345', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
-    });
+    }]);
   });
 
-  it('carries the excluded flag through without filtering (filtering is a view concern)', () => {
-    const rows = rowsClaimedByNoMod([file('foo.zip', 100, undefined, true)]);
-    expect(soleRow(rows)).toMatchObject({ name: 'foo.zip', excluded: true });
+  it('carry an excluded file as a row flagged excluded, filtering being a view\'s concern', async () => {
+    expect(await rowsOf([file('foo.zip', undefined, true)])).toMatchObject([{ name: 'foo.zip', excluded: true }]);
   });
 
-  it('uses the metadata\'s name as displayName when present', () => {
-    expect(soleRow(rowsClaimedByNoMod([file('foo_1_2_3.zip', 100, metaOf({ name: 'Sleep or Save' }))])).displayName).toBe('Sleep or Save');
-  });
-
-  it('falls back to the filename for displayName when the metadata\'s name is absent or empty', () => {
-    expect(soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf())])).displayName).toBe('foo.zip');
-    expect(soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf({ name: '' }))])).displayName).toBe('foo.zip');
+  it.each<[string, DownloadedFileMeta, string]>([
+    ['the metadata\'s name when it has one', metaOf({ name: 'Sleep or Save' }), 'Sleep or Save'],
+    ['the file name when the metadata\'s name is absent', metaOf(), 'foo_1_2_3.zip'],
+    ['the file name when the metadata\'s name is empty', metaOf({ name: '' }), 'foo_1_2_3.zip'],
+  ])('are labelled with %s', async (_case, meta, displayName) => {
+    expect((await rowsOf([file('foo_1_2_3.zip', meta)])).map((row) => row.displayName)).toEqual([displayName]);
   });
 });
 
-describe('which mods each downloaded file was installed into', () => {
-  it('keys a mod under the downloaded file its meta names, case-folded', () => {
-    expect(modsByInstallationFileName([{ name: 'UFO4P', installationFileName: 'UFO4P-4598.7z' }]))
-      .toEqual(new Map([['ufo4p-4598.7z', ['UFO4P']]]));
-  });
-
-  it('keys every mod naming the same downloaded file under it, in mod order, a downloaded file installed into several mods never being forced to one', () => {
-    expect(modsByInstallationFileName([
-      { name: 'Textures', installationFileName: 'Pack.7z' },
-      { name: 'Meshes', installationFileName: 'pack.7z' },
-    ])).toEqual(new Map([['pack.7z', ['Textures', 'Meshes']]]));
-  });
-
-  it('claims no downloaded file for a mod with no installation file name: unknown, never an uninstall', () => {
-    expect(modsByInstallationFileName([{ name: 'Hand Made' }])).toEqual(new Map());
-  });
-});
-
-describe('a downloaded file\'s Installed follows the mods, not the metadata', () => {
-  it('reads as Installed when a mod names it, whatever the metadata says', () => {
-    const rows = buildDownloadedFileRows([file('Pack.7z', 1, metaOf({ modID: '1' }))], new Map([['pack.7z', ['Textures']]]), [], new Set());
-
-    expect(soleRow(rows).status).toBe('Installed');
-  });
-
-  it('reads as Uninstalled, not Downloaded, when no mod names it though the metadata claims installed', () => {
-    const rows = buildDownloadedFileRows([file('Pack.7z', 1, metaOf({ status: 'Installed' }))], new Map(), [], new Set());
-
-    expect(soleRow(rows).status).toBe('Uninstalled');
-  });
-
-  it('keeps the metadata’s Uninstalled when no mod names it, MO2\'s own Uninstalled being a user statement about the downloaded file, not a claim about a mod', () => {
-    const rows = buildDownloadedFileRows([file('Pack.7z', 1, metaOf({ status: 'Uninstalled' }))], new Map(), [], new Set());
-
-    expect(soleRow(rows).status).toBe('Uninstalled');
+describe('a downloaded file\'s Installed follows the mod folders that name it, not the metadata', () => {
+  it.each<[string, DownloadedFileMeta, [string, ModMeta][], DownloadedFileRow['status']]>([
+    ['Installed when a mod folder names it, whatever the metadata says', metaOf({ modID: '1' }), [['Textures', { installationFileName: 'Pack.7z' }]], 'Installed'],
+    ['Installed when a mod folder names it in another case', metaOf(), [['Textures', { installationFileName: 'PACK.7Z' }]], 'Installed'],
+    ['Installed when two mod folders name it, one in another case', metaOf(), [['Textures', { installationFileName: 'Pack.7z' }], ['Meshes', { installationFileName: 'pack.7z' }]], 'Installed'],
+    ['Downloaded when the only mod folder names no installation file: unknown, never an uninstall', metaOf(), [['Hand Made', {}]], 'Downloaded'],
+    ['Uninstalled, not Downloaded, when no mod folder names it though the metadata claims installed', metaOf({ status: 'Installed' }), [], 'Uninstalled'],
+    ['Uninstalled when no mod folder names it and the metadata says so, a statement about the downloaded file', metaOf({ status: 'Uninstalled' }), [], 'Uninstalled'],
+  ])('is %s', async (_case, meta, folderMeta, status) => {
+    expect((await rowsOf([file('Pack.7z', meta)], new Map(folderMeta))).map((row) => row.status)).toEqual([status]);
   });
 });

@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -37,8 +38,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         var pending = _index.Queries.AwaitSequence(landed, TimeSpan.FromDays(1));
 
-        Assert.True(await Waits.CompletesWithin(pending, Generous));
-        Assert.True((await pending).Reached);
+        Assert.True((await pending.WaitAsync(Generous)).Reached);
     }
 
     private static readonly TimeSpan DayLongTimeoutSoAStopwatchAwaitWouldStillBePending = TimeSpan.FromDays(1);
@@ -46,12 +46,12 @@ public sealed class SequenceAwaitTests : IDisposable
     [Fact]
     public async Task ASequenceNotReached_IsAnsweredNotYet_OnceTheClockPassesTheTimeout()
     {
-        var pending = _index.Queries.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
+        var observed = _index.Sequence;
+        var pending = _index.Queries.AwaitSequence(observed + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
         _clock.SetUtcNow(Start + TimeSpan.FromDays(2));
 
-        Assert.True(await Waits.CompletesWithin(pending, Generous));
-        Assert.False((await pending).Reached);
+        Assert.Equal(new SequenceAwaitResponse(false, observed), await pending.WaitAsync(Generous));
     }
 
     [Fact]
@@ -65,7 +65,6 @@ public sealed class SequenceAwaitTests : IDisposable
 
         _clock.Advance(TimeSpan.FromMilliseconds(50));
 
-        Assert.True(await Waits.CompletesWithin(pending, Generous));
-        Assert.True((await pending).Reached);
+        Assert.True((await pending.WaitAsync(Generous)).Reached);
     }
 }

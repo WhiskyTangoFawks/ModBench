@@ -1,8 +1,7 @@
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import type { FolderFile, FolderValue } from '../../repositoriesLib/statusValues';
-import type { Manifest } from '../manifest';
-import { flaggedFilesIn, flaggedHashesFrom, flaggedHashesIn, type PossibleHashes } from '../flaggedHashes';
+import { flaggedFilesIn, flaggedHashesFrom, flaggedHashesIn, type Manifest, type PossibleHashes } from '../manifestAdapter';
 import { localFailure } from '../../wire/readFailed';
 
 const manifest: Manifest = {

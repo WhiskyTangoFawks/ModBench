@@ -3,45 +3,21 @@ import type { CopyItem, RecordAt } from '../../client';
 import type { ItemRefusal } from '../../ports/selectionOutcome';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
 
-interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
-type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
+import { commandHandlers as handlers, editorVscode, progressShown, showQuickPick } from './editorVscode';
 
-const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
-  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
-  return {
-    handlers,
-    executeCommand: vi.fn((command: string, ...args: unknown[]) => handlers.get(command)?.(...args)),
-    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
-      handlers.set(command, handler);
-      return { dispose: vi.fn() };
-    }),
-    showQuickPick: vi.fn<ShowQuickPick>(),
-  };
-});
-
-vi.mock('vscode', async () => {
-  const { TreeItem, TreeItemCollapsibleState } = await import('../../test/vscodeMock');
-  return {
-    commands: { registerCommand, executeCommand },
-    window: { showQuickPick },
-    TreeItem, TreeItemCollapsibleState,
-  };
-});
+vi.mock('vscode', () => editorVscode);
 
 import { TreeItem } from '../../test/vscodeMock';
-import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands,
-} from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { RecordWrite } from '../../drivingLib/writingGesture';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { oneAtATime, type OneAtATime } from '../../textDocuments/oneAtATime';
 import { settled } from '../../test/eventually';
+import { forgetEditor, register } from './editorHarness';
 
 beforeEach(() => {
-  handlers.clear();
+  forgetEditor();
   vi.clearAllMocks();
 });
 
@@ -50,40 +26,24 @@ const carrying = ({ formKey, plugin }: RecordAt, label?: string) =>
 
 let viewSelection: readonly unknown[] = [];
 const selectionsOfViews = new Map<string, readonly unknown[]>();
-const selections = { focused: () => viewSelection, of: (view: string) => selectionsOfViews.get(view) ?? [] };
 
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
 const RECORD_NODE = carrying(RECORD_IDENTITY);
 
-function recordingWrite(): { write: RecordWrite; writing: string[] } {
-  const writing: string[] = [];
-  return {
-    writing,
-    write: async (command) => {
-      writing.push('opens');
-      await command();
-      writing.push('ends');
-    },
-  };
-}
-
 const changes = (record: RecordAt) => ({ record, moves: [], deletions: [], documents: [] });
 
-type RegisterCommands = (
-  client: InMemoryMEditClient, ...rest: Parameters<typeof registerRecordCopyCommands> extends [unknown, ...infer Rest] ? Rest : never
-) => unknown;
-
-function invoking(register: RegisterCommands) {
-  return (client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) => {
-    const reporter = recordingReporter();
-    const ask = scriptedDialog(...answers);
-    const { write, writing } = recordingWrite();
-    const source = {
-      applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), oneAtATime: oneAtATime(), refreshSourceControlFor: vi.fn(),
-    };
-    register(client, reporter, ask, selections, write, source);
-    return { reporter, ask, writing, source };
+function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
+  const reporter = recordingReporter();
+  const ask = scriptedDialog(...answers);
+  const source = {
+    applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), oneAtATime: oneAtATime(), refreshSourceControlFor: vi.fn(),
   };
+  const { focusedView } = register({ meditClient: client, selection: () => viewSelection, reporterOf: reporter, ask, sourceEditing: source });
+  focusedView.follow('modbench.pluginListTree', {
+    get selection() { return selectionsOfViews.get('modbench.pluginListTree') ?? []; },
+    onDidChangeSelection: () => ({ dispose: () => undefined }),
+  });
+  return { reporter, ask, writing: progressShown, source };
 }
 
 function editInFlight(source: { oneAtATime: OneAtATime }): () => void {
@@ -93,8 +53,7 @@ function editInFlight(source: { oneAtATime: OneAtATime }): () => void {
 }
 
 
-describe('registerRecordLifecycleCommands', () => {
-  const invoke = invoking((client, reporter, _ask, ...rest) => registerRecordLifecycleCommands(client, reporter, ...rest));
+describe('deleting records', () => {
 
   describe('a view\'s Delete key, which passes its view as args', () => {
     afterEach(() => { selectionsOfViews.clear(); });
@@ -336,7 +295,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   const copyChanges = (record: RecordAt, destination: { name: string; origin: string }) =>
     ({ record, destination, moves: [], deletions: [], documents: [] });
 
-  const invoke = invoking(registerRecordCopyCommands);
 
   const copy = (...args: unknown[]) =>
     present(handlers.get('modbench.record.copy'), "the handler registered for 'modbench.record.copy'")(...args);

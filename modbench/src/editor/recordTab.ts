@@ -103,12 +103,6 @@ export class RecordTab {
     void this.listening.then(() => { this.post(message); });
   }
 
-  /** The tab's gate for edits addressed from now on. */
-  gate(): EditGate {
-    const addressedAt = ++this.clock;
-    return (address, write) => this.edit(address, addressedAt, write);
-  }
-
   /** The tab's gate when it shows the record `address` names, as of now. Having moved the record,
    *  it shows it under the key it moved to. */
   gateShowing(address: EditAddress): EditGate | undefined {

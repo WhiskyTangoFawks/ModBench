@@ -2,7 +2,7 @@
 // its own game INIs when its settings say so, and the archives and strings files of the Data folder.
 
 import { keepsOwnGameInis } from './codecs/profileSettings';
-import { archiveListsOf, pluginCompanionRule } from '../../tables/gamePaths';
+import { archiveListsOf, pluginCompanionRule, type ArchiveLists } from '../../tables/gamePaths';
 import { dataFolderOf } from '../gameFolder/dataFolder';
 import { ignoreSkippedLink, listEntries, parsedBy, readOrAbsent, readOrReason, type ResolvedEntry } from '../files';
 import { listOwnEntries, type IgnoredLink } from '../gameFolder/ownEntries';
@@ -46,14 +46,14 @@ async function listGameFolderArchives(dataFolder: string, gameRelease: string | 
 }
 
 async function gameInisFolder(
-  { instanceRoot, resolveMyGames, watch }: Mo2Context, profile: string, release: string | undefined, userInis: readonly string[],
+  { instanceRoot, resolveMyGames, watch }: Mo2Context, profile: string, release: string, { userInis, myGamesFolder }: ArchiveLists,
 ): Promise<{ folder: string | undefined; notes: string[] }> {
   const keepsOwn = await readOrAbsent(() => keepsOwnAt(profileSettingsFile(instanceRoot, profile)), false);
   if (keepsOwn) {
     watch.follow('myGamesInis', [], '');
     return { folder: profileDir(instanceRoot, profile), notes: [] };
   }
-  const myGames = await resolveMyGames(release);
+  const myGames = await resolveMyGames(release, myGamesFolder);
   if (myGames.kind === 'found') {
     watch.follow('myGamesInis', [myGames.folder], `{${userInis.map(anyCase).join(',')}}`);
     return { folder: myGames.folder, notes: [] };
@@ -70,13 +70,13 @@ export function mo2Archives(context: Mo2Context): ArchiveReads {
   return {
     async archiveList(profile, gameFolder, gameRelease, ignoredLink) {
       const lists = archiveListsOf(gameRelease);
-      if (gameFolder.kind !== 'found' || lists === undefined) {
+      if (gameFolder.kind !== 'found' || gameRelease === undefined || lists === undefined) {
         watch.follow('defaultIni', [], '');
         watch.follow('myGamesInis', [], '');
         return { archives: [], notes: [] };
       }
       watch.follow('defaultIni', [gameFolder.root], anyCase(lists.defaultIni));
-      const { folder, notes } = await gameInisFolder(context, profile, gameRelease, lists.userInis);
+      const { folder, notes } = await gameInisFolder(context, profile, gameRelease, lists);
       const own = folder === undefined ? [] : lists.userInis.map((name) => fileNamedIn(folder, name, listAnyEntries));
       const files = await Promise.all([fileNamedIn(gameFolder.root, lists.defaultIni, (root) => listOwnEntries(root, ignoredLink)), ...own]);
       return { archives: archivesListedIn((await Promise.all(files.map(archiveKeysOf))).flat(), lists), notes };

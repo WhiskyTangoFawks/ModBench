@@ -1,48 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { handlers, registerCommand, notification } = vi.hoisted(() => {
-  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
-  return {
-    handlers,
-    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
-      handlers.set(command, handler);
-      return { dispose: vi.fn() };
-    }),
-    notification: { cancellable: [] as boolean[], messages: [] as string[], cancel: (): void => {} },
-  };
-});
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  const NOTIFICATION = 15;
-  return {
-    commands: { registerCommand },
-    ProgressLocation: { Notification: NOTIFICATION },
-    window: {
-      withProgress: (
-        options: { location: { viewId: string } | number; cancellable?: boolean },
-        task: (progress: { report: (value: { message?: string }) => void }, token: unknown) => Promise<unknown>,
-      ) => {
-        const { location } = options;
-        if (typeof location !== 'number') return recordedWithProgress({ location }, () => task({ report: () => {} }, undefined));
-        notification.cancellable.push(options.cancellable === true);
-        const listeners: (() => void)[] = [];
-        const token = { isCancellationRequested: false, onCancellationRequested: (listener: () => void) => { listeners.push(listener); return { dispose: () => {} }; } };
-        notification.cancel = () => { token.isCancellationRequested = true; for (const listener of listeners) listener(); };
-        return task({ report: ({ message }) => { if (message !== undefined) notification.messages.push(message); } }, token);
-      },
-    },
-    TreeItem: class { constructor(readonly label: string) {} },
-  };
-});
-
-import { TreeItem } from 'vscode';
-import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
+import { modsViewOn } from './modsViewOn';
+import { cancelNotification, seen } from './modsVscode';
+import { file, folder, indexedValueOf, mod } from './indexedValue';
+import { TreeItem } from '../../test/vscodeMock';
+import { progressSteps } from '../../test/recordedProgress';
 import { restoredMod } from '../../test/restoredMod';
-import { registerManifestGestures } from '../manifestGestures';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import type { InstanceRepositoryCommands } from '../../sourceCommands/instanceRepositoryCommands';
 
@@ -52,46 +17,36 @@ const restoreFromManifest = vi.fn<InstanceRepositoryCommands['restoreFromManifes
 const UPDATE = 'modbench.mod.updateManifest';
 const RESTORE = 'modbench.mod.restoreFromManifest';
 
-const value = instanceValueFixture({
-  mods: [
-    { kind: 'mod', name: 'ModA', enabled: true },
-    { kind: 'separator', name: 'Weapons', enabled: true },
-    { kind: 'mod', name: 'ModB', enabled: false },
-  ],
-  modFolders: [
-    { kind: 'mod', name: 'ModA', path: '/instance/mods/ModA', modName: 'ModA' },
-    { kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' },
-    { kind: 'mod', name: 'ModB', path: '/instance/mods/ModB', modName: 'ModB' },
-    { kind: 'mod', name: 'InAnotherProfile', path: '/instance/mods/InAnotherProfile', modName: 'InAnotherProfile' },
-  ],
-});
+const MOD_FOLDERS = [
+  { kind: 'mod' as const, name: 'ModA', path: '/instance/mods/ModA', modName: 'ModA' },
+  { kind: 'separator' as const, name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' },
+  { kind: 'mod' as const, name: 'ModB', path: '/instance/mods/ModB', modName: 'ModB' },
+  { kind: 'mod' as const, name: 'InAnotherProfile', path: '/instance/mods/InAnotherProfile', modName: 'InAnotherProfile' },
+];
 const EVERY_MOD = ['ModA', 'ModB', 'InAnotherProfile'];
-const sourceModValue = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModA', '/instance/source/ModA']]) } };
+const SOURCE_DIRS = new Map([['ModA', '/instance/source/ModA']]);
 const sourceFolderRow = { argument: { kind: 'folder', path: '/instance/source/ModA' }, name: 'ModA' };
 
-const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
-const separatorRow = (name: string) => ({ argument: { kind: 'separator', name }, name });
-const folderRow = { argument: { kind: 'folder', path: '/instance/mods/ModA/meshes' }, name: 'meshes' };
-
-function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> = {}) {
-  const reporter = recordingReporter();
+async function register({ sourceDirs = new Map<string, string>() }: { sourceDirs?: ReadonlyMap<string, string> } = {}) {
+  const value = await indexedValueOf(
+    [mod('ModA'), { kind: 'separator', name: 'Weapons', enabled: true }, mod('ModB', false)],
+    { ModA: { files: [file('ModA', 'meshes/a.nif')], folders: [folder('ModA', 'meshes')] } },
+  );
   const said: (string | undefined)[] = [];
-  registerManifestGestures({
-    toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest },
-    instance: { value, ...instanceThatReads },
-    reporter, say: (message) => { said.push(message); },
-    focusedView: { id: () => undefined, selection: () => [] }, ...over,
+  const shown = modsViewOn({
+    value: { ...value, modFolders: MOD_FOLDERS, paths: { ...value.paths, sourceDirs } },
+    manifestGestures: { toolboxView: 'modbench.toolbox', say: (message) => { said.push(message); }, commands: { updateManifest, restoreFromManifest, ignoreFiles: vi.fn() } },
   });
-  return { reporter, said, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
+  const modA = async () => shown.row('ModA', await shown.row('Weapons'));
+  const folderRow = async () => shown.row('meshes', await modA());
+  return { ...shown, said, modA, folderRow };
 }
+
+type Shown = Awaited<ReturnType<typeof register>>;
 
 const sentMods = (mock: typeof updateManifest | typeof restoreFromManifest): unknown[] => mock.mock.calls.map(([mods]) => mods);
 
 beforeEach(() => {
-  handlers.clear();
-  progressSteps.length = 0;
-  notification.cancellable.length = 0;
-  notification.messages.length = 0;
   vi.clearAllMocks();
   updateManifest.mockResolvedValue({ notes: [], repositoryNotes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ landed: [], refused: [] });
@@ -99,7 +54,7 @@ beforeEach(() => {
 
 describe('Every mod (update manifest and restore from manifest)', () => {
   it('acts on every mod from the palette with no Mods selection, under the Toolbox\'s progress', async () => {
-    const { run } = register();
+    const { run } = await register();
 
     await run(UPDATE);
 
@@ -110,7 +65,8 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     ['the Source Control title bar, which passes its source control', { rootUri: undefined }],
     ['the Toolbox\'s Modlist menu', new TreeItem('Modlist')],
   ])('acts on every mod from %s, under the Toolbox\'s progress, whatever the Mods view has selected', async (_where, clicked) => {
-    const { run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [modRow('ModB')] } });
+    const { run, row, view } = await register();
+    view.selectRows([await row('ModB')]);
 
     await run(UPDATE, clicked);
 
@@ -121,7 +77,8 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     ['modbench.modList.updateManifestHere', updateManifest],
     ['modbench.modList.restoreFromManifestHere', restoreFromManifest],
   ])('acts on every mod from the Mods title bar\'s %s, under the Mods view\'s progress, whatever the view has selected', async (entryPoint, command) => {
-    const { run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [modRow('ModB')] } });
+    const { run, row, view } = await register();
+    view.selectRows([await row('ModB')]);
 
     await run(entryPoint);
 
@@ -129,28 +86,28 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   });
 
   it('acts on the selected mods from the Mod menu', async () => {
-    const { run } = register();
+    const { run, modA, row } = await register();
 
-    await run(UPDATE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
+    await run(UPDATE, await row('ModB'), [await modA(), await row('ModB')]);
 
     expect(sentMods(updateManifest)).toEqual([['ModA', 'ModB']]);
   });
 
-  it.each([
-    ['from the Explorer menu, with no mod', [sourceFolderRow], [], ['ModA']],
-    ['beside the mods of a selection', [sourceFolderRow, modRow('ModB')], ['ModB'], ['ModA']],
+  it.each<[string, (shown: Shown) => Promise<unknown[]>, string[], string[]]>([
+    ['from the Explorer menu, with no mod', () => Promise.resolve([sourceFolderRow]), [], ['ModA']],
+    ['beside the mods of a selection', async ({ row }) => [sourceFolderRow, await row('ModB')], ['ModB'], ['ModA']],
   ])('records the source folder a row names, %s', async (_where, selection, mods, sourceMods) => {
-    const { run } = register({ instance: { value: sourceModValue, ...instanceThatReads } });
+    const shown = await register({ sourceDirs: SOURCE_DIRS });
 
-    await run(UPDATE, sourceFolderRow, selection);
+    await shown.run(UPDATE, sourceFolderRow, await selection(shown));
 
     expect(updateManifest.mock.calls.map(([sent, , everyMod, sentSourceMods]) => [sent, everyMod, sentSourceMods])).toEqual([[mods, false, sourceMods]]);
   });
 
   it('refuses a selected row that is neither a mod nor a separator, naming it, and acts on the rest', async () => {
-    const { reporter, run } = register();
+    const { reporter, run, modA, folderRow } = await register();
 
-    await run(UPDATE, modRow('ModA'), [modRow('ModA'), folderRow]);
+    await run(UPDATE, await modA(), [await modA(), await folderRow()]);
 
     expect(sentMods(updateManifest)).toEqual([['ModA']]);
     expect(reporter.reports).toEqual([{
@@ -170,11 +127,11 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     })],
   ])('%s shows its progress by mod in a notification with Cancel', async (id, reportsProgress) => {
     reportsProgress();
-    const { run } = register();
+    const { run, modA } = await register();
 
-    await run(id, modRow('ModA'));
+    await run(id, await modA());
 
-    expect([notification.cancellable, notification.messages]).toEqual([[true], [expect.stringContaining('"ModA", 0 of 2 mods done') as unknown]]);
+    expect([seen.notifications.map(({ cancellable }) => cancellable), seen.notifications.flatMap(({ messages }) => messages)]).toEqual([[true], [expect.stringContaining('"ModA", 0 of 2 mods done') as unknown]]);
   });
 
   it('update manifest, cancelled, says it was cancelled and the counts of what landed before, and does not report a landing', async () => {
@@ -182,9 +139,9 @@ describe('Every mod (update manifest and restore from manifest)', () => {
       cancelled: true, notes: [], repositoryNotes: [], refused: [],
       landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }],
     });
-    const { reporter, run } = register();
+    const { reporter, run, modA, row } = await register();
 
-    await run(UPDATE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+    await run(UPDATE, await modA(), [await modA(), await row('ModB')]);
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{
       severity: 'warning',
@@ -197,13 +154,13 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     let signal: AbortSignal | undefined;
     const cancelled = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
-      notification.cancel();
+      cancelNotification();
       signal = options?.signal;
       return Promise.resolve({ landed: [], refused: [{ item: 'ModB', reason: cancelled }] });
     });
-    const { reporter, run } = register();
+    const { reporter, run, modA, row } = await register();
 
-    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+    await run(RESTORE, await modA(), [await modA(), await row('ModB')]);
 
     expect([signal?.aborted, reporter.reports]).toEqual([true, [{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (${cancelled})` }]]);
   });
@@ -218,7 +175,7 @@ describe('Update manifest', () => {
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ notes: [], repositoryNotes: [], landed: [], refused: [] });
     });
-    const { said, run } = register();
+    const { said, run } = await register();
 
     await run(UPDATE);
 
@@ -229,7 +186,7 @@ describe('Update manifest', () => {
 
   it('gives the message line back when update manifest throws', async () => {
     updateManifest.mockRejectedValueOnce(new Error('boom'));
-    const { said, run } = register();
+    const { said, run } = await register();
 
     await expect(run(UPDATE)).rejects.toThrow('boom');
 
@@ -238,9 +195,9 @@ describe('Update manifest', () => {
 
   it('runs under the Mods view\'s progress when a Mods row asked', async () => {
     updateManifest.mockImplementationOnce(() => { progressSteps.push('update manifest'); return Promise.resolve({ notes: [], repositoryNotes: [], landed: [], refused: [] }); });
-    const { run } = register();
+    const { run, modA } = await register();
 
-    await run(UPDATE, modRow('ModA'));
+    await run(UPDATE, await modA());
 
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'update manifest', 'progress closes']);
   });
@@ -250,7 +207,7 @@ describe('Update manifest', () => {
       notes: [], repositoryNotes: [], refused: [],
       landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }, { mod: 'ModB', manifestWritten: false, repositoryWritten: false, notInPackage: [], otherBytes: [] }, { mod: 'C', manifestWritten: false, repositoryWritten: false, notInPackage: [], otherBytes: [] }],
     });
-    const { reporter, run } = register();
+    const { reporter, run } = await register();
 
     await run(UPDATE);
 
@@ -262,7 +219,7 @@ describe('Update manifest', () => {
       notes: [], repositoryNotes: [], refused: [],
       landed: [{ mod: 'ModA', manifestWritten: false, repositoryWritten: true, notInPackage: [], otherBytes: [] }],
     });
-    const { reporter, run } = register();
+    const { reporter, run } = await register();
 
     await run(UPDATE);
 
@@ -280,9 +237,9 @@ describe('Update manifest', () => {
     }, 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.', 'ModA: broken link "a.nif", skipped\nsource/Odd is not a source mod'],
   ])('warns in that line when %s in the Output', async (_case, answer, message, detail) => {
     updateManifest.mockResolvedValueOnce({ notes: [], repositoryNotes: [], refused: [], ...answer });
-    const { reporter, run } = register();
+    const { reporter, run, modA } = await register();
 
-    await run(UPDATE, modRow('ModA'));
+    await run(UPDATE, await modA());
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message, detail }]]);
   });
@@ -293,7 +250,7 @@ describe('Update manifest', () => {
       landed: [{ mod: 'ModA', manifestWritten: false, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: [] }],
       refused: [{ item: 'ModB', reason: "was not updated: its folder does not exist." }],
     });
-    const { reporter, run } = register();
+    const { reporter, run } = await register();
 
     await run(UPDATE);
 
@@ -308,24 +265,24 @@ describe('Update manifest', () => {
 describe('Restore from manifest', () => {
   it('restores the selected mods under the Mods view\'s progress (instance-repository.md, Restore from manifest, story 2)', async () => {
     restoreFromManifest.mockImplementationOnce(() => { progressSteps.push('restore'); return Promise.resolve({ landed: [], refused: [] }); });
-    const { run } = register();
+    const { run, modA, row } = await register();
 
-    await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
+    await run(RESTORE, await row('ModB'), [await modA(), await row('ModB')]);
 
     expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'ModB']]);
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'restore', 'progress closes']);
   });
 
   it('restores the mods a selected separator holds, and not the separator, which has no manifest', async () => {
-    const { run } = register();
+    const { run, row } = await register();
 
-    await run(RESTORE, separatorRow('Weapons'), [separatorRow('Weapons')]);
+    await run(RESTORE, await row('Weapons'), [await row('Weapons')]);
 
     expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
   });
 
   it('restores every mod from the palette with no Mods selection', async () => {
-    const { run } = register();
+    const { run } = await register();
 
     await run(RESTORE);
 
@@ -333,7 +290,8 @@ describe('Restore from manifest', () => {
   });
 
   it('restores nothing when no selected row is a mod or a separator, and names each', async () => {
-    const { reporter, run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [folderRow] } });
+    const { reporter, run, folderRow, view } = await register();
+    view.selectRows([await folderRow()]);
 
     await run(RESTORE);
 
@@ -347,7 +305,7 @@ describe('Restore from manifest', () => {
       options?.onProgress?.({ phase: 'Downloading', file: 'ModB.7z' });
       return Promise.resolve({ landed: [], refused: [] });
     });
-    const { said, run } = register();
+    const { said, run } = await register();
 
     await run(RESTORE);
 
@@ -364,7 +322,7 @@ describe('Restore from manifest', () => {
     [[restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], ['Restored "ModA" from its manifest.']],
   ])('says what it restored, and nothing when it changed nothing: %j', async (landed, landings) => {
     restoreFromManifest.mockResolvedValueOnce({ landed, refused: [] });
-    const { reporter, run } = register();
+    const { reporter, run } = await register();
 
     await run(RESTORE);
 
@@ -385,9 +343,9 @@ describe('Restore from manifest', () => {
       'ModA: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes'],
   ])('warns in its one line when %s, naming why in the Output', async (_case, answer, detail) => {
     restoreFromManifest.mockResolvedValueOnce({ landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...answer });
-    const { reporter, run } = register();
+    const { reporter, run, modA } = await register();
 
-    await run(RESTORE, modRow('ModA'));
+    await run(RESTORE, await modA());
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message: 'Restored "ModA" from its manifest.', detail }]]);
   });
@@ -396,9 +354,9 @@ describe('Restore from manifest', () => {
     restoreFromManifest.mockResolvedValueOnce({
       landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [{ item: 'ModB', reason: "was skipped: its package does not hold 'b.nif'." }],
     });
-    const { reporter, run } = register();
+    const { reporter, run, modA, row } = await register();
 
-    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+    await run(RESTORE, await modA(), [await modA(), await row('ModB')]);
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (was skipped: its package does not hold 'b.nif'.)`,
@@ -410,9 +368,9 @@ describe('Restore from manifest', () => {
     restoreFromManifest.mockResolvedValueOnce({
       landed: [restoredMod({ mod: 'ModA', notes: ['not recorded'] })], refused: [],
     });
-    const { reporter, run } = register();
+    const { reporter, run, modA } = await register();
 
-    await run(RESTORE, modRow('ModA'));
+    await run(RESTORE, await modA());
 
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: 'Restore from manifest: no file differed from its manifest.', detail: 'ModA: not recorded',
@@ -424,9 +382,9 @@ describe('Restore from manifest', () => {
       landed: [restoredMod({ mod: 'ModA', notes: ['not recorded'] })],
       refused: [{ item: 'ModB', reason: "was skipped: it has no manifest." }],
     });
-    const { reporter, run } = register();
+    const { reporter, run, modA, row } = await register();
 
-    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+    await run(RESTORE, await modA(), [await modA(), await row('ModB')]);
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not restore 1 of 2 mods.',
@@ -436,7 +394,7 @@ describe('Restore from manifest', () => {
 
   it('gives the message line back when restore throws', async () => {
     restoreFromManifest.mockRejectedValueOnce(new Error('boom'));
-    const { said, run } = register();
+    const { said, run } = await register();
 
     await expect(run(RESTORE)).rejects.toThrow('boom');
 
@@ -449,16 +407,16 @@ describe('An agent call', () => {
   const separator = (name: string) => ({ kind: 'separator' as const, name });
 
   it('update manifest acts on the mods it is given, a separator for the mods it holds alone, with no progress notification', async () => {
-    const { run } = register();
+    const { run } = await register();
 
     await run(UPDATE, new AgentCall([mod('ModB'), separator('Weapons')], {}));
 
     expect(sentMods(updateManifest)).toEqual([['ModB', 'ModA']]);
-    expect(notification.cancellable).toEqual([]);
+    expect(seen.notifications.map(({ cancellable }) => cancellable)).toEqual([]);
   });
 
   it('update manifest records a source folder it is given by its path, and refuses one that is none beside it, by name', async () => {
-    const { run } = register({ instance: { value: sourceModValue, ...instanceThatReads } });
+    const { run } = await register({ sourceDirs: SOURCE_DIRS });
 
     const answer = await run(UPDATE, new AgentCall([{ kind: 'folder', path: '/instance/source/ModA' }, { kind: 'folder', path: '/elsewhere' }, { kind: 'folder', path: 'source/ModA' }], {}));
 
@@ -473,7 +431,7 @@ describe('An agent call', () => {
       landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: ['b.esp'] }],
       refused: [{ item: 'ModB', reason: "was not updated." }],
     });
-    const { reporter, run } = register();
+    const { reporter, run } = await register();
 
     const answer = await run(UPDATE, new AgentCall([], {}));
 
@@ -494,7 +452,7 @@ describe('An agent call', () => {
     it('answers what it restored, the mods it would not restore refused with why, and what it could not record as a part that failed', async () => {
       const landed = restoredMod({ mod: 'ModA', notes: ['disk full'] });
       restoreFromManifest.mockResolvedValueOnce({ landed: [landed], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] });
-      const { run } = register();
+      const { run } = await register();
 
       const answer = await run(RESTORE, new AgentCall([], {}));
 

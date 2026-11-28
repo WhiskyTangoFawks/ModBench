@@ -1,8 +1,21 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { trashingReplaced } from '../trashingReplaced';
+import type { InstanceAdapter } from '../instanceAdapter';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../test/mo2/adapterOver';
+import { instanceOnDisk } from './instanceOnDisk';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+let instance: string;
+let adapter: InstanceAdapter;
+beforeAll(async () => {
+  instance = await instanceOnDisk();
+  adapter = adapterOver(instance);
+});
+afterAll(() => rm(instance, { recursive: true, force: true }));
 
 let folder: string;
 let inTrash: Record<string, string>;
@@ -27,7 +40,7 @@ describe('trashing what a write may replace', () => {
       trashed: { ...inTrash }, held: await Promise.all(['Mod.esp', join('textures', 'a.dds')].map((path) => readFile(join(folder, path), 'utf8'))),
     }));
 
-    const ran = await trashingReplaced(folder, ['Mod.esp', 'textures/a.dds', 'gone.txt'], trash, write);
+    const ran = await adapter.trashingReplaced(folder, ['Mod.esp', 'textures/a.dds', 'gone.txt'], trash, write);
 
     expect(ran).toEqual({ answer: { trashed: { 'Mod.esp': 'mine', [join('textures', 'a.dds')]: 'my texture' }, held: ['mine', 'my texture'] } });
     expect(await filesIn()).toEqual(['Mod.esp', join('textures', 'a.dds')].sort());
@@ -36,7 +49,7 @@ describe('trashing what a write may replace', () => {
   it('runs no write when the trash refuses a file, names it, and leaves it in place with no copy beside it', async () => {
     const write = vi.fn(() => Promise.resolve('written'));
 
-    const ran = await trashingReplaced(folder, ['Mod.esp'], refusing, write);
+    const ran = await adapter.trashingReplaced(folder, ['Mod.esp'], refusing, write);
 
     expect([ran, write.mock.calls, await filesIn(), await readFile(join(folder, 'Mod.esp'), 'utf8')])
       .toEqual([{ notTrashed: "'Mod.esp' could not be moved to the trash: EBUSY" }, [], ['Mod.esp', join('textures', 'a.dds')].sort(), 'mine']);

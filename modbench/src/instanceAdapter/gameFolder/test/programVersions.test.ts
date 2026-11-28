@@ -1,16 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { programVersions, type ProgramVersion } from '../programVersions';
-import { programsOf } from '../../../tables/gamePaths';
-import { present } from '../../../ports/present';
+import type { ProgramVersion } from '../../instanceAdapter';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
-import type { GameFolder } from '../../instanceAdapter';
+import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+import { instanceOnDisk } from '../../test/instanceOnDisk';
 
-const RELEASE = 'Fallout4';
-const { game, extenderLoader } = present(programsOf(RELEASE), 'the release\'s programs');
-const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
+vi.mock('vscode', () => fakeVscodeModule());
+
+const [game, extenderLoader] = ['Fallout4.exe', 'f4se_loader.exe'];
 
 type Installed = Buffer | 'a folder' | undefined;
 
@@ -19,11 +19,19 @@ const read = (version: string): ProgramVersion => ({ kind: 'read', version });
 
 describe('the versions of the game\'s and its script extender\'s programs, as MO2 reads them', () => {
   let root: string;
+  let instance: string;
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'program-versions-'));
+    await mkdir(join(root, 'Data'));
+    instance = await instanceOnDisk();
   });
-  afterEach(() => rm(root, { recursive: true, force: true }));
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(instance, { recursive: true, force: true });
+  });
+
+  const versionsIn = async (gameFolderSettingValue = root) => (await adapterOver(instance, { gameFolderSettingValue }).reading()).programVersions;
 
   const install = async (name: string, installed: Installed): Promise<void> => {
     if (installed === 'a folder') await mkdir(join(root, name));
@@ -42,22 +50,18 @@ describe('the versions of the game\'s and its script extender\'s programs, as MO
     await install(game, gameProgram);
     await install(extenderLoader, loader);
 
-    expect(await programVersions({ kind: 'found', root, dataFolder: join(root, 'Data') }, RELEASE)).toEqual({ kind: 'found', game: gameVersion, extender: extenderVersion });
+    expect(await versionsIn()).toEqual({ kind: 'found', game: gameVersion, extender: extenderVersion });
   });
 
   it('says why the file system would not read a program, naming it', async () => {
     await install(game, 'a folder');
 
-    const versions = await programVersions({ kind: 'found', root, dataFolder: join(root, 'Data') }, RELEASE);
+    const versions = await versionsIn();
 
     expect(versions).toMatchObject({ kind: 'found', game: { kind: 'unreadable', program: game, why: expect.stringContaining('EISDIR') as unknown } });
   });
 
-  it.each<[string, GameFolder | undefined, string | undefined]>([
-    ['unresolved', NOT_FOUND, RELEASE],
-    ['unknownGame', undefined, 'NoSuchRelease'],
-    ['unknownGame', undefined, undefined],
-  ])('reads neither version, %s, for game folder %j of release %s', async (kind, gameFolder, release) => {
-    expect(await programVersions(gameFolder ?? { kind: 'found', root, dataFolder: join(root, 'Data') }, release)).toEqual({ kind });
+  it('reads neither version while the game folder is not found', async () => {
+    expect(await versionsIn(join(root, 'nowhere'))).toEqual({ kind: 'unresolved' });
   });
 });

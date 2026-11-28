@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
+import { modsViewOn } from './modsViewOn';
+import { DiagnosticSeverity, Uri, type FakeDiagnosticCollection } from '../../test/vscodeMock';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
-import { ModProblems } from '../modProblems';
+import { HeldModStatuses } from '../../test/heldModStatuses';
 import { settled } from '../../test/eventually';
 
 const packaged = status;
@@ -16,18 +16,13 @@ const FOLDER = '/instance/mods/ModA';
 const OTHER = '/instance/mods/ModB';
 
 function over(initial: readonly ModStatus[], plugins: InstanceValue['plugins'] = []) {
-  let held = new Map(initial.map((one) => [one.mod, one]));
-  const lastGood = new Map(initial.map((one) => [one.mod, one]));
-  let changed = (): void => undefined;
-  const statuses = { current: () => Promise.resolve(held), of: (mod: string) => lastGood.get(mod), onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = () => { listener('every'); }; return { dispose: () => undefined }; } };
-  const instance = new FakeInstance(instanceValueFixture({ plugins, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: OTHER }] }));
-  const collection = new FakeDiagnosticCollection();
-  new ModProblems(collection, instance, statuses);
-  return { collection, becomes: (next: readonly ModStatus[]) => {
-    held = new Map(next.map((one) => [one.mod, one]));
-    for (const one of next.filter(({ unreadable }) => unreadable === undefined)) lastGood.set(one.mod, one);
-    changed();
-  } };
+  const statuses = new HeldModStatuses();
+  statuses.answer(initial);
+  const { diagnostics } = modsViewOn({
+    value: instanceValueFixture({ plugins, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: OTHER }] }),
+    statuses,
+  });
+  return { collection: diagnostics('modbench-mod-status'), becomes: (next: readonly ModStatus[]) => { statuses.answer(next); } };
 }
 
 const messagesOn = (collection: FakeDiagnosticCollection, file: string) => (collection.get(Uri.file(file)) ?? []).map(({ message, severity }) => [message, severity]);
@@ -105,8 +100,10 @@ describe('the Problems panel follows Mod status (instance-repository.md, Status,
     it('shows Information on its manifest that names the packages and says an upgrade replaces every one', async () => {
       const { collection } = over([packaged('ModA', several)]);
 
-      await settled(() => { expect(messagesOn(collection, manifestFile)).toEqual([[
-        "Made from several packages. An upgrade replaces the files of every one of the 2 packages: installation file 'A.7z', the game folder.", DiagnosticSeverity.Information]]); });
+      await settled(() => {
+        expect(messagesOn(collection, manifestFile)).toEqual([[
+          "Made from several packages. An upgrade replaces the files of every one of the 2 packages: installation file 'A.7z', the game folder.", DiagnosticSeverity.Information]]);
+      });
     });
 
     it('points at version in git when the mod holds a plugin', async () => {

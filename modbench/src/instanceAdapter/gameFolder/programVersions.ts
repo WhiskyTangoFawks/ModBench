@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { programsOf } from '../../tables/gamePaths';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
+import { present } from '../../ports/present';
 import type { GameFolder } from '../instanceAdapter';
 import { versionResourceOf, type VersionResource } from './versionResource';
 import { stampKept } from '../files';
@@ -18,11 +19,10 @@ export type ProgramVersion =
   | { readonly kind: 'notFound' | 'noVersionResource' | 'notAProgram'; readonly program: string }
   | { readonly kind: 'unreadable'; readonly program: string; readonly why: string };
 
-/** Both versions; or neither, because the game folder was not found, or the game's programs are not known. */
+/** Both versions; or neither, because the game folder was not found. */
 export type ProgramVersions =
   | { readonly kind: 'found'; readonly game: ProgramVersion; readonly extender: ProgramVersion }
-  | { readonly kind: 'unresolved' }
-  | { readonly kind: 'unknownGame' };
+  | { readonly kind: 'unresolved' };
 
 // The reference takes a game program's product version where its file version starts so, as some games' programs
 // carry their true version there alone.
@@ -42,10 +42,9 @@ async function versionIn(
   }
 }
 
-export async function programVersions(gameFolder: GameFolder, release: string | undefined): Promise<ProgramVersions> {
+export async function programVersions(gameFolder: GameFolder, release: string): Promise<ProgramVersions> {
   if (gameFolder.kind !== 'found') return { kind: 'unresolved' };
-  const programs = programsOf(release);
-  if (programs === undefined) return { kind: 'unknownGame' };
+  const programs = present(programsOf(release), `the programs of ${release}, a game the tables hold`);
   const [game, extender] = await Promise.all([
     versionIn(gameFolder.root, programs.game, gameVersion),
     versionIn(gameFolder.root, programs.extenderLoader, ({ fileVersion }) => fileVersion),

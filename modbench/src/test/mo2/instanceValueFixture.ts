@@ -1,11 +1,13 @@
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { READ_SORTING_RULE_FILES } from '../readSortingRuleFiles';
-import { groupModOrder } from '../../instanceAdapter/modGroups';
 import { modOfOrigin } from '../../instanceLoader/modOfOrigin';
-import { entryKey } from '../../instanceAdapter/mo2/mo2Context';
+import { entryKey, readingFixture } from '../fakeInstanceAdapter';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
+
+/** What mEdit answered of an archive the value holds. */
+export type ArchiveRead = InstanceValue['archiveContents'] extends ReadonlyMap<string, infer Read> ? Read : never;
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloadedFiles`, …) states only that one, typed, with no cast. */
@@ -53,7 +55,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     unwatchedFolders: [],
   };
   const value = { ...base, ...overrides };
-  const modGroups = groupModOrder(value.mods);
+  const { modGroups } = readingFixture({ mods: value.mods });
   const modNames = overrides.modNames ?? new Map(value.mods.flatMap((entry) => {
     const folder = value.modFolders?.find(({ kind, name }) => kind === entry.kind && name === entry.name);
     const modName = folder?.modName ?? (entry.kind === 'mod' ? entry.name : undefined);

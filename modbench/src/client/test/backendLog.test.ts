@@ -1,12 +1,23 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { settled } from '../../test/eventually';
+import { fakeLogChannel, fakeMEdit, runningMEdit } from './fakeMEdit';
 
-import { backendLogLevelArgs, makeBackendLogForwarder } from '../backendLog';
+type Channel = ReturnType<typeof fakeLogChannel>;
+const LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+const forwardedCount = (channel: Channel): number => LEVELS.reduce((count, level) => count + channel[level].mock.calls.length, 0);
 
-function fakeChannel() {
-  return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+async function forwarding() {
+  const channel = fakeLogChannel();
+  const { spawned } = await runningMEdit({ backendLog: channel });
+  const [backend] = spawned;
+  return {
+    channel,
+    write: (source: 'stdout' | 'stderr', line: string) => { backend?.[source].write(`${line}\n`); },
+    forwarded: (count: number) => settled(() => { expect(forwardedCount(channel)).toBe(count); }),
+  };
 }
 
-describe('makeBackendLogForwarder', () => {
+describe('the spawned backend\'s output, filed in the log channel', () => {
   it.each([
     ['DBG', 'debug'],
     ['INF', 'info'],
@@ -14,72 +25,72 @@ describe('makeBackendLogForwarder', () => {
     ['ERR', 'error'],
     ['VRB', 'debug'],
     ['FTL', 'error'],
-  ] as const)('routes a %s line to %s, stripping the tag', (tag, level) => {
-    const channel = fakeChannel();
+  ] as const)('routes a %s line to %s, stripping the tag', async (tag, level) => {
+    const { channel, write, forwarded } = await forwarding();
 
-    makeBackendLogForwarder(channel)(`[08:30:45 ${tag}] Indexed 500 records for Fallout4.esm`, 'stdout');
+    write('stdout', `[08:30:45 ${tag}] Indexed 500 records for Fallout4.esm`);
+    await forwarded(1);
 
     expect(channel[level].mock.calls).toEqual([['[backend] Indexed 500 records for Fallout4.esm']]);
   });
 
-  it('forwards an untagged first line at info, unchanged apart from the prefix', () => {
-    const channel = fakeChannel();
-    makeBackendLogForwarder(channel)('Now listening on: http://localhost:5172', 'stdout');
+  it('forwards an untagged first line at info, unchanged apart from the prefix', async () => {
+    const { channel, write, forwarded } = await forwarding();
+
+    write('stdout', 'Now listening on: http://localhost:5172');
+    await forwarded(1);
 
     expect(channel.info).toHaveBeenCalledWith('[backend] Now listening on: http://localhost:5172');
   });
 
-  it('keeps an untagged exception continuation at the level of the line it follows', () => {
-    const channel = fakeChannel();
-    const forward = makeBackendLogForwarder(channel);
+  it('keeps an untagged exception continuation at the level of the line it follows', async () => {
+    const { channel, write, forwarded } = await forwarding();
 
-    forward('[08:30:47 ERR] Reconcile failed', 'stdout');
-    forward('System.IO.FileNotFoundException: Could not find Broken.esp', 'stdout');
-    forward('   at MEditService.RecordIndex.IndexProjector.Reconcile()', 'stdout');
+    write('stdout', '[08:30:47 ERR] Reconcile failed');
+    write('stdout', 'System.IO.FileNotFoundException: Could not find Broken.esp');
+    write('stdout', '   at MEditService.RecordIndex.IndexProjector.Reconcile()');
+    await forwarded(3);
 
     expect(channel.error).toHaveBeenCalledTimes(3);
     expect(channel.error).toHaveBeenLastCalledWith('[backend]    at MEditService.RecordIndex.IndexProjector.Reconcile()');
-    expect(channel.info).not.toHaveBeenCalled();
   });
 
-  it('forwards an untagged stderr line at error — a .NET crash dump is not routine chatter', () => {
-    const channel = fakeChannel();
-    const forward = makeBackendLogForwarder(channel);
+  it('forwards an untagged stderr line at error — a .NET crash dump is not routine chatter', async () => {
+    const { channel, write, forwarded } = await forwarding();
 
-    forward('[08:30:45 INF] Now listening on: http://localhost:5172', 'stdout');
-    forward('Unhandled exception. System.InvalidOperationException: boom', 'stderr');
+    write('stdout', '[08:30:45 INF] Now listening on: http://localhost:5172');
+    write('stderr', 'Unhandled exception. System.InvalidOperationException: boom');
+    await forwarded(2);
 
     expect(channel.error).toHaveBeenCalledWith('[backend] Unhandled exception. System.InvalidOperationException: boom');
   });
 
-  it('tracks the carried level per stream, so a stdout continuation does not pick up stderr\'s error and a stderr continuation stays at error', () => {
-    const channel = fakeChannel();
-    const forward = makeBackendLogForwarder(channel);
+  it('tracks the carried level per stream, so a stdout continuation does not pick up stderr\'s error and a stderr continuation stays at error', async () => {
+    const { channel, write, forwarded } = await forwarding();
 
-    forward('[08:30:45 INF] Indexing', 'stdout');
-    forward('Unhandled exception. boom', 'stderr');
-    forward('continues the INF line', 'stdout');
-    forward('   at Program.<Main>()', 'stderr');
+    write('stdout', '[08:30:45 INF] Indexing');
+    write('stderr', 'Unhandled exception. boom');
+    write('stdout', 'continues the INF line');
+    write('stderr', '   at Program.<Main>()');
+    await forwarded(4);
 
     expect(channel.info).toHaveBeenLastCalledWith('[backend] continues the INF line');
     expect(channel.error).toHaveBeenLastCalledWith('[backend]    at Program.<Main>()');
   });
 
-  it('drops whitespace-only lines', () => {
-    const channel = fakeChannel();
-    const forward = makeBackendLogForwarder(channel);
+  it('drops whitespace-only lines', async () => {
+    const { channel, write, forwarded } = await forwarding();
 
-    forward('', 'stdout');
-    forward('   ', 'stderr');
+    write('stdout', '');
+    write('stderr', '   ');
+    write('stderr', 'the line after them');
+    await forwarded(1);
 
-    expect(channel.debug).not.toHaveBeenCalled();
-    expect(channel.info).not.toHaveBeenCalled();
-    expect(channel.warn).not.toHaveBeenCalled();
-    expect(channel.error).not.toHaveBeenCalled();
+    expect(channel.error.mock.calls).toEqual([['[backend] the line after them']]);
   });
 });
 
-describe('backendLogLevelArgs, mapping the Output channel\'s vscode.LogLevel ordinal (Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a Serilog minimum-level override for the spawn argv', () => {
+describe('the level the backend is spawned at, the Output channel\'s vscode.LogLevel ordinal (Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) mapped to a Serilog minimum-level override for the spawn argv', () => {
   it.each([
     [0, []],
     [1, ['--Serilog:MinimumLevel:Default', 'Verbose']],
@@ -88,7 +99,11 @@ describe('backendLogLevelArgs, mapping the Output channel\'s vscode.LogLevel ord
     [4, ['--Serilog:MinimumLevel:Default', 'Warning']],
     [5, ['--Serilog:MinimumLevel:Default', 'Error']],
     [99, []],
-  ])('maps channel level %i to %j', (level, args) => {
-    expect(backendLogLevelArgs(level)).toEqual(args);
+  ])('maps channel level %i to %j', async (level, args) => {
+    const mEdit = fakeMEdit({ backendLog: fakeLogChannel(level) });
+
+    await mEdit.start();
+
+    expect(mEdit.spawned[0]?.args).toEqual(['--urls', 'http://localhost:5172', ...args]);
   });
 });

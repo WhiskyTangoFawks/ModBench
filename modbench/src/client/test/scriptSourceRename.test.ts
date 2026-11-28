@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { scriptSourceRename } from '../scriptSourceRename';
+import { scriptSourceRename } from '..';
 import { heldTexts } from '../../symbolNames/symbolNames';
 import { localFailure } from '../../wire/readFailed';
 

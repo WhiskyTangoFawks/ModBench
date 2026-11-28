@@ -1,275 +1,163 @@
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('vscode', () => import('./vscodeHost'));
+
+import { host, TreeItem, Uri } from './vscodeHost';
+import { clientHoldingNothing, indexedOver, pluginsOf, pluginsOver } from './pluginsOver';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, Uri,
-} from '../../test/vscodeMock';
-
-const {
-  handlers, registerCommand, executeCommand, showInputBox, showQuickPick,
-} = vi.hoisted(() => {
-  const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
-  return {
-    handlers,
-    registerCommand: vi.fn((command: string, handler: (ctx?: unknown) => Promise<void> | void) => {
-      handlers.set(command, handler);
-      return { dispose: vi.fn() };
-    }),
-    executeCommand: vi.fn(),
-    showInputBox: vi.fn(),
-    showQuickPick: vi.fn(),
-  };
-});
-
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand },
-    window: { showInputBox, showQuickPick, withProgress: recordedWithProgress },
-    Uri,
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
-  };
-});
-
-import {
-  pluginsCopyValueText, registerCreatePluginCommand, registerRevealInExplorerCommand,
-} from '../pluginListCommands';
-import { PLUGINS_KEY_ARGS } from '../gestureEntry';
-import type { RecordBrowserNode } from '../RecordBrowser';
-import { recordSummaryFixture } from '../../client/test/fixtures';
-import { cellRow, placedRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
-import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
+import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { progressSteps } from '../../test/recordedProgress';
-
-beforeEach(() => {
-  progressSteps.length = 0;
-  handlers.clear();
-  vi.clearAllMocks();
-  executeCommand.mockReset();
-  showInputBox.mockReset();
-  showQuickPick.mockReset();
-});
+import { present } from '../../ports/present';
 
 const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>
   ({ name, origin, path, line: null, enabled: false, winning: true });
 
-function makeMo2() {
+const VALUE = instanceValueFixture({
+  mods: [
+    { kind: 'mod', name: 'Winning Mod', enabled: true },
+    { kind: 'separator', name: 'Patches', enabled: true },
+    { kind: 'mod', name: 'Disabled Mod', enabled: false },
+    { kind: 'mod', name: 'Holding Mod', enabled: true },
+    { kind: 'mod', name: 'Losing Mod', enabled: true },
+  ],
+  plugins: [plugin('MyPatch.esp', 'Holding Mod', '/instance/mods/Holding Mod/MyPatch.esp')],
+  paths: {
+    overwriteDir: '/instance/overwrite',
+    downloadsDir: '/instance/downloads',
+    modDirs: new Map([
+      ['Winning Mod', '/instance/mods/Winning Mod'],
+      ['Disabled Mod', '/instance/mods/Disabled Mod'],
+      ['Holding Mod', '/instance/mods/Holding Mod'],
+      ['Losing Mod', '/instance/mods/Losing Mod'],
+    ]),
+    sourceDirs: new Map([['Winning Mod', '/instance/source/Winning Mod']]),
+  },
+});
+
+const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
+const EXTENSIONS_QUERY = { method: 'getCreatablePluginExtensions', args: [] };
+const FLAGS_QUERY = { method: 'getCreatablePluginFlags', args: ['MyPatch.esp'] };
+const PLACES_QUERY = { method: 'getPlacesHoldingPluginSource', args: ['MyPatch.esp'] };
+const PLACES = 'Where should the new plugin live?';
+
+interface Creating { value?: InstanceValue; extensions?: string[]; flags?: string[][]; heldAsPluginSource?: string[] }
+
+function creating({ value = VALUE, extensions = ['.esm', '.esl', '.esp'], flags = [['Master']], heldAsPluginSource = [] }: Creating = {}) {
+  const client = clientHoldingNothing();
+  client.setQueryAnswer('getCreatablePluginExtensions', extensions);
+  client.setQueryAnswer('getPlacesHoldingPluginSource', heldAsPluginSource);
+  client.setQueryAnswer('getCreatablePluginFlags', flags);
+  const instance = new FakeInstance(value);
+  const made = pluginsOver({ client, instance, value });
+  client.calls.length = 0;
   return {
-    instance: {
-      refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
-      value: instanceValueFixture({
-        mods: [
-          { kind: 'mod', name: 'Winning Mod', enabled: true },
-          { kind: 'mod', name: 'Disabled Mod', enabled: false },
-          { kind: 'mod', name: 'Holding Mod', enabled: true },
-        ],
-        plugins: [plugin('MyPatch.esp', 'Holding Mod', '/instance/mods/Holding Mod/MyPatch.esp')],
-        paths: {
-          overwriteDir: '/instance/overwrite',
-          downloadsDir: '/instance/downloads',
-          modDirs: new Map([
-            ['Winning Mod', '/instance/mods/Winning Mod'],
-            ['Disabled Mod', '/instance/mods/Disabled Mod'],
-            ['Holding Mod', '/instance/mods/Holding Mod'],
-          ]),
-          sourceDirs: new Map([['Winning Mod', '/instance/source/Winning Mod']]),
-        },
-      }),
-    },
+    client, instance, reporter: made.reporter('newPlugin'),
+    created: () => client.calls.filter(({ method }) => method === 'createPlugin').map(({ args }) => args),
+    run: (...args: unknown[]) => host.run('modbench.plugin.create', ...args),
+    places: () => host.quickPicks.filter(({ placeHolder }) => placeHolder === PLACES).map(({ items }) => items),
   };
 }
 
-const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
+function namesThenPicks(name: string | undefined, place?: string, flags?: string) {
+  host.types(() => name);
+  host.picks((labels) => [place, flags].find((label) => label !== undefined && labels.includes(label)));
+}
 
-describe('registerCreatePluginCommand', () => {
-  function invoke(
-    client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2>, creatableExtensions = ['.esm', '.esl', '.esp'], flagChoices = [['Master']],
-    heldAsPluginSource: string[] = [],
-  ) {
-    client.setQueryAnswer('getCreatablePluginExtensions', creatableExtensions);
-    client.setQueryAnswer('getPlacesHoldingPluginSource', heldAsPluginSource);
-    client.setQueryAnswer('getCreatablePluginFlags', flagChoices);
-    const reporter = recordingReporter();
-    registerCreatePluginCommand(client, mo2.instance, reporter);
-    return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
-  }
-
-  const extensionsQuery = { method: 'getCreatablePluginExtensions', args: [] };
-  const flagsQuery = { method: 'getCreatablePluginFlags', args: ['MyPatch.esp'] };
-  const placesQuery = { method: 'getPlacesHoldingPluginSource', args: ['MyPatch.esp'] };
-
-  type Place = { label: string; origin: string };
-  const offering = (): { offered: Place[] } => {
-    const pick = { offered: [] as Place[] };
-    showQuickPick.mockImplementation((places: Place[]) => {
-      pick.offered = places;
-      return Promise.resolve(undefined);
-    });
-    return pick;
-  };
-  const pickOrigin = (origin: string) => showQuickPick.mockImplementation((places: Place[]) =>
-    Promise.resolve(places.find((p) => p.origin === origin)));
-
-  it('does not offer a place whose plugin source mEdit says holds a plugin of that name', async () => {
-    const client = new InMemoryMEditClient();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    const pick = offering();
-    const { run } = invoke(client, makeMo2(), undefined, undefined, ['Winning Mod']);
+describe('modbench.plugin.create', () => {
+  it.each([
+    ['whose plugin source mEdit says holds the name, whatever the case of its name', 'MyPatch.esp', ['winning mod'], ['Losing Mod', 'Overwrite']],
+    ['that holds a plugin of that name, whatever its case', 'mypatch.ESP', [], ['Winning Mod', 'Losing Mod', 'Overwrite']],
+  ])('offers the enabled mods, then Overwrite, leaving out a place %s', async (_case, name, heldAsPluginSource, offered) => {
+    const { run, places } = creating({ heldAsPluginSource });
+    namesThenPicks(name);
 
     await run();
 
-    expect(pick.offered.map((place) => place.label)).toEqual(['Overwrite']);
+    expect(places()).toEqual([offered]);
   });
 
-  it('sends the origin, the file name and the picked place\'s folder, and lands the created toast', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', WROTE);
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    pickOrigin('Winning Mod');
+  it.each([
+    ['a mod with a source folder, sending it', 'Winning Mod', 'Winning Mod', ['/instance/mods/Winning Mod', '/instance/source/Winning Mod']],
+    ['a mod with none', 'Losing Mod', 'Losing Mod', ['/instance/mods/Losing Mod', undefined]],
+    ['Overwrite', 'Overwrite', 'overwrite/', ['/instance/overwrite', undefined]],
+  ])('creates the plugin in %s, at its folder, under the Plugins bar, and lands the created toast', async (_case, label, origin, folders) => {
+    const { client, run, reporter } = creating();
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin });
+    namesThenPicks('MyPatch.esp', label);
 
-    const { run, reporter } = invoke(client, makeMo2());
     await run();
 
     expect(client.calls).toEqual([
-      extensionsQuery,
-      placesQuery,
-      flagsQuery,
-      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', ['Master']] },
+      EXTENSIONS_QUERY, PLACES_QUERY, FLAGS_QUERY,
+      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin }, ...folders, ['Master']] },
     ]);
-    expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
+    expect(host.progress).toEqual(['opens on modbench.pluginListTree', 'closes']);
+    expect(reporter.landings).toEqual([`Created "MyPatch.esp" in ${label}.`]);
     expect(reporter.reports).toEqual([]);
   });
 
-  type Labelled = { label: string };
-  const pickLabelled = (label: string) => (items: Labelled[]) => Promise.resolve(items.find((item) => item.label === label));
-
   it('picks the header flags from the combinations offered, and creates the header flagged as picked', async () => {
-    const client = new InMemoryMEditClient();
+    const { client, run, created } = creating({ flags: [[], ['Master'], ['Small'], ['Master', 'Medium']] });
     client.setCommandResult('createPlugin', WROTE);
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    const offered: string[] = [];
-    showQuickPick.mockImplementationOnce(pickLabelled('Winning Mod'));
-    showQuickPick.mockImplementationOnce((items: Labelled[]) => {
-      offered.push(...items.map((item) => item.label));
-      return pickLabelled('Light')(items);
-    });
+    namesThenPicks('MyPatch.esp', 'Winning Mod', 'Light');
 
-    const { run } = invoke(client, makeMo2(), undefined, [[], ['Master'], ['Small'], ['Master', 'Medium']]);
     await run();
 
-    expect(offered).toEqual(['No flags', 'ESM', 'Light', 'ESM, Medium']);
-    expect(client.calls.at(-1)).toMatchObject({ method: 'createPlugin', args: [expect.anything(), expect.anything(), expect.anything(), ['Small']] });
+    expect(host.quickPicks.at(-1)?.items).toEqual(['No flags', 'ESM', 'Light', 'ESM, Medium']);
+    expect(created().map((args) => args.at(-1))).toEqual([['Small']]);
   });
 
   it('creates nothing when Esc answers the flags pick', async () => {
-    const client = new InMemoryMEditClient();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockImplementationOnce(pickLabelled('Winning Mod'));
-    showQuickPick.mockResolvedValueOnce(undefined);
+    const { run, created, reporter } = creating({ flags: [[], ['Master']] });
+    namesThenPicks('MyPatch.esp', 'Winning Mod');
 
-    const { run, reporter } = invoke(client, makeMo2(), undefined, [[], ['Master']]);
     await run();
 
-    expect(client.calls.some((call) => call.method === 'createPlugin')).toBe(false);
+    expect(created()).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
-  it('reports why, and offers no place, when mEdit cannot say which places\' plugin source holds the name', async () => {
-    const client = new InMemoryMEditClient();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    const pick = offering();
+  it.each([
+    ['which places\' plugin source holds the name, and offers no place', 'getPlacesHoldingPluginSource', 'The record index is reading.',
+      'Could not look up which places\' plugin source holds "MyPatch.esp".', [EXTENSIONS_QUERY, PLACES_QUERY], 1],
+    ['which header flags the plugin may take, and creates nothing', 'getCreatablePluginFlags', 'MyPatch.esp is not a plugin file name.',
+      'Could not look up which header flags "MyPatch.esp" may take.', [EXTENSIONS_QUERY, PLACES_QUERY, FLAGS_QUERY], 1],
+    ['which extensions a plugin may take, and opens no prompt', 'getCreatablePluginExtensions', 'No load order has been loaded.',
+      'Could not look up which extensions a plugin may take.', [EXTENSIONS_QUERY], 0],
+  ] as const)('reports why when mEdit cannot say %s', async (_case, query, refusal, message, calls, prompts) => {
+    const { client, run, reporter } = creating();
+    client.setQueryFailure(query, { failed: 'refused', refusal });
+    namesThenPicks('MyPatch.esp', 'Winning Mod');
 
-    const { run, reporter } = invoke(client, makeMo2());
-    client.setQueryFailure('getPlacesHoldingPluginSource', { failed: 'refused', refusal: 'The record index is reading.' });
     await run();
 
-    expect(pick.offered).toEqual([]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up which places\' plugin source holds "MyPatch.esp".', detail: 'The record index is reading.' },
-    ]);
-  });
-
-  it('reports why, and creates nothing, when mEdit cannot say which header flags the plugin may take', async () => {
-    const client = new InMemoryMEditClient();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockImplementationOnce(pickLabelled('Winning Mod'));
-
-    const { run, reporter } = invoke(client, makeMo2());
-    client.setQueryFailure('getCreatablePluginFlags', { failed: 'refused', refusal: 'MyPatch.esp is not a plugin file name.' });
-    await run();
-
-    expect(client.calls.some((call) => call.method === 'createPlugin')).toBe(false);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up which header flags "MyPatch.esp" may take.', detail: 'MyPatch.esp is not a plugin file name.' },
-    ]);
+    expect(client.calls).toEqual(calls);
+    expect(host.inputsAsked).toHaveLength(prompts);
+    expect(reporter.reports).toEqual([{ severity: 'error', message, detail: refusal }]);
   });
 
   it('refuses an extension mEdit leaves out inline, naming the ones it allows', async () => {
-    type Validate = (v: string) => string | undefined;
-    const prompt: { validate?: Validate } = {};
-    showInputBox.mockImplementation((options: { validateInput: Validate }) => {
-      prompt.validate = options.validateInput;
-      return Promise.resolve(undefined);
-    });
-    const { run } = invoke(new InMemoryMEditClient(), makeMo2(), ['.esm', '.esp']);
+    const { run } = creating({ extensions: ['.esm', '.esp'] });
+
     await run();
 
-    const validate = present(prompt.validate, 'the name prompt\'s validator');
-    expect(validate('MyPatch.esl')).toBe('Extension must be .esm or .esp');
+    expect(await present(host.inputsAsked[0], 'the name prompt').validateInput?.('MyPatch.esl')).toBe('Extension must be .esm or .esp');
   });
 
-  it('reports why, and opens no prompt, when mEdit cannot say which extensions a plugin may take', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryFailure('getCreatablePluginExtensions', { failed: 'refused', refusal: 'No load order has been loaded.' });
+  it.each([
+    ['the name prompt, and asks for no place', undefined, [EXTENSIONS_QUERY]],
+    ['the place pick', 'MyPatch.esp', [EXTENSIONS_QUERY, PLACES_QUERY]],
+  ])('creates nothing when Esc answers %s', async (_case, name, calls) => {
+    const { client, run, reporter } = creating();
+    namesThenPicks(name);
 
-    const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([extensionsQuery]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up which extensions a plugin may take.', detail: 'No load order has been loaded.' },
-    ]);
-  });
-
-  it('picks the enabled mods first, then Overwrite, leaving out the place that holds the name', async () => {
-    showInputBox.mockResolvedValue('mypatch.ESP');
-    const pick = offering();
-
-    const { run } = invoke(new InMemoryMEditClient(), makeMo2());
-    await run();
-
-    expect(pick.offered.map((p) => p.label)).toEqual(['Winning Mod', 'Overwrite']);
-  });
-
-  it('creates nothing and asks for no place when Esc answers the name prompt', async () => {
-    const client = new InMemoryMEditClient();
-    showInputBox.mockResolvedValue(undefined);
-
-    const { run, reporter } = invoke(client, makeMo2());
-    await run();
-
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([extensionsQuery]);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('creates nothing when Esc answers the place pick', async () => {
-    const client = new InMemoryMEditClient();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue(undefined);
-
-    const { run, reporter } = invoke(client, makeMo2());
-    await run();
-
-    expect(client.calls).toEqual([extensionsQuery, placesQuery]);
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.landings).toEqual([]);
+    expect(client.calls).toEqual(calls);
+    expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
   it.each<[string, (value: InstanceValue) => InstanceValue, string]>([
@@ -278,259 +166,215 @@ describe('registerCreatePluginCommand', () => {
     ['was disabled, saying so', (value) => ({ ...value, mods: [{ kind: 'mod', name: 'Winning Mod', enabled: false }] }),
       'The mod "Winning Mod" was disabled, so "MyPatch.esp" was not created.'],
   ])('refuses a mod that %s between the pick and the answer, and creates nothing', async (_what, changed, message) => {
-    const client = new InMemoryMEditClient();
-    const mo2 = makeMo2();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockImplementation((places: Place[]) => {
-      mo2.instance.value = changed(mo2.instance.value);
-      return Promise.resolve(places.find((p) => p.origin === 'Winning Mod'));
-    });
+    const { client, instance, run, reporter } = creating();
+    host.types(() => 'MyPatch.esp');
+    host.picks(() => { instance.value = changed(instance.value); return 'Winning Mod'; });
 
-    const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([extensionsQuery, placesQuery]);
+    expect(client.calls).toEqual([EXTENSIONS_QUERY, PLACES_QUERY]);
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
   });
 
   it('reports the refusal mEdit answered with at error, and lands no toast', async () => {
-    const client = new InMemoryMEditClient();
+    const { client, run, reporter } = creating();
     client.setCommandResult('createPlugin', { refused: true, message: 'Could not create "MyPatch.esp" — A file is already there.' });
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    pickOrigin('overwrite/');
+    namesThenPicks('MyPatch.esp', 'Overwrite');
 
-    const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not create "MyPatch.esp" — A file is already there.', detail: undefined },
-    ]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not create "MyPatch.esp" — A file is already there.', detail: undefined }]);
     expect(reporter.landings).toEqual([]);
   });
 
   it('reports that every place holds the name, and offers no empty pick', async () => {
-    const mo2 = makeMo2();
-    mo2.instance.value = {
-      ...mo2.instance.value,
-      mods: [{ kind: 'mod', name: 'Holding Mod', enabled: true }],
-      plugins: [
-        plugin('MyPatch.esp', 'Holding Mod', '/instance/mods/Holding Mod/MyPatch.esp'),
-        plugin('MyPatch.esp', 'overwrite/', '/instance/overwrite/MyPatch.esp'),
-      ],
-    };
-    showInputBox.mockResolvedValue('MyPatch.esp');
+    const { run, reporter } = creating({
+      value: {
+        ...VALUE,
+        mods: [{ kind: 'mod', name: 'Holding Mod', enabled: true }],
+        plugins: [...VALUE.plugins, plugin('MyPatch.esp', 'overwrite/', '/instance/overwrite/MyPatch.esp')],
+      },
+    });
+    namesThenPicks('MyPatch.esp');
 
-    const { run, reporter } = invoke(new InMemoryMEditClient(), mo2);
     await run();
 
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Overwrite and every enabled mod already hold "MyPatch.esp".', detail: undefined },
-    ]);
-  });
-
-  it('ends on the read after the file is written, so the rows show the plugin when the gesture ends', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite/' });
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite/' });
-    const mo2 = makeMo2();
-
-    const { run } = invoke(client, mo2);
-    await run();
-
-    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'progress closes']);
+    expect(host.quickPicks).toEqual([]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Overwrite and every enabled mod already hold "MyPatch.esp".', detail: undefined }]);
   });
 });
 
 describe('modbench.plugin.create, called by the agent', () => {
-  const place = (origin: string, name = 'MyPatch.esp', flags?: string[]) =>
-    new AgentCall([origin === 'overwrite/' ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin }], { name, flags });
-  const placeless = new AgentCall([], { name: 'MyPatch.esp' });
+  const place = (origin: string, flags?: string[]) =>
+    new AgentCall([origin === 'overwrite/' ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin }], { name: 'MyPatch.esp', flags });
 
-  function invokeAgent(call: AgentCall<{ name: string; flags?: string[] }>, client = new InMemoryMEditClient(), paths: Partial<InstanceValue['paths']> = {}) {
-    const mo2 = makeMo2();
-    mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, ...paths } };
-    const reporter = recordingReporter();
-    registerCreatePluginCommand(client, mo2.instance, reporter);
-    const run = present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler");
-    return { client, reporter, answer: (): Promise<unknown> => Promise.resolve(run(call)) };
-  }
-
-  it('creates the plugin named in the place given, opening and reporting nothing, and answers the outcome', async () => {
-    const client = new InMemoryMEditClient();
+  it.each([
+    ['the place given', 'Winning Mod', ['Small']],
+    ['a mod named with other case, addressing it by the origin the place resolved to,', 'winning mod', undefined],
+  ])('creates the plugin named in %s, opening and reporting nothing, and answers the outcome', async (_case, origin, flags) => {
+    const { client, run, reporter } = creating();
     client.setCommandResult('createPlugin', WROTE);
-    const { reporter, answer } = invokeAgent(place('Winning Mod', 'MyPatch.esp', ['Small']), client);
 
-    const answered = await answer();
+    const answered = await run(place(origin, flags));
 
-    expect(client.calls.at(-1)).toEqual(
-      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', ['Small']] });
+    expect(client.calls).toEqual([{ method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', flags] }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [WROTE], refused: [] } });
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  it('creates the plugin in a mod named with other case, addressing it by the origin the place resolved to', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', WROTE);
-    const { answer } = invokeAgent(place('winning mod'), client);
-
-    await answer();
-
-    expect(client.calls.at(-1)).toEqual(
-      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', undefined] });
+    expect([host.inputsAsked, host.quickPicks, reporter.reports, reporter.landings]).toEqual([[], [], [], []]);
   });
 
   it('answers the refusal mEdit gave, with its reason and reporting nothing', async () => {
-    const client = new InMemoryMEditClient();
+    const { client, run, reporter } = creating();
     client.setCommandResult('createPlugin', { refused: true, message: 'A file is already there.' });
-    const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
 
-    expect(await answer()).toEqual({ applied: false, refusal: 'A file is already there.' });
+    expect(await run(place('Winning Mod'))).toEqual({ applied: false, refusal: 'A file is already there.' });
     expect(reporter.reports).toEqual([]);
   });
 
-  it('refuses a call that names no place, creating nothing', async () => {
-    const { client, answer } = invokeAgent(placeless);
-
-    await expect(answer()).rejects.toThrow('Create a plugin in one mod or Overwrite.');
-
-    expect(client.calls).toEqual([]);
-  });
-
-  it('refuses a call that names two places, creating nothing', async () => {
-    const { client, answer } = invokeAgent(new AgentCall([{ kind: 'mod', name: 'Winning Mod' }, { kind: 'runtimeOutput' }], { name: 'MyPatch.esp' }));
-
-    await expect(answer()).rejects.toThrow('Create a plugin in one mod or Overwrite.');
-
-    expect(client.calls).toEqual([]);
-  });
-
-  it('refuses a call whose Argument is not a place', async () => {
-    const { client, answer } = invokeAgent(new AgentCall([{ kind: 'profile', name: 'Default' }], { name: 'MyPatch.esp' }));
-
-    await expect(answer()).rejects.toThrow('carries mod or runtimeOutputs only');
-
-    expect(client.calls).toEqual([]);
-  });
-
   it.each([
-    ['a place that is not an enabled mod', place('Disabled Mod'), {}, '"Disabled Mod" is not enabled, so "MyPatch.esp" was not created.'],
-    ['a place that already holds the name', place('Holding Mod'), {}, '"Holding Mod" already holds "MyPatch.esp".'],
-    ['an Overwrite whose folder is unread', place('overwrite/'), { overwriteDir: undefined }, 'Overwrite has no folder yet, so "MyPatch.esp" was not created.'],
-  ])('refuses %s, creating nothing', async (_what, call, paths, reason) => {
-    const { client, answer } = invokeAgent(call, undefined, paths);
+    ['names no place', new AgentCall([], { name: 'MyPatch.esp' }), {}, 'Create a plugin in one mod or Overwrite.'],
+    ['names two places', new AgentCall([{ kind: 'mod', name: 'Winning Mod' }, { kind: 'runtimeOutput' }], { name: 'MyPatch.esp' }), {},
+      'Create a plugin in one mod or Overwrite.'],
+    ['names what is not a place', new AgentCall([{ kind: 'profile', name: 'Default' }], { name: 'MyPatch.esp' }), {}, 'carries mod or runtimeOutputs only'],
+    ['names a place that is not an enabled mod, whatever its case', place('disabled mod'), {}, '"disabled mod" is not enabled, so "MyPatch.esp" was not created.'],
+    ['names a mod the value does not list', place('Uninstalled'), {}, 'The mod "Uninstalled" is gone, so "MyPatch.esp" was not created.'],
+    ['names a place that already holds the name', place('Holding Mod'), {}, '"Holding Mod" already holds "MyPatch.esp".'],
+    ['names an Overwrite whose folder is unread', place('overwrite/'), { overwriteDir: undefined }, 'Overwrite has no folder yet, so "MyPatch.esp" was not created.'],
+  ])('refuses a call that %s, creating nothing', async (_what, call, paths, reason) => {
+    const { client, run } = creating({ value: { ...VALUE, paths: { ...VALUE.paths, ...paths } } });
 
-    await expect(answer()).rejects.toThrow(reason);
+    await expect(run(call)).rejects.toThrow(reason);
 
     expect(client.calls).toEqual([]);
   });
 });
 
-describe('registerRevealInExplorerCommand', () => {
-  function invoke(resolvePluginPath: (name: string) => Promise<string | undefined>, viewSelection: readonly PluginsTreeNode[] = []) {
-    const reporter = recordingReporter();
-    registerRevealInExplorerCommand(
-      { resolvePluginPath: (row) => resolvePluginPath(row.kind === 'plugin' ? row.plugin.name : row.name) }, reporter, () => viewSelection);
-    return { run: present(handlers.get('modbench.plugin.reveal'), "the reveal plugin command's registered handler"), reporter };
+describe('modbench.plugin.reveal', () => {
+  async function revealing() {
+    const value = instanceValueFixture({
+      plugins: pluginsOf(['A.esp', 'B.esp']),
+      pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }],
+    });
+    const instance = new FakeInstance(value);
+    const made = pluginsOver({ value, instance });
+    const row = await made.pluginRows();
+    return {
+      row, reporter: made.reporter('pluginListTree.revealInExplorer'),
+      run: (...args: unknown[]) => host.run('modbench.plugin.reveal', ...args),
+      select: (...rows: unknown[]) => { made.view().selectRows(rows); },
+      forget: () => { instance.publish({ ...value, plugins: [], pluginsLoadedWithNoLine: [] }); },
+    };
   }
 
-  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
-  const plugin = new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod');
+  it.each([
+    ['a locked row\'s file, resolved from the row', [true], 'Fallout4.esm', 'Data/', '/game/Data/Fallout4.esm'],
+    ['the one selected locked row from the palette', [], 'Fallout4.esm', 'Data/', '/game/Data/Fallout4.esm'],
+    ['a plugin row\'s file', [true], 'A.esp', 'ModA', '/mods/ModA/A.esp'],
+    ['the one selected plugin from the palette', [], 'A.esp', 'ModA', '/mods/ModA/A.esp'],
+  ])('reveals %s in the OS explorer and says nothing', async (_what, clicked, name, origin, fsPath) => {
+    const { row, run, select, reporter } = await revealing();
+    select(row(name, origin));
 
-  it.each<[string, PluginsTreeNode | undefined, readonly PluginsTreeNode[], string]>([
-    ['a locked row\'s file, resolved from the row', locked, [], '/files/Fallout4.esm'],
-    ['the one selected locked row from the palette', undefined, [locked], '/files/Fallout4.esm'],
-    ['a plugin row\'s file', plugin, [], '/files/MyMod.esp'],
-    ['the one selected plugin from the palette', undefined, [plugin], '/files/MyMod.esp'],
-  ])('reveals %s in the OS explorer and says nothing', async (_what, clicked, selection, fsPath) => {
-    const { run, reporter } = invoke((name) => Promise.resolve(`/files/${name}`), selection);
+    await run(...clicked.map(() => row(name, origin)));
 
-    await run(clicked);
-
-    expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', Uri.file(fsPath));
+    expect(host.executed).toEqual([['revealFileInOS', Uri.file(fsPath)]]);
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
   it.each([
-    ['a locked row', locked, 'Could not resolve a file location for "Fallout4.esm" — the instance does not list this file.'],
-    ['a plugin row', plugin, 'Could not resolve a file location for "MyMod.esp" — no mod or Overwrite holds this file.'],
-  ])('reports at error why %s resolves to no file, and reveals nothing', async (_what, clicked, message) => {
-    const { run, reporter } = invoke(() => Promise.resolve(undefined));
+    ['a locked row', 'Fallout4.esm', 'Data/', 'Could not resolve a file location for "Fallout4.esm" — the instance does not list this file.'],
+    ['a plugin row', 'A.esp', 'ModA', 'Could not resolve a file location for "A.esp" — no mod or Overwrite holds this file.'],
+  ])('reports at error why %s resolves to no file, and reveals nothing', async (_what, name, origin, message) => {
+    const { row, run, forget, reporter } = await revealing();
+    const shown = row(name, origin);
+    forget();
 
-    await run(clicked);
+    await run(shown);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
-    expect(executeCommand).not.toHaveBeenCalled();
+    expect(host.executed).toEqual([]);
   });
 
   it('reveals nothing from the palette over a selection of several plugins', async () => {
-    const { run } = invoke(() => Promise.resolve('/instance/mods/MyMod/MyMod.esp'), [
-      new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod'), new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'),
-    ]);
+    const { row, run, select } = await revealing();
+    select(row('A.esp'), row('B.esp'));
 
     await run();
 
-    expect(executeCommand).not.toHaveBeenCalled();
+    expect(host.executed).toEqual([]);
   });
 
   it('reports a rejected reveal at error with the thrown message as its detail', async () => {
-    executeCommand.mockRejectedValue(new Error('no file manager'));
-    const { run, reporter } = invoke(() => Promise.resolve('/instance/mods/MyMod/MyMod.esp'));
+    const { row, run, reporter } = await revealing();
+    host.fails('revealFileInOS', new Error('no file manager'));
 
-    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod'));
+    await run(row('A.esp'));
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to reveal "MyMod.esp" in Explorer.', detail: 'no file manager' },
-    ]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to reveal "A.esp" in Explorer.', detail: 'no file manager' }]);
   });
 });
 
-describe('pluginsCopyValueText', () => {
-  const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
-  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
-  const ALPHA = { name: 'Alpha.esp', origin: 'ModA' };
-  let record: RecordBrowserNode;
-  let mixed: (RecordBrowserNode | PluginNode | ImplicitMasterNode)[];
-  beforeAll(async () => {
-    record = await recordRow(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }), 'ModA');
-    mixed = [
-      plugin, record, locked,
-      await recordRow(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }), 'ModA'),
-      await worldspaceRow({ formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, workingTreeState: 'None', hasChildren: true }, ALPHA),
-      await cellRow({
-        formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false, workingTreeState: 'None',
-      }, ALPHA),
-      await placedRow({
-        formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false, workingTreeState: 'None',
-      }, ALPHA),
-      await recordGroupRow({ type: 'weap', count: 2, displayName: 'Weapon' }, ALPHA),
-    ];
-  });
+describe('the Plugins view\'s copy value', () => {
+  async function copying() {
+    const made = await indexedOver(['Alpha.esp'], {
+      value: { pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'Data/', path: '/game/Data/Fallout4.esm' }] },
+    });
+    const { client, rows, row } = made;
+    client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'weap', count: 2, displayName: 'Weapon' }), recordTypeCountFixture({ type: 'wrld', count: 1 })]);
+    client.setQueryAnswer('getRecords', { items: [
+      recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }),
+      recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }),
+    ], total: 2 });
+    client.setQueryAnswer('getWorldspaces', [{ formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, workingTreeState: 'None', hasChildren: true }]);
+    client.setQueryAnswer('getWorldspaceBlocks', { blocks: [], topCells: [{
+      formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: true, fullName: 'A Room',
+      hasParseFailure: false, workingTreeState: 'None',
+    }] });
+    client.setQueryAnswer('getCellChildRecords', { persistent: [{
+      formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false, workingTreeState: 'None',
+    }], temporary: [] });
+    const sole = async (parent: unknown) => present((await rows(parent))[0], 'a child row');
+    const alpha = row('Alpha.esp');
+    const [weapons, worlds] = await rows(alpha);
+    const [gun, unnamed] = await rows(weapons);
+    const world = await sole(worlds);
+    const room = await sole(world);
+    const placed = await sole(await sole(room));
+    const locked = row('Fallout4.esm', 'Data/');
+    const mixed = [alpha, gun, locked, unnamed, world, room, placed, weapons];
+    made.view().selectRows(mixed);
+    return { copy: made.shown.copyValue.text, gun, locked, mixed };
+  }
+
   const LINES = [
     'Alpha.esp', 'Gun [000800:Alpha.esp]', 'Fallout4.esm', '000801:Alpha.esp',
     'World [000802:Alpha.esp]', 'Room [000803:Alpha.esp]', '000804:Alpha.esp',
   ].join('\n');
 
-  it('copies a mixed selection right-clicked in the tree, a row that stands for neither adding nothing', () => {
-    expect(pluginsCopyValueText(() => mixed)(record, mixed)).toBe(LINES);
+  it('copies a mixed selection right-clicked in the tree, a row that stands for neither adding nothing', async () => {
+    const { copy, gun, mixed } = await copying();
+
+    expect(copy(gun, mixed)).toBe(LINES);
   });
 
-  it('copies the selection the Plugins key hands it', () => {
-    expect(pluginsCopyValueText(() => mixed)(PLUGINS_KEY_ARGS, undefined)).toBe(LINES);
+  it('copies the selection the Plugins key hands it', async () => {
+    const { copy } = await copying();
+
+    expect(copy({ view: 'modbench.pluginListTree' }, undefined)).toBe(LINES);
   });
 
-  it('copies the right-clicked row alone when it is outside the selection', () => {
-    expect(pluginsCopyValueText(() => mixed)(locked, undefined)).toBe('Fallout4.esm');
+  it('copies the right-clicked row alone when VS Code hands no selection with it', async () => {
+    const { copy, locked } = await copying();
+
+    expect(copy(locked, undefined)).toBe('Fallout4.esm');
   });
 
-  it('defers what is not the Plugins view\'s', () => {
-    const copy = pluginsCopyValueText(() => mixed);
-    expect(copy(undefined, undefined)).toBeUndefined();
-    expect(copy({ view: 'modbench.modList' }, undefined)).toBeUndefined();
-    expect(copy(new TreeItem('a Mods row'), undefined)).toBeUndefined();
+  it.each([
+    ['no row', undefined],
+    ['another view\'s key', { view: 'modbench.modList' }],
+    ['a Mods row', new TreeItem('a Mods row')],
+  ])('defers %s, as not the Plugins view\'s', async (_case, clicked) => {
+    const { copy } = await copying();
+
+    expect(copy(clicked, undefined)).toBeUndefined();
   });
 });

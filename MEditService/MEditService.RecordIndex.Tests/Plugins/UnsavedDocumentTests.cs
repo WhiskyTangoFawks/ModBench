@@ -206,7 +206,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         _index.Unsaved.Typed(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
         var holding = _index.Queries.Hold([new HandedPlugin(_compiledPlugin.Key, [_file], [])], CancellationToken.None);
         Waits.Reached(() => disposed, "the disposal");
-        await Task.WhenAny(holding, Task.Delay(TimeSpan.FromMilliseconds(300)));
+        await holding.WaitAsync(Waits.Patience);
 
         lock (_log) Assert.DoesNotContain(_log, entry => entry.Message.Contains("failed unexpectedly", StringComparison.Ordinal));
     }

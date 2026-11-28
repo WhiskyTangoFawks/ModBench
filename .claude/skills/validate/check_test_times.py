@@ -1,31 +1,126 @@
 #!/usr/bin/env python3
-"""Reads the test reports under a directory (see reports.py), names each test that took over a
-second, and prints the run's wall time against its budget. Reports only: exit 0 once the reports
-are read."""
+"""Reads the test reports under a directory (see reports.py), names each test over 100 ms, and prints each
+box's summed test time and the run's wall time against its budget in the budget file. Once FAILS_THE_RUN is on,
+a Linux run fails on a test over the 1 s ceiling the file does not approve. Nothing else fails: each approval that
+lapsed, each box over its budget or without one, and a run over its wall budget ends the report with a yellow flag
+for the developer."""
 import sys
+import tomllib
 from pathlib import Path
 
 import reports
 
-CEILING = 1
+SLOW_SECONDS = 0.1
+CEILING_SECONDS = 1.0
+FAILS_THE_RUN = False
+# The source scans, the gates' own tests and the integration tests: the budget file's `other` holds them.
+NO_BOX = {'MEditService.Architecture.Tests', 'test', 'validate', 'hooks', 'integration'}
+OTHER = 'the tests of no box'
+WINDOWS = 'windows'
+FLAG = 'YELLOW FLAG: '
 
 
-def over_ceiling(directory: Path) -> list[tuple[str, float]]:
-    return sorted(((result.name, result.seconds) for result in reports.results(directory)
-                   if result.seconds is not None and result.seconds > CEILING),
+def slow_tests(results: list[reports.Result]) -> list[tuple[str, float]]:
+    return sorted(((result.name, result.seconds) for result in results
+                   if result.seconds is not None and result.seconds > SLOW_SECONDS),
                   key=lambda over: -over[1])
 
 
+def approval_of(name: str, approved: dict[str, str]) -> str | None:
+    """A theory's name approves each of its cases."""
+    return next((key for key in approved if name == key or name.startswith(f'{key}(')), None)
+
+
+def lapse_flags(results: list[reports.Result], approved: dict[str, str]) -> list[str]:
+    """Each approval whose tests ran, all under the ceiling, slowest first."""
+    slowest: dict[str, float] = {}
+    for result in results:
+        if result.seconds is not None and (key := approval_of(result.name, approved)) is not None:
+            slowest[key] = max(slowest.get(key, 0), result.seconds)
+    return [f'{key} took {seconds:.2f} s at most, so its approval lapsed'
+            for key, seconds in sorted(slowest.items(), key=lambda lapse: -lapse[1]) if seconds < CEILING_SECONDS]
+
+
+def fastest_runs(results: list[reports.Result]) -> dict[str, float]:
+    """Each test's fastest timed run."""
+    fastest: dict[str, float] = {}
+    for result in results:
+        if result.seconds is not None:
+            fastest[result.name] = min(result.seconds, fastest.get(result.name, result.seconds))
+    return fastest
+
+
+def report_ceiling(results: list[reports.Result], alone: list[reports.Result], approved: dict[str, str]) -> tuple[int, list[str]]:
+    """The number of tests over the ceiling no approval names, and the flags of the approvals that lapsed. A test over
+    the ceiling under load that ran again alone is judged on its fastest run there."""
+    fastest_alone = fastest_runs(alone)
+    ran_again = {result.name for result in results if (result.seconds or 0) > CEILING_SECONDS and result.name in fastest_alone}
+    judged = [result._replace(seconds=fastest_alone[result.name]) if result.name in ran_again else result for result in results]
+    unapproved = [(name, seconds) for name, seconds in slow_tests(judged)
+                  if seconds > CEILING_SECONDS and approval_of(name, approved) is None]
+    for name, seconds in unapproved:
+        print(f'{seconds:7.2f} s  {name}: OVER THE {CEILING_SECONDS:g} s CEILING{" ALONE" if name in ran_again else ""}, NOT APPROVED')
+    print(f'--- {len(ran_again)} TESTS OVER {CEILING_SECONDS:g} s RUN AGAIN ALONE, {len(unapproved)} OVER THE CEILING NOT APPROVED ---')
+    return len(unapproved), lapse_flags(judged, approved)
+
+
+def box_times(results: list[reports.Result]) -> list[tuple[str, float]]:
+    """Most first."""
+    times: dict[str, float] = {}
+    for result in results:
+        times[result.box] = times.get(result.box, 0) + (result.seconds or 0)
+    return sorted(times.items(), key=lambda box: -box[1])
+
+
+def budget_flags(name: str, seconds: float, budget: float | None, digits: int) -> list[str]:
+    took = f'{name} took {seconds:.{digits}f} s'
+    if budget is None:
+        return [f'{took}, and has no budget']
+    return [f'{took}, over its {budget:g} s budget by {seconds - budget:.{digits}f} s'] if seconds > budget else []
+
+
+def report_budgets(times: list[tuple[str, float]], boxes: dict[str, float], other: float) -> list[str]:
+    """The flags of the budgets overrun or missing."""
+    no_box = [(box, seconds) for box, seconds in times if box in NO_BOX]
+    judged = [(box, seconds, boxes.get(box)) for box, seconds in times if box not in NO_BOX]
+    judged.append((OTHER, sum(seconds for _, seconds in no_box), other))
+    for name, seconds, budget in judged:
+        print(f'{seconds:7.1f} s  {name}' if budget is None else f'{seconds:7.1f} s of {budget:4g} s  {name}')
+    for box, seconds in no_box:
+        print(f'  {seconds:7.1f} s  {box}')
+    return [flag for name, seconds, budget in judged for flag in budget_flags(name, seconds, budget, 1)]
+
+
+def report_wall(elapsed: float, budget: float, run: str) -> list[str]:
+    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget')
+    return budget_flags(f'the {run} run', elapsed, budget, 0)
+
+
 def main(argv: list[str] | None = None) -> int:
-    directory, elapsed_argument, budget_argument = sys.argv[1:] if argv is None else argv
-    elapsed, budget = float(elapsed_argument), float(budget_argument)
-    over = over_ceiling(Path(directory))
-    for name, time in over:
-        print(f'{time:7.1f} s  {name}')
-    print(f'--- {len(over)} TESTS OVER {CEILING} s ---')
-    late = f': OVER BUDGET by {elapsed - budget:.0f} s' if elapsed > budget else ''
-    print(f'Wall time {elapsed:.0f} s of {budget:.0f} s budget{late}')
-    return 0
+    """The run is a budget file's key under [wall]: branch, merge or windows."""
+    directory, elapsed_argument, budgets_file, run, *optional = sys.argv[1:] if argv is None else argv
+    (alone_folder,) = optional or [None]
+    budgets = tomllib.loads(Path(budgets_file).read_text())
+    results = reports.results(Path(directory))
+    slow = slow_tests(results)
+    for name, seconds in slow:
+        print(f'{seconds:7.2f} s  {name}')
+    print(f'--- {len(slow)} TESTS OVER {SLOW_SECONDS * 1000:.0f} ms ---')
+    times = box_times(results)
+    unapproved = 0
+    flags: list[str] = []
+    if run == WINDOWS:
+        for box, seconds in times:
+            print(f'{seconds:7.1f} s  {box}')
+    else:
+        budget_overruns = report_budgets(times, budgets['boxes'], budgets['other'])
+        alone = reports.results(Path(alone_folder)) if alone_folder else []
+        unapproved, flags = report_ceiling(results, alone, budgets.get('approved', {}))
+        flags += budget_overruns
+    flags += report_wall(float(elapsed_argument), budgets['wall'][run], run)
+    for flag in flags:
+        print(f'{FLAG}{flag}')
+    return int(FAILS_THE_RUN and bool(unapproved))
 
 
 if __name__ == '__main__':

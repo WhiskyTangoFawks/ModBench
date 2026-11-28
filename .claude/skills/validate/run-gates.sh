@@ -8,10 +8,6 @@ SCRIPTS=false
 DETACH=false
 WAIT=false
 FAILED=false
-# The merge-to-main tier is paused until epic #2450 lands: a merge run runs the branch gates. #2466 resumes
-# the tier by deleting this switch and PAUSED_NOTICE.
-MERGE_TIER_PAUSED=true
-PAUSED_NOTICE="The merge-to-main tier is paused until epic #2450 lands: these are the branch gates."
 # The mode survives each re-exec in the environment, as BUILD_SLOT_HELD does.
 MERGE_TO_MAIN=false
 [[ ${MEDIT_MERGE_TO_MAIN:-} == true ]] && MERGE_TO_MAIN=true
@@ -32,8 +28,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-MERGE_REQUESTED=$MERGE_TO_MAIN
-! $MERGE_TIER_PAUSED || MERGE_TO_MAIN=false
 ! $MERGE_TO_MAIN || BACKEND=true
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
@@ -90,10 +84,10 @@ fi
 # is not in it.
 REPORTS="/tmp/medit-reports.$(basename "$ROOT")"
 $HOLDS_SLOT || REPORTS=$REPORTS.comments
-SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit
-{ rm -rf "$REPORTS" && mkdir -p "$SKIP_LOGS"; } || exit 1
-BUDGET_SECONDS=300
-! $MERGE_REQUESTED || BUDGET_SECONDS=600
+SKIP_LOGS=$REPORTS/logs BACKEND_RESULTS=$REPORTS/backend UNIT_RESULTS=$REPORTS/unit ALONE=$REPORTS.alone
+{ rm -rf "$REPORTS" "$ALONE" && mkdir -p "$SKIP_LOGS"; } || exit 1
+RUN=branch
+! $MERGE_TO_MAIN || RUN=merge
 SECONDS=0
 
 # Each unittest run leaves its verbose log, with every test's time, for skips.py and
@@ -107,7 +101,6 @@ unittest_discover() {
   return $status
 }
 
-! { $MERGE_REQUESTED && $MERGE_TIER_PAUSED; } || echo "$PAUSED_NOTICE"
 echo "=== Gate 1: Comment discipline ==="
 EXCLUDE_RE='^(references/|modbench/src/wire/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
 tracked() { (cd "$ROOT" && git ls-files "$@" | grep -Ev "$EXCLUDE_RE" | while read -r f; do [[ -f "$f" ]] && echo "$f"; done); }
@@ -152,6 +145,15 @@ echo "=== Gate runner tests ==="
 # The gate's own tests start runs of it, which are branch runs.
 (cd "$ROOT" && unset MEDIT_MERGE_TO_MAIN && unittest_discover validate -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
+
+# Since main, not the base: a ticket that deletes a survivor its integration branch named meets it here.
+echo "=== Deleted tests and their survivors ==="
+python3 "$ROOT/.claude/skills/validate/check_deleted_tests.py" "$ROOT" main \
+  || { echo "--- DELETED TEST GATE FAILED ---"; FAILED=true; }
+
+echo "=== Test waits on real time ==="
+python3 "$ROOT/.claude/skills/validate/check_test_waits.py" "$ROOT" \
+  || { echo "--- TEST WAIT GATE FAILED ---"; FAILED=true; }
 
 ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
@@ -228,9 +230,15 @@ if $MERGE_TO_MAIN; then
   python3 "$ROOT/.claude/skills/validate/skips.py" "$REPORTS" || FAILED=true
 fi
 
-echo "=== Test times and budget ==="
-python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" "$BUDGET_SECONDS" \
-  || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
+# The ceiling holds a test slow on its own, so each test over it under the gates' load runs again alone.
+ALONE_ARGS=()
+if $HOLDS_SLOT; then
+  echo "=== Tests over 1 s, again alone ==="
+  python3 "$ROOT/.claude/skills/validate/run_alone.py" "$ROOT" "$REPORTS" "$ALONE" \
+    "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" \
+  || { echo "--- ALONE RUN FAILED ---"; FAILED=true; }
+  ALONE_ARGS=("$ALONE")
+fi
 
 if $HOLDS_SLOT; then
   echo "=== Test data over its size ==="
@@ -238,8 +246,14 @@ if $HOLDS_SLOT; then
   || { echo "--- TEST DATA REPORT FAILED ---"; FAILED=true; }
   echo "=== Backend code only tests reach ==="
   python3 "$ROOT/.claude/skills/validate/check_test_only_code.py" "$ROOT/MEditService" \
-  || { echo "--- BACKEND TEST-ONLY CODE REPORT FAILED ---"; FAILED=true; }
+  || { echo "--- BACKEND TEST-ONLY CODE GATE FAILED ---"; FAILED=true; }
 fi
+
+# Last, so the wall time is the whole run's and its yellow flags fall in the verdict's last lines.
+echo "=== Test times and budget ==="
+python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$REPORTS" "$SECONDS" \
+  "$ROOT/.claude/skills/validate/test-budgets.toml" "$RUN" "${ALONE_ARGS[@]}" \
+  || { echo "--- TEST TIME REPORT FAILED ---"; FAILED=true; }
 
 if $FAILED; then
   exit 1

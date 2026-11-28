@@ -8,6 +8,9 @@ import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 
+// A change signal waits for the snapshots handed before it to be answered, so no test waits on the cap's clock.
+const LONGEST_TIMER_MS = 2 ** 31 - 1;
+
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getPlacesHoldingPluginSource' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
@@ -105,7 +108,7 @@ export class InMemoryMEditClient implements MEditClient {
       this.record('signalChange', [paths]);
       return this.signalAnswer().then(() => ({ ended: Promise.resolve() }));
     },
-  });
+  }, LONGEST_TIMER_MS);
 
   private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
   private readonly progress = trackProgress(() => this.recordIndexProgress);

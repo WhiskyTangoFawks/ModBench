@@ -1,4 +1,6 @@
+import { expect } from 'vitest';
 import { present } from '../../ports/present';
+import { settled } from '../../test/eventually';
 import type * as vscode from 'vscode';
 
 /** The InputBox double every per-view name filter test needs — enough of `vscode.InputBox` for
@@ -54,17 +56,10 @@ export const commandInvoker = (state: FilterBoxState) =>
 export const currentBoxOf = (state: FilterBoxState) =>
   () => present(state.boxes.at(-1), 'the most recently created input box');
 
-/** A real recompute chain (an Instance re-read, a provider rebuild, `hasRows()`) settles over a
- *  few ticks; the loop fails on its own assertion, never the runner's timeout. */
-export async function waitForMessage(
-  view: { message?: string }, predicate: (m: string | undefined) => boolean, label: string,
-): Promise<void> {
-  for (let i = 0; i < 200; i++) {
-    if (predicate(view.message)) return;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error(`timed out waiting for ${label}; last message: ${String(view.message)}`);
-}
+/** Settles once the view's message holds `predicate`: a real recompute chain (an Instance re-read, a provider rebuild,
+ *  `hasRows()`) settles over a few ticks. */
+export const waitForMessage = (view: { message?: string }, predicate: (m: string | undefined) => boolean, label: string): Promise<void> =>
+  settled(() => { expect(predicate(view.message), `${label}; last message: ${String(view.message)}`).toBe(true); });
 
 type Listener<E> = (event: E) => void;
 const noDisposable = () => ({ dispose: () => undefined });

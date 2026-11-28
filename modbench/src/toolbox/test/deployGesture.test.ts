@@ -9,7 +9,7 @@ const { handlers, registerCommand, executeCommand, collections } = vi.hoisted(()
       return { dispose: vi.fn() };
     }),
     executeCommand: vi.fn(),
-    collections: [] as { clear(): void; [Symbol.iterator](): IterableIterator<[{ fsPath: string }, readonly { message: string }[]]> }[],
+    collections: [] as { clear(): void; [Symbol.iterator](): IterableIterator<[{ fsPath: string }, readonly { message: string; severity: number; code?: unknown }[]]> }[],
   };
 });
 
@@ -26,7 +26,6 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { toldOf } from '../../instanceLoader/told';
 import { progressSteps } from '../../test/recordedProgress';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -39,6 +38,7 @@ import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdap
 import { instanceOver } from '../../test/instanceOver';
 import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult } from '../../instanceCommands/deploy';
 import { settled } from '../../test/eventually';
+import { DiagnosticSeverity, uriParse } from '../../test/vscodeMock';
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
@@ -197,6 +197,7 @@ describe('Deploy', () => {
 
 describe('the problems on the files the deployment folder holds that deploy does not manage', () => {
   const held = () => [...present(collections[0], 'the collection')].map(([uri, [problem]]) => [uri.fsPath, problem?.message]);
+  const codes = () => [...present(collections[0], 'the collection')].flatMap(([, problems]) => problems.map(({ code }) => code));
 
   it('are read again at a check of the disk and at a change a watch names in the deployment folder, and at no other (ADR-0029)', async () => {
     const instance = instanceOver(fakeInstanceAdapter(readingFixture()).adapter);
@@ -250,7 +251,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
     unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
-    void present(subscribers[0], 'the instance subscriber')(value, 2, toldOf(value, value, { named: [], disk: true }, undefined));
+    void present(subscribers[0], 'the instance subscriber')(value, 2, { named: [], disk: true, before: value, changed: () => 'every' });
 
     await settled(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
   });
@@ -265,6 +266,36 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
 
     expect(held()).toEqual([['/deployed/a.ini', 'Deploy does not manage this file.']]);
+  });
+
+  it('are a warning on each file, at where it is', async () => {
+    const { run } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['Data/MCM/settings.ini', 'game.exe'] });
+
+    await run();
+
+    expect([...present(collections[0], 'the collection')].map(([uri, [problem]]) => [uri.fsPath, problem?.severity, problem?.message])).toEqual([
+      ['/deployed/Data/MCM/settings.ini', DiagnosticSeverity.Warning, 'Deploy does not manage this file.'],
+      ['/deployed/game.exe', DiagnosticSeverity.Warning, 'Deploy does not manage this file.'],
+    ]);
+  });
+
+  it('carries move to Overwrite as its code, a link that fires the gesture on its path', async () => {
+    const { run } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['Data/a.esp'] });
+
+    await run();
+
+    expect(codes()).toEqual([{
+      value: 'move to Overwrite',
+      target: uriParse(`command:modbench.instance.moveToOverwrite?${encodeURIComponent(JSON.stringify([['Data/a.esp']]))}`),
+    }]);
+  });
+
+  it('carry no link to move to Overwrite on a file where no mod file can land at its path', async () => {
+    const { run } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['Data/.hidden'] });
+
+    await run();
+
+    expect(codes()).toEqual([undefined]);
   });
 
   it('are read again after a purge', async () => {

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { SILENT_LOG } from '../ports/log';
-import type { FomodEngine } from '../instanceAdapter/fomodInstaller/fomodInstaller';
+import type { adapterForInstance } from '../instanceAdapter/openInstance';
 
 const bundles = mkdtempSync(join(tmpdir(), 'modbench-fomod-engine-'));
 process.on('exit', () => rmSync(bundles, { recursive: true, force: true }));
@@ -14,6 +14,8 @@ export function engineProcessFrom(entry: string): string {
   buildSync({ entryPoints: [entry], outfile, bundle: true, format: 'cjs', platform: 'node', logLevel: 'error' });
   return outfile;
 }
+
+export type FomodEngine = Parameters<typeof adapterForInstance>[0]['fomodEngine'];
 
 /** The engine as the development tree holds it: its process from its source, and the add-on npm installed. */
 export const FOMOD_ENGINE: FomodEngine = {

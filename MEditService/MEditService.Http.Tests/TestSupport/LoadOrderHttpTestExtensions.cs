@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.TestSupport;
 
@@ -60,22 +60,11 @@ public static class LoadOrderHttpTestExtensions
     /// <summary>Polls status until it answers for at least <paramref name="appliedVersion"/> and
     /// is terminal (Ready, HeldElsewhere or Failed). An identical resend answers the version already
     /// held, so it waits on that version's reconcile.</summary>
-    public static async Task AwaitTerminalLoadOrderStatus(
-        this HttpClient client, long appliedVersion, TimeSpan? timeout = null)
-    {
-        var limit = timeout ?? TimeSpan.FromSeconds(60);
-        var elapsed = Stopwatch.StartNew();
-        while (elapsed.Elapsed < limit)
+    public static Task AwaitTerminalLoadOrderStatus(this HttpClient client, long appliedVersion, TimeSpan? timeout = null) =>
+        Waits.ReachedAsync(async () =>
         {
             var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");
-            var version = status.GetProperty("version").GetInt64();
-            var state = status.GetProperty("state").GetString();
-
-            if (version >= appliedVersion && state is "Ready" or "HeldElsewhere" or "Failed") return;
-
-            await Task.Delay(20);
-        }
-        throw new TimeoutException(
-            $"The load order never reached a terminal state for version {appliedVersion}.");
-    }
+            return status.GetProperty("version").GetInt64() >= appliedVersion
+                && status.GetProperty("state").GetString() is "Ready" or "HeldElsewhere" or "Failed";
+        }, $"a terminal state for version {appliedVersion}", timeout);
 }

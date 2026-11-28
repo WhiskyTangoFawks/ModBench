@@ -403,6 +403,7 @@ export default defineConfig(
     // The dialog is the one root file that surfaces to the user.
     {
         files: ['src/*.ts'],
+        ignores: NOT_PRODUCTION,
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'activation']) },
     },
     {

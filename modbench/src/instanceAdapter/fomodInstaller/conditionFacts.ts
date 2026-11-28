@@ -28,7 +28,7 @@ function versionFact(version: ProgramVersion, notFound: (program: string) => Kno
 
 function versionFacts(versions: ProgramVersions): Pick<ConditionFacts, 'gameVersion' | 'extenderVersion'> {
   if (versions.kind !== 'found') {
-    const unknown = { unknown: versions.kind === 'unresolved' ? 'the game folder was not found' : 'Modbench knows no program of this game' };
+    const unknown = { unknown: 'the game folder was not found' };
     return { gameVersion: unknown, extenderVersion: unknown };
   }
   return {

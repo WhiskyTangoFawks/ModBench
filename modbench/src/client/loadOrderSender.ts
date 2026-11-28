@@ -40,7 +40,6 @@ export interface LoadOrderSender {
 }
 
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
-const SIGNAL_WAIT_CAP_MS = 10_000;
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 interface OwedSignal {
@@ -74,7 +73,7 @@ function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: A
 
 // One snapshot waits and one is in flight. An arrival replaces the one waiting, so the newest
 // lands instead of a queue of stale ones each paying an index.
-function createSendSlot(wire: LoadOrderWire, changed: () => void) {
+function createSendSlot(wire: LoadOrderWire, sendable: () => boolean, signalWaitCapMs: number, changed: () => void) {
   let waiting: Waiting | undefined;
   let inFlight: AbortController | undefined;
   let unanswered = false;
@@ -124,8 +123,8 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
     if (owed === undefined || signalling) return;
     owed.since ??= Date.now();
     const waited = Date.now() - owed.since;
-    if ((waiting || unanswered) && waited < SIGNAL_WAIT_CAP_MS) {
-      signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, SIGNAL_WAIT_CAP_MS - waited);
+    if ((waiting || unanswered) && waited < signalWaitCapMs) {
+      signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, signalWaitCapMs - waited);
       return;
     }
     sendSignal(owed);
@@ -134,7 +133,7 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
   // mEdit to run rather than being sent into a backend that is not there yet.
   const advance = (): void => {
-    if (wire.status() !== 'running') return;
+    if (!sendable()) return;
     if (!inFlight && waiting) {
       const next = waiting;
       waiting = undefined;
@@ -181,7 +180,6 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
       owed.sweepStarted(Promise.resolve());
       Object.assign(owed, awaitingSweep());
     },
-    holdsOne: () => waiting !== undefined,
     pending: () => waiting !== undefined || inFlight !== undefined || owed !== undefined || signalling,
     drop,
     pump,
@@ -191,14 +189,16 @@ function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   };
 }
 
-export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
+/** `signalWaitCapMs` bounds how long a change signal waits for the snapshots handed before it to be answered. */
+export function createLoadOrderSender(wire: LoadOrderWire, signalWaitCapMs: number): LoadOrderSender {
   const pendingChanges = new EventEmitter();
-  const slot = createSendSlot(wire, () => { pendingChanges.fire(); });
-  let newestHanded: LoadOrderSnapshot | undefined;
-  let handedCount = 0;
   const launches = new EventEmitter<Promise<LaunchOutcome>>();
   const exits = new EventEmitter();
   const launcher = createLauncher(wire, (launched) => { launches.fire(launched); });
+  const sendable = (): boolean => !launcher.stopped() && wire.status() === 'running';
+  const slot = createSendSlot(wire, sendable, signalWaitCapMs, () => { pendingChanges.fire(); });
+  let newestHanded: LoadOrderSnapshot | undefined;
+  let handedCount = 0;
   const subscribeTo = <T>(emitter: EventEmitter<T>) => (listener: (data: T) => void): (() => void) => {
     const subscription = emitter.event(listener);
     return () => { subscription.dispose(); };

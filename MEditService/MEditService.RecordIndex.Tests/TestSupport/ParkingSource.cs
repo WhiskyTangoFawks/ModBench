@@ -33,7 +33,7 @@ internal sealed class ParkingSource : DelegatingSourceAdapter, IDisposable
     {
         if (Interlocked.Exchange(ref _armed, 0) == 0) return base.TreeOf(plugin, release);
         _arrived.Release();
-        if (!_released.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("the parked read was never released");
+        Waits.Signalled(_released.Wait, "the parked read's release", TimeSpan.FromSeconds(30));
         return base.TreeOf(plugin, release);
     }
 }

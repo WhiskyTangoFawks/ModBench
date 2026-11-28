@@ -58,8 +58,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
     private const string ActivePlugins = "active_plugins";
 
-    private bool PromotesBase(OpenedIndex index) =>
-        Waits.ReachedWithin(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), TimeSpan.FromSeconds(20));
+    private void AwaitBasePromoted(OpenedIndex index) =>
+        Waits.Reached(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), "Base.esm winning the stack");
 
     private OpenedIndex IndexWhoseSweepFailedAfterDeletingTheWinner()
     {
@@ -67,7 +67,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE {ActivePlugins} RENAME TO active_aside");
         _winner.RemoveFromTree(index.DocumentOf(_npc, _winnerKey));
         index.SignalChange();
-        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
+        Waits.Reached(() => index.Status.State == LoadOrderState.Failed, "the failed sweep's status");
         IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE active_aside RENAME TO {ActivePlugins}");
         return index;
     }
@@ -79,7 +79,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         index.SignalChange();
 
-        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+        AwaitBasePromoted(index);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         index.SignalChange([new PluginAddress("Absent.esp", "AbsentMod")]);
 
-        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+        AwaitBasePromoted(index);
     }
 
     [Fact]

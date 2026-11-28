@@ -3,12 +3,15 @@ import json
 from collections.abc import Sequence
 
 
-def trx_result(name: str, end: float | None = None, duration: float = 0, outcome: str = 'Passed') -> str:
-    """end is a second of the run, or None for a result with no times."""
+def trx_result(name: str, end: float | None = None, duration: float = 0, outcome: str = 'Passed',
+               project: str = 'A.Tests') -> str:
+    """end is a second of the run, or None for a result with no times. The result's definition names
+    the assembly of its test project."""
     times = '' if end is None else (
         f' duration="00:{int(duration) // 60:02d}:{duration % 60:010.7f}"'
         f' endTime="2026-10-02T19:{int(end) // 60:02d}:{end % 60:010.7f}+01:00"')
-    return f'    <UnitTestResult testName="{name}"{times} outcome="{outcome}" />\n'
+    return (f'    <UnitTestResult testId="{name}" testName="{name}"{times} outcome="{outcome}" />\n'
+            f'    <UnitTest id="{name}"><TestMethod codeBase="/repo/{project}/bin/{project}.dll" /></UnitTest>\n')
 
 
 def trx(*results: str) -> str:

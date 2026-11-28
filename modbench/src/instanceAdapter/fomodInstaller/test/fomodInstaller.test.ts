@@ -1,15 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { deathWhy } from '../engineDeath';
-import { fomodLanding, type ConditionFacts, type FomodEngine } from '../fomodInstaller';
-import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAdapter';
+import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallOutcome } from '../../instanceAdapter';
 import type { FomodMove, FomodState, ReleaseImage } from '../../../wire/fomodPage';
 import { SILENT_LOG } from '../../../ports/log';
 import { present } from '../../../ports/present';
+import { programsOf } from '../../../tables/gamePaths';
 import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { FOMOD_PAGE, refusingPage } from '../../../test/fomodDialogDouble';
+import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
+import { onPosix } from '../../../test/platform';
+import { mo2InstanceHolding } from '../../test/instanceOnDisk';
+import { adapterOver } from '../../../test/mo2/adapterOver';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+type FomodEngine = typeof FOMOD_ENGINE;
 
 const SCHEMA = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd"';
 
@@ -37,11 +45,9 @@ const TWO_STEPS = config(`<requiredInstallFiles><folder source="core" destinatio
 )}`);
 const TWO_STEPS_FILES = ['core/Core.esp', 'a/A.esp', 'b/B.esp'];
 
-const KNOWN: ConditionFacts = {
-  plugins: { known: { present: ['Active.esp', 'Inactive.esp'], active: ['Active.esp'] } },
-  gameVersion: { unknown: 'no version in this test' },
-  extenderVersion: { unknown: 'no version in this test' },
-};
+const MOD = 'M';
+const WITH_PLUGINS: Readonly<Record<string, string>> = { 'profiles/Default/plugins.txt': '*Active.esp\r\nInactive.esp\r\n', 'game/Data/Active.esp': '', 'game/Data/Inactive.esp': '' };
+const { game: GAME_PROGRAM, extenderLoader: EXTENDER_LOADER } = present(programsOf('Fallout4'), 'the programs of the instance\'s game');
 
 const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
 const utf16be = (text: string): Buffer => Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, 'utf16le').swap16()]);
@@ -57,14 +63,15 @@ async function filesIn(folder: string): Promise<string[]> {
 describe('the FOMOD installer', () => {
   let base: string;
   let root: string;
-  let landedIn: string | undefined;
+  let instance: string | undefined;
 
   beforeEach(async () => {
     base = await mkdtemp(join(tmpdir(), 'fomod-'));
     root = join(base, 'release');
-    landedIn = undefined;
+    instance = undefined;
   });
   afterEach(() => rm(base, { recursive: true, force: true }));
+  const trash = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
 
   async function release(moduleConfig: string | Buffer, files: readonly string[], configPath = 'fomod/ModuleConfig.xml'): Promise<void> {
     for (const path of [...files, configPath]) {
@@ -73,15 +80,20 @@ describe('the FOMOD installer', () => {
     }
   }
 
-  async function install(choices: readonly FomodStepChoice[], engine: FomodEngine = FOMOD_ENGINE): Promise<FomodLanded> {
-    const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'choices', steps: choices, installAnyway: true }, () => Promise.resolve(KNOWN));
-    if (landing.kind === 'cancelled') throw new Error('The installer was cancelled.');
-    landedIn = landing.root;
-    return landing.fomod;
+  function installing(answer: FomodAnswer | undefined, engine: FomodEngine = FOMOD_ENGINE, files = WITH_PLUGINS): Promise<InstallOutcome> {
+    const held = mo2InstanceHolding(files);
+    instance = held.root;
+    return adapterOver(held.root, { gameFolderSettingValue: join(held.root, 'game'), fomodEngine: engine }).install({ kind: 'folder', path: root }, { kind: 'new', name: MOD }, trash, answer);
   }
-  const filesLanded = (): Promise<string[]> => filesIn(present(landedIn, 'the folder the files landed in'));
-  const releaseLeftAsItWas = async (files: readonly string[]): Promise<void> => {
-    expect(await filesIn(root)).toEqual([...files, 'fomod/ModuleConfig.xml'].sort());
+  async function install(choices: readonly FomodStepChoice[], engine: FomodEngine = FOMOD_ENGINE): Promise<FomodLanded> {
+    const outcome = await installing({ kind: 'choices', steps: choices, installAnyway: true }, engine);
+    return present(outcome.landed ? outcome.fomod : undefined, 'what the FOMOD landed');
+  }
+  const modsOf = (): Promise<string[]> => readdir(join(present(instance, 'the instance'), 'mods'));
+  const filesLanded = async (): Promise<string[]> =>
+    (await filesIn(join(present(instance, 'the instance'), 'mods', MOD))).filter((path) => path !== 'meta.ini');
+  const nothingLanded = async (): Promise<void> => {
+    expect(await modsOf()).toEqual(['A']);
   };
 
   it('lands the files the choices select, each at its destination, and asks no step whose condition does not hold', async () => {
@@ -106,7 +118,7 @@ describe('the FOMOD installer', () => {
       'The choices leave step "Only for B" unanswered. Step "Only for B": group "Extras" takes any of "Extra" (recommended): "Lands \\"A\\" again,". '
       + 'Put it to the user, or request it again with installer to open the installer for them.',
     );
-    await releaseLeftAsItWas(TWO_STEPS_FILES);
+    await nothingLanded();
   });
 
   it.each([
@@ -240,7 +252,7 @@ describe('the FOMOD installer', () => {
 
     await expect(refusal).rejects.toThrow(/needed\.esm/i);
     await expect(refusal).rejects.not.toThrow(/active\.esp/i);
-    await releaseLeftAsItWas(['core/Core.esp']);
+    await nothingLanded();
   });
 
   it('names each folder the options chosen name and its archive lacks, and no folder of an option not chosen', async () => {
@@ -279,55 +291,57 @@ describe('the FOMOD installer', () => {
   });
 
   const UNREADABLE = [
-    ['its installer is a script', 'script', undefined, /its installer is a script, which Modbench does not run/],
-    ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
+    ['its installer is a script', 'fomod/script.cs', 'class Script {}', /its installer is a script, which Modbench does not run/],
+    ['its module config is not XML', 'fomod/ModuleConfig.xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
   ] as const;
-  const landing = async (fomod: 'script' | 'xml', moduleConfig: string | undefined, answer: FomodAnswer) => {
-    if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
-    return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
+  const landing = async (configPath: string, moduleConfig: string, answer: FomodAnswer): Promise<InstallOutcome> => {
+    await release(moduleConfig, ['core/Core.esp'], configPath);
+    return installing(answer);
   };
 
   it.each([
     ...UNREADABLE,
-    ['its module config is never closed', 'xml', '<config><moduleName>Never closed</moduleName>',
+    ['its module config is never closed', 'fomod/ModuleConfig.xml', '<config><moduleName>Never closed</moduleName>',
       /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 175/],
-    ['its module dependencies do not hold', 'xml', config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'),
+    ['its module dependencies do not hold', 'fomod/ModuleConfig.xml', config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'),
       /needed\.esm/i],
-  ] as const)('refuses to an agent a FOMOD whose %s, telling it to ask for manual, and lands nothing', async (_, fomod, moduleConfig, why) => {
-    const refusal = landing(fomod, moduleConfig, { kind: 'choices', steps: [] });
+  ] as const)('refuses to an agent a FOMOD whose %s, telling it to ask for manual, and lands nothing', async (_, configPath, moduleConfig, why) => {
+    const refusal = landing(configPath, moduleConfig, { kind: 'choices', steps: [] });
 
     await expect(refusal).rejects.toThrow(why);
     await expect(refusal).rejects.toThrow('Request it again with manual');
+    await nothingLanded();
   });
 
-  describe.each(UNREADABLE)('a FOMOD whose %s', (_, fomod, moduleConfig, why) => {
+  describe.each(UNREADABLE)('a FOMOD whose %s', (_, configPath, moduleConfig, why) => {
     it.each([
-      ['takes Manual', 'manual', { kind: 'landing', fomod: { kind: 'plainCopy', why: 'Manual was asked for' } }],
-      ['declines it', 'cancelled', { kind: 'cancelled' }],
+      ['takes Manual', 'manual', { landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } }],
+      ['declines it', 'cancelled', { landed: false, cancelled: true }],
     ] as const)('is refused to the page, which %s, while the install waits on the user', async (__, reply, ended) => {
       const { dialog, events } = refusingPage(reply);
 
-      expect(await landing(fomod, moduleConfig, { kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
+      expect(await landing(configPath, moduleConfig, { kind: 'dialog', dialog, steps: [] })).toEqual(ended);
       expect(events).toEqual(['asking true', expect.stringMatching(why), 'asking false']);
     });
 
     it('lands as a plain copy when Manual is asked for, without refusing', async () => {
-      expect(await landing(fomod, moduleConfig, { kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await landing(configPath, moduleConfig, { kind: 'manual' })).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await filesLanded()).toEqual(['core/Core.esp', configPath]);
     });
   });
 
   it('refuses a FOMOD given no answer, saying how to ask for a plain copy', async () => {
     await release(TWO_STEPS, TWO_STEPS_FILES);
 
-    await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, undefined, () => Promise.resolve(KNOWN))).rejects.toThrow('manual');
+    await expect(installing(undefined)).rejects.toThrow('manual');
   });
 
   it('refuses an agent a FOMOD that names files its archive lacks, naming each, unless it asks to install anyway', async () => {
     await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}<folder source="gone" destination=""/></requiredInstallFiles>`), ['core/Core.esp']);
-    const asked = (installAnyway: boolean) => fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'choices', steps: [], installAnyway }, () => Promise.resolve(KNOWN));
+    const asked = (installAnyway: boolean) => installing({ kind: 'choices', steps: [], installAnyway });
 
     await expect(asked(false)).rejects.toThrow(/gone.*Request it again with install anyway/);
-    expect(await asked(true)).toMatchObject({ kind: 'landing', fomod: { kind: 'installer', missing: ['gone'] } });
+    expect(await asked(true)).toMatchObject({ landed: true, fomod: { kind: 'installer', missing: ['gone'] } });
   });
 
   it('refuses a FOMOD that installs outside the mod\'s folder, naming where, and writes nothing there', async () => {
@@ -336,6 +350,7 @@ describe('the FOMOD installer', () => {
 
     await expect(install([])).rejects.toThrow('The FOMOD installs to "../../escaped.esp", "../../escaped2.esp", outside the mod\'s folder.');
     expect(await filesIn(base)).toEqual(['release/core/Core.esp', 'release/fomod/ModuleConfig.xml']);
+    expect(await filesIn(present(instance, 'the instance'))).toEqual(['ModOrganizer.ini', 'game/Data/Active.esp', 'game/Data/Inactive.esp', 'profiles/Default/modlist.txt', 'profiles/Default/plugins.txt']);
   });
 
   it('lands the file of the higher priority where two name one destination in two cases', async () => {
@@ -348,7 +363,7 @@ describe('the FOMOD installer', () => {
     await install(choose(['Main', { Pick: ['High', 'Low'] }]));
 
     const [landed] = await filesLanded();
-    expect(await readFile(join(present(landedIn, 'the folder'), present(landed, 'the one file')), 'utf8')).toBe('bytes of a/A.esp');
+    expect(await readFile(join(present(instance, 'the instance'), 'mods', MOD, present(landed, 'the one file')), 'utf8')).toBe('bytes of a/A.esp');
   });
 
   it('passes on what else its installer says, as it says it', async () => {
@@ -377,8 +392,10 @@ describe('the FOMOD installer', () => {
       );
     });
 
-    it('names the signal an engine died of', () => {
-      expect(deathWhy('', null, 'SIGSEGV')).toBe('it was killed by SIGSEGV');
+    onPosix.describe('(a signal ends a process on POSIX)', () => {
+      it('names the signal an engine died of', async () => {
+        await expect(install([], crashing('killedBySignal.ts'))).rejects.toThrow('its installer cannot be read: it was killed by SIGKILL. Request it again with manual');
+      });
     });
 
     it('refuses as an installer that cannot be read, naming the fatal error\'s header, and logs the whole stderr', async () => {
@@ -395,7 +412,7 @@ describe('the FOMOD installer', () => {
       const unloadable = { ...FOMOD_ENGINE, folder: base };
 
       await expect(install([], unloadable)).rejects.toThrow(/^The FOMOD engine could not run: ./);
-      expect(landedIn).toBeUndefined();
+      await nothingLanded();
     });
   });
 
@@ -433,23 +450,22 @@ describe('the FOMOD installer', () => {
       const AFTER_A_PICK = config(steps(step('Start',
         group('First', 'SelectAny', option('Sets flag', file('f/s.esp', 's.esp'), 'Optional', '<conditionFlags><flag name="picked">A</flag></conditionFlags>'))
         + group('Second', 'SelectAny', gated('<gameDependency version="1.0"/>', 'NotUsable', UNSET)))));
-      const GAME = 'The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test.';
+      const GAME_UNREAD = `the game's version, which could not be read: ${GAME_PROGRAM} is not in the game folder`;
+      const GAME = `The FOMOD's conditions read ${GAME_UNREAD}.`;
 
       it.each([
-        ['at Install', GAME_AT_INSTALL, KNOWN, [], GAME],
-        ['by an option\'s type, before any step is answered', GAME_IN_OPTION, KNOWN, [], GAME],
-        ['by an option\'s type once a pick changes it, though more picks follow', AFTER_A_PICK, KNOWN,
+        ['at Install', GAME_AT_INSTALL, WITH_PLUGINS, [], GAME],
+        ['by an option\'s type, before any step is answered', GAME_IN_OPTION, WITH_PLUGINS, [], GAME],
+        ['by an option\'s type once a pick changes it, though more picks follow', AFTER_A_PICK, WITH_PLUGINS,
           choose(['Start', { First: ['Sets flag'], Second: [] }]), GAME],
-        ['of the game and of its script extender, naming both', GAME_AND_EXTENDER_IN_OPTION, KNOWN, [],
-          'The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test; '
-          + 'the script extender\'s version, which could not be read: no version in this test.'],
-        ['of the plugins',PLUGIN_IN_OPTION, { ...KNOWN, plugins: { unknown: 'no plugins in this test' } }, [],
-          'The FOMOD\'s conditions read the plugins, which could not be read: no plugins in this test.'],
-      ])('refuses what is read %s, naming why', async (_, moduleConfig, facts, choices, refusal) => {
+        ['of the game and of its script extender, naming both', GAME_AND_EXTENDER_IN_OPTION, { ...WITH_PLUGINS, [`game/${EXTENDER_LOADER}`]: 'not a program' }, [],
+          `The FOMOD's conditions read ${GAME_UNREAD}; the script extender's version, which could not be read: ${EXTENDER_LOADER} is not a Windows program.`],
+        ['of the plugins', PLUGIN_IN_OPTION, { 'profiles/Default/plugins.txt': '*Active.esp\r\n' }, [],
+          'The FOMOD\'s conditions read the plugins, which could not be read: the game folder was not found.'],
+      ])('refuses what is read %s, naming why', async (_, moduleConfig, files, choices, refusal) => {
         await release(moduleConfig, ['f/g.esp', 'f/s.esp', 'core/Core.esp']);
 
-        await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'choices', steps: choices }, () => Promise.resolve(facts)))
-          .rejects.toThrow(new Error(refusal));
+        await expect(installing({ kind: 'choices', steps: choices }, FOMOD_ENGINE, files)).rejects.toThrow(new Error(refusal));
       });
 
       it('shows the page no step', async () => {
@@ -457,8 +473,7 @@ describe('the FOMOD installer', () => {
         const show = vi.fn();
         const dialog: FomodDialog = { ...FOMOD_PAGE, show };
 
-        await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog, steps: [] }, () => Promise.resolve(KNOWN)))
-          .rejects.toThrow(new Error(GAME));
+        await expect(installing({ kind: 'dialog', dialog, steps: [] })).rejects.toThrow(new Error(GAME));
         expect(show).not.toHaveBeenCalled();
       });
     });
@@ -467,7 +482,6 @@ describe('the FOMOD installer', () => {
   describe('answered by the user on a page', () => {
     interface Page {
       readonly states: FomodState<ReleaseImage>[];
-      readonly roots: string[];
       readonly confirmed: (string[])[];
       readonly asking: boolean[];
       closed: number;
@@ -480,18 +494,17 @@ describe('the FOMOD installer', () => {
     async function answered(
       replies: readonly Reply[],
       { engine = FOMOD_ENGINE, confirms = true, onShow = () => undefined, choices = [] }:
-        { engine?: FomodEngine; confirms?: boolean; onShow?: () => void; choices?: readonly FomodStepChoice[] } = {},
-    ): Promise<{ page: Page; landing: Awaited<ReturnType<typeof fomodLanding>> }> {
-      const page: Page = { states: [], roots: [], confirmed: [], asking: [], closed: 0 };
+        { engine?: FomodEngine; confirms?: boolean; onShow?: (shownRoot: string) => void; choices?: readonly FomodStepChoice[] } = {},
+    ): Promise<{ page: Page; landing: InstallOutcome }> {
+      const page: Page = { states: [], confirmed: [], asking: [], closed: 0 };
       let handler: ((move: FomodMove) => void) | undefined;
       const dialog: FomodDialog = {
         ...FOMOD_PAGE,
         show: (state, shownRoot) => {
-          page.roots.push(shownRoot);
           const reply = present(replies[Math.min(page.states.length, replies.length - 1)], 'the reply to this state');
           page.states.push(state);
           setImmediate(() => {
-            onShow();
+            onShow(shownRoot);
             present(handler, 'the installer\'s listener')(typeof reply === 'function' ? reply(state) : reply);
           });
         },
@@ -509,8 +522,7 @@ describe('the FOMOD installer', () => {
           page.closed += 1;
         },
       };
-      const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'dialog', dialog, steps: choices }, () => Promise.resolve(KNOWN));
-      if (landing.kind === 'landing') landedIn = landing.root;
+      const landing = await installing({ kind: 'dialog', dialog, steps: choices }, engine);
       return { page, landing };
     }
     const idOf = (state: FomodState<ReleaseImage>, step: string, group: string, option: string): { stepId: number; groupId: number; optionId: number } => {
@@ -541,16 +553,15 @@ describe('the FOMOD installer', () => {
         `<moduleImage path="${headerImage}"/>${steps(step('Main', group('Pick', 'SelectExactlyOne',
           `<plugin name="A"><description>About A</description><image path="${optionImage}"/><files>${file('a/A.esp', 'A.esp')}</files>`
           + '<typeDescriptor><type name="Optional"/></typeDescriptor></plugin>')))}`);
-      const shown = async (moduleConfig: string, files: readonly string[]): Promise<{ state: FomodState<ReleaseImage>; root: string }> => {
+      const shown = async (moduleConfig: string, files: readonly string[]): Promise<{ state: FomodState<ReleaseImage> }> => {
         await release(moduleConfig, ['a/A.esp', ...files]);
         const { page } = await answered([INSTALL]);
-        return { state: present(page.states[0], 'the first state'), root: present(page.roots[0], 'the root it was shown with') };
+        return { state: present(page.states[0], 'the first state') };
       };
       const imageOf = (state: FomodState<ReleaseImage>): ReleaseImage => state.steps[0]?.optionalFileGroups?.group[0]?.options[0]?.image;
 
       it('carries the author, version and website of the FOMOD\'s info file, found as the release spells it', async () => {
-        await release(imaged('', ''), ['a/A.esp']);
-        await mkdir(join(root, 'FOMOD'), { recursive: true });
+        await release(imaged('', ''), ['a/A.esp'], 'FOMOD/ModuleConfig.xml');
         await writeFile(join(root, 'FOMOD', 'Info.XML'), INFO);
 
         const { page } = await answered([INSTALL]);
@@ -613,9 +624,12 @@ describe('the FOMOD installer', () => {
       });
 
       it('shows the page the folder of the release, where its images are', async () => {
-        const { root: shownRoot } = await shown(imaged('', ''), []);
+        await release(imaged('', ''), ['a/A.esp']);
+        const holdsTheRelease: boolean[] = [];
 
-        expect(shownRoot).toBe(root);
+        await answered([INSTALL], { onShow: (shownRoot) => holdsTheRelease.push(existsSync(join(shownRoot, 'a', 'A.esp'))) });
+
+        expect(holdsTheRelease).toEqual([true]);
       });
     });
 
@@ -644,9 +658,9 @@ describe('the FOMOD installer', () => {
 
       const { page, landing } = await answered([CANCEL]);
 
-      expect(landing).toEqual({ kind: 'cancelled' });
+      expect(landing).toEqual({ landed: false, cancelled: true });
       expect(page.closed).toBe(1);
-      await releaseLeftAsItWas(TWO_STEPS_FILES);
+      await nothingLanded();
     });
 
     describe('opened on the choices the install names', () => {
@@ -699,7 +713,7 @@ describe('the FOMOD installer', () => {
 
       const { landing } = await answered([{ kind: 'manual' }]);
 
-      expect(landing).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(landing).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
     });
 
     it('shows the header and Install alone for a FOMOD with no step to see, and lands its files when Install is clicked', async () => {
@@ -717,7 +731,7 @@ describe('the FOMOD installer', () => {
 
       const { landing } = await answered([CANCEL]);
 
-      expect(landing).toEqual({ kind: 'cancelled' });
+      expect(landing).toEqual({ landed: false, cancelled: true });
     });
 
     it('waits on the user for as long as the user takes, though the engine says nothing', async () => {
@@ -726,7 +740,7 @@ describe('the FOMOD installer', () => {
       try {
         const { landing } = await answered([CANCEL], { onShow: () => vi.advanceTimersByTime(FOMOD_ENGINE.silence * 10) });
 
-        expect(landing).toEqual({ kind: 'cancelled' });
+        expect(landing).toEqual({ landed: false, cancelled: true });
       } finally {
         vi.useRealTimers();
       }
@@ -766,8 +780,8 @@ describe('the FOMOD installer', () => {
 
         const { landing } = await answered([INSTALL], { confirms: false });
 
-        expect(landing).toEqual({ kind: 'cancelled' });
-        await releaseLeftAsItWas(['core/Core.esp']);
+        expect(landing).toEqual({ landed: false, cancelled: true });
+        await nothingLanded();
       });
     });
 
@@ -776,7 +790,7 @@ describe('the FOMOD installer', () => {
       const close = vi.fn();
       const { dialog } = refusingPage('cancelled');
 
-      await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...dialog, close }, steps: [] }, () => Promise.resolve(KNOWN));
+      await installing({ kind: 'dialog', dialog: { ...dialog, close }, steps: [] });
 
       expect(close).toHaveBeenCalledTimes(1);
     });

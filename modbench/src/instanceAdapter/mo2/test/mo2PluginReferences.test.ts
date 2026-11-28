@@ -5,16 +5,16 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import type { ManagerAdapter } from '../../publisher';
+import type { InstanceAdapter } from '../../instanceAdapter';
 import { heldTexts } from '../../../symbolNames/symbolNames';
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { adapterOver } from '../../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
 
 const PATCH = { name: 'Patch Mod.esp', origin: 'Patch Mod' };
 
 describe('the MO2 Instance adapter saying where its files name a plugin (ADR-0028)', () => {
   let root: string;
-  let adapter: ManagerAdapter;
+  let adapter: InstanceAdapter;
 
   async function put(relative: string, contents: string): Promise<void> {
     await mkdir(join(root, relative, '..'), { recursive: true });
@@ -26,7 +26,7 @@ describe('the MO2 Instance adapter saying where its files name a plugin (ADR-002
 
   beforeEach(async () => {
     root = cloneCorpusFixture();
-    adapter = managerOver(root);
+    adapter = adapterOver(root);
     await put('profiles/Default/plugins.txt', PLUGINS_TXT);
     await put('profiles/Default/loadorder.txt', 'Base.esm\r\nPatch Mod.esp\r\n');
     await put('profiles/Secondary/plugins.txt', '*Base.esm\r\n');

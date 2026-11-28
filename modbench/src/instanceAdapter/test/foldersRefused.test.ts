@@ -1,41 +1,67 @@
-import { describe, expect, it } from 'vitest';
-import { foldersRefused } from '../foldersRefused';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, realpath: vi.fn(actual.realpath) };
+});
+
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+import type { InstanceAdapter } from '../instanceAdapter';
+import { adapterOver } from '../../test/mo2/adapterOver';
 
 describe('the folders restore refuses', () => {
-  it('joins every reason a folder has, since it can be outside the instance and built by another manifest too', async () => {
-    const folders = new Map([['A', '/elsewhere/A'], ['B', '/elsewhere/A']]);
+  let place: string;
+  let adapter: InstanceAdapter;
+  const at = (path: string): string => join(place, path);
 
-    expect(await foldersRefused('/instance', folders, ['A'])).toEqual([
-      { item: 'A', reason: "was skipped: its folder '/elsewhere/A' is outside the instance folder; its folder is also built by 'B'." },
+  beforeAll(async () => {
+    place = await realpath(await mkdtemp(join(tmpdir(), 'medit-refused-')));
+    await mkdir(at('instance'));
+    adapter = adapterOver(at('instance'));
+  });
+  afterAll(() => rm(place, { recursive: true, force: true }));
+
+  it('joins every reason a folder has, since it can be outside the instance and built by another manifest too', async () => {
+    const folders = new Map([['A', at('elsewhere/A')], ['B', at('elsewhere/A')]]);
+
+    expect(await adapter.foldersRefused(folders, ['A'])).toEqual([
+      { item: 'A', reason: `was skipped: its folder '${at('elsewhere/A')}' is outside the instance folder; its folder is also built by 'B'.` },
     ]);
   });
 
   it('answers only the manifests asked, though it compares them with every manifest', async () => {
-    const folders = new Map([['A', '/instance/mods/A'], ['B', '/instance/mods/A'], ['C', '/instance/mods/C']]);
+    const folders = new Map([['A', at('instance/mods/A')], ['B', at('instance/mods/A')], ['C', at('instance/mods/C')]]);
 
-    expect(await foldersRefused('/instance', folders, ['B', 'C'])).toEqual([
+    expect(await adapter.foldersRefused(folders, ['B', 'C'])).toEqual([
       { item: 'B', reason: "was skipped: its folder is also built by 'A'." },
     ]);
   });
 
   it('leaves a folder inside another to the search for manifests', async () => {
-    const folders = new Map([['A', '/instance/mods/A'], ['B', '/instance/mods/A/B']]);
+    const folders = new Map([['A', at('instance/mods/A')], ['B', at('instance/mods/A/B')]]);
 
-    expect(await foldersRefused('/instance', folders, ['A', 'B'])).toEqual([]);
+    expect(await adapter.foldersRefused(folders, ['A', 'B'])).toEqual([]);
   });
 
   it('resolves the instance folder and each folder once, however many it compares', async () => {
-    const resolved: string[] = [];
-    const folders = new Map(Array.from({ length: 20 }, (_, at) => [`M${at}`, `/instance/mods/M${at}`] as const));
+    const folders = new Map(Array.from({ length: 20 }, (_, index) => [`M${index}`, at(`instance/mods/M${index}`)] as const));
+    await Promise.all([...folders.values()].map((folder) => mkdir(folder, { recursive: true })));
+    vi.mocked(realpath).mockClear();
 
-    await foldersRefused('/instance', folders, [...folders.keys()], (path) => { resolved.push(path); return Promise.resolve(path); });
+    await adapter.foldersRefused(folders, [...folders.keys()]);
 
-    expect(resolved.sort()).toEqual(['/instance', ...folders.values()].sort());
+    expect(vi.mocked(realpath).mock.calls.map(([path]) => String(path)).sort()).toEqual([at('instance'), ...folders.values()].sort());
   });
 
   it('refuses a folder beside the instance folder whose name starts as the instance folder\'s does', async () => {
-    expect(await foldersRefused('/instance', new Map([['A', '/instance-two/A']]), ['A'])).toEqual([
-      { item: 'A', reason: "was skipped: its folder '/instance-two/A' is outside the instance folder." },
+    expect(await adapter.foldersRefused(new Map([['A', at('instance-two/A')]]), ['A'])).toEqual([
+      { item: 'A', reason: `was skipped: its folder '${at('instance-two/A')}' is outside the instance folder.` },
     ]);
   });
 });

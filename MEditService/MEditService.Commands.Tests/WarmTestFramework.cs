@@ -8,8 +8,7 @@ using Xunit.Abstractions;
 
 namespace MEditService.Commands.Tests;
 
-/// <summary>Mutagen's first write, and the whole-mod door's first write and read, cost seconds once per process,
-/// so they run before any test does rather than inside whichever tests happen to start first.</summary>
+/// <summary>The whole-mod door's first write and read cost seconds once per process too.</summary>
 public sealed class WarmTestFramework(IMessageSink messageSink) : SchemaWarmedTestFramework(messageSink)
 {
     protected override void Warm()

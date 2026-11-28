@@ -1,14 +1,14 @@
-import { userInfo } from 'node:os';
-import { join, posix } from 'node:path';
-import { archiveListsOf, gamePathInfoForRelease } from '../../tables/gamePaths';
+import { join } from 'node:path';
+import { gamePathInfoForRelease } from '../../tables/gamePaths';
 import { errorMessage } from '../../ports/errorMessage';
-import { factsOf } from '../files';
-import type { GameDetectors } from './gameFolderResolver';
+import { factsOf, keptUntilNamed } from '../files';
+import type { Machine } from '../instanceAdapter';
+import { detectWinePrefix } from './gamePathDetector';
 
 type MyGamesResolution = { readonly kind: 'found'; readonly folder: string } | { readonly kind: 'notFound'; readonly looked: readonly string[] };
 
-/** Answers where the release's My Games folder is, with each place looked at when it is nowhere. */
-export type MyGamesResolver = (release: string | undefined) => Promise<MyGamesResolution>;
+/** Answers where the release's My Games folder, `folderName`, is, with each place looked at when it is nowhere. */
+export type MyGamesResolver = (release: string, folderName: string) => Promise<MyGamesResolution>;
 
 const MY_GAMES = 'My Games';
 const PROTON_USER = 'steamuser';
@@ -27,8 +27,8 @@ async function firstFolder(candidates: readonly string[]): Promise<string | unde
   return undefined;
 }
 
-const inPrefix = (prefix: string, folderName: string): Promise<string | undefined> =>
-  firstFolder([PROTON_USER, userInfo().username].map((user) => posix.join(prefix, WINE_DRIVE, 'users', user, 'Documents', MY_GAMES, folderName)));
+const inPrefix = (prefix: string, folderName: string, userName: string): Promise<string | undefined> =>
+  firstFolder([PROTON_USER, userName].map((user) => join(prefix, WINE_DRIVE, 'users', user, 'Documents', MY_GAMES, folderName)));
 
 function prefixHolding(instanceRoot: string): string | undefined {
   const segments = instanceRoot.split('/');
@@ -50,16 +50,16 @@ async function windowsResolution(documentsFolder: () => Promise<string>, folderN
     : { kind: 'notFound', looked: [`${place}, ${documents}: no ${MY_GAMES}/${folderName} folder in it`] };
 }
 
-async function linuxResolution(instanceRoot: string, detectors: GameDetectors, release: string, folderName: string): Promise<MyGamesResolution> {
+async function linuxResolution(instanceRoot: string, machine: Machine, release: string, folderName: string): Promise<MyGamesResolution> {
   const looked: string[] = [];
   const appId = gamePathInfoForRelease(release)?.steamAppId;
   if (appId === undefined) looked.push('the Steam prefix: Modbench has no Steam entry for this game');
   else {
-    const steamPrefix = await detectors.winePrefix(appId);
+    const steamPrefix = await detectWinePrefix(machine, appId);
     const place = `the Steam prefix of app ${appId}`;
     if (steamPrefix === null) looked.push(`${place}: the game is in no Steam library`);
     else {
-      const folder = await inPrefix(steamPrefix, folderName);
+      const folder = await inPrefix(steamPrefix, folderName, machine.userName);
       if (folder !== undefined) return { kind: 'found', folder };
       looked.push(`${place}, ${steamPrefix}: no ${MY_GAMES}/${folderName} folder in its Documents`);
     }
@@ -68,19 +68,22 @@ async function linuxResolution(instanceRoot: string, detectors: GameDetectors, r
   const winePrefix = prefixHolding(instanceRoot);
   if (winePrefix === undefined) looked.push(`${place}: ${instanceRoot} is under no ${WINE_DRIVE}`);
   else {
-    const folder = await inPrefix(winePrefix, folderName);
+    const folder = await inPrefix(winePrefix, folderName, machine.userName);
     if (folder !== undefined) return { kind: 'found', folder };
     looked.push(`${place}, ${winePrefix}: no ${MY_GAMES}/${folderName} folder in its Documents`);
   }
   return { kind: 'notFound', looked };
 }
 
-export function myGamesResolver(instanceRoot: string, detectors: GameDetectors, platform: NodeJS.Platform = process.platform): MyGamesResolver {
+export function myGamesResolver(instanceRoot: string, machine: Machine): MyGamesResolver {
   let documentsFolder: string | undefined;
-  const askDocumentsOnce = async (): Promise<string> => (documentsFolder ??= await detectors.documents());
-  return async (release) => {
-    const folderName = archiveListsOf(release)?.myGamesFolder;
-    if (release === undefined || folderName === undefined) return { kind: 'notFound', looked: [] };
-    return platform === 'win32' ? windowsResolution(askDocumentsOnce, folderName) : linuxResolution(instanceRoot, detectors, release, folderName);
-  };
+  const askDocumentsOnce = async (): Promise<string> => (documentsFolder ??= await machine.documentsFolder());
+  // No change Modbench hears names Steam's library file or a prefix's Documents folder, so a trusted read keeps the answer until a
+  // check of the disk, or a change in the folder found.
+  const resolved = keptUntilNamed(
+    (_key, { release, folderName }: { release: string; folderName: string }) =>
+      (machine.platform === 'win32' ? windowsResolution(askDocumentsOnce, folderName) : linuxResolution(instanceRoot, machine, release, folderName)),
+    (resolution) => (resolution.kind === 'found' ? resolution.folder : undefined),
+  );
+  return (release, folderName) => resolved(`${MY_GAMES} of ${release}`, { release, folderName });
 }

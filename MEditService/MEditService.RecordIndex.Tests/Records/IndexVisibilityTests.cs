@@ -28,18 +28,22 @@ public sealed class IndexVisibilityTests
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: RecordsPerIngestBatch, () =>
         {
             ingestPaused.Release();
-            _ = ingestResumed.Wait(PauseBound);
+            Waits.Signalled(ingestResumed.Wait, "the ingest's resumption", PauseBound);
         }));
 
         var reconcile = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
         Assert.True(await ingestPaused.WaitAsync(PauseBound), "the ingest never reached the plugin's last record");
         var readMidIngest = Task.Run(() => (Npcs: index.CountOf(key, "npc_"), index.Sequence));
-        var servedMidIngest = await Waits.CompletesWithin(readMidIngest, ReadBound);
-        ingestResumed.Release();
+        try
+        {
+            await readMidIngest.WaitAsync(ReadBound);
+        }
+        finally
+        {
+            ingestResumed.Release();
+        }
         await reconcile;
 
-        Assert.True(servedMidIngest,
-            $"a read made while the plugin was being indexed did not complete within {ReadBound.TotalSeconds} s: reads are blocked by the ingest");
         var (npcsMidIngest, sequenceMidIngest) = await readMidIngest;
         Assert.True(npcsMidIngest == 0,
             $"a read made while the plugin was being indexed saw {npcsMidIngest} of its {NpcCount} NPCs");

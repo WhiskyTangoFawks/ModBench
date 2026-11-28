@@ -660,12 +660,4 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.Equal(new SequenceAwaitResponse(true, observed), await _svc.AwaitSequence(observed - 1, TimeSpan.FromSeconds(1)));
     }
-
-    [Fact]
-    public async Task AwaitingASequenceNotReached_AnswersFalseAndTheSequenceObserved()
-    {
-        var observed = _svc.GetSequence();
-
-        Assert.Equal(new SequenceAwaitResponse(false, observed), await _svc.AwaitSequence(observed + 2, TimeSpan.FromMilliseconds(50)));
-    }
 }

@@ -36,7 +36,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         await Client.NextCheck(_instance);
-        await Wire.Eventually(async () => await EditorIdUnlessTheIndexIsReconciling(formKey) == "UpgradedNpc", "the decompiled source reaching the answers");
+        await Waits.ReachedAsync(async () => await EditorIdUnlessTheIndexIsReconciling(formKey) == "UpgradedNpc", "the decompiled source reaching the answers");
     }
 
     private async Task<string?> EditorIdUnlessTheIndexIsReconciling(string formKey)

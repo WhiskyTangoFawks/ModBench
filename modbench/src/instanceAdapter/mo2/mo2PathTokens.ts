@@ -192,21 +192,22 @@ const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, commi
 // A write of the programs is several steps, and a follow-up between them would put its own in the gesture's way.
 const programsLock = (instanceRoot: string): string => `${instanceRoot}\0path token programs`;
 
-type Machine = ReadonlyMap<string, string>;
-const NOTHING_OF_MACHINE: Machine = new Map();
+// By driver, the text of the file this machine's values are read from.
+type MachineTexts = ReadonlyMap<string, string>;
+const NO_TEXTS: MachineTexts = new Map();
 
-function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directory: string, { game, downloads, committedOutsideInstance }: FilterFolders, accounts: TokenProgram, machine: Machine): TokenFilter {
+function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directory: string, { game, downloads, committedOutsideInstance }: FilterFolders, accounts: TokenProgram, texts: MachineTexts): TokenFilter {
   const filters = covered.map(({ driver, spelling, holdsAccounts, blanked }) => {
     const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutsideInstance }, process.platform, spelling);
-    return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked(machine.get(driver) ?? '')]));
+    return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked(texts.get(driver) ?? '')]));
   });
   const merged = (of: (filter: TokenFilter) => Readonly<Record<string, string>>): Record<string, string> =>
     Object.fromEntries(filters.flatMap((filter) => Object.entries(of(filter))));
   return { config: merged(({ config }) => config), programFiles: merged(({ programFiles }) => programFiles) };
 }
 
-async function programsPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram, machine: Machine): Promise<void> {
-  const { programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts, machine);
+async function programsPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram, texts: MachineTexts): Promise<void> {
+  const { programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts, texts);
   await mkdir(directory, { recursive: true });
   for (const [file, text] of Object.entries(programFiles)) await writeUntold(file, text);
 }
@@ -214,7 +215,7 @@ async function programsPut(instanceRoot: string, covered: readonly CoveredFile[]
 // A filter's config names its program files and no folder, so one write serves every pass. Each key written costs a
 // git process, so a key the repository already holds is left as it is.
 async function configPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, held: ReadonlyMap<string, string>): Promise<void> {
-  const { config } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
+  const { config } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''), NO_TEXTS);
   for (const [key, value] of Object.entries(config)) if (held.get(key) !== value) await git(instanceRoot, 'config', key, value);
 }
 
@@ -235,7 +236,7 @@ interface FilterHeld {
 }
 
 async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[], directory: string): Promise<FilterHeld> {
-  const { config, programFiles } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
+  const { config, programFiles } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''), NO_TEXTS);
   const held = await localFilterConfig(instanceRoot);
   const files = await Promise.all(Object.keys(programFiles).map(async (file) => ({ file, text: await readOrAbsent<string | undefined>(() => get(file), undefined) })));
   const folderHeld = await exists(directory);
@@ -258,7 +259,7 @@ async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[],
 export async function pathTokensWritten(context: Mo2Context, publisherFile: ConfigurationFile | undefined): Promise<boolean> {
   const covered = coveredFiles(publisherFile);
   if ((await filesNotWritten(context.repository, covered)).length > 0) return false;
-  const { programFiles } = filterOf(context.instanceRoot, covered, await programDirectory(context), NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
+  const { programFiles } = filterOf(context.instanceRoot, covered, await programDirectory(context), NO_FOLDERS, accountTokens(''), NO_TEXTS);
   return (await Promise.all(Object.keys(programFiles).map(exists))).every(Boolean);
 }
 
@@ -286,11 +287,11 @@ async function committedOutsideInstanceIn(instanceRoot: string, covered: readonl
 }
 
 // What each file holds before the filter's passes rewrite it.
-async function machineOf(instanceRoot: string, covered: readonly CoveredFile[]): Promise<Machine> {
-  const texts = await Promise.all(covered.flatMap(({ driver, file }) => (file === undefined ? [] : [
+async function machineTextsOf(instanceRoot: string, covered: readonly CoveredFile[]): Promise<MachineTexts> {
+  const read = await Promise.all(covered.flatMap(({ driver, file }) => (file === undefined ? [] : [
     readOrAbsent(() => textByStamp(join(instanceRoot, file)), '').then((text): [string, string] => [driver, text]),
   ])));
-  return new Map(texts);
+  return new Map(read);
 }
 
 /** Shows each file the path filter covers that the index or HEAD holds unfiltered as a problem on it. A failed listing
@@ -312,10 +313,10 @@ export function unfilteredShown({ instanceRoot, repository }: Mo2Context, publis
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 // The programs with this machine's own folders and values in place of the tokens. Answers the game folder it used.
-async function machineProgramsPut(context: Mo2Context, gameFolder: () => Promise<GameFolder>, covered: readonly CoveredFile[], directory: string, accounts: TokenProgram, machine: Machine): Promise<GameFolder> {
+async function machineProgramsPut(context: Mo2Context, gameFolder: () => Promise<GameFolder>, covered: readonly CoveredFile[], directory: string, accounts: TokenProgram, texts: MachineTexts): Promise<GameFolder> {
   const game = await gameFolder();
   const folders = { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(context.instanceRoot, covered) };
-  await programsPut(context.instanceRoot, covered, directory, folders, accounts, machine);
+  await programsPut(context.instanceRoot, covered, directory, folders, accounts, texts);
   return game;
 }
 
@@ -326,11 +327,11 @@ export function pathTokensFollowed(context: Mo2Context, gameFolder: () => Promis
   let followed: string | undefined;
   return () => withLock(programsLock(context.instanceRoot), async () => {
     const { instanceRoot } = context;
-    const machine = await machineOf(instanceRoot, covered);
-    const values = JSON.stringify([...machine]);
+    const texts = await machineTextsOf(instanceRoot, covered);
+    const values = JSON.stringify([...texts]);
     if (values === followed) return;
     if (await isRepository(instanceRoot) && await pathTokensWritten(context, publisherFile)) {
-      await machineProgramsPut(context, gameFolder, covered, await programDirectory(context),accountTokens(await get(settingsFile(instanceRoot), '')), machine);
+      await machineProgramsPut(context, gameFolder, covered, await programDirectory(context),accountTokens(await get(settingsFile(instanceRoot), '')), texts);
     }
     followed = values;
   });
@@ -343,15 +344,15 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     takeBack.push(await attributesWritten(instanceRoot, covered));
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     covering.push(...files.map((file) => join(instanceRoot, file)));
-    const machine = await machineOf(instanceRoot, covered);
+    const texts = await machineTextsOf(instanceRoot, covered);
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
     const directory = await programDirectory(context);
     const held = await filterHeld(instanceRoot, covered, directory);
     takeBack.push(held.restore);
-    await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts, machine);
+    await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts, texts);
     await configPut(instanceRoot, covered, directory, held.config);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
-    const game = await machineProgramsPut(context, gameFolder, covered, directory, accounts, machine);
+    const game = await machineProgramsPut(context, gameFolder, covered, directory, accounts, texts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;

@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
+vi.mock('vscode', async () => (await import('./modsVscode')).vscodeModule);
 
+import { modsViewOn } from './modsViewOn';
+import { DiagnosticSeverity, Range, Uri, type FakeDiagnosticCollection } from '../../test/vscodeMock';
 import type { FileRead, PublisherConfiguration } from '../../instanceAdapter/instanceAdapter';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
-import { UnshippableProblems } from '../unshippableProblems';
+import { HeldModStatuses } from '../../test/heldModStatuses';
 import { settled } from '../../test/eventually';
 
 const SETTINGS = '/instance/compiler_settings.json';
@@ -22,27 +22,19 @@ const configuration = (shippable: (path: string) => boolean = () => false): Publ
 
 type Entries = ReadonlyMap<string, FileRead<readonly string[]>>;
 
-function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration, packaged: Record<string, readonly string[]> = {}, entriesOf: Record<string, Entries> = {}) {
-  let held = new Map(initial.map((one) => [one.mod, one]));
-  let changed = (): void => undefined;
-  let heldByPackage = packaged;
-  let entries = entriesOf;
-  const statuses = {
-    current: () => Promise.resolve(held), heldByPackage: (mod: string): ReadonlySet<string> => new Set(heldByPackage[mod] ?? []),
-    entriesNoPackageHolds: (mod: string): Entries => entries[mod] ?? new Map(), onDidChange: (listener: (mods: 'every' | ReadonlySet<string>) => void) => { changed = () => { listener('every'); }; return { dispose: () => undefined }; },
-  };
-  const instance = new FakeInstance(instanceValueFixture({
-    publisherConfiguration, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: '/instance/mods/ModB' }],
-  }));
-  const collection = new FakeDiagnosticCollection();
-  new UnshippableProblems(collection, instance, statuses);
+function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration, packaged: Record<string, readonly string[]> = {}, entries: Record<string, Entries> = {}) {
+  const statuses = new HeldModStatuses();
+  statuses.answer(initial, { packaged, entries });
+  const { instance, diagnostics } = modsViewOn({
+    value: instanceValueFixture({
+      publisherConfiguration, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: '/instance/mods/ModB' }],
+    }),
+    statuses,
+  });
   return {
-    collection, instance,
-    becomes: (next: readonly ModStatus[], nextPackaged: Record<string, readonly string[]> = heldByPackage, nextEntries: Record<string, Entries> = entries) => {
-      entries = nextEntries;
-      held = new Map(next.map((one) => [one.mod, one]));
-      heldByPackage = nextPackaged;
-      changed();
+    collection: diagnostics('modbench-unshippable'), instance,
+    becomes: (next: readonly ModStatus[], nextPackaged?: Record<string, readonly string[]>, nextEntries?: Record<string, Entries>) => {
+      statuses.answer(next, { packaged: nextPackaged, entries: nextEntries });
     },
   };
 }
@@ -54,9 +46,7 @@ describe('a mod the published modlist has no way to ship (publishing.md, What sh
   it('is one warning on the publisher\'s configuration, naming the mod, how many files, the first, and why', async () => {
     const { collection } = over([status('ModA', { unpackaged: ['a.esp', 'b.esp', 'sub/c.dds'] })], configuration());
 
-    await settled(() => {
-      expect(problemsOn(collection)).toEqual([[firstLine, `3 files of "ModA" have no way to ship, such as 'a.esp': ModA ${REASON}.`, DiagnosticSeverity.Warning]]);
-    });
+    await settled(() => { expect(problemsOn(collection)).toEqual([[firstLine, `3 files of "ModA" have no way to ship, such as 'a.esp': ModA ${REASON}.`, DiagnosticSeverity.Warning]]); });
   });
 
   it('judges an archive by the entries no package holds, and judges it again when they change', async () => {
